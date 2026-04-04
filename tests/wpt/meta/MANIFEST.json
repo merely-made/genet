@@ -5847,6 +5847,13 @@
         {}
        ]
       ],
+      "remove-table-column-group.html": [
+       "c34c94a7abdc072b8196c4baca8068453011bbf4",
+       [
+        null,
+        {}
+       ]
+      ],
       "table-column-display-change-chrome-crash.html": [
        "08458829555aff71197891aae4aad5192eb050dd",
        [
@@ -8739,6 +8746,17 @@
       "navigating-across-documents": {
        "unknown-protocol-reload-crash.html": [
         "b274e5706939088a702042e07aa2c8af3f9bd3bd",
+        [
+         null,
+         {}
+        ]
+       ]
+      }
+     },
+     "history": {
+      "the-location-interface": {
+       "cross-origin-location-stringify-crash.sub.html": [
+        "32b1c8b30542c0b02ae642ecd87d508e916169c2",
         [
          null,
          {}
@@ -402325,21 +402343,6 @@
      ]
     ]
    },
-   "visual-viewport": {
-    "viewport-apply-initial-scale-after-navigation.html": [
-     "ec03c380d6d27ed0b486a26203d441dc101fd39f",
-     [
-      null,
-      [
-       [
-        "/visual-viewport/viewport-apply-initial-scale-after-navigation-ref.html",
-        "=="
-       ]
-      ],
-      {}
-     ]
-    ]
-   },
    "web-animations": {
     "animation-model": {
      "keyframe-effects": {
@@ -523012,6 +523015,10 @@
         []
        ],
        "support": {
+        "anchor-src-encoding-iframe.html": [
+         "1f72de0fa8e243da6ee6e3aa170a8f4d1648c8ff",
+         []
+        ],
         "noopener-popup.html": [
          "2057dbf0beab37916a44d57c5ea234f1ac5810b5",
          []
@@ -530798,7 +530805,7 @@
     }
    },
    "lint.ignore": [
-    "b2ae55b1f639b8cc1376f3eb5fbb961bf740a6b3",
+    "cf7571b6f28c22e38602d6c510ccd50ebca6042b",
     []
    ],
    "loading": {
@@ -559754,16 +559761,6 @@
     ],
     "helper-resize-event-on-load-overflowing-page.html": [
      "c036b16ec87bc7e562c4040ad1923c5a8b483cec",
-     []
-    ],
-    "resource": {
-     "viewport-apply-initial-scale-after-navigation-inner.html": [
-      "edbf5dbb70aa916363ff32eab847f2d03562d4f5",
-      []
-     ]
-    },
-    "viewport-apply-initial-scale-after-navigation-ref.html": [
-     "904d370d6b464ef526b79e3974532d3f2c57d13b",
      []
     ],
     "viewport_support.js": [
@@ -636400,6 +636397,20 @@
        {}
       ]
      ],
+     "viewport-clamp-initial-scale-to-max.tentative.html": [
+      "996babbc9c0b289f76b99d6e6828370d93c4582d",
+      [
+       null,
+       {}
+      ]
+     ],
+     "viewport-clamp-initial-scale-to-min.tentative.html": [
+      "55eddf322756dad65572fe8fe3ab426792bc9afd",
+      [
+       null,
+       {}
+      ]
+     ],
      "viewport-user-scalable-no-clamp-to-max.tentative.html": [
       "c2c341245b528bc375bd8aa2d14e273fda492207",
       [
@@ -679875,6 +679886,15 @@
        [
         null,
         {}
+       ]
+      ],
+      "wheel-event-composed.html": [
+       "6c6a162ce6b43b9d0579758e88aa5c25f16aad72",
+       [
+        null,
+        {
+         "testdriver": true
+        }
        ]
       ],
       "wheel-event-no-scroll-after-prevent-default.html": [
@@ -743154,6 +743174,13 @@
          }
         ]
        ],
+       "focus-changes-after-scroll-to-fragment.html": [
+        "cbb1b50f6ef012fca837c3bd969bf7cdc8824f6d",
+        [
+         null,
+         {}
+        ]
+       ],
        "forward-triggers-hashchange.html": [
         "45f7e38ba3e8419e592e8fee51d95447d09e7173",
         [
@@ -793499,6 +793526,13 @@
        ]
       },
       "links-created-by-a-and-area-elements": {
+       "anchor-src-encoding.html": [
+        "6a52552c5f5ac77687f137d92e866d5bbe73f3db",
+        [
+         null,
+         {}
+        ]
+       ],
        "htmlanchorelement_attribute-getter-setter.html": [
         "2db3082e214ef913e602052e6ae24731adc9d08a",
         [
@@ -881935,6 +881969,15 @@
      ]
     },
     "keyboard": {
+     "keyboardevent-composed.html": [
+      "6993e2376a9e2f6cc64eacb954363166e4a9a569",
+      [
+       null,
+       {
+        "testdriver": true
+       }
+      ]
+     ],
      "keyboardevent-legacy.html": [
       "df1a80893c5c24cd42321c717add74ea87b64a33",
       [
@@ -886396,6 +886439,15 @@
      [
       null,
       {}
+     ]
+    ],
+    "viewport-scale-clamped.html": [
+     "afee0742a0dd320a9c76249cd591c257d8764e1c",
+     [
+      null,
+      {
+       "testdriver": true
+      }
      ]
     ],
     "viewport-scrollbars-cause-resize-in-iframe.html": [

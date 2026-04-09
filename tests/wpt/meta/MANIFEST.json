@@ -380615,6 +380615,19 @@
        ]
       },
       "the-video-element": {
+       "video-poster-from-revoked-blob.html": [
+        "2210ec8c719775402cd1208b64a9d347670f8f44",
+        [
+         null,
+         [
+          [
+           "/html/semantics/embedded-content/the-video-element/video-poster-shown-preload-auto-ref.html",
+           "=="
+          ]
+         ],
+         {}
+        ]
+       ],
        "video-poster-shown-preload-auto.html": [
         "95e32bb77ce1f7642a881edc1c61ae4d6879cea2",
         [
@@ -855896,6 +855909,13 @@
       {
        "testdriver": true
       }
+     ]
+    ],
+    "build-deep-detached-shadow-then-append-text.html": [
+     "65cbab68906e29983f5692dcf206f6f8c56ba908",
+     [
+      null,
+      {}
      ]
     ],
     "capturing-and-bubbling-event-listeners-across-shadow-trees.html": [

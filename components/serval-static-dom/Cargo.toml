@@ -14,3 +14,4 @@ path = "lib.rs"
 
 [dependencies]
 html5ever = { workspace = true }
+layout_dom_api = { workspace = true }

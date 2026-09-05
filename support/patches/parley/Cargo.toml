@@ -79,6 +79,7 @@ optional = true
 
 [dependencies.fontique]
 version = "0.10.0"
+path = "../fontique"
 default-features = false
 
 [dependencies.harfrust]

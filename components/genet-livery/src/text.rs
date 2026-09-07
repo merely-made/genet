@@ -2799,7 +2799,11 @@ where
                     return;
                 };
                 let start = self.text.len();
-                append_inline_text(self.text, &marker, style);
+                // The marker pseudo-element's UA white-space and
+                // text-transform defaults preserve an authored string
+                // verbatim. The owning list item's text rules do not rewrite
+                // generated marker text.
+                self.text.push_str(&marker);
                 if self.text.len() != start {
                     self.spans.push(SourceSpan {
                         source: Some(box_id),
@@ -2992,10 +2996,11 @@ where
     if style.list_style_position != ListStylePosition::Inside {
         return None;
     }
-    match style.list_style_type {
+    match &style.list_style_type {
         ListStyleType::None => None,
         ListStyleType::Disc => Some("• ".to_owned()),
         ListStyleType::Decimal => decimal_inside_marker_text(dom, styles, owner),
+        ListStyleType::String(marker) => Some(marker.clone()),
     }
 }
 

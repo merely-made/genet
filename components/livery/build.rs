@@ -285,6 +285,7 @@ fn value_type_is_copy(value_type: &str) -> bool {
             | "font-family"
             | "font-feature-settings"
             | "grid-template"
+            | "list-style-type"
             | "transform"
     )
 }

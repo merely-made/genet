@@ -519,6 +519,8 @@ fn catalog_property_values_round_trip() {
     assert_round_trip::<Inset>("25%");
     assert_round_trip::<LineHeight>("1.5");
     assert_round_trip::<ListStyleType>("decimal");
+    assert_round_trip::<ListStyleType>("\"# \"");
+    assert_round_trip::<ListStyleType>("\"  \"");
     assert_round_trip::<Margin>("auto");
     assert_round_trip::<Margin>("0.5rem");
     assert_round_trip::<Opacity>("50%");

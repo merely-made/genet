@@ -254,7 +254,8 @@ The read-only follow-up audit identifies these separate candidate gates:
    aligning a separate marker fragment with the first baseline of a block
    child in both stateless and retained layout.
 
-These are proposals, not implementation receipts. Some outside/reversed
+The wave-three receipt below records the string implementation and the held
+RTL experiment separately. Some outside/reversed
 tests currently match because neither image paints its marker. Therefore the
 reported maps are raw runner statuses, not proof that every passing list test
 demonstrates implemented behavior. The 023 gain was separately inspected and
@@ -294,3 +295,67 @@ Frozen host logs, locks, full metadata, commands and source identities live
 under `testing/genet/host-receipts/2026-09-06-scripted-host-wave2/` in the
 workspace testing root. Its manifest also pins the separate WPT artifact
 manifest. The original first-wave receipt remains unchanged.
+
+### Wave three: quoted inside markers and held RTL work
+
+The string-only source is `9b2e963b51799970b60e982ccca683431ee711eb`,
+based on the published wave-two branch at `50e0e48ed01`. Quoted
+`list-style-type` values now retain decoded CSS strings through computed
+style and paint ordinary inside markers, including empty strings and repeated
+spaces. The marker's generated text is not rewritten by the list item's
+`text-transform`. This does not implement the `list-style` shorthand,
+`::before`, general counters, outside markers, or complete bidi behavior.
+Marker-only intrinsic measurement still uses the existing approximate glyph
+width model; tabs and newlines are not a full preformatted-text receipt.
+
+Full Livery and Genet-Livery tests report 674 passed, 1 failed, and 10 ignored,
+against baseline 671 passed, 1 failed, and 10 ignored. The three new string
+fixtures pass. Both runs have the identical existing
+`flex_basis_content_geometry_covers_each_content_family` failure:
+`canvas-cross-content` is 72 pixels wide instead of 120. Formatting and diff
+checks pass. Strict Clippy remains blocked by unchanged library and test
+diagnostics; this is not lint closure.
+
+The frozen string-only release runner has identical status maps to baseline
+for all 3,836 cases below: zero gains, zero losses, unchanged membership and
+zero errors. The baseline runner was built from `b4af4f9d473`; its source
+diff to the documented `50e0e48ed01` baseline contains only wave-two receipt
+documentation. Locks, manifests, input hashes and exact policy are unchanged.
+
+| WPT scope | Baseline and candidate pass / fail / skip |
+|---|---|
+| `css/CSS2/lists` | 62 / 93 / 131 |
+| `css/css-lists` | 70 / 70 / 78 |
+| `css/css-text` | 563 / 823 / 578 |
+| `css/css-writing-modes` | 193 / 920 / 255 |
+
+The exact `list-style-type-string-001a.html` test side now paints its authored
+prefix. Its reference uses `li::before { content: "# "; }`, which remains
+unsupported by Livery's pseudo-element selector and generated-content model.
+Independent literal-DOM fixtures prove the string behavior; this WPT is not
+booked as a gain. Frozen maps, runners, native logs and the image comparison
+live under `testing/genet/wpt-ledger/2026-09-06_inside-string-markers/` in
+the workspace testing root. Its 49-file artifact manifest has SHA-256
+`a7f6dd22d0024203a06814c114a2208235e44b7a52b53a2d58dc94ed2695ad69`.
+
+The broader RTL candidate `ffb475bef5039759dec510a7a7f130643a6865e1` is
+preserved on `codex/rtl-string-marker-review-20260906` and is **held, not
+integrated**. It adds HTML direction hints, explicit Parley paragraph
+direction, decimal-marker isolation and ordinary RTL text reconstruction.
+Its 3,836-case comparison has 20 gains and 18 pass-to-fail changes. Its
+native suite has 678 passed, the same one failure, and 10 ignored. Passing
+native fixtures do not override the WPT stop rule.
+
+The audit identifies an overly broad principal-fragment width override in
+shrink-to-fit text, RTL preserved-space hanging, unsupported `unicode-bidi`
+and upright-text used direction. Test 024 also exposes a separate Buckram
+root/block placement gap: an RTL HTML parent shifts the body's default
+margin geometry 16 pixels left. These need independent geometry and text
+receipts before RTL integration. Parley's own test build is additionally
+blocked by the vendored package's missing `parley_dev` test dependency.
+
+The held runner, maps and audits are frozen under
+`testing/genet/wpt-ledger/2026-09-06_inside-rtl-string-markers/`.
+Its 105-file artifact manifest has SHA-256
+`a2ccaeada7cedb6975a9e76a78594739e40a455cb975caa7ab8e44eab6dc5b33`.
+Row 17 remains in progress; neither branch is a current-main closure receipt.

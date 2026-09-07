@@ -11,7 +11,7 @@ use genet_livery::{
 };
 use genet_static_dom::StaticDocument;
 use livery::values::ListStyleType;
-use paint_list_api::PaintCmd;
+use paint_list_api::{PaintCmd, PaintList};
 
 fn render(html: &str, css: &str) -> genet_livery::LiveryPaintList {
     let document = StaticDocument::parse(html);

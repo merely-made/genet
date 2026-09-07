@@ -7,7 +7,7 @@ use genet_livery::{
     Device, InteractionStates, LiveryDocument, StyleSet, emit_paint_list, layout, resolve_styles,
 };
 use genet_static_dom::StaticDocument;
-use paint_list_api::PaintCmd;
+use paint_list_api::{PaintCmd, PaintList};
 
 fn render(html: &str, css: &str, width: f32) -> genet_livery::LiveryPaintList {
     let document = StaticDocument::parse(html);

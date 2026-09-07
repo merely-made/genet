@@ -797,8 +797,12 @@ where
                 };
                 let font_size = font_size_px(&style.font_size, parent_font_size);
                 let line_height = line_height_px(&style.line_height, font_size);
-                let min_width = collapsed_word_width(&marker) as f32 * font_size * 0.6;
-                let max_width = collapsed_text_width(&marker) as f32 * font_size * 0.6;
+                // Marker strings use the UA marker pseudo-element's `pre`
+                // whitespace behavior, so repeated authored spaces contribute
+                // to the marker-only run's intrinsic width.
+                let marker_width = marker.chars().count() as f32 * font_size * 0.6;
+                let min_width = marker_width;
+                let max_width = marker_width;
                 let node = self.tree.new_leaf_with_context_and_block_style(
                     anonymous_block_style(self.boxes, box_id),
                     Style {

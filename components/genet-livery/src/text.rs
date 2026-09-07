@@ -663,6 +663,29 @@ impl TextSystem {
                 .and_then(|fragment| fragments.fragments().get(*fragment))
                 .map(|fragment| crate::content_box_size(parent_style, fragment).0)
                 .unwrap_or(anchor_fragment.width);
+            // A marker-only anonymous inline run has no DOM content box to
+            // anchor. Its generated marker fragment is at the inline start;
+            // in horizontal RTL its physical left is therefore the marker's
+            // left edge, rather than the inline formatting context's left
+            // edge. Reconstruct the context from that inline-end edge before
+            // asking Parley to apply RTL alignment.
+            let marker_only_anchor = content_box.is_none()
+                && marker_box.is_some_and(|marker_box| {
+                    fragments
+                        .fragments()
+                        .fragment_ids_for_box(marker_box)
+                        .last()
+                        .and_then(|fragment| fragments.fragments().get(*fragment))
+                        .is_some()
+                });
+            let origin_x = if marker_only_anchor
+                && parent_style.direction == Direction::Rtl
+                && !parent_style.writing_mode.is_vertical()
+            {
+                anchor_fragment.x + anchor_fragment.width - width
+            } else {
+                anchor_fragment.x
+            };
             // A list marker exists only in Buckram's generated box tree. The
             // DOM-only collector below cannot see it, which meant stateless
             // layout rebuilt a list item's text without its inside marker at
@@ -686,7 +709,7 @@ impl TextSystem {
                     frame,
                     styles,
                     |box_id| fragments.boxes().origin_node(box_id),
-                    (anchor_fragment.x, anchor_fragment.y),
+                    (origin_x, anchor_fragment.y),
                     width,
                 );
             }

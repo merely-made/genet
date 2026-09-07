@@ -873,6 +873,26 @@ impl TextSystem {
             return;
         }
         let (parent_fragment, parent_style) = parent;
+        // Stateless reconstruction normally reuses the prepared inline
+        // fragment. Horizontal RTL alignment also needs the principal block's
+        // content edge: shaping against its border box places text through
+        // right padding and border. Derive that geometry independently from
+        // Buckram rather than subtracting decoration from an inline fragment
+        // that may already describe content.
+        let rtl_content_geometry = (parent_style.direction == Direction::Rtl
+            && !parent_style.writing_mode.is_vertical())
+        .then(|| fragments.get(owner))
+        .flatten()
+        .map(|fragment| {
+            let edges = inline_decoration_edges(parent_style, fragment.width);
+            (
+                crate::content_box_size(parent_style, fragment).0,
+                fragment.x + edges.left,
+            )
+        });
+        let available_width = rtl_content_geometry
+            .map(|(width, _)| width)
+            .unwrap_or(parent_fragment.width);
         let mut text = String::new();
         let mut spans = Vec::new();
         let mut inline_boxes = Vec::new();
@@ -887,7 +907,7 @@ impl TextSystem {
                 text: &mut text,
                 spans: &mut spans,
                 inline_boxes: &mut inline_boxes,
-                percentage_basis: parent_fragment.width,
+                percentage_basis: available_width,
             };
             for root in roots {
                 collector.collect(*root, parent_style);
@@ -897,7 +917,7 @@ impl TextSystem {
             return;
         }
 
-        let origin = spans
+        let mut origin = spans
             .iter()
             .filter_map(|span| span.source.and_then(|id| fragments.get(id)))
             .next()
@@ -905,6 +925,9 @@ impl TextSystem {
             .map_or((parent_fragment.x, parent_fragment.y), |fragment| {
                 (fragment.x, fragment.y)
             });
+        if let Some((_, content_x)) = rtl_content_geometry {
+            origin.0 = content_x;
+        }
         let mut visual_commands = Vec::new();
         let mut prepared_sources = Vec::new();
         let text_sources = spans
@@ -916,7 +939,7 @@ impl TextSystem {
             &text,
             &mut spans,
             &inline_boxes,
-            parent_fragment.width,
+            available_width,
             parent_style,
             None,
             None,
@@ -950,7 +973,7 @@ impl TextSystem {
                                 styles,
                                 *owner,
                                 run.fragment,
-                                parent_fragment.width,
+                                available_width,
                             ),
                             line_y,
                         );
@@ -1070,6 +1093,10 @@ impl TextSystem {
         let mut builder =
             self.layout_context
                 .ranged_builder(&mut self.font_context, text, 1.0, true);
+        builder.set_base_level(Some(match root_style.direction {
+            Direction::Ltr => 0,
+            Direction::Rtl => 1,
+        }));
         push_defaults(
             &mut builder,
             default_style,
@@ -2474,6 +2501,59 @@ struct SourceSpan<Id> {
     range: Range<usize>,
 }
 
+fn append_generated_marker<Id>(
+    text: &mut String,
+    spans: &mut Vec<SourceSpan<Id>>,
+    source: Id,
+    owners: &[Id],
+    style: &ComputedValues,
+    marker: &str,
+) where
+    Id: Copy,
+{
+    let isolate = style.list_style_position == ListStylePosition::Inside
+        && style.list_style_type == ListStyleType::Decimal
+        && style.direction == Direction::Rtl
+        && !style.writing_mode.is_vertical();
+    if isolate {
+        append_generated_marker_control(text, spans, owners, style, '\u{2067}');
+    }
+
+    let start = text.len();
+    text.push_str(marker);
+    if text.len() != start {
+        spans.push(SourceSpan {
+            source: Some(source),
+            owners: owners.to_vec(),
+            style: style.clone(),
+            range: start..text.len(),
+        });
+    }
+
+    if isolate {
+        append_generated_marker_control(text, spans, owners, style, '\u{2069}');
+    }
+}
+
+fn append_generated_marker_control<Id>(
+    text: &mut String,
+    spans: &mut Vec<SourceSpan<Id>>,
+    owners: &[Id],
+    style: &ComputedValues,
+    control: char,
+) where
+    Id: Copy,
+{
+    let start = text.len();
+    text.push(control);
+    spans.push(SourceSpan {
+        source: None,
+        owners: owners.to_vec(),
+        style: style.clone(),
+        range: start..text.len(),
+    });
+}
+
 #[derive(Clone)]
 struct TextSource<Id> {
     source: Id,
@@ -2821,20 +2901,11 @@ where
                 let Some(marker) = inside_marker_text(self.dom, self.styles, owner, style) else {
                     return;
                 };
-                let start = self.text.len();
                 // The marker pseudo-element's UA white-space and
                 // text-transform defaults preserve an authored string
                 // verbatim. The owning list item's text rules do not rewrite
                 // generated marker text.
-                self.text.push_str(&marker);
-                if self.text.len() != start {
-                    self.spans.push(SourceSpan {
-                        source: Some(box_id),
-                        owners: self.owners.clone(),
-                        style: style.clone(),
-                        range: start..self.text.len(),
-                    });
-                }
+                append_generated_marker(self.text, self.spans, box_id, self.owners, style, &marker);
             },
             BoxOrigin::Pseudo { .. } => {},
         }

@@ -989,6 +989,35 @@ fn test_single_char() {
 }
 
 #[test]
+fn test_explicit_rtl_base_level_for_latin_does_not_leak_to_next_builder() {
+    let mut test_context = TestContext::default();
+
+    {
+        let mut builder = test_context.layout_context.ranged_builder(
+            &mut test_context.font_context,
+            "Latin",
+            1.,
+            true,
+        );
+        builder.set_base_level(Some(1));
+        _ = builder.build("Latin");
+    }
+    assert_eq!(test_context.layout_context.bidi.base_level(), 1);
+    assert_eq!(test_context.layout_context.bidi.levels(), &[2, 2, 2, 2, 2]);
+
+    {
+        let builder = test_context.layout_context.ranged_builder(
+            &mut test_context.font_context,
+            "Latin",
+            1.,
+            true,
+        );
+        _ = builder.build("Latin");
+    }
+    assert_eq!(test_context.layout_context.bidi.base_level(), 0);
+}
+
+#[test]
 fn test_rtl_paragraph_with_non_authoritative_logical_first_char_two_paragraphs() {
     verify_analysis("حدا\u{64b} \nحدا\u{64b} ", |_| {})
         .expect_boundary_list(vec![

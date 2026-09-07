@@ -11,7 +11,7 @@ use genet_livery::{
 };
 use genet_static_dom::StaticDocument;
 use livery::values::ListStyleType;
-use paint_list_api::PaintCmd;
+use paint_list_api::{PaintCmd, PaintList};
 
 fn render(html: &str, css: &str) -> genet_livery::LiveryPaintList {
     let document = StaticDocument::parse(html);
@@ -92,25 +92,27 @@ fn quoted_list_style_type_decodes_and_serializes_css_strings() {
 
 #[test]
 fn inside_string_markers_match_literal_glyphs_with_preserved_spaces() {
-    let candidate = render(
-        "<html><body><ol><li>item</li></ol><ul><li>item</li></ul></body></html>",
-        r##"* { margin: 0; padding: 0; }
-             ol, ul { list-style-position: inside; list-style-type: "#  "; }"##,
-    );
     let reference = render(
-        "<html><body><div><span>#  </span>item</div><div><span>#  </span>item</div></body></html>",
+        "<html><body><div><span>#  </span>item</div></body></html>",
         "* { margin: 0; padding: 0; } span { white-space-collapse: preserve; }",
     );
+    let css = r##"* { margin: 0; padding: 0; }
+                  ol, ul { list-style-position: inside; list-style-type: "#  "; }"##;
 
-    assert_eq!(glyph_signature(&candidate), glyph_signature(&reference));
+    // Keep each list kind in an independent row. Livery currently gives the
+    // literal prefix span's preserved-whitespace line box an extra line of
+    // block height, which must not offset a later glyph comparison row.
+    for list in ["ol", "ul"] {
+        let html = format!("<html><body><{list}><li>item</li></{list}></body></html>");
+        assert_eq!(
+            glyph_signature(&render(&html, css)),
+            glyph_signature(&reference)
+        );
 
-    let (retained, cached) = render_retained(
-        "<html><body><ol><li>item</li></ol><ul><li>item</li></ul></body></html>",
-        r##"* { margin: 0; padding: 0; }
-             ol, ul { list-style-position: inside; list-style-type: "#  "; }"##,
-    );
-    assert_eq!(glyph_signature(&retained), glyph_signature(&reference));
-    assert_eq!(command_signature(&cached), command_signature(&retained));
+        let (retained, cached) = render_retained(&html, css);
+        assert_eq!(glyph_signature(&retained), glyph_signature(&reference));
+        assert_eq!(command_signature(&cached), command_signature(&retained));
+    }
 }
 
 #[test]

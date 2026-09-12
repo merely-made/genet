@@ -22,6 +22,15 @@ pub enum SubtreeTransferError {
     EpochExhausted,
 }
 
+/// How a member was reached. Children must agree with their recorded parent;
+/// a shadow root and a template's contents are parentless side-map edges.
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum Origin {
+    Child,
+    ShadowRoot,
+    TemplateContents,
+}
+
 impl ScriptedDom {
     /// Validate a prospective transfer without detaching anything or consuming
     /// mutation records. An attached root is accepted only when its entire parent
@@ -30,6 +39,12 @@ impl ScriptedDom {
     /// This is not a reservation: callers must finish semantic removal and drain
     /// observer records before the detached transfer revalidates current state.
     /// Pending layout and observer records do not prevent this read-only check.
+    ///
+    /// The member set is **shadow-including** and template-including: a host
+    /// carries its shadow root and that root's own nested hosts, and a
+    /// `<template>` carries its contents fragment, because DOM's adopt steps
+    /// move a node's shadow-including inclusive descendants and HTML's "adopt
+    /// the template's contents" re-homes the fragment with the element.
     pub fn preflight_subtree_transfer_to(
         &self,
         destination: &Self,
@@ -41,7 +56,7 @@ impl ScriptedDom {
             .get(&root.raw())
             .ok_or(Error::MissingNode)?
             .parent;
-        if self.parsing || self.observed_group.is_some() {
+        if self.observed_group.is_some() {
             return Err(Error::PendingSourceWork);
         }
         // An attached root still needs a removal epoch before the transfer epoch.
@@ -75,10 +90,19 @@ impl ScriptedDom {
             }
             cursor = parent;
         }
+        // The root itself is an ordinary node: a document, a shadow root or the
+        // inert template-contents owner is never the thing being adopted, only
+        // something carried along beneath one.
+        if matches!(
+            self.nodes[&root.raw()].kind,
+            NodeKind::Document | NodeKind::ShadowRoot
+        ) {
+            return Err(Error::UnsupportedNode);
+        }
         let mut members = Vec::new();
         let mut seen = HashSet::new();
-        let mut pending = vec![(root, root_parent)];
-        while let Some((id, parent)) = pending.pop() {
+        let mut pending = vec![(root, root_parent, Origin::Child)];
+        while let Some((id, parent, origin)) = pending.pop() {
             let key = id.raw();
             if !seen.insert(key) {
                 return Err(Error::InvalidTree);
@@ -87,40 +111,91 @@ impl ScriptedDom {
             if node.parent != parent {
                 return Err(Error::InvalidTree);
             }
-            if matches!(node.kind, NodeKind::Document | NodeKind::ShadowRoot) {
+            match origin {
+                Origin::Child => {
+                    if matches!(node.kind, NodeKind::Document | NodeKind::ShadowRoot) {
+                        return Err(Error::UnsupportedNode);
+                    }
+                },
+                Origin::ShadowRoot => {
+                    if node.kind != NodeKind::ShadowRoot {
+                        return Err(Error::AssociatedState);
+                    }
+                },
+                Origin::TemplateContents => {
+                    if node.kind != NodeKind::DocumentFragment {
+                        return Err(Error::AssociatedState);
+                    }
+                },
+            }
+            // The inert owner document is shared by every template in the
+            // source; it is re-homed to the destination's own, never moved.
+            if self.template_document == Some(id) {
                 return Err(Error::UnsupportedNode);
             }
-            if self.shadow_hosts.contains_key(&key)
-                || self.shadow_roots.contains_key(&key)
-                || self.template_contents.contains_key(&key)
-                || self.template_content_owners.contains_key(&key)
-                || self.assigned_slots.contains_key(&key)
-                || self.slot_assignments.contains_key(&key)
-                || self.slot_changes.contains(&id)
-                || self.template_document == Some(id)
-            {
-                return Err(Error::AssociatedState);
+            if self.parser_holds(id) {
+                return Err(Error::PendingSourceWork);
             }
             if destination.nodes.contains_key(&key) {
                 return Err(Error::DestinationCollision);
             }
             members.push(id);
-            pending.extend(node.children.iter().rev().map(|&child| (child, Some(id))));
+            pending.extend(
+                node.children
+                    .iter()
+                    .rev()
+                    .map(|&child| (child, Some(id), Origin::Child)),
+            );
+            if let Some(&shadow) = self.shadow_hosts.get(&key) {
+                pending.push((shadow, None, Origin::ShadowRoot));
+            }
+            if let Some(&contents) = self.template_contents.get(&key) {
+                pending.push((contents, None, Origin::TemplateContents));
+            }
         }
-        // Manual slot assignment can retain a requested slottable even while
-        // it is detached and has no current assigned-slot entry.
-        if self.shadow_roots.values().any(|data| {
-            data.manual.iter().any(|(slot, nodes)| {
-                seen.contains(&slot.raw()) || nodes.iter().any(|id| seen.contains(&id.raw()))
-            })
-        }) || self
-            .slot_assignments
-            .values()
-            .any(|nodes| nodes.iter().any(|id| seen.contains(&id.raw())))
-        {
-            return Err(Error::AssociatedState);
+        // Every associated-state edge must be wholly inside or wholly outside
+        // the member set. A shadow root whose host stayed behind, a slot
+        // assignment straddling the boundary, or a contents fragment whose
+        // template is not moving would arrive in the destination as a dangling
+        // reference, so those are still refused.
+        let inside = |id: &NodeId| seen.contains(&id.raw());
+        for (key, data) in &self.shadow_roots {
+            if seen.contains(key) != inside(&data.host) {
+                return Err(Error::AssociatedState);
+            }
+            if seen.contains(key) {
+                continue;
+            }
+            if data
+                .manual
+                .iter()
+                .chain(data.slots.iter())
+                .any(|(slot, nodes)| inside(slot) || nodes.iter().any(inside))
+            {
+                return Err(Error::AssociatedState);
+            }
         }
-
+        for (key, host) in &self.shadow_hosts {
+            if seen.contains(key) != inside(host) {
+                return Err(Error::AssociatedState);
+            }
+        }
+        for (key, slot) in &self.assigned_slots {
+            if seen.contains(key) != inside(slot) {
+                return Err(Error::AssociatedState);
+            }
+        }
+        for (key, nodes) in &self.slot_assignments {
+            let slot_in = seen.contains(key);
+            if nodes.iter().any(|id| inside(id) != slot_in) {
+                return Err(Error::AssociatedState);
+            }
+        }
+        for (key, contents) in &self.template_contents {
+            if seen.contains(key) != inside(contents) {
+                return Err(Error::AssociatedState);
+            }
+        }
         Ok(members)
     }
 
@@ -174,10 +249,7 @@ impl ScriptedDom {
         if root_node.parent.is_some() {
             return Err(Error::AttachedRoot);
         }
-        if self.parsing
-            || self.observed_group.is_some()
-            || !self.observed.is_empty()
-            || !self.mutations.is_empty()
+        if self.observed_group.is_some() || !self.observed.is_empty() || !self.mutations.is_empty()
         {
             return Err(Error::PendingSourceWork);
         }
@@ -202,6 +274,7 @@ impl ScriptedDom {
                 .expect("preflight checked every member");
             destination.nodes.insert(id.raw(), node);
         }
+        self.move_associated_state_to(destination, &members);
         // Register every foreign origin the destination now holds, so capture
         // and replay can translate an imported identity instead of refusing it.
         for id in &members {
@@ -212,6 +285,51 @@ impl ScriptedDom {
         self.structure_epoch = source_epoch;
         destination.structure_epoch = destination_epoch;
         Ok(members)
+    }
+}
+
+impl ScriptedDom {
+    /// Relocate the side maps that hang off the transferred members: shadow
+    /// roots and their slot assignment tables, and template contents together
+    /// with their owner edge, which is re-pointed at the **destination's** inert
+    /// template-contents owner document (HTML's "adopt the template's
+    /// contents"). The nodes themselves have already moved, and the preflight
+    /// has already established that no edge straddles the boundary.
+    fn move_associated_state_to(&mut self, destination: &mut Self, members: &[NodeId]) {
+        let moving: HashSet<u64> = members.iter().map(|id| id.raw()).collect();
+        let mut owner = None;
+        for id in members {
+            let key = id.raw();
+            if let Some(data) = self.shadow_roots.remove(&key) {
+                destination.shadow_roots.insert(key, data);
+            }
+            if let Some(root) = self.shadow_hosts.remove(&key) {
+                destination.shadow_hosts.insert(key, root);
+            }
+            if let Some(slot) = self.assigned_slots.remove(&key) {
+                destination.assigned_slots.insert(key, slot);
+            }
+            if let Some(nodes) = self.slot_assignments.remove(&key) {
+                destination.slot_assignments.insert(key, nodes);
+            }
+            if let Some(contents) = self.template_contents.remove(&key) {
+                destination.template_contents.insert(key, contents);
+            }
+            if self.template_content_owners.remove(&key).is_some() {
+                let document = *owner.get_or_insert_with(|| destination.template_owner_document());
+                destination.template_content_owners.insert(key, document);
+            }
+        }
+        // A pending `slotchange` belongs to the slot, so it is delivered by
+        // whichever document the slot now lives in.
+        let (moved, kept): (Vec<NodeId>, Vec<NodeId>) = self
+            .slot_changes
+            .drain(..)
+            .partition(|id| moving.contains(&id.raw()));
+        self.slot_changes = kept;
+        destination.slot_changes.extend(moved);
+        // Assignment is not recomputed: no member changed parent in the move,
+        // so the tables that came across are already the destination's answer.
     }
 }
 

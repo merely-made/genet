@@ -218,6 +218,11 @@ fn with_parked<R>(host: &mut HostState, stream: &OpenStream, f: impl FnOnce() ->
     *stream.cell.borrow_mut() = std::mem::replace(&mut host.dom, ScriptedDom::new());
     let out = f();
     host.dom = std::mem::replace(&mut *stream.cell.borrow_mut(), ScriptedDom::new());
+    // Mirror what the tree builder is still holding. Script runs at exactly the
+    // points the arena comes back here, so this is where a cross-document
+    // adoption can learn which subtrees the parser would be robbed of.
+    let (open, anchor, form) = stream.parser.parser_guard();
+    host.dom.set_parser_guard(open, anchor, form);
     out
 }
 

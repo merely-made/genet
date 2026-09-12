@@ -239,6 +239,16 @@ pub struct ScriptedDom {
     /// .innerHTML = ...` from a script the parser is running would otherwise
     /// pull the tree out from under the tree builder's own handles.
     parsing: bool,
+    /// The running parser's *stack of open elements*, as a superset narrowed by
+    /// `parser_anchor` (see [`ScriptedDom::parser_holds`]), and its form element
+    /// pointer. Mirrored from the tree builder at every point script can run.
+    ///
+    /// A parse is not by itself a reason to refuse a cross-document transfer:
+    /// HTML only forbids moving what the tree builder still holds a handle on.
+    /// A completed sibling subtree may leave a parsing document.
+    parser_open: Vec<NodeId>,
+    parser_anchor: Option<NodeId>,
+    parser_form: Option<NodeId>,
     /// Index into `observed` where the current coalescing group began. A DOM
     /// operation that is one record to script but several arena mutations
     /// (`replaceChild`) opens a group so the childList records for one target
@@ -405,6 +415,9 @@ impl ScriptedDom {
             observed: Vec::new(),
             observing: false,
             parsing: false,
+            parser_open: Vec::new(),
+            parser_anchor: None,
+            parser_form: None,
             observed_group: None,
             structure_epoch: 0,
             shadow_roots: std::collections::HashMap::new(),
@@ -583,6 +596,52 @@ impl ScriptedDom {
     /// parser left orphaned.
     pub fn set_parsing(&mut self, on: bool) {
         self.parsing = on;
+        if !on {
+            self.parser_open.clear();
+            self.parser_anchor = None;
+            self.parser_form = None;
+        }
+    }
+
+    /// Mirror the tree builder's held handles into the arena. `open` is the set
+    /// of elements the builder created and has not popped; `anchor` is its
+    /// current node; `form` its form element pointer.
+    pub fn set_parser_guard(
+        &mut self,
+        open: Vec<NodeId>,
+        anchor: Option<NodeId>,
+        form: Option<NodeId>,
+    ) {
+        self.parser_open = open;
+        self.parser_anchor = anchor;
+        self.parser_form = form;
+    }
+
+    /// Whether the running parser still holds `id`: it is the form element
+    /// pointer, or it is on the stack of open elements.
+    ///
+    /// The stack is recovered as `created-and-unpopped ∩ inclusive ancestors of
+    /// the current node`. Every genuinely open element is an inclusive ancestor
+    /// of the current node; a never-pushed element html5ever reports no pop for
+    /// (a void element) is not, and so does not protect a completed subtree.
+    pub fn parser_holds(&self, id: NodeId) -> bool {
+        if self.parser_form == Some(id) {
+            return true;
+        }
+        if self.parser_open.is_empty() || !self.parser_open.contains(&id) {
+            return false;
+        }
+        let mut cursor = self.parser_anchor;
+        while let Some(node) = cursor {
+            if node == id {
+                return true;
+            }
+            cursor = self
+                .try_index(node)
+                .and_then(|key| self.nodes.get(&key))
+                .and_then(|node| node.parent);
+        }
+        false
     }
 
     /// Whether the observer record is being written.

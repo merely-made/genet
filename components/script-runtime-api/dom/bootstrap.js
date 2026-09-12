@@ -411,11 +411,43 @@
     }
     return [node];
   }
+  // The shadow root of `node` whatever its mode. `Element.shadowRoot` hides a
+  // closed root from script; adoption is not script reading the tree, and DOM's
+  // adopt steps move a node's **shadow-including** inclusive descendants, so a
+  // closed root travels with its host exactly like an open one.
+  function shadowRootOfAny(node) {
+    if (!node || node.nodeType !== 1) return null;
+    return wrapNode(__shadowRoot(node.__ref)) || null;
+  }
+  // The contents fragment of a `<template>`, without going through `.content`
+  // (which would record an ownerDocument we are about to invalidate).
+  function templateContentsOf(node) {
+    if (!node || node.nodeType !== 1 || node.localName !== 'template') return null;
+    return wrapNode(__templateContent(node.__ref)) || null;
+  }
   function snapshotTree(root, out) {
     out.push(root);
     var kids = root.childNodes;
     for (var i = 0; i < kids.length; i++) snapshotTree(kids[i], out);
+    var shadow = shadowRootOfAny(root);
+    if (shadow) snapshotTree(shadow, out);
     return out;
+  }
+  // Template contents do **not** join the ordinary snapshot: HTML adopts them
+  // into the destination's own inert template-contents owner document, not into
+  // the adopting document. Dropping the cached entry makes the `content` getter
+  // re-record that owner on next read, which is where it is minted.
+  function retireTemplateOwners(root) {
+    if (!root) return;
+    var contents = templateContentsOf(root);
+    if (contents) {
+      ownerDocuments.delete(contents);
+      retireTemplateOwners(contents);
+    }
+    var kids = root.childNodes;
+    for (var i = 0; i < kids.length; i++) retireTemplateOwners(kids[i]);
+    var shadow = shadowRootOfAny(root);
+    if (shadow) retireTemplateOwners(shadow);
   }
   function snapshotMovedNodes(node) {
     return snapshotTree(node, []);
@@ -441,6 +473,10 @@
     }
     var kids = root.childNodes;
     for (var i = 0; i < kids.length; i++) enqueueAdoptedTreeLocal(kids[i], oldDoc, newDoc);
+    // A custom element inside a shadow tree is adopted with its host, so its
+    // adoptedCallback is owed the same pair of documents.
+    var shadow = shadowRootOfAny(root);
+    if (shadow) enqueueAdoptedTreeLocal(shadow, oldDoc, newDoc);
   }
   function prepareNodeMove(parent, node) {
     ensureLocalNode(parent);
@@ -465,6 +501,7 @@
     if (move.oldDoc && move.newDoc && move.oldDoc !== move.newDoc) {
       setOwnerDocumentSnapshot(move.snapshot, move.newDoc);
       for (var i = 0; i < move.roots.length; i++) {
+        retireTemplateOwners(move.roots[i]);
         enqueueAdoptedTree(move.roots[i], move.oldDoc, move.newDoc);
       }
     }
@@ -2731,6 +2768,7 @@
     if (move.oldDoc !== move.newDoc) {
       setOwnerDocumentSnapshot(move.snapshot, move.newDoc);
       for (var i = 0; i < move.roots.length; i++) {
+        retireTemplateOwners(move.roots[i]);
         enqueueAdoptedTree(move.roots[i], move.oldDoc, move.newDoc);
       }
     }

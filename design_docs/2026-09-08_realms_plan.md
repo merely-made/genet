@@ -1,30 +1,38 @@
 # Realms: one agent, one realm per browsing context
 
-**Status:** WindowProxy and navigation landed on the working tree, 2026-09-11;
-broad DOM guard remains red. A browsing context now holds one `WindowProxy` for
-its life, built natively before its realm's first instruction over a shadow
-target that retains no global, with the cross-origin decision made *inside* the
-one object per accessing realm. A child navigates for real - `iframe.src`,
-`location.href` / `assign` / `replace` / `reload`, and `contentWindow.location`
-from the parent - through unload, a new realm, a new `Document`, a proxy rebind
-and an interleaved parse, with fragment navigation keeping the document and
-firing `hashchange`, and session history moved onto the browsing-context crate
-with `popstate`. The outgoing realm is discarded every time, **including the
-realm the proxy was built in**: both engines keep the handler, the shadow and the
-control function alive after it goes, so no realm is retained. The release
-runtime suite passes **542 tests with zero ignored**. The navigation census gains
-19 named subtests and twelve files across nine directories with two
-pass-to-nonpass movements, both former vacuous passes and both explained; **no
-repins**, twelve of fifteen testharness slices and both reftest guards at
-`unexpected=0`, every red one carrying the count it inherited, and both Ortet
-receipts unchanged. **The top-level realm is not replaced**: `MAIN_REALM` is the
-agent's root host, the resolution target of every `Runtime` entry point and the
-one realm the engine refuses to discard, so replacing it is a `Runtime` API lane
-rather than a navigation one - the host policy hook that gates a top-level
-navigation exists and the document URL and session history move, but the realm
-does not. Full G5 and associated shadow/template transfers also remain open.
-Earlier phases below retain their historical results; final acceptance is
-recorded at the end of this plan.
+**Status:** **The top-level realm is replaced**, on `lane/top-level-realm` from
+`546201874df`, 2026-09-12; broad DOM guard remains red. `MAIN_REALM` now means
+only the agent's bootstrap realm — the timer queue, the navigation drive, the
+`WindowProxy` factory, the one realm the engine refuses to discard — and the
+top-level browsing context's document lives in a realm of its own, created
+through the realm API with its `WindowProxy` as the global `this` from the
+realm's first instruction, exactly as a child frame's is. The two are told apart
+by the top context's absent `FrameRecord` and nothing else. One accessor,
+`Runtime::top_realm()`, answers every top-document question across 41 migrated
+call sites; `navigate_top_level` asks the host policy hook and past that
+decision takes the child's route exactly, draining on the bootstrap realm
+because that is the one realm guaranteed to outlive every document.
+`Runtime::host()` keeps its signature — a navigation writes the new `HostState`
+into the cell the embedder already holds — so no host changed a line. The
+release runtime suite passes **558 tests with zero ignored**. The eight-subset,
+2491-file census moves **no file in either direction** and exactly two subtests,
+both in `no-browsing-context.window.html` and both former passes that depended
+on the very defect this phase fixed; **no repins**, twelve of fourteen
+testharness slices and both reftest guards at `unexpected=0`, with `dom` 61 and
+`dom/nodes` 35 reproduced *exactly* by the base runner and left for the merge to
+reconcile against `main`'s repins. Ortet's `article` digest is stable over three
+runs and `frames` is bimodal at this base; an `ortet` built from the base commit
+produces the identical six digests, so both are properties of the base rather
+than of this lane. A discarded context's `Location` still does not report
+`about:blank`, which is the next `Location` lane. Full G5 and associated
+shadow/template transfers also remain open.
+
+Earlier phases below retain their historical results, including the
+WindowProxy-and-navigation status this line supersedes: that phase landed one
+`WindowProxy` per context for its life, real child navigation through unload, a
+new realm, a proxy rebind and an interleaved parse, session history with
+`popstate`, and a release suite of 542 with zero ignored, and it recorded the
+top-level realm as *not* replaced — the blocker this lane cleared.
 
 **Parent:** [iframes and nested browsing contexts](2026-09-08_iframes_plan.md),
 whose Â§4 named the realm decision as Mark's and left `contentWindow` a stub
@@ -1794,3 +1802,254 @@ from a queued task to the synchronous point HTML puts it at, which is what the
 one honest census regression turns on. It does not lift the parsing-time
 adoption refusal, and `dom` / `dom/nodes` stay red for the same protected loss
 as before.
+
+---
+
+## Phase: top-level realm, 2026-09-12
+
+The phase the WindowProxy lane refused to guess at. That lane's B recorded the
+blocker precisely — `MAIN_REALM` was the agent's root host *and* the realm the
+top-level browsing context's document happened to live in, and `Runtime::eval`,
+`Runtime::host` and the interleaved parse all resolved against it by name — so
+replacing the top realm was a `Runtime` API lane rather than a navigation one.
+This is that lane.
+
+**Base commit:** `546201874df` (`546201874dfa07cf153680a03f46efd93aabcec6`),
+the WindowProxy-and-navigation tip.
+
+### The design
+
+`MAIN_REALM` keeps exactly one meaning: **the agent's bootstrap realm**. It
+holds the timer queue, the navigation drive and the `WindowProxy` factory, and
+it is the one realm the engine refuses to discard. It is no longer where the top
+document lives.
+
+The top-level browsing context's document lives in a realm created through the
+realm API, with its `WindowProxy` installed as that realm's global `this` from
+the realm's first instruction — exactly as a child frame's is. The two are told
+apart by one thing only: the top context carries **no `FrameRecord`**, because
+it has no container element. That absence is the whole discriminator, and the
+regression manifest below records the defect that came of reading it as "this
+realm is the top one" rather than "this realm has no container".
+
+**One accessor.** `FrameState` gains `top_realm`, reached through
+`FrameState::top_realm()` and re-exported as `Runtime::top_realm()`. Every
+top-document question asks that accessor instead of naming `MAIN_REALM`, and
+script that runs in the top document goes through `eval_top` rather than
+`engine.eval`, which is now only the bootstrap realm's. **41 call sites** moved
+in the first commit — the load-completion barrier and `pending_main_load`, the
+browsing-context tree's top binding, `top` in both the frame relation and the
+cross-origin window-property path, `closed`'s liveness check, `host_in_realm`,
+`child_hosts`, the opaque-root policy's four top-realm branches,
+`pending_fetches`, the fetch-completion fallback, the worker pump, the whole of
+the interleaved parse, the five synthetic event dispatches, `__moPump`, the
+testharness load, bridge and two test entries, `fail_all_pending`, and
+genet-scripted's compositor walk and Livery's CSSOM binding walk. Because
+`top_realm` was still `MAIN_REALM` at that commit, it is a pure API change with
+no behavioural delta — which is what made the replacement reviewable.
+
+Nine more entry points had to follow the accessor once the top realm really
+moved, none of them findable by the first pass: the three synthetic `load`
+dispatches, `DOMContentLoaded`, `readystatechange`, the `matchMedia`
+re-evaluation, the two custom-element registry reads the parser makes at every
+script pause, and module evaluation. That last one needed a realm-aware entry on
+the engine trait, `eval_module_in_realm`, implemented on both backends, because
+a module belongs to the document that declared it; on Nova the graph's realm is
+pinned for the load, since a dependency is parsed from the host hook while the
+root realm is still the running one.
+
+The timer and animation-frame drives keep `engine.eval` **on purpose**: those
+queues are agent-wide machinery, which is exactly what the bootstrap realm is
+for.
+
+### Navigation through the child route, behind the policy hook
+
+`navigate_top_level` asks the host policy hook — the one thing that still
+distinguishes a top-level navigation from a child's — and past that decision
+takes the child's route exactly: queue, then unload (`pagehide`, `unload`,
+cancellations, teardown), `open_document_realm`, `WindowProxy` rebind,
+interleaved parse through `document.open`/`write`/`close`, `load`.
+
+Two things are deliberately not the child's. The drain runs on the **bootstrap
+realm**, which is the one realm guaranteed to outlive every document; a child's
+runs on its container's realm, for the same reason. And the load goes through a
+new `__loadTopDocument` rather than `__loadFrameDocument`, because there is no
+`FrameRecord` to rebuild from and the tree is initialized on first navigation
+for a document that never had a frame.
+
+One behavioural change worth naming: **`location.assign` no longer moves the URL
+synchronously.** HTML's navigate is a task, the top level now really navigates,
+and a read in the same script sees the URL the document was loaded with — which
+is what a browser does, and what the old edit-the-base-URL approximation could
+not be.
+
+### The hosts' unchanged API, and Mere's seam
+
+`Runtime::host()` keeps its signature. A top-level navigation writes the new
+document's `HostState` **into the cell the embedder already holds** rather than
+allocating a new one, so a borrow taken before a navigation stays valid across a
+navigation that replaces everything behind it. This is the seam Mere consumes:
+no embedder — genet-scripted, the WPT runner, Ortet, or a Mere-side host —
+changes a line for the top realm to move, and the Ortet receipts in the gates
+below are the measurement of that claim, not an assertion about it.
+
+### Rooting and teardown parity
+
+Three liveness paths visited `MAIN_REALM` and the child frames and so skipped
+the top document once it had a realm of its own: `collect_garbage`,
+`rooted_reflector_count`, and the opaque-root policy's cross-realm group
+rebuild. The third of those was collecting detached components out from under
+script. All three now enumerate **every registered realm**, which is the only
+formulation that stays correct when the top realm is just another realm.
+
+`Runtime`'s `Drop` now empties every realm's `HostState`. A realm's host state
+is reachable from its `[[HostDefined]]` slot, which lives in the engine heap,
+and Boa's heap is a thread-local — so anything left there is dropped from a TLS
+destructor, when wgpu's own thread-local is already gone. That aborted the WebGL
+conformance test. The defect was latent for child frames all along; it became
+load-bearing the moment the top document had a realm.
+
+### The snapshot-clone blocker, and whose it was
+
+The blocker this phase had to clear first was not HTML's. Nova's adapter refused
+to snapshot-clone an agent that had ever created a realm, and `snapshot_clone`
+is how `NovaHarnessTemplate` gives every WPT test a fresh heap without
+re-evaluating `testharness.js`; a top realm at construction would have disabled
+it for the life of the process.
+
+The refusal turned out to be **genet's, not vano's**: `GcAgent::snapshot_clone`
+copies `realm_roots` wholesale, so a realm keeps its index in the clone, and
+only the rooting and the `[[HostDefined]]` slot needed rebuilding. Both are now
+rebuilt per realm, and the counter no longer rewinds. Measured cost of the
+alternative, had it not been liftable: **37.7 ms per test fresh against 3.4 ms
+per clone**, over ~2480 censused files.
+
+### Named regression manifest
+
+Six defects found by a fixture or by the census during this phase, and fixed
+rather than recorded. Each is named by what found it.
+
+| Defect | Found by |
+|---|---|
+| A realm with no `FrameRecord` was taken to *be* the top-level browsing context, so a `Location` held across its own frame's removal navigated the **top** document, fired `hashchange` and moved history | the census, `no-browsing-context.window.html`; receipt `top_level_navigation.rs::a_context_less_location_navigates_nothing` |
+| A navigation resolved its input against `None` when the host had set no base URL — the whole WPT disk corpus — so `location.assign('#x')` became a cross-document navigation instead of a fragment one | the census; receipt `a_base_less_top_document_still_resolves_a_fragment` |
+| `location.assign("http://:")` resolved to an opaque string, took the top-level route and unloaded the document to go nowhere, taking the harness and the file's already-recorded results with it | the census, the `location_assign` / `location_replace` pair; receipt `an_unparseable_top_level_url_is_abandoned` |
+| Nova's adapter refused `snapshot_clone` on any agent that had ever created a realm; the refusal was genet's wholesale `realm_roots` copy, not vano's | `script-engine-nova/tests/realms.rs`, the multi-realm clone receipt |
+| `collect_garbage`, `rooted_reflector_count` and the opaque-root policy's cross-realm group rebuild each visited only `MAIN_REALM` and the child frames, so the third was collecting detached components out from under script | `page_weakref_liveness.rs`, `snapshot_realm_boundary.rs` |
+| `Runtime`'s `Drop` left a realm's `HostState` in the engine heap, dropped from a TLS destructor after wgpu's own thread-local was already gone; it aborted the WebGL conformance test | the release runtime suite |
+
+The lane's own receipt is
+**`components/script-runtime-api/tests/top_level_navigation.rs`** — seven cases
+across both backends, fourteen tests:
+`the_top_level_navigates_three_times`, `the_policy_hook_can_refuse`,
+`a_top_level_fragment_keeps_the_document`,
+`top_level_history_joins_and_traverses`,
+`a_base_less_top_document_still_resolves_a_fragment`,
+`a_context_less_location_navigates_nothing` and
+`an_unparseable_top_level_url_is_abandoned`. The three-navigation case asserts,
+per pass: a new realm id that was never used before, the outgoing realm
+discarded, the new document behind the same `WindowProxy`, and the whole
+unload-and-load sequence in one string. The unparseable-URL case runs over the
+base-less document the WPT disk corpus actually serves, with an absolute URL as
+the positive control. `snapshot_realm_boundary.rs` carries the clone and
+teardown parity; `cross_arena_adoption.rs`, `page_weakref_liveness.rs`,
+`frame_lifecycle.rs`, `frame_realms.rs`, `navigation.rs`, `realm_clone.rs`,
+`realms.rs`, `realm_animation_frames.rs` and `owner_native_boundaries.rs` were
+re-pointed at the accessor and stay green.
+
+### Census
+
+Eight subsets, 2491 files, `--engine boa --renderer livery --jobs 8
+--timeout 240`, mapped under
+`testing/genet/wpt-ledger/2026-09-12_top_level_realm/`.
+
+| Subset | Files | File gains | File regressions | Subtests before → after |
+|---|---|---|---|---|
+| `dom` | 698 | 0 | 0 | 46594 → 46594 |
+| `html/browsers/browsing-the-web` | 332 | 0 | 0 | 38 → 38 |
+| `html/browsers/history` | 140 | 0 | 0 | 96 → 94 |
+| `html/browsers/the-window-object` | 96 | 0 | 0 | 86 → 86 |
+| `html/browsers/windows` | 60 | 0 | 0 | 8 → 8 |
+| `html/semantics/scripting-1` | 515 | 0 | 0 | 1430 → 1430 |
+| `html/webappapis` | 356 | 0 | 0 | 1124 → 1124 |
+| `workers` | 294 | 0 | 0 | 325 → 325 |
+| **Total** | **2491** | **0** | **0** | **−2** |
+
+**No file-level movement anywhere**, and exactly two subtest movements, both in
+one file and both **artefacts of the defect this phase fixed**:
+
+`html/browsers/history/the-location-interface/no-browsing-context.window.html`,
+"Invoking `assign` / `replace` with `about:blank` on a `Location` object sans
+browsing context is a no-op", pass → fail. Each asserts
+`loc.href === "about:blank"` after the call, on a `Location` whose iframe has
+been removed. genet does not yet report `about:blank` for a discarded context's
+`Location` — which is why **all 21 `assign` / `replace` / `reload` subtests in
+that file, and all six `href` setter subtests, fail identically in `pre` and
+`post`**; that is the positive control. The two that passed in `pre` passed
+*because* of the defect: the context-less `Location` resolved to the top realm,
+so `assign("about:blank")` navigated the **top document** to `about:blank`, and
+the following read of the top document's URL then happened to match. The fix
+removes the accidental navigation, and the subtest falls back to the same honest
+failure as its nineteen siblings.
+
+Recovering all 27 needs a discarded context's `Location` to report
+`about:blank` for every member, which is a `Location` lane, not a realm one. It
+is named in "What this phase does not do" rather than taken here.
+
+**No repins.** No checked expectation map covers any directory that moved, and
+nothing moved anyway.
+
+### The two maps this branch does not repin
+
+`dom_boa.json` and `dom_nodes_boa.json` were repinned **on `main`** by the
+ordinary-adoption lane. This branch carries the base's copies and, per the lane
+instruction, does not touch them; the disagreement is reported rather than
+resolved, and belongs at the merge.
+
+Against this branch's copies, the post runner reports `dom` **unexpected=61**
+and `dom/nodes` **unexpected=35**. The banked **base runner reports exactly the
+same two counts against the same two files** — 61 and 35 — so the disagreement
+is between the base and the maps `main` now carries, and this lane contributes
+nothing to it. The control is recorded rather than inferred.
+
+| Runner | sha256 |
+|---|---|
+| `genet-wpt-pre.exe` (from `546201874df`, banked) | `ca1db3ee541dc61c057cf6c10617b91b7863c275d19c2617507650d391094308` |
+| `genet-wpt-post.exe` (from `6280a6e163f`) | `3320e5cb6b24a0a83c3b71343572eae41d613e1dabf32d0fa9cdcde0208f4d0a` |
+
+### Gates
+
+| Gate | Result |
+|---|---|
+| Release `script-runtime-api` | **558 passed, 0 failed, 0 ignored** (up from 542; fourteen new top-level navigation tests) |
+| Debug `script-runtime-api` | 558 passed, 0 failed, 0 ignored — matches release |
+| `script-engine-api`, `script-engine-boa`, `script-engine-nova` | 26 + 43 passed, 0 failed |
+| `genet-scripted` with `scripted-nova` | 118 passed, 0 failed |
+| `genet-documents` with `scripted` | 49 passed, 0 failed |
+| `genet-scripted-dom`, `browsing-context-api` | passed, 0 failed |
+| Clippy, five touched crates, `--all-targets` | zero errors; **one** new warning, `type_complexity` on `eval_module_in_realm`'s `resolve` parameter, the identical shape its sibling `eval_module` already carries directly above it. Not factored: `script-engine-api` is `publish = true`, so a public type alias there is an API decision, not a cleanup |
+| Rustfmt, all five touched crates | clean. (`cargo fmt --check` over the whole workspace is red on `support/patches/parley` and `genet-livery`, both untouched here and both red at the base) |
+| `cargo check --workspace --features genet-wpt/netfetch` | passed |
+| Canonical testharness slices | **12 of 14 at `unexpected=0`**; `dom` 61 and `dom/nodes` 35, both reproduced exactly by the base runner — see above |
+| Reftest guards | both `unexpected=0` |
+| Ortet `article` | `0x3e8866376840a521`, three consecutive matching captures |
+| Ortet `frames` | **bimodal at this base**: `0x2ba5cb3bdf6747fd`, `0x2ba5cb3bdf6747fd`, `0xcb1e19faee628d44` over three runs, from compositing-commit timing |
+
+Both Ortet figures differ from the numbers the adoption lane banked, and neither
+difference is this lane's. **An `ortet` built from the base commit, run three
+times per page on the same machine against the same files, produces the
+identical six digests — including the same 2:1 `frames` split in the same
+position.** The receipts are a property of the base, not of the top-level realm,
+and no embedder changed a line for the realm to move.
+
+### What this phase does not do
+
+It does not make a discarded browsing context's `Location` report `about:blank`
+for every member, which is what the file carrying this phase's only two subtest
+movements actually needs, and which would recover 27 subtests in it. It does not
+implement `pageswap`, the Navigation API, `beforeunload` cancellation,
+`window.open`, form submission or link-click navigation. It does not move the
+initial `about:blank` load event to the synchronous point HTML puts it at. It
+does not lift the parsing-time adoption refusal, and it does not reconcile
+`dom_boa.json` / `dom_nodes_boa.json` against `main`'s repins — that is the
+merge's work, with the control above as its evidence.

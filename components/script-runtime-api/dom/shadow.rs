@@ -242,6 +242,28 @@ impl<E: ScriptEngine> NativeFn<E> for TemplateContent {
     }
 }
 
+/// `__templateHost(fragment)` → the `<template>` element whose contents
+/// `fragment` is, or null. DOM's "host-including inclusive ancestor" walk needs
+/// it: a contents fragment's host is its template, so appending one of that
+/// template's own ancestors into the contents is a cycle. This is deliberately
+/// not folded into `__shadowHost`, which decides interface selection and the
+/// composed root - a contents fragment is neither a shadow root nor part of its
+/// template's composed tree.
+pub(crate) struct TemplateHostOf;
+impl<E: ScriptEngine> NativeFn<E> for TemplateHostOf {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let fragment = cx.arg(0);
+        let Some(raw) = cx.owned_node(&fragment)? else {
+            return Ok(cx.make_null());
+        };
+        let found = raw.with_dom(|dom| dom.template_host_of(raw.id()));
+        match found {
+            Some(template) => reflect_pinned::<E>(cx, template.raw() as u64),
+            None => Ok(cx.make_null()),
+        }
+    }
+}
+
 /// `__templateOwnerDocument(node?)` → the inert template-contents owner
 /// document of the arena that holds `node`, minting it if no template there has
 /// asked yet; with no argument, the calling realm's own. `content.ownerDocument`.
@@ -318,6 +340,7 @@ pub(crate) fn install<E: ScriptEngine>(
     engine.set_function::<SlotAssign>("__slotAssign", 2)?;
     engine.set_function::<TakeSlotChanges>("__takeSlotChanges", 0)?;
     engine.set_function::<TemplateContent>("__templateContent", 1)?;
+    engine.set_function::<TemplateHostOf>("__templateHost", 1)?;
     engine.set_function::<TemplateOwnerDocument>("__templateOwnerDocument", 1)?;
     engine.set_function::<RealizeDeclarativeShadow>("__realizeDeclarativeShadow", 1)?;
     engine.set_function::<GetHtmlWithShadow>("__getHTML", 2)?;

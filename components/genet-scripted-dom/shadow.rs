@@ -608,6 +608,24 @@ impl ScriptedDom {
             .filter(|contents| self.is_live(*contents))
     }
 
+    /// The `<template>` element whose contents `fragment` is, if any. DOM's
+    /// "host-including inclusive ancestor" walk needs it: a contents fragment's
+    /// *host* is its template, so appending a template's own ancestor into its
+    /// contents is a cycle and must be refused. The table is one entry per
+    /// template that has been asked for its contents, so the scan is over that
+    /// set and not over the tree.
+    pub fn template_host_of(&self, fragment: NodeId) -> Option<NodeId> {
+        if self.template_contents.is_empty() {
+            return None;
+        }
+        let key = self.try_index(fragment)?;
+        self.template_contents
+            .iter()
+            .find(|(_, contents)| contents.raw() == key)
+            .map(|(template, _)| NodeId::from_raw(*template))
+            .filter(|template| self.is_live(*template))
+    }
+
     /// The contents fragment of template element `id`, creating it if absent.
     pub fn ensure_template_contents(&mut self, id: NodeId) -> NodeId {
         if let Some(existing) = self.template_contents_of(id) {

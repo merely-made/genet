@@ -266,6 +266,17 @@
       throw new DOMException("Cross-arena node adoption is unsupported.", "WrongDocumentError");
     }
   }
+  // One step of DOM's **host-including inclusive ancestor** walk: an ordinary
+  // parent, else the fragment's host. A shadow root's host is its element; a
+  // `<template>`'s contents fragment's host is the template. Without the second
+  // the cycle `tmpl.content.appendChild(tmplsAncestor)` is admitted and the tree
+  // it makes has no top.
+  function hostIncludingParent(node) {
+    if (!node) return null;
+    if (node.parentNode) return node.parentNode;
+    if (node.nodeType !== 11) return null;
+    return wrapNode(__shadowHost(node.__ref)) || wrapNode(__templateHost(node.__ref)) || null;
+  }
   function ensureInsertionNodes(parent, nodes, ref, replaced, replaceAll) {
     // WebIDL argument conversion precedes the DOM hierarchy algorithm, even
     // when the receiver cannot have children. Check every supplied node before
@@ -290,7 +301,7 @@
       var ancestor = parent;
       while (ancestor) {
         if (ancestor === candidate) throw new DOMException("The new child is an ancestor of the parent.", "HierarchyRequestError");
-        ancestor = ancestor.parentNode || (ancestor.nodeType === 11 ? wrapNode(__shadowHost(ancestor.__ref)) : null);
+        ancestor = hostIncludingParent(ancestor);
       }
     }
     if (ref !== null && ref !== undefined && ref.parentNode !== parent) {
@@ -313,7 +324,7 @@
       var ancestor = parent;
       while (ancestor) {
         if (ancestor === node) throw new DOMException("The new child is an ancestor of the parent.", "HierarchyRequestError");
-        ancestor = ancestor.parentNode || (ancestor.nodeType === 11 ? wrapNode(__shadowHost(ancestor.__ref)) : null);
+        ancestor = hostIncludingParent(ancestor);
       }
       if ((type === 10 && parentType !== 9) || ((type === 3 || type === 4) && parentType === 9)) {
         throw new DOMException("This child type is invalid for the parent.", "HierarchyRequestError");

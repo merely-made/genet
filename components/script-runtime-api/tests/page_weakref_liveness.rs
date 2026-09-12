@@ -42,7 +42,8 @@ fn page_weakref_and_native_liveness_agree<E: ScriptEngine>(adopt: bool) {
     let id = NodeId::from_raw(raw.parse().unwrap());
     let owner = if adopt {
         rt.eval("child.document.adoptNode(held);").unwrap();
-        rt.host_in_realm(rt.frame_realms(rt.top_realm())[0].1).unwrap()
+        rt.host_in_realm(rt.frame_realms(rt.top_realm())[0].1)
+            .unwrap()
     } else {
         rt.host().clone()
     };

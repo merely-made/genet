@@ -38,7 +38,9 @@ fn a_runtime_with_a_separate_top_realm_still_snapshot_clones() {
     );
 
     // Positive control: the clone the WPT harness template depends on.
-    let mut clone = runtime.snapshot_clone().expect("two-realm agent must clone");
+    let mut clone = runtime
+        .snapshot_clone()
+        .expect("two-realm agent must clone");
 
     // The clone shows the same top realm, and it is a live realm in the clone's
     // own heap - not a dangling index into the donor's.
@@ -48,7 +50,9 @@ fn a_runtime_with_a_separate_top_realm_still_snapshot_clones() {
     assert_eq!(clone.engine_mut().value_to_string(&value).unwrap(), "7");
 
     // And the two agents are separate: what the clone wrote is not in the donor.
-    let value = runtime.eval("typeof globalThis.__fromClone").expect("donor");
+    let value = runtime
+        .eval("typeof globalThis.__fromClone")
+        .expect("donor");
     assert_eq!(
         runtime.engine_mut().value_to_string(&value).unwrap(),
         "undefined",

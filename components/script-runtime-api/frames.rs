@@ -1601,6 +1601,10 @@ fn without_fragment(url: &str) -> &str {
 /// it was asked from - `location.href = ...` runs in exactly that realm - and a
 /// realm cannot free the frame it is running in. The queue is drained by
 /// `__runNavigations`, from a task on a realm that survives.
+/// The document URL of a document whose host has no base URL. HTML's initial
+/// top-level document URL, and what `location.href` already reports for one.
+const NO_DOCUMENT_URL: &str = "about:blank";
+
 fn navigate_context<E: ScriptEngine>(
     cx: &mut E::CallCx<'_>,
     from: RealmId,
@@ -1620,7 +1624,29 @@ fn navigate_context<E: ScriptEngine>(
         };
         (base(from), base(target))
     };
-    let url = crate::fetch::resolve_against(source_base.as_deref(), input);
+    // A realm has a browsing context when it carries a `FrameRecord` (a child)
+    // or is the top-level context's own realm. Anything else - a removed
+    // frame's `Location`, which keeps answering after its context is gone -
+    // navigates nothing at all. Decided before the fragment and same-URL
+    // branches below, because a dead context must not fire `hashchange` or
+    // move a history entry either.
+    let container = {
+        let a = agent.borrow();
+        match a.frames.records.get(&target) {
+            Some(record) => Some(record.parent),
+            None if target == a.frames.top_realm() => None,
+            None => return Ok(cx.undefined()),
+        }
+    };
+    // The URL a navigation resolves against is the document URL `location.href`
+    // reports, which is `about:blank` until the host sets a base - not "no URL
+    // at all". Resolving against nothing turned `location.assign('#x')` on a
+    // base-less document into a navigation to the opaque string `#x`, which is
+    // a cross-document navigation rather than the fragment one HTML performs.
+    let url = crate::fetch::resolve_against(
+        Some(source_base.as_deref().unwrap_or(NO_DOCUMENT_URL)),
+        input,
+    );
     // A `javascript:` URL is not a navigation: HTML evaluates it against the
     // target's Document and, whatever it returns, never unloads, never joins
     // the session history and never fires `load`. genet does not evaluate one
@@ -1628,7 +1654,7 @@ fn navigate_context<E: ScriptEngine>(
     if url.len() >= 11 && url[..11].eq_ignore_ascii_case("javascript:") {
         return Ok(cx.undefined());
     }
-    let current = target_base.unwrap_or_else(|| "about:blank".into());
+    let current = target_base.unwrap_or_else(|| NO_DOCUMENT_URL.into());
     if without_fragment(&url) == without_fragment(&current) && url != current {
         return navigate_fragment::<E>(cx, &agent, target, &url, &current, replace);
     }
@@ -1639,17 +1665,9 @@ fn navigate_context<E: ScriptEngine>(
     }
     // The queue is drained on the container's realm, which by construction
     // outlives the subtree being replaced - the same route the initial load and
-    // the teardown both take.
-    let container = agent
-        .borrow()
-        .frames
-        .records
-        .get(&target)
-        .map(|record| record.parent);
+    // the teardown both take. A top-level context has no container, so it takes
+    // the route next door, which drains on the bootstrap realm instead.
     let Some(container) = container else {
-        // A top-level context. Its realm is the agent's main realm, which the
-        // engine refuses to discard, so there is nothing this lane can replace
-        // under it; the document URL moves and the history entry joins.
         return navigate_top_level::<E>(cx, &agent, target, &url, replace);
     };
     agent
@@ -1754,7 +1772,7 @@ fn navigate_top_level<E: ScriptEngine>(
             .hosts
             .get(&target)
             .and_then(|host| host.borrow().base_url.clone())
-            .unwrap_or_else(|| "about:blank".into());
+            .unwrap_or_else(|| NO_DOCUMENT_URL.into());
         agent.borrow_mut().frames.initialize(&base);
     }
     agent

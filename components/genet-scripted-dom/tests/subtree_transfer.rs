@@ -4,7 +4,7 @@
 
 //! Storage-only adoption prerequisite. These are not JS adoption receipts.
 use genet_scripted_dom::{
-    NodeId, NodeIdentityError, Pins, ScriptedDom, ShadowRootInit, SlotAssignmentMode,
+    NodeId, NodeIdentityError, Pins, ScriptedDom, ShadowRootInit, ShadowRootMode, SlotAssignmentMode,
     SubtreeTransferError,
 };
 use layout_dom_api::{DomMutation, LayoutDom, LayoutDomMut, LocalName, Namespace, QualName};
@@ -177,18 +177,50 @@ fn queued_mutations_and_observer_records_must_be_consumed_first() {
 }
 
 #[test]
-fn active_parser_and_observer_group_refuse_even_with_empty_queues() {
+fn a_parse_refuses_only_what_the_tree_builder_still_holds() {
     let mut a = ScriptedDom::new();
     let mut b = ScriptedDom::new();
-    let node = a.create_element(qual("p"));
+    // A completed sibling subtree and the element the parser is inside of.
+    let open = a.create_element(qual("section"));
+    a.append_child(a.document(), open);
+    let done = a.create_element(qual("p"));
+    a.append_child(a.document(), done);
+    a.remove_child(done);
+    drain(&mut a);
     a.set_parsing(true);
+    a.set_parser_guard(vec![open, done], Some(open), None);
+    // `done` was created and never popped, but it is not an inclusive ancestor
+    // of the current node, so it is not on the stack of open elements.
+    assert!(a.parser_holds(open));
+    assert!(!a.parser_holds(done));
+    // `open` is still attached, so the read-only preflight is what names the
+    // parser as the obstacle; the detached transfer would stop at its parent.
+    assert_eq!(
+        a.preflight_subtree_transfer_to(&b, open),
+        Err(SubtreeTransferError::PendingSourceWork)
+    );
+    assert_eq!(a.transfer_detached_subtree_to(&mut b, done).unwrap(), [done]);
+    assert!(b.is_live(done));
+
+    // The form element pointer protects its element wherever it sits.
+    let form = a.create_element(qual("form"));
+    a.set_parser_guard(vec![open], Some(open), Some(form));
     assert_refused(
         &mut a,
         &mut b,
-        node,
+        form,
         SubtreeTransferError::PendingSourceWork,
     );
     a.set_parsing(false);
+    assert!(!a.parser_holds(form));
+    assert!(a.transfer_detached_subtree_to(&mut b, form).is_ok());
+}
+
+#[test]
+fn an_observer_group_refuses_even_with_empty_queues() {
+    let mut a = ScriptedDom::new();
+    let mut b = ScriptedDom::new();
+    let node = a.create_element(qual("p"));
     a.set_observing(true);
     a.set_observer_group(true);
     assert_refused(
@@ -202,28 +234,107 @@ fn active_parser_and_observer_group_refuse_even_with_empty_queues() {
 }
 
 #[test]
-fn shadow_and_template_metadata_are_not_silently_left_behind() {
+fn a_shadow_tree_and_its_nested_hosts_travel_with_the_host() {
     let mut a = ScriptedDom::new();
     let mut b = ScriptedDom::new();
     let host = a.create_element(qual("div"));
-    a.attach_shadow(host, ShadowRootInit::default()).unwrap();
+    let root = a
+        .attach_shadow(
+            host,
+            ShadowRootInit {
+                mode: ShadowRootMode::Closed,
+                ..ShadowRootInit::default()
+            },
+        )
+        .unwrap();
+    let slot = a.create_element(qual("slot"));
+    a.append_child(root, slot);
+    let inner_host = a.create_element(qual("span"));
+    a.append_child(root, inner_host);
+    let inner_root = a
+        .attach_shadow(inner_host, ShadowRootInit::default())
+        .unwrap();
+    let light = a.create_element(qual("p"));
+    a.append_child(host, light);
+    drain(&mut a);
+
+    let members = a.transfer_detached_subtree_to(&mut b, host).unwrap();
+    for id in [host, root, slot, inner_host, inner_root, light] {
+        assert!(members.contains(&id), "{id:?} did not travel");
+        assert!(b.is_live(id) && !a.is_live(id));
+    }
+    // The shadow root's side maps came with it, closed stays closed, and the
+    // source keeps none of the bookkeeping.
+    assert_eq!(b.shadow_root_of(host), Some(root));
+    assert_eq!(b.shadow_host_of(root), Some(host));
+    assert_eq!(b.shadow_root_of(inner_host), Some(inner_root));
+    assert_eq!(
+        b.shadow_init(root).map(|init| init.mode),
+        Some(ShadowRootMode::Closed)
+    );
+    assert_eq!(a.shadow_root_count(), 0);
+    assert_eq!(b.shadow_root_count(), 2);
+    assert_eq!(b.assigned_nodes_of(slot), vec![light]);
+    assert_eq!(b.assigned_slot_of(light), Some(slot));
+    assert_eq!(b.tree_root(inner_root), Some(host));
+}
+
+#[test]
+fn a_shadow_root_is_never_the_thing_adopted_and_a_split_host_is_refused() {
+    let mut a = ScriptedDom::new();
+    let mut b = ScriptedDom::new();
+    let host = a.create_element(qual("div"));
+    let root = a.attach_shadow(host, ShadowRootInit::default()).unwrap();
+    let inside = a.create_element(qual("p"));
+    a.append_child(root, inside);
+    drain(&mut a);
+    // A shadow root has no parent and is not an adoptable node of its own.
+    assert_refused(&mut a, &mut b, root, SubtreeTransferError::UnsupportedNode);
+    // Neither is a node that would leave its containing shadow tree behind:
+    // `inside` is attached, so the runtime removes it first; here the storage
+    // boundary sees an attached root.
+    assert_refused(&mut a, &mut b, inside, SubtreeTransferError::AttachedRoot);
+    assert_eq!(a.shadow_root_of(host), Some(root));
+}
+
+#[test]
+fn template_contents_are_rehomed_to_the_destination_inert_document() {
+    let mut a = ScriptedDom::new();
+    let mut b = ScriptedDom::new();
     let template = a.create_element(qual("template"));
     let contents = a.ensure_template_contents(template);
+    let nested = a.create_element(qual("template"));
+    a.append_child(contents, nested);
+    let nested_contents = a.ensure_template_contents(nested);
+    let source_owner = a.template_owner_document_if_any().unwrap();
+    // Something else already owns an inert document in the destination, so the
+    // re-homing must land on *that* one rather than minting a second.
+    let resident = b.create_element(qual("template"));
+    let resident_contents = b.ensure_template_contents(resident);
+    let destination_owner = b.template_owner_document_if_any().unwrap();
     drain(&mut a);
-    assert_refused(&mut a, &mut b, host, SubtreeTransferError::AssociatedState);
-    assert_refused(
-        &mut a,
-        &mut b,
-        template,
-        SubtreeTransferError::AssociatedState,
+
+    let members = a.transfer_detached_subtree_to(&mut b, template).unwrap();
+    for id in [template, contents, nested, nested_contents] {
+        assert!(members.contains(&id));
+    }
+    assert!(!members.contains(&source_owner));
+    assert_eq!(b.template_contents_of(template), Some(contents));
+    assert_eq!(b.template_contents_of(nested), Some(nested_contents));
+    assert!(b.is_in_template_contents(nested));
+    assert_eq!(b.template_owner_document_if_any(), Some(destination_owner));
+    assert_eq!(b.template_contents_of(resident), Some(resident_contents));
+    assert_eq!(a.template_contents_of(template), None);
+    // A contents fragment whose template stays behind is still refused.
+    let orphan = b.create_element(qual("template"));
+    let orphan_contents = b.ensure_template_contents(orphan);
+    drain(&mut b);
+    let mut c = ScriptedDom::new();
+    assert_eq!(
+        b.preflight_subtree_transfer_to(&c, orphan_contents),
+        Err(SubtreeTransferError::AssociatedState)
     );
-    assert_refused(
-        &mut a,
-        &mut b,
-        contents,
-        SubtreeTransferError::AssociatedState,
-    );
-    assert_eq!(a.template_contents_of(template), Some(contents));
+    assert!(b.transfer_detached_subtree_to(&mut c, orphan).is_ok());
 }
 
 #[test]
@@ -336,15 +447,16 @@ fn unsupported_preflight_does_not_detach_or_consume_pending_work() {
     source.set_observing(true);
     let host = source.create_element(qual("div"));
     source.append_child(source.document(), host);
-    source
+    let root = source
         .attach_shadow(host, ShadowRootInit::default())
         .unwrap();
     let queue = format!("{:?}", source.pending_mutations());
     let epoch = source.structure_epoch();
     let count = source.live_node_count();
+    // A shadow root travels with its host; it is never adopted on its own.
     assert_eq!(
-        source.preflight_subtree_transfer_to(&target, host),
-        Err(SubtreeTransferError::AssociatedState)
+        source.preflight_subtree_transfer_to(&target, root),
+        Err(SubtreeTransferError::UnsupportedNode)
     );
     assert_eq!(source.parent(host), Some(source.document()));
     assert_eq!(format!("{:?}", source.pending_mutations()), queue);

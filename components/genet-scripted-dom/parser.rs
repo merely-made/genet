@@ -231,6 +231,20 @@ pub struct ScriptedTreeSink<A: DomAccess> {
     /// the arena, so the sink keeps it for the length of the parse — which is
     /// exactly as long as the tree builder asks about it.
     mathml_integration_points: RefCell<HashSet<NodeId>>,
+    /// Elements the tree builder created and has not popped off its stack of
+    /// open elements. html5ever calls [`TreeSink::pop`] for every element it
+    /// pushed, but nothing at all for one it inserted without pushing (a void
+    /// element, a self-closing foreign element), so this set is a superset of
+    /// the real stack and is narrowed by `anchor` at query time.
+    created_unpopped: RefCell<HashSet<NodeId>>,
+    /// The tree builder's *current node*: the element insertions are landing
+    /// in. Intersecting `created_unpopped` with this node's inclusive ancestors
+    /// recovers the stack of open elements exactly — every genuinely open
+    /// element is an inclusive ancestor of the current node, and every stale
+    /// never-pushed entry is not.
+    anchor: RefCell<Option<NodeId>>,
+    /// The tree builder's *form element pointer*.
+    form_element: RefCell<Option<NodeId>>,
 }
 
 impl<A: DomAccess> ScriptedTreeSink<A> {
@@ -241,7 +255,21 @@ impl<A: DomAccess> ScriptedTreeSink<A> {
             content_target: RefCell::new(HashMap::new()),
             already_started: RefCell::new(HashSet::new()),
             mathml_integration_points: RefCell::new(HashSet::new()),
+            created_unpopped: RefCell::new(HashSet::new()),
+            anchor: RefCell::new(None),
+            form_element: RefCell::new(None),
         }
+    }
+
+    /// Move the current-node anchor for an insertion under `parent`. An element
+    /// the sink has only just created stays the anchor: html5ever appends it
+    /// into its parent *before* pushing it, so the parent is not yet current.
+    fn note_insertion(&self, parent: NodeId, child: Option<NodeId>) {
+        let mut anchor = self.anchor.borrow_mut();
+        if child.is_some() && *anchor == child {
+            return;
+        }
+        *anchor = Some(parent);
     }
 
     /// Append `child` (a node or a run of text) under `parent`, merging text
@@ -318,6 +346,11 @@ impl<A: DomAccess> TreeSink for ScriptedTreeSink<A> {
         if &*name_local == "script" {
             self.policy.note_parser_created_script(id);
         }
+        if &*name_local == "form" {
+            *self.form_element.borrow_mut() = Some(id);
+        }
+        self.created_unpopped.borrow_mut().insert(id);
+        *self.anchor.borrow_mut() = Some(id);
         id
     }
 
@@ -331,11 +364,38 @@ impl<A: DomAccess> TreeSink for ScriptedTreeSink<A> {
     }
 
     fn append(&self, parent: &NodeId, child: NodeOrText<NodeId>) {
+        self.note_insertion(
+            *parent,
+            match &child {
+                NodeOrText::AppendNode(node) => Some(*node),
+                NodeOrText::AppendText(_) => None,
+            },
+        );
         self.append_node_or_text(*parent, child);
+    }
+
+    fn pop(&self, node: &NodeId) {
+        self.created_unpopped.borrow_mut().remove(node);
+        if *self.form_element.borrow() == Some(*node) {
+            *self.form_element.borrow_mut() = None;
+        }
+        let mut anchor = self.anchor.borrow_mut();
+        if *anchor == Some(*node) {
+            *anchor = self.access.with(|dom| dom.parent(*node));
+        }
     }
 
     fn append_before_sibling(&self, sibling: &NodeId, child: NodeOrText<NodeId>) {
         let sibling = *sibling;
+        if let Some(parent) = self.access.with(|dom| dom.parent(sibling)) {
+            self.note_insertion(
+                parent,
+                match &child {
+                    NodeOrText::AppendNode(node) => Some(*node),
+                    NodeOrText::AppendText(_) => None,
+                },
+            );
+        }
         match child {
             NodeOrText::AppendNode(node) => self.access.with(|dom| {
                 let Some(parent) = dom.parent(sibling) else {
@@ -687,6 +747,21 @@ impl<A: DomAccess> DocumentParser<A> {
 
     /// Whether this `<script>` was marked "already started" (EOF inside it), in
     /// which case HTML says it must not execute.
+    /// What the tree builder is currently holding: the elements it created and
+    /// has not popped, the current node those are narrowed against, and the
+    /// form element pointer. The host mirrors this into the arena at every
+    /// point script can run, so a cross-document adoption during a parse can
+    /// refuse precisely the subtrees the parser still has handles on instead of
+    /// refusing every subtree in a parsing document.
+    pub fn parser_guard(&self) -> (Vec<NodeId>, Option<NodeId>, Option<NodeId>) {
+        let sink = &self.parser.tokenizer.sink.sink;
+        (
+            sink.created_unpopped.borrow().iter().copied().collect(),
+            *sink.anchor.borrow(),
+            *sink.form_element.borrow(),
+        )
+    }
+
     pub fn script_already_started(&self, node: NodeId) -> bool {
         self.parser
             .tokenizer

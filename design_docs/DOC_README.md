@@ -932,3 +932,33 @@ runtime acceptance claim yet. Associated trees and host-owned embedded contexts
 remain explicit unsupported transfer boundaries. This is the successor to the
 foundation-only refusal described above; full realms and headed G5 acceptance
 remain open.
+
+### Top-level realm (2026-09-12)
+
+The [top-level realm phase](2026-09-08_realms_plan.md#phase-top-level-realm-2026-09-12)
+replaces the realm the WindowProxy lane recorded as unreplaceable. `MAIN_REALM`
+now means only the agent's bootstrap realm — the timer queue, the navigation
+drive, the `WindowProxy` factory, the one realm the engine refuses to discard —
+and the top-level browsing context's document lives in a realm created through
+the realm API, with its `WindowProxy` as the global `this` from the realm's
+first instruction, exactly as a child frame's is. The two are told apart by the
+top context's absent `FrameRecord` and by nothing else. One accessor,
+`Runtime::top_realm()`, answers every top-document question across 41 migrated
+call sites, and `navigate_top_level` asks the host policy hook and then takes
+the child's route exactly, draining on the bootstrap realm because that is the
+one realm guaranteed to outlive every document. `Runtime::host()` keeps its
+signature — a navigation writes the new `HostState` into the cell the embedder
+already holds — so genet-scripted, the WPT runner, Ortet and Mere-side hosts
+change nothing. The blocker cleared first was genet's, not vano's: Nova's
+`snapshot_clone` refusal on realm-creating agents was a wholesale `realm_roots`
+copy, and lifting it kept the 3.4 ms-per-clone harness path instead of 37.7 ms
+per test fresh. Release runtime suite **558 passed, zero ignored**. The
+eight-subset, 2491-file census moves **no file in either direction** and exactly
+two subtests, both former passes that depended on the defect this phase fixed;
+**no repins**, twelve of fourteen testharness slices and both reftest guards at
+`unexpected=0`. `dom` 61 and `dom/nodes` 35 are reproduced exactly by the base
+runner and are deliberately left unrepinned for the merge to reconcile against
+`main`'s copies. Ortet's `article` digest is stable over three runs and `frames`
+is bimodal at this base; an `ortet` built from the base commit produces the
+identical six digests, so both are properties of the base rather than of this
+lane. A discarded context's `Location` reporting `about:blank` remains open.

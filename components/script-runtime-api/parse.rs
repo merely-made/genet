@@ -257,9 +257,8 @@ impl<E: ScriptEngine> Runtime<E> {
         };
         // The document object and the window's named properties are bound
         // before the first script can look at either.
-        let _ = self
-            .engine
-            .eval("globalThis.__rebindDocument(); globalThis.__refreshNamedProperties()");
+        let _ =
+            self.eval_top("globalThis.__rebindDocument(); globalThis.__refreshNamedProperties()");
 
         let mut deferred: Vec<(NodeId, ScriptFacts)> = Vec::new();
         // Async scripts do not block the parser, so they are not run here. See
@@ -323,9 +322,7 @@ impl<E: ScriptEngine> Runtime<E> {
         // The final tokenizer stretch may contain frames without a following
         // blocking script. Discover their contexts and queue document loads
         // before handing the completed parse back to the host event loop.
-        let _ = self
-            .engine
-            .eval("globalThis.__refreshNamedProperties && __refreshNamedProperties()");
+        let _ = self.eval_top("globalThis.__refreshNamedProperties && __refreshNamedProperties()");
 
         // HTML, "the end". Readiness first, then the tasks already queued (the
         // async scripts, whose fetches completed while the parser ran), then
@@ -349,8 +346,7 @@ impl<E: ScriptEngine> Runtime<E> {
             report.deferred_run += 1;
         }
         let _ = self
-            .engine
-            .eval("document.dispatchEvent(new Event('DOMContentLoaded', { bubbles: true }));");
+            .eval_top("document.dispatchEvent(new Event('DOMContentLoaded', { bubbles: true }));");
         self.run_microtasks();
         if dispatch_load && self.agent.borrow_mut().frames.defer_main_load() {
             // The final child completion performs Complete/readystatechange/load.
@@ -358,7 +354,7 @@ impl<E: ScriptEngine> Runtime<E> {
         }
         self.set_ready_state(ReadyState::Complete);
         if dispatch_load {
-            let _ = self.engine.eval("window.dispatchEvent(new Event('load'));");
+            let _ = self.eval_top("window.dispatchEvent(new Event('load'));");
             self.run_microtasks();
         }
         report
@@ -369,9 +365,10 @@ impl<E: ScriptEngine> Runtime<E> {
     /// only change while a script runs, so refreshing here makes the table
     /// exactly current for the whole next stretch of tokenizing.
     fn refresh_parser_policy(&mut self, policy: &Rc<ParserPolicy>) {
+        // The custom-element registry belongs to the document, so both of these
+        // are asked of the top document's realm.
         let names = self
-            .engine
-            .eval("globalThis.__ceShadowDisabledNames ? __ceShadowDisabledNames() : ''")
+            .eval_top("globalThis.__ceShadowDisabledNames ? __ceShadowDisabledNames() : ''")
             .ok()
             .and_then(|v| self.engine.value_to_string(&v).ok())
             .unwrap_or_default();
@@ -386,8 +383,7 @@ impl<E: ScriptEngine> Runtime<E> {
         // script pause. Nothing is defined in the overwhelming majority of
         // documents, and then the parser feeds whole buffers as before.
         let defined = self
-            .engine
-            .eval("globalThis.__ceDefinedCount ? __ceDefinedCount() : 0")
+            .eval_top("globalThis.__ceDefinedCount ? __ceDefinedCount() : 0")
             .ok()
             .and_then(|v| self.engine.value_to_string(&v).ok())
             .and_then(|s| s.trim().parse::<u32>().ok())
@@ -414,7 +410,7 @@ impl<E: ScriptEngine> Runtime<E> {
         if live.is_empty() {
             return;
         }
-        let _ = self.engine.eval(&format!(
+        let _ = self.eval_top(&format!(
             "globalThis.__ceUpgradeParsed && __ceUpgradeParsed('{}')",
             live.join(",")
         ));
@@ -467,9 +463,7 @@ impl<E: ScriptEngine> Runtime<E> {
 
     fn set_ready_state(&mut self, state: ReadyState) {
         self.host.borrow_mut().markup.ready_state = state;
-        let _ = self
-            .engine
-            .eval("document.dispatchEvent(new Event('readystatechange'));");
+        let _ = self.eval_top("document.dispatchEvent(new Event('readystatechange'));");
     }
 
     /// Read the `<script>` element's attributes and text out of the arena.
@@ -527,20 +521,16 @@ impl<E: ScriptEngine> Runtime<E> {
         // Window named properties are live over the tree, and the tree just
         // grew: a script that names an element parsed since the last pause
         // (`ordinarytemplate.innerHTML = ...`) must find it.
-        let _ = self
-            .engine
-            .eval("globalThis.__refreshNamedProperties && __refreshNamedProperties()");
+        let _ = self.eval_top("globalThis.__refreshNamedProperties && __refreshNamedProperties()");
         self.host.borrow_mut().markup.current_script = Some(node);
-        let _ = self.engine.eval(&source);
+        let _ = self.eval_top(&source);
         self.flush_host_trace_events();
         self.host.borrow_mut().markup.current_script = None;
         // The microtask checkpoint after a script is where a MutationObserver
         // callback registered by an earlier script actually runs — and the
         // reason the parser can see a shadow root that callback attached.
         self.run_microtasks();
-        let _ = self
-            .engine
-            .eval("globalThis.__refreshNamedProperties && __refreshNamedProperties()");
+        let _ = self.eval_top("globalThis.__refreshNamedProperties && __refreshNamedProperties()");
     }
 
     /// Execute one deferred classic or module script after parsing.
@@ -554,7 +544,7 @@ impl<E: ScriptEngine> Runtime<E> {
                     },
                 };
                 if let Some(source) = source {
-                    let _ = self.engine.eval(&source);
+                    let _ = self.eval_top(&source);
                     self.flush_host_trace_events();
                 }
             },
@@ -582,7 +572,13 @@ impl<E: ScriptEngine> Runtime<E> {
                         let url = loader.resolve(specifier);
                         loader.load(specifier, None, None).map(|text| (url, text))
                     };
-                    let _ = self.engine.eval_module(&source, &base, &mut resolve);
+                    // The module belongs to the document that declared it, so
+                    // it is evaluated in the top document's realm - not the
+                    // agent's bootstrap realm, which is nobody's document.
+                    let top = self.top_realm();
+                    let _ = self
+                        .engine
+                        .eval_module_in_realm(top, &source, &base, &mut resolve);
                     self.flush_host_trace_events();
                 }
             },

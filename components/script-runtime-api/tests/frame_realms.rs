@@ -282,7 +282,7 @@ fn parser_only_frame_loads_without_window_access<E: ScriptEngine>() {
         r#"<body><iframe srcdoc='<script>parent.childLoaded = true;</script>'></iframe></body>"#,
         &NoScriptLoader,
     );
-    assert_eq!(runtime.frame_realms(script_engine_api::MAIN_REALM).len(), 1);
+    assert_eq!(runtime.frame_realms(runtime.top_realm()).len(), 1);
     check(
         &mut runtime,
         "parentLoads === 0 && document.readyState === 'interactive'",

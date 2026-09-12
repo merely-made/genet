@@ -649,24 +649,42 @@ mod tests {
     }
 
     /// `location.assign` / `location.href =` resolve relative to the current URL
-    /// and update what the getters (and `__resolve_url`) read.
+    /// and update what the getters (and `__resolve_url`) read - **once the
+    /// navigation they queue has run**.
+    ///
+    /// HTML's "navigate" is a task, not a synchronous call, so a read taken in
+    /// the same script still sees the URL the document was loaded with. That is
+    /// what a browser does, and since the top-level context now navigates by
+    /// the same route a child does - unload, new realm, new `Document` - it is
+    /// what genet does too. The synchronous URL move this test used to assert
+    /// was an artifact of a top-level navigation that only ever edited the base
+    /// URL of a realm it could not replace.
     fn location_assign_updates_url<E: ScriptEngine>() {
         let mut rt = Runtime::<E>::new().expect("runtime");
         rt.set_base_url("https://example.com/a/b.html")
             .expect("base url");
-        rt.eval(
-            "location.assign('../c.html'); console.log(location.href);\
-             location.href = 'd.html'; console.log(location.href);\
-             console.log(location.pathname);",
-        )
-        .expect("assign script");
+        rt.eval("location.assign('../c.html'); console.log(location.href);")
+            .expect("assign script");
         assert_eq!(
             rt.host().borrow().console,
-            vec![
-                "https://example.com/c.html",
-                "https://example.com/d.html",
-                "/d.html",
-            ],
+            vec!["https://example.com/a/b.html"],
+            "the navigation is queued; this read precedes it"
+        );
+        rt.run_event_loop(16).expect("drain the navigation");
+        rt.eval("console.log(location.href); location.href = 'd.html';")
+            .expect("read and reassign");
+        assert_eq!(
+            rt.host().borrow().console,
+            vec!["https://example.com/c.html"],
+            "the first navigation ran, and its document's console is its own"
+        );
+        rt.run_event_loop(16).expect("drain the second navigation");
+        rt.eval("console.log(location.href); console.log(location.pathname);")
+            .expect("read back");
+        assert_eq!(
+            rt.host().borrow().console,
+            vec!["https://example.com/d.html", "/d.html"],
+            "the second navigation moved the URL and replaced the document again"
         );
     }
 

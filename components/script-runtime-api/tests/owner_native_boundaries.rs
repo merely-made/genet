@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use genet_scripted_dom::NodeId;
-use script_engine_api::{MAIN_REALM, ScriptEngine};
+use script_engine_api::ScriptEngine;
 use script_runtime_api::{NoScriptLoader, Runtime};
 
 fn runtime<E: ScriptEngine>() -> Runtime<E> {
@@ -53,7 +53,7 @@ fn adopted_scroll_targets_storage_owner<E: ScriptEngine>() {
     rt.eval("var node=document.createElement('div'); child.document.body.appendChild(node); node.scrollIntoView();").unwrap();
     let raw = rt.eval("String(__nodeRawId(node.__ref))").unwrap();
     let node = NodeId::from_raw(rt.value_to_string(&raw).unwrap().parse().unwrap());
-    let realm = rt.frame_realms(MAIN_REALM)[0].1;
+    let realm = rt.frame_realms(rt.top_realm())[0].1;
     assert_eq!(rt.host().borrow().scroll_into_view, None);
     assert_eq!(
         rt.host_in_realm(realm).unwrap().borrow().scroll_into_view,

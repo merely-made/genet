@@ -257,9 +257,8 @@ impl<E: ScriptEngine> Runtime<E> {
         };
         // The document object and the window's named properties are bound
         // before the first script can look at either.
-        let _ = self
-            .engine
-            .eval("globalThis.__rebindDocument(); globalThis.__refreshNamedProperties()");
+        let _ =
+            self.eval_top("globalThis.__rebindDocument(); globalThis.__refreshNamedProperties()");
 
         let mut deferred: Vec<(NodeId, ScriptFacts)> = Vec::new();
         // Async scripts do not block the parser, so they are not run here. See
@@ -323,9 +322,7 @@ impl<E: ScriptEngine> Runtime<E> {
         // The final tokenizer stretch may contain frames without a following
         // blocking script. Discover their contexts and queue document loads
         // before handing the completed parse back to the host event loop.
-        let _ = self
-            .engine
-            .eval("globalThis.__refreshNamedProperties && __refreshNamedProperties()");
+        let _ = self.eval_top("globalThis.__refreshNamedProperties && __refreshNamedProperties()");
 
         // HTML, "the end". Readiness first, then the tasks already queued (the
         // async scripts, whose fetches completed while the parser ran), then
@@ -358,7 +355,7 @@ impl<E: ScriptEngine> Runtime<E> {
         }
         self.set_ready_state(ReadyState::Complete);
         if dispatch_load {
-            let _ = self.engine.eval("window.dispatchEvent(new Event('load'));");
+            let _ = self.eval_top("window.dispatchEvent(new Event('load'));");
             self.run_microtasks();
         }
         report
@@ -414,7 +411,7 @@ impl<E: ScriptEngine> Runtime<E> {
         if live.is_empty() {
             return;
         }
-        let _ = self.engine.eval(&format!(
+        let _ = self.eval_top(&format!(
             "globalThis.__ceUpgradeParsed && __ceUpgradeParsed('{}')",
             live.join(",")
         ));
@@ -527,20 +524,16 @@ impl<E: ScriptEngine> Runtime<E> {
         // Window named properties are live over the tree, and the tree just
         // grew: a script that names an element parsed since the last pause
         // (`ordinarytemplate.innerHTML = ...`) must find it.
-        let _ = self
-            .engine
-            .eval("globalThis.__refreshNamedProperties && __refreshNamedProperties()");
+        let _ = self.eval_top("globalThis.__refreshNamedProperties && __refreshNamedProperties()");
         self.host.borrow_mut().markup.current_script = Some(node);
-        let _ = self.engine.eval(&source);
+        let _ = self.eval_top(&source);
         self.flush_host_trace_events();
         self.host.borrow_mut().markup.current_script = None;
         // The microtask checkpoint after a script is where a MutationObserver
         // callback registered by an earlier script actually runs — and the
         // reason the parser can see a shadow root that callback attached.
         self.run_microtasks();
-        let _ = self
-            .engine
-            .eval("globalThis.__refreshNamedProperties && __refreshNamedProperties()");
+        let _ = self.eval_top("globalThis.__refreshNamedProperties && __refreshNamedProperties()");
     }
 
     /// Execute one deferred classic or module script after parsing.
@@ -554,7 +547,7 @@ impl<E: ScriptEngine> Runtime<E> {
                     },
                 };
                 if let Some(source) = source {
-                    let _ = self.engine.eval(&source);
+                    let _ = self.eval_top(&source);
                     self.flush_host_trace_events();
                 }
             },

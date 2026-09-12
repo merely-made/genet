@@ -930,7 +930,7 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             let _ = self.rt.notify_media_features_changed();
         }
         let mut reachable = std::collections::HashSet::new();
-        let mut pending = vec![script_engine_api::MAIN_REALM];
+        let mut pending = vec![self.rt.top_realm()];
         while let Some(parent) = pending.pop() {
             for (_, realm) in self.rt.frame_realms(parent) {
                 if reachable.insert(realm) {
@@ -941,7 +941,7 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         self.child_cssoms
             .borrow_mut()
             .retain(|realm, _| reachable.contains(realm));
-        self.composite_child_realms(script_engine_api::MAIN_REALM, &mut list);
+        self.composite_child_realms(self.rt.top_realm(), &mut list);
         genet_render::translate_frame(&list)
     }
 

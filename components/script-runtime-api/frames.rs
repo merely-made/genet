@@ -829,10 +829,19 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
                 loader.as_ref().and_then(|loader| loader.load(&url))
             }
         });
-        let (context, scripts) = {
+        let Some((context, scripts)) = ({
             let mut a = agent.borrow_mut();
             a.frames.initialize(&base);
-            let parent_context = a.frames.contexts[&parent];
+            // HTML creates a child navigable only when the container's *node
+            // document* has a navigable of its own. It may not: appending an
+            // `iframe` into the document of its own child destroys that child's
+            // browsing context by the removing steps, and the element's
+            // container document is then one whose navigable is gone. Such a
+            // container has no content navigable at all - `contentWindow` is
+            // null - rather than a fresh one parented in nothing.
+            let Some(&parent_context) = a.frames.contexts.get(&parent) else {
+                return Ok(cx.make_null());
+            };
             let tree = a.frames.tree.as_mut().expect("initialized");
             let context = tree
                 .create_child(parent_context, raw.raw(), &attrs)
@@ -864,7 +873,9 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
                     origin,
                     initial_about_blank: lazy || url == "about:blank",
                 });
-            (context, !flags.contains(SandboxFlags::SCRIPTS))
+            Some((context, !flags.contains(SandboxFlags::SCRIPTS)))
+        }) else {
+            return Ok(cx.make_null());
         };
         let style = parent_host.borrow().computed_style.clone();
         let dimension = |name: &str, fallback: f32| {
@@ -1255,13 +1266,13 @@ fn window_property<E: ScriptEngine>(
         return view_from::<E>(cx, viewer, target);
     }
     if key == "parent" || key == "top" {
-        let parent = agent
-            .borrow()
-            .frames
-            .records
-            .get(&target)
-            .map(|r| r.parent)
-            .unwrap_or(target);
+        // A discarded context has no parent and no top: HTML's `parent` and
+        // `top` are defined over the navigable's *parent*/*top* navigable, and
+        // a destroyed one has neither. The top-level realm always has both.
+        let parent = agent.borrow().frames.records.get(&target).map(|r| r.parent);
+        let Some(parent) = parent.or((target == MAIN_REALM).then_some(MAIN_REALM)) else {
+            return Ok(cx.make_null());
+        };
         let to = if key == "top" { MAIN_REALM } else { parent };
         return view_from::<E>(cx, viewer, to);
     }

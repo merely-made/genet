@@ -194,6 +194,7 @@ pub(crate) fn install_dom_surface<E: ScriptEngine>(
     engine.set_function::<RemoveAttributeNS>("__removeAttributeNS", 3)?;
     engine.set_function::<NodeType>("__nodeType", 1)?;
     engine.set_function::<NodeRawId>("__nodeRawId", 1)?;
+    engine.set_function::<adoption::NoteCanvasContext>("__noteCanvasContext", 1)?;
     engine.set_function::<RemoveAttribute>("__removeAttribute", 2)?;
     engine.set_function::<Matches>("__matches", 2)?;
     engine.set_function::<QuerySelector>("__querySelector", 2)?;

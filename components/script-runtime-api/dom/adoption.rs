@@ -206,6 +206,25 @@ pub(crate) fn validate<C: CallCx + ?Sized>(cx: &mut C, raw: u64) -> Result<(), C
     resolve_owner(cx, raw).map(|_| ())
 }
 
+/// `__noteCanvasContext(canvas)` — record that this canvas minted a live
+/// drawing context in its owning host. The registry index the JS context object
+/// carries is meaningful only in that host, and the handler behind it owns a
+/// texture producer with no ownership transaction, so the adoption boundary
+/// reads this set to refuse exactly the canvases that cannot move. A canvas
+/// that never asked for a context is an ordinary element.
+pub(crate) struct NoteCanvasContext;
+impl<E: ScriptEngine> NativeFn<E> for NoteCanvasContext {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let canvas = cx.arg(0);
+        if let Some(raw) = cx.reflector_data(&canvas) {
+            let owned = resolve_owner(cx, raw)?;
+            let id = owned.raw();
+            owned.with_host(|host| host.canvas_contexts.insert(id));
+        }
+        Ok(cx.undefined())
+    }
+}
+
 /// A multi-node mutation must stay inside one arena: the operands are already
 /// owner-resolved, so this compares the stores they resolved to rather than
 /// resolving them a second time.
@@ -432,8 +451,8 @@ impl<E: ScriptEngine> NativeFn<E> for AgentDispatch {
                 }
                 Ok(cx.undefined())
             },
-            "owners" | "adopted" | "connect" | "disconnect" | "rangeRemove" | "rangeInsert"
-            | "rangeReplace" | "rangeData" | "rangeSplit" => {
+            "owners" | "adopted" | "connect" | "disconnect" | "templateOwners" | "rangeRemove"
+            | "rangeInsert" | "rangeReplace" | "rangeData" | "rangeSplit" => {
                 let count = match op.as_str() {
                     "owners" => 2,
                     "adopted" | "rangeSplit" => 3,
@@ -475,10 +494,11 @@ fn transfer<E: ScriptEngine>(cx: &mut E::CallCx<'_>, mutate: bool) -> Result<E::
     }
     .map_err(|e| cx.error(&format!("NotSupportedError: cross-arena subtree {e:?}")))?;
     // Active host-owned resource state still needs its own ownership
-    // transaction. An `iframe` is no longer one of those: HTML destroys its
-    // nested browsing context when the element leaves a connected tree and
-    // creates a fresh one when it is inserted again, so a relocated frame
-    // arrives here as an ordinary subtree.
+    // transaction. The three browsing-context containers are no longer among
+    // them by *name*: HTML destroys a container's nested browsing context when
+    // the element leaves a connected tree and creates a fresh one when it is
+    // inserted again, so a relocated `iframe`, `object` or `embed` arrives here
+    // as an ordinary subtree and becomes a fresh frame in the destination.
     //
     // The two passes ask different questions on purpose. The preflight runs
     // *before* the removal steps, so the context it would see is one the very
@@ -486,6 +506,13 @@ fn transfer<E: ScriptEngine>(cx: &mut E::CallCx<'_>, mutate: bool) -> Result<E::
     // relocation. The mutating pass runs after them, so a context still live at
     // that point is one the mutation funnel never saw, and moving the element
     // would strand its realm.
+    //
+    // A `canvas` is the residual, and it is refused by fact rather than by
+    // name: only one that has minted a drawing context is. That context's
+    // registry index means something only in the source host, and the texture
+    // producer behind it has no ownership transaction to move it - so the
+    // element cannot leave the arena its producer answers to. A canvas that
+    // never asked for a context carries nothing and adopts like any element.
     let agent = current_host(cx).and_then(|h| h.borrow().agent.upgrade());
     let unsupported = {
         let source = source.borrow();
@@ -494,8 +521,8 @@ fn transfer<E: ScriptEngine>(cx: &mut E::CallCx<'_>, mutate: bool) -> Result<E::
                 .dom
                 .element_name(id)
                 .is_some_and(|name| match &*name.local {
-                    "object" | "embed" | "canvas" => true,
-                    "iframe" => {
+                    "canvas" => source.canvas_contexts.contains(&id.raw()),
+                    "iframe" | "object" | "embed" => {
                         mutate
                             && agent
                                 .as_ref()

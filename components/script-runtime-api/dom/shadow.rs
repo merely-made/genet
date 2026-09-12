@@ -242,12 +242,23 @@ impl<E: ScriptEngine> NativeFn<E> for TemplateContent {
     }
 }
 
-/// `__templateOwnerDocument()` → the shared inert template-contents owner
-/// document, minting it if no template has asked yet. `content.ownerDocument`.
+/// `__templateOwnerDocument(node?)` → the inert template-contents owner
+/// document of the arena that holds `node`, minting it if no template there has
+/// asked yet; with no argument, the calling realm's own. `content.ownerDocument`.
+///
+/// The owner belongs to an *arena*, not to the calling realm. HTML's "adopt the
+/// template's contents" re-homes an adopted template's contents onto the
+/// destination document's inert owner, so a reader still holding the fragment
+/// from the origin realm must be told that one and not its own.
 pub(crate) struct TemplateOwnerDocument;
 impl<E: ScriptEngine> NativeFn<E> for TemplateOwnerDocument {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
-        match with_dom::<E, _>(cx, |dom| dom.template_owner_document()) {
+        let node = cx.arg(0);
+        let found = match cx.owned_node(&node)? {
+            Some(owned) => Some(owned.with_dom(|dom| dom.template_owner_document())),
+            None => with_dom::<E, _>(cx, |dom| dom.template_owner_document()),
+        };
+        match found {
             Some(id) => reflect_pinned::<E>(cx, id.raw() as u64),
             None => Ok(cx.make_null()),
         }
@@ -307,7 +318,7 @@ pub(crate) fn install<E: ScriptEngine>(
     engine.set_function::<SlotAssign>("__slotAssign", 2)?;
     engine.set_function::<TakeSlotChanges>("__takeSlotChanges", 0)?;
     engine.set_function::<TemplateContent>("__templateContent", 1)?;
-    engine.set_function::<TemplateOwnerDocument>("__templateOwnerDocument", 0)?;
+    engine.set_function::<TemplateOwnerDocument>("__templateOwnerDocument", 1)?;
     engine.set_function::<RealizeDeclarativeShadow>("__realizeDeclarativeShadow", 1)?;
     engine.set_function::<GetHtmlWithShadow>("__getHTML", 2)?;
     Ok(())

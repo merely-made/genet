@@ -50,6 +50,7 @@ older `docs/` corpus without changing their location or governance.
 | [Servo cone retirement](2026-09-07_servo_cone_retirement_plan.md) | servo-paint's compositor half carved out as genet-compositor; the reftest lane renders through genet-render-host; the constellation trait cone left the graph 2026-09-07. All gates green; next proof is Mere's dependency rename at its next bump. |
 | [Web platform WPT census](2026-09-06_web_platform_wpt_census.md) | Baseline exact maps for 41 non-CSS WPT directories (21,672 files, disk mode, Boa/Livery) landed 2026-09-06. Three of its four harness caveats are closed by the harness-repair plan; the reftest caveat and the per-directory lanes remain open. |
 | [Standards-to-features ledger](2026-09-07_standards_to_features_ledger.md) | Founded 2026-09-07 by Mark's ruling on mere's lighter-recall brief: fourteen rows pairing a standard, its census count, what adhering means in genet, and what mere and the products unlock; consumers on record. The census is the authority for current numbers. |
+| [CSS 3D transforms and first-frame scaling](2026-09-12_css_3d_transforms_and_first_frame_plan.md) | Founded 2026-09-12 by Mark's rulings on the games wing's orthographic voxel presentation plan. Three lanes, no lane started: T1 CSS Transforms Level 2 in Livery lowered to netrender's column-major 4x4 `Transform` (founding census `css/css-transforms` 143 / 2,296 subtests, 13 of 924 files, 2026-09-07); T2 a linear, roughly two-orders-cheaper first frame for tens of thousands of positioned boxes plus parse/style/layout/paint spans behind a flag; T3 a host-side DOM mutation harness with real per-frame timing and a replaced element whose paint is a host-supplied retained netrender fragment spliced the way the iframes plan splices a child document. Next proof is T1's parse and lowering surface. |
 | [WPT harness repair](2026-09-07_wpt_harness_repair_plan.md) | Per-test worker isolation, the disk-mode include and `.py` fixes, and a configurable, quiescing server-mode deadline landed 2026-09-07, with a re-run census whose 204 movements are all attributed. Next proof: a server-mode measurement of the network-dependent families on a live `wpt serve`. |
 | [XMLHttpRequest](2026-09-07_xhr_plan.md) | XHR as a state machine over the fetch seam, landed 2026-09-07: xhr 53 to 281 subtests in disk mode, 831 of 1,336 in server mode, fetch holds. Residuals: responseXML needs DOMParser; 28 errors are Worker and document.domain demand. |
 | [Cheap globals](2026-09-07_cheap_globals_plan.md) | `performance` (+ `PerformanceObserver`), `queueMicrotask`, `structuredClone`, `MessageChannel` / `MessagePort` / `BroadcastChannel` and `crypto` landed 2026-09-07: 79 forward file movements, zero pass-to-fail, +462 subtest passes over ten directories. Next proof is `crypto.subtle`, real `ArrayBuffer` detachment, and the cross-agent reuse of the clone walker by the Worker lane. |
@@ -481,6 +482,29 @@ completed corpus census or bounded slice does not close its enclosing feature.
   green.)
 
 ## layout and styling
+
+- [css_3d_transforms_and_first_frame_plan](2026-09-12_css_3d_transforms_and_first_frame_plan.md)
+  (**founded 2026-09-12, no lane started**: the genet half of the games wing's
+  presentation route. T1 brings CSS Transforms Level 2 into Livery —
+  `matrix3d`, `translate3d`, `rotate3d`, `scale3d`, `perspective` and
+  `perspective-origin`, `transform-style`, `backface-visibility`, 3D
+  `transform-origin`, and the individual `translate` / `rotate` / `scale`
+  properties — lowered to netrender's existing column-major 4x4 `Transform`
+  with per-element projection and z-sorting inside a 3D rendering context; the
+  founding census is `css/css-transforms` at 143 / 2,296 subtests and 13 of 924
+  files, disk mode, Boa, 2026-09-07, copied from the harness repair plan's F6
+  gate. T2 targets a linear and roughly two-orders-cheaper first frame for
+  documents of tens of thousands of positioned boxes, with the done condition
+  stated as measured fixtures and a parse/style/layout/paint span facility
+  behind a flag, since genet emits no phase timing today and the wing's
+  attribution had to be done by fixture variant
+  (`Code/testing/wing/l0b_first_frame_attribution.md`). T3 adds a host-side DOM
+  mutation harness with real per-frame timing — the wing's live path is
+  host-driven, not page script — and a replaced element whose paint is a
+  host-supplied retained netrender fragment (`Scene::place_fragment`), spliced
+  into the paint list the way the iframes plan splices a child document.
+  Ledger rows 15 and 16; the consumer on record for all three lanes is
+  `isometry/mesocosm/design_docs/2026-09-11_orthographic_voxel_presentation_plan.md`.)
 
 - [common_script_font_fallback_plan](2026-09-04_common_script_font_fallback_plan.md)
   (**Windows repair accepted 2026-09-05**: the paired Parley/Fontique patch

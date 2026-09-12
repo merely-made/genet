@@ -352,10 +352,15 @@ fn a_context_less_location_navigates_nothing<E: ScriptEngine>() {
 
     runtime
         .eval(
-            "var f = document.createElement('iframe');             document.body.appendChild(f);             globalThis.__loc = f.contentWindow.location;             f.remove();",
+            "var f = document.createElement('iframe');             document.body.appendChild(f);             globalThis.__win = f.contentWindow;             globalThis.__loc = __win.location;             f.remove();",
         )
         .expect("removed frame");
     runtime.run_event_loop(50).expect("teardown");
+    assert_eq!(
+        read(&mut runtime, "__win.closed"),
+        "true",
+        "the removed frame's context is not reported discarded"
+    );
 
     for call in [
         "__loc.assign('about:blank')",
@@ -373,6 +378,45 @@ fn a_context_less_location_navigates_nothing<E: ScriptEngine>() {
         assert_eq!(read(&mut runtime, "window.__page"), "one");
         assert_eq!(journal.read(), "", "{call} unloaded the top document");
     }
+}
+
+/// A top-level navigation to a URL that does not parse is abandoned: HTML
+/// stops at "parse a URL", and there is no container to rebuild a top-level
+/// document from anyway. The document, its realm and its history stay.
+///
+/// The shape that matters is the base-less one - the whole WPT disk corpus -
+/// where the document URL is `about:blank`, which cannot be a base, so every
+/// relative input survives resolution unparsed.
+fn an_unparseable_top_level_url_is_abandoned<E: ScriptEngine>() {
+    let journal = Journal::default();
+    let mut runtime = Runtime::<E>::new().expect("runtime");
+    runtime.set_script_resource_loader(Box::new(Pages));
+    runtime.set_fetch_handler(Box::new(journal.clone()));
+    runtime.parse_document_interleaved(&Pages::page("one"), &NoScriptLoader);
+    runtime.run_event_loop(50).expect("first load");
+    journal.clear();
+    let realm = runtime.top_realm();
+    assert_eq!(read(&mut runtime, "location.href"), "about:blank");
+
+    for input in ["http://:", "relative.html", "not a url"] {
+        runtime
+            .eval(&format!("location.assign({input:?});"))
+            .unwrap_or_else(|_| panic!("{input}"));
+        runtime.run_event_loop(50).expect("tasks");
+        assert_eq!(runtime.top_realm(), realm, "{input} replaced the realm");
+        assert_eq!(read(&mut runtime, "location.href"), "about:blank");
+        assert_eq!(read(&mut runtime, "window.__page"), "one");
+        assert_eq!(journal.read(), "", "{input} unloaded the document");
+    }
+
+    // The positive control: an absolute URL still navigates from the same
+    // base-less document.
+    runtime
+        .eval("location.assign('https://top.test/two.html');")
+        .expect("parseable");
+    runtime.run_event_loop(100).expect("tasks");
+    assert_ne!(runtime.top_realm(), realm);
+    assert_eq!(read(&mut runtime, "window.__page"), "two");
 }
 
 macro_rules! backend {
@@ -401,6 +445,10 @@ macro_rules! backend {
             #[test]
             fn context_less_location_navigates_nothing() {
                 super::a_context_less_location_navigates_nothing::<$engine>();
+            }
+            #[test]
+            fn unparseable_top_level_url_abandoned() {
+                super::an_unparseable_top_level_url_is_abandoned::<$engine>();
             }
         }
     };

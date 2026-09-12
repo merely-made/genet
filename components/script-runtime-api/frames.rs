@@ -1752,6 +1752,15 @@ fn navigate_top_level<E: ScriptEngine>(
     url: &str,
     replace: bool,
 ) -> Result<E::Value, E::Error> {
+    // HTML abandons a navigation whose URL does not parse. A child could still
+    // be pointed at an opaque string and reach the loader with it; the top-level
+    // context cannot - there is no container to rebuild it from - so an input
+    // that survived resolution unparsed (a relative URL against a document URL
+    // that cannot be a base, `http://:`, and the rest) stops here rather than
+    // unloading the document to go nowhere.
+    if url::Url::parse(url).is_err() {
+        return Ok(cx.undefined());
+    }
     let allowed = agent
         .borrow()
         .top_level_navigation_policy

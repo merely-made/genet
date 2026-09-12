@@ -1509,7 +1509,7 @@ can be committed:
 
 | Fork | Path | Branch | Commit |
 |---|---|---|---|
-| Boa | `crates/boa` | `genet-windowproxy` | `091d5543` |
+| Boa | `crates/boa` | `genet-windowproxy` | `52cfb6ff9efdaf0ff6d213ab107bbaefe5838ab0 (tip; 091d5543 plus two test-and-format commits the fork's pre-push CI required)` |
 | Vano | `crates/vano` | `genet-windowproxy` | `3101fb63` |
 
 ### The design, as Mark ruled it

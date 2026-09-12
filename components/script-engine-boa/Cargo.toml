@@ -15,8 +15,8 @@ path = "lib.rs"
 
 [dependencies]
 script-engine-api = { path = "../script-engine-api" }
-boa_engine = { version = "=1.0.0-dev", git = "https://github.com/mark-ik/boa.git", rev = "5a58112579cecaba6ba59d3310901992003fbb31" }
-boa_gc = { version = "=1.0.0-dev", git = "https://github.com/mark-ik/boa.git", rev = "5a58112579cecaba6ba59d3310901992003fbb31" }
+boa_engine = { version = "=1.0.0-dev", git = "https://github.com/mark-ik/boa.git", rev = "52cfb6ff9efdaf0ff6d213ab107bbaefe5838ab0" }
+boa_gc = { version = "=1.0.0-dev", git = "https://github.com/mark-ik/boa.git", rev = "52cfb6ff9efdaf0ff6d213ab107bbaefe5838ab0" }
 # Pin the published caller-provenance patch so fresh clones use the same native
 # callback realm rules as local development. The gitignored local config may
 # redirect these sources to crates/boa; it is not part of the public contract.

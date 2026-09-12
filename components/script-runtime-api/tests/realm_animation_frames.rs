@@ -7,6 +7,8 @@ use script_runtime_api::{HostState, Runtime};
 
 fn child_animation_frames_share_agent_drive<E: ScriptEngine>() {
     let mut runtime = Runtime::<E>::new().expect("runtime");
+    // The top document's realm, which is not the agent's bootstrap realm.
+    let top = runtime.top_realm();
     let realm = runtime
         .create_child_realm(HostState::default())
         .expect("child realm");
@@ -44,7 +46,7 @@ fn child_animation_frames_share_agent_drive<E: ScriptEngine>() {
     assert_eq!(
         realms,
         vec![
-            "realm=0;handle=1".to_owned(),
+            format!("realm={top};handle=1"),
             format!("realm={realm};handle=1"),
             format!("realm={realm};handle=3")
         ]

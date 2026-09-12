@@ -2600,7 +2600,7 @@ mod tests {
                     .any(|op| matches!(op, netrender::SceneOp::GlyphRun(_))),
                 "child text enters parent paint slot"
             );
-            let realm = doc.rt.frame_realms(script_engine_api::MAIN_REALM)[0].1;
+            let realm = doc.rt.frame_realms(doc.rt.top_realm())[0].1;
             let host = doc.rt.host_in_realm(realm).expect("child host");
             let node = {
                 let h = host.borrow();
@@ -2654,7 +2654,7 @@ mod tests {
             .expect("hosted document");
             doc.pump(0.0);
             let _ = doc.frame(400, 300);
-            let child_realm = doc.rt.frame_realms(script_engine_api::MAIN_REALM)[0].1;
+            let child_realm = doc.rt.frame_realms(doc.rt.top_realm())[0].1;
             let child_arena = doc
                 .rt
                 .host_in_realm(child_realm)
@@ -2669,7 +2669,7 @@ mod tests {
             let _ = doc.frame(400, 300);
             let host = doc
                 .rt
-                .host_in_realm(script_engine_api::MAIN_REALM)
+                .host_in_realm(doc.rt.top_realm())
                 .expect("parent host");
             let adopted = {
                 let h = host.borrow();

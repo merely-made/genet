@@ -346,8 +346,7 @@ impl<E: ScriptEngine> Runtime<E> {
             report.deferred_run += 1;
         }
         let _ = self
-            .engine
-            .eval("document.dispatchEvent(new Event('DOMContentLoaded', { bubbles: true }));");
+            .eval_top("document.dispatchEvent(new Event('DOMContentLoaded', { bubbles: true }));");
         self.run_microtasks();
         if dispatch_load && self.agent.borrow_mut().frames.defer_main_load() {
             // The final child completion performs Complete/readystatechange/load.
@@ -366,9 +365,10 @@ impl<E: ScriptEngine> Runtime<E> {
     /// only change while a script runs, so refreshing here makes the table
     /// exactly current for the whole next stretch of tokenizing.
     fn refresh_parser_policy(&mut self, policy: &Rc<ParserPolicy>) {
+        // The custom-element registry belongs to the document, so both of these
+        // are asked of the top document's realm.
         let names = self
-            .engine
-            .eval("globalThis.__ceShadowDisabledNames ? __ceShadowDisabledNames() : ''")
+            .eval_top("globalThis.__ceShadowDisabledNames ? __ceShadowDisabledNames() : ''")
             .ok()
             .and_then(|v| self.engine.value_to_string(&v).ok())
             .unwrap_or_default();
@@ -383,8 +383,7 @@ impl<E: ScriptEngine> Runtime<E> {
         // script pause. Nothing is defined in the overwhelming majority of
         // documents, and then the parser feeds whole buffers as before.
         let defined = self
-            .engine
-            .eval("globalThis.__ceDefinedCount ? __ceDefinedCount() : 0")
+            .eval_top("globalThis.__ceDefinedCount ? __ceDefinedCount() : 0")
             .ok()
             .and_then(|v| self.engine.value_to_string(&v).ok())
             .and_then(|s| s.trim().parse::<u32>().ok())
@@ -464,9 +463,7 @@ impl<E: ScriptEngine> Runtime<E> {
 
     fn set_ready_state(&mut self, state: ReadyState) {
         self.host.borrow_mut().markup.ready_state = state;
-        let _ = self
-            .engine
-            .eval("document.dispatchEvent(new Event('readystatechange'));");
+        let _ = self.eval_top("document.dispatchEvent(new Event('readystatechange'));");
     }
 
     /// Read the `<script>` element's attributes and text out of the arena.
@@ -575,7 +572,13 @@ impl<E: ScriptEngine> Runtime<E> {
                         let url = loader.resolve(specifier);
                         loader.load(specifier, None, None).map(|text| (url, text))
                     };
-                    let _ = self.engine.eval_module(&source, &base, &mut resolve);
+                    // The module belongs to the document that declared it, so
+                    // it is evaluated in the top document's realm - not the
+                    // agent's bootstrap realm, which is nobody's document.
+                    let top = self.top_realm();
+                    let _ =
+                        self.engine
+                            .eval_module_in_realm(top, &source, &base, &mut resolve);
                     self.flush_host_trace_events();
                 }
             },

@@ -12,7 +12,7 @@
 //! rooting entry that was only mostly released would show up here as a growing
 //! host table, a reused realm id, or an arena that never returns to baseline.
 
-use script_engine_api::{MAIN_REALM, RealmId, ScriptEngine};
+use script_engine_api::{RealmId, ScriptEngine};
 use script_runtime_api::{NoScriptLoader, Runtime};
 
 fn runtime<E: ScriptEngine>() -> Runtime<E> {
@@ -59,7 +59,7 @@ const INSTRUMENT: &str = concat!(
 
 fn realms<E: ScriptEngine>(runtime: &Runtime<E>) -> Vec<RealmId> {
     let mut all: Vec<_> = runtime
-        .frame_realms(MAIN_REALM)
+        .frame_realms(runtime.top_realm())
         .into_iter()
         .map(|(_, realm)| realm)
         .collect();

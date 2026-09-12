@@ -226,6 +226,31 @@ pub trait ScriptEngine: Sized {
         Ok(None)
     }
 
+    /// [`eval_module`](Self::eval_module), in `realm` rather than the agent's
+    /// bootstrap realm.
+    ///
+    /// A module script belongs to the document that declared it, and the
+    /// top-level browsing context's document has a realm of its own, so "the
+    /// bootstrap realm" is no longer the answer for any `<script type=module>`.
+    /// The default forwards to [`eval_module`](Self::eval_module) when `realm`
+    /// *is* the bootstrap realm and otherwise refuses, so a backend with realms
+    /// but no per-realm module entry fails loudly rather than quietly
+    /// evaluating a module against the wrong global.
+    fn eval_module_in_realm(
+        &mut self,
+        realm: RealmId,
+        source: &str,
+        base_url: &str,
+        resolve: &mut dyn FnMut(&str, &str) -> Option<(String, String)>,
+    ) -> Result<Option<Self::Value>, RealmError> {
+        if realm == MAIN_REALM {
+            return self
+                .eval_module(source, base_url, resolve)
+                .map_err(|error| RealmError::Engine(self.describe_error(&error)));
+        }
+        Err(RealmError::Unsupported)
+    }
+
     /// Like [`eval`](Self::eval), but bounded: a [`Budget::Steps`] cap stops a
     /// runaway script (e.g. `while true do end`) after roughly that many
     /// coarse VM steps and returns an error instead of hanging. The cap is on

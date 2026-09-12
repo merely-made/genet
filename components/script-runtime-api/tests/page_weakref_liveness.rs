@@ -5,7 +5,7 @@
 //! a wrapper's creation realm differs from the node's current storage owner.
 use genet_scripted_dom::NodeId;
 use layout_dom_api::LayoutDom;
-use script_engine_api::{MAIN_REALM, ScriptEngine};
+use script_engine_api::ScriptEngine;
 use script_runtime_api::{NoScriptLoader, Runtime};
 
 fn eval_text<E: ScriptEngine>(rt: &mut Runtime<E>, source: &str) -> String {
@@ -42,7 +42,7 @@ fn page_weakref_and_native_liveness_agree<E: ScriptEngine>(adopt: bool) {
     let id = NodeId::from_raw(raw.parse().unwrap());
     let owner = if adopt {
         rt.eval("child.document.adoptNode(held);").unwrap();
-        rt.host_in_realm(rt.frame_realms(MAIN_REALM)[0].1).unwrap()
+        rt.host_in_realm(rt.frame_realms(rt.top_realm())[0].1).unwrap()
     } else {
         rt.host().clone()
     };

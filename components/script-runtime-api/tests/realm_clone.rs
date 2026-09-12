@@ -19,9 +19,12 @@ fn with_child<E: ScriptEngine>() -> Runtime<E> {
         .engine_mut()
         .realm_global(child)
         .expect("child global");
+    // `set_global` is the bootstrap realm's; the top document - which is what
+    // `Runtime::eval` evaluates in - is a realm of its own.
+    let top = runtime.top_realm();
     runtime
         .engine_mut()
-        .set_global("child", &global)
+        .set_global_in_realm(top, "child", &global)
         .expect("share global");
     runtime
 }
@@ -245,10 +248,15 @@ fn native_rethrow_preserves_authored_value<E: ScriptEngine>() {
     let mut runtime = Runtime::<E>::new().unwrap();
     let child = runtime.create_child_realm(HostState::default()).unwrap();
     let global = runtime.engine_mut().realm_global(child).unwrap();
-    runtime.engine_mut().set_global("child", &global).unwrap();
+    // Both go in the top document's realm, which is where `eval` reads them.
+    let top = runtime.top_realm();
     runtime
         .engine_mut()
-        .set_function::<Rethrow>("rethrow", 2)
+        .set_global_in_realm(top, "child", &global)
+        .unwrap();
+    runtime
+        .engine_mut()
+        .set_function_in_realm::<Rethrow>(top, "rethrow", 2)
         .unwrap();
     check(
         &mut runtime,

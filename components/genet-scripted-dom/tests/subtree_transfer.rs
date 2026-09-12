@@ -4,8 +4,8 @@
 
 //! Storage-only adoption prerequisite. These are not JS adoption receipts.
 use genet_scripted_dom::{
-    NodeId, NodeIdentityError, Pins, ScriptedDom, ShadowRootInit, ShadowRootMode, SlotAssignmentMode,
-    SubtreeTransferError,
+    NodeId, NodeIdentityError, Pins, ScriptedDom, ShadowRootInit, ShadowRootMode,
+    SlotAssignmentMode, SubtreeTransferError,
 };
 use layout_dom_api::{DomMutation, LayoutDom, LayoutDomMut, LocalName, Namespace, QualName};
 
@@ -199,7 +199,10 @@ fn a_parse_refuses_only_what_the_tree_builder_still_holds() {
         a.preflight_subtree_transfer_to(&b, open),
         Err(SubtreeTransferError::PendingSourceWork)
     );
-    assert_eq!(a.transfer_detached_subtree_to(&mut b, done).unwrap(), [done]);
+    assert_eq!(
+        a.transfer_detached_subtree_to(&mut b, done).unwrap(),
+        [done]
+    );
     assert!(b.is_live(done));
 
     // The form element pointer protects its element wherever it sits.
@@ -464,4 +467,42 @@ fn unsupported_preflight_does_not_detach_or_consume_pending_work() {
     assert_eq!(source.live_node_count(), count);
     assert!(!source.take_observed().is_empty());
     assert_eq!(target.live_node_count(), 1);
+}
+
+/// Assignment is a property of the shadow tree, not of connectedness: it must
+/// survive the host leaving its document, the transfer, and the insertion on the
+/// far side, because no member changed parent in any of those steps.
+#[test]
+fn slot_assignment_survives_removal_transfer_and_reinsertion() {
+    let mut a = ScriptedDom::new();
+    let mut b = ScriptedDom::new();
+    let host = a.create_element(qual("div"));
+    let root = a.attach_shadow(host, ShadowRootInit::default()).unwrap();
+    let slot = a.create_element(qual("slot"));
+    a.append_child(root, slot);
+    let inner_host = a.create_element(qual("span"));
+    a.append_child(root, inner_host);
+    let inner_root = a
+        .attach_shadow(
+            inner_host,
+            ShadowRootInit {
+                mode: ShadowRootMode::Closed,
+                ..ShadowRootInit::default()
+            },
+        )
+        .unwrap();
+    let deep = a.create_element(qual("x-adoptee"));
+    a.append_child(inner_root, deep);
+    let light = a.create_element(qual("p"));
+    a.append_child(host, light);
+    a.append_child(a.document(), host);
+    assert_eq!(a.assigned_nodes_of(slot), vec![light], "before removal");
+    a.remove_child(host);
+    drain(&mut a);
+    assert_eq!(a.assigned_nodes_of(slot), vec![light], "after removal");
+    a.transfer_detached_subtree_to(&mut b, host).unwrap();
+    assert_eq!(b.assigned_nodes_of(slot), vec![light], "after transfer");
+    b.append_child(b.document(), host);
+    drain(&mut b);
+    assert_eq!(b.assigned_nodes_of(slot), vec![light], "after reinsertion");
 }

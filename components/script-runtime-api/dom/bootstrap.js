@@ -433,21 +433,30 @@
     if (shadow) snapshotTree(shadow, out);
     return out;
   }
-  // Template contents do **not** join the ordinary snapshot: HTML adopts them
-  // into the destination's own inert template-contents owner document, not into
-  // the adopting document. Dropping the cached entry makes the `content` getter
-  // re-record that owner on next read, which is where it is minted.
-  function retireTemplateOwners(root) {
+  // Template contents do **not** join the ordinary snapshot: HTML's "adopt the
+  // template's contents" re-homes the fragment into the *destination's* own
+  // inert template-contents owner document, not into the adopting document. Run
+  // after the nodes have moved, so asking the fragment for its owner resolves in
+  // the arena that now holds it. Nested templates recursively, and templates
+  // inside a shadow tree that travelled with its host.
+  // Every same-origin realm holding a wrapper for one of these fragments has
+  // its own `ownerDocuments` map, and the move may have run in any of them, so
+  // the re-homing fans out the same way the ownerDocument snapshot does.
+  function rehomeTemplateOwners(root) {
+    if (domAgentDispatch) return domAgentDispatch('templateOwners', root);
+    return rehomeTemplateOwnersLocal(root);
+  }
+  function rehomeTemplateOwnersLocal(root) {
     if (!root) return;
     var contents = templateContentsOf(root);
     if (contents) {
-      ownerDocuments.delete(contents);
-      retireTemplateOwners(contents);
+      ownerDocuments.set(contents, wrapNode(__templateOwnerDocument(contents.__ref)));
+      rehomeTemplateOwnersLocal(contents);
     }
     var kids = root.childNodes;
-    for (var i = 0; i < kids.length; i++) retireTemplateOwners(kids[i]);
+    for (var i = 0; i < kids.length; i++) rehomeTemplateOwnersLocal(kids[i]);
     var shadow = shadowRootOfAny(root);
-    if (shadow) retireTemplateOwners(shadow);
+    if (shadow) rehomeTemplateOwnersLocal(shadow);
   }
   function snapshotMovedNodes(node) {
     return snapshotTree(node, []);
@@ -501,7 +510,7 @@
     if (move.oldDoc && move.newDoc && move.oldDoc !== move.newDoc) {
       setOwnerDocumentSnapshot(move.snapshot, move.newDoc);
       for (var i = 0; i < move.roots.length; i++) {
-        retireTemplateOwners(move.roots[i]);
+        rehomeTemplateOwners(move.roots[i]);
         enqueueAdoptedTree(move.roots[i], move.oldDoc, move.newDoc);
       }
     }
@@ -2768,7 +2777,7 @@
     if (move.oldDoc !== move.newDoc) {
       setOwnerDocumentSnapshot(move.snapshot, move.newDoc);
       for (var i = 0; i < move.roots.length; i++) {
-        retireTemplateOwners(move.roots[i]);
+        rehomeTemplateOwners(move.roots[i]);
         enqueueAdoptedTree(move.roots[i], move.oldDoc, move.newDoc);
       }
     }
@@ -3055,6 +3064,11 @@
       // dimensions and context classification. Keep it on the context rather
       // than making the runtime API know about DOM wrapper identity.
       this.__webglContext.canvas = this;
+      // Tell the host this canvas now owns a drawing context. The context's
+      // registry index is meaningful only in this host, so the adoption
+      // boundary must be able to refuse this element specifically rather than
+      // refusing every canvas by name.
+      __noteCanvasContext(this.__ref);
       if (this.__webglContext._externalTextureKey) {
         this.setAttribute('data-genet-external-texture-key', this.__webglContext._externalTextureKey);
       }
@@ -3242,8 +3256,14 @@
     return out;
   }
 
-  function moNodeById(id) {
+  // A raw arena id to its canonical wrapper, in whichever same-origin arena
+  // actually holds the node. The bare `__reflectNode` resolves only in the
+  // calling realm's own store.
+  function nodeByRawId(id) {
     return id ? wrapNode(domAgentDispatch ? domAgentDispatch('recordNode', id) : __reflectNode(id)) : null;
+  }
+  function moNodeById(id) {
+    return nodeByRawId(id);
   }
   function moNodesById(csv) {
     var out = [];
@@ -6040,7 +6060,10 @@
     var out = [];
     var parts = raw.split(',');
     for (var i = 0; i < parts.length; i++) {
-      var node = wrapNode(__reflectNode(parts[i]));
+      // Route the raw ids through the agent: after an adopted shadow tree the
+      // assignment table names nodes in another arena, which a realm-local
+      // `__reflectNode` cannot see - it would silently report an empty slot.
+      var node = nodeByRawId(parts[i]);
       if (node) out.push(node);
     }
     return out;
@@ -6089,7 +6112,7 @@
     if (!raw) return;
     var parts = raw.split(',');
     for (var i = 0; i < parts.length; i++) {
-      var slot = wrapNode(__reflectNode(parts[i]));
+      var slot = nodeByRawId(parts[i]);
       if (slot) slot.dispatchEvent(new Event('slotchange', { bubbles: true, composed: false }));
     }
   }
@@ -6108,7 +6131,7 @@
         // template-contents document, not the page's, and the fragment is
         // detached so no tree walk could work that out.
         if (fragment && !ownerDocuments.get(fragment)) {
-          ownerDocuments.set(fragment, wrapNode(__templateOwnerDocument()));
+          ownerDocuments.set(fragment, wrapNode(__templateOwnerDocument(fragment.__ref)));
         }
         return fragment;
       }
@@ -6348,6 +6371,7 @@
         case 'ownerDocument': return ownerDocumentOf(wrapNodeLocal(a));
         case 'owners': return setOwnerDocumentSnapshotLocal(a, b);
         case 'adopted': return enqueueAdoptedTreeLocal(a, b, c);
+        case 'templateOwners': return rehomeTemplateOwnersLocal(a);
         case 'connect': return connectCustomElementTreeLocal(a);
         case 'disconnect': return disconnectCustomElementTreeLocal(a);
         case 'rangeRemove': return rangeWillRemoveLocal(a);

@@ -284,6 +284,12 @@ pub struct HostState {
     /// carries (`_ctx`). Each `__webgl_*` sink routes to one of these by its
     /// leading context-id argument. Grows by one per `getContext('webgl')`.
     pub webgl_contexts: Vec<Box<dyn WebGlHandler>>,
+    /// Canvas elements that have minted a live drawing context, by raw node id.
+    /// A context's registry index means something only in *this* host, and the
+    /// handler behind it owns a texture producer with no ownership transaction,
+    /// so such a canvas cannot cross into another arena. A canvas that never
+    /// asked for a context carries nothing and adopts like any other element.
+    pub canvas_contexts: std::collections::HashSet<u64>,
     /// The host's cryptographically secure random source for `crypto`. `None` =
     /// the built-in ChaCha20 default (seeded from `std`'s OS-derived hash keys),
     /// so `getRandomValues` works with no host wiring. Installed by

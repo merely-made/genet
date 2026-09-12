@@ -1,7 +1,26 @@
 # Realms: one agent, one realm per browsing context
 
-**Status:** WindowProxy and navigation landed on the working tree, 2026-09-11;
-broad DOM guard remains red. A browsing context now holds one `WindowProxy` for
+**Status:** Associated-state transfer landed on `lane/shadow-template-adoption`,
+2026-09-12; **the broad DOM guard is green**. Shadow trees move with their hosts
+(nested and closed roots, slot tables, `adoptedCallback` fan-out, `ownerDocument`
+and reflector identity on both engines), template contents are re-homed
+recursively onto the destination's inert owner, the parsing guard refuses only
+subtrees intersecting the parser's stack of open elements or the form element
+pointer, and `object` and `embed` join `iframe` in arriving as fresh frames — a
+canvas with a live drawing context is the one named residual. The release
+runtime suite passes **551 tests with zero ignored**. The census over `dom`,
+`shadow-dom`, `custom-elements`, the template element and the iframe element
+gains seven subtests across three files with **zero** pass-to-nonpass movements;
+`dom_boa.json` and `dom_nodes_boa.json` are repinned **forward-only** (no former
+pass demoted, no key dropped), which takes `dom` from 60 to 0 and `dom/nodes`
+from 35 to 0, so **all fourteen testharness slices and both reftest guards sit at
+`unexpected=0`**. Both Ortet receipts are unchanged by the lane, proved against a
+build at the lane's own base rather than against the stale digest on record — see
+the phase for that correction. Earlier phases below retain their historical
+results.
+
+Before it, WindowProxy and navigation landed on the working tree, 2026-09-11.
+A browsing context holds one `WindowProxy` for
 its life, built natively before its realm's first instruction over a shadow
 target that retains no global, with the cross-origin decision made *inside* the
 one object per accessing realm. A child navigates for real - `iframe.src`,
@@ -1794,3 +1813,231 @@ from a queued task to the synchronous point HTML puts it at, which is what the
 one honest census regression turns on. It does not lift the parsing-time
 adoption refusal, and `dom` / `dom/nodes` stay red for the same protected loss
 as before.
+
+---
+
+## Phase: Associated-state transfer, 2026-09-12
+
+The adoption boundary refused two whole classes of subtree by name rather than
+by fact: anything carrying associated state — a shadow tree, a template's
+contents — and *anything at all* while a parser was still working in the source
+document. Both refusals were blunter than the specs they stood in for, and the
+second one is what `dom/nodes/Node-isConnected.html: Test with iframes` had been
+stopped on since the browsing-context lifecycle phase isolated it.
+
+**Branch:** `lane/shadow-template-adoption`.
+**Base commit:** `546201874df`
+(`546201874dfa07cf153680a03f46efd93aabcec6`).
+
+### 1. A shadow tree moves with its host
+
+DOM's adopt steps move a node's **shadow-including** inclusive descendants, so
+the storage-side member walk is now shadow-including and template-including: a
+host carries its shadow root, that root's nodes and its nested hosts, together
+with the slot assignment tables and any pending `slotchange` entries. An edge
+that would straddle the boundary is still refused, so nothing arrives dangling,
+and a shadow root is never itself the thing adopted — a split host is refused
+atomically.
+
+Three runtime-side faults kept that arena-side transfer from reaching script
+correctly, and each was a different kind of wrong:
+
+- `__templateOwnerDocument` was a zero-argument sink over the **calling realm's**
+  arena, so a reader in the origin realm was told its own inert document rather
+  than the destination's. It now takes the fragment and answers for the arena
+  that actually holds it.
+- The bootstrap dropped a moved template's recorded owner and left the `content`
+  getter to re-record it — which no plain `.ownerDocument` read ever reaches. It
+  now re-homes the entry outright, after the move, recursively through nested
+  templates and through a shadow tree that travelled with its host, and fans
+  that out to every same-origin realm through a new `templateOwners` agent op,
+  because the move may have run in any of them.
+- `assignedNodes()` re-reflected the assignment table's raw ids through the
+  realm-local `__reflectNode`, so an adopted slot reported empty. It and
+  `slotchange` delivery now route through the agent like every other raw-id
+  lookup.
+
+Closed roots stay closed on the far side (`innerHost.shadowRoot` is still
+`null`, while the captured `innerRoot` still holds its contents), `ownerDocument`
+follows for the root and every node under it, the `adoptedCallback` fan-out
+reaches a custom element living *inside* a nested closed root, and every
+reflector is the same object before and after — on both engines.
+
+### 2. Template contents are re-homed, recursively
+
+HTML's "adopt the template's contents" re-homes a template's contents fragment
+onto the **destination's** inert template-contents owner document, not onto the
+destination document and not onto the source's inert owner. The transfer now
+mints that document per arena on first use and re-homes nested templates
+recursively; the fragment, its nodes and the serialization survive unchanged,
+and the destination inert owner is provably neither the source's nor the
+destination document itself.
+
+### 3. The parsing guard refuses only what the tree builder holds
+
+The refusal is now the rule HTML actually states. The tree sink tracks the
+elements it created and has not popped, plus the form element pointer; the arena
+recovers the **stack of open elements** by intersecting that set with the current
+node's inclusive ancestors — which drops the never-pushed void elements html5ever
+reports no pop for. A completed sibling subtree may therefore leave a document
+mid-parse, while `document.body`, still on the stack, is refused, and the
+refusal moves nothing.
+
+The during-parse test drives this directly: a `<script>` running at
+`readyState === 'loading'` moves a finished sibling `<div>` into an iframe's
+document, is refused for `document.body`, and the parse then completes over both.
+`dom/nodes/Node-isConnected.html: Test with iframes` is **recovered**, and with
+it the file.
+
+Two cycles that the relaxed boundary exposed were closed in the same phase.
+DOM's pre-insert step 2 is a *host-including* inclusive ancestor walk; the
+bootstrap's walk climbed a shadow root to its host but stopped dead at a
+`<template>`'s contents fragment, whose host is its template, so
+`tmpl.content.appendChild(anAncestorOfTmpl)` built a tree with no top — which
+`template-content-hierarcy.html` hangs on rather than fails. The arena gains the
+contents-to-template lookup, `__templateHost` exposes it, and one
+`hostIncludingParent` step serves both walks. It is deliberately **not** folded
+into `__shadowHost`, which picks the interface and decides the composed root: a
+contents fragment is neither a shadow root nor part of its template's composed
+tree.
+
+### 4. Container elements arrive as fresh frames; canvas is the residual
+
+`object` and `embed` join `iframe`: HTML destroys a container's nested browsing
+context on removal and creates a fresh one on insertion, so all three cross the
+boundary as ordinary subtrees and become fresh frames in the destination per the
+removing and inserting steps. Appending an `iframe` into the document of its own
+child used to panic the frame surface — the removing steps destroy that child's
+context, so the element's container document is one whose navigable is gone, and
+the creation path indexed the parent context map straight into a missing key.
+HTML creates a child navigable only when the container's node document has one,
+so a container in that state has no content navigable at all; the same rule makes
+a discarded context's `parent` and `top` null rather than the context itself.
+
+**`canvas` is the named residual, and it is refused by fact rather than by
+name.** Only a canvas that has minted a drawing context is refused: its registry
+index and texture producer answer to the source host alone, and `HostState`
+records those at `getContext`. A canvas that has never been drawn into adopts
+like any other element. Moving a live WebGL context is a producer-relocation
+problem, not an adoption one, and is left to the Ortet/WebGL lane.
+
+### Census
+
+Runner `4f79ca20029856938cfa5d4d327d5e37a879ce417cdc06e09220ddb2f0b44e88`
+(post) against `72b0dd3a1571fe13e63f2f2e13576d712c5bb07c2d36b0402cf85402e5983c0d`
+(pre), `--engine boa --renderer livery --jobs 8 --timeout 240`, manifest
+`d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422`. Ledger:
+`Code/testing/genet/wpt-ledger/2026-09-12_associated_adoption`.
+
+| Subset | Keys | Pass before | Pass after | Gain | Pass-to-nonpass |
+|---|---:|---:|---:|---:|---:|
+| `dom` | 57891 | 46835 | 46837 | +2 | **0** |
+| `shadow-dom` | 9139 | 1572 | 1574 | +2 | **0** |
+| `custom-elements` | 4140 | 2243 | 2243 | 0 | **0** |
+| `html/semantics/scripting-1/the-template-element` | 690 | 522 | 525 | +3 | **0** |
+| `html/semantics/embedded-content/the-iframe-element` | 375 | 50 | 50 | 0 | **0** |
+| **Total** | **72235** | **51222** | **51229** | **+7** | **0** |
+
+Key sets are identical before and after in every subset: no test appeared, none
+vanished, and there is nothing to explain on the pass-to-fail side because the
+count is zero. The seven gains are exactly the three files this phase set out to
+recover and their subtests:
+
+| File | Subtest |
+|---|---|
+| `dom/nodes/Node-isConnected.html` | `Test with iframes` (and the file) |
+| `shadow-dom/untriaged/events/event-retargeting/test-003.html` | `A_05_01_03_T01` (and the file) |
+| `html/semantics/scripting-1/the-template-element/template-element/template-content-hierarcy.html` | `Template content should throw when its ancestor is being appended.`; `Template content should throw exception when its ancestor in a different document but connected via host is being append.` (and the file) |
+
+### Repins — both forward-only
+
+Two maps are repinned, both written from the post census above and both verified
+key-by-key against the maps they replace.
+
+| Map | Keys | Pass | Demoted `pass` -> non-`pass` | Keys dropped | Promoted to `pass` | Keys added |
+|---|---|---|---:|---:|---:|---:|
+| `expectations/testharness/dom_boa.json` | 55083 -> 57891 | 44294 -> 46837 | **0** | **0** | 215 | 2808 |
+| `expectations/testharness/dom_nodes_boa.json` | 9763 -> 9763 | 6659 -> 6854 | **0** | **0** | 195 | 0 |
+
+**Every former pass is pinned as a pass.** The 2808 added keys in `dom_boa.json`
+are subtests the runner now reaches and records rather than new tests: the map
+had been pinned before the navigation and lifecycle phases stopped
+`Range-mutations-dataChange.html` timing out wholesale. The 410 promotions are
+the accumulated arrears of those phases plus this one — the pin had not been
+refreshed since before them — which is why the count far exceeds this phase's
+own seven.
+
+With the repins in place the **broad `dom` guard is green** for the first time
+since it was introduced, at `unexpected=0` over 698 files, and `dom/nodes` with
+it.
+
+### Named regression manifest
+
+| Test | What it pins |
+|---|---|
+| `script-runtime-api/tests/cross_arena_associated_transfer.rs::{boa,nova}::shadow_tree_travels_with_host` | host adopts; root, nested open **and closed** roots, and their nodes follow; `ownerDocument` follows for all of them; closed root stays closed; slot assignment table intact; `adoptedCallback` fires once, with the right old/new documents, for a custom element inside a nested closed root; every reflector identical |
+| `…::{boa,nova}::shadow_tree_round_trip` | `adoptNode` reaches the same place as an insertion and detaches; the return hop restores the shadow tree and its text |
+| `…::{boa,nova}::template_contents_rehomed` | nested contents fragments re-homed onto the destination's inert owner, which is neither the source's nor the destination document; reflectors and serialization preserved |
+| `…::{boa,nova}::completed_sibling_leaves_a_parsing_document` | during-parse adoption: a completed sibling moves and is connected; `document.body` (on the stack of open elements) is refused and unmoved; the parse completes over both |
+| `genet-scripted-dom/tests/subtree_transfer.rs::a_shadow_tree_and_its_nested_hosts_travel_with_the_host` | the storage-side shadow-including member walk |
+| `…::a_shadow_root_is_never_the_thing_adopted_and_a_split_host_is_refused` | a root is not an adoptable node; a straddling edge is refused |
+| `…::template_contents_are_rehomed_to_the_destination_inert_document` | the arena-side re-home |
+| `…::a_parse_refuses_only_what_the_tree_builder_still_holds` | stack-of-open-elements and form-pointer intersection, void elements excluded |
+| `…::detached_manual_slot_request_is_still_associated_state` | manual slot requests travel |
+| `…::slot_assignment_survives_removal_transfer_and_reinsertion` | assignment survives the full round |
+| `script-runtime-api/tests/frame_arena_boundary.rs` (associated-subtree case, retargeted) | the transfer, the identity of every carried reflector, and the re-homed inert owner |
+| `script-runtime-api/tests/cross_arena_replacement.rs` (retargeted) | the atomicity of a refusal, now on the one element that still refuses |
+
+### Gates
+
+| Gate | Result |
+|---|---|
+| Release `script-runtime-api` | **551 passed, 0 failed, 0 ignored** (up from 542) |
+| `cargo test -p genet-scripted-dom -p script-runtime-api`, both engines | all suites `ok`, **0 failed, 0 ignored** |
+| Clippy, both touched crates, `--all-targets` | zero errors; the one warning this lane had introduced (a redundant `u64` cast in `dom/shadow.rs`) removed; no other warning in a touched file is new |
+| Rustfmt, both crates | clean |
+| `cargo check --workspace --features genet-wpt/netfetch` | passed |
+| Testharness slices | **all fourteen at `unexpected=0`**, `dom` (60 -> 0) and `dom/nodes` (35 -> 0) included; `fetch/api/basic` unchanged at its inherited 55 |
+| Reftest guards | both `unexpected=0` |
+| Ortet `article` | `0x86e02f7fcd1c5b04`, three consecutive matching captures — **unchanged by this lane** (see below) |
+| Ortet `frames` | bimodal, unchanged by this lane (see below) |
+
+Guard runner:
+`f13ddd6d4ad66b9cc515706df1aac947c306423d0a747e8be1cf34e930702380`
+(`--release --features netfetch`, built from the lane tip). The `dom` guard is
+run at the census's own `--timeout 240`; at the driver's default two heavy files
+(`Document-characterSet-normalization-2.html`, `Range-mutations-dataChange.html`)
+are hang-killed under `--jobs 8`, which is a harness budget, not a result.
+
+### The Ortet receipts, and a correction to what "unchanged" means here
+
+Both receipts are unchanged **by this lane**, proved against a control rather
+than against the number on record, because the number on record had already
+moved on `main`:
+
+- **`article`** captures `0x86e02f7fcd1c5b04`, three times running. That is not
+  the `0x6377ba8a6bf4dbc9` every phase since the Ortet founding plan recorded.
+  An Ortet built in a throwaway worktree at the lane's own base commit
+  `546201874df` renders the same page to **`0x86e02f7fcd1c5b04`** as well, so the
+  move belongs to the Livery compositing commits that landed between the
+  WindowProxy phase and this lane's base (`ecaa79296bf` native-resolution canvas
+  layers, `62e1a0fad82` authored transform origins), not to adoption. The
+  digest was also confirmed path-insensitive: the lane's binary renders the main
+  checkout's copy of the page to the same value.
+- **`frames`** is **not a stable digest at this base**, and recording one would
+  be false. It is bimodal between `0x7ce450775e74208c` and `0x03ad0a534659fdb7`:
+  13/5 over eighteen consecutive runs on the lane tip, 12/6 over eighteen on the
+  base build. The digest *set* and its rough proportion are the same either
+  side, so the lane changes nothing; the instability is inherited and belongs to
+  the frame-compositing lane to settle. (Two further one-off digests appeared
+  only in a batch run while a full `cargo build` was saturating the machine, and
+  did not recur in any unloaded run on either build.)
+
+### What this phase does not do
+
+It does not move a canvas with a live drawing context, which is the one named
+residual and a producer-relocation problem. It does not lift the straddling-edge
+refusal, which is a correctness boundary rather than a gap. It does not stabilise
+`frames.html`'s Ortet digest, and it does not touch the top-level realm, the
+`fetch/api/basic` slice, or the initial-`about:blank` load-event timing that the
+navigation phase's one honest census regression turns on.

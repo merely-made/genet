@@ -501,12 +501,19 @@
   function prepareNodeMove(parent, node) {
     ensureLocalNode(parent);
     ensureLocalNode(node);
+    var oldDoc = ownerDocumentOf(node);
+    var newDoc = documentForInsertionTarget(parent);
     return {
       crossArena: domAgentDispatch ? domAgentDispatch('prepareAdoption', parent.__ref, node.__ref) : false,
       roots: movedRoots(node),
-      snapshot: snapshotMovedNodes(node),
-      oldDoc: ownerDocumentOf(node),
-      newDoc: documentForInsertionTarget(parent),
+      // The snapshot exists only to re-record `ownerDocument` on the far side of
+      // a *cross-document* move, and it is shadow-including, so taking it costs
+      // one reflector walk per node of every shadow tree in the subtree. A move
+      // inside one document has no use for it: `document.body.appendChild` of a
+      // detached 999-deep nest of shadow hosts must not pay for it.
+      snapshot: oldDoc !== newDoc ? snapshotMovedNodes(node) : null,
+      oldDoc: oldDoc,
+      newDoc: newDoc,
       oldParent: node.parentNode
     };
   }
@@ -2777,6 +2784,9 @@
     }
     var move = prepareNodeMove(this, node);
     move.newDoc = this;
+    // `prepareNodeMove` only snapshots for a move it already sees as crossing
+    // documents; overriding the destination here can make it one.
+    if (!move.snapshot && move.oldDoc !== move.newDoc) move.snapshot = snapshotMovedNodes(node);
     if (move.oldParent) {
       disconnectMovedRoots(move);
       moRemoveChild(move.oldParent.__ref, node.__ref);

@@ -258,7 +258,7 @@ impl<E: ScriptEngine> NativeFn<E> for TemplateHostOf {
         };
         let found = raw.with_dom(|dom| dom.template_host_of(raw.id()));
         match found {
-            Some(template) => reflect_pinned::<E>(cx, template.raw() as u64),
+            Some(template) => reflect_pinned::<E>(cx, template.raw()),
             None => Ok(cx.make_null()),
         }
     }

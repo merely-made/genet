@@ -600,6 +600,51 @@ impl<E: ScriptEngine> Runtime<E> {
         })
     }
 
+    /// The realm the **top-level browsing context** is showing right now.
+    ///
+    /// Every top-document entry point on this type - [`eval`](Self::eval),
+    /// [`host`](Self::host), [`parse_document_interleaved`] and the rest -
+    /// resolves through this one accessor rather than through
+    /// [`MAIN_REALM`](script_engine_api::MAIN_REALM), which is the agent's
+    /// bootstrap realm: the realm that owns the timer queue, the navigation
+    /// drive and the `WindowProxy` factory, and the one the engine refuses to
+    /// discard. Separating the two is what lets a top-level navigation replace
+    /// its realm the way a child's does.
+    ///
+    /// [`parse_document_interleaved`]: Self::parse_document_interleaved
+    pub fn top_realm(&self) -> RealmId {
+        self.agent.borrow().frames.top_realm()
+    }
+
+    /// Evaluate in the top-level context's current realm. The engine's plain
+    /// `eval` is the bootstrap realm's, which is deliberately not the document's
+    /// any more; every internal top-document evaluation goes through here.
+    pub(crate) fn eval_top(&mut self, source: &str) -> Result<E::Value, E::Error> {
+        let top = self.top_realm();
+        if top == MAIN_REALM {
+            self.engine.eval(source)
+        } else {
+            match self.engine.eval_in_realm(top, source) {
+                Ok(value) => Ok(value),
+                Err(error) => Err(self.engine_error(&error.to_string())),
+            }
+        }
+    }
+
+    /// Turn a [`RealmError`] into the engine's own error type. The engine trait
+    /// has no error constructor - only a call context does - so the error is
+    /// minted the one way an embedder always can: by throwing in the bootstrap
+    /// realm, which never succeeds.
+    pub(crate) fn engine_error(&mut self, message: &str) -> E::Error {
+        self.engine
+            .eval(&format!(
+                "(function(){{throw new Error({});}})()",
+                js_str(message)
+            ))
+            .err()
+            .expect("a throw in the bootstrap realm yields an engine error")
+    }
+
     /// Install a window realm over the supplied document state in this agent.
     pub fn create_child_realm(&mut self, mut host: HostState) -> Result<RealmId, RealmError> {
         let realm = self.engine.create_realm()?;
@@ -695,21 +740,19 @@ impl<E: ScriptEngine> Runtime<E> {
             .borrow()
             .hosts
             .iter()
-            .filter(|(id, _)| **id != MAIN_REALM)
+            .filter(|(id, _)| **id != self.top_realm() && **id != MAIN_REALM)
             .map(|(&id, host)| (id, host.clone()))
             .collect()
     }
 
     pub fn host_in_realm(&self, realm: RealmId) -> Result<SharedHost, RealmError> {
-        if realm == MAIN_REALM {
+        if let Some(host) = self.agent.borrow().hosts.get(&realm) {
+            return Ok(host.clone());
+        }
+        if realm == self.top_realm() {
             return Ok(self.host.clone());
         }
-        self.agent
-            .borrow()
-            .hosts
-            .get(&realm)
-            .cloned()
-            .ok_or(RealmError::NoSuchRealm(realm))
+        Err(RealmError::NoSuchRealm(realm))
     }
 
     pub fn eval_in_realm(&mut self, realm: RealmId, source: &str) -> Result<E::Value, RealmError> {
@@ -742,7 +785,7 @@ impl<E: ScriptEngine> Runtime<E> {
         // Host boundary: evaluating a top-level script is driven by the embedder;
         // callers choose when to perform the next microtask checkpoint.
         self.trace_scheduler("eval", "start", None);
-        let result = self.engine.eval(source);
+        let result = self.eval_top(source);
         self.flush_host_trace_events();
         self.trace_scheduler("eval", if result.is_ok() { "end" } else { "error" }, None);
         result
@@ -789,9 +832,8 @@ impl<E: ScriptEngine> Runtime<E> {
         }
         // The rebind is a no-op unless the host was swapped under a retained
         // JS heap (snapshot_clone); it must run before any JS DOM access.
-        let _ = self
-            .engine
-            .eval("globalThis.__rebindDocument(); globalThis.__refreshNamedProperties()");
+        let _ =
+            self.eval_top("globalThis.__rebindDocument(); globalThis.__refreshNamedProperties()");
     }
 
     /// Drain pending microtasks (Promise reaction jobs) to quiescence — a microtask
@@ -809,7 +851,7 @@ impl<E: ScriptEngine> Runtime<E> {
         // before the queue is pumped, so "notify mutation observers" is a
         // microtask of *this* checkpoint. Costs nothing until something observes.
         if self.host.borrow().dom.is_observing() {
-            let _ = self.engine.eval("__moPump()");
+            let _ = self.eval_top("__moPump()");
         }
         for (&realm, host) in &self.child_hosts() {
             if host.borrow().dom.is_observing() {
@@ -842,7 +884,7 @@ impl<E: ScriptEngine> Runtime<E> {
         // raw NodeId can exceed 2^53 and lose precision as a JS f64, corrupting
         // its doc-tag high bits and tripping the scripted-DOM fence. The
         // `__dispatchSynthetic` bridge does `String(rawId)` anyway.
-        let v = match self.engine.eval(&format!(
+        let v = match self.eval_top(&format!(
             "__dispatchSynthetic(\"{raw_node_id}\", {event_type:?})"
         )) {
             Ok(value) => value,
@@ -884,7 +926,7 @@ impl<E: ScriptEngine> Runtime<E> {
         let expr = format!(
             "__dispatchTransition(\"{raw_node_id}\", {event_type:?}, {property_name:?}, {elapsed_time})"
         );
-        self.engine.eval(&expr)?;
+        self.eval_top(&expr)?;
         self.flush_host_trace_events();
         self.perform_microtask_checkpoint();
         Ok(())
@@ -922,7 +964,7 @@ impl<E: ScriptEngine> Runtime<E> {
         // precision bug the transitions plan hit).
         let expr =
             format!("__dispatchTouch(\"{raw_node_id}\", {event_type:?}, {x}, {y}, {identifier})");
-        let v = self.engine.eval(&expr)?;
+        let v = self.eval_top(&expr)?;
         self.flush_host_trace_events();
         let proceed = self
             .engine
@@ -951,7 +993,7 @@ impl<E: ScriptEngine> Runtime<E> {
         let expr = format!(
             "__dispatchWheel(\"{raw_node_id}\", {x}, {y}, {delta_x}, {delta_y}, {delta_mode})"
         );
-        let v = self.engine.eval(&expr)?;
+        let v = self.eval_top(&expr)?;
         self.flush_host_trace_events();
         let proceed = self
             .engine
@@ -983,7 +1025,7 @@ impl<E: ScriptEngine> Runtime<E> {
         let expr = format!(
             "__dispatchAnimation(\"{raw_node_id}\", {event_type:?}, {animation_name:?}, {elapsed_time})"
         );
-        self.engine.eval(&expr)?;
+        self.eval_top(&expr)?;
         self.flush_host_trace_events();
         self.perform_microtask_checkpoint();
         Ok(())
@@ -1002,7 +1044,7 @@ impl<E: ScriptEngine> Runtime<E> {
     /// rebuild complete physical components so any creation realm can retain the
     /// canonical wrappers. Temporary roots protect both paths while hooks allocate.
     pub(crate) fn apply_opaque_root_policy(&mut self) {
-        let realms: Vec<_> = std::iter::once(MAIN_REALM)
+        let realms: Vec<_> = std::iter::once(self.top_realm())
             .chain(self.child_hosts().keys().copied())
             .collect();
         // Policy hooks allocate and execute JS. Keep every existing reflector
@@ -1017,7 +1059,7 @@ impl<E: ScriptEngine> Runtime<E> {
                 .expect("registered realm reflector inventory");
             // Prior connected roots remain installed throughout this
             // transaction, even if those nodes have since been detached.
-            let temporary: Vec<_> = if realm == MAIN_REALM {
+            let temporary: Vec<_> = if realm == self.top_realm() {
                 minted
                     .iter()
                     .copied()
@@ -1046,7 +1088,7 @@ impl<E: ScriptEngine> Runtime<E> {
         // force_gc. Detached components now rely solely on their ephemerons and
         // authored references, so dropping the final wrapper still collects them.
         for (realm, minted) in inventories {
-            let detached: Vec<_> = if realm == MAIN_REALM {
+            let detached: Vec<_> = if realm == self.top_realm() {
                 minted
                     .into_iter()
                     .filter(|raw| !self.opaque_roots.rooted.contains(raw))
@@ -1087,7 +1129,7 @@ impl<E: ScriptEngine> Runtime<E> {
                 .expect("live child realm reflector inventory");
             refreshed.as_slice()
         };
-        let mut owned_roots = if realm == MAIN_REALM {
+        let mut owned_roots = if realm == self.top_realm() {
             std::mem::take(&mut self.opaque_roots)
         } else {
             self.agent
@@ -1177,7 +1219,7 @@ impl<E: ScriptEngine> Runtime<E> {
         }
         opaque_roots.rooted = now_rooted;
         opaque_roots.grouped = now_grouped;
-        if realm == MAIN_REALM {
+        if realm == self.top_realm() {
             self.opaque_roots = owned_roots;
         } else {
             self.agent
@@ -1365,16 +1407,16 @@ impl<E: ScriptEngine> Runtime<E> {
     /// test yet. A snapshot-capable engine can clone after this point so each
     /// test gets a fresh harness heap without re-evaluating the harness source.
     pub fn load_testharness(&mut self, harness_src: &str) -> Result<(), E::Error> {
-        self.engine.eval(harness_src)?;
+        self.eval_top(harness_src)?;
         self.flush_host_trace_events();
-        harness::install_bridge(&mut self.engine)
+        self.eval_top(harness::bridge_source()).map(|_| ())
     }
 
     /// Run `test_src` against an already-loaded `testharness.js`, dispatch
     /// `load`, drain the event loop, and return the reported subtests.
     pub fn run_loaded_testharness(&mut self, test_src: &str) -> Result<Vec<TestResult>, E::Error> {
         self.host.borrow_mut().results.clear();
-        self.engine.eval(test_src)?;
+        self.eval_top(test_src)?;
         self.flush_host_trace_events();
         self.engine
             .eval("window.dispatchEvent(new Event('load'));")?;
@@ -1400,7 +1442,7 @@ impl<E: ScriptEngine> Runtime<E> {
     /// reads [`results`](Self::results).
     pub fn begin_loaded_testharness(&mut self, test_src: &str) -> Result<(), E::Error> {
         self.host.borrow_mut().results.clear();
-        self.engine.eval(test_src)?;
+        self.eval_top(test_src)?;
         self.flush_host_trace_events();
         self.engine
             .eval("window.dispatchEvent(new Event('load'));")?;
@@ -1702,7 +1744,7 @@ impl<E: ScriptEngine> Runtime<E> {
             .fetch_realms
             .get(&id)
             .copied()
-            .unwrap_or(MAIN_REALM);
+            .unwrap_or_else(|| self.agent.borrow().frames.top_realm());
         if realm == MAIN_REALM {
             let _ = self.engine.eval(source);
         } else {
@@ -1799,7 +1841,7 @@ impl<E: ScriptEngine> Runtime<E> {
         );
         self.agent.borrow_mut().fetch_realms.clear();
         // Fetch task source: reject outstanding fetches at the host deadline, then checkpoint.
-        let _ = self.engine.eval(&js);
+        let _ = self.eval_top(&js);
         for &realm in self.child_hosts().keys() {
             let _ = self.engine.eval_in_realm(realm, &js);
         }
@@ -1809,7 +1851,7 @@ impl<E: ScriptEngine> Runtime<E> {
     /// How many `fetch()` Promises are still pending. The host drive loop reads this
     /// to know when script has quiesced (no in-flight fetches left to settle).
     pub fn pending_fetches(&mut self) -> usize {
-        let mut total = self.pending_fetches_in_realm(MAIN_REALM).unwrap_or(0);
+        let mut total = self.pending_fetches_in_realm(self.top_realm()).unwrap_or(0);
         for realm in self.child_hosts().keys().copied().collect::<Vec<_>>() {
             total += self.pending_fetches_in_realm(realm).unwrap_or(0);
         }

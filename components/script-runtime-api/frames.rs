@@ -25,6 +25,17 @@ use crate::{HostState, SharedHost, Surface, SurfaceError};
 #[derive(Default)]
 pub(crate) struct FrameState {
     pub(crate) tree: Option<BrowsingContextTree>,
+    /// The realm the **top-level browsing context** is showing right now.
+    ///
+    /// Distinct from [`MAIN_REALM`], which is the agent's bootstrap realm: the
+    /// one the engine refuses to discard, the one that owns the timer queue and
+    /// the navigation drive, and the one whose global every `engine.eval`
+    /// resolves against. The top-level document's realm is an ordinary realm
+    /// from the realm API, created like a child's and replaced like a child's
+    /// on navigation, and *this* is the field every top-document question
+    /// resolves through. Zero until the top context is bound, which is also
+    /// `MAIN_REALM` - the fallback a single-realm backend keeps for good.
+    top_realm: RealmId,
     contexts: BTreeMap<RealmId, BrowsingContextId>,
     records: BTreeMap<RealmId, FrameRecord>,
     /// Contexts detached from the tree but not yet unloaded. HTML's "destroy a
@@ -93,18 +104,31 @@ struct FrameRecord {
 }
 
 impl FrameState {
+    /// The one accessor every top-document question goes through. See the
+    /// field's note for why this is not [`MAIN_REALM`].
+    pub(crate) fn top_realm(&self) -> RealmId {
+        self.top_realm
+    }
+
+    /// Point the top-level browsing context at `realm`. Called once when the
+    /// top document's realm is opened and again on every top-level navigation.
+    pub(crate) fn set_top_realm(&mut self, realm: RealmId) {
+        self.top_realm = realm;
+    }
+
     pub(crate) fn defer_main_load(&mut self) -> bool {
+        let top = self.top_realm;
         self.pending_main_load = self
             .records
             .values()
-            .any(|record| record.parent == MAIN_REALM && !record.lazy && !record.loaded);
+            .any(|record| record.parent == top && !record.lazy && !record.loaded);
         self.pending_main_load
     }
 
     fn initialize(&mut self, url: &str) {
         if self.tree.is_none() {
             let tree = BrowsingContextTree::new(url);
-            self.contexts.insert(MAIN_REALM, tree.top());
+            self.contexts.insert(self.top_realm, tree.top());
             self.tree = Some(tree);
         }
     }
@@ -1139,17 +1163,19 @@ impl<E: ScriptEngine> NativeFn<E> for LoadFrameDocument {
         // Parsing creates descendants synchronously, but their document tasks
         // run later. A completed descendant releases its waiting ancestors only
         // after both of its load events have been delivered.
+        let top_realm = agent.borrow().frames.top_realm();
         let mut completing = if connected { realm } else { parent };
         loop {
-            if completing == MAIN_REALM {
+            if completing == top_realm {
                 let main_host = {
                     let mut a = agent.borrow_mut();
-                    let waiting = a.frames.records.values().any(|record| {
-                        record.parent == MAIN_REALM && !record.lazy && !record.loaded
-                    });
+                    let waiting =
+                        a.frames.records.values().any(|record| {
+                            record.parent == top_realm && !record.lazy && !record.loaded
+                        });
                     if a.frames.pending_main_load && !waiting {
                         a.frames.pending_main_load = false;
-                        a.hosts.get(&MAIN_REALM).cloned()
+                        a.hosts.get(&top_realm).cloned()
                     } else {
                         None
                     }
@@ -1158,7 +1184,7 @@ impl<E: ScriptEngine> NativeFn<E> for LoadFrameDocument {
                     main_host.borrow_mut().markup.ready_state = crate::ReadyState::Complete;
                     realm_eval::<E>(
                         cx,
-                        MAIN_REALM,
+                        top_realm,
                         "document.dispatchEvent(new Event('readystatechange'));window.dispatchEvent(new Event('load'))",
                     )?;
                 }
@@ -1230,7 +1256,8 @@ impl<E: ScriptEngine> NativeFn<E> for WindowRelation {
             );
         }
         let parent = relation.map(|r| r.0).unwrap_or(realm);
-        view::<E>(cx, if key == "top" { MAIN_REALM } else { parent })
+        let top_realm = agent.borrow().frames.top_realm();
+        view::<E>(cx, if key == "top" { top_realm } else { parent })
     }
 }
 
@@ -1262,14 +1289,21 @@ fn window_property<E: ScriptEngine>(
             .get(&target)
             .map(|r| r.parent)
             .unwrap_or(target);
-        let to = if key == "top" { MAIN_REALM } else { parent };
+        let to = if key == "top" {
+            agent.borrow().frames.top_realm()
+        } else {
+            parent
+        };
         return view_from::<E>(cx, viewer, to);
     }
     if key == "opener" {
         return Ok(cx.make_null());
     }
     if key == "closed" {
-        let live = agent.borrow().frames.records.contains_key(&target) || target == MAIN_REALM;
+        let live = {
+            let a = agent.borrow();
+            a.frames.records.contains_key(&target) || target == a.frames.top_realm()
+        };
         return eval::<E>(cx, if live { "false" } else { "true" });
     }
     if key == "length" {

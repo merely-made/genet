@@ -517,7 +517,7 @@ impl LiveryCssom {
         runtime.set_child_host_initializer(move |realm, host| future(realm, host));
         // A host can install CSSOM after parsing a document which already has
         // children. Bind those arenas as well as future inserted frames.
-        let mut parents = vec![script_engine_api::MAIN_REALM];
+        let mut parents = vec![runtime.top_realm()];
         while let Some(parent) = parents.pop() {
             let style = runtime
                 .host_in_realm(parent)

@@ -659,7 +659,7 @@ impl<E: ScriptEngine> NativeFn<E> for WsImport {
 /// One turn of worker service: drain the channels, answer resource requests,
 /// then dispatch the queued events into JS. Returns how much work happened.
 pub(crate) fn pump<E: ScriptEngine>(rt: &mut Runtime<E>) -> usize {
-    pump_in_realm(rt, script_engine_api::MAIN_REALM)
+    pump_in_realm(rt, rt.top_realm())
 }
 
 pub(crate) fn pump_in_realm<E: ScriptEngine>(
@@ -754,7 +754,7 @@ pub(crate) fn pump_in_realm<E: ScriptEngine>(
     }
     let queued = host.borrow().worker_events.len();
     if queued > 0 {
-        if realm == script_engine_api::MAIN_REALM {
+        if realm == rt.top_realm() {
             let _ = rt.eval("__workerPump()");
         } else {
             let _ = rt.eval_in_realm(realm, "__workerPump()");

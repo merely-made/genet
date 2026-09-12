@@ -576,9 +576,9 @@ impl<E: ScriptEngine> Runtime<E> {
                     // it is evaluated in the top document's realm - not the
                     // agent's bootstrap realm, which is nobody's document.
                     let top = self.top_realm();
-                    let _ =
-                        self.engine
-                            .eval_module_in_realm(top, &source, &base, &mut resolve);
+                    let _ = self
+                        .engine
+                        .eval_module_in_realm(top, &source, &base, &mut resolve);
                     self.flush_host_trace_events();
                 }
             },

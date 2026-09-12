@@ -229,7 +229,9 @@ fn mixed_creation_realms_share_detached_component_liveness<E: ScriptEngine>() {
         let value = rt.eval("rootId").unwrap();
         NodeId::from_raw(rt.value_to_string(&value).unwrap().parse::<u64>().unwrap())
     };
-    let owner = rt.host_in_realm(rt.frame_realms(rt.top_realm())[0].1).unwrap();
+    let owner = rt
+        .host_in_realm(rt.frame_realms(rt.top_realm())[0].1)
+        .unwrap();
     // The mixed component must be grouped by its physical parent links, even
     // though its reflectors belong to different creation-realm inventories.
     let held_id = {

@@ -932,3 +932,37 @@ runtime acceptance claim yet. Associated trees and host-owned embedded contexts
 remain explicit unsupported transfer boundaries. This is the successor to the
 foundation-only refusal described above; full realms and headed G5 acceptance
 remain open.
+
+### Associated-state transfer (2026-09-12)
+
+The [associated-state transfer phase](2026-09-08_realms_plan.md#phase-associated-state-transfer-2026-09-12)
+replaces the last two adoption refusals that were stated by name rather than by
+fact. A shadow tree now moves with its host — nested hosts, open and closed roots
+alike, slot assignment tables and pending `slotchange` entries, `ownerDocument`
+following for every node, the `adoptedCallback` fanning out to a custom element
+inside a nested *closed* root, and every reflector the same object on the far
+side, on both engines; a closed root stays closed. A template's contents are
+re-homed onto the **destination's** inert template-contents owner document,
+recursively through nested templates, and the fan-out reaches every same-origin
+realm because the move may have run in any of them. The parsing guard becomes the
+rule HTML states: the tree sink tracks unpopped created elements plus the form
+element pointer, and the arena recovers the stack of open elements by
+intersecting that set with the current node's inclusive ancestors, so a completed
+sibling subtree may leave a document mid-parse while `document.body` is still
+refused — which recovers `dom/nodes/Node-isConnected.html: Test with iframes`.
+`object` and `embed` join `iframe` in arriving as ordinary subtrees that become
+fresh frames in the destination; **a canvas holding a live drawing context is the
+one named residual**, refused by fact because its registry index and texture
+producer answer to the source host alone. Release runtime 551 passed / 0 failed /
+**0 ignored**. The census over `dom`, `shadow-dom`, `custom-elements`, the
+template element and the iframe element gains seven subtests across three files
+with **zero** pass-to-nonpass movements and identical key sets; `dom_boa.json`
+and `dom_nodes_boa.json` are repinned forward-only with no former pass demoted
+and no key dropped, taking `dom` from 60 to 0 and `dom/nodes` from 35 to 0 — so
+**all fourteen testharness slices and both reftest guards are at
+`unexpected=0`** and the broad DOM guard is green for the first time. Both Ortet
+receipts are unchanged by the lane, established against an Ortet built at the
+lane's own base commit: `article` reads `0x86e02f7fcd1c5b04` there too, so the
+move off `0x6377ba8a6bf4dbc9` belongs to the Livery compositing commits, and
+`frames` is bimodal at this base in the same proportion before and after, so no
+single digest can honestly be recorded for it.

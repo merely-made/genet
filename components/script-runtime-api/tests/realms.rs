@@ -88,6 +88,9 @@ fn separate_documents<E: ScriptEngine>() {
 
 fn shared_timer_order<E: ScriptEngine>() {
     let mut rt = Runtime::<E>::new().expect("runtime");
+    // The top document's realm - where `eval` and the timers it sets run. Not
+    // the agent's bootstrap realm, which owns the timer *queue* but no document.
+    let top = rt.top_realm();
     let realm = rt.create_child_realm(child_host()).expect("child");
     let log = rt.eval("globalThis.order=[]; order").unwrap();
     rt.engine_mut()
@@ -100,7 +103,7 @@ fn shared_timer_order<E: ScriptEngine>() {
         .unwrap();
     assert_eq!(rt.run_timers(8, 0.0), 3);
     assert_eq!(
-        read(&mut rt, MAIN_REALM, "order.join(',')"),
+        read(&mut rt, top, "order.join(',')"),
         "parent,child,microtask,last"
     );
     let realm_marks: Vec<_> = rt
@@ -112,9 +115,9 @@ fn shared_timer_order<E: ScriptEngine>() {
     assert_eq!(
         realm_marks,
         vec![
-            "realm=0;sequence=1".to_string(),
+            format!("realm={top};sequence=1"),
             format!("realm={realm};sequence=2"),
-            "realm=0;sequence=3".to_string()
+            format!("realm={top};sequence=3")
         ]
     );
 }

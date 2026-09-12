@@ -44,6 +44,11 @@ pub(crate) struct FrameState {
     /// context released in a later task, so no removal runs script.
     pending_teardown: Vec<Vec<(RealmId, Option<BrowsingContextId>)>>,
     pending_main_load: bool,
+    /// The source a top-level navigation fetched, waiting for the task that
+    /// parses it into the realm just opened for it, and whether that document
+    /// runs scripts. A child's equivalent lives in its [`FrameRecord`]; the
+    /// top-level context has none, so it lives here.
+    pending_top_load: Option<(String, bool)>,
     /// The browsing-context key each live realm answers for, and the realm each
     /// key currently resolves to. A context's key never changes; the realm
     /// behind it does, every time the context navigates. This pair is the
@@ -907,8 +912,8 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
         let viewport_size = (dimension("width", 300.0), dimension("height", 150.0));
         drop(raw);
         let plan = DocumentPlan {
-            parent,
-            owner: node,
+            container: Some((parent, node)),
+            reuse_host: None,
             context,
             key: None,
             document_url: if lazy || url == "about:srcdoc" || url == "about:blank" {
@@ -957,8 +962,17 @@ struct HostSeams {
 /// exactly two fields: a navigation supplies the context's existing `key`, and
 /// it is never `lazy`.
 struct DocumentPlan {
-    parent: RealmId,
-    owner: NodeId,
+    /// The container element's realm and node, or `None` for the **top-level**
+    /// browsing context, which has neither. A context with a container gets a
+    /// [`FrameRecord`] and loads through `__loadFrameDocument`; the top-level
+    /// one carries no record - its absence is what `navigate` reads to tell a
+    /// top-level context from a child - and loads through `__loadTopDocument`.
+    container: Option<(RealmId, NodeId)>,
+    /// The `HostState` cell to write the new document's state into, rather than
+    /// allocating a fresh one. Only the top-level context supplies this, and it
+    /// is what lets `Runtime::host()` keep returning a borrow of a field across
+    /// a navigation that replaces everything the field points at.
+    reuse_host: Option<SharedHost>,
     context: BrowsingContextId,
     /// The context's WindowProxy key. `None` on a context's first document,
     /// where the new realm's own id becomes the key.
@@ -986,8 +1000,8 @@ fn open_document_realm<E: ScriptEngine>(
     plan: DocumentPlan,
 ) -> Result<RealmId, RealmError> {
     let DocumentPlan {
-        parent,
-        owner,
+        container,
+        reuse_host,
         context,
         key,
         document_url,
@@ -1002,7 +1016,7 @@ fn open_document_realm<E: ScriptEngine>(
         .timer_state
         .clone()
         .ok_or(RealmError::Refused("agent timer state is unavailable"))?;
-    let child_host = Rc::new(RefCell::new(HostState {
+    let fresh = HostState {
         dom: ScriptedDom::from_serialized_document(
             "<!doctype html><html><head></head><body></body></html>",
         ),
@@ -1016,7 +1030,18 @@ fn open_document_realm<E: ScriptEngine>(
         viewport_size,
         worker_spawn: Some(crate::worker::worker_main::<E> as fn(_)),
         ..HostState::default()
-    }));
+    };
+    // A top-level navigation writes the new document's state *into* the cell the
+    // embedder already holds; everything else allocates one. Either way the old
+    // `HostState` is dropped here and nothing of the outgoing document survives
+    // but the seams copied into `fresh` above.
+    let child_host = match reuse_host {
+        Some(cell) => {
+            *cell.borrow_mut() = fresh;
+            cell
+        },
+        None => Rc::new(RefCell::new(fresh)),
+    };
     let child_for_install = child_host.clone();
     let mut attempted_realm = None;
     let result = E::create_realm_from_call(cx, child_host, |child| {
@@ -1026,19 +1051,29 @@ fn open_document_realm<E: ScriptEngine>(
             let mut a = agent.borrow_mut();
             a.register(realm, child_for_install.clone());
             a.frames.contexts.insert(realm, context);
-            a.frames.records.insert(
-                realm,
-                FrameRecord {
-                    parent,
-                    owner,
-                    source,
-                    scripts,
-                    lazy,
-                    load_started: false,
-                    parsed: false,
-                    loaded: false,
+            match container {
+                Some((parent, owner)) => {
+                    a.frames.records.insert(
+                        realm,
+                        FrameRecord {
+                            parent,
+                            owner,
+                            source,
+                            scripts,
+                            lazy,
+                            load_started: false,
+                            parsed: false,
+                            loaded: false,
+                        },
+                    );
                 },
-            );
+                // The top-level context: no container, so no record. The
+                // document's source waits here instead, for `__loadTopDocument`.
+                None => {
+                    a.frames.set_top_realm(realm);
+                    a.frames.pending_top_load = source.map(|source| (source, scripts));
+                },
+            }
             // A navigation keeps the context's key, which is what carries the
             // WindowProxy's identity from the old document to this one.
             a.frames.bind_context(realm, key.unwrap_or(realm));
@@ -1079,7 +1114,13 @@ fn open_document_realm<E: ScriptEngine>(
         // outlives the realm that owns it.
         bind_window_proxy_hooks_from_call::<E>(child, context_key)?;
         if !lazy {
-            E::eval_from_call(child, "setTimeout(function(){ __loadFrameDocument(); },0)")?;
+            E::eval_from_call(
+                child,
+                match container {
+                    Some(_) => "setTimeout(function(){ __loadFrameDocument(); },0)",
+                    None => "setTimeout(function(){ __loadTopDocument(); },0)",
+                },
+            )?;
         }
         Ok(())
     });
@@ -1217,6 +1258,71 @@ impl<E: ScriptEngine> NativeFn<E> for LoadFrameDocument {
             )?;
             completing = parent;
         }
+        Ok(cx.undefined())
+    }
+}
+
+/// `__loadTopDocument()` - the top-level context's `__loadFrameDocument`.
+///
+/// A child's version has to check that its container is still connected, ask
+/// its parent's host for the source and release the parent's load barrier.
+/// The top-level context has no container and no parent, so what is left is the
+/// part that matters: parse the fetched source into this realm with scripts
+/// interleaved, exactly the way a child's document is parsed - through
+/// `document.open()` / `write` / `close()`, which is what runs the document's
+/// scripts at their parse positions - then complete the document and fire
+/// `load` at the Window.
+struct LoadTopDocument;
+impl<E: ScriptEngine> NativeFn<E> for LoadTopDocument {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let Some(h) = host::<E>(cx) else {
+            return Ok(cx.undefined());
+        };
+        let Some(agent) = h.borrow().agent.upgrade() else {
+            return Ok(cx.undefined());
+        };
+        let realm = cx.current_realm();
+        // A navigation that landed after this task was queued has already moved
+        // the top realm on; this one is stale and does nothing.
+        if agent.borrow().frames.top_realm() != realm {
+            return Ok(cx.undefined());
+        }
+        let pending = agent.borrow_mut().frames.pending_top_load.take();
+        if let Some((source, scripts)) = pending.filter(|(source, _)| !source.is_empty()) {
+            if scripts {
+                eval::<E>(
+                    cx,
+                    &format!(
+                        "document.open();document.write({});document.close();",
+                        crate::js_str(&source)
+                    ),
+                )?;
+            } else {
+                let parsed = ScriptedDom::from_serialized_document(&source);
+                {
+                    let mut host = h.borrow_mut();
+                    let root = host.dom.document();
+                    let children: Vec<_> = host.dom.dom_children(root).collect();
+                    for child in children {
+                        host.dom.remove_child(child);
+                    }
+                    crate::dom::clone_into(&parsed, parsed.document(), &mut host.dom, root);
+                }
+                eval::<E>(cx, "__rebindDocument();__refreshNamedProperties();")?;
+            }
+        }
+        // A document whose parse created frames waits for them; the last of them
+        // completes it through `LoadFrameDocument`'s walk, which ends at the top
+        // realm and fires exactly this pair.
+        if agent.borrow_mut().frames.defer_main_load() {
+            return Ok(cx.undefined());
+        }
+        h.borrow_mut().markup.ready_state = crate::ReadyState::Complete;
+        eval::<E>(
+            cx,
+            "document.dispatchEvent(new Event('readystatechange'));\
+             window.dispatchEvent(new Event('load'))",
+        )?;
         Ok(cx.undefined())
     }
 }
@@ -1607,15 +1713,20 @@ fn navigate_fragment<E: ScriptEngine>(
     Ok(cx.undefined())
 }
 
-/// A top-level, document-replacing navigation. The host policy hook decides
-/// whether it may proceed at all; when it does, the document URL and the
-/// session history move exactly as a child's do.
+/// A top-level, document-replacing navigation.
 ///
-/// What does *not* happen here is the realm replacement a child gets. The
-/// agent's main realm is the one the engine refuses to discard and the one
-/// every embedder's `Runtime::eval` resolves against, so replacing it is not a
-/// change this lane can make behind the `Runtime` API. See the phase note in
-/// the realms plan.
+/// One thing makes this different from a child's, and it is the first thing:
+/// the host policy hook decides whether the navigation may proceed at all. A
+/// child is never asked. Past that decision the route is a child's exactly -
+/// the navigation is queued and performed by `perform_navigation`, which
+/// unloads, opens a new realm and `Document` through `open_document_realm`,
+/// rebinds the context's `WindowProxy` and parses.
+///
+/// The drain runs on [`MAIN_REALM`], the agent's bootstrap realm. For a child
+/// that task goes on the container's realm, which outlives the subtree being
+/// replaced; a top-level context has no container, and the bootstrap realm is
+/// the one realm in the agent that is guaranteed to outlive every document -
+/// which is the whole reason it was separated from the top document's.
 fn navigate_top_level<E: ScriptEngine>(
     cx: &mut E::CallCx<'_>,
     agent: &Rc<RefCell<crate::AgentState>>,
@@ -1632,25 +1743,34 @@ fn navigate_top_level<E: ScriptEngine>(
     if !allowed {
         return Ok(cx.undefined());
     }
-    let mut a = agent.borrow_mut();
-    if let Some(host) = a.hosts.get(&target) {
-        host.borrow_mut().base_url = Some(url.to_owned());
+    // A document with no frames has never needed a browsing-context tree, and
+    // until now the top-level context never needed one either - it could not be
+    // navigated. It can be, and the navigation has to join a session history, so
+    // the tree is built here if nothing built it earlier, rooted at the URL the
+    // top document was loaded with. `initialize` is a no-op once a tree exists.
+    {
+        let base = agent
+            .borrow()
+            .hosts
+            .get(&target)
+            .and_then(|host| host.borrow().base_url.clone())
+            .unwrap_or_else(|| "about:blank".into());
+        agent.borrow_mut().frames.initialize(&base);
     }
-    let context = a.frames.contexts.get(&target).copied();
-    if let (Some(context), Some(tree)) = (context, a.frames.tree.as_mut()) {
-        if let Some(context) = tree.get_mut(context) {
-            let origin = browsing_context_api::Origin::of_url(url, 0);
-            context.navigate_with(
-                ActiveDocument {
-                    url: url.to_owned(),
-                    origin,
-                    initial_about_blank: false,
-                },
-                replace,
-            );
-        }
-    }
-    drop(a);
+    agent
+        .borrow_mut()
+        .frames
+        .pending_navigations
+        .push(PendingNavigation {
+            target,
+            url: url.to_owned(),
+            replace,
+        });
+    realm_eval::<E>(
+        cx,
+        MAIN_REALM,
+        "setTimeout(function(){ __runNavigations(); },0)",
+    )?;
     Ok(cx.undefined())
 }
 
@@ -1726,16 +1846,29 @@ fn perform_navigation<E: ScriptEngine>(
         url,
         replace,
     } = navigation;
+    // A child carries a `FrameRecord`; the top-level context carries none, and
+    // that absence is the only thing that distinguishes the two here. Both keep
+    // their browsing context, their container (where there is one) and their
+    // `WindowProxy` across the navigation.
+    let top_level = agent.borrow().frames.top_realm() == target;
     let facts = (|| {
         let a = agent.borrow();
-        let record = a.frames.records.get(&target)?;
         let context = *a.frames.contexts.get(&target)?;
         let host = a.hosts.get(&target)?.clone();
-        Some((record.parent, record.owner, record.scripts, context, host))
+        match a.frames.records.get(&target) {
+            Some(record) => Some((
+                Some((record.parent, record.owner)),
+                record.scripts,
+                context,
+                host,
+            )),
+            None if top_level => Some((None, true, context, host)),
+            None => None,
+        }
     })();
     // A context destroyed between the request and the task takes its
     // navigation with it.
-    let Some((parent, owner, scripts, context, outgoing)) = facts else {
+    let Some((container, scripts, context, outgoing)) = facts else {
         return Ok(());
     };
     let key = agent.borrow_mut().frames.context_key(target);
@@ -1784,8 +1917,10 @@ fn perform_navigation<E: ScriptEngine>(
     }
     let discard = unload_for_navigation::<E>(cx, agent, target);
     let plan = DocumentPlan {
-        parent,
-        owner,
+        container,
+        // The top-level document's `HostState` cell is the one `Runtime::host()`
+        // hands out, so it is written into rather than replaced.
+        reuse_host: top_level.then(|| outgoing.clone()),
         context,
         key: Some(key),
         document_url: url,
@@ -1869,6 +2004,7 @@ pub(crate) fn install_frame_surface<E: ScriptEngine>(
 ) -> Result<(), SurfaceError<E::Error>> {
     surface.set_function::<FrameWindow>("__frameWindow", 1)?;
     surface.set_function::<LoadFrameDocument>("__loadFrameDocument", 0)?;
+    surface.set_function::<LoadTopDocument>("__loadTopDocument", 0)?;
     surface.set_function::<DiscardFrame>("__discardFrame", 1)?;
     surface.set_function::<RunFrameTeardown>("__runFrameTeardown", 0)?;
     surface.set_function::<LiveFrameCount>("__liveFrameCount", 0)?;

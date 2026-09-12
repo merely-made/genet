@@ -331,13 +331,52 @@ fn discarding_realm_does_not_revoke_retained_functions() {
     assert_eq!(engine.value_to_string(&value).unwrap(), child.to_string());
 }
 
+/// A multi-realm agent clones, and every realm arrives in the clone: rooted,
+/// carrying its own host slot, and holding the JS state the donor left in it.
+///
+/// This is what a separated top-level realm needs. The top document's realm is
+/// an ordinary realm from the realm API, so a runtime that has one has two
+/// realms before the embedder has run a line of script - and the WPT harness
+/// template's whole method is to clone such a runtime once per test.
 #[test]
-fn snapshot_refuses_multiple_realms() {
+fn snapshot_carries_every_realm() {
     let mut engine = NovaEngine::new().unwrap();
-    engine.create_realm().unwrap();
+    let child = engine.create_realm().unwrap();
+    engine.eval("globalThis.mark = 'root'").unwrap();
+    engine
+        .eval_in_realm(child, "globalThis.mark = 'child'")
+        .unwrap();
+
+    let mut clone = engine.snapshot_clone().expect("multi-realm clone");
+
+    // The realm is present under the same id, its global is intact, and it is
+    // rooted - an unrooted realm would not survive the collection a fresh
+    // evaluation triggers.
+    let value = clone.eval_in_realm(child, "globalThis.mark").unwrap();
+    assert_eq!(clone.value_to_string(&value).unwrap(), "child");
+    let value = clone.eval("globalThis.mark").unwrap();
+    assert_eq!(clone.value_to_string(&value).unwrap(), "root");
+
+    // The clone's host slots are its own: discarding the carried realm in the
+    // clone leaves the donor's untouched.
+    clone.discard_realm(child).expect("discard in clone");
+    assert!(clone.eval_in_realm(child, "1").is_err());
+    let value = engine.eval_in_realm(child, "globalThis.mark").unwrap();
+    assert_eq!(engine.value_to_string(&value).unwrap(), "child");
+
+    // And the counter does not rewind, so a realm minted in the clone cannot
+    // collide with one it inherited.
+    let minted = clone.create_realm().unwrap();
+    assert!(minted > child, "{minted} must not reuse {child}");
+}
+
+#[test]
+fn snapshot_refuses_pending_jobs() {
+    let mut engine = NovaEngine::new().unwrap();
+    engine.eval("Promise.resolve().then(function(){})").unwrap();
     assert_eq!(
         engine.snapshot_clone().err().as_deref(),
-        Some("cannot snapshot clone NovaEngine with multiple realms")
+        Some("cannot snapshot clone NovaEngine with pending jobs")
     );
 }
 

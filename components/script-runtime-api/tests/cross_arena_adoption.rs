@@ -6,7 +6,7 @@
 
 use genet_scripted_dom::NodeId;
 use layout_dom_api::LayoutDom;
-use script_engine_api::{MAIN_REALM, ScriptEngine};
+use script_engine_api::ScriptEngine;
 use script_runtime_api::{NoScriptLoader, Runtime};
 
 fn runtime<E: ScriptEngine>() -> Runtime<E> {
@@ -149,7 +149,7 @@ fn collection_tracks_owner_separately_from_wrapper_realm<E: ScriptEngine>() {
         let value = rt.eval("__nodeRawId(retained.__ref)").unwrap();
         NodeId::from_raw(rt.value_to_string(&value).unwrap().parse::<u64>().unwrap())
     };
-    let realm = rt.frame_realms(MAIN_REALM)[0].1;
+    let realm = rt.frame_realms(rt.top_realm())[0].1;
     let owner = rt.host_in_realm(realm).unwrap();
     assert!(
         !rt.host().borrow().dom.is_live(id),
@@ -229,7 +229,7 @@ fn mixed_creation_realms_share_detached_component_liveness<E: ScriptEngine>() {
         let value = rt.eval("rootId").unwrap();
         NodeId::from_raw(rt.value_to_string(&value).unwrap().parse::<u64>().unwrap())
     };
-    let owner = rt.host_in_realm(rt.frame_realms(MAIN_REALM)[0].1).unwrap();
+    let owner = rt.host_in_realm(rt.frame_realms(rt.top_realm())[0].1).unwrap();
     // The mixed component must be grouped by its physical parent links, even
     // though its reflectors belong to different creation-realm inventories.
     let held_id = {
@@ -360,7 +360,7 @@ fn native_reads_follow_the_owning_arena<E: ScriptEngine>() {
         None::<NodeId>
     };
     assert!(id.is_none());
-    let child = rt.frame_realms(MAIN_REALM)[0].1;
+    let child = rt.frame_realms(rt.top_realm())[0].1;
     let host = rt.host_in_realm(child).expect("child host");
     let host = host.borrow();
     let node = find_id(&host.dom, LayoutDom::document(&host.dom), "moved")

@@ -50,6 +50,17 @@ mod native {
         /// a diamond / cycle resolves each module once. `Global` keeps each rooted
         /// across the load (the heap-global root set, like the reflector cache).
         module_cache: RefCell<HashMap<String, Global<SourceTextModule<'static>>>>,
+        /// The realm every module in the current load graph belongs to.
+        ///
+        /// A dependency is parsed from `load_imported_module`, which runs during
+        /// the *load* phase - before any of the graph is evaluated, and so while
+        /// the running execution context is still the one `run_in_realm`
+        /// entered, not the entry module's. `agent.current_realm()` there is the
+        /// root realm, which is nobody's document once the top document has a
+        /// realm of its own. So the entry's realm is pinned here for the call.
+        /// `None` means "whatever is current", which is what the realm-less
+        /// `eval_module` wants.
+        module_realm: Cell<Option<Realm<'static>>>,
     }
 
     // `HostHooks: Debug`, but `Job` is not `Debug`, so report the queue length only.
@@ -67,12 +78,25 @@ mod native {
         /// lifetime is erased to `'static` for storage in the leaked (`'static`)
         /// hooks; it is never observed past `f`, where the real resolver lives.
         fn with_resolver<R>(&self, resolver: &mut ModuleResolver<'_>, f: impl FnOnce() -> R) -> R {
+            self.with_resolver_in_realm(None, resolver, f)
+        }
+
+        /// As [`with_resolver`](Self::with_resolver), also pinning the realm
+        /// every module parsed during `f` belongs to. See `module_realm`.
+        fn with_resolver_in_realm<R>(
+            &self,
+            realm: Option<Realm<'static>>,
+            resolver: &mut ModuleResolver<'_>,
+            f: impl FnOnce() -> R,
+        ) -> R {
             let raw: *mut ModuleResolver<'_> = resolver;
             // SAFETY: erases only the captured-data lifetime; same layout. Cleared below.
             let erased: *mut ModuleResolver<'static> = unsafe { std::mem::transmute(raw) };
             self.module_resolver.set(Some(erased));
+            self.module_realm.set(realm);
             let out = f();
             self.module_resolver.set(None);
+            self.module_realm.set(None);
             self.module_cache.borrow_mut().clear();
             out
         }
@@ -132,7 +156,13 @@ mod native {
                         let global = cache.get(&url).expect("just checked present");
                         Ok(AbstractModule::from(global.get(agent, gc)))
                     } else {
-                        let realm = agent.current_realm(gc);
+                        // The graph's pinned realm, or the running one when
+                        // nothing pinned it.
+                        let realm = self
+                            .module_realm
+                            .get()
+                            .map(|realm| realm.bind(gc))
+                            .unwrap_or_else(|| agent.current_realm(gc));
                         let src = JsString::from_string(agent, source, gc);
                         match parse_module(
                             agent,
@@ -170,6 +200,7 @@ mod native {
             jobs,
             module_resolver: Cell::new(None),
             module_cache: RefCell::new(HashMap::new()),
+            module_realm: Cell::new(None),
         }))
     }
 
@@ -913,9 +944,6 @@ mod native {
         /// Host-owned DOM state is intentionally not copied; callers install it with
         /// `set_host_data` before running script in the clone.
         pub fn snapshot_clone(&mut self) -> Result<Self, String> {
-            if self.registry.next_realm.get() != MAIN_REALM + 1 {
-                return Err("cannot snapshot clone NovaEngine with multiple realms".to_string());
-            }
             if !self.jobs.borrow().is_empty() {
                 return Err("cannot snapshot clone NovaEngine with pending jobs".to_string());
             }
@@ -925,14 +953,42 @@ mod native {
                 drain_release(agent, &original_release);
             });
 
+            // Every realm this agent holds, as the bare `Realm` index rather
+            // than the donor's `Global` root. `GcAgent::snapshot_clone` copies
+            // `realm_roots` wholesale, so a realm keeps its index in the clone;
+            // what does *not* carry over is the rooting (the donor's `Global`
+            // is a root in the donor's heap) or the `[[HostDefined]]` slot,
+            // which vano clears on every realm by contract. Both are rebuilt
+            // below, which is the whole of what once made a second realm refuse
+            // the clone.
+            let donor = self.registry.clone();
+            let mut carried: Vec<(RealmId, Realm<'static>)> = Vec::new();
+            self.agent.run_in_realm(&self.realm, |agent, gc| {
+                let realms = donor.realms.borrow();
+                let mut ids: Vec<RealmId> = realms.keys().copied().collect();
+                ids.sort_unstable();
+                for id in ids {
+                    let realm = realms
+                        .get(&id)
+                        .expect("id came from this map")
+                        .get(agent, gc.nogc())
+                        .unbind();
+                    carried.push((id, realm));
+                }
+            });
+
             let jobs: Rc<RefCell<VecDeque<Job>>> = Rc::new(RefCell::new(VecDeque::new()));
             let hooks = leak_host_hooks(jobs.clone());
             let release: ReleaseQueue = Rc::new(RefCell::new(Vec::new()));
             let mut agent = self.agent.snapshot_clone(hooks);
             let registry = Rc::new(RealmRegistry {
                 realms: RefCell::new(HashMap::new()),
-                next_realm: Cell::new(MAIN_REALM + 1),
+                // The clone inherits the donor's whole heap, so the counter must
+                // not rewind: a clone that minted id 1 again would collide with
+                // the realm it just inherited under that id.
+                next_realm: Cell::new(self.registry.next_realm.get()),
             });
+            let promises = Rc::new(AgentPromises::default());
             agent.run_in_realm(&self.realm, |a, gc| {
                 let main = a.current_realm(gc.nogc()).unbind();
                 registry
@@ -945,7 +1001,7 @@ mod native {
                 Some(Rc::new(NovaHostSlot::new(
                     MAIN_REALM,
                     release.clone(),
-                    Rc::new(AgentPromises::default()),
+                    promises.clone(),
                     registry.clone(),
                 ))),
             );
@@ -953,6 +1009,34 @@ mod native {
                 previous.is_none(),
                 "GcAgent::snapshot_clone clears realm host-defined state"
             );
+            // Re-root and re-slot every realm that is not the root one. The root
+            // realm is reached through `self.realm`, a `RealmRoot` index the
+            // clone copies; the rest are reached only through the registry.
+            agent.run_in_realm(&self.realm, |a, _gc| {
+                for &(id, realm) in &carried {
+                    if id == MAIN_REALM {
+                        continue;
+                    }
+                    // `replace`, not `initialize`: vano clears `[[HostDefined]]`
+                    // only on the realms in its own root table, and a realm
+                    // created from a call is rooted by the registry's `Global`
+                    // instead - so it arrives still carrying the *donor's* slot,
+                    // which the clone must not share.
+                    realm.replace_host_defined(
+                        a,
+                        Some(Rc::new(NovaHostSlot::new(
+                            id,
+                            release.clone(),
+                            promises.clone(),
+                            registry.clone(),
+                        ))),
+                    );
+                    registry
+                        .realms
+                        .borrow_mut()
+                        .insert(id, Global::new(a, realm));
+                }
+            });
 
             Ok(Self {
                 agent,
@@ -1136,6 +1220,85 @@ mod native {
                                 .map(|s| s.to_string_lossy(agent).into_owned())
                                 .unwrap_or_else(|_| "<unprintable>".to_string());
                             out = Err(format!("module threw: {msg}"));
+                        },
+                    }
+                });
+            });
+            out
+        }
+
+        /// A module in a named realm. `parse_module` takes the realm the module
+        /// instance belongs to explicitly, so this is the same drive as
+        /// `eval_module` with the registry's realm in place of the current one.
+        fn eval_module_in_realm(
+            &mut self,
+            realm: RealmId,
+            source: &str,
+            base_url: &str,
+            resolve: &mut dyn FnMut(&str, &str) -> Option<(String, String)>,
+        ) -> Result<Option<Self::Value>, RealmError> {
+            if !self.registry.realms.borrow().contains_key(&realm) {
+                return Err(RealmError::NoSuchRealm(realm));
+            }
+            let hooks = self.hooks;
+            let release = self.release.clone();
+            let registry = self.registry.clone();
+            let src = source.to_string();
+            let base = base_url.to_string();
+            let mut out: Result<Option<NovaValue>, RealmError> = Err(RealmError::Engine(
+                "eval_module_in_realm did not run".to_string(),
+            ));
+            // Pin the realm before the load starts: a dependency is parsed from
+            // the host hook, which runs while the root realm is still current.
+            let pinned = {
+                let mut pinned = None;
+                self.agent.run_in_realm(&self.realm, |agent, gc| {
+                    pinned = registry
+                        .realms
+                        .borrow()
+                        .get(&realm)
+                        .map(|global| global.get(agent, gc.nogc()).unbind());
+                });
+                pinned
+            };
+            hooks.with_resolver_in_realm(pinned, resolve, || {
+                self.agent.run_in_realm(&self.realm, |agent, mut gc| {
+                    let target = registry
+                        .realms
+                        .borrow()
+                        .get(&realm)
+                        .expect("checked realm")
+                        .get(agent, gc.nogc())
+                        .unbind();
+                    let current = target.bind(gc.nogc());
+                    let source_text = JsString::from_string(agent, src, gc.nogc());
+                    let module = match parse_module(
+                        agent,
+                        source_text,
+                        current,
+                        Some(Rc::new(base) as HostDefined),
+                        gc.nogc(),
+                    ) {
+                        Ok(m) => m,
+                        Err(_) => {
+                            out = Err(RealmError::Engine("module parse error".to_string()));
+                            return;
+                        },
+                    };
+                    match agent.run_module(module.unbind(), None, gc.reborrow()) {
+                        Ok(value) => {
+                            out = Ok(Some(NovaValue::new(
+                                Global::new(agent, value.unbind()),
+                                &release,
+                            )))
+                        },
+                        Err(err) => {
+                            let v = err.value().unbind();
+                            let msg = v
+                                .to_string(agent, gc.reborrow())
+                                .map(|s| s.to_string_lossy(agent).into_owned())
+                                .unwrap_or_else(|_| "<unprintable>".to_string());
+                            out = Err(RealmError::Engine(format!("module threw: {msg}")));
                         },
                     }
                 });

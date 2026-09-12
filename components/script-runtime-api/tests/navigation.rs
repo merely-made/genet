@@ -12,7 +12,7 @@
 //! replaced. Three navigations in a row prove it runs to completion each time
 //! rather than leaking a realm or a host registration per pass.
 
-use script_engine_api::{MAIN_REALM, RealmId, ScriptEngine};
+use script_engine_api::{RealmId, ScriptEngine};
 use script_runtime_api::{NoScriptLoader, Runtime, ScriptResourceLoader};
 
 struct Documents;
@@ -74,7 +74,7 @@ fn check<E: ScriptEngine>(runtime: &mut Runtime<E>, expression: &str) {
 
 fn child_realms<E: ScriptEngine>(runtime: &Runtime<E>) -> Vec<RealmId> {
     runtime
-        .frame_realms(MAIN_REALM)
+        .frame_realms(runtime.top_realm())
         .into_iter()
         .map(|(_, realm)| realm)
         .collect()

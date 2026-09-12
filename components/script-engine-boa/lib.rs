@@ -656,6 +656,27 @@ impl ScriptEngine for BoaEngine {
         }
     }
 
+    /// A module in a named realm: enter it, then run exactly the entry above.
+    /// Boa's module cache is per-`Context` and keyed on the resolved URL, so the
+    /// realm a module is first evaluated in is the one its instance belongs to -
+    /// which is why the realm has to be entered around `parse` and not just
+    /// around the evaluation.
+    fn eval_module_in_realm(
+        &mut self,
+        realm: RealmId,
+        source: &str,
+        base_url: &str,
+        resolve: &mut dyn FnMut(&str, &str) -> Option<(String, String)>,
+    ) -> Result<Option<Self::Value>, RealmError> {
+        let Some(target) = self.registry.realms.borrow().get(&realm).cloned() else {
+            return Err(RealmError::NoSuchRealm(realm));
+        };
+        let previous = self.ctx.enter_realm(target);
+        let result = self.eval_module(source, base_url, resolve);
+        let _ = self.ctx.enter_realm(previous);
+        result.map_err(|error| RealmError::Engine(format!("{error:?}")))
+    }
+
     fn value_to_string(&mut self, value: &Self::Value) -> Result<String, Self::Error> {
         Ok(value.to_string(&mut self.ctx)?.to_std_string_escaped())
     }

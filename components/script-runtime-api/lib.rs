@@ -548,16 +548,15 @@ impl<E: ScriptEngine> Runtime<E> {
         host.borrow_mut().agent = Rc::downgrade(&agent);
         agent.borrow_mut().register(MAIN_REALM, host.clone());
         engine.set_host_data(host.clone());
-        // The top-level browsing context's WindowProxy, before a line of script
-        // has run in the realm: from the realm's first instruction `globalThis`,
-        // `window`, `self` and the `this` of global code are all this one
-        // object, which is the identity HTML gives a browsing context and the
-        // one that has to survive the navigations that replace the realm under
-        // it. It is transparent until the bootstrap below installs its handler,
-        // so the surface the bootstrap defines lands on the global object as it
-        // always did.
+        // The bootstrap realm's own WindowProxy, before a line of script has run
+        // in it. This realm is not a browsing context - the top document's is
+        // opened below - but it is where the agent-wide machinery lives (the
+        // timer queue, the navigation drive, `__moPump`), and that machinery is
+        // written against `window`, so it is given the same global `this` a
+        // document realm gets, keyed to itself. It is transparent until the
+        // bootstrap below installs its handler, so the surface the bootstrap
+        // defines lands on the global object as it always did.
         if scope == GlobalScopeKind::Window {
-            // The top context is keyed by the top realm.
             agent
                 .borrow_mut()
                 .frames
@@ -569,13 +568,13 @@ impl<E: ScriptEngine> Runtime<E> {
                         .frames
                         .set_window_proxy(MAIN_REALM, Rc::new(control));
                     frames::bind_window_proxy_realm(&mut engine, &agent, MAIN_REALM, MAIN_REALM)
-                        .expect("the top realm names itself to its window proxy");
+                        .expect("the bootstrap realm names itself to its window proxy");
                 },
                 // A backend without realms or without the global-`this` entry
                 // runs with the global object as its own `this`; one browsing
                 // context, no navigation, and every identity test still holds.
                 Ok(None) => {},
-                Err(error) => panic!("the top realm's window proxy: {error:?}"),
+                Err(error) => panic!("the bootstrap realm's window proxy: {error:?}"),
             }
         }
         install_host_surface(
@@ -588,7 +587,7 @@ impl<E: ScriptEngine> Runtime<E> {
         .map_err(SurfaceError::main)?;
         if scope == GlobalScopeKind::Window {
             frames::bind_window_proxy_hooks_in_realm(&mut engine, &agent, MAIN_REALM, MAIN_REALM)
-                .expect("the top realm accepts its window-proxy host hook");
+                .expect("the bootstrap realm accepts its window-proxy host hook");
         }
         let timer_state = engine.eval("globalThis.__agentTimers")?;
         let cancel_realm_tasks = engine.eval("globalThis.__agentTimers.cancelRealm")?;
@@ -596,14 +595,100 @@ impl<E: ScriptEngine> Runtime<E> {
         agent.borrow_mut().timer_state = Some(Rc::new(timer_state));
         agent.borrow_mut().cancel_realm_tasks = Some(Rc::new(cancel_realm_tasks));
         host.borrow_mut().worker_spawn = Some(worker::worker_main::<E> as fn(_));
-        Ok(Self {
+        let mut runtime = Self {
             engine,
             host,
             agent,
             scheduler_trace: Vec::new(),
             next_trace_seq: 0,
             opaque_roots: OpaqueRootState::default(),
-        })
+        };
+        if scope == GlobalScopeKind::Window {
+            runtime.open_top_realm()?;
+        }
+        Ok(runtime)
+    }
+
+    /// Open the top-level browsing context's own realm and make it the one
+    /// [`top_realm`](Self::top_realm) answers.
+    ///
+    /// The top document gets exactly what a child frame's document gets: a
+    /// realm from the realm API, its browsing context's `WindowProxy` as the
+    /// realm's global `this` from the first instruction, and a `HostState` of
+    /// its own. What it does *not* get is a container element or a parent
+    /// realm, so it carries no [`FrameRecord`] - the absence of one is how
+    /// `navigate` tells a top-level context from a child.
+    ///
+    /// [`FrameRecord`]: frames
+    fn open_top_realm(&mut self) -> Result<RealmId, E::Error> {
+        let viewport_size = self.host.borrow().viewport_size;
+        let top = self
+            .create_child_realm(HostState {
+                viewport_size,
+                ..HostState::default()
+            })
+            .map_err(|error| self.engine_error(&error.to_string()))?;
+        self.agent.borrow_mut().frames.set_top_realm(top);
+        // From here on `self.host` is the top *document's* host, which is what
+        // every `Runtime` entry point and every embedder means by `host()`. The
+        // bootstrap realm keeps its own, reached only as `hosts[&MAIN_REALM]`.
+        //
+        // This cell is reused - not replaced - by a top-level navigation, which
+        // is what lets `host()` keep returning a borrow of a field.
+        let host = self
+            .agent
+            .borrow()
+            .hosts
+            .get(&top)
+            .cloned()
+            .expect("the realm just opened is registered");
+        self.host = host;
+        Ok(top)
+    }
+
+    /// The realm the **top-level browsing context** is showing right now.
+    ///
+    /// Every top-document entry point on this type - [`eval`](Self::eval),
+    /// [`host`](Self::host), [`parse_document_interleaved`] and the rest -
+    /// resolves through this one accessor rather than through
+    /// [`MAIN_REALM`](script_engine_api::MAIN_REALM), which is the agent's
+    /// bootstrap realm: the realm that owns the timer queue, the navigation
+    /// drive and the `WindowProxy` factory, and the one the engine refuses to
+    /// discard. Separating the two is what lets a top-level navigation replace
+    /// its realm the way a child's does.
+    ///
+    /// [`parse_document_interleaved`]: Self::parse_document_interleaved
+    pub fn top_realm(&self) -> RealmId {
+        self.agent.borrow().frames.top_realm()
+    }
+
+    /// Evaluate in the top-level context's current realm. The engine's plain
+    /// `eval` is the bootstrap realm's, which is deliberately not the document's
+    /// any more; every internal top-document evaluation goes through here.
+    pub(crate) fn eval_top(&mut self, source: &str) -> Result<E::Value, E::Error> {
+        let top = self.top_realm();
+        if top == MAIN_REALM {
+            self.engine.eval(source)
+        } else {
+            match self.engine.eval_in_realm(top, source) {
+                Ok(value) => Ok(value),
+                Err(error) => Err(self.engine_error(&error.to_string())),
+            }
+        }
+    }
+
+    /// Turn a [`RealmError`] into the engine's own error type. The engine trait
+    /// has no error constructor - only a call context does - so the error is
+    /// minted the one way an embedder always can: by throwing in the bootstrap
+    /// realm, which never succeeds.
+    pub(crate) fn engine_error(&mut self, message: &str) -> E::Error {
+        self.engine
+            .eval(&format!(
+                "(function(){{throw new Error({});}})()",
+                js_str(message)
+            ))
+            .err()
+            .expect("a throw in the bootstrap realm yields an engine error")
     }
 
     /// Install a window realm over the supplied document state in this agent.
@@ -701,21 +786,19 @@ impl<E: ScriptEngine> Runtime<E> {
             .borrow()
             .hosts
             .iter()
-            .filter(|(id, _)| **id != MAIN_REALM)
+            .filter(|(id, _)| **id != self.top_realm() && **id != MAIN_REALM)
             .map(|(&id, host)| (id, host.clone()))
             .collect()
     }
 
     pub fn host_in_realm(&self, realm: RealmId) -> Result<SharedHost, RealmError> {
-        if realm == MAIN_REALM {
+        if let Some(host) = self.agent.borrow().hosts.get(&realm) {
+            return Ok(host.clone());
+        }
+        if realm == self.top_realm() {
             return Ok(self.host.clone());
         }
-        self.agent
-            .borrow()
-            .hosts
-            .get(&realm)
-            .cloned()
-            .ok_or(RealmError::NoSuchRealm(realm))
+        Err(RealmError::NoSuchRealm(realm))
     }
 
     pub fn eval_in_realm(&mut self, realm: RealmId, source: &str) -> Result<E::Value, RealmError> {
@@ -748,7 +831,7 @@ impl<E: ScriptEngine> Runtime<E> {
         // Host boundary: evaluating a top-level script is driven by the embedder;
         // callers choose when to perform the next microtask checkpoint.
         self.trace_scheduler("eval", "start", None);
-        let result = self.engine.eval(source);
+        let result = self.eval_top(source);
         self.flush_host_trace_events();
         self.trace_scheduler("eval", if result.is_ok() { "end" } else { "error" }, None);
         result
@@ -795,9 +878,8 @@ impl<E: ScriptEngine> Runtime<E> {
         }
         // The rebind is a no-op unless the host was swapped under a retained
         // JS heap (snapshot_clone); it must run before any JS DOM access.
-        let _ = self
-            .engine
-            .eval("globalThis.__rebindDocument(); globalThis.__refreshNamedProperties()");
+        let _ =
+            self.eval_top("globalThis.__rebindDocument(); globalThis.__refreshNamedProperties()");
     }
 
     /// Drain pending microtasks (Promise reaction jobs) to quiescence — a microtask
@@ -815,7 +897,7 @@ impl<E: ScriptEngine> Runtime<E> {
         // before the queue is pumped, so "notify mutation observers" is a
         // microtask of *this* checkpoint. Costs nothing until something observes.
         if self.host.borrow().dom.is_observing() {
-            let _ = self.engine.eval("__moPump()");
+            let _ = self.eval_top("__moPump()");
         }
         for (&realm, host) in &self.child_hosts() {
             if host.borrow().dom.is_observing() {
@@ -848,7 +930,7 @@ impl<E: ScriptEngine> Runtime<E> {
         // raw NodeId can exceed 2^53 and lose precision as a JS f64, corrupting
         // its doc-tag high bits and tripping the scripted-DOM fence. The
         // `__dispatchSynthetic` bridge does `String(rawId)` anyway.
-        let v = match self.engine.eval(&format!(
+        let v = match self.eval_top(&format!(
             "__dispatchSynthetic(\"{raw_node_id}\", {event_type:?})"
         )) {
             Ok(value) => value,
@@ -890,7 +972,7 @@ impl<E: ScriptEngine> Runtime<E> {
         let expr = format!(
             "__dispatchTransition(\"{raw_node_id}\", {event_type:?}, {property_name:?}, {elapsed_time})"
         );
-        self.engine.eval(&expr)?;
+        self.eval_top(&expr)?;
         self.flush_host_trace_events();
         self.perform_microtask_checkpoint();
         Ok(())
@@ -928,7 +1010,7 @@ impl<E: ScriptEngine> Runtime<E> {
         // precision bug the transitions plan hit).
         let expr =
             format!("__dispatchTouch(\"{raw_node_id}\", {event_type:?}, {x}, {y}, {identifier})");
-        let v = self.engine.eval(&expr)?;
+        let v = self.eval_top(&expr)?;
         self.flush_host_trace_events();
         let proceed = self
             .engine
@@ -957,7 +1039,7 @@ impl<E: ScriptEngine> Runtime<E> {
         let expr = format!(
             "__dispatchWheel(\"{raw_node_id}\", {x}, {y}, {delta_x}, {delta_y}, {delta_mode})"
         );
-        let v = self.engine.eval(&expr)?;
+        let v = self.eval_top(&expr)?;
         self.flush_host_trace_events();
         let proceed = self
             .engine
@@ -989,7 +1071,7 @@ impl<E: ScriptEngine> Runtime<E> {
         let expr = format!(
             "__dispatchAnimation(\"{raw_node_id}\", {event_type:?}, {animation_name:?}, {elapsed_time})"
         );
-        self.engine.eval(&expr)?;
+        self.eval_top(&expr)?;
         self.flush_host_trace_events();
         self.perform_microtask_checkpoint();
         Ok(())
@@ -1008,7 +1090,7 @@ impl<E: ScriptEngine> Runtime<E> {
     /// rebuild complete physical components so any creation realm can retain the
     /// canonical wrappers. Temporary roots protect both paths while hooks allocate.
     pub(crate) fn apply_opaque_root_policy(&mut self) {
-        let realms: Vec<_> = std::iter::once(MAIN_REALM)
+        let realms: Vec<_> = std::iter::once(self.top_realm())
             .chain(self.child_hosts().keys().copied())
             .collect();
         // Policy hooks allocate and execute JS. Keep every existing reflector
@@ -1023,7 +1105,7 @@ impl<E: ScriptEngine> Runtime<E> {
                 .expect("registered realm reflector inventory");
             // Prior connected roots remain installed throughout this
             // transaction, even if those nodes have since been detached.
-            let temporary: Vec<_> = if realm == MAIN_REALM {
+            let temporary: Vec<_> = if realm == self.top_realm() {
                 minted
                     .iter()
                     .copied()
@@ -1052,7 +1134,7 @@ impl<E: ScriptEngine> Runtime<E> {
         // force_gc. Detached components now rely solely on their ephemerons and
         // authored references, so dropping the final wrapper still collects them.
         for (realm, minted) in inventories {
-            let detached: Vec<_> = if realm == MAIN_REALM {
+            let detached: Vec<_> = if realm == self.top_realm() {
                 minted
                     .into_iter()
                     .filter(|raw| !self.opaque_roots.rooted.contains(raw))
@@ -1093,7 +1175,7 @@ impl<E: ScriptEngine> Runtime<E> {
                 .expect("live child realm reflector inventory");
             refreshed.as_slice()
         };
-        let mut owned_roots = if realm == MAIN_REALM {
+        let mut owned_roots = if realm == self.top_realm() {
             std::mem::take(&mut self.opaque_roots)
         } else {
             self.agent
@@ -1183,7 +1265,7 @@ impl<E: ScriptEngine> Runtime<E> {
         }
         opaque_roots.rooted = now_rooted;
         opaque_roots.grouped = now_grouped;
-        if realm == MAIN_REALM {
+        if realm == self.top_realm() {
             self.opaque_roots = owned_roots;
         } else {
             self.agent
@@ -1212,8 +1294,13 @@ impl<E: ScriptEngine> Runtime<E> {
             // hot path above retains its membership-delta optimization.
             by_root.clear();
             clear.clear();
+            // Every realm's inventory, the top document's included: it is a
+            // realm of its own now, so an agent that listed only the bootstrap
+            // realm and the child frames would leave the top document's
+            // wrappers out of every group - and a detached component whose only
+            // live key is one of them would be collected out from under script.
             let mut all_minted = self.engine.minted_reflectors();
-            for &creation_realm in other_realms.keys() {
+            for creation_realm in self.realms_beyond_bootstrap() {
                 all_minted.extend(
                     self.engine
                         .minted_reflectors_in_realm(creation_realm)
@@ -1264,13 +1351,29 @@ impl<E: ScriptEngine> Runtime<E> {
     /// on - the count of touched, connected nodes. The soak's bound.
     pub fn rooted_reflector_count(&mut self) -> usize {
         let mut count = self.engine.rooted_reflector_count();
-        for &realm in self.child_hosts().keys() {
+        for realm in self.realms_beyond_bootstrap() {
             count += self
                 .engine
                 .rooted_reflector_count_in_realm(realm)
                 .expect("live realm roots");
         }
         count
+    }
+
+    /// Every registered realm except the bootstrap one, which the engine's
+    /// realm-less methods already mean.
+    ///
+    /// The top document's realm is one of these: it is an ordinary realm from
+    /// the realm API, so a per-realm sweep that visits only `MAIN_REALM` and the
+    /// child frames would skip the document the embedder is actually showing.
+    fn realms_beyond_bootstrap(&self) -> Vec<RealmId> {
+        self.agent
+            .borrow()
+            .hosts
+            .keys()
+            .copied()
+            .filter(|&id| id != MAIN_REALM)
+            .collect()
     }
 
     /// The scripted-tier GC tick (G3): retire the reflectors the engine reports
@@ -1294,7 +1397,18 @@ impl<E: ScriptEngine> Runtime<E> {
         // observed dead this tick (the epoch-pin default no-ops, losing nothing).
         self.engine.force_gc();
         let children = self.child_hosts();
+        // The bootstrap realm, which `drain_dead_reflectors` means by default,
+        // then the top document's realm - a realm of its own now, and neither
+        // the bootstrap one nor a child - then every child.
         let mut dead = self.engine.drain_dead_reflectors();
+        let top = self.top_realm();
+        if top != MAIN_REALM {
+            dead.extend(
+                self.engine
+                    .drain_dead_reflectors_in_realm(top)
+                    .expect("the top realm is live"),
+            );
+        }
         for &realm in children.keys() {
             dead.extend(
                 self.engine
@@ -1371,19 +1485,18 @@ impl<E: ScriptEngine> Runtime<E> {
     /// test yet. A snapshot-capable engine can clone after this point so each
     /// test gets a fresh harness heap without re-evaluating the harness source.
     pub fn load_testharness(&mut self, harness_src: &str) -> Result<(), E::Error> {
-        self.engine.eval(harness_src)?;
+        self.eval_top(harness_src)?;
         self.flush_host_trace_events();
-        harness::install_bridge(&mut self.engine)
+        self.eval_top(harness::bridge_source()).map(|_| ())
     }
 
     /// Run `test_src` against an already-loaded `testharness.js`, dispatch
     /// `load`, drain the event loop, and return the reported subtests.
     pub fn run_loaded_testharness(&mut self, test_src: &str) -> Result<Vec<TestResult>, E::Error> {
         self.host.borrow_mut().results.clear();
-        self.engine.eval(test_src)?;
+        self.eval_top(test_src)?;
         self.flush_host_trace_events();
-        self.engine
-            .eval("window.dispatchEvent(new Event('load'));")?;
+        self.eval_top("window.dispatchEvent(new Event('load'));")?;
         self.flush_host_trace_events();
         self.run_event_loop(1000)?;
         Ok(self.host.borrow().results.clone())
@@ -1406,10 +1519,9 @@ impl<E: ScriptEngine> Runtime<E> {
     /// reads [`results`](Self::results).
     pub fn begin_loaded_testharness(&mut self, test_src: &str) -> Result<(), E::Error> {
         self.host.borrow_mut().results.clear();
-        self.engine.eval(test_src)?;
+        self.eval_top(test_src)?;
         self.flush_host_trace_events();
-        self.engine
-            .eval("window.dispatchEvent(new Event('load'));")?;
+        self.eval_top("window.dispatchEvent(new Event('load'));")?;
         self.flush_host_trace_events();
         Ok(())
     }
@@ -1434,8 +1546,7 @@ impl<E: ScriptEngine> Runtime<E> {
     ) -> Result<parse::ParseReport, E::Error> {
         self.host.borrow_mut().results.clear();
         let report = self.parse_document_interleaved_with(html, loader, false);
-        self.engine
-            .eval("window.dispatchEvent(new Event('load'));")?;
+        self.eval_top("window.dispatchEvent(new Event('load'));")?;
         self.flush_host_trace_events();
         Ok(report)
     }
@@ -1629,8 +1740,11 @@ impl<E: ScriptEngine> Runtime<E> {
     /// after mutating the device its [`MediaQueryHandler`] evaluates against. A
     /// microtask checkpoint runs after so listener-scheduled work settles.
     pub fn notify_media_features_changed(&mut self) -> Result<(), E::Error> {
-        self.engine
-            .eval("globalThis.__reevaluateMediaQueries && globalThis.__reevaluateMediaQueries()")?;
+        // A `MediaQueryList` belongs to its document, so the re-evaluation is the
+        // top document's realm's, not the bootstrap realm's.
+        self.eval_top(
+            "globalThis.__reevaluateMediaQueries && globalThis.__reevaluateMediaQueries()",
+        )?;
         self.flush_host_trace_events();
         self.perform_microtask_checkpoint();
         Ok(())
@@ -1708,7 +1822,7 @@ impl<E: ScriptEngine> Runtime<E> {
             .fetch_realms
             .get(&id)
             .copied()
-            .unwrap_or(MAIN_REALM);
+            .unwrap_or_else(|| self.agent.borrow().frames.top_realm());
         if realm == MAIN_REALM {
             let _ = self.engine.eval(source);
         } else {
@@ -1805,7 +1919,7 @@ impl<E: ScriptEngine> Runtime<E> {
         );
         self.agent.borrow_mut().fetch_realms.clear();
         // Fetch task source: reject outstanding fetches at the host deadline, then checkpoint.
-        let _ = self.engine.eval(&js);
+        let _ = self.eval_top(&js);
         for &realm in self.child_hosts().keys() {
             let _ = self.engine.eval_in_realm(realm, &js);
         }
@@ -1815,7 +1929,7 @@ impl<E: ScriptEngine> Runtime<E> {
     /// How many `fetch()` Promises are still pending. The host drive loop reads this
     /// to know when script has quiesced (no in-flight fetches left to settle).
     pub fn pending_fetches(&mut self) -> usize {
-        let mut total = self.pending_fetches_in_realm(MAIN_REALM).unwrap_or(0);
+        let mut total = self.pending_fetches_in_realm(self.top_realm()).unwrap_or(0);
         for realm in self.child_hosts().keys().copied().collect::<Vec<_>>() {
             total += self.pending_fetches_in_realm(realm).unwrap_or(0);
         }
@@ -1965,11 +2079,29 @@ impl<E: ScriptEngine> Runtime<E> {
 }
 
 impl<E: ScriptEngine> Drop for Runtime<E> {
-    /// No worker thread outlives the agent that owns it.
+    /// No worker thread outlives the agent that owns it, and no realm's host
+    /// state outlives the thread.
     fn drop(&mut self) {
-        worker::shutdown(&self.host);
-        for host in self.child_hosts().values() {
+        let hosts: Vec<SharedHost> = self.agent.borrow().hosts.values().cloned().collect();
+        for host in &hosts {
             worker::shutdown(host);
+        }
+        // Then empty them. See the note on the `Runtime` type: a realm's
+        // `HostState` is reachable from that realm's `[[HostDefined]]` slot,
+        // which lives in the engine's heap - and Boa's heap is a thread-local,
+        // so anything the collector still holds at thread exit is dropped from
+        // a TLS destructor, by which time other thread-locals may be gone. A
+        // `HostState` can own a GPU context whose `Drop` reads one of those.
+        //
+        // This never mattered while the top document *was* the bootstrap realm,
+        // whose host the `Runtime` owned outright; it matters from the moment
+        // the top document has a realm of its own, and it has been latent for
+        // child frames all along. So the teardown is per-realm and treats every
+        // realm alike, leaving the engine nothing but empty cells to collect.
+        for host in hosts {
+            if let Ok(mut host) = host.try_borrow_mut() {
+                *host = HostState::default();
+            }
         }
     }
 }
@@ -1994,35 +2126,63 @@ impl<E: ScriptEngineSnapshot> Runtime<E> {
         let snapshot = self.engine.snapshot_clone();
         let _ = self.engine.eval("delete globalThis.__agentTimers");
         let mut engine = snapshot?;
-        let host: SharedHost = Rc::new(RefCell::new(HostState::default()));
+        // The donor's realms arrived with the heap; what did not is any of the
+        // Rust state outside it. Rebuild the two realms a clonable runtime has -
+        // the bootstrap realm and the top document's - each with a `HostState`
+        // of its own, and leave the donor's frame tree behind: a clone is a
+        // fresh top-level browsing context, not a copy of the donor's.
+        let top = self.top_realm();
+        let boot_host: SharedHost = Rc::new(RefCell::new(HostState::default()));
         let agent = Rc::new(RefCell::new(AgentState::default()));
-        host.borrow_mut().agent = Rc::downgrade(&agent);
-        agent.borrow_mut().register(MAIN_REALM, host.clone());
+        boot_host.borrow_mut().agent = Rc::downgrade(&agent);
+        agent.borrow_mut().register(MAIN_REALM, boot_host.clone());
         // The cloned heap's global `this` is the donor's WindowProxy, which
-        // resolves its `[[Window]]` through *this* agent. Bind the top context
+        // resolves its `[[Window]]` through *this* agent. Bind each context
         // before anything reads through `globalThis`, or every such read is
         // undefined.
         agent
             .borrow_mut()
             .frames
             .bind_context(MAIN_REALM, MAIN_REALM);
-        engine.set_host_data(host.clone());
+        engine.set_host_data(boot_host.clone());
+        let host: SharedHost = if top == MAIN_REALM {
+            boot_host.clone()
+        } else {
+            let host: SharedHost = Rc::new(RefCell::new(HostState {
+                viewport_size: self.host.borrow().viewport_size,
+                agent: Rc::downgrade(&agent),
+                ..HostState::default()
+            }));
+            if let Err(error) = engine.set_host_data_in_realm(top, host.clone()) {
+                let message = error.to_string();
+                return Err(self.engine_error(&message));
+            }
+            {
+                let mut a = agent.borrow_mut();
+                a.register(top, host.clone());
+                a.frames.bind_context(top, top);
+                a.frames.set_top_realm(top);
+            }
+            host
+        };
         let timer_state = engine.eval("globalThis.__agentTimers")?;
         let cancel_realm_tasks = engine.eval("globalThis.__agentTimers.cancelRealm")?;
         engine.eval("delete globalThis.__agentTimers")?;
         agent.borrow_mut().timer_state = Some(Rc::new(timer_state));
         agent.borrow_mut().cancel_realm_tasks = Some(Rc::new(cancel_realm_tasks));
-        // The cloned heap's `document` wrapper still holds the donor host's
-        // root reflector; point it at this fresh host before any script runs.
-        engine.eval("globalThis.__rebindDocument()")?;
-        Ok(Self {
+        let mut clone = Self {
             engine,
             host,
             agent,
             scheduler_trace: Vec::new(),
             next_trace_seq: 0,
             opaque_roots: OpaqueRootState::default(),
-        })
+        };
+        // The cloned heap's `document` wrapper still holds the donor host's root
+        // reflector; point it at this fresh host before any script runs. In the
+        // top realm, which is the one the document is in.
+        clone.eval_top("globalThis.__rebindDocument()")?;
+        Ok(clone)
     }
 }
 

@@ -47,9 +47,12 @@ pub(crate) fn install_report_sink<E: ScriptEngine>(
 
 /// Register the completion callback on a loaded `testharness.js`. Must run *after*
 /// the harness is evaluated (it defines `add_completion_callback`).
-pub(crate) fn install_bridge<E: ScriptEngine>(engine: &mut E) -> Result<(), E::Error> {
-    engine.eval(BRIDGE_JS)?;
-    Ok(())
+///
+/// Installed in the realm the harness itself was evaluated in - the top-level
+/// browsing context's, not the agent's bootstrap realm - because
+/// `add_completion_callback` is a binding of *that* realm's global.
+pub(crate) fn bridge_source() -> &'static str {
+    BRIDGE_JS
 }
 
 /// `__reportResult(name, status, message)` — record one subtest into host state.

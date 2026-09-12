@@ -399,7 +399,7 @@ fn adopted_wrapper_reclaimed_with_no_dangling_pin_in_either_arena<E: ScriptEngin
         .split(',')
         .map(|raw| NodeId::from_raw(raw.parse().unwrap()))
         .collect();
-    let realm = runtime.frame_realms(0)[0].1;
+    let realm = runtime.frame_realms(runtime.top_realm())[0].1;
     let source = runtime.host_in_realm(realm).unwrap();
     for id in &ids {
         assert!(

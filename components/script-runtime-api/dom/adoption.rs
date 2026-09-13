@@ -14,6 +14,7 @@ use std::{
 #[derive(Default)]
 pub(crate) struct AgentDomState {
     creation_realms: HashMap<u32, RealmId>,
+    relocated_reflectors: HashMap<u64, RealmId>,
     hooks: BTreeMap<RealmId, Rc<dyn Any>>,
     observing: HashSet<RealmId>,
     observer_groups: BTreeMap<RealmId, usize>,
@@ -25,9 +26,14 @@ impl AgentDomState {
     }
 
     pub(crate) fn remove_realm(&mut self, realm: RealmId) {
+        self.relocated_reflectors.retain(|_, owner| *owner != realm);
         self.hooks.remove(&realm);
         self.observing.remove(&realm);
         self.observer_groups.remove(&realm);
+    }
+
+    pub(crate) fn retire_reflector(&mut self, raw: u64) {
+        self.relocated_reflectors.remove(&raw);
     }
 }
 
@@ -176,7 +182,9 @@ pub(crate) fn owner_host(start: &SharedHost, id: NodeId) -> Option<(RealmId, Sha
         .map(|(&realm, host)| (realm, host.clone()))
 }
 
-pub(crate) fn creation_realm(start: &SharedHost, id: NodeId) -> Option<RealmId> {
+/// Cache custody normally follows birth, but moves when that registration dies.
+/// The native object's brand and its JS wrapper's prototype never change here.
+pub(crate) fn reflector_realm(start: &SharedHost, id: NodeId) -> Option<RealmId> {
     let (owner, _) = owner_host(start, id)?;
     let Some(agent) = start.borrow().agent.upgrade() else {
         return Some(owner);
@@ -184,18 +192,67 @@ pub(crate) fn creation_realm(start: &SharedHost, id: NodeId) -> Option<RealmId> 
     let state = agent.borrow();
     let realm = state
         .dom_adoption
-        .creation_realms
-        .get(&id.origin_arena_id())
+        .relocated_reflectors
+        .get(&id.raw())
         .copied()
-        // A creation realm that has since been **discarded** cannot home a
-        // reflector any more: the realm is gone from the engine, and asking it
-        // for one fails the whole call with `NoSuchRealm`. The node's current
-        // owner can, and that is the owner-resolved rule this plan already
-        // states everywhere else — this was the one place that preferred the
-        // birth realm unconditionally. A node adopted out of a child browsing
-        // context before that context was navigated away is exactly the case.
+        .or_else(|| {
+            state
+                .dom_adoption
+                .creation_realms
+                .get(&id.origin_arena_id())
+                .copied()
+        })
         .filter(|realm| state.hosts.contains_key(realm));
     realm.or(Some(owner))
+}
+
+/// Before removing any registration in a teardown group, move the canonical
+/// entries for nodes adopted into surviving stores. Pins enumerate reflected
+/// nodes, including detached shadow/template components; the destination's next
+/// GC pass reclassifies the transferred roots against current tree ownership.
+pub(crate) fn preserve_reflectors<E: ScriptEngine>(
+    cx: &mut E::CallCx<'_>,
+    agent: &Rc<std::cell::RefCell<crate::AgentState>>,
+    retiring: &[RealmId],
+) -> Result<(), E::Error> {
+    let mut moves: BTreeMap<(RealmId, RealmId), Vec<u64>> = BTreeMap::new();
+    {
+        let state = agent.borrow();
+        for (&owner, host) in &state.hosts {
+            if retiring.contains(&owner) {
+                continue;
+            }
+            for id in host.borrow().pins.iter() {
+                let source = state
+                    .dom_adoption
+                    .relocated_reflectors
+                    .get(&id.raw())
+                    .copied()
+                    .or_else(|| {
+                        state
+                            .dom_adoption
+                            .creation_realms
+                            .get(&id.origin_arena_id())
+                            .copied()
+                    });
+                if let Some(source) = source.filter(|source| retiring.contains(source)) {
+                    moves.entry((source, owner)).or_default().push(id.raw());
+                }
+            }
+        }
+    }
+    for ((source, destination), ids) in moves {
+        cx.relocate_reflectors(source, destination, &ids)
+            .map_err(|error| cx.error(&format!("DOM reflector relocation: {error}")))?;
+        let mut state = agent.borrow_mut();
+        for raw in ids {
+            state
+                .dom_adoption
+                .relocated_reflectors
+                .insert(raw, destination);
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn host_for_call<E: ScriptEngine>(cx: &mut E::CallCx<'_>) -> Option<SharedHost> {
@@ -341,15 +398,15 @@ impl<E: ScriptEngine> NativeFn<E> for AgentDispatch {
         let op_arg = cx.arg(0);
         let op = cx.value_to_string(&op_arg)?;
         match op.as_str() {
-            "wrap" | "ownerDocument" => {
+            "wrap" => {
                 let value = cx.arg(1);
                 let Some(raw) = cx.reflector_data(&value) else {
                     return Ok(cx.undefined());
                 };
                 validate(cx, raw)?;
                 let host = current_host(cx).unwrap();
-                let realm = creation_realm(&host, NodeId::from_raw(raw)).unwrap();
-                if op == "wrap" && realm == cx.current_realm() {
+                let realm = reflector_realm(&host, NodeId::from_raw(raw)).unwrap();
+                if realm == cx.current_realm() {
                     return Ok(cx.undefined());
                 }
                 call_hook::<E>(cx, realm, &op, vec![value])
@@ -597,6 +654,6 @@ mod owner_lookup_tests {
         let (realm, owner) = owner_host(&source, imported).unwrap();
         assert_eq!(realm, MAIN_REALM + 1);
         assert!(Rc::ptr_eq(&owner, &destination));
-        assert_eq!(creation_realm(&destination, imported), Some(MAIN_REALM));
+        assert_eq!(reflector_realm(&destination, imported), Some(MAIN_REALM));
     }
 }

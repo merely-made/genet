@@ -17,13 +17,22 @@ restates).
 Mark's ruling, in one line: **wrapper liveness follows node reachability, not
 wrapper state.**
 
-WebIDL requires exactly one JavaScript object per platform object per realm, so
+Each platform object has a canonical JavaScript object and an associated realm, so
 the identity of any reachable node's wrapper must be stable across collections
 — expandos or not. `getElementById(x) === saved` has to hold, and a user
 `WeakMap` keyed on an element has to keep finding its entry. That rules out the
 scoping document's option B (pin on the first expando write): pinning on *state*
 fixes the columns of §4 one at a time and never fixes identity, and it leaks,
 because a pin taken on a write has no natural release.
+
+**Realm clarification (2026-09-13):** Access from another realm does not create
+a new wrapper. The associated realm and prototype are distinct from the
+registration holding the engine's weak cache. The
+[Realms continuation](2026-09-08_realms_plan.md#phase-wrapper-identity-after-disposal-2026-09-13)
+closed cache relocation at disposal, with shared weak wrapper/group/owner maps,
+directed template-to-contents retention, and both-engine collection tests and
+headed acceptance.
+See [Web IDL's platform objects](https://webidl.spec.whatwg.org/#platform-object).
 
 So every wrapper has an **opaque root**: the root of its node's tree. A wrapper
 is alive while its opaque root is alive, and a document is always alive.

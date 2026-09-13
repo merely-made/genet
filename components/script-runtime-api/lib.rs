@@ -1431,6 +1431,7 @@ impl<E: ScriptEngine> Runtime<E> {
         // any store, independent of realm iteration order.
         let mut totals = (0, 0);
         for raw in dead {
+            self.agent.borrow_mut().dom_adoption.retire_reflector(raw);
             let id = NodeId::from_raw(raw);
             if let Some((_, owner)) = dom::adoption::owner_host(&self.host, id) {
                 totals.0 += owner.borrow_mut().pins.retire_dead(std::iter::once(id));
@@ -2374,7 +2375,11 @@ const EVENT_LOOP_BOOTSTRAP: &str = r#"
   if (!state) {
     var queue = Object.create(null);
     queue.length = 0;
-    state = globalThis.__agentTimers = { timers: queue, nextId: 1, now: 0, domNodes: new WeakSet() };
+    state = globalThis.__agentTimers = {
+      timers: queue, nextId: 1, now: 0, domNodes: new WeakSet(),
+      domWrappers: new WeakMap(), domWrapperGroups: new WeakMap(), domOwners: new WeakMap(),
+      domTemplateContents: new WeakMap()
+    };
   }
   var timers = state.timers;
   var realm = globalThis.__realmId || 0;

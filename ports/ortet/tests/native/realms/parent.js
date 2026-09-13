@@ -136,6 +136,15 @@ function buildAssociatedState() {
     return fail("the nested template lost its contents");
   }
 
+  // A detached adopted component survives the source registration and is later
+  // released while its destination document is still live. Its collection must
+  // come from GC, independently of the documents destroyed by navigation.
+  var retiredTree = childDoc.createElement("div");
+  var retiredLeaf = childDoc.createElement("span");
+  retiredLeaf.textContent = "detached adoption collection";
+  retiredTree.appendChild(retiredLeaf);
+  document.adoptNode(retiredTree);
+
   held = {
     childDoc: childDoc,
     payload: payload,
@@ -147,6 +156,12 @@ function buildAssociatedState() {
     outer: outer,
     inner: inner,
     slip: slip,
+    contents: contents,
+    nestedContents: inner.content,
+    hostPrototype: Object.getPrototypeOf(host),
+    rootPrototype: Object.getPrototypeOf(openRoot),
+    retiredTree: retiredTree,
+    retiredLeaf: retiredLeaf,
     kept: kept,
     sourceInert: sourceInert,
     away: document.getElementById("away")
@@ -226,6 +241,10 @@ function navigateChildOnce() {
     }
     if (stillHere) return fail("the away link came back to the parent");
     if (document.getElementById("away")) return fail("the away link is back in the parent tree");
+    if (document.getElementById("kept") !== held.kept) return fail("discard changed ordinary wrapper identity");
+    if (held.host.shadowRoot !== held.openRoot) return fail("discard changed shadow wrapper identity");
+    if (held.outer.content !== held.contents || held.inner.content !== held.nestedContents) return fail("discard changed template wrapper identity");
+    if (held.retiredTree.firstChild !== held.retiredLeaf || held.retiredLeaf.ownerDocument !== document) return fail("discard changed detached wrapper identity");
     held.away = null;
     state.textContent = "Ortet G5 realms child navigated once";
     step(adoptBackIntoChild);
@@ -245,22 +264,20 @@ function adoptBackIntoChild() {
   }
   if (held.payload.ownerDocument !== childDoc) return fail("the subtree's ownerDocument did not follow back");
   if (held.host.ownerDocument !== childDoc) return fail("the shadow host did not follow back");
-  // The shadow tree travels back: its *element* reflectors are the same objects
-  // and the host's root holds them. The `ShadowRoot` object itself is a fresh
-  // wrapper on this hop — a named residual of this receipt, recorded in the
-  // plan rather than asserted away — so the invariant checked here is the tree,
-  // through identities that are preserved.
   var returned = held.host.shadowRoot;
-  if (!returned) return fail("the open shadow root did not travel back");
+  if (returned !== held.openRoot) return fail("the return hop changed shadow wrapper identity");
+  if (Object.getPrototypeOf(returned) !== held.rootPrototype || Object.getPrototypeOf(held.host) !== held.hostPrototype) return fail("the return hop changed creation prototypes");
   if (returned.childNodes.length !== 2) return fail("the returned shadow root lost children");
   if (returned.firstChild.id !== "shadow-text") return fail("the returned shadow root lost its first child");
   if (returned.firstChild.textContent !== "open shadow content") return fail("shadow content lost its text on the return hop");
   if (held.slot.parentNode !== returned) return fail("shadow content is not parented by the returned root");
   if (held.slot.ownerDocument !== childDoc) return fail("shadow content's ownerDocument did not follow back");
-  held.openRoot = returned;
+  if (returned.firstChild !== held.slot || returned.lastChild !== held.innerHost) return fail("the return hop changed shadow child identity");
+  if (held.closedRoot.firstChild.getRootNode() !== held.closedRoot) return fail("the return hop changed closed root identity");
   if (held.innerHost.shadowRoot !== null) return fail("the closed root opened on the return hop");
   if (held.closedRoot.textContent !== "closed shadow content") return fail("the closed root lost its contents on the return hop");
   if (held.outer.content.ownerDocument === held.parentInert) return fail("template contents kept the parent's inert owner");
+  if (held.outer.content !== held.contents || held.inner.content !== held.nestedContents || held.contents.firstChild !== held.slip) return fail("the return hop changed template identity");
   if (held.outer.content.firstChild.textContent !== "template contents") return fail("template contents were rebuilt on the return hop");
 
   state.textContent = "Ortet G5 realms subtree adopted back into the child";
@@ -278,7 +295,7 @@ function keepOneLinkInTheParent() {
   }
   if (held.kept.ownerDocument !== document) return fail("the kept link's ownerDocument did not follow home");
   var home = document.getElementById("kept");
-  if (!home) return fail("the kept link is not in the parent tree");
+  if (home !== held.kept) return fail("the kept link changed identity on its return home");
   if (home.textContent !== "Adopted link kept in the parent") return fail("the kept link lost its text");
   if (held.kept.parentNode !== landing) return fail("the held kept link is not where the parent put it");
 
@@ -308,6 +325,7 @@ function navigateChildTwice() {
 // 8. Release everything the sequence held and let several frame-cadence GC
 //    ticks run before anything is read back.
 function release() {
+  if (held.retiredTree.firstChild !== held.retiredLeaf || held.retiredTree.isConnected) return fail("the retained detached component changed before release");
   var kept = held.kept;
   held = {};
   kept = null;

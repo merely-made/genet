@@ -4,7 +4,8 @@
 
 **Status, 2026-09-13:** prerequisite assessment complete; T3's bounded Genet
 content-box and 2D paint/input seam is implemented with automated receipts.
-Native Bench B integration and the remaining T3 acceptance are pending.
+Bounded native Bench B assembly is accepted on the downstream development
+build; the remaining T3 acceptance and mutation measurement are open.
 Founded 2026-09-12 from the wing's L0 receipts;
 Mark's 2026-09-13 ruling replaces T3's body-fragment proposal with a shared
 scene viewport whose producer owns depth. T1's general CSS 3D work, T2's
@@ -220,9 +221,10 @@ directories shows zero `pass -> anything else`.
 
 ## T3. Scene viewport embedding and host mutation measurement
 
-**Status, 2026-09-13:** bounded engine implementation and automated receipt
-complete; native Bench B integration and the remaining acceptance are pending. The
-specimen bench prerequisite section named above is the cross-repository
+**Status, 2026-09-13:** bounded engine implementation, automated receipt and
+downstream native Bench B assembly complete. Broader T3 acceptance and mutation
+measurement remain open. The specimen bench prerequisite section named above
+is the cross-repository
 assembly authority. T3 specifies the Genet portion, not an application renderer.
 
 **The element and paint route.** Reuse the existing `<custom-leaf>` slot and
@@ -249,7 +251,8 @@ affine transforms and authored origins, rectangular overflow, content-box
 placement, group opacity and source-over. Netrender's GPU gate separately
 covered scales 1, 1.5 and 2 and registration, refresh, resize and removal.
 Those receipts were inspected during this assessment, not freshly rerun.
-They do not yet accept Cambium's scene producer or transformed picking.
+Cambium's scene producer and transformed picking have the separate downstream
+consumer receipt below.
 
 **Genet changes.** The custom-leaf slot now uses the same content-box geometry
 as `emit_canvas_external_texture`, excluding borders and padding from image
@@ -285,7 +288,7 @@ producer registration, content generation, physical size, suspension and
 retirement hooks, staging before its ordinary raster pass, and a read-only
 resolved-style query for application hooks. Its existing custom-leaf
 constructor and Sprigging scene buffers alone do not establish the producer's
-native acceptance. This work lands under
+native acceptance. The implementation belongs under
 `mere/crates/cambium/cambium-rootstock`, not in Genet or a second compositor.
 
 The host converts an admitted input point through Genet's inverse mapping
@@ -335,7 +338,8 @@ that application gate.
 
 ### Bounded engine receipt, 2026-09-13
 
-The source is `components/genet-livery` in the commit containing this receipt.
+The source is `components/genet-livery` at Genet
+`101d9e9ade8671564e723443d9f0498e899a33f1`.
 `tests/host_content_geometry.rs` supplies literal interior and adjacent edge
 coordinates independently of the query implementation, and evaluates emitted
 paint commands through euclid separately from the query's matrix inversion.
@@ -364,9 +368,47 @@ the host-content test executable SHA256 is
 `54f85fb413ee98b802ee90af4374ed7d3287222bba4a2284789d95bf2bdc226e`.
 The existing local `.cargo/config.toml` overrides for netrender, Boa, Vano and
 Piccolo were used unchanged. No workspace/all-target, native Ortet, or WPT
-rerun is claimed here. Native Bench B composition, lifecycle, same-identity
-picking/accessibility, and update-cost acceptance remain with the wing's
-canonical prerequisite section and are pending its integration run.
+rerun is claimed by these focused checks. The downstream native assembly
+receipt below has its own source and acceptance scope.
+
+### Downstream native consumer receipt, 2026-09-13
+
+The canonical wing plan's **Bench B** receipt accepts the bounded native
+assembly on a development-path build: Genet
+`101d9e9ade8671564e723443d9f0498e899a33f1`, netrender
+`3961aca919f707ab09a786379eb4ce8bb121258e`, and Cambium's producer source,
+which was uncommitted at that run. Compact receipts and executable/source
+identities live at
+`isometry/mesocosm/testing/bench/receipts/2026-09-13/`; full captures live at
+`Code/testing/specimen-bench/native-final/`.
+
+A separate Mesocosm release workspace check with all features and targets
+passes without development path configuration, using Mere
+`4f4de1d05ec99461f7fa3cdc4e514e904a999213` and the Genet/netrender commits
+above. From `isometry/mesocosm`, Rust 1.97.1 exits 0 for:
+
+```text
+cargo check --release --offline --workspace --all-features --all-targets -j 3
+```
+
+The native captures remain the development-path build's receipt;
+the committed-dependency check does not relabel or repeat that native run.
+
+The native acceptance passes **167 frames and 15 captures at actual output
+scale 2**. Each tint comparison changes 102,660 body pixels while 1,128,060
+sampled background pixels remain fixed. Decorative CSS preserves all 1,230,720
+sampled content pixels and upload counters. Real host input passes transformed
+centre clicks, UI zoom 1.25, DOM overlay priority, resize, removal/recreation
+and selection expiry on preview replacement. The authored 7-degree/0.9
+transform is calculated independently for the native click fixture.
+
+The habitat run assembles ten bodies and 343 parts beside the terrain. It
+establishes native assembly; exact body/terrain occlusion remains covered by
+Bench A's pixel fixtures, and literal transform/clip edges by the Genet and
+Cambium focused fixtures. The deliberate failure exits 1 with `ok: false` and
+two fresh captures. These are bounded consumer checks, distinct from an Ortet
+or WPT rerun. They preserve the 61-check Genet receipt above and leave broader
+T3 mutation/measurement acceptance, T1, T2 and T4 open.
 
 ---
 
@@ -416,9 +458,10 @@ articulated residual, quantized-yaw comparison and sprite-cache qualification
 remain recorded in the wing's L0c assessment. Nothing ran through Genet.
 
 **Ruled 2026-09-13 (Mark):** T3 embeds the shared depth-owning scene viewport
-described above. Its document composition, host lifecycle and interaction
-still need their own receipts. T4 retains its independent planar-content
-scope; the measured netrender fallback does not make T4 a viewport gate.
+described above. Its bounded native document composition, host lifecycle and
+interaction now have the separate T3 consumer receipt above. T4 retains its
+independent planar-content scope; the measured netrender fallback does not
+make T4 a viewport gate.
 
 **Done when:** a fragment placed inside a rect-clip layer, an alpha layer and
 a filter layer each matches an independently expanded reference under the
@@ -495,6 +538,12 @@ T3's ordinary image-composition receipt.
   Documentation only: implementation not started and prior native acceptance
   not freshly rerun.
 - **2026-09-13** — T3's bounded Genet content-box, shared 2D paint/input and
-  typed used-color implementation passed 61 focused checks. Native Bench B
-  integration, the remaining T3 acceptance and measurement, and independent
-  T1/T2/T4 work remain open. Prior native canvas receipts were not rerun.
+  typed used-color implementation passed 61 focused checks. At this source
+  checkpoint native Bench B integration remained pending. Prior native canvas
+  receipts were not rerun.
+- **2026-09-13** — downstream Bench B native assembly accepted on the recorded
+  development-path source, with 167 frames/15 captures and independent tint,
+  decorative-CSS and input checks. The qualified consumer receipt is above;
+  a separate committed-dependency Mesocosm workspace check passes. Broader T3
+  acceptance and mutation measurement, and independent T1/T2/T4 work remain
+  open. This is not an Ortet or WPT rerun.

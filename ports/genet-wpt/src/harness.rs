@@ -276,6 +276,12 @@ struct DiskResources {
 impl ScriptResourceLoader for DiskResources {
     fn load(&self, url: &str) -> Option<String> {
         let bare = url.split(['#', '?']).next().unwrap_or(url).trim();
+        // Workers resolve their script URL against the document environment.
+        // Disk mode owns this synthetic origin; other remote URLs still fail
+        // `resolve` and require the server route.
+        let local = bare.strip_prefix("http://web-platform.test/")
+            .map(|path| format!("/{path}"));
+        let bare = local.as_deref().unwrap_or(bare);
         if let Some(stem) = bare.strip_suffix(".any.worker.js") {
             let source = resolve(&format!("{stem}.any.js"), &self.base_dir, &self.tests_root)?;
             let src = fs::read_to_string(&source).ok()?;

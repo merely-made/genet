@@ -449,6 +449,15 @@ struct WorkerCreate;
 impl<E: ScriptEngine> NativeFn<E> for WorkerCreate {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
         let url = arg_string::<E>(cx, 0)?;
+        let url = with_host::<E, _>(cx, |h| {
+            h.base_url
+                .as_deref()
+                .and_then(|base| url::Url::parse(base).ok())
+                .and_then(|base| base.join(&url).ok())
+                .map(|url| url.to_string())
+        })
+        .flatten()
+        .unwrap_or(url);
         let name = arg_string::<E>(cx, 1)?;
         let spawn = with_host::<E, _>(cx, |h| h.worker_spawn).flatten();
         let wake = with_host::<E, _>(cx, |h| h.worker_wake.clone()).flatten();

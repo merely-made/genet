@@ -2639,7 +2639,8 @@ landed; their labels now point to the continuation and navigation phases.
 | Initial `about:blank` load ordering | Closed by the [initial blank-load phase](#phase-initial-blank-load-ordering-2026-09-13): synchronous iframe load, parser callback removal, and the named immediate-navigation WPT regression. Unload remains queued. |
 | `execution-timing/112.html` | Parser script scheduling, tracked in the parser/interleaving plan. |
 | `Location.ancestorOrigins` | Snapshot, masking and detached-object lifetime implemented in the [ancestor origins phase](#phase-ancestor-origins-2026-09-13); `no-browsing-context.window.html` now passes 46/46. Full Location conformance remains open. |
-| `window.origin` | Missing global origin serialization blocks two ancestor-origin WPT assertions. Implement the environment origin, including opaque origins, then rerun the new-object and referrerpolicy-snapshot files. |
+| `window.origin` | Implemented in the [global origin phase](#phase-global-origin-2026-09-13), including inherited/opaque origins and replaceable assignment. The two blocked ancestor-origin WPT files now pass on Boa. |
+| Initial blank/srcdoc document URL versus base URL | Frame creation still uses the inherited base as its document URL, so `location.origin` reports the parent's URL origin. Separate document URL from fallback base without breaking relative resource resolution; `self-origin.sub.html` records the remaining assertions. |
 | `document.domain` | Origin/security surface, still outside the landed core checks. |
 | `pageswap`, Navigation API, `beforeunload` cancellation, `window.open`, forms and link-click navigation | Separate navigation surfaces. The landed realm replacement machinery does not implement them. |
 | Scripted accessibility action dispatch and stale-target validation | Scripted document session. The headed G5 receipt proves projection only. |
@@ -2925,3 +2926,59 @@ the existing document-creation model. A distinct initial about:blank document
 for initially nonblank frames, `window.origin`, `document.domain`, and broader
 Location exotic-object behavior remain separate work. It does not close the
 other navigation, canvas, parser or accessibility items in the inventory.
+
+
+## Phase: global origin (2026-09-13)
+
+`window.origin` and worker `self.origin` now serialize the environment origin,
+following the [WindowOrWorkerGlobalScope getter](https://html.spec.whatwg.org/multipage/webappapis.html#dom-origin).
+The browsing-context tree supplies inherited and sandboxed origins; discarded
+windows retain their recorded origin. Before the lazy top-level context tree
+exists, and for workers, the host URL supplies the origin. Both the Window and
+its stable proxy are registered for branded borrowed-getter calls. Cross-origin
+access remains denied. Assignment replaces the configurable, enumerable accessor
+with a writable data property without changing the environment's security origin.
+
+Worker creation now resolves relative script URLs against the document base,
+so the worker receives an absolute URL for its environment and resource request.
+The WPT disk worker loader recognizes only the runner's `http://web-platform.test/`
+synthetic origin as local; other remote origins still require server mode.
+
+### Evidence
+
+- **55 focused tests pass**: 10 global-origin tests, 13 ancestor-origin tests,
+  eight WindowProxy security tests, and 24 worker tests. New controls cover tuple
+  and opaque origins, inherited blank frames, retained discarded windows,
+  navigation, borrowed getters, cross-origin denial, replacement descriptors,
+  and a relative-URL dedicated worker, on both Boa and Nova.
+- Matched WPT runs cover **eight files per engine** with the same manifest,
+  exact policy, renderer and subset. Boa preserves **51** passing named
+  subtests and gains **four**, with zero losses. New-object is **1/1**,
+  referrerpolicy-snapshot **2/2**, and both Window/Worker `self-origin.any`
+  variants **1/1**. Inactive-document stays **2/2** and no-browsing-context
+  **46/46**. Nova's file outcomes and named results remain unchanged, with
+  zero passing subtests; its positive proof is the runtime and headed tests.
+  The intermediate worker-loader failures are retained in `post-*`; `final-*`
+  contains the corrected results used for the comparison.
+- `self-origin.sub.html` remains **0/11** in disk mode: unresolved server
+  substitutions, inherited Location URLs and JavaScript navigation block it.
+  `Worker_Self_Origin.html` preserves **2/8**; data-URL loading and SharedWorker
+  are still unsupported. The pre worker passes compared two missing values;
+  the final dedicated Window/Worker tests independently assert origin strings.
+- Headed G5 passes **three runs per engine**, digest `0x8df9c9b8815a6e22`,
+  **31 -> 31** live nodes, **4 unpinned / 32 collected**, and normal exit 0.
+  Both failure controls exit 1. Physical size is 1280x1120, CSS viewport 640x560
+  at scale 2. Before/after source identities match; the image was inspected.
+  Runtime source hashes still match after the later WPT-only loader correction.
+- Artifacts: `C:/Users/mark_/Code/testing/genet/realms-global-origin-20260913/`
+  retains exploratory failures, focused logs, frozen pre/intermediate/final WPT
+  runners and source provenance. The pre runner is the previous ancestor-origin
+  phase's frozen final executable, including its documented comment-encoding
+  cleanup qualification. Headed evidence is in
+  `C:/Users/mark_/Code/testing/genet/ortet-g5-realms-global-origin-20260913/`.
+  Dependencies, Cargo.lock and WPT expectations are unchanged.
+
+This does not complete the broader origin/security platform. Blank/srcdoc
+Location URL separation, `document.domain`, JavaScript/blob navigation, data-URL
+worker loading and SharedWorker remain outside the bounded implementation.
+The prior aggregate opaque-root timing qualification remains unchanged.

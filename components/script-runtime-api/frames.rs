@@ -858,11 +858,17 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
             .loading
             .as_deref()
             .is_some_and(|value| value.trim().eq_ignore_ascii_case("lazy"));
+        // Initial about:blank bypasses navigation and lazy loading. Query and
+        // fragment components do not change whether this URL matches blank.
+        let initial_blank = source.is_none()
+            && url::Url::parse(&url)
+                .is_ok_and(|url| url.scheme() == "about" && url.path() == "blank");
+        let lazy = lazy && !initial_blank;
         let source = source.or_else(|| {
             if lazy {
                 return None;
             }
-            if url == "about:blank" {
+            if initial_blank {
                 Some(String::new())
             } else {
                 loader.as_ref().and_then(|loader| loader.load(&url))
@@ -892,7 +898,7 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
                     .document()
                     .origin
                     .clone()
-            } else if lazy || url == "about:blank" || url == "about:srcdoc" {
+            } else if lazy || initial_blank || url == "about:srcdoc" {
                 tree.get(parent_context)
                     .expect("parent")
                     .document()
@@ -910,7 +916,7 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
                         url.clone()
                     },
                     origin,
-                    initial_about_blank: lazy || url == "about:blank",
+                    initial_about_blank: lazy || initial_blank,
                 });
             Some((context, !flags.contains(SandboxFlags::SCRIPTS)))
         }) else {
@@ -937,7 +943,7 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
             reuse_host: None,
             context,
             key: None,
-            document_url: if lazy || url == "about:srcdoc" || url == "about:blank" {
+            document_url: if lazy || url == "about:srcdoc" || initial_blank {
                 base
             } else {
                 url.clone()
@@ -945,6 +951,7 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
             source,
             scripts,
             lazy,
+            initial_blank,
             viewport_size,
             seams: HostSeams {
                 fetch,
@@ -955,7 +962,22 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
             },
         };
         match open_document_realm::<E>(cx, &agent, plan) {
-            Ok(realm) => view::<E>(cx, realm),
+            Ok(realm) => {
+                if initial_blank {
+                    // Finish realm creation and proxy binding before authored
+                    // callbacks can remove or navigate this context. This
+                    // event belongs to the iframe, not the child Window.
+                    realm_eval::<E>(
+                        cx,
+                        parent,
+                        &format!(
+                            "__dispatchSynthetic({}, 'load', {{bubbles:false}})",
+                            crate::js_str(&node.raw().to_string())
+                        ),
+                    )?;
+                }
+                view::<E>(cx, realm)
+            },
             Err(error) => {
                 if let Some(tree) = agent.borrow_mut().frames.tree.as_mut() {
                     tree.discard(context);
@@ -979,9 +1001,8 @@ struct HostSeams {
 }
 
 /// Everything needed to put a document in a browsing context, whether it is the
-/// context's first document or its fifth. Initial load and navigation differ in
-/// exactly two fields: a navigation supplies the context's existing `key`, and
-/// it is never `lazy`.
+/// context's first document or its fifth. A navigation supplies the context's
+/// existing `key`; it is never `lazy` or an `initial_blank` completion.
 struct DocumentPlan {
     /// The container element's realm and node, or `None` for the **top-level**
     /// browsing context, which has neither. A context with a container gets a
@@ -1002,6 +1023,9 @@ struct DocumentPlan {
     source: Option<String>,
     scripts: bool,
     lazy: bool,
+    /// The initial empty document is complete; its container fires load after
+    /// realm construction returns.
+    initial_blank: bool,
     viewport_size: (f32, f32),
     seams: HostSeams,
 }
@@ -1029,6 +1053,7 @@ fn open_document_realm<E: ScriptEngine>(
         source,
         scripts,
         lazy,
+        initial_blank,
         viewport_size,
         seams,
     } = plan;
@@ -1037,7 +1062,7 @@ fn open_document_realm<E: ScriptEngine>(
         .timer_state
         .clone()
         .ok_or(RealmError::Refused("agent timer state is unavailable"))?;
-    let fresh = HostState {
+    let mut fresh = HostState {
         dom: ScriptedDom::from_serialized_document(
             "<!doctype html><html><head></head><body></body></html>",
         ),
@@ -1052,6 +1077,9 @@ fn open_document_realm<E: ScriptEngine>(
         worker_spawn: Some(crate::worker::worker_main::<E> as fn(_)),
         ..HostState::default()
     };
+    if initial_blank {
+        fresh.markup.ready_state = crate::ReadyState::Complete;
+    }
     // A top-level navigation writes the new document's state *into* the cell the
     // embedder already holds; everything else allocates one. Either way the old
     // `HostState` is dropped here and nothing of the outgoing document survives
@@ -1082,9 +1110,9 @@ fn open_document_realm<E: ScriptEngine>(
                             source,
                             scripts,
                             lazy,
-                            load_started: false,
-                            parsed: false,
-                            loaded: false,
+                            load_started: initial_blank,
+                            parsed: initial_blank,
+                            loaded: initial_blank,
                         },
                     );
                 },
@@ -1134,7 +1162,7 @@ fn open_document_realm<E: ScriptEngine>(
         // dispatches through. Replaced on every navigation, so it never
         // outlives the realm that owns it.
         bind_window_proxy_hooks_from_call::<E>(child, context_key)?;
-        if !lazy {
+        if !lazy && !initial_blank {
             E::eval_from_call(
                 child,
                 match container {
@@ -1976,6 +2004,7 @@ fn perform_navigation<E: ScriptEngine>(
         source,
         scripts,
         lazy: false,
+        initial_blank: false,
         viewport_size,
         seams,
     };

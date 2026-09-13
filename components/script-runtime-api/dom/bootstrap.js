@@ -5303,14 +5303,21 @@
   // ours to remove.
   var installedFrameIndices = 0;
   globalThis.__refreshNamedProperties = function() {
+    // Creating an initial blank context can synchronously run an iframe load
+    // callback. Discover contexts first, then rebuild indices from the live
+    // tree: the callback may have removed a frame or recursively refreshed us.
+    var frameElements;
+    try { frameElements = document.querySelectorAll('iframe'); } catch (_) { frameElements = []; }
+    for (var discoverIndex = 0; discoverIndex < frameElements.length; discoverIndex++) {
+      if (typeof __frameWindow === 'function' && frameElements[discoverIndex].isConnected)
+        __frameWindow(frameElements[discoverIndex].__ref);
+    }
     for (var frameIndex = 0; frameIndex < installedFrameIndices; frameIndex++) {
       try { delete globalThis[String(frameIndex)]; } catch (_) {}
     }
     installedFrameIndices = 0;
-    var frameElements;
     try { frameElements = document.querySelectorAll('iframe'); } catch (_) { frameElements = []; }
     for (var newIndex = 0; newIndex < frameElements.length; newIndex++) {
-      if (typeof __frameWindow === 'function') __frameWindow(frameElements[newIndex].__ref);
       (function(container) {
         Object.defineProperty(globalThis, String(installedFrameIndices), {
           configurable: true,

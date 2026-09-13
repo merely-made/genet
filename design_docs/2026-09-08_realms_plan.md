@@ -2636,7 +2636,7 @@ landed; their labels now point to the continuation and navigation phases.
 |---|---|
 | Reflector identity across source-realm discard and another adoption | **Closed in the [wrapper identity phase](#phase-wrapper-identity-after-disposal-2026-09-13).** Both-engine regressions and strengthened headed acceptance preserve ordinary, shadow, closed-root and template identities, with GC between hops and final collection. |
 | Canvas with a live drawing context | Canvas/WebGL host producer ownership. Move context storage and the producer together, preserving context identity and pixels, before lifting the refusal. |
-| Initial `about:blank` load ordering | Frame insertion/parser integration. Recover the named synchronous load expectation without running unload in removing steps. |
+| Initial `about:blank` load ordering | Closed by the [initial blank-load phase](#phase-initial-blank-load-ordering-2026-09-13): synchronous iframe load, parser callback removal, and the named immediate-navigation WPT regression. Unload remains queued. |
 | `execution-timing/112.html` | Parser script scheduling, tracked in the parser/interleaving plan. |
 | `Location.ancestorOrigins` | Location/DOMStringList surface. This absent API is the one remaining failure in `no-browsing-context.window.html`, now 45/46. Implement ancestor order, origin values and the required object lifetime before closing it. |
 | `document.domain` | Origin/security surface, still outside the landed core checks. |
@@ -2644,6 +2644,7 @@ landed; their labels now point to the continuation and navigation phases.
 | Scripted accessibility action dispatch and stale-target validation | Scripted document session. The headed G5 receipt proves projection only. |
 | Actual capture replay | Capture owner. The accessor phase supplied imported-identity translation and tests, not a complete replayer. |
 | Range and charset-test throughput | WPT measurement. The default 30-second guards time out under load; isolated pre/post controls are recorded below. The large data-change file still exceeds 120 seconds on both runners. |
+| Opaque-root policy timing | Runtime measurement. The [initial blank-load phase](#phase-initial-blank-load-ordering-2026-09-13) records a failing 50 ms cost guard separately from passing GC-soak and functional checks. Keep the timing failure visible. |
 | Inherited server-mode fetch count | Fetch/WPT server route. The earlier 55 unexpected results used `--features netfetch --spawn-server`; this phase's unchanged disk-mode census does not close that separate receipt. |
 | Glyph digest instability | Livery/compositing. Keep CSS viewport and display scale attached to each headed receipt. |
 
@@ -2794,3 +2795,70 @@ post: `be73c68d719225bc8fa8dbdf65757b5cec5708217be0f63eadd0cc6496ad9964`.
 This slice does not close live canvas adoption, initial `about:blank` load
 ordering, parser scheduling, or the other navigation surfaces in the residual
 inventory above.
+
+## Phase: initial blank-load ordering (2026-09-13)
+
+The initial empty iframe document now completes without a queued document-load
+task. After its realm and WindowProxy are fully installed, the parent receives
+the synchronous iframe `load` event required by
+[process the iframe attributes](https://html.spec.whatwg.org/multipage/iframe-embed-object.html#process-the-iframe-attributes).
+This includes absent/empty `src`, `about:blank` with query or fragment, and a
+blank frame marked lazy. The initial child Window does not receive a later
+`load`. Subsequent blank navigations and `srcdoc` loading retain their queued
+path. Frame removal still queues unload.
+
+Synchronous callbacks can remove a parser-created frame. Named-property refresh
+therefore discovers contexts before rebuilding indices from the live tree;
+otherwise the outer refresh could reinstall `window[0]` for the removed frame.
+The callback runs after realm construction, so reentrant navigation and removal
+cannot interrupt installation of the realm's host surface.
+
+### Evidence
+
+- `initial_blank_load.rs`: **12 tests pass across Boa and Nova**. They cover
+  event order and exactly-once delivery, readiness, parser order, immediate
+  navigation, callback removal/navigation, stale frame-index removal, and the
+  asynchronous later-blank/srcdoc boundary. The original six dynamic timing
+  controls failed before the patch. The original parser controls used an
+  unsupported inline event attribute and were corrected to capturing listeners;
+  their first failures are not independent timing proof. The two added parser
+  removal controls failed with the timing change alone and pass with the live
+  index rebuild.
+- Matched WPT runners from base `2ecb56a9a68` and this patch cover **18 files per
+  engine**: the initial-empty-document directory, `Node-isConnected.html`, and
+  `iframe-loading-lazy.html`. Boa preserves all **8** pre-existing passing
+  subtests and gains **9**, with zero passing subtests lost. The immediate
+  navigation file recovers `src` and `location.assign`; its already-passing
+  `location.href` remains passing, for **3/6**. Two content-preservation cases
+  for blank URL query/fragment and all five initial child-Window event cases
+  also become passing. Nova's selected WPT results remain unchanged with zero
+  passes; its positive proof here is the runtime tests and headed fixture.
+- The final **669-test** engine/runtime aggregate passes **668**, with zero
+  ignored. The one failure is Nova's existing opaque-root cost guard: quiescent
+  **9.341 ms**, re-parent **52.627 ms**, against the unchanged **50 ms** ceiling.
+  Both GC soaks pass. A serial cost-only run passes Nova (**5.860 / 39.217 ms**)
+  but fails Boa (**8.347 / 58.935 ms**), in quiescent/re-parent order. This is
+  not an all-green aggregate receipt. The earlier exploratory aggregate passed
+  all 669 but is not the final-source gate; a final rebuild first encountered a
+  Windows executable lock and was rerun after the earlier run exited.
+  A committed-baseline control built from the archived `2ecb56a9a68` with the
+  same lockfile, profile and dependency revisions passes both guards: Boa
+  **5.980 / 19.981 ms**, Nova **4.699 / 22.798 ms**. The patch's immediate
+  paired rerun also passes both: Boa **3.538 / 11.272 ms**, Nova
+  **4.519 / 26.195 ms**. These observations demonstrate timing variability;
+  they do not turn the failed aggregate into a passing one or qualify general
+  throughput. The threshold and test remain unchanged. Raw logs, archived
+  baseline and executable hashes are retained with the artifacts.
+- Headed G5: **three runs per engine**, all at digest `0x8df9c9b8815a6e22`,
+  **31 -> 31** live nodes, **4 unpinned / 32 collected**, and normal exit 0.
+  Both deliberate-failure controls exit 1. Physical size is 1280x1120, CSS
+  viewport 640x560 at scale 2; source identities match before and after.
+- Artifacts: `C:/Users/mark_/Code/testing/genet/realms-initial-blank-20260913/`
+  holds runner hashes, baseline identity, focused controls and exact WPT maps
+  with named comparisons. Headed evidence is in
+  `C:/Users/mark_/Code/testing/genet/ortet-g5-realms-initial-blank-20260913/`.
+  Dependencies, Cargo.lock and WPT expectations are unchanged.
+
+This closes the named initial blank-load residual. Inline event attributes,
+`execution-timing/112.html`, live canvas adoption, `ancestorOrigins`, and the
+unimplemented navigation surfaces remain outside this slice.

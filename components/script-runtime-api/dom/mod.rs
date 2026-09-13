@@ -292,7 +292,10 @@ fn with_host_state<E: ScriptEngine, R>(
 ) -> Option<R> {
     let host = adoption::host_for_call::<E>(cx)?;
     let mut host = host.borrow_mut();
-    Some(f(&mut host))
+    host.document_base_url();
+    let result = f(&mut host);
+    host.document_base_url();
+    Some(result)
 }
 
 fn with_dom<E: ScriptEngine, R>(

@@ -500,7 +500,7 @@ impl LiveryCssom {
             let (url, viewport) = {
                 let h = host.borrow();
                 (
-                    h.fallback_base_url().unwrap_or("about:blank").to_owned(),
+                    h.document_base_url().unwrap_or_else(|| "about:blank".to_owned()),
                     h.viewport_size,
                 )
             };

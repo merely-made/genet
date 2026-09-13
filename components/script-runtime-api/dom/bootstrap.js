@@ -72,6 +72,12 @@
   // opaque-root rule, resolved by the GC rather than approximated by the host.
   // The host rebuilds the groups at each GC tick (the private `gcPolicy` hook), sending only what
   // changed since the last one.
+  var nodeBaseReaders = globalThis.__agentTimers.domBaseReaders;
+  if (!nodeBaseReaders) nodeBaseReaders = globalThis.__agentTimers.domBaseReaders = new WeakMap();
+  function nativeNodeBaseURI(ref, selector) { return __nodeBaseURI(ref, selector); }
+  function registerBaseReader(node) {
+    nodeBaseReaders.set(node, nativeNodeBaseURI);
+  }
   var wrapperGroups = globalThis.__agentTimers.domWrapperGroups;
   // A template retains its contents, but contents do not retain the template.
   // Keep this directed ephemeron separate from the bidirectional tree groups.
@@ -208,6 +214,7 @@
     node.__ref = ref;
     node.nodeType = nt;
     wrappers.set(ref, node);
+    registerBaseReader(node);
     if (customDef) upgradeCustomElement(node, customDef);
     return node;
   }
@@ -642,18 +649,13 @@
   // the first `<base href>` in the tree (HTML "document base URL"). It is the
   // same value for every node in a document, attributes included.
   Object.defineProperty(Node.prototype, 'baseURI', {
-    configurable: true, get: function() { return documentBaseURI(); }
-  });
-  function documentBaseURI() {
-    var url = globalThis.document ? __locationField('fallbackBaseURL') : undefined;
-    if (url === undefined || url === null) return '';
-    var bases = globalThis.document.getElementsByTagName('base');
-    for (var i = 0; i < bases.length; i++) {
-      var href = bases[i].getAttribute('href');
-      if (href !== null) return String(__resolve_url(href));
+    configurable: true, get: function() {
+      var node = this;
+      var reader = nodeBaseReaders.get(node);
+      if (!reader) throw new TypeError('Illegal Node receiver');
+      return reader(node.__ref);
     }
-    return String(url);
-  }
+  });
   Node.prototype.isSameNode = function(other) { return other === this; };
   Node.prototype.getRootNode = function(options) {
     return (options && options.composed) ? composedTreeRoot(this) : nodeTreeRoot(this);
@@ -2210,6 +2212,12 @@
     a.__local = String(local);
     a.__value = '';
     a.__doc = doc || document;
+    // Attribute views have no native reflector; follow their current element or
+    // saved document, including when the getter is borrowed across realms.
+    nodeBaseReaders.set(a, function() {
+      var target = a.__owner || a.__doc;
+      return nodeBaseReaders.get(target)(target.__ref);
+    });
     a.__isAttr = true; // the Range boundary guard rejects an Attr container
     return a;
   }
@@ -2381,6 +2389,7 @@
       throw new DOMException("The attribute is not on this element.", "NotFoundError");
     }
     attr.__value = attr.value;
+    attr.__doc = ownerDocumentOf(this);
     this.removeAttributeNS(attr.__ns, attr.__local);
     attr.__owner = null;
     var byKey = attrViews.get(this);
@@ -5043,7 +5052,17 @@
         // url: reflect the content attribute resolved against the document base URL
         // (absent -> ""); the raw string is stored on set. `__resolve_url` returns the
         // input unchanged when it is already absolute or no base URL is set.
-        desc.get = function() { var v = this.getAttribute(attr); return v === null ? '' : __resolve_url(v); };
+        desc.get = function() {
+          var v = this.getAttribute(attr);
+          if (v === null) return '';
+          // Base href reflects against the fallback, never against itself or a
+          // preceding base element. The reader follows adoption across realms.
+          if (attr === 'href' && this.localName === 'base' && this.namespaceURI === XHTML_NS) {
+            var base = nodeBaseReaders.get(this)(this.__ref, 'fallback');
+            try { return new URL(v, base).href; } catch (_) { return v; }
+          }
+          return __resolve_url(v);
+        };
         desc.set = function(v) { this.setAttribute(attr, String(v)); };
       }
       // A readonly IDL attribute keeps only its getter, except the
@@ -5242,6 +5261,7 @@
   document.__ref = docRef;
   document.nodeType = 9;
   wrappers.set(docRef, document);
+  registerBaseReader(document);
   // On a Window, `document` is `[LegacyUnforgeable]`: a getter with no setter,
   // non-configurable and non-deletable. A worker global keeps it a plain property,
   // which is what lets the worker scope delete it — testharness.js selects its
@@ -5286,6 +5306,7 @@
     docRef = freshRef;
     document.__ref = docRef;
     wrappers.set(docRef, document);
+    registerBaseReader(document);
   };
 
   // Refresh the parse-time named-element properties after the host clones a

@@ -76,14 +76,20 @@ impl OwnedNode {
     /// Run `f` against the arena that actually stores this node.
     pub(crate) fn with_dom<R>(&self, f: impl FnOnce(&mut ScriptedDom) -> R) -> R {
         let mut host = self.host.borrow_mut();
-        f(&mut host.dom)
+        host.document_base_url();
+        let result = f(&mut host.dom);
+        host.document_base_url();
+        result
     }
 
     /// Run `f` against the owning host, for a native that must touch the arena
     /// *and* something beside it (pins, the already-started flag).
     pub(crate) fn with_host<R>(&self, f: impl FnOnce(&mut HostState) -> R) -> R {
         let mut host = self.host.borrow_mut();
-        f(&mut host)
+        host.document_base_url();
+        let result = f(&mut host);
+        host.document_base_url();
+        result
     }
 }
 
@@ -605,6 +611,8 @@ fn transfer<E: ScriptEngine>(cx: &mut E::CallCx<'_>, mutate: bool) -> Result<E::
     }
     let mut source = source.borrow_mut();
     let mut destination = destination.borrow_mut();
+    source.document_base_url();
+    destination.document_base_url();
     let started: Vec<_> = ids
         .iter()
         .copied()
@@ -614,6 +622,8 @@ fn transfer<E: ScriptEngine>(cx: &mut E::CallCx<'_>, mutate: bool) -> Result<E::
         .dom
         .transfer_detached_subtree_preserving_mutations_to(&mut destination.dom, node)
         .map_err(|e| cx.error(&format!("NotSupportedError: cross-arena subtree {e:?}")))?;
+    source.document_base_url();
+    destination.document_base_url();
     for id in ids {
         if source.pins.unpin(id) {
             destination.pins.pin(id);

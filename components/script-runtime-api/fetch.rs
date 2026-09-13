@@ -411,7 +411,7 @@ fn url_components_json(u: &url::Url) -> String {
 fn host_base_url<E: ScriptEngine>(cx: &mut E::CallCx<'_>) -> Option<String> {
     let data = cx.host_data()?;
     let cell = data.downcast_ref::<RefCell<HostState>>()?;
-    let base = cell.borrow().fallback_base_url().map(str::to_owned);
+    let base = cell.borrow().document_base_url();
     base
 }
 

@@ -19,6 +19,7 @@ mod invalidation;
 mod layout;
 mod legacy_color;
 mod paint;
+mod placement;
 mod presentational_hints;
 mod style;
 // K4d6b: Buckram lays out live tables' block axis through the phase order it
@@ -100,6 +101,7 @@ pub use paint::{
     emit_paint_list_with_text_system_scrolled_with_images,
     emit_paint_list_with_text_system_scrolled_with_images_and_external_textures,
 };
+pub use placement::{ElementGeometry, element_geometry};
 pub use presentational_hints::{
     LegacyDescendantAlignment, PresentationalDeclarations, PresentationalHintDiagnostic,
     PresentationalHintProvider, PresentationalHints,

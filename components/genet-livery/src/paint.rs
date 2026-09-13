@@ -96,7 +96,7 @@ pub struct FrameSlot {
 struct HostLeafSlot {
     key: u64,
     command_index: usize,
-    origin: LayoutPoint,
+    content_rect: LayoutRect,
 }
 
 impl LiveryPaintList {
@@ -133,7 +133,7 @@ impl LiveryPaintList {
                 vec![PaintCmd::PlaceRetainedFragment(
                     paint_list_api::RetainedFragmentRef {
                         id,
-                        origin: slot.origin,
+                        origin: slot.content_rect.min,
                     },
                 )]
             } else if let Some(items) = commands(slot.key) {
@@ -142,7 +142,7 @@ impl LiveryPaintList {
                 }
                 let mut replacement = Vec::with_capacity(items.len() + 2);
                 replacement.push(PaintCmd::PushTransform(TransformSpec {
-                    origin: slot.origin,
+                    origin: slot.content_rect.min,
                     transform: LayoutTransform::identity(),
                     kind: TransformKind::Standard,
                 }));
@@ -632,6 +632,7 @@ fn emit_node<D>(
     ) else {
         return;
     };
+    record_host_leaf_slot(dom, styles, fragments, id, list);
     let scroll_transform = scroll_offsets.get(&id).copied().and_then(scroll_spec);
     if let Some(transform) = &scroll_transform {
         list.commands
@@ -644,7 +645,6 @@ fn emit_node<D>(
     let mut deferred_collapsed = table
         .filter(|table| table.is_collapsed())
         .map(DeferredCollapsedBorders::new);
-    record_host_leaf_slot(dom, fragments, id, list);
     record_frame_slot(dom, styles, fragments, id, list);
     emit_children_in_stacking_order(
         dom,
@@ -701,6 +701,7 @@ where
 /// normal-flow leaves used by graph canvases and grid cells.
 fn record_host_leaf_slot<D>(
     dom: &D,
+    styles: &StylePlane<D::NodeId>,
     fragments: &LiveryLayout<D::NodeId>,
     id: D::NodeId,
     list: &mut LiveryPaintList,
@@ -709,12 +710,20 @@ fn record_host_leaf_slot<D>(
     D::NodeId: Copy + Eq + Hash,
 {
     if let Some(key) = custom_leaf_key(dom, id)
+        && let Some(style) = styles.get(id)
         && let Some(fragment) = fragments.get(id)
     {
+        let (x, y, width, height) = crate::layout::content_box_rect(style, fragment);
+        if width <= 0.0 || height <= 0.0 {
+            return;
+        }
         list.host_leaf_slots.push(HostLeafSlot {
             key,
             command_index: list.commands.len(),
-            origin: LayoutPoint::new(fragment.x, fragment.y),
+            content_rect: LayoutRect::new(
+                LayoutPoint::new(x, y),
+                LayoutPoint::new(x + width, y + height),
+            ),
         });
     }
 }
@@ -796,7 +805,7 @@ fn record_frame_slot<D>(
 /// computed outside display was inline. Keep decoration selection aligned with
 /// the generated box tree, rather than treating a canvas flex item as an IFC
 /// fragment that has no line-owned decoration record.
-fn is_blockified_item<Id>(fragments: &LiveryLayout<Id>, id: Id) -> bool
+pub(crate) fn is_blockified_item<Id>(fragments: &LiveryLayout<Id>, id: Id) -> bool
 where
     Id: Copy + Eq + Hash,
 {
@@ -2206,8 +2215,30 @@ struct StackingItem<Id> {
     id: Id,
     level: i32,
     // Flattening moves the subtree outside these ancestors' normal paint
-    // walk, so their overflow clips must travel with it.
-    ancestor_clips: Vec<ClipSpec>,
+    // walk, so overflow clips and content scroll must travel together.
+    ancestor_scopes: Vec<StackingScope>,
+}
+
+#[derive(Clone)]
+enum StackingScope {
+    Clip(ClipSpec),
+    Scroll(TransformSpec),
+}
+
+impl StackingScope {
+    fn push(&self) -> PaintCmd {
+        match self {
+            Self::Clip(clip) => PaintCmd::PushClip(clip.clone()),
+            Self::Scroll(transform) => PaintCmd::PushTransform(transform.clone()),
+        }
+    }
+
+    fn pop(&self) -> PaintCmd {
+        match self {
+            Self::Clip(_) => PaintCmd::PopClip,
+            Self::Scroll(_) => PaintCmd::PopTransform,
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -2275,6 +2306,7 @@ fn emit_children_in_stacking_order<D>(
         fragments,
         parent,
         list.viewport,
+        scroll_offsets,
         &mut Vec::new(),
         &mut items,
     );
@@ -2338,7 +2370,8 @@ fn collect_stacking_items<D>(
     fragments: &LiveryLayout<D::NodeId>,
     parent: D::NodeId,
     viewport: DeviceIntSize,
-    ancestor_clips: &mut Vec<ClipSpec>,
+    scroll_offsets: &HashMap<D::NodeId, (f32, f32)>,
+    ancestor_scopes: &mut Vec<StackingScope>,
     items: &mut Vec<StackingItem<D::NodeId>>,
 ) where
     D: LayoutDom,
@@ -2352,7 +2385,7 @@ fn collect_stacking_items<D>(
             items.push(StackingItem {
                 id: child,
                 level,
-                ancestor_clips: ancestor_clips.clone(),
+                ancestor_scopes: ancestor_scopes.clone(),
             });
             continue;
         }
@@ -2362,10 +2395,12 @@ fn collect_stacking_items<D>(
                 let Some(style) = styles.get(child) else {
                     continue;
                 };
-                if style.display == Display::None {
+                if style.display == Display::None || style.visibility != Visibility::Visible {
                     continue;
                 }
-                if matches!(style.display, Display::Inline | Display::InlineBlock) {
+                if matches!(style.display, Display::Inline | Display::InlineBlock)
+                    && !is_blockified_item(fragments, child)
+                {
                     None
                 } else {
                     fragments
@@ -2376,9 +2411,12 @@ fn collect_stacking_items<D>(
             NodeKind::Text => continue,
             _ => None,
         };
-        let pushed_clip = added_clip.is_some();
+        let previous_len = ancestor_scopes.len();
         if let Some(clip) = added_clip {
-            ancestor_clips.push(clip);
+            ancestor_scopes.push(StackingScope::Clip(clip));
+        }
+        if let Some(transform) = scroll_offsets.get(&child).copied().and_then(scroll_spec) {
+            ancestor_scopes.push(StackingScope::Scroll(transform));
         }
         collect_stacking_items(
             dom,
@@ -2386,12 +2424,11 @@ fn collect_stacking_items<D>(
             fragments,
             child,
             viewport,
-            ancestor_clips,
+            scroll_offsets,
+            ancestor_scopes,
             items,
         );
-        if pushed_clip {
-            ancestor_clips.pop();
-        }
+        ancestor_scopes.truncate(previous_len);
     }
 }
 
@@ -2421,19 +2458,19 @@ fn emit_stacking_items<'items, D>(
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash + 'items,
 {
-    let mut open: Option<&'items [ClipSpec]> = None;
+    let mut open: Option<&'items [StackingScope]> = None;
     for item in items {
-        let reuse = open.is_some_and(|current| clip_stacks_match(current, &item.ancestor_clips));
+        let reuse = open.is_some_and(|current| scope_stacks_match(current, &item.ancestor_scopes));
         if !reuse {
             if let Some(current) = open {
-                for _ in current {
-                    list.commands.push(PaintCmd::PopClip);
+                for scope in current.iter().rev() {
+                    list.commands.push(scope.pop());
                 }
             }
-            for clip in &item.ancestor_clips {
-                list.commands.push(PaintCmd::PushClip(clip.clone()));
+            for scope in &item.ancestor_scopes {
+                list.commands.push(scope.push());
             }
-            open = Some(&item.ancestor_clips);
+            open = Some(&item.ancestor_scopes);
         }
         emit_node(
             dom,
@@ -2449,8 +2486,8 @@ fn emit_stacking_items<'items, D>(
         );
     }
     if let Some(current) = open {
-        for _ in current {
-            list.commands.push(PaintCmd::PopClip);
+        for scope in current.iter().rev() {
+            list.commands.push(scope.pop());
         }
     }
 }
@@ -2459,13 +2496,16 @@ fn emit_stacking_items<'items, D>(
 /// therefore share one scope. Deliberately conservative: only rectangular
 /// clips compare, so a rounded or path clip simply opens its own scope rather
 /// than risking a wrong match on geometry this does not compare.
-fn clip_stacks_match(left: &[ClipSpec], right: &[ClipSpec]) -> bool {
+fn scope_stacks_match(left: &[StackingScope], right: &[StackingScope]) -> bool {
     left.len() == right.len()
         && left
             .iter()
             .zip(right)
-            .all(|(left, right)| match (&left.kind, &right.kind) {
-                (ClipKind::Rect(left), ClipKind::Rect(right)) => left == right,
+            .all(|(left, right)| match (left, right) {
+                (StackingScope::Clip(left), StackingScope::Clip(right)) =>
+                    matches!((&left.kind, &right.kind), (ClipKind::Rect(left), ClipKind::Rect(right)) if left == right),
+                (StackingScope::Scroll(left), StackingScope::Scroll(right)) =>
+                    left.origin == right.origin && left.transform == right.transform,
                 _ => false,
             })
 }
@@ -2496,12 +2536,12 @@ fn emit_normal_node<'a, D>(
     else {
         return;
     };
+    record_host_leaf_slot(dom, styles, fragments, id, list);
     let scroll_transform = scroll_offsets.get(&id).copied().and_then(scroll_spec);
     if let Some(transform) = &scroll_transform {
         list.commands
             .push(PaintCmd::PushTransform(transform.clone()));
     }
-    record_host_leaf_slot(dom, fragments, id, list);
     record_frame_slot(dom, styles, fragments, id, list);
     if let Some(table) = fragments.table_paint_for_node(id) {
         if let Some(deferred) = deferred_collapsed.as_deref_mut() {
@@ -2708,7 +2748,11 @@ fn same_fragment(left: &Fragment, right: &Fragment) -> bool {
         && (left.height - right.height).abs() <= 0.5
 }
 
-fn stacking_level<D>(dom: &D, styles: &StylePlane<D::NodeId>, id: D::NodeId) -> Option<i32>
+pub(crate) fn stacking_level<D>(
+    dom: &D,
+    styles: &StylePlane<D::NodeId>,
+    id: D::NodeId,
+) -> Option<i32>
 where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
@@ -2741,7 +2785,7 @@ fn scroll_spec(offset: (f32, f32)) -> Option<TransformSpec> {
     })
 }
 
-fn transform_spec(style: &ComputedValues, fragment: &Fragment) -> Option<TransformSpec> {
+pub(crate) fn transform_spec(style: &ComputedValues, fragment: &Fragment) -> Option<TransformSpec> {
     if !establishes_transform_context(style) {
         return None;
     }
@@ -2777,7 +2821,7 @@ fn transform_spec(style: &ComputedValues, fragment: &Fragment) -> Option<Transfo
     })
 }
 
-fn descendant_clip(
+pub(crate) fn descendant_clip(
     style: &ComputedValues,
     fragment: &Fragment,
     viewport: DeviceIntSize,
@@ -2812,7 +2856,7 @@ fn descendant_clip(
     })
 }
 
-fn polygon_clip(style: &ComputedValues, fragment: &Fragment) -> Option<ClipSpec> {
+pub(crate) fn polygon_clip(style: &ComputedValues, fragment: &Fragment) -> Option<ClipSpec> {
     let points = style
         .clip_path
         .polygon_points(fragment.width, fragment.height)?;

@@ -725,6 +725,21 @@ where
             .map(|values| self.used_color_context_for(values))
     }
 
+    /// Used foreground color as encoded sRGB channels and straight alpha.
+    /// Resolves contextual expressions through this plane's device palette
+    /// and the element's used color scheme, exactly as paint does.
+    pub fn used_color(&self, id: Id) -> Option<[f32; 4]>
+    where
+        Id: Copy,
+    {
+        let color = self
+            .get(id)?
+            .color
+            .resolve_used(self.used_color_context(id)?);
+        let (r, g, b, a) = color.to_srgb()?;
+        Some([r, g, b, a])
+    }
+
     /// Turn all color-bearing fields into numeric leaves for a paint or
     /// animation consumer. The retained plane itself stays contextual so
     /// inheritance and CSSOM can still use the authored computed model.

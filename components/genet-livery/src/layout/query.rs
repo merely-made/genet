@@ -16,6 +16,7 @@ where
     Id: Copy + Eq + Hash,
 {
     pub(in crate::layout) fn new(
+        viewport: (f32, f32),
         buckram: LayoutResult<Id>,
         text_frame: Option<TextFrame<Id>>,
         block_algorithms: BlockAlgorithmCounts,
@@ -23,6 +24,7 @@ where
         table_shadow: TableShadowLedger,
     ) -> Self {
         Self {
+            viewport,
             buckram,
             text_frame,
             block_algorithms,

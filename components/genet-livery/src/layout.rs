@@ -233,6 +233,7 @@ where
 /// Livery's retained wrapper around Buckram's standards-owned layout result.
 #[derive(Clone, Debug)]
 pub struct LiveryLayout<Id> {
+    pub(crate) viewport: (f32, f32),
     buckram: LayoutResult<Id>,
     text_frame: Option<TextFrame<Id>>,
     block_algorithms: BlockAlgorithmCounts,

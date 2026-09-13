@@ -1,88 +1,100 @@
-# CSS 3D transforms, first-frame scaling, and the body fragment
+# CSS 3D transforms, first-frame scaling, and scene viewport embedding
 
 **Date:** 2026-09-12
 
-**Status:** founded 2026-09-12, no lane started. T4 added the same day from
-the layer-scope finding below, by Mark's ruling. Founded on Mark's rulings of
-2026-09-11 and 2026-09-12 on the wing's orthographic voxel presentation plan
-(`isometry/mesocosm/design_docs/2026-09-11_orthographic_voxel_presentation_plan.md`),
-whose L0 receipts are this plan's evidence and whose L1 and L5 are its named
-consumers. Ruling 3 of that plan authorizes 3D transforms as genet scope and
-says genet's own plan founds it; the 2026-09-12 rulings add the first-frame
-slice, the host-side mutation harness, and the body-level fragment shape.
+**Status, 2026-09-13:** prerequisite assessment complete; T3's bounded Genet
+content-box and 2D paint/input seam is implemented with automated receipts.
+Native Bench B integration and the remaining T3 acceptance are pending.
+Founded 2026-09-12 from the wing's L0 receipts;
+Mark's 2026-09-13 ruling replaces T3's body-fragment proposal with a shared
+scene viewport whose producer owns depth. T1's general CSS 3D work, T2's
+large-document scaling and T4's planar retention remain independent lanes,
+not prerequisites for the first specimen bench. Existing native canvas
+acceptance is prior evidence, not a fresh rerun in this implementation.
+
+**Consumer and cross-repository owner:** the specimen bench prerequisites in
+`isometry/mesocosm/design_docs/2026-09-11_orthographic_voxel_presentation_plan.md#specimen-bench-prerequisites-2026-09-13`.
+That section owns the application assembly and prerequisite order. This
+document owns the Genet engine changes it calls for.
 
 **Owns:** CSS Transforms Level 2 in Livery and its lowering to netrender's
 `Transform`; the first-frame cost of a document with tens of thousands of
 positioned boxes, and the phase-timing facility that makes that cost
-attributable; a host-driven DOM mutation harness with real per-frame timing;
-and a replaced-element kind whose paint is a retained netrender fragment
-supplied by the host.
+attributable; host-driven mutation measurement through the engine host; and
+the existing host-content paint seam's content-box placement and shared 2D
+paint/input geometry for a scene image in ordinary document composition.
 
 **Does not own:** what the wing draws or how a voxel body is meshed (the
 appearance crate, wing-side); netrender's fragment, tile-cache and execution
 graph internals (`netrender/netrender-notes/2026-09-04_wgpu_execution_graph_plan.md`),
-with one recorded exception: T4 states the single change to netrender's
-retained path that T3 requires, and its receipt, while the change itself lands
-in netrender under that plan's owner;
+with one recorded exception: T4 records the planar-retention requirement and
+its receipt, while the change itself lands in netrender under that plan's
+owner; Cambium's same-device producer lifecycle, resolved-style query hook,
+and application style-to-instance mapping (Mere and the wing own those);
 the browsing-context tree and the child-document loading path (the
-[iframes plan](2026-09-08_iframes_plan.md) owns those, and this plan reuses
-its splice rather than extending it); scripted mutation semantics (the
+[iframes plan](2026-09-08_iframes_plan.md) owns those); scripted mutation semantics (the
 [parser/script interleaving](2026-09-08_parser_script_interleaving_plan.md)
 and [Realms](2026-09-08_realms_plan.md) plans); WPT harness behaviour (the
 [harness repair plan](2026-09-07_wpt_harness_repair_plan.md)).
 
 **Prior art and prerequisites in this repository:**
 
+- Existing custom-leaf slots (`HostLeafSlot`, `splice_host_leaf_slots` in
+  `components/genet-livery/src/paint.rs`) keep host commands inside the active
+  CSS paint scopes. T3 reuses this seam and the external-image translation;
+  it adds neither a separate fragment slot list nor a compositor.
+- [Ortet canvas composition acceptance](2026-09-03_ortet_founding_plan.md#canvas-composition-follow-up-2026-09-11)
+  — same-device source staging into an ordinary `SceneImage`, with bounded
+  native proof of content-box placement, 2D affine transforms and origins,
+  rectangular overflow, group opacity and source-over. T3 carries those
+  checks to the host-owned scene producer.
 - [iframes and nested browsing contexts](2026-09-08_iframes_plan.md) — the
-  paint-list splice (`FrameSlot`, `absorb_frame_commands`,
-  `splice_frame_slots`, `record_frame_slot` in
-  `components/genet-livery/src/paint.rs`) and the recorded reasons it was
-  chosen over an `ExternalTextureDraw` producer texture. T3's replaced element
-  reuses that mechanism, in a separate slot key space, with a host-supplied
-  netrender fragment in place of a child document's paint list.
+  adjacent child-document splice and its command-index and resource-key
+  discipline remain owned there; the scene viewport is not a child document.
 - [Shadow DOM](2026-09-07_shadow_dom_plan.md) — the wing's L8 cites its
   declarative-attachment residual; that residual was closed by
   [parser/script interleaving](2026-09-08_parser_script_interleaving_plan.md)
   part two on 2026-09-08. Recorded here so the wing plan's L8 wording can be
   corrected by its owner rather than silently disagreeing with genet.
-- [Ortet](2026-09-03_ortet_founding_plan.md) — the headed host every receipt
-  below is taken through, and the host T3's harness extends.
+- [Ortet](2026-09-03_ortet_founding_plan.md) — the minimal engine host for
+  Genet's receipts and mutation instrument. Cambium's native host supplies
+  the application-side specimen bench receipt under Mere ownership.
 - [Standards-to-features ledger](2026-09-07_standards_to_features_ledger.md) —
   rows 15 and 16 are added by this plan.
 - [WPT harness repair](2026-09-07_wpt_harness_repair_plan.md) gate F6 — the
   first and only measurement of `css/css-transforms` to date; T1's founding
   count is copied from it.
 
-**Consumers on record (all four lanes):**
-`isometry/mesocosm/design_docs/2026-09-11_orthographic_voxel_presentation_plan.md`
-— its L1 (Livery 3D transforms), its L5 (live faces and the body-level
-shape), and the two gaps its L0 verdict names. Mark's 2026-09-12 ruling
-requires this plan to carry T1, T2 and T3 as that document's named
-dependencies.
+**Consumers on record:** the wing's broader L1 and L5 presentation work and
+its L0 findings motivated these lanes. The specimen bench now consumes T3's
+bounded engine seam plus Mere's producer bridge. Its bodies are renderer
+instances in one shared-depth scene, not thousands of transformed DOM boxes.
 
 ---
 
-## Why these three are one plan
+## Why these lanes remain separate
 
 The wing's L0 measured both halves of the route. L0a
 (`Code/testing/wing/l0a_netrender_face_ceiling.md`) holds 200,000 live
 rectangles under a 16 ms frame through retained fragments placed by
-`Scene::place_fragment`, with a per-instance transform and no re-encode for a
-moving body. L0b (`Code/testing/wing/l0b_genet_element_ceiling.md`) holds
+`Scene::place_fragment`, with no re-encode for planar affine placement at
+layer depth zero. It does not prove changing a body's 3D orientation. L0b
+(`Code/testing/wing/l0b_genet_element_ceiling.md`) holds
 about 5,000 DOM elements before the **first frame** exceeds five seconds, and
 grows roughly quadratically past that.
 
-The engine is therefore not short of rasterization; it is short of a cheap way
-to get many boxes into a scene, and of a cheap element to hang a fragment on.
-T1 gives the wing the transform vocabulary it cannot express today, T2 removes
-the element ceiling, and T3 removes the need for most of the elements in the
-first place while making the live path measurable at all. Landing any one of
-the three alone leaves the consumer blocked on the other two.
+L0c then compared planar fragments, sprites and resident geometry with depth.
+Its renderer-only evidence and Mark's ruling select one depth-owning scene
+viewport for the first bench. The producer performs the 3D work; the document
+composes its result as an ordinary image among a bounded set of controls.
 
-T4 is the fourth, found on 2026-09-12 by reading the handoff rather than
-either side of it: the moment T3's fragment is clipped to its content box it
-leaves netrender's retained path, so T3 without T4 measures the flat live
-path L0a already rejected.
+T1 supplies a general CSS 3D vocabulary. T2 measures and reduces large-DOM
+first-frame cost. T4 repairs retention for planar fragments under layers.
+Those remain useful independently, but none is required to display or
+interact with the bench's shared-depth image. T3's bounded content-box,
+composition and 2D input mapping, followed by the Mere-owned producer bridge,
+are the relevant prerequisites. The large-element mutation sweep remains
+separate measurement work rather than a bench admission gate.
 
 ---
 
@@ -91,8 +103,10 @@ path L0a already rejected.
 Livery parses no 3D transform today: the wing's earmark table records zero
 mentions across the livery crates on 2026-09-11, and netrender's `Transform`
 is already a column-major 4x4
-(`netrender/netrender/src/scene/geometry.rs`), so the gap is entirely on the
-CSS side.
+(`netrender/netrender/src/scene/geometry.rs`). That representation alone does
+not establish 3D rendering: the affine lowering and admitted rendering
+contexts below still need their own correctness proof. T3's shared-depth
+viewport does not depend on this CSS surface.
 
 **Surface.** `matrix3d()`, `translate3d()` and `translateZ()`, `rotate3d()`
 with `rotateX()` / `rotateY()` / `rotateZ()`, `scale3d()` and `scaleZ()`,
@@ -139,9 +153,9 @@ readback.
 
 **Target.** Linear growth in element count, and roughly two orders of
 magnitude less cost per element, for documents of tens of thousands of
-positioned boxes. This is the wing's L0 verdict restated as an engine target:
-without it, live-all-the-time is closed at Paredros scale whichever shape L5
-takes.
+positioned boxes. This is the wing's original L0 large-element verdict
+restated as an engine target. A scene viewport with instance data does not
+inherit that DOM count, so this target does not gate the first bench.
 
 **Starting hypotheses,** from the read-only attribution in
 `Code/testing/wing/l0b_first_frame_attribution.md` (its per-factor table is
@@ -204,70 +218,155 @@ directories shows zero `pass -> anything else`.
 
 ---
 
-## T3. Host-side DOM mutation harness and the body-fragment replaced element
+## T3. Scene viewport embedding and host mutation measurement
 
-Two halves of one thing: the wing's live path is the Rust host mutating the
-DOM per frame, not page script, and the thing it mutates should be one element
-per body rather than one per face.
+**Status, 2026-09-13:** bounded engine implementation and automated receipt
+complete; native Bench B integration and the remaining acceptance are pending. The
+specimen bench prerequisite section named above is the cross-repository
+assembly authority. T3 specifies the Genet portion, not an application renderer.
 
-**The harness.** A host-side facility that mutates element transforms from
-Rust once per frame and reports real per-frame timing. It exists because the
-L0b live cells could not be measured at all: the Boa-scripted fixtures
-rendered byte-identical frames, and wall time around a Fifo-presenting window
-cannot resolve one frame. The harness measures the path the wing actually
-uses.
+**The element and paint route.** Reuse the existing `<custom-leaf>` slot and
+`splice_host_leaf_slots` in `components/genet-livery/src/paint.rs` to place one
+`DrawExternalTexture`. The translator in
+`netrender/paint_list_render/src/lib.rs` emits an ordinary `SceneImage` at
+that position, retaining the active transform and layer scopes. There is no
+new fragment slot list, iframe, per-body surface or post-document overlay.
+The producer owns ground and mutually occluding body parts in one depth
+attachment; Genet owns placement of the resulting image in the document.
 
-**The replaced element.** A replaced-element kind whose paint is a retained
-netrender fragment supplied by the host, spliced into the paint list exactly
-the way the [iframes plan](2026-09-08_iframes_plan.md) splices a child
-document into an `<iframe>`'s replaced box: recorded as a slot while the
-ancestors' clips and transforms are still live, filled by the host afterwards,
-clipped to the content box, with the same image-key re-keying discipline and
-the same awareness that a recorded command index is invalidated by every later
-insertion. It gets its own slot list and key space, as `FrameSlot` did beside
-`HostLeafSlot`, because its key is a host-supplied fragment identity rather
-than a node id or an author attribute.
+**Existing evidence to reuse.** Ortet's native canvas route already stages
+sources before rasterization (`ports/ortet/src/shell.rs` and `webgl.rs`) via
+`Renderer::stage_external_image` and `unregister_external_image`
+(`netrender/netrender/src/renderer/mod.rs`). Staging samples on the shared GPU,
+converts alpha as needed and registers an image; it is not zero-copy. The
+producer must advance its content generation and never reuse a live key for
+another source. Unchanged key, size and generation skip staging.
 
-**The netrender API it consumes.**
-`Scene::place_fragment(FragmentId, Transform)`
-(`netrender/netrender/src/scene/build.rs`), over `SceneFragment` and
-`Scene::append_fragment` (`netrender/netrender/src/scene/fragment.rs`), with
-the 4x4 from `netrender/netrender/src/scene/geometry.rs`. That fragments carry
-a per-instance transform, and cost a placement rather than a re-encode on a
-transform-changing frame, is proved by the wing's L0a receipt,
-`Code/testing/wing/l0a_netrender_face_ceiling.md`: 200,000 rectangles on the
-live fragment path at 10.0 ms per frame against 50.9 ms for 50,000 on the flat
-rebuild path, with lowering staying at one per body across every
-transform-changing frame, and the receipt's explicit finding "No API refusal.
-Fragments already carry a per-instance transform." Qualified 2026-09-12: that
-receipt proves planar placement at layer depth zero. The per-instance
-transform is the six-cell affine, so a part's fragment holds one
-orientation's projection and a turn is new content (the wing's L0c prices
-it); and a placement inside any layer scope is not retained at all today,
-which is T4.
+The [2026-09-11 canvas acceptance](2026-09-03_ortet_founding_plan.md#canvas-composition-follow-up-2026-09-11)
+at Genet `62e1a0fad82` and netrender `3961aca919` passed 25 analytic native
+pixel probes on Boa and Nova at display scale 2. Its bounded scope is 2D
+affine transforms and authored origins, rectangular overflow, content-box
+placement, group opacity and source-over. Netrender's GPU gate separately
+covered scales 1, 1.5 and 2 and registration, refresh, resize and removal.
+Those receipts were inspected during this assessment, not freshly rerun.
+They do not yet accept Cambium's scene producer or transformed picking.
 
-**A finding, not a lane.** Under Ortet's Boa scripted profile the L0b live
-fixtures — which mutate `style.transform` from a `requestAnimationFrame`
-callback, on a timer-driven loop — render **byte-identical frames with no wake
-events**, so this Ortet build does not present script-driven mutation.
-Recorded in `Code/testing/wing/l0b_genet_element_ceiling.md`, finding 3. It is
-not a lane here, because the wing does not need it, but it should be fixed or
-explained in the [Ortet founding plan](2026-09-03_ortet_founding_plan.md)'s
-scripted-profile gates, beside the browser-hosted scripting residual already
-open there. Whether the gap is in Ortet's wake and present loop or in the
-scripted document's animation-frame dispatch is **unverified**: it was not
-investigated by this plan.
+**Genet changes.** The custom-leaf slot now uses the same content-box geometry
+as `emit_canvas_external_texture`, excluding borders and padding from image
+placement. `element_geometry` and `ElementGeometry` in
+`components/genet-livery/src/placement.rs` expose that size and inverse
+content-local mapping; ordinary controls have a separate border-local map.
+The caller adds document scroll before querying. Producer content is stationary
+inside its own box; its DOM descendants receive its own scroll, and ancestor
+scroll applies to both. The existing content-box helper is exact for resolved
+pixel padding/borders; its percentage-padding basis remains the element's own
+width, a pre-existing approximation that this slice does not make conformant.
 
-**Done when:** a host-side harness mutates the transforms of every body element
-in a fixture once per frame from Rust and reports a measured per-frame time
-that is not floored by the presentation interval, for at least the 1,000 /
-5,000 / 20,000 element cells of the L0b grid; a replaced element whose paint is
-a host-supplied retained netrender fragment renders through Ortet, clipped to
-its content box and carried by its ancestors' live clip and transform stack,
-with a headless readback proving it composites at the right paint-list
-position; an unchanged such element costs a placement and no re-encode across a
-frame in which its own transform changed; and the reftest guards and the WPT
-census show zero `pass -> anything else`.
+The slot adds no unconditional clip or layer. A producer's
+`DrawExternalTexture` rectangle bounds its content, while ordinary CSS overflow
+and clip paths retain their existing scopes. A plain retained custom leaf must
+remain at layer depth zero, preserving the fast path independently of T4.
+The command-index and resource-key discipline stays in the existing splice.
+
+Livery's hit test (`components/genet-livery/src/layout/hit_testing.rs`) now
+uses the same resolved transform-origin, transform and clip helpers as paint,
+with inverse accumulated placement and the content-box offset. It follows
+paint's negative, normal and nonnegative stacking phases. Flattened stacking
+items now carry intervening ancestor scroll scopes along with overflow clips.
+A pointer in a transformed bounding rectangle is not necessarily inside the element;
+clipped points and singular transforms must not produce a scene pick. This
+is bounded 2D affine geometry, independent of T1's general 3D rendering contexts.
+`StylePlane::used_color` supplies encoded sRGB foreground channels and straight
+alpha after the existing palette and color-scheme resolution; application
+conversion into a linear scene tint remains outside Genet.
+
+**Mere-owned consumer bridge.** Cambium's Rootstock owns the same-device
+producer registration, content generation, physical size, suspension and
+retirement hooks, staging before its ordinary raster pass, and a read-only
+resolved-style query for application hooks. Its existing custom-leaf
+constructor and Sprigging scene buffers alone do not establish the producer's
+native acceptance. This work lands under
+`mere/crates/cambium/cambium-rootstock`, not in Genet or a second compositor.
+
+The host converts an admitted input point through Genet's inverse mapping
+into content-local coordinates. The application then maps it to its render
+pixels/camera and picks stable body/part identities at the relevant scene
+epoch. Cambium retains pointer capture, focus and DOM hit precedence.
+Accessible specimen/part controls reference those same identities; the image
+does not automatically supply an accessibility subtree. Supported style
+properties map explicitly to instance data in the application. Arbitrary
+per-part CSS filters, masks or opacity are not implied by the viewport.
+
+**Mutation measurement.** Keep the host-side Rust mutation instrument and
+real per-frame attribution, with presentation wait separate from the work.
+For the bench, measure its viewport, bounded controls and producer updates;
+do not manufacture a DOM element for every part or face just to reuse L0b.
+The separate 1,000 / 5,000 / 20,000-element mutation sweep remains a general
+engine measurement alongside T2. Its completion does not gate the first bench.
+
+L0b's byte-identical Boa scripted frames and missing wakes remain a finding
+of that fixture and build (`Code/testing/wing/l0b_genet_element_ceiling.md`,
+finding 3). This assessment did not diagnose it or rerun it. Ortet's native
+O5 acceptance is recorded separately; the old fixture is not evidence that
+all current native scripting is unable to present mutation.
+
+**Genet seam done when:**
+
+- A host-owned image in the existing leaf slot has correct content-box size,
+  clipping and painter position among normal DOM siblings, including an
+  overlapping translucent sibling and a half-opacity ancestor.
+- Independent interior and adjacent edge probes cover border/padding,
+  scrolling, rectangular overflow, authored origins and accumulated 2D
+  translation, scale and rotation. The same geometry maps admitted pointer
+  points back to the expected content location and rejects clipped/outside
+  points and singular transforms.
+- The existing native composition receipt and affected input/reftest guards
+  are rerun at recorded source identities; relevant WPT movements are
+  attributed with zero `pass -> anything else`. Prior acceptance is not
+  substituted for this changed-source receipt.
+- The engine-host mutation instrument reports actual work and separate
+  presentation wait for the bounded fixture. The large-element sweep has
+  its own results/status and remains open until measured.
+
+The wing's bench closes only with the Mere producer lifecycle, same-identity
+picking/accessibility and application update-cost receipts specified by its
+canonical prerequisite section. Genet's seam acceptance alone does not close
+that application gate.
+
+### Bounded engine receipt, 2026-09-13
+
+The source is `components/genet-livery` in the commit containing this receipt.
+`tests/host_content_geometry.rs` supplies literal interior and adjacent edge
+coordinates independently of the query implementation, and evaluates emitted
+paint commands through euclid separately from the query's matrix inversion.
+Its ten tests cover pixel border/padding; own and ancestor scroll; nested
+translation, scale, rotation and noncentral origins; padding-edge overflow;
+rejection of a rotated AABB's empty corner; overlay ordering and half-opacity
+scope; singular/nonfinite input; hidden ancestors; palette-resolved color;
+and the plain retained leaf's zero clip/layer depth. These are CPU paint-list
+and input checks, not native pixel readbacks or WPT conformance receipts.
+
+Fresh focused checks, with `CARGO_TARGET_DIR=C:/Users/mark_/Code/targets/genet-bench-b`:
+
+| Command after `cargo test --locked --offline -p genet-livery` | Result |
+|---|---:|
+| `--test host_content_geometry` | 10 passed |
+| `--test interaction` | 25 passed |
+| `--lib paint::` | 23 passed |
+| `--lib hit_test` | 2 passed |
+| `--lib stacking_paint_children` | 1 passed |
+
+The host-content and paint filters were rerun after the final scope correction;
+the other checks cover unchanged input code. `rustfmt` on the touched files and
+`git diff --check -- components/genet-livery` pass. The ignored lockfile SHA256
+is `005313842e13d744c738685595a2cf22007ad9636d23095c4487e783f94f69be`;
+the host-content test executable SHA256 is
+`54f85fb413ee98b802ee90af4374ed7d3287222bba4a2284789d95bf2bdc226e`.
+The existing local `.cargo/config.toml` overrides for netrender, Boa, Vano and
+Piccolo were used unchanged. No workspace/all-target, native Ortet, or WPT
+rerun is claimed here. Native Bench B composition, lifecycle, same-identity
+picking/accessibility, and update-cost acceptance remain with the wing's
+canonical prerequisite section and are pending its integration run.
 
 ---
 
@@ -280,17 +379,19 @@ op, only `PushLayer(SceneLayer { clip, alpha, blend_mode, filters, .. })`.
 The retained path in `netrender/netrender/src/vello_tile_rasterizer/retained.rs`
 appends a registered fragment's lowered scene to the master only while
 `layer_depth == 0`; inside any open layer it takes the warned fallback and
-inlines the fragment un-retained, re-encoding it every frame. T3's replaced
-element is clipped to its content box, and every real document carries
-ancestor clips besides, so through the paint list as lowered today every body
-fragment takes the un-retained path. That is L0a's flat live path, ten to
+inlines the fragment un-retained, re-encoding it every frame. The original
+body-fragment proposal put each fragment inside a content-box clip, with
+ancestor clips besides, so that proposal took the un-retained path through
+normal document composition. That is L0a's flat live path, ten to
 fifteen thousand rectangles under a 16 ms frame, not its fragment path at two
 hundred thousand. L0a did not see this because the probe bypasses Livery and
 places fragments at the scene's top level.
 
-The same fallback is what any per-part `opacity`, `clip-path`, `mask-image`
-or `filter` would hit, since each lowers to a layer, so the wing's earmarked
-tier-1 effects on parts are gated here as well.
+The same fallback applies to planar retained content under `opacity`,
+`clip-path`, `mask-image` or `filter` layers. T3's scene image does not use a
+retained fragment, so this repair is not a prerequisite for its viewport.
+Effects on instances inside that viewport belong to its producer and the
+application's supported style mapping.
 
 **The change.** Netrender's retained path honours a placement inside an open
 layer without re-encoding. The fallback's own comment names the obstacle: the
@@ -302,14 +403,31 @@ the receipt; the code lands in netrender under
 `netrender/netrender-notes/2026-09-04_wgpu_execution_graph_plan.md`, which
 this document does not amend.
 
+**Measured 2026-09-12** by the wing's L0c
+(`Code/testing/wing/l0c_three_paths.md`, finding 3): one clip layer around a
+scene of retained fragments costs 3.3x at 200 bodies (6.8 to 22.6 ms) and
+6.7x at 1000 bodies (13.7 to 91.9 ms, 181k rectangles), with
+`fragment_lower_count` at zero throughout because the fallback never
+retains. The same receipt prices the re-lower a turning part needs at about
+1.1 µs per rectangle, CPU-bound, and records resident geometry with depth at
+2.6 to 3.8 ms in the thousand-body cells. These are the probe's workloads,
+not end-to-end Genet costs or a correctness proof for every case; its
+articulated residual, quantized-yaw comparison and sprite-cache qualification
+remain recorded in the wing's L0c assessment. Nothing ran through Genet.
+
+**Ruled 2026-09-13 (Mark):** T3 embeds the shared depth-owning scene viewport
+described above. Its document composition, host lifecycle and interaction
+still need their own receipts. T4 retains its independent planar-content
+scope; the measured netrender fallback does not make T4 a viewport gate.
+
 **Done when:** a fragment placed inside a rect-clip layer, an alpha layer and
-a filter layer each renders identically to the same fragment placed at depth
-zero in a headless readback; `fragment_lower_count` stays flat across
+a filter layer each matches an independently expanded reference under the
+same layer in a headless readback; `fragment_lower_count` stays flat across
 placement-only frames in all three cases; the layer-scope warning no longer
-fires on T3's fixture; the L0a probe rerun with every body wrapped in a
-content-box clip layer holds its 200,000-rectangle cell within the 2026-09-11
-frame time plus a stated tolerance; and T3's done condition is re-checked
-against that rerun rather than against the unclipped receipt.
+fires on that planar fixture; and the L0a probe rerun with every body wrapped
+in a content-box clip layer holds its 200,000-rectangle cell within the
+2026-09-11 frame time plus a stated tolerance. Record this separately from
+T3's ordinary image-composition receipt.
 
 ---
 
@@ -318,7 +436,8 @@ against that rerun rather than against the unclipped receipt.
 - A perspective-correct rasterization path. Vello is affine; a perspective
   divide that cannot be expressed affinely is reported as a gap.
 - Extending the browsing-context tree, child-document loading, or anything else
-  the iframes plan owns. T3 borrows its splice; it does not amend it.
+  the iframes plan owns. T3 reuses the existing custom-leaf slot, not a new
+  browsing context.
 - Making script-driven mutation present under Ortet. Recorded above as a
   finding for the Ortet plan, not adopted as a lane here.
 - A general layout incrementalization program. T2's target is the **first**
@@ -343,11 +462,39 @@ against that rerun rather than against the unclipped receipt.
 - **2026-09-12** — netrender's retained fragments are not retained inside any
   layer scope, and every genet clip is a layer; fragment placement reads the
   planar six cells of the 4x4. Both from reading `retained.rs`,
-  `paint_list_render/src/emit.rs` and `vello_rasterizer/mod.rs`; neither is
-  measured yet. T4 and the wing's L0c carry them.
+  `paint_list_render/src/emit.rs` and `vello_rasterizer/mod.rs`. Initially
+  unmeasured; L0c subsequently measured the layer fallback as recorded in T4.
+- **2026-09-13** — native canvas composition already uses an ordinary
+  `SceneImage`; T3's original separate fragment-slot proposal duplicates an
+  available seam. At assessment, `paint.rs` recorded the custom-leaf slot at the outer
+  fragment origin, and `layout/hit_testing.rs` had no accumulated transform
+  inversion. Content-box geometry and shared 2D paint/input mapping are the
+  bounded Genet prerequisites. Cambium's producer/style hooks remain Mere's.
+- **2026-09-13** — the bounded T3 implementation closes those engine placement
+  gaps and preserves ancestor scroll when stacking roots flatten out of a
+  non-context scroll container. An unconditional content-box clip would have
+  forced legacy retained leaves into T4's fallback; it is deliberately absent,
+  with a zero-layer regression. The existing percentage-padding approximation
+  remains explicit. Automated evidence is recorded in T3 above.
 
 ## Progress
 
 - **2026-09-12** — founded. No lane started.
 - **2026-09-12** — T4 added by Mark's ruling after the layer-scope finding.
   No lane started.
+- **2026-09-12** — T4's cost measured by the wing's L0c (3.3x at 200
+  bodies, 6.7x at 1000); L0c's verdict, resident geometry with depth as the
+  body unit, is recorded against T3 above for Mark's ruling on what the
+  replaced element carries.
+- **2026-09-13** — Mark ruled: T3 embeds a depth-owning scene viewport,
+  parts as instances inside it, style-to-instance mapping as the bridge to
+  build and measure. Recorded under T3.
+- **2026-09-13** — prerequisite assessment complete; T3 and the dependency
+  summary reconciled with the existing image route and the wing's canonical
+  specimen bench prerequisites. T1, T2 and T4 remain independent work.
+  Documentation only: implementation not started and prior native acceptance
+  not freshly rerun.
+- **2026-09-13** — T3's bounded Genet content-box, shared 2D paint/input and
+  typed used-color implementation passed 61 focused checks. Native Bench B
+  integration, the remaining T3 acceptance and measurement, and independent
+  T1/T2/T4 work remain open. Prior native canvas receipts were not rerun.

@@ -325,6 +325,7 @@ where
         viewport_height,
     );
     Ok(LiveryLayout::new(
+        (viewport_width, viewport_height),
         LayoutResult::new(boxes.into_tree(), fragments),
         None,
         BlockAlgorithmCounts {
@@ -1033,6 +1034,7 @@ where
         viewport_height,
     );
     Ok(LiveryLayout::new(
+        (viewport_width, viewport_height),
         LayoutResult::new(boxes.into_tree(), fragments),
         Some(text_frame),
         BlockAlgorithmCounts {

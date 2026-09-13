@@ -638,14 +638,14 @@
       return n.nodeType === 9;
     }
   });
-  // `baseURI` is the node document's base URL: the document URL, overridden by
+  // `baseURI` is the node document's base URL: its fallback URL, overridden by
   // the first `<base href>` in the tree (HTML "document base URL"). It is the
   // same value for every node in a document, attributes included.
   Object.defineProperty(Node.prototype, 'baseURI', {
     configurable: true, get: function() { return documentBaseURI(); }
   });
   function documentBaseURI() {
-    var url = globalThis.document ? globalThis.document.URL : undefined;
+    var url = globalThis.document ? __locationField('fallbackBaseURL') : undefined;
     if (url === undefined || url === null) return '';
     var bases = globalThis.document.getElementsByTagName('base');
     for (var i = 0; i < bases.length; i++) {

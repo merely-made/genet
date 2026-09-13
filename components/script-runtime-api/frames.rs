@@ -97,6 +97,7 @@ pub(crate) struct PendingNavigation {
     url: String,
     replace: bool,
     referrer_policy: String,
+    about_base_url: Option<String>,
 }
 
 /// A browsing context's stable identity for `WindowProxy` purposes: the id of
@@ -913,7 +914,7 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
             };
             let srcdoc = attr("srcdoc");
             let src = attr("src").unwrap_or_default();
-            let base = h.base_url.clone().unwrap_or_else(|| "about:blank".into());
+            let base = h.fallback_base_url().unwrap_or("about:blank").to_owned();
             let url = if srcdoc.is_some() {
                 "about:srcdoc".into()
             } else if src.is_empty() {
@@ -1025,8 +1026,9 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
             reuse_host: None,
             context,
             key: None,
-            document_url: if lazy || url == "about:srcdoc" || initial_blank {
-                base
+            about_base_url: (lazy || url == "about:srcdoc" || initial_blank).then_some(base),
+            document_url: if lazy {
+                "about:blank".into()
             } else {
                 url.clone()
             },
@@ -1103,6 +1105,7 @@ struct DocumentPlan {
     /// where the new realm's own id becomes the key.
     key: Option<ContextKey>,
     document_url: String,
+    about_base_url: Option<String>,
     source: Option<String>,
     scripts: bool,
     lazy: bool,
@@ -1134,6 +1137,7 @@ fn open_document_realm<E: ScriptEngine>(
         context,
         key,
         document_url,
+        about_base_url,
         source,
         scripts,
         lazy,
@@ -1152,6 +1156,7 @@ fn open_document_realm<E: ScriptEngine>(
             "<!doctype html><html><head></head><body></body></html>",
         ),
         base_url: Some(document_url),
+        about_base_url,
         fetch: seams.fetch,
         script_loader: seams.script_loader,
         websocket: seams.websocket,
@@ -1754,12 +1759,8 @@ fn navigate_context<E: ScriptEngine>(
     };
     let (source_base, target_base) = {
         let a = agent.borrow();
-        let base = |realm: RealmId| {
-            a.hosts
-                .get(&realm)
-                .and_then(|host| host.borrow().base_url.clone())
-        };
-        (base(from), base(target))
+        (a.hosts.get(&from).and_then(|host| host.borrow().fallback_base_url().map(str::to_owned)),
+         a.hosts.get(&target).and_then(|host| host.borrow().base_url.clone()))
     };
     // A realm has a browsing context when it carries a `FrameRecord` (a child)
     // or is the top-level context's own realm. Anything else - a removed
@@ -1775,11 +1776,10 @@ fn navigate_context<E: ScriptEngine>(
             None => return Ok(cx.undefined()),
         }
     };
-    // The URL a navigation resolves against is the document URL `location.href`
-    // reports, which is `about:blank` until the host sets a base - not "no URL
-    // at all". Resolving against nothing turned `location.assign('#x')` on a
-    // base-less document into a navigation to the opaque string `#x`, which is
-    // a cross-document navigation rather than the fragment one HTML performs.
+    // Resolve against the initiator's fallback base, while same-document
+    // comparisons below use the target's visible document URL. A top-level
+    // document without an inherited base still resolves against about:blank,
+    // so a fragment input is not mistaken for a new opaque document URL.
     let url = crate::fetch::resolve_against(
         Some(source_base.as_deref().unwrap_or(NO_DOCUMENT_URL)),
         input,
@@ -1805,7 +1805,7 @@ fn navigate_context<E: ScriptEngine>(
     // the teardown both take. A top-level context has no container, so it takes
     // the route next door, which drains on the bootstrap realm instead.
     let Some(container) = container else {
-        return navigate_top_level::<E>(cx, &agent, target, &url, replace);
+        return navigate_top_level::<E>(cx, &agent, target, &url, replace, source_base);
     };
     let referrer_policy = {
         let a = agent.borrow();
@@ -1822,6 +1822,7 @@ fn navigate_context<E: ScriptEngine>(
             url,
             replace,
             referrer_policy,
+            about_base_url: source_base,
         });
     realm_eval::<E>(
         cx,
@@ -1895,6 +1896,7 @@ fn navigate_top_level<E: ScriptEngine>(
     target: RealmId,
     url: &str,
     replace: bool,
+    about_base_url: Option<String>,
 ) -> Result<E::Value, E::Error> {
     // HTML abandons a navigation whose URL does not parse. A child could still
     // be pointed at an opaque string and reach the loader with it; the top-level
@@ -1937,6 +1939,7 @@ fn navigate_top_level<E: ScriptEngine>(
             url: url.to_owned(),
             replace,
             referrer_policy: String::new(),
+            about_base_url,
         });
     realm_eval::<E>(
         cx,
@@ -2021,6 +2024,7 @@ fn perform_navigation<E: ScriptEngine>(
         url,
         replace,
         referrer_policy,
+        about_base_url,
     } = navigation;
     // A child carries a `FrameRecord`; the top-level context carries none, and
     // that absence is the only thing that distinguishes the two here. Both keep
@@ -2062,7 +2066,9 @@ fn perform_navigation<E: ScriptEngine>(
             host.script_loader.clone(),
         )
     };
-    let source = if url == "about:blank" {
+    let blank = url::Url::parse(&url)
+        .is_ok_and(|url| url.scheme() == "about" && url.path() == "blank");
+    let source = if blank {
         Some(String::new())
     } else {
         loader.as_ref().and_then(|loader| loader.load(&url))
@@ -2072,7 +2078,7 @@ fn perform_navigation<E: ScriptEngine>(
     {
         let mut a = agent.borrow_mut();
         if let Some(tree) = a.frames.tree.as_mut() {
-            let origin = if url == "about:blank" {
+            let origin = if blank {
                 tree.get(context)
                     .map(|context| context.document().origin.clone())
                     .unwrap_or_else(|| tree.mint_opaque_origin())
@@ -2099,6 +2105,9 @@ fn perform_navigation<E: ScriptEngine>(
         reuse_host: top_level.then(|| outgoing.clone()),
         context,
         key: Some(key),
+        about_base_url: url::Url::parse(&url).ok()
+            .filter(|url| url.scheme() == "about" && matches!(url.path(), "blank" | "srcdoc"))
+            .and(about_base_url),
         document_url: url,
         source,
         scripts,

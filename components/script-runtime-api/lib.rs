@@ -248,11 +248,13 @@ pub struct HostState {
     /// the native sink clones it out before calling (no live `HostState` borrow during
     /// the call).
     pub cookies: Option<std::rc::Rc<dyn CookieProvider>>,
-    /// The document base URL, against which relative `fetch()` / `Request` URLs
-    /// resolve (the `__resolve_url` sink reads it). `None` = no base (relative URLs
-    /// stay relative, so a network fetch of one is an error). Set by
+    /// The visible document URL. Resource consumers use `fallback_base_url()`
+    /// so about documents keep their inherited resolution base. Set by
     /// [`Runtime::set_base_url`] for server-mode WPT runs.
     pub base_url: Option<String>,
+    /// Creation-time inherited fallback for about:blank / iframe srcdoc.
+    /// `base_url` remains the visible document URL.
+    pub about_base_url: Option<String>,
     /// `window.localStorage` backing: an ordered key→value store (insertion
     /// order, for `key(n)` / `Object.keys`). The in-memory default (tests / WPT /
     /// no-host runs); a host that sets [`local_storage`](Self::local_storage) backs
@@ -330,6 +332,17 @@ pub struct HostState {
 }
 
 impl HostState {
+    /// The document URL, or its captured about-document fallback base.
+    pub fn fallback_base_url(&self) -> Option<&str> {
+        let is_about = self.base_url.as_deref().and_then(|url| url::Url::parse(url).ok())
+            .is_some_and(|url| url.scheme() == "about" && matches!(url.path(), "blank" | "srcdoc"));
+        if is_about {
+            self.about_base_url.as_deref().or(self.base_url.as_deref())
+        } else {
+            self.base_url.as_deref()
+        }
+    }
+
     /// The tree root (opaque root) of `id`, memoised against the arena's
     /// structural-mutation epoch. A hit is a hash lookup; a miss walks the parent
     /// links once. The whole cache is dropped when the epoch moves, because a

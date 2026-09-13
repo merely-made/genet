@@ -2640,7 +2640,8 @@ landed; their labels now point to the continuation and navigation phases.
 | `execution-timing/112.html` | Parser script scheduling, tracked in the parser/interleaving plan. |
 | `Location.ancestorOrigins` | Snapshot, masking and detached-object lifetime implemented in the [ancestor origins phase](#phase-ancestor-origins-2026-09-13); `no-browsing-context.window.html` now passes 46/46. Full Location conformance remains open. |
 | `window.origin` | Implemented in the [global origin phase](#phase-global-origin-2026-09-13), including inherited/opaque origins and replaceable assignment. The two blocked ancestor-origin WPT files now pass on Boa. |
-| Initial blank/srcdoc document URL versus base URL | Frame creation still uses the inherited base as its document URL, so `location.origin` reports the parent's URL origin. Separate document URL from fallback base without breaking relative resource resolution; `self-origin.sub.html` records the remaining assertions. |
+| Initial blank/srcdoc document URL versus base URL | Separated in the [about-document URL phase](#phase-about-document-urls-2026-09-13). Visible URLs, inherited fallback snapshots, relative scripts/requests and nested navigation have focused proof; child CSS consumers use the shared fallback. |
+| Broader document base behavior | Parent `<base href>` snapshots and frozen-base semantics still need a unified effective-base implementation. A retained document's `baseURI` can encounter a stale DOM after queued teardown; its URL and documentURI remain readable. Entry-realm attribution for borrowed Location methods and lazy-frame activation are separate existing lifecycle gaps. |
 | `document.domain` | Origin/security surface, still outside the landed core checks. |
 | `pageswap`, Navigation API, `beforeunload` cancellation, `window.open`, forms and link-click navigation | Separate navigation surfaces. The landed realm replacement machinery does not implement them. |
 | Scripted accessibility action dispatch and stale-target validation | Scripted document session. The headed G5 receipt proves projection only. |
@@ -2982,3 +2983,59 @@ This does not complete the broader origin/security platform. Blank/srcdoc
 Location URL separation, `document.domain`, JavaScript/blob navigation, data-URL
 worker loading and SharedWorker remain outside the bounded implementation.
 The prior aggregate opaque-root timing qualification remains unchanged.
+
+
+## Phase: about-document URLs (2026-09-13)
+
+Blank and iframe srcdoc documents now expose `about:blank` (including its query
+and fragment) or `about:srcdoc` through Location, `document.URL` and the added
+`document.documentURI` getter. Their URL origin is `null`; the inherited
+security origin remains independently available through `window.origin`.
+
+`HostState.base_url` holds the visible document URL. The separate
+`about_base_url` captures an inherited fallback, and `fallback_base_url()`
+selects it while the document has the corresponding about URL. This follows the
+[HTML distinction between document URL and fallback base](https://html.spec.whatwg.org/multipage/urls-and-fetching.html#document-base-urls).
+Fetch/Request resolution, workers, external scripts, nested frame URLs and child
+CSS providers now use that accessor. `Node.baseURI` starts from the fallback.
+History URL resolution and navigation distinguish the initiator's fallback from
+the target's document URL. A queued about navigation captures its fallback when
+requested; later initiator URL changes do not alter it. Later blank navigations
+also recognize query/fragment variants when creating their empty document.
+
+### Evidence
+
+- **89 focused tests pass** across Boa and Nova: six new about-base tests plus
+  ancestor origins, global origin, initial blank loads, child/top navigation and
+  workers. The new tests cover initial blank/query/fragment, srcdoc and lazy
+  initial documents; immutable inherited fallback after parent URL changes;
+  relative Request URLs, external scripts and nested frames; navigation away;
+  and a queued blank navigation with a changed initiator URL. Retained URL and
+  documentURI remain readable after teardown; baseURI is checked before queued
+  teardown, with its later stale-DOM gap recorded above.
+- Matched WPT runs cover **seven files per engine** with the same manifest,
+  exact policy, renderer and subset. Boa preserves **50** passing named
+  subtests and gains **one**, with zero losses. The matches-about-blank file
+  changes to **1/1**. Detached blank/srcdoc base tests and the two base-element
+  fixtures remain **1/1** each; no-browsing-context remains **46/46**.
+  `self-origin.sub.html` stays **0/11** in disk mode. Its blank/srcdoc checks now
+  pass the URL-origin assertion and stop at unresolved server substitutions;
+  that intermediate progress earns no subtest pass. Nova's outcomes remain
+  unchanged with zero passing subtests; runtime/headed results are its positive
+  evidence.
+- Headed G5 passes **three runs per engine**, digest `0x8df9c9b8815a6e22`,
+  **31 -> 31** live nodes, **4 unpinned / 32 collected**, and normal exit 0.
+  Both failure controls exit 1. Physical size is 1280x1120, CSS viewport 640x560
+  at scale 2. Source identities match before/after and the capture was inspected.
+  Two explanatory comments were corrected after the gates; reversing only those
+  edits reproduces every recorded source hash. Executable statements are unchanged.
+- Artifacts: `C:/Users/mark_/Code/testing/genet/realms-about-base-20260913/`
+  contains exploratory failures, the 89-test receipt, frozen WPT runners, named
+  comparisons and source/lock provenance. The pre runner is reused from the
+  preceding global-origin slice. Headed evidence is in
+  `C:/Users/mark_/Code/testing/genet/ortet-g5-realms-about-base-20260913/`.
+  Dependencies, Cargo.lock and WPT expectations are unchanged.
+
+This is the document-URL/fallback separation, not complete HTML base-element or
+navigation conformance. The broader base/lifecycle row above remains open,
+alongside the existing canvas, parser, navigation and timing qualifications.

@@ -1,6 +1,13 @@
 # Realms: one agent, one realm per browsing context
 
-**Status (2026-09-13):** Three residuals are closed: classic external scripts
+**Status (2026-09-13):** Canonical wrapper identity after source-realm disposal
+is closed for ordinary nodes, nested open/closed shadow trees and template
+contents. All 657 engine/runtime tests pass. Three headed runs per engine
+preserve the previous digest and node census, prove detached collection, and
+exit normally. See [Wrapper identity after disposal](#phase-wrapper-identity-after-disposal-2026-09-13)
+for the matched WPT results and remaining boundaries.
+
+**Earlier residual closure (2026-09-13):** Three residuals are closed: classic external scripts
 after navigation, discarded `Location` URL behavior, and retired-host resource
 teardown including Ortet's Boa exit. The strengthened headed G5 gate passes on
 both engines. The current inventory and done-conditions are in
@@ -2627,7 +2634,7 @@ landed; their labels now point to the continuation and navigation phases.
 
 | Item | Owner and next proof |
 |---|---|
-| Reflector identity across source-realm discard and another adoption | Runtime/engine wrapper caches. Preserve ordinary, shadow, closed-root and template identities across both hops with GC between them, then prove final collection. |
+| Reflector identity across source-realm discard and another adoption | **Closed in the [wrapper identity phase](#phase-wrapper-identity-after-disposal-2026-09-13).** Both-engine regressions and strengthened headed acceptance preserve ordinary, shadow, closed-root and template identities, with GC between hops and final collection. |
 | Canvas with a live drawing context | Canvas/WebGL host producer ownership. Move context storage and the producer together, preserving context identity and pixels, before lifting the refusal. |
 | Initial `about:blank` load ordering | Frame insertion/parser integration. Recover the named synchronous load expectation without running unload in removing steps. |
 | `execution-timing/112.html` | Parser script scheduling, tracked in the parser/interleaving plan. |
@@ -2715,3 +2722,75 @@ Pre runner SHA-256:
 Post runner:
 `e6b7e18f477bcf94ac71de2955a41bb8f77cb6a2d586f3d7daa66f9c44631e44`.
 The locked graph is unchanged; no fork or renderer dependency was repinned.
+
+## Phase: wrapper identity after disposal, 2026-09-13
+
+**Status:** implemented and verified. Base source is
+`b15ced95ff23e925d946cad804d3e1ca187f5a4b`.
+
+### Findings
+
+- The old fallback from a removed creation realm to physical ownership could
+  mint a second reflector on the first lookup, on both engines. The first eight
+  removal/navigation regressions all fail against unchanged production code.
+- `CallCx::relocate_reflectors` now moves selected weak cache entries and their
+  existing roots between registered slots. It refuses a destination collision
+  before changing the batch; native creation identity and prototypes stay put.
+  Runtime teardown performs this move after unload handlers, before removing
+  registrations, for pins physically held in surviving stores. A per-node
+  custody record handles another disposal after a subsequent adoption and is
+  retired with the reflector's death report.
+- Canonical wrappers, detached groups and recorded owner documents now use
+  agent-shared weak maps. Native reflector objects are the cache keys; equal
+  raw IDs in different engine realms remain separate objects. Discarded realms
+  leave the registration tables as before, without a permanent strong root.
+- The stronger single-descendant test found a separate template gap: native
+  contents survived through their host, but their wrappers could die. A directed
+  weak-keyed template-to-contents edge now preserves that identity. Contents
+  retain no reverse edge to the template, as the negative collection test proves.
+- The first headed run completed with the unchanged digest and 31 -> 31 nodes,
+  but reported only one unpin (29 collected nodes), below the existing receipt's
+  two-unpin requirement. That counter cannot stand in for wrapper identity:
+  preserved caches no longer produce the same discarded/reminted entries. The
+  fixture now explicitly retains and releases a detached adopted component in
+  the surviving parent, so collection is tested independently of document
+  destruction. The receipt's collection thresholds remain unchanged.
+
+### Done-conditions and progress
+
+- **Passed:** ten runtime regressions across Boa/Nova: connected/detached trees,
+  removal/navigation, repeated adoption and two cache-owner disposals; ordinary
+  nodes, nested open/closed roots and template contents; identity, prototypes,
+  owner documents, expandos and listeners; one retained descendant; final native
+  collection; and directed template retention. Two engine-contract tests also
+  pass, covering collision refusal, intact roots, post-disposal lookup and death.
+- **Passed:** all 657 tests in 44 engine/runtime test binaries, with zero failed
+  or ignored. This includes both GC soak tests and existing cross-realm,
+  native-boundary, snapshot and collection tests.
+- **Passed:** matched default-feature WPT runners, using the same locked graph
+  and unoptimized profile, cover 43 files per engine (86 file/engine cases).
+  Every file outcome and named subtest status is unchanged; Boa preserves all
+  2,112 passing subtests, including 522 template passes. Nova yields no passing
+  subtests in either control; its unchanged no-results/skipped cases earn no
+  conformance credit. The runtime and headed regressions are its positive proof.
+- **Passed:** three headed runs per engine, each at CSS 640x560, physical
+  1280x1120, scale 2. All six retain digest `0x8df9c9b8815a6e22`, report live
+  nodes 31 -> 31 and **4 unpinned / 32 collected**, and exit normally with code
+  0. Both failure controls exit with code 1. Source identities match before and
+  after, and the capture was visually inspected. The fixture asserts identity
+  immediately after disposal and on the return hop, and releases an explicitly
+  retained detached component before top-level navigation.
+- Artifacts: `C:/Users/mark_/Code/testing/genet/realms-identity-20260913/`, with
+  the original source archive and lockfile, failing controls, suite logs, exact
+  WPT maps and comparisons. Headed results are in
+  `C:/Users/mark_/Code/testing/genet/ortet-g5-realms-identity-20260913-final/`;
+  the initial accounting failure remains in the sibling directory without
+  `-final`. No dependency or WPT expectation was repinned.
+
+WPT runner SHA-256, pre:
+`8f43817400d5324574660dc7ae3293b1e2586ba8e56debbc76570d2fd464cb34`;
+post: `be73c68d719225bc8fa8dbdf65757b5cec5708217be0f63eadd0cc6496ad9964`.
+
+This slice does not close live canvas adoption, initial `about:blank` load
+ordering, parser scheduling, or the other navigation surfaces in the residual
+inventory above.

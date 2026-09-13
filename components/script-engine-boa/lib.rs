@@ -476,6 +476,54 @@ impl CallCx for BoaCallCx<'_> {
         })
     }
 
+    fn relocate_reflectors(
+        &mut self,
+        source: RealmId,
+        destination: RealmId,
+        data: &[ReflectorData],
+    ) -> Result<(), RealmError> {
+        let registry = &self
+            .ctx
+            .get_data::<HostCell>()
+            .ok_or(RealmError::Refused("host cell missing"))?
+            .registry;
+        let realms = registry.realms.borrow();
+        let source = realms.get(&source).ok_or(RealmError::NoSuchRealm(source))?;
+        let destination = realms
+            .get(&destination)
+            .ok_or(RealmError::NoSuchRealm(destination))?;
+        let source_host = source.host_defined();
+        let destination_host = destination.host_defined();
+        let source = source_host
+            .get::<RealmSlot>()
+            .ok_or(RealmError::Refused("realm host slot missing"))?;
+        let destination = destination_host
+            .get::<RealmSlot>()
+            .ok_or(RealmError::Refused("realm host slot missing"))?;
+        if source.id == destination.id {
+            return Ok(());
+        }
+        let mut from_cache = source.reflectors.borrow_mut();
+        let mut to_cache = destination.reflectors.borrow_mut();
+        let mut from_roots = source.roots.borrow_mut();
+        let mut to_roots = destination.roots.borrow_mut();
+        if data
+            .iter()
+            .any(|raw| to_cache.contains_key(raw) || to_roots.contains_key(raw))
+        {
+            return Err(RealmError::Refused("reflector cache destination collision"));
+        }
+        for raw in data {
+            if let Some(value) = from_cache.remove(raw) {
+                to_cache.insert(*raw, value);
+            }
+            if let Some(value) = from_roots.remove(raw) {
+                to_roots.insert(*raw, value);
+            }
+        }
+        Ok(())
+    }
+
     fn root_reflector_in_realm(
         &mut self,
         realm: RealmId,

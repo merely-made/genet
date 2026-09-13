@@ -582,6 +582,46 @@ mod native {
             ))
         }
 
+        fn relocate_reflectors(
+            &mut self,
+            source: RealmId,
+            destination: RealmId,
+            data: &[ReflectorData],
+        ) -> Result<(), RealmError> {
+            let source_host = self.reflector_host(source)?;
+            let destination_host = self.reflector_host(destination)?;
+            if source == destination {
+                return Ok(());
+            }
+            let source = source_host
+                .downcast_ref::<NovaHostSlot>()
+                .ok_or(RealmError::Refused("realm host slot missing"))?;
+            let destination = destination_host
+                .downcast_ref::<NovaHostSlot>()
+                .ok_or(RealmError::Refused("realm host slot missing"))?;
+            let mut from_cache = source.reflectors.borrow_mut();
+            let mut to_cache = destination.reflectors.borrow_mut();
+            let mut from_roots = source.roots.borrow_mut();
+            let mut to_roots = destination.roots.borrow_mut();
+            if data
+                .iter()
+                .any(|raw| to_cache.contains_key(raw) || to_roots.contains_key(raw))
+            {
+                return Err(RealmError::Refused("reflector cache destination collision"));
+            }
+            // Globals move intact: neither release their roots nor create new
+            // WeakRefs. The embedder object's owner remains its creation realm.
+            for raw in data {
+                if let Some(value) = from_cache.remove(raw) {
+                    to_cache.insert(*raw, value);
+                }
+                if let Some(value) = from_roots.remove(raw) {
+                    to_roots.insert(*raw, value);
+                }
+            }
+            Ok(())
+        }
+
         fn root_reflector_in_realm(
             &mut self,
             realm: RealmId,

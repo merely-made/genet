@@ -815,8 +815,9 @@ pub trait CallCx {
     /// lives in the same host-defined slot the engine already owns.
     fn reflector_for(&mut self, data: ReflectorData) -> Result<Self::Value, Self::Error>;
 
-    /// Fetch the canonical reflector in its creation realm without changing the
-    /// active callback realm. Storage ownership may have moved independently.
+    /// Fetch the canonical reflector in its registered cache realm without
+    /// changing the active callback realm. Storage ownership and object creation
+    /// realm may differ from cache custody after an explicit relocation.
     fn reflector_for_in_realm(
         &mut self,
         realm: RealmId,
@@ -827,6 +828,20 @@ pub trait CallCx {
         }
         self.reflector_for(data)
             .map_err(|_| RealmError::Refused("reflector creation failed"))
+    }
+
+    /// Move selected canonical cache entries and their existing roots to another
+    /// registered realm. This changes cache custody, never the object's creation
+    /// realm, native brand or prototype. Missing source entries are harmless;
+    /// any destination collision must refuse the whole batch before mutation.
+    /// No JS executes and no new reflector is minted during the move.
+    fn relocate_reflectors(
+        &mut self,
+        _source: RealmId,
+        _destination: RealmId,
+        _data: &[ReflectorData],
+    ) -> Result<(), RealmError> {
+        Err(RealmError::Unsupported)
     }
 
     /// Root the creation realm's canonical object, even from another callback realm.

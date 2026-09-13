@@ -45,14 +45,17 @@
   // weak reflector cache then reports the death, and the node is reaped at the next
   // GC tick. (Found by the gc-arena soak: a strong Map peaked at ~12k live nodes
   // under churn; weak-keyed, it stays bounded.)
-  var wrappers = new WeakMap();
+  // Shared by the agent so removing a realm's host registration cannot sever
+  // the ephemeron linking a still-reachable reflector to its canonical wrapper.
+  // Keys are native objects, never raw IDs; prototypes are chosen only at mint.
+  var wrappers = globalThis.__agentTimers.domWrappers;
   // Agent-private identity branding survives public property/prototype changes.
   var domNodes = globalThis.__agentTimers.domNodes;
   var addDOMNode = WeakSet.prototype.add, applyDOMBrand = Reflect.apply;
 
   // Opaque-root groups for **detached** subtrees (the reflector-identity policy).
   //
-  // WebIDL wants exactly one JS object per platform object per realm, so a
+  // A platform object has one canonical JS wrapper with a creation realm, so a
   // reachable node's wrapper identity has to survive a collection. A connected
   // node is handled by the host: it takes a strong engine root on the reflector,
   // because "connected" is decided by the arena and needs no liveness question.
@@ -69,7 +72,10 @@
   // opaque-root rule, resolved by the GC rather than approximated by the host.
   // The host rebuilds the groups at each GC tick (the private `gcPolicy` hook), sending only what
   // changed since the last one.
-  var wrapperGroups = new WeakMap();
+  var wrapperGroups = globalThis.__agentTimers.domWrapperGroups;
+  // A template retains its contents, but contents do not retain the template.
+  // Keep this directed ephemeron separate from the bidirectional tree groups.
+  var templateContentHolds = globalThis.__agentTimers.domTemplateContents;
 
   // Name validation (DOM "validate" / XML Name + QName productions), used by
   // createElement(NS) / setAttribute(NS) to throw the spec exceptions. The ranges
@@ -238,7 +244,7 @@
   };
   var upgradedCustomElements = new WeakMap();
   var connectedCustomElements = new WeakMap();
-  var ownerDocuments = new WeakMap();
+  var ownerDocuments = globalThis.__agentTimers.domOwners;
 
 
   var htmlElementConstructionStack = [];
@@ -393,12 +399,8 @@
   function ownerDocumentOf(node) {
     if (!node) return null;
     if (node.nodeType === 9) return null;
-    // Detached canonical wrappers retain their document metadata in their
-    // creation realm. A borrowed method must query that private metadata,
-    // rather than fall back to the borrowed method's own document.
-    if (domAgentDispatch && !wrappers.has(node.__ref)) {
-      return domAgentDispatch('ownerDocument', node.__ref);
-    }
+    // Recorded ownership is agent-shared, including for borrowed methods and
+    // wrappers whose creation context has since been discarded.
     var root = rootDocument(node);
     if (root) return root;
     // Detached: the node's own recorded owner, else its tree root's — which is
@@ -434,7 +436,9 @@
   // (which would record an ownerDocument we are about to invalidate).
   function templateContentsOf(node) {
     if (!node || node.nodeType !== 1 || node.localName !== 'template') return null;
-    return wrapNode(__templateContent(node.__ref)) || null;
+    var contents = wrapNode(__templateContent(node.__ref)) || null;
+    if (contents) templateContentHolds.set(node, contents);
+    return contents;
   }
   function snapshotTree(root, out) {
     out.push(root);
@@ -450,9 +454,8 @@
   // after the nodes have moved, so asking the fragment for its owner resolves in
   // the arena that now holds it. Nested templates recursively, and templates
   // inside a shadow tree that travelled with its host.
-  // Every same-origin realm holding a wrapper for one of these fragments has
-  // its own `ownerDocuments` map, and the move may have run in any of them, so
-  // the re-homing fans out the same way the ownerDocument snapshot does.
+  // The shared weak ownership map lets a surviving realm update metadata even
+  // when a wrapper's original realm no longer participates in the dispatch.
   function rehomeTemplateOwners(root) {
     if (domAgentDispatch) return domAgentDispatch('templateOwners', root);
     return rehomeTemplateOwnersLocal(root);
@@ -6147,7 +6150,7 @@
     Object.defineProperty(Template.prototype, 'content', {
       configurable: true,
       get: function() {
-        var fragment = wrapNode(__templateContent(this.__ref));
+        var fragment = templateContentsOf(this);
         // Record the inert owner once: `content.ownerDocument` is the shared
         // template-contents document, not the page's, and the fragment is
         // detached so no tree walk could work that out.
@@ -6399,7 +6402,6 @@
   domRealmHooks = function(op, a, b, c, d) {
       switch (op) {
         case 'wrap': return wrapNodeLocal(a);
-        case 'ownerDocument': return ownerDocumentOf(wrapNodeLocal(a));
         case 'owners': return setOwnerDocumentSnapshotLocal(a, b);
         case 'adopted': return enqueueAdoptedTreeLocal(a, b, c);
         case 'templateOwners': return rehomeTemplateOwnersLocal(a);

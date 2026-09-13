@@ -1178,7 +1178,7 @@ pub(crate) fn root_connected_subtree<E: ScriptEngine>(cx: &mut E::CallCx<'_>, no
         out
     };
     for d in ids {
-        if let Some(realm) = adoption::creation_realm(&start, NodeId::from_raw(d)) {
+        if let Some(realm) = adoption::reflector_realm(&start, NodeId::from_raw(d)) {
             let _ = cx.root_reflector_in_realm(realm, d);
         }
     }
@@ -1192,7 +1192,7 @@ fn reflect_pinned<E: ScriptEngine>(cx: &mut E::CallCx<'_>, raw: u64) -> Result<E
     let Some((_, owner)) = adoption::owner_host(&start, id) else {
         return Ok(cx.make_null());
     };
-    let realm = adoption::creation_realm(&start, id).unwrap_or_else(|| cx.current_realm());
+    let realm = adoption::reflector_realm(&start, id).unwrap_or_else(|| cx.current_realm());
     let connected = owner.borrow_mut().is_connected_node(id);
     let value = cx
         .reflector_for_in_realm(realm, raw)

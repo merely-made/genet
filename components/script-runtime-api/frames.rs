@@ -636,6 +636,8 @@ fn run_pending_teardown<E: ScriptEngine>(
                 "window.dispatchEvent(new Event('pagehide'));                 window.dispatchEvent(new Event('unload'))",
             );
         }
+        let retiring: Vec<_> = group.iter().map(|(realm, _)| *realm).collect();
+        crate::dom::adoption::preserve_reflectors::<E>(cx, agent, &retiring)?;
         for (realm, context) in group.iter().rev() {
             // A parent may still hold this global. Leave it reporting what HTML
             // says a discarded context reports, before the realm goes.
@@ -1831,7 +1833,7 @@ fn unload_for_navigation<E: ScriptEngine>(
     cx: &mut E::CallCx<'_>,
     agent: &Rc<RefCell<crate::AgentState>>,
     root: RealmId,
-) -> Vec<RealmId> {
+) -> Result<Vec<RealmId>, E::Error> {
     let group = agent.borrow().frames.realm_tree(root);
     for realm in &group {
         let _ = realm_eval::<E>(
@@ -1840,6 +1842,7 @@ fn unload_for_navigation<E: ScriptEngine>(
             "window.dispatchEvent(new Event('pagehide'));             window.dispatchEvent(new Event('unload'))",
         );
     }
+    crate::dom::adoption::preserve_reflectors::<E>(cx, agent, &group)?;
     let cancel = agent.borrow().cancel_realm_tasks.clone();
     for realm in group.iter().rev() {
         if *realm != root {
@@ -1875,7 +1878,7 @@ fn unload_for_navigation<E: ScriptEngine>(
             }
         }
     }
-    group
+    Ok(group)
 }
 
 /// Perform one queued navigation: unload, new realm, new `Document`, proxy
@@ -1961,7 +1964,7 @@ fn perform_navigation<E: ScriptEngine>(
             }
         }
     }
-    let discard = unload_for_navigation::<E>(cx, agent, target);
+    let discard = unload_for_navigation::<E>(cx, agent, target)?;
     let plan = DocumentPlan {
         container,
         // The top-level document's `HostState` cell is the one `Runtime::host()`

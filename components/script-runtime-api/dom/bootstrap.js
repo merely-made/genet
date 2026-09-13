@@ -6263,15 +6263,20 @@
   // native cannot re-enter the engine.
   function runStagedScripts() {
     var guard = 0;
-    for (;;) {
-      var source = __nextPreparedScript();
-      if (source === null || source === undefined) return;
-      if (++guard > 10000) return;
-      if (source) {
-        try { indirectEval(source); } catch (e) { reportScriptError(e); }
+    var previous = __currentScript();
+    try {
+      for (;;) {
+        var source = __nextPreparedScript();
+        if (source === null || source === undefined) return;
+        if (++guard > 10000) return;
+        if (source) {
+          try { indirectEval(source); } catch (e) { reportScriptError(e); }
+        }
+        __prepareScriptEnd(previous);
+        __refreshNamedProperties();
       }
-      __prepareScriptEnd();
-      __refreshNamedProperties();
+    } finally {
+      __prepareScriptEnd(previous);
     }
   }
   function prepareScriptsAfterInsertion(parent, roots) {
@@ -6294,13 +6299,18 @@
   function pumpOpenStream(doc) {
     if (typeof __docPumpStream !== 'function') return;
     var guard = 0;
-    for (;;) {
-      var source = __docPumpStream(doc);
-      if (source === null || source === undefined) return;
-      if (++guard > 10000) return;
-      if (source) {
-        try { indirectEval(source); } catch (e) { reportScriptError(e); }
+    var previous = __currentScript();
+    try {
+      for (;;) {
+        var source = __docPumpStream(doc);
+        if (source === null || source === undefined) return;
+        if (++guard > 10000) return;
+        if (source) {
+          try { indirectEval(source); } catch (e) { reportScriptError(e); }
+        }
       }
+    } finally {
+      __prepareScriptEnd(previous);
     }
   }
   function reportScriptError(e) {

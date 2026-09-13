@@ -235,13 +235,13 @@ fn open_stream_pump(host: &mut HostState) -> Option<String> {
         ParsePause::Script(node) => {
             let inert = script_started(host, node);
             clear_parser_inserted(host, node);
-            mark_script_started(host, node);
-            host.markup.current_script = Some(node);
-            Some(if inert {
+            let source = if inert {
                 String::new()
             } else {
-                script_source(&host.dom, node)
-            })
+                prepare_script(host, node).unwrap_or_default()
+            };
+            host.markup.current_script = Some(node);
+            Some(source)
         },
         ParsePause::Created | ParsePause::Done => {
             host.markup.current_script = None;
@@ -369,9 +369,10 @@ fn in_active_document(dom: &ScriptedDom, node: NodeId) -> bool {
     dom.tree_root(node) == Some(dom.document())
 }
 
-/// HTML's "prepare the script element" for a `<script>` the parser did not
-/// insert: one that just became connected, had a node inserted into it while
-/// connected, or had its `src` set while connected.
+/// HTML's "prepare the script element" for a classic script at a stream-parser
+/// pause, or one that just became connected, had a node inserted into it while
+/// connected, or had its `src` set while connected. The stream caller clears
+/// the parser-inserted flag before entering this common preparation path.
 ///
 /// Returns the classic source to evaluate, or `None` when the element must not
 /// run — and note the ordering that makes step 10 load-bearing: the flag is set
@@ -396,7 +397,14 @@ pub(crate) fn prepare_script(host: &mut HostState, node: NodeId) -> Option<Strin
             Some(src) => {
                 let url = crate::fetch::resolve_against(host.base_url.as_deref(), &src);
                 let loader = host.script_loader.clone()?;
-                loader.load(&url)
+                let namespace = Namespace::from("");
+                let charset = host
+                    .dom
+                    .attribute(node, &namespace, &LocalName::from("charset"));
+                let integrity = host
+                    .dom
+                    .attribute(node, &namespace, &LocalName::from("integrity"));
+                loader.load_classic_script(&url, charset, integrity)
             },
         },
     }
@@ -434,25 +442,6 @@ fn write_target(host: &HostState, node: Option<NodeId>) -> (NodeId, bool) {
         Some(node) if node != active && host.dom.is_live(node) => (node, false),
         _ => (active, true),
     }
-}
-
-/// The source a written `<script>` runs, per HTML's "prepare the script
-/// element": its own text for a classic inline script, nothing for a module, a
-/// data block, or an external one (the stream has no resource route).
-fn script_source(dom: &ScriptedDom, node: NodeId) -> String {
-    let html = Namespace::from("");
-    let attr = |name: &str| dom.attribute(node, &html, &LocalName::from(name));
-    if attr("src").is_some_and(|s| !s.is_empty()) {
-        return String::new();
-    }
-    if crate::parse::classify(attr("type"), attr("language"))
-        != Some(crate::parse::ScriptKind::Classic)
-    {
-        return String::new();
-    }
-    dom.dom_children(node)
-        .filter_map(|c| dom.text(c))
-        .collect::<String>()
 }
 
 fn with_host<E: ScriptEngine, R>(
@@ -724,12 +713,14 @@ impl<E: ScriptEngine> NativeFn<E> for CopyScriptStarted {
     }
 }
 
-/// `__prepareScriptEnd()` — clear `document.currentScript` after a prepared
-/// script has run.
+/// `__prepareScriptEnd(previous)` restores the enclosing classic script after
+/// a nested write/insertion; an omitted argument clears it.
 pub(crate) struct PrepareScriptEnd;
 impl<E: ScriptEngine> NativeFn<E> for PrepareScriptEnd {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
-        with_host::<E, _>(cx, |host| host.markup.current_script = None);
+        let previous = cx.arg(0);
+        let previous = cx.owned_node(&previous)?.map(|node| node.id());
+        with_host::<E, _>(cx, |host| host.markup.current_script = previous);
         cx.make_string("")
     }
 }
@@ -745,7 +736,7 @@ pub(crate) fn install<E: ScriptEngine>(
     engine.set_function::<DocClose>("__docClose", 1)?;
     engine.set_function::<StageScripts>("__stageScripts", 2)?;
     engine.set_function::<NextPreparedScript>("__nextPreparedScript", 0)?;
-    engine.set_function::<PrepareScriptEnd>("__prepareScriptEnd", 0)?;
+    engine.set_function::<PrepareScriptEnd>("__prepareScriptEnd", 1)?;
     engine.set_function::<CopyScriptStarted>("__copyScriptStarted", 2)?;
     Ok(())
 }

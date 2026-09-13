@@ -67,7 +67,7 @@ older `docs/` corpus without changing their location or governance.
 | [Parser/script interleaving](2026-09-08_parser_script_interleaving_plan.md) | HTML's parsing model with scripts run at the point the tree builder pops them: an html5ever `TreeSink` over the live arena, `document.write` at the tokenizer's insertion point, `currentScript`, the `readyState` transitions with `DOMContentLoaded` and `load`, parse-time custom-element upgrade, and declarative shadow roots consulting the registry. Landed 2026-09-08 in the engine (part one: +68 subtest passes over eight directories, 30 files `fail -> pass`, zero pass-to-fail, no repins). **Part two, 2026-09-08**, routed the WPT runner and `LiveryScriptedDocument` through the same parse and closed the named residuals: `testharness.js` as a prelude and one `load` dispatch, a two-phase `LiveryCssom` that resolves author sheets from the arena as the parser fills it, `document.write` tokenized inside the call so its markup is visible to the writing script and a written `<script>` runs, the open stream appending through one live tokenizer, upgrades at element creation, foreign-namespace scripts, and scripts in template contents left inert. +181 subtest passes over ten directories and +439 across the 79-directory disk census (excluding two identified timing artifacts), 19 census `pass -> fail` all attributed, six baselines repinned forward-only, all fourteen at `unexpected=0`, Ortet digest unchanged. **Both Shadow DOM declarative regressions now recover in WPT** — the open gate is closed. |
 
 | [iframes and nested browsing contexts](2026-09-08_iframes_plan.md) | HTML's browsing-context tree in `genet-documents` (parent, children, top, each context's active document, origin, sandbox flags and its own session history), loading through the parent's own resource route (`src`, `srcdoc`, `about:blank`, the initial-`about:blank` rules, `sandbox` / `allow` / `loading`), and the child's scene composited into the parent's replaced box as a **paint-list splice** rather than a producer texture, clipped to the content box, with hit testing descending into it. Landed 2026-09-08: +23 subtest passes over eight directories, two files `fail -> pass`, zero pass-to-fail, three baselines repinned forward with six named entries, all fourteen at `unexpected=0` and both reftest guards at `unexpected=0`. Ortet composites child frames through the script-free Livery route with no Ortet code change; the article digest is unchanged at `0x6377ba8a6bf4dbc9` and the new `frames.html` receipt is `0x97bdd4bd9e03ec02`. The earlier runtime/`WindowProxy` decision is superseded by the [Realms plan](2026-09-08_realms_plan.md): one `Runtime` per agent, one realm per browsing context. Continuation acceptance remains open. |
-| [Realms](2026-09-08_realms_plan.md) | One `Runtime` per agent, one realm per browsing context. `aa12e16eb7c` commits the phase-one engine contract and in-progress per-realm surface/frame integration; later corrections remain in the working tree. Historical phase-one automated tests, controlled WPT comparison and native Ortet digests remain scoped to their recorded source. Fresh continuation automated and native headed acceptance remains open; no browser-hosted realm receipt is recorded. See the plan's current gates for measured partial results and remaining checks. |
+| [Realms](2026-09-08_realms_plan.md) | One `Runtime` per agent, one realm per browsing context, the `WindowProxy` as each context's global this. Landed on main through 11b61a0edab: the realm contract on both engines, per-realm host surfaces, same-origin identity and cross-origin `SecurityError`, child and top-level navigation with session history, live iframe relocation and teardown, and cross-arena adoption of ordinary, shadow and template subtrees with the broad DOM guard green. Headed G5 accepted 2026-09-12 on Ortet's scripted route, both engines. Open: return-hop reflector identity, external scripts of an in-session top-level navigation, canvas with a live drawing context. |
 The [Buckram master](../docs/2026-07-26_buckram_css_layout_engine_plan.md)
 defines ownership and the [lane program](../docs/2026-08-21_buckram_livery_lane_program_plan.md)
 assigns residuals. The linked execution plans carry their current gate; a
@@ -1020,3 +1020,50 @@ lane's own base commit: `article` reads `0x86e02f7fcd1c5b04` there too, so the
 move off `0x6377ba8a6bf4dbc9` belongs to the Livery compositing commits, and
 `frames` is bimodal at this base in the same proportion before and after, so no
 single digest can honestly be recorded for it.
+
+### Headed G5 acceptance (2026-09-12)
+
+The [headed G5 acceptance phase](2026-09-08_realms_plan.md#phase-headed-g5-acceptance-2026-09-12)
+closes the open item every realms phase since the adoption continuation carried
+forward. The host was chosen by fact, not built: Ortet on `main` already has a
+scripted route (`--engine boa` / `--engine nova` select the scripted session
+engine), so a real winit window drives the frame loop while the page drives
+itself. The fixture (`ports/ortet/tests/native/realms/`) is a parent document and
+a same-origin child iframe served over one loopback http origin — it **cannot**
+be served from the filesystem, because this engine gives every `file:` URL an
+opaque origin and an opaque origin is same-origin with nothing, so a `file:`
+parent cannot reach `frame.contentDocument` at all. One native click then runs
+the whole sequence: a subtree carrying an open shadow root, a nested closed root
+and a parser-created template is adopted from the child into the parent and
+back, the parent's own link goes the other way, the child is navigated twice and
+the top level once. Three things the script cannot see are read back and agree,
+on **both engines**: the presented frame (`0x8df9c9b8815a6e22`, three
+consecutive matching captures each, at a stated 640x560 CSS viewport on a 2.0
+display), the accessibility projection the host published (the adopted link that
+ends up in the parent as a `Link` with a `Click` action, carrying the *child's*
+arena tag under a parent-arena root; the link adopted into the child and
+navigated away absent from that same revision; a post-navigation revision under
+a new root carrying the completion heading), and the live-node census of the top
+arena (`31` before, `31` after, across the top-level navigation), with
+`unpinned=14 collected=29` over the run. Two seams were added to make that
+readable — `ortet --a11y-dump`, a receipt file beside `--artifact`, and a
+`live nodes first=/last=` line — plus the scripted session's first accessibility
+projection, which had been `None` for every scripted document until now.
+**One defect found and fixed:** a node could not outlive the realm it was born
+in — `creation_realm` preferred the recorded birth realm unconditionally, so
+re-reflecting a node after the child it came from had been navigated away died
+with `NoSuchRealm`; the birth realm is now used only while it is live, and the
+node's current owner answers otherwise, pinned by a regression with a verified
+positive control on both engines. **Four residuals are named rather than
+papered over:** return-hop reflector identity (the tree returns correctly, the
+`ShadowRoot` wrapper and re-reflected nodes do not keep object identity); an
+external script of a document reached by an in-session top-level navigation is
+never fetched, though its stylesheet and child frame are; `ortet.exe` does not
+always terminate after its event loop exits, on Boa but not Nova; and the
+compositing lane's digest instability, which this lane characterizes as
+**broader and size-dependent** — `article.html` is stable at 640x400 physical
+(`0xbebd4a74f765263d`, four for four) and unstable at 1280x1200, which points at
+glyph rasterization rather than frame timing and means the `article` digests
+recorded by the two previous phases should be read as size-qualified. This
+lane's own fixture is drawn entirely at 20 px and above with flat fills, so its
+digest does not inherit that instability.

@@ -74,6 +74,12 @@ pub struct Outcome {
     /// correlate it with the captured frame instead of approximating
     /// collection from script-visible behavior alone.
     pub collection_stats: (usize, usize),
+    /// Live nodes in the **top** document's arena at the first laid-out frame
+    /// and at the last frame presented. `None` for a lane with no scripted
+    /// arena to count. A sequence that adopts a subtree out and back, and then
+    /// navigates the top level, must not end above where it began: a leaked
+    /// outgoing document would leave the last count higher.
+    pub live_nodes: (Option<usize>, Option<usize>),
 }
 
 /// Build facts that a host receipt can report without guessing a source
@@ -295,6 +301,13 @@ struct Ortet {
     pending_actions: Vec<Action>,
     start: Instant,
     capture: Option<(std::path::PathBuf, u64)>,
+    /// Top-document arena census at the first laid-out frame and at the most
+    /// recent one. Sampled through the session's own observation downcast.
+    live_nodes_first: Option<usize>,
+    live_nodes_last: Option<usize>,
+    /// The last projection revision appended to `--a11y-dump`, so a steady
+    /// document does not write the same block on every frame.
+    a11y_dumped_revision: Option<u64>,
     wake_deadline: Option<Instant>,
     receipt_deadline: Option<Instant>,
     failure: Option<String>,
@@ -341,6 +354,9 @@ impl Ortet {
             pointer_captured: false,
             start,
             capture: None,
+            live_nodes_first: None,
+            live_nodes_last: None,
+            a11y_dumped_revision: None,
             wake_deadline: None,
             receipt_deadline,
             matched_heading: None,
@@ -364,6 +380,7 @@ impl Ortet {
             digest: self.capture.as_ref().map(|(_, digest)| *digest),
             matched_heading: self.matched_heading.clone(),
             collection_stats: self.session.collection_stats(),
+            live_nodes: (self.live_nodes_first, self.live_nodes_last),
         }
     }
 
@@ -507,12 +524,116 @@ impl Ortet {
     }
 
     fn publish_accessibility(&mut self) {
-        let update = self.a11y.publish(self.session.accessibility_projection());
+        let projection = self.session.accessibility_projection();
+        if let Some(path) = self.config.a11y_dump.clone() {
+            self.append_accessibility_dump(&path, projection.as_ref());
+        }
+        let update = self.a11y.publish(projection);
         if let Some(update) = update
             && let Some(bridge) = self.a11y_bridge.as_mut()
         {
             bridge.update(update);
         }
+    }
+
+    /// Append one projection block to the `--a11y-dump` file, once per
+    /// revision. The format is deliberately flat text: a receipt greps for the
+    /// node it cares about and reads its role, name, actions and bounds, so the
+    /// dump proves what the host advertised rather than what the pixels imply.
+    fn append_accessibility_dump(
+        &mut self,
+        path: &std::path::Path,
+        projection: Option<&document_session_api::DocumentA11yProjection>,
+    ) {
+        use std::io::Write as _;
+
+        let mut block = String::new();
+        match projection {
+            Some(projection) => {
+                if self.a11y_dumped_revision == Some(projection.revision()) {
+                    return;
+                }
+                self.a11y_dumped_revision = Some(projection.revision());
+                block.push_str(&format!(
+                    "projection revision={} frames={} address={} nodes={} root={}\n",
+                    projection.revision(),
+                    self.frames,
+                    self.address,
+                    projection.nodes().len(),
+                    projection.root().get(),
+                ));
+                for node in projection.nodes() {
+                    let bounds = node.bounds.as_ref().map_or_else(
+                        || "none".to_owned(),
+                        |bounds| {
+                            format!(
+                                "{:.1},{:.1},{:.1},{:.1}",
+                                bounds.x, bounds.y, bounds.width, bounds.height
+                            )
+                        },
+                    );
+                    block.push_str(&format!(
+                        "  node id={} role={:?} name={:?} value={:?} actions={:?} bounds={bounds}\n",
+                        node.id.get(),
+                        node.role,
+                        node.name.as_deref().unwrap_or(""),
+                        node.value.as_deref().unwrap_or(""),
+                        node.actions,
+                    ));
+                }
+            },
+            None => {
+                if self.a11y_dumped_revision.is_none() {
+                    return;
+                }
+                self.a11y_dumped_revision = None;
+                block.push_str(&format!(
+                    "projection none frames={} address={}\n",
+                    self.frames, self.address
+                ));
+            },
+        }
+        let opened = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path);
+        match opened {
+            Ok(mut file) => {
+                if let Err(error) = file.write_all(block.as_bytes()) {
+                    eprintln!("[ortet] could not write {}: {error}", path.display());
+                }
+            },
+            Err(error) => eprintln!("[ortet] could not open {}: {error}", path.display()),
+        }
+    }
+
+    /// Live nodes in the top document's arena, through the session's own
+    /// observation downcast. `None` for the script-free lane, which has no
+    /// arena to count — reported honestly rather than as zero.
+    #[cfg(feature = "scripted")]
+    fn sample_live_nodes(&mut self) -> Option<usize> {
+        if let Some(session) = self
+            .session
+            .as_any()
+            .downcast_mut::<genet_documents::ScriptedDocumentSession<script_engine_boa::BoaEngine>>(
+            )
+        {
+            return Some(session.document_mut().live_node_count());
+        }
+        #[cfg(all(feature = "scripted-nova", target_pointer_width = "64"))]
+        if let Some(session) = self
+            .session
+            .as_any()
+            .downcast_mut::<genet_documents::ScriptedDocumentSession<script_engine_nova::NovaEngine>>()
+        {
+            return Some(session.document_mut().live_node_count());
+        }
+        None
+    }
+
+    #[cfg(not(feature = "scripted"))]
+    fn sample_live_nodes(&mut self) -> Option<usize> {
+        None
     }
 
     fn drain_accessibility_actions(&mut self) {
@@ -618,6 +739,16 @@ impl Ortet {
             scene = self.session.frame(width, height);
         }
         self.publish_accessibility();
+        // Sampled after the frame that laid the document out, so the first
+        // reading is a real arena rather than a pre-layout one, and before the
+        // surface is borrowed for presentation.
+        let live = self.sample_live_nodes();
+        if self.live_nodes_first.is_none() {
+            self.live_nodes_first = live;
+        }
+        if live.is_some() {
+            self.live_nodes_last = live;
+        }
         let receipt_ready = match self.receipt_settled() {
             Ok(ready) => ready,
             Err(error) => {

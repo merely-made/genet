@@ -1,0 +1,24 @@
+<!-- Copyright 2026 Mark Alan Boykin
+     This Source Code Form is subject to the terms of the Mozilla Public
+     License, v. 2.0. If a copy of the MPL was not distributed with this
+     file, You can obtain one at https://mozilla.org/MPL/2.0/.
+     SPDX-License-Identifier: MPL-2.0 -->
+<!doctype html>
+<meta charset="utf-8">
+<title>Ortet G5 realms receipt, second pass</title>
+<link rel="stylesheet" href="realms.css">
+<div id="activate">The second pass does not drive anything</div>
+<h1 id="state">Ortet G5 realms sequence complete</h1>
+<a id="away" href="gone.html">Link that belongs to the second pass</a>
+<div id="landing"></div>
+<iframe id="frame" src="child-a.html"></iframe>
+<script>
+  // Inline, not external. An external script of a document reached by an
+  // in-session top-level navigation is not fetched by this host (the
+  // stylesheet and the child frame are) — a named residual of this receipt —
+  // so the completion condition is in the markup above and the completion
+  // paint is set here, from bytes that arrived with the document.
+  document.body.dataset.inlineReady = "yes";
+  document.documentElement.className = "complete";
+</script>
+<script src="parent2.js"></script>

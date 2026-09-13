@@ -203,6 +203,61 @@ fn a_completed_sibling_subtree_may_leave_a_parsing_document<E: ScriptEngine>() {
     .unwrap();
 }
 
+/// A node adopted **out of** a child browsing context keeps its *birth* arena
+/// tag. If the birth realm is then discarded - the child navigates - re-reflecting
+/// that node must not go looking for the realm it was born in: the realm is gone
+/// from the engine, and asking it for a reflector fails the whole call with
+/// `NoSuchRealm`. The node's current owner answers instead, which is the
+/// owner-resolved rule the rest of this lane already follows.
+///
+/// Found by the headed G5 realms acceptance
+/// (`support/ci/run_ortet_g5_realms_receipt.ps1`), whose sequence adopts a
+/// subtree carrying associated state out of a child and then navigates that
+/// child away before touching the subtree again.
+fn a_node_outlives_the_realm_it_was_born_in<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().unwrap();
+    rt.set_base_url("https://parent.test/").unwrap();
+    rt.parse_document_interleaved(
+        "<body><div id=landing></div><iframe id=frame srcdoc='<div id=payload>\
+         <div id=host></div><template id=tpl><p>contents</p></template>\
+         <a id=kept href=x>kept</a></div>'></iframe></body>",
+        &NoScriptLoader,
+    );
+    rt.run_event_loop(40).unwrap();
+    rt.eval(
+        r#"
+        var frame = document.getElementById('frame');
+        var payload = frame.contentDocument.getElementById('payload');
+        if (!payload) throw new Error('fixture: the child carried no payload');
+        var host = frame.contentDocument.getElementById('host');
+        host.attachShadow({mode: 'open'}).textContent = 'shadow';
+        document.getElementById('landing').appendChild(payload);
+        if (payload.ownerDocument !== document) throw new Error('fixture: the subtree did not adopt');
+        frame.src = 'about:blank';
+        "#,
+    )
+    .unwrap();
+    // Drain the navigation: the birth realm is discarded here.
+    rt.run_event_loop(40).unwrap();
+    // Every one of these re-reflects a node whose birth realm is gone. Before
+    // the fix each threw `NoSuchRealm`, taking the whole call with it.
+    let read = rt
+        .eval(
+            r#"
+            var link = document.getElementById('kept');
+            var shadow = document.getElementById('host').shadowRoot;
+            [link.textContent, link.ownerDocument === document,
+             shadow !== null, shadow.textContent,
+             document.getElementById('landing').firstChild.id].join('|')
+            "#,
+        )
+        .expect("re-reflecting a node born in a discarded realm must not fail");
+    assert_eq!(
+        rt.value_to_string(&read).unwrap(),
+        "kept|true|true|shadow|payload"
+    );
+}
+
 macro_rules! backend {
     ($name:ident, $engine:ty) => {
         mod $name {
@@ -221,6 +276,10 @@ macro_rules! backend {
             #[test]
             fn completed_sibling_leaves_a_parsing_document() {
                 super::a_completed_sibling_subtree_may_leave_a_parsing_document::<$engine>();
+            }
+            #[test]
+            fn node_outlives_the_realm_it_was_born_in() {
+                super::a_node_outlives_the_realm_it_was_born_in::<$engine>();
             }
         }
     };

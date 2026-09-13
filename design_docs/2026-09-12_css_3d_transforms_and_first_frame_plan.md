@@ -2,7 +2,8 @@
 
 **Date:** 2026-09-12
 
-**Status:** founded 2026-09-12, no lane started. Founded on Mark's rulings of
+**Status:** founded 2026-09-12, no lane started. T4 added the same day from
+the layer-scope finding below, by Mark's ruling. Founded on Mark's rulings of
 2026-09-11 and 2026-09-12 on the wing's orthographic voxel presentation plan
 (`isometry/mesocosm/design_docs/2026-09-11_orthographic_voxel_presentation_plan.md`),
 whose L0 receipts are this plan's evidence and whose L1 and L5 are its named
@@ -19,7 +20,10 @@ supplied by the host.
 
 **Does not own:** what the wing draws or how a voxel body is meshed (the
 appearance crate, wing-side); netrender's fragment, tile-cache and execution
-graph internals (`netrender/netrender-notes/2026-09-04_wgpu_execution_graph_plan.md`);
+graph internals (`netrender/netrender-notes/2026-09-04_wgpu_execution_graph_plan.md`),
+with one recorded exception: T4 states the single change to netrender's
+retained path that T3 requires, and its receipt, while the change itself lands
+in netrender under that plan's owner;
 the browsing-context tree and the child-document loading path (the
 [iframes plan](2026-09-08_iframes_plan.md) owns those, and this plan reuses
 its splice rather than extending it); scripted mutation semantics (the
@@ -49,7 +53,7 @@ and [Realms](2026-09-08_realms_plan.md) plans); WPT harness behaviour (the
   first and only measurement of `css/css-transforms` to date; T1's founding
   count is copied from it.
 
-**Consumers on record (all three lanes):**
+**Consumers on record (all four lanes):**
 `isometry/mesocosm/design_docs/2026-09-11_orthographic_voxel_presentation_plan.md`
 — its L1 (Livery 3D transforms), its L5 (live faces and the body-level
 shape), and the two gaps its L0 verdict names. Mark's 2026-09-12 ruling
@@ -75,6 +79,11 @@ the element ceiling, and T3 removes the need for most of the elements in the
 first place while making the live path measurable at all. Landing any one of
 the three alone leaves the consumer blocked on the other two.
 
+T4 is the fourth, found on 2026-09-12 by reading the handoff rather than
+either side of it: the moment T3's fragment is clipped to its content box it
+leaves netrender's retained path, so T3 without T4 measures the flat live
+path L0a already rejected.
+
 ---
 
 ## T1. CSS Transforms Level 2 in Livery
@@ -94,7 +103,10 @@ properties, `transform-style: flat | preserve-3d`,
 properties with their specified order relative to `transform`.
 
 **Lowering.** Each element's accumulated matrix projects into netrender's
-existing column-major 4x4 `Transform`; a 3D rendering context
+existing column-major 4x4 `Transform`, of which netrender's rasterizers read
+the planar six cells (`transform_to_affine` in
+`netrender/netrender/src/vello_rasterizer/mod.rs`), so depth sorting and
+backface culling are genet's to do before paint, not netrender's; a 3D rendering context
 (`transform-style: preserve-3d`) z-sorts its participating boxes by
 transformed depth before paint, and `backface-visibility: hidden` culls a box
 whose transformed normal faces away. Vello is affine, so the plane the
@@ -227,7 +239,12 @@ transform-changing frame, is proved by the wing's L0a receipt,
 live fragment path at 10.0 ms per frame against 50.9 ms for 50,000 on the flat
 rebuild path, with lowering staying at one per body across every
 transform-changing frame, and the receipt's explicit finding "No API refusal.
-Fragments already carry a per-instance transform."
+Fragments already carry a per-instance transform." Qualified 2026-09-12: that
+receipt proves planar placement at layer depth zero. The per-instance
+transform is the six-cell affine, so a part's fragment holds one
+orientation's projection and a turn is new content (the wing's L0c prices
+it); and a placement inside any layer scope is not retained at all today,
+which is T4.
 
 **A finding, not a lane.** Under Ortet's Boa scripted profile the L0b live
 fixtures — which mutate `style.transform` from a `requestAnimationFrame`
@@ -251,6 +268,48 @@ with a headless readback proving it composites at the right paint-list
 position; an unchanged such element costs a placement and no re-encode across a
 frame in which its own transform changed; and the reftest guards and the WPT
 census show zero `pass -> anything else`.
+
+---
+
+## T4. Retained fragments inside layer scopes
+
+**Finding (2026-09-12).** Genet's paint-list translator lowers every
+`PushClip` to a netrender layer (`emit_push_clip` in
+`netrender/paint_list_render/src/emit.rs`); netrender has no standalone clip
+op, only `PushLayer(SceneLayer { clip, alpha, blend_mode, filters, .. })`.
+The retained path in `netrender/netrender/src/vello_tile_rasterizer/retained.rs`
+appends a registered fragment's lowered scene to the master only while
+`layer_depth == 0`; inside any open layer it takes the warned fallback and
+inlines the fragment un-retained, re-encoding it every frame. T3's replaced
+element is clipped to its content box, and every real document carries
+ancestor clips besides, so through the paint list as lowered today every body
+fragment takes the un-retained path. That is L0a's flat live path, ten to
+fifteen thousand rectangles under a 16 ms frame, not its fragment path at two
+hundred thousand. L0a did not see this because the probe bypasses Livery and
+places fragments at the scene's top level.
+
+The same fallback is what any per-part `opacity`, `clip-path`, `mask-image`
+or `filter` would hit, since each lowers to a layer, so the wing's earmarked
+tier-1 effects on parts are gated here as well.
+
+**The change.** Netrender's retained path honours a placement inside an open
+layer without re-encoding. The fallback's own comment names the obstacle: the
+open layer lives in the run's sub-scene, so an append to the master would
+escape it. Appending the retained lowered scene into the run's open sub-scene
+instead, with the placement affine, is the contained shape; the execution
+graph plan's owner may prefer another. This plan records the requirement and
+the receipt; the code lands in netrender under
+`netrender/netrender-notes/2026-09-04_wgpu_execution_graph_plan.md`, which
+this document does not amend.
+
+**Done when:** a fragment placed inside a rect-clip layer, an alpha layer and
+a filter layer each renders identically to the same fragment placed at depth
+zero in a headless readback; `fragment_lower_count` stays flat across
+placement-only frames in all three cases; the layer-scope warning no longer
+fires on T3's fixture; the L0a probe rerun with every body wrapped in a
+content-box clip layer holds its 200,000-rectangle cell within the 2026-09-11
+frame time plus a stated tolerance; and T3's done condition is re-checked
+against that rerun rather than against the unclipped receipt.
 
 ---
 
@@ -281,7 +340,14 @@ census show zero `pass -> anything else`.
   names are listed under T2's hypotheses.
 - **2026-09-12** — the Shadow DOM declarative-attachment residual the wing's L8
   cites was closed by the parser/script interleaving plan on 2026-09-08.
+- **2026-09-12** — netrender's retained fragments are not retained inside any
+  layer scope, and every genet clip is a layer; fragment placement reads the
+  planar six cells of the 4x4. Both from reading `retained.rs`,
+  `paint_list_render/src/emit.rs` and `vello_rasterizer/mod.rs`; neither is
+  measured yet. T4 and the wing's L0c carry them.
 
 ## Progress
 
 - **2026-09-12** — founded. No lane started.
+- **2026-09-12** — T4 added by Mark's ruling after the layer-scope finding.
+  No lane started.

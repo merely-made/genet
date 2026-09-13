@@ -14,6 +14,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use layout_dom_api::LayoutDom;
 use script_engine_api::{CallCx, NativeFn, ScriptEngine};
 
 use crate::HostState;
@@ -138,6 +139,38 @@ impl<E: ScriptEngine> NativeFn<E> for LocationField {
         .flatten();
         let out = location_field(href.as_deref(), if document_url { "href" } else { &field });
         cx.make_string(&out)
+    }
+}
+
+/// Read through the reflector's current owner, retaining the native host as a
+/// fallback only after its execution registration has been retired.
+struct NodeBaseURI;
+impl<E: ScriptEngine> NativeFn<E> for NodeBaseURI {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let selector = cx.arg(1);
+        let fallback = cx.value_to_string(&selector)? == "fallback";
+        let value = cx.arg(0);
+        let raw = cx
+            .reflector_data(&value)
+            .ok_or_else(|| cx.error("Illegal Node receiver"))?;
+        let start = crate::dom::adoption::current_host(cx)
+            .ok_or_else(|| cx.error("DOM host is unavailable"))?;
+        let id = crate::NodeId::from_raw(raw);
+        let host = if crate::dom::adoption::owner_host(&start, id).is_some() {
+            crate::dom::adoption::resolve_owner(cx, raw)?.host().clone()
+        } else if start.borrow().dom.is_live(id) {
+            start
+        } else {
+            return Err(cx.error("DOM node is no longer live"));
+        };
+        let host = host.borrow();
+        let base = if fallback {
+            host.fallback_base_url().map(str::to_owned)
+        } else {
+            host.document_base_url()
+        }
+        .unwrap_or_else(|| "about:blank".into());
+        cx.make_string(&base)
     }
 }
 
@@ -364,7 +397,10 @@ fn context_history<E: ScriptEngine, R>(
 
 /// Adopt `url` as the document URL of the realm `cx` is in.
 fn adopt_document_url<E: ScriptEngine>(cx: &mut E::CallCx<'_>, url: &str) {
-    with_host::<E, _>(cx, |h| h.base_url = Some(url.to_owned()));
+    with_host::<E, _>(cx, |h| {
+        let _ = h.document_base_url();
+        h.base_url = Some(url.to_owned());
+    });
 }
 
 /// `__historyPush(stateJson, url, hasUrl)` -> push a new entry (dropping any
@@ -400,7 +436,7 @@ fn history_write<E: ScriptEngine>(
     let has_url = cx.value_to_string(&a2)? == "true";
     let base = with_host::<E, _>(cx, |h| h.base_url.clone()).flatten();
     let entry_url = if has_url {
-        let resolution_base = with_host::<E, _>(cx, |h| h.fallback_base_url().map(str::to_owned)).flatten();
+        let resolution_base = with_host::<E, _>(cx, |h| h.document_base_url()).flatten();
         resolve_against(resolution_base.as_deref(), &url)
     } else {
         base.clone().unwrap_or_else(|| "about:blank".to_string())
@@ -439,6 +475,7 @@ fn history_write<E: ScriptEngine>(
             h.history_index = h.history.len() - 1;
         }
         if has_url {
+            let _ = h.document_base_url();
             h.base_url = Some(entry_url);
         }
     });
@@ -519,6 +556,7 @@ impl<E: ScriptEngine> NativeFn<E> for HistoryGo {
                 let last = h.history.len() as i64 - 1;
                 let target = (h.history_index as i64 + delta).clamp(0, last);
                 h.history_index = target as usize;
+                let _ = h.document_base_url();
                 h.base_url = Some(h.history[h.history_index].1.clone());
             });
             return Ok(cx.undefined());
@@ -561,6 +599,7 @@ pub(crate) fn install_platform_surface<E: ScriptEngine>(
     engine: &mut crate::Surface<'_, '_, E>,
 ) -> Result<(), crate::SurfaceError<E::Error>> {
     engine.set_function::<LocationField>("__locationField", 1)?;
+    engine.set_function::<NodeBaseURI>("__nodeBaseURI", 2)?;
     engine.set_function::<AncestorOrigins>("__ancestorOrigins", 1)?;
     engine.set_function::<EnvironmentOrigin>("__environmentOrigin", 1)?;
     engine.set_function::<HistoryPush>("__historyPush", 3)?;

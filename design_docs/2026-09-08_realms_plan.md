@@ -2641,7 +2641,7 @@ landed; their labels now point to the continuation and navigation phases.
 | `Location.ancestorOrigins` | Snapshot, masking and detached-object lifetime implemented in the [ancestor origins phase](#phase-ancestor-origins-2026-09-13); `no-browsing-context.window.html` now passes 46/46. Full Location conformance remains open. |
 | `window.origin` | Implemented in the [global origin phase](#phase-global-origin-2026-09-13), including inherited/opaque origins and replaceable assignment. The two blocked ancestor-origin WPT files now pass on Boa. |
 | Initial blank/srcdoc document URL versus base URL | Separated in the [about-document URL phase](#phase-about-document-urls-2026-09-13). Visible URLs, inherited fallback snapshots, relative scripts/requests and nested navigation have focused proof; child CSS consumers use the shared fallback. |
-| Broader document base behavior | Parent `<base href>` snapshots and frozen-base semantics still need a unified effective-base implementation. A retained document's `baseURI` can encounter a stale DOM after queued teardown; its URL and documentURI remain readable. Entry-realm attribution for borrowed Location methods and lazy-frame activation are separate existing lifecycle gaps. |
+| Broader document base behavior | Parent effective-base snapshots, frozen first-base semantics, and retained Node/Document/Attr baseURI reads after queued teardown are closed by the [base snapshots and retained reads phase](#phase-base-snapshots-and-retained-reads-2026-09-13). Synthetic/template document metadata, mutation after retirement, and history restoration of inherited bases remain open. Borrowed Location entry-realm attribution and lazy-frame activation retain their existing lifecycle qualifications. |
 | `document.domain` | Origin/security surface, still outside the landed core checks. |
 | `pageswap`, Navigation API, `beforeunload` cancellation, `window.open`, forms and link-click navigation | Separate navigation surfaces. The landed realm replacement machinery does not implement them. |
 | Scripted accessibility action dispatch and stale-target validation | Scripted document session. The headed G5 receipt proves projection only. |
@@ -3039,3 +3039,77 @@ also recognize query/fragment variants when creating their empty document.
 This is the document-URL/fallback separation, not complete HTML base-element or
 navigation conformance. The broader base/lifecycle row above remains open,
 alongside the existing canvas, parser, navigation and timing qualifications.
+
+
+## Phase: base snapshots and retained reads (2026-09-13)
+
+The two base-related residuals now share one native effective-base accessor.
+`HostState::document_base_url()` selects the first connected HTML `base` with
+an unnamespaced href and freezes it against the document fallback. Relevant
+mutation-journal entries update that selection; ordinary mutations avoid a
+full document scan. A same-value href assignment and ordinary remove/reinsert
+refreeze it, while `moveBefore` preserving the first base keeps its frozen URL.
+Invalid, data and JavaScript base URLs use the fallback. The `base.href` getter
+itself resolves against the fallback, independently of preceding base elements.
+
+Blank/srcdoc creation and queued blank navigation capture the parent's effective
+base. Fetch/Request, workers, external scripts, child CSS, frame navigation and
+history URL resolution consume it. Changing a base affects URL resolution while
+the document URL and security origin retain their separate ownership. A new
+cross-origin-base regression protects lazy browsing-tree initialization from
+mistaking the effective base for the document's security origin.
+
+`Node.baseURI` now follows the reflector's current owner through a native reader.
+After execution registration retires, a retained creation-realm reader can still
+read its live host. Genuine wrappers register in an agent-wide weak map; borrowed
+getters follow the receiver and fake receivers throw TypeError. Attributes follow
+their owner element or saved document, including removal after adoption. These
+are retained reads, not a general reopening of retired DOM mutation surfaces.
+
+### Evidence
+
+- **160 focused tests pass** across 13 integration binaries on Boa and Nova.
+  The 17 new tests cover inherited snapshots, frozen relative bases, same-value
+  href mutation, first-base ordering, ordinary versus state-preserving moves,
+  invalid schemes, resource consumers and cross-origin base/security separation;
+  retained Document/Node/Attr reads through queued teardown and GC; borrowed
+  getters, adoption, Document-only retention and a Nova runtime snapshot clone.
+  Existing about URLs, origins, initial loads, navigation, workers, security,
+  adoption, discarded-wrapper identity and DOM node-model tests remain green.
+- The unchanged isolated opaque-root cost guard passes both engines over 4,003
+  touched nodes. Quiescent/reparent checks measure **2,786/8,921 us on Boa** and
+  **2,897/14,104 us on Nova**, below the existing 50,000 us threshold. This does
+  not erase the earlier aggregate-run timing variability qualification.
+- Matched WPT runs cover **27 distinct files per engine**, deduplicating the
+  single-file and directory subsets. Manifest, exact policy, renderer and subset
+  match. Boa preserves **74** passing named subtests and gains **four**, with
+  zero pass losses: blank/srcdoc image resolution gains two, and removing a
+  data/JavaScript first base gains two. `Node-baseURI.html` remains **9/9** and
+  detached Location remains **46/46**. The grandparent-initiator fixture changes
+  from three failing/not-run subtests to no results in the batch; an isolated
+  final-runner recheck reproduces the original three outcomes. Both are retained,
+  and neither earns conformance credit. Nova remains at zero passing WPT
+  subtests; runtime and headed checks are its positive evidence.
+- Headed G5 passes **three runs per engine**, digest `0x8df9c9b8815a6e22`,
+  **31 -> 31** live nodes, **4 unpinned / 32 collected**, and normal exit 0.
+  Both failure controls exit 1. Physical size is 1280x1120, CSS viewport 640x560
+  at scale 2. Source identities match before/after and the capture was inspected.
+  Runtime source remained frozen throughout the final gates.
+- Artifacts: `C:/Users/mark_/Code/testing/genet/realms-base-lanes-20260913/`
+  contains exploratory failures, final test and cost logs, frozen WPT runners,
+  named comparisons and source/lock provenance. The pre runner is reused from
+  the preceding about-document slice, including its documented two comment-only
+  corrections after its gates. Headed evidence is in
+  `C:/Users/mark_/Code/testing/genet/ortet-g5-realms-base-lanes-20260913/`.
+  Dependencies, Cargo.lock and WPT expectations are unchanged.
+
+Remaining boundaries: synthetic and template documents still lack independent
+URL/base metadata; mutation APIs after queued retirement are incomplete; history
+restoration of inherited about-base snapshots is unproved. Direct external host
+DOM mutation followed by draining its journal before synchronization can lose
+same-value href mutation facts. An absent base href still reflects as an empty
+string. Existing cross-origin History URL-rewrite checks and Worker constructor
+security checks remain incomplete; this slice changes URL resolution without
+claiming to close them. Server-substituted WPT resources, borrowed Location
+entry-realm attribution, lazy activation, live canvas adoption and parser timing
+retain their existing gates.

@@ -248,13 +248,14 @@ pub struct HostState {
     /// the native sink clones it out before calling (no live `HostState` borrow during
     /// the call).
     pub cookies: Option<std::rc::Rc<dyn CookieProvider>>,
-    /// The visible document URL. Resource consumers use `fallback_base_url()`
+    /// The visible document URL. Resource consumers use `document_base_url()`
     /// so about documents keep their inherited resolution base. Set by
     /// [`Runtime::set_base_url`] for server-mode WPT runs.
     pub base_url: Option<String>,
     /// Creation-time inherited fallback for about:blank / iframe srcdoc.
     /// `base_url` remains the visible document URL.
     pub about_base_url: Option<String>,
+    document_base_cache: RefCell<DocumentBaseCache>,
     /// `window.localStorage` backing: an ordered key→value store (insertion
     /// order, for `key(n)` / `Object.keys`). The in-memory default (tests / WPT /
     /// no-host runs); a host that sets [`local_storage`](Self::local_storage) backs
@@ -331,6 +332,16 @@ pub struct HostState {
     pending_trace: Vec<PendingTraceEvent>,
 }
 
+#[derive(Default)]
+struct DocumentBaseCache {
+    arena: u32,
+    initialized: bool,
+    cursor: u64,
+    structure_epoch: u64,
+    first: Option<(NodeId, String)>,
+    frozen: Option<String>,
+}
+
 impl HostState {
     /// The document URL, or its captured about-document fallback base.
     pub fn fallback_base_url(&self) -> Option<&str> {
@@ -341,6 +352,126 @@ impl HostState {
         } else {
             self.base_url.as_deref()
         }
+    }
+
+    /// The document's effective base, including its first connected HTML base.
+    /// A base element freezes against the fallback when it becomes first or its
+    /// href changes; changing the document URL alone does not re-resolve it.
+    pub fn document_base_url(&self) -> Option<String> {
+        use layout_dom_api::{DomMutation, LocalName, Namespace};
+        let mut cache = self.document_base_cache.borrow_mut();
+        if cache.arena != self.dom.arena_id() {
+            *cache = DocumentBaseCache {
+                arena: self.dom.arena_id(),
+                ..DocumentBaseCache::default()
+            };
+        }
+        let (start, pending) = self.dom.pending_mutations();
+        let end = start + pending.len() as u64;
+        let epoch = self.dom.structure_epoch();
+        if cache.initialized && cache.cursor == end && cache.structure_epoch == epoch {
+            return cache
+                .frozen
+                .clone()
+                .or_else(|| self.fallback_base_url().map(str::to_owned));
+        }
+        let is_base = |node| {
+            self.dom.is_live(node)
+                && self.dom.element_name(node).is_some_and(|name| {
+                    name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
+                        && name.local.as_ref() == "base"
+                })
+        };
+        let subtree_has_base = |root| {
+            let mut stack = vec![root];
+            while let Some(node) = stack.pop() {
+                if !self.dom.is_live(node) {
+                    continue;
+                }
+                if is_base(node) {
+                    return true;
+                }
+                stack.extend(self.dom.dom_children(node));
+            }
+            false
+        };
+        let missed = cache.cursor < start;
+        let changes = pending
+            .iter()
+            .skip(cache.cursor.saturating_sub(start) as usize);
+        let mut href_changed = false;
+        let mut first_removed = false;
+        let mut any_base_changed = false;
+        let mut structure_affects_base = false;
+        for change in changes {
+            if let DomMutation::Removed { node, .. } = change {
+                if let Some((first, _)) = cache.first.as_ref() {
+                    let mut current = Some(*first);
+                    while let Some(ancestor) = current {
+                        if ancestor == *node {
+                            first_removed = true;
+                            break;
+                        }
+                        current = self.dom.parent(ancestor);
+                    }
+                }
+            }
+            match change {
+                DomMutation::Inserted { node, .. }
+                | DomMutation::Removed { node, .. }
+                | DomMutation::Moved { node, .. }
+                | DomMutation::SubtreeReplaced { node } => {
+                    structure_affects_base |= subtree_has_base(*node);
+                },
+                _ => {},
+            }
+            if let DomMutation::AttributeChanged { node, name, .. } = change {
+                if name.ns.as_ref().is_empty() && name.local.as_ref() == "href" && is_base(*node) {
+                    any_base_changed = true;
+                    href_changed |= cache.first.as_ref().is_some_and(|(first, _)| first == node);
+                }
+            }
+        }
+        structure_affects_base |= cache.first.as_ref().is_some_and(|(node, _)| {
+            !self.dom.is_live(*node) || self.dom.tree_root(*node) != Some(self.dom.document())
+        });
+        if !cache.initialized || missed || structure_affects_base || any_base_changed {
+            let mut stack = vec![self.dom.document()];
+            let mut first = None;
+            while let Some(node) = stack.pop() {
+                if is_base(node) {
+                    if let Some(href) =
+                        self.dom
+                            .attribute(node, &Namespace::from(""), &LocalName::from("href"))
+                    {
+                        first = Some((node, href.to_owned()));
+                        break;
+                    }
+                }
+                let children: Vec<_> = self.dom.dom_children(node).collect();
+                stack.extend(children.into_iter().rev());
+            }
+            if first != cache.first || href_changed || first_removed || !cache.initialized {
+                cache.frozen = first.as_ref().map(|(_, href)| {
+                    let fallback = self.fallback_base_url().unwrap_or("about:blank");
+                    url::Url::options()
+                        .base_url(url::Url::parse(fallback).ok().as_ref())
+                        .parse(href)
+                        .ok()
+                        .filter(|url| !matches!(url.scheme(), "data" | "javascript"))
+                        .map(|url| url.to_string())
+                        .unwrap_or_else(|| fallback.to_owned())
+                });
+                cache.first = first;
+            }
+        }
+        cache.initialized = true;
+        cache.cursor = end;
+        cache.structure_epoch = epoch;
+        cache
+            .frozen
+            .clone()
+            .or_else(|| self.fallback_base_url().map(str::to_owned))
     }
 
     /// The tree root (opaque root) of `id`, memoised against the arena's
@@ -2037,6 +2168,7 @@ impl<E: ScriptEngine> Runtime<E> {
         let Ok(u) = url::Url::parse(&script_visible_url) else {
             return Ok(());
         };
+        self.host.borrow().document_base_url();
         self.host.borrow_mut().base_url = Some(u.to_string());
         // `globalThis.location` is a live view of `base_url` (the `platform`
         // surface's getters re-read it), so updating the host base URL is enough;

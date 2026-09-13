@@ -914,7 +914,7 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
             };
             let srcdoc = attr("srcdoc");
             let src = attr("src").unwrap_or_default();
-            let base = h.fallback_base_url().unwrap_or("about:blank").to_owned();
+            let base = h.document_base_url().unwrap_or_else(|| "about:blank".to_owned());
             let url = if srcdoc.is_some() {
                 "about:srcdoc".into()
             } else if src.is_empty() {
@@ -958,7 +958,10 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
         });
         let Some((context, scripts)) = ({
             let mut a = agent.borrow_mut();
-            a.frames.initialize(&base);
+            let document_url = a.hosts.get(&a.frames.top_realm())
+                .and_then(|host| host.borrow().base_url.clone())
+                .unwrap_or_else(|| "about:blank".to_owned());
+            a.frames.initialize(&document_url);
             // HTML creates a child navigable only when the container's *node
             // document* has a navigable of its own. It may not: appending an
             // `iframe` into the document of its own child destroys that child's
@@ -1759,7 +1762,7 @@ fn navigate_context<E: ScriptEngine>(
     };
     let (source_base, target_base) = {
         let a = agent.borrow();
-        (a.hosts.get(&from).and_then(|host| host.borrow().fallback_base_url().map(str::to_owned)),
+        (a.hosts.get(&from).and_then(|host| host.borrow().document_base_url()),
          a.hosts.get(&target).and_then(|host| host.borrow().base_url.clone()))
     };
     // A realm has a browsing context when it carries a `FrameRecord` (a child)
@@ -1845,6 +1848,7 @@ fn navigate_fragment<E: ScriptEngine>(
     {
         let mut a = agent.borrow_mut();
         if let Some(host) = a.hosts.get(&target) {
+            host.borrow().document_base_url();
             host.borrow_mut().base_url = Some(url.to_owned());
         }
         let context = a.frames.contexts.get(&target).copied();

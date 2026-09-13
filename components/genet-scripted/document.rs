@@ -809,8 +809,7 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             let (url, viewport) = {
                 let host = host.borrow();
                 (
-                    host.fallback_base_url()
-                        .map(str::to_owned)
+                    host.document_base_url()
                         .unwrap_or_else(|| "about:blank".into()),
                     host.viewport_size,
                 )
@@ -971,8 +970,7 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             if !self.child_cssoms.borrow().contains_key(&realm) {
                 let url = host
                     .borrow()
-                    .fallback_base_url()
-                    .map(str::to_owned)
+                    .document_base_url()
                     .unwrap_or_else(|| "about:blank".into());
                 let cssom = LiveryCssom::install_live_for_host(
                     &host,

@@ -395,7 +395,7 @@ pub(crate) fn prepare_script(host: &mut HostState, node: NodeId) -> Option<Strin
         crate::parse::ScriptKind::Classic => match src {
             None => Some(text),
             Some(src) => {
-                let url = crate::fetch::resolve_against(host.fallback_base_url(), &src);
+                let url = crate::fetch::resolve_against(host.document_base_url().as_deref(), &src);
                 let loader = host.script_loader.clone()?;
                 let namespace = Namespace::from("");
                 let charset = host

@@ -27,6 +27,10 @@ usage: ortet --url <address> [options]
   --size <WxH>         Window size in physical pixels (default 960x640).
   --frames <N>         Present N frames, then exit once any receipt condition matches.
   --artifact <path>    Write the captured frame as a PNG and print its digest.
+  --a11y-dump <path>   Append every accessibility projection this run publishes
+                       to a text file, one block per revision. A receipt reads
+                       the role, name, actions and viewport bounds of the nodes
+                       it cares about without driving a platform client.
   --expect-heading <text>
                       Require the captured session's semantic heading report
                       to contain this exact text. Without --frames, --artifact
@@ -81,6 +85,11 @@ pub struct Config {
     pub size: (u32, u32),
     pub frames: Option<u32>,
     pub artifact: Option<PathBuf>,
+    /// Where to append the accessibility projections this run publishes. This
+    /// is a receipt seam beside `--artifact`, not a live API: it lets a headed
+    /// receipt read the projection the host actually advertised at the frame
+    /// it captured, instead of inferring semantics from pixels.
+    pub a11y_dump: Option<PathBuf>,
     /// A bounded receipt completion condition over the engine-owned semantic
     /// session report. This keeps scripted acceptance out of screenshot-only
     /// territory without adding a page-automation language to Ortet.
@@ -107,6 +116,7 @@ where
     let mut size = DEFAULT_SIZE;
     let mut frames = None;
     let mut artifact = None;
+    let mut a11y_dump = None;
     let mut expect_heading = None;
     let mut receipt_timeout = std::time::Duration::from_millis(DEFAULT_RECEIPT_TIMEOUT_MS);
     let mut actions = Vec::new();
@@ -134,6 +144,7 @@ where
                 frames = Some(count);
             },
             "--artifact" => artifact = Some(PathBuf::from(value("--artifact")?)),
+            "--a11y-dump" => a11y_dump = Some(PathBuf::from(value("--a11y-dump")?)),
             "--expect-heading" => expect_heading = Some(value("--expect-heading")?),
             "--timeout-ms" => {
                 let raw = value("--timeout-ms")?;
@@ -160,6 +171,7 @@ where
         size,
         frames,
         artifact,
+        a11y_dump,
         expect_heading,
         receipt_timeout,
         actions,
@@ -327,6 +339,27 @@ mod tests {
         assert_eq!(config.frames, Some(3));
         assert_eq!(config.artifact, Some(PathBuf::from("out.png")));
         assert_eq!(config.expect_heading.as_deref(), Some("Finished receipt"));
+        assert_eq!(config.a11y_dump, None, "the dump is opt-in");
+    }
+
+    /// The accessibility dump is an independent receipt seam: it neither
+    /// requires nor implies `--artifact`, and it is absent unless asked for.
+    #[test]
+    fn the_accessibility_dump_is_its_own_opt_in_receipt_seam() {
+        let config = run(&[
+            "--url",
+            "file:///x/a.html",
+            "--frames",
+            "2",
+            "--a11y-dump",
+            "tree.txt",
+        ]);
+        assert_eq!(config.a11y_dump, Some(PathBuf::from("tree.txt")));
+        assert_eq!(config.artifact, None);
+        assert!(
+            parse(args(&["--url", "a.html", "--a11y-dump"])).is_err(),
+            "the flag needs its value"
+        );
     }
 
     #[test]

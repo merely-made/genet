@@ -181,12 +181,20 @@ pub(crate) fn creation_realm(start: &SharedHost, id: NodeId) -> Option<RealmId> 
     let Some(agent) = start.borrow().agent.upgrade() else {
         return Some(owner);
     };
-    let realm = agent
-        .borrow()
+    let state = agent.borrow();
+    let realm = state
         .dom_adoption
         .creation_realms
         .get(&id.origin_arena_id())
-        .copied();
+        .copied()
+        // A creation realm that has since been **discarded** cannot home a
+        // reflector any more: the realm is gone from the engine, and asking it
+        // for one fails the whole call with `NoSuchRealm`. The node's current
+        // owner can, and that is the owner-resolved rule this plan already
+        // states everywhere else — this was the one place that preferred the
+        // birth realm unconditionally. A node adopted out of a child browsing
+        // context before that context was navigated away is exactly the case.
+        .filter(|realm| state.hosts.contains_key(realm));
     realm.or(Some(owner))
 }
 

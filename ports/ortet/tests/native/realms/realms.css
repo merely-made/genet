@@ -1,0 +1,56 @@
+/* Copyright 2026 Mark Alan Boykin
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ * SPDX-License-Identifier: MPL-2.0 */
+
+/* Everything here is deliberately large and flat. The frames fixture's Ortet
+ * digest is bimodal at this base, and the earlier finding pointed at glyph
+ * rasterization below about 10 px; nothing in this receipt is drawn smaller
+ * than 20 px, and no gradient, shadow or sub-pixel geometry is used, so this
+ * fixture's own digest does not inherit that instability. */
+
+html, body {
+  margin: 0;
+  background: #f2ede1;
+  color: #17324d;
+  font: 20px/1.4 sans-serif;
+}
+
+body {
+  box-sizing: border-box;
+  padding: 20px;
+  min-height: 560px;
+}
+
+/* The completion colour, read back by the runner at a fixed corner pixel. */
+html.complete, html.complete body { background: #2f6b3c; }
+
+#activate {
+  box-sizing: border-box;
+  width: 340px;
+  height: 84px;
+  padding: 24px;
+  background: #d8e6dc;
+  border: 4px solid #5b3b78;
+}
+
+h1 { font-size: 26px; color: #8a2f24; margin: 14px 0; }
+
+a { font-size: 22px; color: #1c5c8c; display: block; margin: 8px 0; }
+
+#landing {
+  box-sizing: border-box;
+  min-height: 96px;
+  border: 3px dashed #8a2f24;
+  padding: 10px;
+}
+
+#frame {
+  display: block;
+  width: 560px;
+  height: 170px;
+  margin-top: 12px;
+  border: 3px solid #17324d;
+  background: #ffffff;
+}

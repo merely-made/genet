@@ -1,0 +1,11 @@
+/* Copyright 2026 Mark Alan Boykin
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ * SPDX-License-Identifier: MPL-2.0 */
+
+body { margin: 0; padding: 10px; background: #ffffff; color: #17324d;
+       font: 20px/1.4 sans-serif; }
+h2 { font-size: 22px; margin: 0 0 8px; color: #1c5c8c; }
+a { font-size: 20px; color: #1c5c8c; }
+#payload { border: 3px solid #1c5c8c; padding: 8px; }

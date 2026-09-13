@@ -1116,6 +1116,37 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         inspect(&host.dom)
     }
 
+    /// Live nodes in the **top** browsing context's arena. A child frame keeps
+    /// its own arena and is not counted here; after a top-level navigation this
+    /// answers for the incoming document, because the runtime writes the new
+    /// `HostState` into the cell the embedder already holds.
+    pub fn live_node_count(&self) -> usize {
+        self.rt.host().borrow().dom.live_node_count()
+    }
+
+    /// Read the top document's live DOM together with the retained layout of
+    /// the last rendered frame, the scroll offset, and the viewport. `None`
+    /// before the first frame.
+    ///
+    /// The DOM is the **top** browsing context's: a composited child frame
+    /// keeps its own arena and its own retained layout, so a caller that wants
+    /// a child's geometry asks that child's realm, not this.
+    pub fn with_retained_frame_and_dom<R>(
+        &self,
+        read: impl FnOnce(
+            &ScriptedDom,
+            &genet_livery::LiveryLayout<NodeId>,
+            (f32, f32),
+            (u32, u32),
+        ) -> R,
+    ) -> Option<R> {
+        let host = self.rt.host().borrow();
+        self.cssom
+            .with_retained_frame(|fragments, scroll, viewport| {
+                read(&host.dom, fragments, scroll, viewport)
+            })
+    }
+
     pub fn pump(&mut self, now_ms: f64) -> (usize, usize) {
         if self.frozen {
             return (0, 0);

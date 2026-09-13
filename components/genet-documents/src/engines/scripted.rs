@@ -138,6 +138,8 @@ where
             pointer_active: false,
             external_textures: Vec::new(),
             collection_stats: (0, 0),
+            a11y_revision: std::cell::Cell::new(0),
+            a11y_cache: std::cell::RefCell::new(None),
         };
         if request.hidden {
             session.doc.set_hidden(true);
@@ -159,6 +161,12 @@ pub struct ScriptedDocumentSession<E: script_engine_api::ScriptEngine> {
     /// pumps. Reading this never triggers another collection.
     collection_stats: (usize, usize),
     external_textures: Vec<document_session_api::SessionExternalTextureDraw>,
+    /// Monotonic revision for the published accessibility projection, and the
+    /// last projection published under it. Same discipline as the Livery
+    /// session: the revision advances only when the content actually changed,
+    /// so a host may compare revisions to decide whether to republish.
+    a11y_revision: std::cell::Cell<u64>,
+    a11y_cache: std::cell::RefCell<Option<document_session_api::DocumentA11yProjection>>,
 }
 
 #[cfg(feature = "scripted")]
@@ -178,7 +186,98 @@ impl<E: script_engine_api::ScriptEngine + 'static> ScriptedDocumentSession<E> {
             pointer_active: false,
             collection_stats: (0, 0),
             external_textures: Vec::new(),
+            a11y_revision: std::cell::Cell::new(0),
+            a11y_cache: std::cell::RefCell::new(None),
         }
+    }
+
+    /// The neutral accessibility projection of the **top** browsing context's
+    /// document, built off the retained layout of the last rendered frame.
+    ///
+    /// `Click` is advertised only for a node whose retained fragment actually
+    /// intersects the presented viewport, which is the same on-screen rule the
+    /// static Livery session reaches through `accessible_pointer_target`. A
+    /// receipt that states its window in physical pixels on a scaled display
+    /// therefore sees exactly the links a person could click.
+    ///
+    /// A composited child frame keeps its own arena and its own retained
+    /// layout; this projection covers the top document alone, so a node that
+    /// has been adopted away into a child is absent here rather than reparented.
+    fn unrevisioned_accessibility_projection(
+        &self,
+    ) -> Option<document_session_api::DocumentA11yProjection> {
+        use document_session_api::{DocumentA11yAction, DocumentA11yProjection};
+
+        let projection =
+            self.doc
+                .with_retained_frame_and_dom(|dom, fragments, scroll, viewport| {
+                    let projection = genet_render::document_a11y_projection_with_scroll(
+                        dom,
+                        fragments,
+                        None,
+                        0,
+                        &std::collections::HashMap::new(),
+                    );
+                    let (scroll_x, scroll_y) = scroll;
+                    let (view_w, view_h) = (viewport.0 as f32, viewport.1 as f32);
+                    let nodes = projection
+                        .nodes()
+                        .iter()
+                        .cloned()
+                        .map(|mut node| {
+                            let on_screen = node.bounds.as_ref().is_some_and(|bounds| {
+                                let x = bounds.x - scroll_x;
+                                let y = bounds.y - scroll_y;
+                                bounds.width > 0.0
+                                    && bounds.height > 0.0
+                                    && x < view_w
+                                    && y < view_h
+                                    && x + bounds.width > 0.0
+                                    && y + bounds.height > 0.0
+                            });
+                            if node.state.disabled || node.state.hidden || !on_screen {
+                                node.actions
+                                    .retain(|action| *action != DocumentA11yAction::Click);
+                            }
+                            if let Some(bounds) = node.bounds.as_mut() {
+                                bounds.x -= scroll_x;
+                                bounds.y -= scroll_y;
+                            }
+                            node
+                        })
+                        .collect();
+                    DocumentA11yProjection::new(
+                        0,
+                        projection.support().clone(),
+                        projection.root(),
+                        nodes,
+                    )
+                })?;
+        Some(projection)
+    }
+
+    fn current_accessibility_projection(
+        &self,
+    ) -> Option<document_session_api::DocumentA11yProjection> {
+        let fresh = self.unrevisioned_accessibility_projection()?;
+        let unchanged = self.a11y_cache.borrow().as_ref().is_some_and(|cached| {
+            cached.root() == fresh.root()
+                && cached.support() == fresh.support()
+                && cached.nodes() == fresh.nodes()
+        });
+        if unchanged {
+            return self.a11y_cache.borrow().clone();
+        }
+        let revision = self.a11y_revision.get().saturating_add(1).max(1);
+        let current = document_session_api::DocumentA11yProjection::new(
+            revision,
+            fresh.support().clone(),
+            fresh.root(),
+            fresh.nodes().to_vec(),
+        );
+        self.a11y_revision.set(revision);
+        *self.a11y_cache.borrow_mut() = Some(current.clone());
+        Some(current)
     }
 }
 
@@ -300,6 +399,14 @@ impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
     }
     fn inspect(&self) -> Option<document_session_api::ContentReport> {
         Some(self.doc.with_dom(content_report))
+    }
+
+    /// The scripted lane publishes a projection of the top document. Action
+    /// dispatch and click-target revalidation stay unimplemented here: they
+    /// need a live pointer target for a scripted document, which is the
+    /// Livery-session seam (`accessible_pointer_target`) and not this lane's.
+    fn accessibility_projection(&self) -> Option<document_session_api::DocumentA11yProjection> {
+        self.current_accessibility_projection()
     }
     fn clip(&self) -> Option<DocumentClip> {
         let selection = self.doc.text_selection();

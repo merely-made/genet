@@ -785,6 +785,23 @@ impl LiveryCssom {
         self.state.borrow().scroll
     }
 
+    /// Read the last rendered live frame's retained layout together with the
+    /// scroll offset and viewport it was rendered against. `None` before the
+    /// first frame, because there is no geometry to answer with.
+    ///
+    /// This is the read seam a session-level accessibility projection needs:
+    /// the projection helper wants the retained fragments, and the on-screen
+    /// rule that decides whether a node may advertise `Click` wants the
+    /// viewport those fragments are measured against.
+    pub fn with_retained_frame<R>(
+        &self,
+        read: impl FnOnce(&LiveryLayout<NodeId>, (f32, f32), (u32, u32)) -> R,
+    ) -> Option<R> {
+        let state = self.state.borrow();
+        let frame = state.frame.as_ref()?;
+        Some(read(&frame.fragments, state.scroll, frame.viewport))
+    }
+
     /// The most recently rendered viewport. It is `(0, 0)` before the first
     /// frame so keyboard scrolling remains a no-op until geometry exists.
     pub fn viewport(&self) -> (u32, u32) {

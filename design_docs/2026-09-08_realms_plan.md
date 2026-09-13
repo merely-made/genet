@@ -1,5 +1,28 @@
 # Realms: one agent, one realm per browsing context
 
+**Status (current):** **The full headed G5 acceptance is closed**, at
+`11b61a0edab`, 2026-09-12 — see
+[Phase: headed G5 acceptance](#phase-headed-g5-acceptance-2026-09-12), which
+supersedes every "full headed G5 remains open" line below. A real Ortet window
+on **both engines** drives a parent document and a same-origin child iframe
+through the whole sequence: a subtree carrying an open shadow root, a nested
+closed root and a parser-created template is adopted from the child into the
+parent and back, the child is navigated twice and the top level once, and the
+presented frame (`0x8df9c9b8815a6e22`, three consecutive matching captures per
+engine), the published accessibility projection (the adopted link that ends up
+in the parent projected as a `Link` with a `Click` action; the link adopted into
+the child and navigated away absent from that same revision) and the live-node
+census (`31` before and `31` after, across the top-level navigation) all agree.
+It found and fixed one defect — a node could not outlive the realm it was born
+in, `NoSuchRealm` on re-reflection after the source context was discarded — and
+records four residuals by name: return-hop reflector identity, the unfetched
+external script of a document reached by an in-session top-level navigation,
+Ortet's lingering exit, and the compositing lane's digest instability, which is
+now shown to reach `article.html` as well and to turn on **window size**, not
+frame timing. **Still open:** a discarded context's `Location` reporting
+`about:blank`; accessibility action *dispatch* for a scripted session; the three
+named residuals above.
+
 **Status:** **The top-level realm is replaced**, on `lane/top-level-realm` from
 `546201874df`, 2026-09-12; the broad DOM guard is green since the associated-state transfer lane's repin. `MAIN_REALM` now means
 only the agent's bootstrap realm — the timer queue, the navigation drive, the
@@ -80,33 +103,6 @@ navigation exists and the document URL and session history move, but the realm
 does not. Full G5 and associated shadow/template transfers also remain open.
 Earlier phases below retain their historical results; final acceptance is
 recorded at the end of this plan.
-||||||| base
-**Status:** WindowProxy and navigation landed on the working tree, 2026-09-11;
-broad DOM guard remains red. A browsing context now holds one `WindowProxy` for
-its life, built natively before its realm's first instruction over a shadow
-target that retains no global, with the cross-origin decision made *inside* the
-one object per accessing realm. A child navigates for real - `iframe.src`,
-`location.href` / `assign` / `replace` / `reload`, and `contentWindow.location`
-from the parent - through unload, a new realm, a new `Document`, a proxy rebind
-and an interleaved parse, with fragment navigation keeping the document and
-firing `hashchange`, and session history moved onto the browsing-context crate
-with `popstate`. The outgoing realm is discarded every time, **including the
-realm the proxy was built in**: both engines keep the handler, the shadow and the
-control function alive after it goes, so no realm is retained. The release
-runtime suite passes **542 tests with zero ignored**. The navigation census gains
-19 named subtests and twelve files across nine directories with two
-pass-to-nonpass movements, both former vacuous passes and both explained; **no
-repins**, twelve of fifteen testharness slices and both reftest guards at
-`unexpected=0`, every red one carrying the count it inherited, and both Ortet
-receipts unchanged. **The top-level realm is not replaced**: `MAIN_REALM` is the
-agent's root host, the resolution target of every `Runtime` entry point and the
-one realm the engine refuses to discard, so replacing it is a `Runtime` API lane
-rather than a navigation one - the host policy hook that gates a top-level
-navigation exists and the document URL and session history move, but the realm
-does not. Full G5 and associated shadow/template transfers also remain open.
-Earlier phases below retain their historical results; final acceptance is
-recorded at the end of this plan.
-
 **Parent:** [iframes and nested browsing contexts](2026-09-08_iframes_plan.md),
 whose Â§4 named the realm decision as Mark's and left `contentWindow` a stub
 rather than dressing it up.
@@ -2103,7 +2099,6 @@ refusal, which is a correctness boundary rather than a gap. It does not stabilis
 `frames.html`'s Ortet digest, and it does not touch the top-level realm, the
 `fetch/api/basic` slice, or the initial-`about:blank` load-event timing that the
 navigation phase's one honest census regression turns on.
-||||||| base
 
 
 ---
@@ -2356,3 +2351,231 @@ initial `about:blank` load event to the synchronous point HTML puts it at. It
 does not lift the parsing-time adoption refusal, and it does not reconcile
 `dom_boa.json` / `dom_nodes_boa.json` against `main`'s repins — that is the
 merge's work, with the control above as its evidence.
+
+---
+
+## Phase: headed G5 acceptance, 2026-09-12
+
+The open item every phase since the adoption continuation has carried forward is
+"full headed G5 acceptance": everything the runtime suite proves about realms,
+adoption and lifetimes has been proved with no window in the loop. This phase
+closes it. A real winit window drives the frame loop, a script inside the page
+performs the whole realms sequence, and three things the script cannot see are
+read back and correlated with it, per engine: the presented frame's digest, the
+accessibility projection the host published, and the live-node census of the top
+document's arena.
+
+**Genet commit:** `11b61a0edab`
+(`11b61a0edab4cf74a4c4808e2b80e9cc2fd13aa7`).
+
+### The host decision, by fact
+
+Ortet on `main` **has** a scripted route: `--engine boa` and `--engine nova`
+select `ScriptedSessionEngine::<BoaEngine|NovaEngine, _>` in
+`ports/ortet/src/shell.rs`, behind the `scripted` / `scripted-nova` features, and
+a page loaded that way runs its scripts through `genet-scripted`'s
+`LiveryScriptedDocument`. So the host is **Ortet**, not a harness around
+`LiveryScriptedDocument`, and no new host was built. The receipt reuses the
+conventions of `support/ci/run_ortet_g5_arena_receipt.ps1` — same source-identity
+record, same completion-heading condition, same completion-pixel readback, same
+deliberate-failing control.
+
+Two facts forced departures from the G5 arena receipt's shape, both established
+by running rather than by reading:
+
+- **The fixture cannot be served from the filesystem.** `Origin::of_url`
+  (`components/shared/browsing-context/lib.rs`) gives every `file:` URL an
+  opaque origin, and an opaque origin is same-origin with nothing, itself
+  included. A `file:` parent therefore cannot reach `frame.contentDocument` at
+  all, and neither can a `srcdoc` child, which inherits the opaque origin. The
+  fixture is served over one loopback http origin by
+  `support/ci/ortet_g5_realms_receipt_server.mjs`, a static server for that one
+  directory that also records every path it served.
+- **The scripted session published no accessibility projection.**
+  `DocumentSession::accessibility_projection` had a `None` default and only the
+  Livery session overrode it, so a *scripted* document was invisible to the
+  accessibility half of this acceptance. That is now implemented for
+  `ScriptedDocumentSession` (below).
+
+### What was built
+
+| Piece | What it is |
+|---|---|
+| `ports/ortet/tests/native/realms/` | the fixture: `parent.html` + `parent.js`, `parent2.html` + `parent2.js`, `child-a.html`, `child-b.html`, `child-c.html`, `realms.css`, `child.css` |
+| `support/ci/ortet_g5_realms_receipt_server.mjs` | the one loopback http origin the fixture needs to be same-origin with its child |
+| `support/ci/run_ortet_g5_realms_receipt.ps1` | the receipt: build, serve, three passes per engine, every assertion, the deliberate-failing control |
+| `ortet --a11y-dump <path>` | a receipt seam beside `--artifact`: every accessibility projection the run publishes, appended one block per revision, as flat text a runner greps |
+| `ortet: receipt live nodes first=N last=M` | the top document's arena census at the first laid-out frame and the last presented one, through the session's existing `as_any` observation downcast |
+| `ScriptedDocumentSession::accessibility_projection` | the scripted lane's neutral projection, off the retained layout of the last rendered frame, with `Click` withheld from any node whose fragment does not intersect the presented viewport |
+| `LiveryCssom::with_retained_frame`, `LiveryScriptedDocument::with_retained_frame_and_dom`, `LiveryScriptedDocument::live_node_count` | the read seams those two need, and nothing wider |
+
+Action dispatch and click-target revalidation are deliberately **not**
+implemented for the scripted session: they need a live pointer target for a
+scripted document, which is the Livery session's `accessible_pointer_target`
+seam and not this lane's. The projection is published; acting on it is not.
+
+### The fixture, and what each stage asks
+
+One native click starts it. Each stage runs in its own timer turn, so the host's
+frame-cadence GC tick runs between stages; each catches its own throw and writes
+it into the page as a distinct, non-matching heading, so a failure is legible in
+the receipt rather than silent.
+
+1. The parent reaches into child A and builds associated state on its `#payload`
+   subtree: an **open** shadow root holding a nested **closed** one, beside a
+   parser-created `template` whose contents already live in child A's inert
+   template-contents owner document — which is asserted to be neither document.
+2. `#payload` is adopted **into the parent**. Every invariant the
+   associated-state phase names is asserted here and holds: `ownerDocument`
+   follows for the subtree, the host, the shadow content and the link; the open
+   root travels with its host as the same object; the closed root stays closed
+   and keeps its contents; the template's contents are re-homed onto the
+   *parent's* inert owner, which is neither the source's nor the parent
+   document, recursively through the nested template; and every reflector,
+   including `document.getElementById('kept')`, is the same object as before.
+3. The parent's own `#away` link is adopted **into child A**, the other way.
+4. **Child navigation one**: `frame.src = 'child-b.html'`. Child A is discarded,
+   and the away link with it.
+5. `#payload` is adopted **back into child B** — into a document that did not
+   exist when the subtree left.
+6. `#kept` alone comes back to the parent, so exactly one link ends up there.
+7. **Child navigation two**: `frame.src = 'child-c.html'`. What is left of the
+   subtree goes down with child B; the kept link survives in the parent.
+8. Every reference is released and several GC ticks are allowed to run, and the
+   page settles on the heading the accessibility assertions are read at.
+9. **Top-level navigation**: `location.href` moves the top level to
+   `parent2.html`, whose markup is node-for-node the first pass's shape and whose
+   `h1` carries the completion heading the host is waiting for. Matching it is
+   the proof that the top level was replaced.
+
+### The receipts, per engine
+
+Window `1280x1120` **physical**; Ortet's own `display scale=2` line is read back
+by the runner, so the asserted geometry is a **640x560 CSS viewport**, recorded
+rather than assumed (the 2026-09-10 correction to the O2 bridge-action receipt).
+
+| Gate | Boa | Nova |
+|---|---|---|
+| Presented-frame digest, three consecutive runs | `0x8df9c9b8815a6e22` three for three | `0x8df9c9b8815a6e22` three for three |
+| Completion heading at the captured frame | `Ortet G5 realms sequence complete` | same |
+| Completion pixel at (width-8, height-8) | `#2F6B3C` | same |
+| Accessibility: kept link in the settled revision | `role=Link`, `actions=[Click, Focus]`, bounds `33,189,574,31`, node id tagged with the **child's** arena (`7696581394467`) under a parent-arena root (`2199023255552`) | same |
+| Accessibility: away link in that same revision | absent | absent |
+| Accessibility: a post-navigation revision under a new root | revision 10, root `47278999994368`, carrying the completion heading | same |
+| Live-node census (top arena) | `first=31 last=31`, all three passes | `first=31 last=31`, all three passes |
+| Collection over the run | `unpinned=14 collected=29` | `unpinned=14 collected=29` |
+| Deliberate-failing control | an unmet heading under a 25 ms deadline fails the run and reports its bound | same |
+
+The two engines agree on every number, digest included. The digest is **stable**:
+the fixture is drawn entirely at 20 px and above with flat fills, deliberately,
+so it does not inherit the frames fixture's instability — see below.
+
+### Four defects and residuals this acceptance found
+
+It found them because a window was in the loop; none is visible to the runtime
+suite as it stood.
+
+**1. A node could not outlive the realm it was born in — fixed, with a named
+regression.** `creation_realm` (`components/script-runtime-api/dom/adoption.rs`)
+preferred a node's recorded *birth* realm unconditionally. A node adopted out of
+a child browsing context keeps its birth arena tag, so once that child navigated
+and its realm was discarded, `reflect_pinned` asked a realm that no longer
+existed for a reflector and the whole call died with `Error: NoSuchRealm(2)`.
+The recorded creation realm is now used only while it is still a live realm;
+otherwise the node's **current owner** answers, which is the owner-resolved rule
+the rest of this plan already states. Positive control: with the filter reverted,
+the new test fails on both engines with exactly that error; with it, both pass.
+
+**2. `ShadowRoot` and re-reflection identity are not preserved on the return
+hop — named residual, not fixed.** Adopting the subtree *back* into a child
+yields a *fresh* `ShadowRoot` object rather than the held one, and re-reflecting
+a node through the returned root (`root.firstChild`), through the template's
+contents fragment, or through `document.getElementById` no longer returns the
+object held across the hop — while the held references themselves stay valid and
+report the right parent, owner and text. The tree is correct; the wrapper
+identity is not. The outbound hop preserves identity exactly, which is what the
+associated-state phase's tests assert, so this is a gap in the *return* hop
+only. The fixture asserts the tree through identities that are preserved and
+states this plainly rather than asserting it away. **Scope for whoever takes
+it:** the same-arena round trip is covered by
+`cross_arena_associated_transfer.rs::shadow_tree_round_trip`; what is uncovered
+is a round trip whose source realm has been discarded in between.
+
+**3. An external script of a document reached by an in-session top-level
+navigation is not fetched — named residual.** After `location.href` moved the
+top level, the server was asked for `parent2.html`, its stylesheet and its child
+frame, but **never** for `parent2.js`. The completion condition therefore lives
+in `parent2.html`'s markup and its completion paint in an inline script; the
+external script is kept only so the two passes have the same node shape, and
+says so in a comment.
+
+**4. `ortet.exe` does not always terminate after its event loop exits — named
+residual.** On Boa, all three passes reported their entire receipt and then
+lingered; on Nova every pass exited cleanly. A host-owned background runtime
+outlives `main`. The runner gives the process the receipt deadline plus twenty
+seconds, then stops it, and accepts the run only if the completion line was
+already written — it warns loudly rather than hiding it.
+
+### The compositing lane's instability, characterized
+
+The frames fixture's bimodal digest was to be characterized if it reproduced,
+and not averaged away. What reproduced at this commit is **broader than
+`frames.html`**: the `article` fixture, recorded as three matching captures in
+the two previous phases, is **also unstable here** — and the variable is the
+**window size**, which points at glyph rasterization rather than frame timing.
+
+| Fixture | Window (physical) | CSS viewport | Runs | Digests |
+|---|---|---|---:|---|
+| `article` | 640x400 | 320x200 | 4 | `0xbebd4a74f765263d` four for four — **stable** |
+| `article` | 1280x1200 | 640x600 | 3, `--frames 3` | `0x9dbe44635b0d03cb`, `0x91de7697a0c708a3`, `0x6bac9850b7d13f30` — three distinct |
+| `article` | 1280x1200 | 640x600 | 3, settle-driven | `0x9dbe44635b0d03cb`, `0x6bac9850b7d13f30`, `0x6bac9850b7d13f30` — two distinct |
+| this lane's realms fixture | 1280x1120 | 640x560 | 3 per engine | one value, both engines — **stable** |
+
+A larger CSS viewport shows more of `article`'s small body text and the digest
+destabilises; the same host at the same commit renders this lane's fixture — same
+window scale, nothing below 20 px, flat fills — identically six times running.
+That is consistent with the earlier sub-10-px glyph-rasterization finding and
+against a frame-timing explanation, and it is **the compositing lane's**, not
+this one's. Two consequences: the `article` digest recorded by the previous two
+phases should be read as *size-qualified*, and a receipt that wants a stable
+digest must state its viewport and keep its type large.
+
+### Named regression manifest
+
+| Test | What it pins |
+|---|---|
+| `script-runtime-api/tests/cross_arena_associated_transfer.rs::{boa,nova}::node_outlives_the_realm_it_was_born_in` | a subtree carrying associated state is adopted out of a child, the child is navigated away, and re-reflecting its nodes through the parent still works — the `NoSuchRealm` defect above, with a verified positive control |
+| `ortet/src/args.rs::the_accessibility_dump_is_its_own_opt_in_receipt_seam` | `--a11y-dump` is opt-in, independent of `--artifact`, and needs its value |
+| `ortet/src/args.rs::a_receipt_run_carries_its_frames_size_and_artifact` | the dump is absent unless asked for |
+| `support/ci/run_ortet_g5_realms_receipt.ps1` | the headed acceptance itself: digest stability over three runs per engine, the completion heading and pixel, the projection assertions on one settled revision, the post-navigation projection under a new root, the live-node census, the collection floor, and a deliberate-failing control |
+
+### Gates
+
+| Gate | Result |
+|---|---|
+| `script-runtime-api`, both engines, whole suite | **568 passed, 0 failed, 0 ignored** (the top-level-realm phase recorded 558; two of the difference are this lane's new tests, and the number is reported as observed) |
+| `genet-scripted` with `scripted-nova` | 118 passed, 0 failed, 0 ignored |
+| `genet-documents` with `scripted-nova` | 49 passed, 0 failed, 0 ignored |
+| `genet-scripted-dom` | 72 passed, 0 failed, 0 ignored |
+| `ortet` with `scripted-nova` | 24 passed, 0 failed, 0 ignored |
+| Clippy, four touched crates, `--all-targets` | **zero errors**; no new warning in a touched line (the pre-existing unused-import warnings in `genet-scripted/livery.rs` and `genet-documents/src/engines/tests.rs` are red at the base and untouched here) |
+| Rustfmt, every touched file | clean. Whole-crate `cargo fmt --check` is still red on `script-runtime-api/frames.rs`, untouched here and red at the base |
+| Headed realms receipt, both engines | **passed**, three consecutive matching digests each |
+| Ortet `article`, three runs | see the table above: **stable at 640x400, unstable at 1280x1200** — reported as observed, and the instability attributed to the compositing lane |
+
+Artifacts: `C:/Users/mark_/Code/testing/genet/ortet-g5-realms-20260912/`
+(per engine, per pass: log, PNG, SHA-256, the appended projection dump, the
+parsed assertions, the completion-pixel record, `digests.json`, `summary.json`,
+plus the source-identity records and the server's request log) and
+`C:/Users/mark_/Code/testing/genet/ortet-article-640-20260912/`.
+
+### What this phase does not do
+
+It does not fix the return-hop reflector identity, the unfetched external script
+after a top-level navigation, or Ortet's lingering exit; all three are named
+above with their scope. It does not give the scripted session accessibility
+*action dispatch* or click-target revalidation, only a projection. It does not
+run a WPT census — nothing here moves a web-platform behaviour except the
+`NoSuchRealm` fix, whose reach is pinned by its own regression on both engines.
+It does not stabilise `article.html`'s digest at a large viewport, which is the
+compositing lane's to settle.

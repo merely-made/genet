@@ -73,6 +73,17 @@ fn run() -> Result<(), String> {
     // this session's frame-cadence GC ticks. Zero for non-scripted lanes.
     let (unpinned, collected) = outcome.collection_stats;
     println!("ortet: receipt collection unpinned={unpinned} collected={collected}");
+    // The top document's arena census at the first and last presented frames.
+    // A sequence that ends where it began — including across a top-level
+    // navigation — must not have grown here.
+    let census = |count: Option<usize>| {
+        count.map_or_else(|| "unavailable".to_owned(), |count| count.to_string())
+    };
+    println!(
+        "ortet: receipt live nodes first={} last={}",
+        census(outcome.live_nodes.0),
+        census(outcome.live_nodes.1)
+    );
     Ok(())
 }
 

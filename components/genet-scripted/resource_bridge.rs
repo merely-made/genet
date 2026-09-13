@@ -404,6 +404,18 @@ impl ScriptResourceLoader for ScriptResourceBridge {
         String::from_utf8(response.bytes).ok()
     }
 
+    fn load_classic_script(
+        &self,
+        url: &str,
+        charset: Option<&str>,
+        integrity: Option<&str>,
+    ) -> Option<String> {
+        if self.state.closed.load(Ordering::Acquire) {
+            return None;
+        }
+        crate::document::fetch_external(Some((self, url)), url, charset, integrity)
+    }
+
     fn start(
         &self,
         _id: u64,
@@ -479,6 +491,54 @@ mod tests {
             [("content-type".to_owned(), "text/javascript".to_owned())]
         );
         assert_eq!(outcome.body, b"x");
+    }
+
+    #[test]
+    fn classic_script_loading_checks_integrity_and_stops_after_close() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let bridge = ScriptResourceBridge::new(
+            Fixture {
+                calls: Arc::clone(&calls),
+            },
+            ScriptWake::new(),
+        );
+        let url = "https://origin.test/script.js";
+        assert_eq!(
+            bridge.load_classic_script(
+                url,
+                None,
+                Some("sha256-LXEWQrcmsEQBYnyp+6wy9chTD7GQPMTbAiWHF5IaSIE="),
+            ),
+            Some("x".to_owned())
+        );
+        assert_eq!(
+            bridge.load_classic_script(
+                url,
+                None,
+                Some("sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="),
+            ),
+            None
+        );
+        assert_eq!(calls.load(Ordering::Relaxed), 2);
+        bridge.close();
+        assert_eq!(bridge.load_classic_script(url, None, None), None);
+        assert_eq!(calls.load(Ordering::Relaxed), 2);
+    }
+
+    #[test]
+    fn classic_script_loading_decodes_the_declared_charset() {
+        struct Latin1Script;
+        impl ResourceFetcher for Latin1Script {
+            fn fetch(&self, _url: &str) -> Option<Vec<u8>> {
+                Some(vec![0xe9])
+            }
+        }
+        let bridge = ScriptResourceBridge::new(Latin1Script, ScriptWake::new());
+        assert_eq!(
+            bridge
+                .load_classic_script("https://origin.test/script.js", Some("windows-1252"), None,),
+            Some("é".to_owned())
+        );
     }
 
     #[test]

@@ -66,8 +66,8 @@ older `docs/` corpus without changing their location or governance.
 | [Shadow DOM](2026-09-07_shadow_dom_plan.md) | A parentless shadow root in both DOMs, a per-host slot assignment table maintained at the mutation, `flat_children` under Livery's rendering traversals, per-rule tree-scope matching with `:host` / `:host()` / `::slotted()` / `::part()`, event retargeting and `composedPath()`, and the declarative post-parse pass with `<template>.content` in one shared inert document. Landed 2026-09-07/08: `shadow-dom` 6 to 45 all-pass and 24 to 1,512 subtests, +1,761 subtest passes over four directories, one explained pass-to-fail. Residuals: `:host-context()`, `adoptedStyleSheets`, focus delegation, and declarative attachment consulting the custom-element registry (which needs parser/script interleaving — Mark's call). |
 | [Parser/script interleaving](2026-09-08_parser_script_interleaving_plan.md) | HTML's parsing model with scripts run at the point the tree builder pops them: an html5ever `TreeSink` over the live arena, `document.write` at the tokenizer's insertion point, `currentScript`, the `readyState` transitions with `DOMContentLoaded` and `load`, parse-time custom-element upgrade, and declarative shadow roots consulting the registry. Landed 2026-09-08 in the engine (part one: +68 subtest passes over eight directories, 30 files `fail -> pass`, zero pass-to-fail, no repins). **Part two, 2026-09-08**, routed the WPT runner and `LiveryScriptedDocument` through the same parse and closed the named residuals: `testharness.js` as a prelude and one `load` dispatch, a two-phase `LiveryCssom` that resolves author sheets from the arena as the parser fills it, `document.write` tokenized inside the call so its markup is visible to the writing script and a written `<script>` runs, the open stream appending through one live tokenizer, upgrades at element creation, foreign-namespace scripts, and scripts in template contents left inert. +181 subtest passes over ten directories and +439 across the 79-directory disk census (excluding two identified timing artifacts), 19 census `pass -> fail` all attributed, six baselines repinned forward-only, all fourteen at `unexpected=0`, Ortet digest unchanged. **Both Shadow DOM declarative regressions now recover in WPT** — the open gate is closed. |
 
-| [iframes and nested browsing contexts](2026-09-08_iframes_plan.md) | HTML's browsing-context tree in `genet-documents` (parent, children, top, each context's active document, origin, sandbox flags and its own session history), loading through the parent's own resource route (`src`, `srcdoc`, `about:blank`, the initial-`about:blank` rules, `sandbox` / `allow` / `loading`), and the child's scene composited into the parent's replaced box as a **paint-list splice** rather than a producer texture, clipped to the content box, with hit testing descending into it. Landed 2026-09-08: +23 subtest passes over eight directories, two files `fail -> pass`, zero pass-to-fail, three baselines repinned forward with six named entries, all fourteen at `unexpected=0` and both reftest guards at `unexpected=0`. Ortet composites child frames through the script-free Livery route with no Ortet code change; the article digest is unchanged at `0x6377ba8a6bf4dbc9` and the new `frames.html` receipt is `0x97bdd4bd9e03ec02`. The earlier runtime/`WindowProxy` decision is superseded by the [Realms plan](2026-09-08_realms_plan.md): one `Runtime` per agent, one realm per browsing context. Continuation acceptance remains open. |
-| [Realms](2026-09-08_realms_plan.md) | One `Runtime` per agent, one realm per browsing context, the `WindowProxy` as each context's global this. Landed on main through 11b61a0edab: the realm contract on both engines, per-realm host surfaces, same-origin identity and cross-origin `SecurityError`, child and top-level navigation with session history, live iframe relocation and teardown, and cross-arena adoption of ordinary, shadow and template subtrees with the broad DOM guard green. Headed G5 accepted 2026-09-12 on Ortet's scripted route, both engines. Open: return-hop reflector identity, external scripts of an in-session top-level navigation, canvas with a live drawing context. |
+| [iframes and nested browsing contexts](2026-09-08_iframes_plan.md) | Browsing-context tree, parent resource route and child paint-list composition landed 2026-09-08; the original script-free receipts remain dated in the plan. The [Realms continuation](2026-09-08_realms_plan.md) resolved the runtime decision, implemented child and top-level navigation, and completed scripted headed G5 acceptance on both engines. The current residual inventory lives there; the earlier request for a runtime/WindowProxy decision is superseded. |
+| [Realms](2026-09-08_realms_plan.md) | One `Runtime` per agent, one realm per browsing context, stable `WindowProxy`, child/top navigation and ordinary/shadow/template adoption are landed. Three residuals closed 2026-09-13: classic external scripts after navigation, discarded Location URL behavior, and retired-host teardown including Boa process exit. 841 crate tests pass; a 1,426-file census gains 37 subtest passes without losing a passing subtest. Stronger G5: three matching captures per engine, unchanged digest and node counts, every process exits normally. Open: wrapper identity after source-realm discard, live canvas adoption, `ancestorOrigins`, parser timing and the named navigation surfaces. DOM guard throughput remains qualified in the plan; no baseline repins. |
 The [Buckram master](../docs/2026-07-26_buckram_css_layout_engine_plan.md)
 defines ownership and the [lane program](../docs/2026-08-21_buckram_livery_lane_program_plan.md)
 assigns residuals. The linked execution plans carry their current gate; a
@@ -573,6 +573,11 @@ same session; links out of it are rewritten for its new depth.
 
 - **Cross-arena runtime mutation:** validate every participating operand before detachment; preserve pending layout records while consuming observer records at the semantic boundary. Group observer mutations by the physical owner, keep canonical wrappers in their creation realm, and re-register private hooks from the cloned heap after a runtime snapshot restore.
 
+- **Execution registration is shorter than host lifetime.** A discarded realm
+  can leave host resources reachable through retained script objects. Runtime
+  teardown must cover those hosts before the engine heap is destroyed; weak
+  lifetime tracking provides that coverage without rooting discarded documents.
+
 - **Fuse the check with the decode, or the check is optional.** A native sink
   got an agent-wide reflector id and a separate `reflector_is_local` to call
   before dereferencing it in its own arena — 60 sinks, 72 call sites, and
@@ -1067,3 +1072,22 @@ glyph rasterization rather than frame timing and means the `article` digests
 recorded by the two previous phases should be read as size-qualified. This
 lane's own fixture is drawn entirely at 20 px and above with flat fills, so its
 digest does not inherit that instability.
+
+### Realms residual closure (2026-09-13)
+
+The [residual closure phase](2026-09-08_realms_plan.md#phase-residual-closure-2026-09-13)
+closes external classic scripts on both top and child navigation, the discarded
+Location's URL/no-op behavior, and resource teardown for retired hosts. Eight
+new runtime regressions fail before the patch and pass after it on both engines;
+two bridge tests cover integrity, charset decoding and loader closure. All
+**841 crate tests pass**, including **576 runtime tests**, with zero ignored.
+The seven-directory census gains **37** passes with zero lost passing subtests;
+the Location file moves **8/46 -> 45/46**, leaving `ancestorOrigins` unimplemented.
+The default DOM guards hit load-sensitive deadlines, with pre/post controls
+recorded in the plan; both rendering guards stay green and no expectations are
+repinned. Ortet's second document now depends on its fetched external script to
+complete the receipt. Both engines give three captures at the previous digest
+`0x8df9c9b8815a6e22`, live nodes **31 -> 31**, and normal exit code 0; both
+deliberate-failure controls exit 1. Source identities match before and after.
+The plan and iframe banner now distinguish completed continuation work from the
+remaining identity, canvas, parser, API and performance work.

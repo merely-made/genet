@@ -1472,7 +1472,7 @@ impl script_runtime_api::ParserScriptLoader for DocumentScriptLoader<'_> {
     }
 }
 
-fn fetch_external(
+pub(crate) fn fetch_external(
     loader: Option<(&dyn ResourceFetcher, &str)>,
     src: &str,
     charset: Option<&str>,

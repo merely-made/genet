@@ -37,6 +37,9 @@ pub(crate) struct FrameState {
     /// `MAIN_REALM` - the fallback a single-realm backend keeps for good.
     top_realm: RealmId,
     contexts: BTreeMap<RealmId, BrowsingContextId>,
+    /// Retained Location objects must observe removal synchronously, before
+    /// the queued unload removes the realm's host and execution registration.
+    detached_documents: std::collections::BTreeSet<RealmId>,
     records: BTreeMap<RealmId, FrameRecord>,
     /// Contexts detached from the tree but not yet unloaded. HTML's "destroy a
     /// child navigable" splits exactly here: the container stops having a
@@ -109,6 +112,10 @@ struct FrameRecord {
 }
 
 impl FrameState {
+    pub(crate) fn document_is_detached(&self, realm: RealmId) -> bool {
+        self.detached_documents.contains(&realm)
+    }
+
     /// The one accessor every top-document question goes through. See the
     /// field's note for why this is not [`MAIN_REALM`].
     pub(crate) fn top_realm(&self) -> RealmId {
@@ -207,6 +214,7 @@ impl FrameState {
             .into_iter()
             .map(|realm| {
                 self.records.remove(&realm);
+                self.detached_documents.insert(realm);
                 (realm, self.contexts.remove(&realm))
             })
             .collect();
@@ -1850,6 +1858,7 @@ fn unload_for_navigation<E: ScriptEngine>(
         let context = {
             let mut a = agent.borrow_mut();
             let context = a.frames.contexts.remove(realm);
+            a.frames.detached_documents.insert(*realm);
             a.frames.records.remove(realm);
             a.frames.release_context(*realm);
             a.dom_adoption.remove_realm(*realm);

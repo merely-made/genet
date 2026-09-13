@@ -404,6 +404,10 @@ pub(crate) struct AgentState {
     /// them is deliberately not reachable from any global.
     pub(crate) cancel_realm_tasks: Option<Rc<dyn std::any::Any>>,
     pub(crate) hosts: std::collections::BTreeMap<RealmId, SharedHost>,
+    /// Hosts can outlive their execution registration through retained JS or
+    /// host references. Track them weakly so Runtime::drop can release their
+    /// resources before engine heap/TLS destruction without extending their life.
+    host_lifetimes: Vec<std::rc::Weak<RefCell<HostState>>>,
     pub(crate) fetch_realms: std::collections::HashMap<u64, RealmId>,
     pending_trace: Vec<PendingTraceEvent>,
     pub(crate) opaque_roots: std::collections::BTreeMap<RealmId, OpaqueRootState>,
@@ -411,6 +415,12 @@ pub(crate) struct AgentState {
 
 impl AgentState {
     pub(crate) fn register(&mut self, realm: RealmId, host: SharedHost) {
+        self.host_lifetimes
+            .retain(|known| known.strong_count() != 0);
+        let weak = Rc::downgrade(&host);
+        if !self.host_lifetimes.iter().any(|known| known.ptr_eq(&weak)) {
+            self.host_lifetimes.push(weak);
+        }
         self.dom_adoption
             .register_realm(realm, host.borrow().dom.arena_id());
         self.hosts.insert(realm, host);
@@ -2082,7 +2092,13 @@ impl<E: ScriptEngine> Drop for Runtime<E> {
     /// No worker thread outlives the agent that owns it, and no realm's host
     /// state outlives the thread.
     fn drop(&mut self) {
-        let hosts: Vec<SharedHost> = self.agent.borrow().hosts.values().cloned().collect();
+        let hosts: Vec<SharedHost> = self
+            .agent
+            .borrow()
+            .host_lifetimes
+            .iter()
+            .filter_map(|host| host.upgrade())
+            .collect();
         for host in &hosts {
             worker::shutdown(host);
         }

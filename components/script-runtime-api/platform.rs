@@ -114,14 +114,24 @@ fn ensure_history(h: &mut HostState) {
     }
 }
 
-/// `__locationField(field)` -> the named URL component of the document URL.
+/// `__locationField(field)` -> a Location URL component, or the separate
+/// retained Document URL for the private `documentURL` selector.
 struct LocationField;
 impl<E: ScriptEngine> NativeFn<E> for LocationField {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
         let a0 = cx.arg(0);
         let field = cx.value_to_string(&a0)?;
-        let href = with_host::<E, _>(cx, |h| h.base_url.clone()).flatten();
-        let out = location_field(href.as_deref(), &field);
+        let realm = cx.current_realm();
+        let document_url = field == "documentURL";
+        let href = with_host::<E, _>(cx, |h| {
+            let detached = !document_url
+                && h.agent
+                    .upgrade()
+                    .is_some_and(|agent| agent.borrow().frames.document_is_detached(realm));
+            if detached { None } else { h.base_url.clone() }
+        })
+        .flatten();
+        let out = location_field(href.as_deref(), if document_url { "href" } else { &field });
         cx.make_string(&out)
     }
 }
@@ -525,7 +535,7 @@ const PLATFORM_BOOTSTRAP: &str = r#"
   Object.defineProperty(globalThis.document, 'URL', {
     enumerable: true,
     configurable: true,
-    get: function() { return __locationField('href'); },
+    get: function() { return __locationField('documentURL'); },
   });
 
   // ── localStorage ── an in-memory Storage (one origin per runtime). The methods

@@ -4,9 +4,11 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 // SPDX-License-Identifier: MPL-2.0
 
-// Kept so the second pass's markup is node-for-node the shape of the first —
-// one inline script and one external one — which is what makes the host's
-// live-node census of the two arenas comparable. This host does not fetch it
-// after an in-session top-level navigation (a named residual of this receipt),
-// so nothing the receipt depends on may live here.
-void 0;
+// Completion requires fetching and executing this external resource after a
+// top-level navigation. Keep the same document shape as the first pass so the
+// live-node census still compares equivalent trees.
+if (document.body.dataset.inlineReady !== "yes") {
+  throw new Error("the inline setup did not precede the external script");
+}
+document.getElementById("state").firstChild.data = "Ortet G5 realms sequence complete";
+document.documentElement.className = "complete";

@@ -34,6 +34,7 @@ param(
     [string]$TargetDir,
     [ValidateRange(1, 32)]
     [int]$BuildJobs = 4,
+    [switch]$Release,
     [ValidateRange(1, 65535)]
     [int]$HttpPort = 18795,
     [ValidateRange(1, 120000)]
@@ -76,10 +77,22 @@ function Get-SourceIdentity {
         $roots += ($root -join '').Trim()
     }
     $identities = foreach ($root in ($roots | Sort-Object -Unique)) {
+        $changedPaths = @(git -C $root diff HEAD --name-only)
+        $changedPaths += @(git -C $root ls-files --others --exclude-standard)
+        $workingFiles = foreach ($path in @($changedPaths | Sort-Object -Unique)) {
+            $absolute = Join-Path $root $path
+            [pscustomobject]@{
+                path = $path
+                sha256 = if (Test-Path -LiteralPath $absolute -PathType Leaf) {
+                    (Get-FileHash -LiteralPath $absolute -Algorithm SHA256).Hash
+                } else { $null }
+            }
+        }
         [pscustomobject]@{
             path = $root
             revision = (git -C $root rev-parse HEAD).Trim()
             dirty = @(git -C $root status --porcelain --untracked-files=normal).Count
+            working_files = @($workingFiles)
         }
     }
     [pscustomobject]@{
@@ -205,12 +218,9 @@ function Assert-Projection {
 # `& $exe ... 2>&1 | Tee-Object` cannot be used here for two reasons, both
 # observed rather than assumed. Ortet writes progress lines to stderr, and with
 # `$ErrorActionPreference = 'Stop'` a redirected native stderr line becomes a
-# terminating error — the receipt would fail on a log line. And **ortet.exe does
-# not always terminate once its event loop has exited**: a host-owned background
-# runtime outlives `main`, so the pipeline never closes even though every
-# receipt line has already been written. That is a named residual of this
-# receipt, not something this runner may paper over silently, so the process is
-# given a grace period and then stopped, and the run is judged from its log.
+# terminating error. Ortet also previously lingered after its event loop
+# exited. Keep a process deadline and retain its log on failure; completion
+# also requires a normal process exit.
 function Invoke-Ortet {
     param([string]$Exe, [string[]]$Arguments, [string]$Log, [int]$GraceMs)
 
@@ -254,10 +264,15 @@ try {
     $before = Get-SourceIdentity
     $before | Set-Content (Join-Path $artifact 'source-identity.json')
     $env:GENET_SOURCE_REVISION = (git rev-parse HEAD).Trim()
-    cargo build -p ortet --features scripted-nova --offline -j $BuildJobs
+    $buildArguments = @('build', '-p', 'ortet', '--features', 'scripted-nova', '--offline', '--locked', '-j', "$BuildJobs")
+    if ($Release) { $buildArguments += '--release' }
+    & cargo @buildArguments
     if ($LASTEXITCODE -ne 0) { throw 'native scripted Ortet build failed.' }
-    $exe = Join-Path $target 'debug\ortet.exe'
+    $profile = if ($Release) { 'release' } else { 'debug' }
+    $exe = Join-Path $target "$profile\ortet.exe"
     if (-not (Test-Path $exe)) { throw "Ortet binary was not produced at $exe." }
+    (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant() + '  ortet.exe' |
+        Set-Content (Join-Path $artifact 'ortet.sha256')
 
     $server = Start-Process -FilePath 'node' -ArgumentList @(
         $serverScript, '--artifact', $artifact, '--port', $HttpPort
@@ -293,12 +308,7 @@ try {
                     throw "Ortet $engine pass $pass exited $($run.code) without completing the realms sequence; see $log."
                 }
                 if (-not $run.exited) {
-                    # Only the lingering-exit residual is tolerated, and only
-                    # when the run had already reported its whole receipt.
-                    if ($output -notmatch [regex]::Escape("semantic heading `"$completion`"")) {
-                        throw "Ortet $engine pass $pass neither exited nor reported completion; see $log."
-                    }
-                    Write-Warning "Ortet $engine pass $pass completed its receipt but did not exit; stopped after the grace period."
+                    throw "Ortet $engine pass $pass did not exit within the process deadline; see $log."
                 }
                 Assert-ReceiptLog -Output $output -Engine $engine -ExpectedAddress $url
                 if (-not (Test-Path $png)) { throw "Ortet $engine pass $pass wrote no PNG." }
@@ -346,6 +356,8 @@ try {
                     live_nodes_first = $first
                     live_nodes_last = $last
                     collection = $stats.Value
+                    process_exited = $run.exited
+                    process_exit_code = $run.code
                 } | ConvertTo-Json | Set-Content (Join-Path $passArtifact 'result.json')
             }
 
@@ -372,6 +384,7 @@ try {
                 '--artifact', (Join-Path $failArtifact 'receipt.png'),
                 '--expect-heading', $impossible, '--timeout-ms', $FailureTimeoutMs
             )
+            if (-not $control.exited) { throw "Ortet $engine failure control did not exit; see $failLog." }
             if ($control.exited -and $control.code -eq 0) { throw "Ortet $engine deliberate-failure control unexpectedly succeeded." }
             if ($control.output -notmatch [regex]::Escape("was absent before the ${FailureTimeoutMs}ms deadline")) {
                 throw "Ortet $engine failure control did not report its bounded deadline."
@@ -379,6 +392,11 @@ try {
             if ($control.output -match [regex]::Escape("semantic heading")) {
                 throw "Ortet $engine failure control reported a semantic completion it must not have."
             }
+            [pscustomobject]@{
+                process_exited = $control.exited
+                process_exit_code = $control.code
+                expected_failure = $true
+            } | ConvertTo-Json | Set-Content (Join-Path $failArtifact 'result.json')
         }
 
         $summary | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $artifact 'summary.json')

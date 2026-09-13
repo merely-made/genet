@@ -2,7 +2,16 @@
 
 **Date:** 2026-09-08
 
-**Status:** landed 2026-09-08 for the browsing-context tree, loading, the
+**Current status (2026-09-13):** The runtime and `WindowProxy` decisions below
+were resolved by the [Realms continuation](2026-09-08_realms_plan.md): one
+`Runtime` per agent, one document realm per browsing context, with child and
+top-level navigation and a stable `WindowProxy`. Scripted Ortet's headed G5
+acceptance is complete on both engines. The
+[current remaining-work inventory](2026-09-08_realms_plan.md#phase-residual-closure-2026-09-13)
+supersedes this lane's original runtime decision and headed-proof residuals.
+The original scope and receipts below retain their 2026-09-08 boundaries.
+
+**Original lane status (2026-09-08):** landed for the browsing-context tree, loading, the
 script-free composite and the Window's own view of its children; the second
 `Runtime` per context and the cross-origin `WindowProxy` are **named residuals
 and a decision for Mark**, recorded in "Residuals" and "What is Mark's" below.

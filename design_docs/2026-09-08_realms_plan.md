@@ -1,6 +1,13 @@
 # Realms: one agent, one realm per browsing context
 
-**Status (current):** **The full headed G5 acceptance is closed**, at
+**Status (2026-09-13):** Three residuals are closed: classic external scripts
+after navigation, discarded `Location` URL behavior, and retired-host resource
+teardown including Ortet's Boa exit. The strengthened headed G5 gate passes on
+both engines. The current inventory and done-conditions are in
+[Residual closure](#phase-residual-closure-2026-09-13).
+Earlier phases retain their dated receipts and historical boundaries.
+
+**Headed acceptance (2026-09-12):** **The full headed G5 acceptance is closed**, at
 `11b61a0edab`, 2026-09-12 — see
 [Phase: headed G5 acceptance](#phase-headed-g5-acceptance-2026-09-12), which
 supersedes every "full headed G5 remains open" line below. A real Ortet window
@@ -260,7 +267,7 @@ Boa 14/14 (7 new + 7 existing), Nova 29/29 (7 new + 22 existing).
 
 ---
 
-## 2. Per-realm host surface â€” **planned**
+## 2. Per-realm host surface â€” **landed in the continuation**
 
 ### The shape
 
@@ -315,7 +322,7 @@ the engine level, never from inside a native sink.
 
 ---
 
-## 3. `contentWindow`, `contentDocument`, `postMessage` â€” **planned**
+## 3. `contentWindow`, `contentDocument`, `postMessage` â€” **landed in the continuation and navigation phases**
 
 ### The design
 
@@ -381,7 +388,7 @@ Events retarget across realms; the child's `load` fires on the parent's
 
 ---
 
-## 4. Security â€” **planned**
+## 4. Security â€” **core checks landed; `document.domain` remains open**
 
 Same-origin comparison comes from the browsing-context tree's `Origin`
 (`components/genet-documents/src/browsing_context.rs`), which the iframes lane
@@ -2579,3 +2586,132 @@ run a WPT census — nothing here moves a web-platform behaviour except the
 `NoSuchRealm` fix, whose reach is pinned by its own regression on both engines.
 It does not stabilise `article.html`'s digest at a large viewport, which is the
 compositing lane's to settle.
+
+## Phase: residual closure, 2026-09-13
+
+**Status:** The three targets below are verified from
+`6ebd3598f63865dfa3f7f8b3fe4e413e6a92109e`, with the broader inventory still open.
+The handoff's scoped acceptance is confirmed in the current tree. The original
+sections 2–4 above were still labelled planned after their implementations
+landed; their labels now point to the continuation and navigation phases.
+
+### Targets and done-conditions
+
+| Target | Done-condition |
+|---|---|
+| Classic external scripts after navigation | The stream parser uses the installed resource route, resolves relative URLs, preserves parse order and `currentScript`, and does not run missing resources or data blocks. Both top and child navigation have automated coverage; the headed fixture's completion depends on its external script. |
+| Discarded `Location` | Reads report the components of `about:blank` immediately after removal and after queued teardown, writes navigate nothing, and the retained document's URL is unchanged. Both engines and the named WPT file are checked. |
+| Retired host resources | Dropping the runtime releases resources held by hosts removed from the live realm registry, before engine heap destruction. A retained old host is a regression control; headed Boa runs must exit normally. |
+
+### Findings
+
+- `dom/markup_insertion.rs::script_source` explicitly skipped external scripts.
+  `frames.rs::{LoadTopDocument, LoadFrameDocument}` both load through that stream,
+  so the scope includes child documents and explicit post-parse writes.
+- `Runtime::drop` visited only `AgentState::hosts`, whereas frame teardown removes
+  hosts from that map before the engine heap necessarily releases them. A weak
+  inventory of registered host lifetimes now covers teardown without keeping old
+  documents alive merely for bookkeeping.
+- `platform.rs` used `__locationField('href')` for both `Location.href` and
+  `Document.URL`. The [Location definition](https://html.spec.whatwg.org/multipage/nav-history-apis.html#the-location-interface)
+  gives the context-free Location an `about:blank` URL; it does not rewrite the
+  retained Document's URL. The two reads therefore need distinct paths.
+- The identity residual includes loss at the first re-reflection after discard,
+  not just at the subsequent return adoption: `creation_realm` falls back to the
+  physical owner while the canonical reflector and JS wrapper caches were in the
+  old realm. Changing that fallback again is insufficient. Any fix must preserve
+  the held object and its creation-realm prototype while maintaining connected
+  roots, detached component groups, and collection after the last reference.
+
+### Remaining inventory
+
+| Item | Owner and next proof |
+|---|---|
+| Reflector identity across source-realm discard and another adoption | Runtime/engine wrapper caches. Preserve ordinary, shadow, closed-root and template identities across both hops with GC between them, then prove final collection. |
+| Canvas with a live drawing context | Canvas/WebGL host producer ownership. Move context storage and the producer together, preserving context identity and pixels, before lifting the refusal. |
+| Initial `about:blank` load ordering | Frame insertion/parser integration. Recover the named synchronous load expectation without running unload in removing steps. |
+| `execution-timing/112.html` | Parser script scheduling, tracked in the parser/interleaving plan. |
+| `Location.ancestorOrigins` | Location/DOMStringList surface. This absent API is the one remaining failure in `no-browsing-context.window.html`, now 45/46. Implement ancestor order, origin values and the required object lifetime before closing it. |
+| `document.domain` | Origin/security surface, still outside the landed core checks. |
+| `pageswap`, Navigation API, `beforeunload` cancellation, `window.open`, forms and link-click navigation | Separate navigation surfaces. The landed realm replacement machinery does not implement them. |
+| Scripted accessibility action dispatch and stale-target validation | Scripted document session. The headed G5 receipt proves projection only. |
+| Actual capture replay | Capture owner. The accessor phase supplied imported-identity translation and tests, not a complete replayer. |
+| Range and charset-test throughput | WPT measurement. The default 30-second guards time out under load; isolated pre/post controls are recorded below. The large data-change file still exceeds 120 seconds on both runners. |
+| Inherited server-mode fetch count | Fetch/WPT server route. The earlier 55 unexpected results used `--features netfetch --spawn-server`; this phase's unchanged disk-mode census does not close that separate receipt. |
+| Glyph digest instability | Livery/compositing. Keep CSS viewport and display scale attached to each headed receipt. |
+
+Classic stream script loading does not by itself close external module loading
+or the stream's async/defer scheduling. Those consume the parser scheduler's
+ordering model and remain separate from the blocking-classic target above.
+
+### Progress and receipts
+
+The unmodified runner was built with the locked graph before code edits and
+copied to `testing/genet/wpt-ledger/2026-09-13_realms-residuals/`, alongside the
+lockfile, runner digest and source identities. Boa is `52cfb6ff9efd`, Vano is
+`8ad0841255c2`. The focused census covers Location, Window, iframe, parsing,
+script-element, DOM-node and fetch-basic directories with four workers and a
+120-second worker bound. New regression failures and post-change results are
+recorded separately from that census.
+
+Implementation uses the existing classic-script preparation path for stream
+parser pauses. `ScriptResourceLoader::load_classic_script` lets byte-backed
+hosts reuse the initial parser's decoding and integrity check; text-only loaders
+decline integrity metadata they cannot verify. The bootstrap restores the outer
+`currentScript` after nested writes and insertions. Discard tracking changes only
+the Location URL read, while `Document.URL` keeps its own path. A weak host
+inventory covers resources retained after execution registration ends.
+
+| Gate | Result |
+|---|---|
+| New runtime regressions, both engines | **8 fail before / 8 pass after**, covering top and child navigation, nested external writes/currentScript, discarded Location, and retained old-host teardown |
+| New resource-bridge regressions | 2 pass: valid/invalid integrity, charset decoding, and rejection after close |
+| Full crate suites | **841 passed, 0 failed, 0 ignored**: runtime 576, genet-scripted 120, genet-documents 49, scripted DOM 72, Ortet 24 |
+| Seven-directory WPT census | **1,426 files, +37 named subtest passes, zero lost passing subtests**, with identical file keys |
+| Default testharness guards | 12/14 at `unexpected=0`; `dom` and `dom/nodes` retain the timeout qualifications below. **No expectation repins.** |
+| Rendering guards | Both at `unexpected=0` |
+| Runtime library Clippy | Exit 0; warnings are outside changed lines |
+| Formatting and syntax | Changed Rust files pass rustfmt except the existing whole-file formatting differences in `frames.rs`; new frame-state lines follow its surrounding style. JS syntax, PowerShell parsing and diff whitespace checks pass. |
+| Strengthened headed G5 | **3 passes per engine**, normal exit code 0 in every pass; both deliberately unmet-heading controls exit 1 |
+
+The Location file moves **8/46 -> 45/46**, entirely from the discarded URL and
+no-op navigation behavior. Window, iframe, script-element, DOM-node and
+disk-fetch maps are identical. Parsing keeps all 2,606 passes; four blob-URI
+variants vary between failed subtests and no results under the 15-second drive
+deadline. Isolated reruns match for `html5lib_blocks`, `html5lib_domjs-unsafe`
+and `html5lib_webkit01`; `html5lib_tests20` exhibits both states on both runners.
+The original maps and those reruns are retained separately, not normalized into
+a cleaner census.
+
+The 30-second DOM guard timed out on `Document-characterSet-normalization-2`,
+`Range-mutations-dataChange` and `Range-mutations-replaceData`; the narrower
+DOM-node guard also timed out on `Document-characterSet-normalization-1`.
+The full DOM-node census at a 120-second worker bound reproduces the complete
+pre-change map. Isolated controls for charset normalization 2 give identical
+0/339 results at 51.24 seconds before and 46.70 after. Range replacement retains
+all **1,146/1,146** passes at 29.69 and 31.25 seconds. The large data-change test
+exceeds 120 seconds in both controls, so its semantic count remains unverified
+in this phase. These are load-qualified observations, not performance acceptance.
+
+The headed fixture now starts the second document with a waiting heading. Only
+the fetched `parent2.js`, after observing the inline setup, can publish the
+completion heading and paint. Both engines retain digest
+**`0x8df9c9b8815a6e22`** at CSS **640x560**, physical **1280x1120**, scale **2**;
+live nodes remain **31 -> 31**, with **14 unpinned / 29 collected**. The receipt
+runner rejects a lingering process, records exit codes, hashes the binary and
+dirty source files, and verifies source identity before and after the run.
+
+Artifacts:
+
+- `C:/Users/mark_/Code/testing/genet/wpt-ledger/2026-09-13_realms-residuals/`:
+  saved pre/post runners, lockfile, exact maps, named comparisons, timeout and
+  parser controls, full crate log, regression controls and guard results.
+- `C:/Users/mark_/Code/testing/genet/ortet-g5-realms-residuals-20260913/`:
+  per-pass pixels, projection assertions, live-node/collection counts and
+  process exits; both failure controls; source identities and server requests.
+
+Pre runner SHA-256:
+`f6722ff0637f5382a8be9e16c95fac0080f6cb5ab86a25c25b05c73022c13247`.
+Post runner:
+`e6b7e18f477bcf94ac71de2955a41bb8f77cb6a2d586f3d7daa66f9c44631e44`.
+The locked graph is unchanged; no fork or renderer dependency was repinned.

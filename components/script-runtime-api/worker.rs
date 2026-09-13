@@ -45,6 +45,22 @@ pub trait ScriptResourceLoader {
     /// to the network seam.
     fn load(&self, url: &str) -> Option<String>;
 
+    /// Load a classic script on the same resource route. Text-only loaders
+    /// already return decoded source, but cannot verify integrity against the
+    /// original response bytes, so they decline nonempty integrity metadata.
+    /// Byte-backed hosts override this with their parser's decoding/SRI path.
+    fn load_classic_script(
+        &self,
+        url: &str,
+        _charset: Option<&str>,
+        integrity: Option<&str>,
+    ) -> Option<String> {
+        if integrity.is_some_and(|metadata| !metadata.trim().is_empty()) {
+            return None;
+        }
+        self.load(url)
+    }
+
     /// Start a worker resource request. Returning `Some(request)` declines
     /// deferred service and hands the request back to the page fetch route;
     /// returning `None` means the loader accepted it and will invoke

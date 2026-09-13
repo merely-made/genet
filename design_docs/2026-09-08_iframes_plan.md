@@ -9,6 +9,9 @@ top-level navigation and a stable `WindowProxy`. Scripted Ortet's headed G5
 acceptance is complete on both engines. The
 [current remaining-work inventory](2026-09-08_realms_plan.md#phase-residual-closure-2026-09-13)
 supersedes this lane's original runtime decision and headed-proof residuals.
+The [initial blank-load phase](2026-09-08_realms_plan.md#phase-initial-blank-load-ordering-2026-09-13)
+also closes synchronous initial iframe load ordering and parser callback removal,
+with nine Boa WPT gains and both-engine runtime and headed evidence.
 The original scope and receipts below retain their 2026-09-08 boundaries.
 
 **Original lane status (2026-09-08):** landed for the browsing-context tree, loading, the

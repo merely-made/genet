@@ -122,6 +122,11 @@ impl<E: ScriptEngine> NativeFn<E> for LocationField {
         let a0 = cx.arg(0);
         let field = cx.value_to_string(&a0)?;
         let realm = cx.current_realm();
+        if field == "fallbackBaseURL" {
+            let base = with_host::<E, _>(cx, |h| h.fallback_base_url().unwrap_or("about:blank").to_owned())
+                .unwrap_or_else(|| "about:blank".into());
+            return cx.make_string(&base);
+        }
         let document_url = field == "documentURL";
         let href = with_host::<E, _>(cx, |h| {
             let detached = !document_url
@@ -395,7 +400,8 @@ fn history_write<E: ScriptEngine>(
     let has_url = cx.value_to_string(&a2)? == "true";
     let base = with_host::<E, _>(cx, |h| h.base_url.clone()).flatten();
     let entry_url = if has_url {
-        resolve_against(base.as_deref(), &url)
+        let resolution_base = with_host::<E, _>(cx, |h| h.fallback_base_url().map(str::to_owned)).flatten();
+        resolve_against(resolution_base.as_deref(), &url)
     } else {
         base.clone().unwrap_or_else(|| "about:blank".to_string())
     };
@@ -697,6 +703,10 @@ const PLATFORM_BOOTSTRAP: &str = r#"
     enumerable: true,
     configurable: true,
     get: function() { return __locationField('documentURL'); },
+  });
+  Object.defineProperty(globalThis.document, 'documentURI', {
+    enumerable: true, configurable: true,
+    get: function() { return __locationField('documentURL'); }
   });
 
   // ── localStorage ── an in-memory Storage (one origin per runtime). The methods

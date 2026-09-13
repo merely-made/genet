@@ -84,6 +84,9 @@ pub(crate) struct FrameState {
     /// reused, and this is the only record that a destroyed context was once
     /// same-origin with its holder.
     last_origins: BTreeMap<RealmId, String>,
+    // Document-creation snapshots. None entries are masked opaque origins;
+    // keeping real origins typed preserves opaque-origin identity comparisons.
+    ancestor_origins: BTreeMap<RealmId, Vec<Option<browsing_context_api::Origin>>>,
 }
 
 /// One queued navigation. `target` is the realm the context is showing now -
@@ -93,6 +96,7 @@ pub(crate) struct PendingNavigation {
     target: RealmId,
     url: String,
     replace: bool,
+    referrer_policy: String,
 }
 
 /// A browsing context's stable identity for `WindowProxy` purposes: the id of
@@ -112,6 +116,57 @@ struct FrameRecord {
 }
 
 impl FrameState {
+    pub(crate) fn ancestor_origins(&self, realm: RealmId) -> Option<Vec<String>> {
+        if self.document_is_detached(realm) {
+            return None;
+        }
+        Some(
+            self.ancestor_origins
+                .get(&realm)
+                .into_iter()
+                .flatten()
+                .map(|origin| {
+                    origin
+                        .as_ref()
+                        .map_or_else(|| "null".into(), |origin| origin.serialize())
+                })
+                .collect(),
+        )
+    }
+
+    fn snapshot_ancestor_origins(&mut self, realm: RealmId, parent: RealmId, policy: &str) {
+        let origin = |realm| {
+            self.contexts
+                .get(&realm)
+                .and_then(|context| self.tree.as_ref()?.get(*context))
+                .map(|context| context.document().origin.clone())
+        };
+        let (Some(parent_origin), Some(child_origin)) = (origin(parent), origin(realm)) else {
+            return;
+        };
+        let mut masked = policy.eq_ignore_ascii_case("no-referrer")
+            || (policy.eq_ignore_ascii_case("same-origin")
+                && !parent_origin.is_same_origin(&child_origin));
+        let mut list = vec![if masked {
+            None
+        } else {
+            Some(parent_origin.clone())
+        }];
+        for ancestor in self.ancestor_origins.get(&parent).into_iter().flatten() {
+            if masked
+                && ancestor
+                    .as_ref()
+                    .is_some_and(|origin| origin.is_same_origin(&parent_origin))
+            {
+                list.push(None);
+            } else {
+                list.push(ancestor.clone());
+                masked = false;
+            }
+        }
+        self.ancestor_origins.insert(realm, list);
+    }
+
     pub(crate) fn document_is_detached(&self, realm: RealmId) -> bool {
         self.detached_documents.contains(&realm)
     }
@@ -214,6 +269,7 @@ impl FrameState {
             .into_iter()
             .map(|realm| {
                 self.records.remove(&realm);
+                self.ancestor_origins.remove(&realm);
                 self.detached_documents.insert(realm);
                 (realm, self.contexts.remove(&realm))
             })
@@ -776,6 +832,23 @@ pub(crate) fn install_window_proxy_from_call<E: ScriptEngine>(
     E::finish_global_this_from_call(cx, &proxy)
 }
 
+fn iframe_referrer_policy(agent: &crate::AgentState, parent: RealmId, owner: NodeId) -> String {
+    agent
+        .hosts
+        .get(&parent)
+        .and_then(|host| {
+            host.borrow()
+                .dom
+                .attribute(
+                    owner,
+                    &layout_dom_api::Namespace::from(""),
+                    &layout_dom_api::LocalName::from("referrerpolicy"),
+                )
+                .map(str::to_owned)
+        })
+        .unwrap_or_default()
+}
+
 struct FrameWindow;
 impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
@@ -938,6 +1011,7 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
         };
         let viewport_size = (dimension("width", 300.0), dimension("height", 150.0));
         drop(raw);
+        let referrer_policy = iframe_referrer_policy(&agent.borrow(), parent, node);
         let plan = DocumentPlan {
             container: Some((parent, node)),
             reuse_host: None,
@@ -952,6 +1026,7 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
             scripts,
             lazy,
             initial_blank,
+            referrer_policy,
             viewport_size,
             seams: HostSeams {
                 fetch,
@@ -1026,6 +1101,7 @@ struct DocumentPlan {
     /// The initial empty document is complete; its container fires load after
     /// realm construction returns.
     initial_blank: bool,
+    referrer_policy: String,
     viewport_size: (f32, f32),
     seams: HostSeams,
 }
@@ -1054,6 +1130,7 @@ fn open_document_realm<E: ScriptEngine>(
         scripts,
         lazy,
         initial_blank,
+        referrer_policy,
         viewport_size,
         seams,
     } = plan;
@@ -1100,6 +1177,9 @@ fn open_document_realm<E: ScriptEngine>(
             let mut a = agent.borrow_mut();
             a.register(realm, child_for_install.clone());
             a.frames.contexts.insert(realm, context);
+            if let Some((parent, _)) = container {
+                a.frames.snapshot_ancestor_origins(realm, parent, &referrer_policy);
+            }
             match container {
                 Some((parent, owner)) => {
                     a.frames.records.insert(
@@ -1181,6 +1261,7 @@ fn open_document_realm<E: ScriptEngine>(
             agent.opaque_roots.remove(&realm);
             agent.frames.contexts.remove(&realm);
             agent.frames.records.remove(&realm);
+            agent.frames.ancestor_origins.remove(&realm);
             agent.frames.release_context(realm);
         }
     }
@@ -1718,6 +1799,12 @@ fn navigate_context<E: ScriptEngine>(
     let Some(container) = container else {
         return navigate_top_level::<E>(cx, &agent, target, &url, replace);
     };
+    let referrer_policy = {
+        let a = agent.borrow();
+        a.frames.records.get(&target)
+            .map(|record| iframe_referrer_policy(&a, record.parent, record.owner))
+            .unwrap_or_default()
+    };
     agent
         .borrow_mut()
         .frames
@@ -1726,6 +1813,7 @@ fn navigate_context<E: ScriptEngine>(
             target,
             url,
             replace,
+            referrer_policy,
         });
     realm_eval::<E>(
         cx,
@@ -1840,6 +1928,7 @@ fn navigate_top_level<E: ScriptEngine>(
             target,
             url: url.to_owned(),
             replace,
+            referrer_policy: String::new(),
         });
     realm_eval::<E>(
         cx,
@@ -1891,6 +1980,7 @@ fn unload_for_navigation<E: ScriptEngine>(
             let context = a.frames.contexts.remove(realm);
             a.frames.detached_documents.insert(*realm);
             a.frames.records.remove(realm);
+            a.frames.ancestor_origins.remove(realm);
             a.frames.release_context(*realm);
             a.dom_adoption.remove_realm(*realm);
             a.hosts.remove(realm);
@@ -1922,6 +2012,7 @@ fn perform_navigation<E: ScriptEngine>(
         target,
         url,
         replace,
+        referrer_policy,
     } = navigation;
     // A child carries a `FrameRecord`; the top-level context carries none, and
     // that absence is the only thing that distinguishes the two here. Both keep
@@ -2005,6 +2096,7 @@ fn perform_navigation<E: ScriptEngine>(
         scripts,
         lazy: false,
         initial_blank: false,
+        referrer_policy,
         viewport_size,
         seams,
     };

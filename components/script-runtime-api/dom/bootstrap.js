@@ -3052,6 +3052,14 @@
 
   function installHtmlInterfaceMembers(name, proto) {
     if (name === 'HTMLIFrameElement') {
+      Object.defineProperty(proto, 'referrerPolicy', {
+        configurable: true, enumerable: true,
+        get: function() {
+          var value = (this.getAttribute('referrerpolicy') || '').toLowerCase();
+          return ['', 'no-referrer', 'no-referrer-when-downgrade', 'same-origin', 'origin', 'strict-origin', 'origin-when-cross-origin', 'strict-origin-when-cross-origin', 'unsafe-url'].indexOf(value) < 0 ? '' : value;
+        },
+        set: function(value) { this.setAttribute('referrerpolicy', String(value)); }
+      });
       Object.defineProperty(proto, 'srcdoc', {
         configurable: true,
         get: function() { return this.getAttribute('srcdoc') || ''; },

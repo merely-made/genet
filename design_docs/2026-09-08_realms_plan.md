@@ -2638,7 +2638,8 @@ landed; their labels now point to the continuation and navigation phases.
 | Canvas with a live drawing context | Canvas/WebGL host producer ownership. Move context storage and the producer together, preserving context identity and pixels, before lifting the refusal. |
 | Initial `about:blank` load ordering | Closed by the [initial blank-load phase](#phase-initial-blank-load-ordering-2026-09-13): synchronous iframe load, parser callback removal, and the named immediate-navigation WPT regression. Unload remains queued. |
 | `execution-timing/112.html` | Parser script scheduling, tracked in the parser/interleaving plan. |
-| `Location.ancestorOrigins` | Location/DOMStringList surface. This absent API is the one remaining failure in `no-browsing-context.window.html`, now 45/46. Implement ancestor order, origin values and the required object lifetime before closing it. |
+| `Location.ancestorOrigins` | Snapshot, masking and detached-object lifetime implemented in the [ancestor origins phase](#phase-ancestor-origins-2026-09-13); `no-browsing-context.window.html` now passes 46/46. Full Location conformance remains open. |
+| `window.origin` | Missing global origin serialization blocks two ancestor-origin WPT assertions. Implement the environment origin, including opaque origins, then rerun the new-object and referrerpolicy-snapshot files. |
 | `document.domain` | Origin/security surface, still outside the landed core checks. |
 | `pageswap`, Navigation API, `beforeunload` cancellation, `window.open`, forms and link-click navigation | Separate navigation surfaces. The landed realm replacement machinery does not implement them. |
 | Scripted accessibility action dispatch and stale-target validation | Scripted document session. The headed G5 receipt proves projection only. |
@@ -2862,3 +2863,65 @@ cannot interrupt installation of the realm's host surface.
 This closes the named initial blank-load residual. Inline event attributes,
 `execution-timing/112.html`, live canvas adoption, `ancestorOrigins`, and the
 unimplemented navigation surfaces remain outside this slice.
+
+
+## Phase: ancestor origins (2026-09-13)
+
+`Location.ancestorOrigins` now returns a stable DOMStringList snapshot, ordered
+from immediate parent outward. Document creation records typed origins before
+installing the realm surface. The iframe referrer policy is captured when
+navigation is queued; `no-referrer` and cross-origin `same-origin` masking follow
+the [HTML ancestor-origin algorithm](https://html.spec.whatwg.org/multipage/dom.html#concept-document-ancestor-origins).
+Opaque origins serialize as `null`, and masking propagates through consecutive
+same-origin ancestors while preserving inherited masked entries.
+
+A retained Location switches to its separate stable empty list when its document
+is detached. Previously returned lists retain their strings and creation-realm
+prototype without retaining the document. DOMStringList supplies branded length,
+item and contains operations, iteration, and readonly indexed properties,
+including refusal of newly invented numeric entries. Ordinary expandos remain
+possible. The interface is Window-only; workers retain their existing surface.
+The iframe `referrerPolicy` property now reflects the enumerated attribute.
+
+### Evidence
+
+- The original eight runtime controls fail on base `e629817a244` and pass with
+  the implementation. The expanded focused run passes **85 tests in seven
+  binaries**, covering ancestor lists, frame lifecycle/security, initial blank
+  loads, child/top navigation and workers. After tightening out-of-range numeric
+  property behavior, all **13 ancestor-origin regressions** pass again across
+  Boa and Nova, including the Nova snapshot-clone test. This is focused evidence;
+  the prior aggregate timing-guard qualification remains in force.
+- Matched frozen WPT runners cover **66 files per engine**, with identical
+  manifest, exact policy, renderer and subset. Boa preserves **52** passing
+  named subtests and gains **49**, with **zero losses**, reaching **101/240**.
+  File outcomes improve from 12 to 14 all-pass: inactive-document is **2/2**,
+  and no-browsing-context is **46/46**. Nova remains at 59 no-results and seven
+  skipped files, with zero subtests; its positive proof is the runtime suite
+  and headed receipt.
+- Verbose diagnostics identify the remaining new-object **0/1** and
+  referrerpolicy-snapshot **1/2** failures as comparisons against missing
+  `window.origin` (`undefined`), while the actual list contains the expected
+  origin string. The broader ancestor-origins file still returns no results.
+  These files are not claimed passing.
+- Final headed G5 passes **three runs per engine** with matching source
+  identities before/after, digest `0x8df9c9b8815a6e22`, **31 -> 31** live nodes,
+  **4 unpinned / 32 collected**, and normal exit 0. Both failure controls exit 1.
+  Physical size is 1280x1120, CSS viewport 640x560 at scale 2. The capture was
+  visually inspected.
+- Artifacts: `C:/Users/mark_/Code/testing/genet/realms-ancestor-origins-20260913/`
+  contains controls, focused logs, exact WPT maps and occurrence-aware named
+  comparisons. Final WPT runner SHA-256 is
+  `d7fd62f67e0990bf65a7f7d9b5971bfc4c6205667a3cf1505f7c8af5f2814735`.
+  After those builds, six pre-existing decorative comments were restored from
+  an encoding conversion; executable statements were unchanged. The initial
+  headed receipt was rejected for that source change. The fresh passing receipt
+  is `C:/Users/mark_/Code/testing/genet/ortet-g5-realms-ancestor-origins-20260913-final/`.
+  Its sibling without `-final` retains the rejected attempt. Dependencies,
+  Cargo.lock and WPT expectations were not repinned.
+
+This closes the absent ancestor-list API and its named lifetime residual, within
+the existing document-creation model. A distinct initial about:blank document
+for initially nonblank frames, `window.origin`, `document.domain`, and broader
+Location exotic-object behavior remain separate work. It does not close the
+other navigation, canvas, parser or accessibility items in the inventory.

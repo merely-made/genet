@@ -213,6 +213,7 @@ where
 
     Ok(RetainedRootFormatting::Formatted(Box::new(
         LiveryLayout::new(
+            previous.viewport,
             LayoutResult::new(boxes.into_tree(), fragments),
             Some(text_frame),
             BlockAlgorithmCounts {

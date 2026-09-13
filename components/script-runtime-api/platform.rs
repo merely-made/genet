@@ -136,6 +136,48 @@ impl<E: ScriptEngine> NativeFn<E> for LocationField {
     }
 }
 
+struct AncestorOrigins;
+impl<E: ScriptEngine> NativeFn<E> for AncestorOrigins {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let realm = cx.current_realm();
+        let arg = cx.arg(0);
+        let selector = cx.value_to_string(&arg)?;
+        if selector == "realm" {
+            return cx.make_string(&realm.to_string());
+        }
+        let target = selector.parse().unwrap_or(realm);
+        let (origins, allowed) = with_host::<E, _>(cx, |h| {
+            h.agent
+                .upgrade()
+                .map(|agent| {
+                    let a = agent.borrow();
+                    let origins = a.frames.ancestor_origins(target);
+                    let allowed =
+                        origins.is_none() || realm == target || a.frames.same_origin(realm, target);
+                    (origins, allowed)
+                })
+                .unwrap_or_else(|| (Some(Vec::new()), true))
+        })
+        .unwrap_or((None, true));
+        if !allowed {
+            return cx.make_string("__security_error__");
+        }
+        let json = origins
+            .map(|values| {
+                format!(
+                    "[{}]",
+                    values
+                        .iter()
+                        .map(|s| crate::js_str(s))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                )
+            })
+            .unwrap_or_else(|| "null".into());
+        cx.make_string(&json)
+    }
+}
+
 // ── localStorage ─────────────────────────────────────────────────────────────
 
 /// The host's backing for `localStorage` (e.g. a durable, persona + origin-partitioned
@@ -482,6 +524,7 @@ pub(crate) fn install_platform_surface<E: ScriptEngine>(
     engine: &mut crate::Surface<'_, '_, E>,
 ) -> Result<(), crate::SurfaceError<E::Error>> {
     engine.set_function::<LocationField>("__locationField", 1)?;
+    engine.set_function::<AncestorOrigins>("__ancestorOrigins", 1)?;
     engine.set_function::<HistoryPush>("__historyPush", 3)?;
     engine.set_function::<HistoryReplace>("__historyReplace", 3)?;
     engine.set_function::<HistoryState>("__historyState", 0)?;
@@ -505,6 +548,73 @@ const PLATFORM_BOOTSTRAP: &str = r#"
   // getters re-read it each access, so it stays correct after `assign` / `href =`
   // (unlike a snapshot). `set_base_url` only updates the host's base URL now.
   var location = {};
+  // DOMStringList has indexed getters, not Array mutation methods. Its backing
+  // strings are private snapshots; retaining one never retains a Document.
+  var platformState = globalThis.__agentTimers;
+  var stringLists = platformState.domStringLists || (platformState.domStringLists = new WeakMap());
+  var locations = platformState.locations || (platformState.locations = new WeakMap());
+  function DOMStringList() { throw new TypeError('Illegal constructor'); }
+  function strings(receiver) {
+    var data = stringLists.get(receiver);
+    if (!data) throw new TypeError('Illegal invocation');
+    return data;
+  }
+  Object.defineProperty(DOMStringList.prototype, 'length', {
+    configurable: true, enumerable: true,
+    get: function() { return strings(this).length; }
+  });
+  Object.defineProperty(DOMStringList.prototype, 'item', {
+    configurable: true, enumerable: true, writable: true,
+    value: function(index) {
+      var data = strings(this);
+      if (!arguments.length) throw new TypeError('Missing index');
+      index = (+index) >>> 0;
+      return index < data.length ? data[index] : null;
+    }
+  });
+  Object.defineProperty(DOMStringList.prototype, 'contains', {
+    configurable: true, enumerable: true, writable: true,
+    value: function(value) {
+      var data = strings(this);
+      if (!arguments.length || typeof value === 'symbol') throw new TypeError('Expected a string');
+      return data.indexOf(String(value)) !== -1;
+    }
+  });
+  Object.defineProperty(DOMStringList.prototype, Symbol.toStringTag, {configurable:true, value:'DOMStringList'});
+  Object.defineProperty(DOMStringList.prototype, Symbol.iterator, {configurable:true, writable:true, value:Array.prototype[Symbol.iterator]});
+  function makeStringList(data) {
+    var target = Object.create(DOMStringList.prototype);
+    for (var index = 0; index < data.length; index++) {
+      Object.defineProperty(target, String(index), {configurable:true, enumerable:true, value:data[index]});
+    }
+    function indexKey(key) { return typeof key === 'string' && key !== '4294967295' && String(key >>> 0) === key; }
+    var list = new Proxy(target, {
+      defineProperty: function(t,k,d) { return !indexKey(k) && Reflect.defineProperty(t,k,d); },
+      deleteProperty: function(t,k) { return !(indexKey(k) && (k >>> 0) < data.length) && Reflect.deleteProperty(t,k); },
+      preventExtensions: function() { return false; }
+    });
+    stringLists.set(list, data);
+    return list;
+  }
+  if (typeof window !== 'undefined') {
+    globalThis.DOMStringList = DOMStringList;
+    var locationRealm = __ancestorOrigins('realm');
+    locations.set(location, {realm:locationRealm, document:makeStringList(JSON.parse(__ancestorOrigins(locationRealm)) || []), empty:makeStringList([])});
+    Object.defineProperty(location, 'ancestorOrigins', {
+      enumerable: true,
+      get: function() {
+        var state = locations.get(this);
+        if (!state) throw new TypeError('Illegal invocation');
+        var snapshot = __ancestorOrigins(state.realm);
+        if (snapshot === '__security_error__') throw new DOMException('Cross-origin Location access', 'SecurityError');
+        if (snapshot === 'null') {
+          state.document = null;
+          return state.empty;
+        }
+        return state.document;
+      }
+    });
+  }
   var getOnly = ['protocol', 'host', 'hostname', 'port', 'pathname', 'search', 'hash', 'origin'];
   for (var i = 0; i < getOnly.length; i++) {
     (function(p) {

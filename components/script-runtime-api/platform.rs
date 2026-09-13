@@ -136,6 +136,37 @@ impl<E: ScriptEngine> NativeFn<E> for LocationField {
     }
 }
 
+struct EnvironmentOrigin;
+impl<E: ScriptEngine> NativeFn<E> for EnvironmentOrigin {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let realm = cx.current_realm();
+        let arg = cx.arg(0);
+        let selector = cx.value_to_string(&arg)?;
+        if selector == "realm" {
+            return cx.make_string(&realm.to_string());
+        }
+        let target = selector.parse().unwrap_or(realm);
+        let agent = with_host::<E, _>(cx, |h| h.agent.upgrade()).flatten();
+        let origin = agent
+            .map(|agent| {
+                let a = agent.borrow();
+                if realm != target && !a.frames.same_origin(realm, target) {
+                    return "__security_error__".to_owned();
+                }
+                // Context origins include inherited and sandboxed origins. A bare
+                // runtime or worker has no context tree, so use its host URL.
+                a.frames.environment_origin(target).unwrap_or_else(|| {
+                    a.hosts
+                        .get(&target)
+                        .map(|host| location_field(host.borrow().base_url.as_deref(), "origin"))
+                        .unwrap_or_else(|| "null".into())
+                })
+            })
+            .unwrap_or_else(|| "null".into());
+        cx.make_string(&origin)
+    }
+}
+
 struct AncestorOrigins;
 impl<E: ScriptEngine> NativeFn<E> for AncestorOrigins {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
@@ -525,6 +556,7 @@ pub(crate) fn install_platform_surface<E: ScriptEngine>(
 ) -> Result<(), crate::SurfaceError<E::Error>> {
     engine.set_function::<LocationField>("__locationField", 1)?;
     engine.set_function::<AncestorOrigins>("__ancestorOrigins", 1)?;
+    engine.set_function::<EnvironmentOrigin>("__environmentOrigin", 1)?;
     engine.set_function::<HistoryPush>("__historyPush", 3)?;
     engine.set_function::<HistoryReplace>("__historyReplace", 3)?;
     engine.set_function::<HistoryState>("__historyState", 0)?;
@@ -551,6 +583,25 @@ const PLATFORM_BOOTSTRAP: &str = r#"
   // DOMStringList has indexed getters, not Array mutation methods. Its backing
   // strings are private snapshots; retaining one never retains a Document.
   var platformState = globalThis.__agentTimers;
+  var globalOrigins = platformState.globalOrigins || (platformState.globalOrigins = new WeakMap());
+  globalOrigins.set(globalThis, __environmentOrigin('realm'));
+  if (typeof __windowProxyGlobal !== 'undefined') {
+    globalOrigins.set(__windowProxyGlobal, __environmentOrigin('realm'));
+  }
+  Object.defineProperty(globalThis, 'origin', {
+    configurable: true, enumerable: true,
+    get: function() {
+      var realm = globalOrigins.get(this);
+      if (realm === undefined) throw new TypeError('Illegal invocation');
+      var origin = __environmentOrigin(realm);
+      if (origin === '__security_error__') throw new DOMException('Cross-origin Window access', 'SecurityError');
+      return origin;
+    },
+    set: function(value) {
+      if (!globalOrigins.has(this)) throw new TypeError('Illegal invocation');
+      Object.defineProperty(this, 'origin', {configurable:true, enumerable:true, writable:true, value:value});
+    }
+  });
   var stringLists = platformState.domStringLists || (platformState.domStringLists = new WeakMap());
   var locations = platformState.locations || (platformState.locations = new WeakMap());
   function DOMStringList() { throw new TypeError('Illegal constructor'); }

@@ -328,12 +328,20 @@ impl FrameState {
     /// context still answers a parent that holds its `WindowProxy`, and there
     /// is nothing left in the tree to compare through.
     fn origin(&self, realm: RealmId) -> String {
+        self.environment_origin(realm).unwrap_or_else(|| "null".into())
+    }
+
+    pub(crate) fn environment_origin(&self, realm: RealmId) -> Option<String> {
+        // The host sets the initial top URL before the lazy context tree is
+        // created. Its provisional binding has no environment origin yet.
+        if self.tree.is_none() && !self.document_is_detached(realm) {
+            return None;
+        }
         self.contexts
             .get(&realm)
             .and_then(|id| self.tree.as_ref()?.get(*id))
             .map(|context| context.document().origin.serialize())
             .or_else(|| self.last_origins.get(&realm).cloned())
-            .unwrap_or_else(|| "null".into())
     }
 }
 

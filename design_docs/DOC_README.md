@@ -50,7 +50,7 @@ older `docs/` corpus without changing their location or governance.
 | [Servo cone retirement](2026-09-07_servo_cone_retirement_plan.md) | servo-paint's compositor half carved out as genet-compositor; the reftest lane renders through genet-render-host; the constellation trait cone left the graph 2026-09-07. All gates green; next proof is Mere's dependency rename at its next bump. |
 | [Web platform WPT census](2026-09-06_web_platform_wpt_census.md) | Baseline exact maps for 41 non-CSS WPT directories (21,672 files, disk mode, Boa/Livery) landed 2026-09-06. Three of its four harness caveats are closed by the harness-repair plan; the reftest caveat and the per-directory lanes remain open. |
 | [Standards-to-features ledger](2026-09-07_standards_to_features_ledger.md) | Founded 2026-09-07 by Mark's ruling on mere's lighter-recall brief: fourteen rows pairing a standard, its census count, what adhering means in genet, and what mere and the products unlock; consumers on record. The census is the authority for current numbers. |
-| [CSS 3D transforms, first-frame scaling and scene viewport embedding](2026-09-12_css_3d_transforms_and_first_frame_plan.md) | T3's bounded Genet content-box, shared 2D paint/input geometry and typed used-color seam implemented 2026-09-13; 61 focused checks pass. Ordinary retained leaves gain no clip/layer. The existing percentage-padding approximation remains explicit. Native Bench B integration and the remaining T3 acceptance are pending; Mere owns the producer/style consumer. T1 general CSS 3D, T2 large-DOM scaling and T4 planar retention remain independent; prior native canvas acceptance was not rerun. |
+| [CSS 3D transforms, first-frame scaling and scene viewport embedding](2026-09-12_css_3d_transforms_and_first_frame_plan.md) | T3's bounded Genet content-box, shared 2D paint/input geometry and typed used-color seam implemented 2026-09-13; 61 focused checks pass. Native Bench B assembly is accepted on the recorded downstream development build (167 frames/15 captures, scale 2); a separate committed-dependency Mesocosm workspace check passes. Ordinary retained leaves gain no clip/layer; the percentage-padding approximation remains explicit. Broader T3 acceptance/mutation measurement and independent T1/T2/T4 work remain open. This consumer receipt is not an Ortet or WPT rerun. |
 | [WPT harness repair](2026-09-07_wpt_harness_repair_plan.md) | Per-test worker isolation, the disk-mode include and `.py` fixes, and a configurable, quiescing server-mode deadline landed 2026-09-07, with a re-run census whose 204 movements are all attributed. Next proof: a server-mode measurement of the network-dependent families on a live `wpt serve`. |
 | [XMLHttpRequest](2026-09-07_xhr_plan.md) | XHR as a state machine over the fetch seam, landed 2026-09-07: xhr 53 to 281 subtests in disk mode, 831 of 1,336 in server mode, fetch holds. Residuals: responseXML needs DOMParser; 28 errors are Worker and document.domain demand. |
 | [Cheap globals](2026-09-07_cheap_globals_plan.md) | `performance` (+ `PerformanceObserver`), `queueMicrotask`, `structuredClone`, `MessageChannel` / `MessagePort` / `BroadcastChannel` and `crypto` landed 2026-09-07: 79 forward file movements, zero pass-to-fail, +462 subtest passes over ten directories. Next proof is `crypto.subtle`, real `ArrayBuffer` detachment, and the cross-agent reuse of the clone walker by the Worker lane. |
@@ -484,16 +484,19 @@ completed corpus census or bounded slice does not close its enclosing feature.
 ## layout and styling
 
 - [css_3d_transforms_and_first_frame_plan](2026-09-12_css_3d_transforms_and_first_frame_plan.md)
-  (**bounded Genet seam implemented 2026-09-13; native Bench B pending**:
+  (**bounded Genet seam implemented; downstream native Bench B accepted 2026-09-13**:
   T3's existing custom-leaf/external-image route now exposes content-box
   placement, common 2D paint/input mapping and typed used foreground color.
   Its 61 focused checks include a plain retained leaf at zero layer depth;
-  the percentage-padding approximation remains explicit. Mere owns Cambium's
-  producer lifecycle and style consumer. Remaining T3 native/measurement
-  acceptance, the large-element mutation sweep, T1 general CSS 3D,
-  T2 first-frame scaling and T4 planar retention remain independent of the
-  first bench. Existing Ortet canvas acceptance was inspected, not freshly
-  rerun. Application prerequisite authority:
+  the percentage-padding approximation remains explicit. The native development
+  build passes 167 frames/15 captures at scale 2 with tint, decorative-CSS,
+  transformed input and producer-lifecycle checks; a separate Mesocosm workspace
+  check passes on committed dependencies. Mere owns Cambium's producer and style
+  consumer. Broader T3 acceptance and mutation measurement, the large-element
+  sweep, T1 general CSS 3D, T2 first-frame scaling and T4 planar retention remain
+  independent of the first bench. The downstream native receipt is separate from the prior Ortet
+  canvas acceptance and is not an Ortet or WPT rerun. Application prerequisite
+  authority:
   `isometry/mesocosm/design_docs/2026-09-11_orthographic_voxel_presentation_plan.md#specimen-bench-prerequisites-2026-09-13`.)
 
 - [common_script_font_fallback_plan](2026-09-04_common_script_font_fallback_plan.md)

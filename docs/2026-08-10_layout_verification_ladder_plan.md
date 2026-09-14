@@ -40,7 +40,7 @@ would otherwise spend its runs rediscovering.
 ## What prompted it
 
 The 2026-08-09 inline-fragment work (per-inline-box rects, so an inline-level
-control has geometry for `absolute_rect`, `genet_probe::resolve`, and AccessKit
+control has geometry for `absolute_rect`, `genet_probe::resolve` (now taproot), and AccessKit
 bounds). Two findings drove this plan:
 
 - The spec **bounded** the fix. CSS 2.2 §10.6.1 and §10.6.6 have opposite rules

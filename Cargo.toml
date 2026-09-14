@@ -11,7 +11,7 @@ members = [
     "components/webgl-wgpu",
     "components/webgl-essl",
     "components/genet-document-resources",
-    "components/genet-probe",
+    "components/taproot",
     "components/genet-clipboard",
     "components/livery",
     "components/buckram",

@@ -89,7 +89,7 @@ published crate no longer exports fork types to Hekate, mere-host or
 Apparatus. Independent of every other stage; do it first regardless of what
 else slips.
 
-**L2 - the free leaves.** servo-paint (dev-dep, test-file only), genet-probe
+**L2 - the free leaves.** servo-paint (dev-dep, test-file only), genet-probe (now taproot)
 (one call site), cambium-winit-a11y (four references), and style_tests.
 
 **L3 - the trivial fork edges.** Five crates at one to eight references

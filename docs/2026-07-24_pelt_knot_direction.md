@@ -13,7 +13,7 @@ stack behind `genet-host-api`, not pelt; the boundary doc's direction rule
 (components never depend on ports) is what keeps that true. It is
 multiprotocol through the host-supplied fetch seam (http(s), smolweb, later
 mesh-side protocols supplied by the host), and natively automatable:
-genet-probe carries drivability in the DOM itself, where every other
+genet-probe (now taproot) carries drivability in the DOM itself, where every other
 embeddable engine bolts automation on through CDP or the accessibility tree.
 Publishing waits on livery obviating stylo (the
 [cutover plan](2026-07-24_livery_fullweb_cutover_and_servo_retirement_plan.md));

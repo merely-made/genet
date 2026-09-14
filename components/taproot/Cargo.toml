@@ -1,14 +1,15 @@
 [package]
-name = "genet-probe"
+# Named genet-probe until 2026-09-14.
+name = "taproot"
 version = "0.1.0"
 edition = "2024"
 license = "MPL-2.0"
 repository = "https://github.com/merely-made/genet"
-description = "Shared automatability substrate for genet apps: resolve semantic selectors (role/class + text) over cambium ScriptedDom surfaces to window points, for scripting, testing, and model-driving."
+description = "The automatability substrate and scenario driver for genet apps: selectors over cambium ScriptedDom surfaces, the Automatable/Driveable seam, and the text Scenario that drives an app through them."
 publish = true
 
 [lib]
-name = "genet_probe"
+name = "taproot"
 path = "lib.rs"
 
 [dependencies]

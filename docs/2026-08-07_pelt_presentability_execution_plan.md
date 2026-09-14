@@ -789,7 +789,7 @@ photograph the wrong window.
 - Stop the scenario lane if `ProbeSurface`'s single `sheet: &'a str` blocks it.
   `TileSurface` lays out under two sheets and the field is private with no
   accessor; widening `ProbeSurface` is a cross-repo change, because woodshed
-  and turnstone take genet-probe by git branch.
+  and turnstone take genet-probe (now taproot) by git branch.
 - Do not build a frame-count smoke as the permanent answer. It is a guess about
   someone else's timing, which is the failure genet-probe's `wait`/`busy()`
   exists to replace.

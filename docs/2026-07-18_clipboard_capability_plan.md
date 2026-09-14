@@ -138,7 +138,7 @@ the hand-off UI plan so it is not mistaken for the final layering.
 ## Open questions
 
 - **Resolved: crate home.** `components/genet-clipboard`, matching the
-  `genet-probe` founded-component convention. `components/shared/` is where the
+  `genet-probe` (now taproot) founded-component convention. `components/shared/` is where the
   Servo-derived MPL crates live; a clean-room MIT/Apache crate sits beside the
   other `genet-*` components.
 - **Resolved: the cambium front door is app-held, not a host API.**

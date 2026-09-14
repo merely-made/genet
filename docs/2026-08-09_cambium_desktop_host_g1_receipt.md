@@ -173,7 +173,7 @@ host handles `ScaleFactorChanged` by re-requesting a redraw, and the resize
 path proves the same relayout-and-repaint route; a real DPI receipt needs a
 display change during a manual pass.
 
-### `genet-probe` semantic interaction receipt
+### `genet-probe` (now taproot) semantic interaction receipt
 
 The same run is the semantic receipt: every interaction in `smoke.scn` is a
 selector (`click role:button Reset`, `click role:slider Level`), resolved

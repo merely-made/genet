@@ -628,7 +628,7 @@ live session and drives an interaction loop with no polling.
 
 ## Progress
 
-- 2026-09-08: **host-owned selector targets landed in `genet-probe`.**
+- 2026-09-08: **host-owned selector targets landed in `genet-probe` (now taproot).**
   `Automatable::selector_target` answers `Unsupported`, `Miss`, or an exact
   window-space `Hit`. `Unsupported` preserves retained-surface selector
   resolution for existing consumers; `Miss` is authoritative, so an absent

@@ -14,5 +14,5 @@ path = "lib.rs"
 
 [dependencies]
 genet-livery = { version = ">=0.0.1, <0.1", path = "../genet-livery" }
-genet-scripted-dom = { version = "0.1.0", path = "../genet-scripted-dom" }
-layout-dom-api = { version = "0.1.0", path = "../shared/layout-dom" }
+genet-scripted-dom = { version = "0.1.1", path = "../genet-scripted-dom" }
+layout-dom-api = { version = "0.1.1", path = "../shared/layout-dom" }

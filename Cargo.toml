@@ -247,7 +247,7 @@ parley = { package = "genet-parley", version = "0.10.0", path = "support/patches
 # scroll, finger) were errand's wire layer and left this table with it.
 document-session-api = { version = "=0.1.0", path = "components/shared/document-session-api" }
 genet-documents = { version = "=0.1.0", path = "components/genet-documents", default-features = false }
-genet-document-resources = { version = "=0.2.0", path = "components/genet-document-resources" }
+genet-document-resources = { version = "=0.2.1", path = "components/genet-document-resources" }
 genet-host-api = { version = "=0.2.0", path = "components/genet-host-api" }
 genet-render-host = { path = "components/genet-render-host" }
 netrender = { git = "https://github.com/merely-made/netrender.git", rev = "3961aca919f707ab09a786379eb4ce8bb121258e", version = "0.1.0" }

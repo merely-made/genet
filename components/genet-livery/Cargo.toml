@@ -15,7 +15,7 @@ data-url = { workspace = true }
 genet-document-resources = { workspace = true }
 euclid.workspace = true
 image = { workspace = true }
-layout-dom-api = { version = "0.1.0", path = "../shared/layout-dom" }
+layout-dom-api = { version = "0.1.1", path = "../shared/layout-dom" }
 livery = { version = "0.0.4", path = "../livery" }
 paint_list_api.workspace = true
 parley.workspace = true
@@ -30,8 +30,8 @@ fontsan.workspace = true
 
 [dev-dependencies]
 base64.workspace = true
-genet-scripted-dom = { version = "0.1.0", path = "../genet-scripted-dom" }
-genet-static-dom = { version = "0.1.0", path = "../genet-static-dom" }
+genet-scripted-dom = { version = "0.1.1", path = "../genet-scripted-dom" }
+genet-static-dom = { version = "0.1.1", path = "../genet-static-dom" }
 parley = { workspace = true, features = ["font-diagnostic"] }
 read-fonts.workspace = true
 # examples/capture_paint_corpus.rs — same encoding netrender's paint-list

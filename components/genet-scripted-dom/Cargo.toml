@@ -1,6 +1,6 @@
 [package]
 name = "genet-scripted-dom"
-version = "0.1.0"
+version = "0.1.1"
 repository = "https://github.com/merely-made/genet"
 publish = true
 authors.workspace = true
@@ -15,7 +15,7 @@ path = "lib.rs"
 
 [dependencies]
 engine_observables_api = { workspace = true }
-layout-dom-api = { version = "0.1.0", path = "../shared/layout-dom", features = ["capture"] }
+layout-dom-api = { version = "0.1.1", path = "../shared/layout-dom", features = ["capture"] }
 markup5ever = { workspace = true }
 # The HTML serializer (the `serialize` fn + `SerializeOpts` + void-element/escaping
 # logic) lives in html5ever; markup5ever only carries the `Serialize`/`Serializer`
@@ -23,7 +23,7 @@ markup5ever = { workspace = true }
 html5ever = { workspace = true }
 # Reused for `set_inner_html` fragment parsing: parse via StaticDocument (a LayoutDom),
 # then walk it into the mutable arena. Avoids a second TreeSink impl.
-genet-static-dom = { version = "0.1.0", path = "../genet-static-dom" }
+genet-static-dom = { version = "0.1.1", path = "../genet-static-dom" }
 # Capture identities travel through a serialized journal. The `capture` feature
 # of layout-dom-api already puts serde in this crate's graph; a captured node
 # identity is this crate's own type, so it derives here rather than being

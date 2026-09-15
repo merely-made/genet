@@ -12,15 +12,24 @@
 [package]
 edition = "2021"
 rust-version = "1.88"
-name = "fontique"
+name = "genet-fontique"
 version = "0.10.0"
 build = false
+include = [
+    "src/**/*",
+    "examples/**/*",
+    "Cargo.toml",
+    "README.md",
+    "GENET_PATCHES.md",
+    "LICENSE-APACHE",
+    "LICENSE-MIT",
+]
 autolib = false
 autobins = false
 autoexamples = false
 autotests = false
 autobenches = false
-description = "Font enumeration and fallback."
+description = "Genet-maintained Fontique fork of fontique 0.10.0, carrying the patches recorded in GENET_PATCHES.md (actual-cluster DirectWrite text fallback)."
 readme = "README.md"
 keywords = [
     "font",
@@ -31,7 +40,7 @@ categories = [
     "os",
 ]
 license = "Apache-2.0 OR MIT"
-repository = "https://github.com/linebender/parley"
+repository = "https://github.com/merely-made/genet"
 
 [package.metadata.docs.rs]
 all-features = true

@@ -12,16 +12,24 @@
 [package]
 edition = "2021"
 rust-version = "1.88"
-name = "parley"
+name = "genet-parley"
 version = "0.10.0"
 build = false
-exclude = ["/tests"]
+include = [
+    "src/**/*",
+    "tests/**/*",
+    "Cargo.toml",
+    "README.md",
+    "GENET_PATCHES.md",
+    "LICENSE-APACHE",
+    "LICENSE-MIT",
+]
 autolib = false
 autobins = false
 autoexamples = false
 autotests = false
 autobenches = false
-description = "Parley provides an API for implementing rich text layout."
+description = "Genet-maintained Parley fork of parley 0.10.0, carrying the patches recorded in GENET_PATCHES.md (join-control coverage, the font-diagnostic feature, and the fallback query seam)."
 readme = "README.md"
 keywords = [
     "text",
@@ -32,7 +40,7 @@ categories = [
     "graphics",
 ]
 license = "Apache-2.0 OR MIT"
-repository = "https://github.com/linebender/parley"
+repository = "https://github.com/merely-made/genet"
 
 [[test]]
 name = "join_controls"
@@ -80,6 +88,7 @@ optional = true
 [dependencies.fontique]
 version = "0.10.0"
 path = "../fontique"
+package = "genet-fontique"
 default-features = false
 
 [dependencies.harfrust]

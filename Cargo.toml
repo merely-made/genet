@@ -41,9 +41,11 @@ members = [
     "components/script-engine-piccolo",
     "components/script-runtime-api",
     # Livery carries three Parley 0.10 extensions that downstream hosts must
-    # resolve from the same source. Keeping the fork as a workspace package
-    # lets git consumers name it in their own root `[patch.crates-io]`; root
-    # patches are not inherited across Cargo workspaces.
+    # resolve from the same source. Published as `genet-parley` on 2026-09-14
+    # (with its sibling `genet-fontique`, an implicit member through parley's
+    # path dependency), so consumers now name the fork by package identity
+    # instead of a root `[patch.crates-io]` entry, which is not inherited
+    # across Cargo workspaces and cannot be relied on by a registry crate.
     "support/patches/parley",
     # The Fetch network engine, adopted the same day: genet and mere were its only
     # consumers, and it must stay genet-side to keep mere's dependency direction
@@ -237,7 +239,7 @@ openxr = "0.20"
 p384 = { version = "0.13", features = ["ecdh"] }
 p521 = { version = "0.13", features = ["ecdh"] }
 parking_lot = { version = "0.12", features = ["serde"] }
-parley = { version = "0.10.0", default-features = true }
+parley = { package = "genet-parley", version = "0.10.0", path = "support/patches/parley", default-features = true }
 # The engine-management family (inker, nematic, document-canvas, the three
 # engine adapters, errand, illume, tinct, verso-tile) left for mere on
 # 2026-09-03 under the platform boundary plan, with the doc areas that
@@ -283,7 +285,7 @@ sha2 = "0.10"
 speexdsp-resampler = "0.1.0"
 # Font enumeration + family resolution, the same stack parley uses (so the
 # cascade's font-metrics provider resolves fonts identically to text layout).
-fontique = "0.10.0"
+fontique = { package = "genet-fontique", version = "0.10.0", path = "support/patches/fontique" }
 fontsan = "0.7.0"
 skrifa = "0.42.1"
 smallvec = { version = "1.15", features = ["serde", "union"] }
@@ -350,7 +352,7 @@ zeroize = "1.8"
 # update the version requirements when bumping the workspace version.
 # Begin workspace-version dependencies - Don't change this comment, we grep for it in scripts!
 engine_observables_api = { package = "engine-observables-api", version = "=0.1.1", path = "components/shared/engine-observables-api" }
-layout_dom_api = { package = "layout-dom-api", version = "=0.1.0", path = "components/shared/layout-dom" }
+layout_dom_api = { package = "layout-dom-api", version = "=0.1.1", path = "components/shared/layout-dom" }
 malloc_size_of = { package = "servo-malloc-size-of", version = "=0.2.0", path = "components/malloc_size_of" }
 media = { package = "servo-media-thread", version = "=0.2.0", path = "components/media/media-thread" }
 genet-compositor = { version = "=0.2.0", path = "components/genet-compositor" }
@@ -457,16 +459,12 @@ layout-dom-api = { path = "components/shared/layout-dom" }
 # xml5ever = { path = "../html5ever/xml5ever" }
 # tendril = { path = "../html5ever/tendril" }
 gpu-allocator = { path = "support/patches/gpu-allocator" }
-# Parley 0.10 treats inherited-format join controls as requiring nominal glyph
-# coverage during fallback selection. Fonts commonly omit ZWNJ/ZWJ from cmap;
-# requiring coverage then splits the cluster onto a fallback face and imports
-# the fallback's line metrics. The vendored patch keeps both controls in the
-# HarfRust buffer while excluding them from font-coverage scoring. Retire when
-# upstream Parley carries the equivalent fix.
-parley = { path = "support/patches/parley" }
-# Actual-cluster DirectWrite fallback, paired with the Parley query extension.
-# Parley also uses a sibling path so downstream roots inherit the matching API.
-fontique = { path = "support/patches/fontique" }
+# The parley and fontique forks were published under the `genet-parley` /
+# `genet-fontique` identities on 2026-09-14 and left this table: the workspace
+# dependencies now name them with `package =` plus an explicit path, so the
+# forks travel by identity rather than by redirect. A registry crate cannot
+# depend on a root patch entry, and genet-livery must build from crates.io for
+# taproot. See support/patches/parley/GENET_PATCHES.md.
 # sonic-rs uses ahash with default features, whose `runtime-rng` pulled getrandom
 # 0.3 (hard-codes wasm32) onto the shared ahash. This vendored copy drops
 # runtime-rng on wasm (native keeps it), so the wasm graph carries no getrandom 0.3

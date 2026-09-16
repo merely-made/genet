@@ -66,7 +66,10 @@ impl LiveryResourcePreparation {
             .map_or(source_response.final_url.as_str(), |(resource, _)| resource)
             .to_owned();
         let source = String::from_utf8_lossy(&source_response.bytes).into_owned();
-        let dom = genet_scripted_dom::ScriptedDom::from_serialized_document(&source);
+        let dom = {
+            let _parse = genet_livery::phase::span(genet_livery::phase::Phase::Parse);
+            genet_scripted_dom::ScriptedDom::from_serialized_document(&source)
+        };
         Self {
             requested_address: request.address.clone(),
             source_response,
@@ -176,7 +179,10 @@ impl<Fetch: ResourceFetcher + Send + Sync> SessionEngine<Scene> for LiverySessio
         // Script-free HTML still uses the mutable DOM backing. Form controls
         // need one retained value plane even when JavaScript is disabled;
         // ScriptedDom supplies LayoutDomMut without constructing a JS runtime.
-        let dom = genet_scripted_dom::ScriptedDom::from_serialized_document(&source);
+        let dom = {
+            let _parse = genet_livery::phase::span(genet_livery::phase::Phase::Parse);
+            genet_scripted_dom::ScriptedDom::from_serialized_document(&source)
+        };
         self.spawn_livery_document(request, dom, base_resource, source_response, navigation)
     }
 }

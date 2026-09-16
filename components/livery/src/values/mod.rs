@@ -93,6 +93,13 @@ pub trait ResolveViewport: Clone {
     fn resolve_relative_lengths(&self, _environment: RelativeLengthEnvironment) -> Self {
         self.clone()
     }
+
+    /// Whether this family can carry a relative length or a math program at
+    /// all. The default resolution is the identity, so a `false` here lets the
+    /// generated in-place resolver skip the value outright instead of cloning
+    /// and comparing it once per element per pass (T2's per-element constant).
+    /// Every explicit implementation below sets it to `true`.
+    const RESOLVES_RELATIVE: bool = false;
 }
 
 macro_rules! unchanged_viewport_resolution {
@@ -172,6 +179,8 @@ unchanged_viewport_resolution!(
 );
 
 impl ResolveViewport for ColumnWidth {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         match self {
             Self::Length(length) => Self::Length(length.resolve_relative(environment)),
@@ -183,18 +192,24 @@ impl ResolveViewport for ColumnWidth {
 // The three bounded scalar families carry no lengths, but they can retain a
 // math program whose tree-counting leaves resolve from the same environment.
 impl ResolveViewport for Rotate {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         self.resolve_math(environment)
     }
 }
 
 impl ResolveViewport for Scale {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         self.resolve_math(environment)
     }
 }
 
 impl ResolveViewport for ClipPath {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         match self {
             Self::None => Self::None,
@@ -214,12 +229,16 @@ impl ResolveViewport for ClipPath {
 }
 
 impl ResolveViewport for ZIndex {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         self.resolve_math(environment)
     }
 }
 
 impl ResolveViewport for GridTemplate {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         match self {
             Self::None => Self::None,
@@ -239,6 +258,8 @@ impl ResolveViewport for GridTemplate {
 }
 
 impl ResolveViewport for BackgroundPosition {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         Self {
             x: self.x.resolve_relative(environment),
@@ -248,12 +269,16 @@ impl ResolveViewport for BackgroundPosition {
 }
 
 impl ResolveViewport for BackgroundSize {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         self.resolve_relative(environment)
     }
 }
 
 impl ResolveViewport for ContainIntrinsicSize {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         match *self {
             Self::None => Self::None,
@@ -266,6 +291,8 @@ impl ResolveViewport for ContainIntrinsicSize {
 }
 
 impl ResolveViewport for BorderWidth {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         match *self {
             Self::Length(length) => Self::Length(length.resolve_relative(environment)),
@@ -275,6 +302,8 @@ impl ResolveViewport for BorderWidth {
 }
 
 impl ResolveViewport for BoxShadow {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         match self {
             Self::None => Self::None,
@@ -291,6 +320,8 @@ impl ResolveViewport for BoxShadow {
 }
 
 impl ResolveViewport for FontSize {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         match *self {
             Self::Value(value) => Self::Value(value.resolve_relative(environment)),
@@ -300,12 +331,16 @@ impl ResolveViewport for FontSize {
 }
 
 impl ResolveViewport for Gap {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         Self(self.0.resolve_relative(environment))
     }
 }
 
 impl ResolveViewport for TableBorderSpacing {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         Self {
             horizontal: self.horizontal.resolve_relative(environment),
@@ -315,6 +350,8 @@ impl ResolveViewport for TableBorderSpacing {
 }
 
 impl ResolveViewport for Inset {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         match *self {
             Self::Value(value) => Self::Value(value.resolve_relative(environment)),
@@ -324,6 +361,8 @@ impl ResolveViewport for Inset {
 }
 
 impl ResolveViewport for LineHeight {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         match *self {
             Self::Value(value) => Self::Value(value.resolve_relative(environment)),
@@ -333,6 +372,8 @@ impl ResolveViewport for LineHeight {
 }
 
 impl ResolveViewport for Margin {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         match *self {
             Self::Value(value) => Self::Value(value.resolve_relative(environment)),
@@ -342,18 +383,24 @@ impl ResolveViewport for Margin {
 }
 
 impl ResolveViewport for Padding {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         Self(self.0.resolve_relative(environment))
     }
 }
 
 impl ResolveViewport for Radius {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         Self(self.0.resolve_relative(environment))
     }
 }
 
 impl ResolveViewport for Size {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         match *self {
             Self::FitContent(value) => Self::FitContent(value.resolve_relative(environment)),
@@ -364,12 +411,16 @@ impl ResolveViewport for Size {
 }
 
 impl ResolveViewport for FlexBasis {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         self.resolve_relative(environment)
     }
 }
 
 impl ResolveViewport for TextIndent {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         Self {
             length: self.length.resolve_relative(environment),
@@ -379,6 +430,8 @@ impl ResolveViewport for TextIndent {
 }
 
 impl ResolveViewport for TabSize {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         match *self {
             Self::Length(length) => Self::Length(length.resolve_relative(environment)),
@@ -388,6 +441,8 @@ impl ResolveViewport for TabSize {
 }
 
 impl ResolveViewport for Spacing {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         match *self {
             Self::Length(value) => Self::Length(value.resolve_relative(environment)),
@@ -397,6 +452,8 @@ impl ResolveViewport for Spacing {
 }
 
 impl ResolveViewport for Transform {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         let Self::Functions(functions) = self else {
             return Self::None;
@@ -418,6 +475,8 @@ impl ResolveViewport for Transform {
 }
 
 impl ResolveViewport for TransformOrigin {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         Self {
             x: self.x.resolve_relative(environment),
@@ -428,6 +487,8 @@ impl ResolveViewport for TransformOrigin {
 }
 
 impl ResolveViewport for VerticalAlign {
+    const RESOLVES_RELATIVE: bool = true;
+
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
         match *self {
             Self::Length(value) => Self::Length(value.resolve_relative(environment)),

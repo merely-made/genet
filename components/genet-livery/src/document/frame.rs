@@ -190,6 +190,7 @@ where
         self.viewport = (width, height);
         self.device.set_viewport_size(width as f32, height as f32);
         self.finish_completed_transitions();
+        let style_span = crate::phase::span(crate::phase::Phase::Style);
         self.style_session.update(
             &self.dom,
             &self.style_set,
@@ -212,6 +213,10 @@ where
         // shortcut drops the transition before its first sample.
         self.schedule_transitions(&styles);
         self.schedule_keyframe_animation(&styles);
+        drop(style_span);
+        // Opened here so the retained fast paths' geometry work is attributed
+        // to layout as well; `take` closes it without moving the binding.
+        let mut layout_span = crate::phase::span(crate::phase::Phase::Layout);
         if !viewport_changed
             && self.layout_dirty
             && self.transitions.is_empty()
@@ -249,6 +254,7 @@ where
             self.clamp_scroll();
             self.clamp_nested_scroll();
             self.generation = self.generation.saturating_add(1);
+            let _ = layout_span.take();
             return self.paint_active_layout(width, height);
         }
         if !viewport_changed
@@ -288,6 +294,7 @@ where
             self.clamp_scroll();
             self.clamp_nested_scroll();
             self.generation = self.generation.saturating_add(1);
+            let _ = layout_span.take();
             return self.paint_active_layout(width, height);
         }
         if !viewport_changed
@@ -306,6 +313,7 @@ where
             self.identity_source = None;
             self.layout_dirty = false;
             self.generation = self.generation.saturating_add(1);
+            let _ = layout_span.take();
             return self.paint_active_layout(width, height);
         }
 
@@ -368,6 +376,7 @@ where
                             self.clamp_scroll();
                             self.clamp_nested_scroll();
                             self.generation = self.generation.saturating_add(1);
+                            let _ = layout_span.take();
                             return self.paint_active_layout(width, height);
                         }
                         break;
@@ -413,10 +422,13 @@ where
             fragments = previous.fragments;
         }
         let (content_width, content_height) = self.document_content_extent(&styles, &fragments);
+        // Moved, not cloned: nothing reads these locals afterwards, and a
+        // whole-document style plane and fragment tree are the two largest
+        // allocations a first frame makes.
         self.layout = Some(LayoutState {
             viewport: (width, height),
-            styles: styles.clone(),
-            fragments: fragments.clone(),
+            styles,
+            fragments,
             content_width,
             content_height,
         });
@@ -425,6 +437,7 @@ where
         self.clamp_scroll();
         self.clamp_nested_scroll();
         self.generation = self.generation.saturating_add(1);
+        let _ = layout_span.take();
         self.paint_active_layout(width, height)
     }
 
@@ -433,6 +446,7 @@ where
         width: u32,
         height: u32,
     ) -> Result<LiveryPaintList, LayoutError> {
+        let _paint_span = crate::phase::span(crate::phase::Phase::Paint);
         let (mut styles, mut fragments) = self
             .layout
             .as_ref()

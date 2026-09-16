@@ -910,7 +910,37 @@ fn generate(db: &Database) -> String {
             ));
         }
     }
-    out.push_str("        }\n    }\n}\n\n");
+    out.push_str("        }\n    }\n\n");
+
+    // T2: resolving relative lengths through `get`/`set` builds and destroys a
+    // tagged `PropertyValue` — and clones every non-Copy value — once per
+    // property per element, on every pass. This walks the fields directly, and
+    // the `RESOLVES_RELATIVE` constant folds the identity families away
+    // entirely at compile time.
+    out.push_str(
+        "    /// Resolve every relative length and math program in place,\n\
+         \x20   /// reporting whether anything changed.\n\
+         \x20   pub fn resolve_relative_lengths_in_place(\n\
+         \x20       &mut self,\n\
+         \x20       environment: crate::values::RelativeLengthEnvironment,\n\
+         \x20   ) -> bool {\n\
+         \x20       use crate::values::ResolveViewport;\n\
+         \x20       let mut changed = false;\n",
+    );
+    for property in &db.property {
+        let field = rust_field(&property.name);
+        let path = value_type_path(&property.value_type);
+        out.push_str(&format!(
+            "        if <{path} as ResolveViewport>::RESOLVES_RELATIVE {{\n\
+             \x20           let next = ResolveViewport::resolve_relative_lengths(&self.{field}, environment);\n\
+             \x20           if next != self.{field} {{\n\
+             \x20               self.{field} = next;\n\
+             \x20               changed = true;\n\
+             \x20           }}\n\
+             \x20       }}\n"
+        ));
+    }
+    out.push_str("        changed\n    }\n}\n\n");
 
     out.push_str(
         "#[derive(Clone, Copy, Debug, Eq, PartialEq)]\n\

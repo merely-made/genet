@@ -1747,6 +1747,10 @@ pub(crate) struct TextFrame<Id> {
     text_values: HashMap<Id, String>,
     text_groups: HashMap<Id, usize>,
     text_clusters: Vec<RetainedTextCluster<Id>>,
+    /// Every source that has ever contributed a retained cluster. It only
+    /// grows, so it is a safe over-approximation: when it says a subtree owns
+    /// no clusters, the subtree owns none.
+    cluster_sources: HashSet<Id>,
     next_text_group: usize,
 }
 
@@ -1766,6 +1770,7 @@ impl<Id> Default for TextFrame<Id> {
             text_values: HashMap::new(),
             text_groups: HashMap::new(),
             text_clusters: Vec::new(),
+            cluster_sources: HashSet::new(),
             next_text_group: 0,
         }
     }
@@ -1890,13 +1895,15 @@ where
                 self.inline_baselines.insert(*source, baselines.clone());
             }
         }
-        self.text_clusters.extend(
-            source_frame
-                .text_clusters
-                .iter()
-                .filter(|cluster| includes(cluster.source))
-                .cloned(),
-        );
+        let copied = source_frame
+            .text_clusters
+            .iter()
+            .filter(|cluster| includes(cluster.source))
+            .cloned()
+            .collect::<Vec<_>>();
+        self.cluster_sources
+            .extend(copied.iter().map(|cluster| cluster.source));
+        self.text_clusters.extend(copied);
     }
 
     fn copy_text_from(
@@ -1940,6 +1947,19 @@ where
         }
         let mut nodes = HashSet::new();
         collect_subtree_nodes(dom, root, &mut nodes);
+        // T2: final positioning calls this once per positioned box. A document
+        // whose positioned boxes carry no text — the L0b shape, and most
+        // application chrome — must not pay a corpus scan per box, so the
+        // subtree is asked first whether it owns any retained text at all.
+        let owns_text = nodes.iter().any(|node| {
+            self.source_groups.contains_key(node)
+                || self.cluster_sources.contains(node)
+                || self.inline_fragments.contains_key(node)
+                || self.inline_line_keys.contains_key(node)
+        });
+        if !owns_text {
+            return;
+        }
         for group in &mut self.prepared_groups {
             for prepared in group {
                 if nodes.contains(&prepared.source) {
@@ -1947,23 +1967,20 @@ where
                 }
             }
         }
-        for (node, fragments) in &mut self.inline_fragments {
-            if nodes.contains(node) {
+        // The keyed planes are walked by subtree node, not by corpus entry.
+        for node in &nodes {
+            if let Some(fragments) = self.inline_fragments.get_mut(node) {
                 for fragment in fragments {
                     translate_fragment(fragment, offset);
                 }
             }
-        }
-        for (node, lines) in &mut self.inline_line_keys {
-            if nodes.contains(node) {
+            if let Some(lines) = self.inline_line_keys.get_mut(node) {
                 for line in lines {
                     *line += offset.1;
                 }
             }
-        }
-        #[cfg(test)]
-        for (node, baselines) in &mut self.inline_baselines {
-            if nodes.contains(node) {
+            #[cfg(test)]
+            if let Some(baselines) = self.inline_baselines.get_mut(node) {
                 for baseline in baselines {
                     *baseline += offset.1;
                 }
@@ -1987,6 +2004,9 @@ where
     {
         let mut nodes = HashSet::new();
         collect_subtree_nodes(dom, root, &mut nodes);
+        if !nodes.iter().any(|node| self.source_groups.contains_key(node)) {
+            return false;
+        }
         self.prepared_groups
             .iter()
             .flatten()
@@ -2077,6 +2097,7 @@ where
         fragment: Fragment,
         rtl: bool,
     ) {
+        self.cluster_sources.insert(source);
         self.text_clusters.push(RetainedTextCluster {
             source,
             range,

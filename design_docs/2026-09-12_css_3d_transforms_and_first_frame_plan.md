@@ -2,7 +2,12 @@
 
 **Date:** 2026-09-12
 
-**Status, 2026-09-15:** prerequisite assessment complete; T3's bounded Genet
+**Status, 2026-09-15:** prerequisite assessment complete; **T2 is implemented
+and measured** — the L0b grid's first-frame growth falls from n^2.156 to
+n^1.168 and the 50,000-element cell from 1,172.21 s to 7.68 s, with a
+phase-timing instrument behind `--phase-timing` and a status-identical WPT
+census; the 1-second bound at 50,000 is not reached and the narrower bound is
+stated under T2. T3's bounded Genet
 content-box and 2D paint/input seam is implemented with automated receipts.
 Bounded native Bench B assembly is accepted on the downstream development
 build. T3's **host mutation instrument is now built and measured** on the
@@ -156,6 +161,15 @@ readback.
 
 ## T2. First-frame scaling
 
+**Status, 2026-09-15:** implemented and measured. The quadratic term is gone:
+the L0b grid's fitted growth exponent falls from **2.156 to 1.168** and the
+50,000-element cell's first frame from **1,172.21 s to 7.68 s** over baseline,
+with every cell's rendered digest unchanged. The phase-timing facility is built
+and it attributes the remaining cost without a fixture variant. The 1-second
+bound at 50,000 is **not** reached; the narrower bound and its rationale are
+recorded below under "What was reached". The WPT census over six layout and CSS
+directories shows zero transitions of any kind.
+
 **Target.** Linear growth in element count, and roughly two orders of
 magnitude less cost per element, for documents of tens of thousands of
 positioned boxes. This is the wing's original L0 large-element verdict
@@ -220,6 +234,77 @@ lane; the measured first-frame times across the 1,000 / 5,000 / 20,000 /
 and paint spans for one frame, and its output attributes the remaining cost
 without a fixture variant; and the WPT census over the layout and CSS
 directories shows zero `pass -> anything else`.
+
+**What was reached, 2026-09-15.** Receipt:
+`Code/testing/wing/l0b_t2_2026-09-15/results.md`, with raw timings, the phase
+receipts and the fitted exponent beside it. Host, fixtures and method are the
+2026-09-12 receipt's, unchanged.
+
+| elements | before, over baseline | after, over baseline | speed-up |
+|---:|---:|---:|---:|
+| 1,000 | 0.239 s | 0.078 s | 3.1x |
+| 5,000 | 4.976 s | 0.372 s | 13.4x |
+| 20,000 | 102.416 s | 2.015 s | 50.8x |
+| 50,000 | 1,172.213 s | **7.682 s** | 152.6x |
+
+Fitted exponent over the four cells: **2.156 (R² 0.995) before, 1.168
+(R² 0.993) after**. Growth is linear rather than quadratic, which is the second
+done-condition met.
+
+**The narrower bound, and why the wider one is not reachable in this lane.**
+The 50,000-element first frame is **7.68 s**, not under 1 s. The instrument
+attributes 6.04 s of it to the four phases — parse 0.15 s, style 2.03 s, layout
+2.89 s, paint 0.96 s — and a finer split inside style, taken once and removed,
+puts 2.25 s of the 2.03–2.56 s style phase in the cascade alone. The cascade's
+inner loop matches **every rule in the style set against every element**
+(`for rule in &style_set.rules` in `resolve_subtree_on_this_stack`,
+`components/genet-livery/src/style.rs`) with no selector bucketing by tag, class
+or id, and parses one inline `style` declaration block per element. Cutting the
+resulting ~45 µs per element to the ~8 µs the 1-second bound needs is a selector
+index plus rule-match caching plus a change to how `ComputedValues` is stored —
+hypothesis 3's "two orders of magnitude" half, a change to the cascade's shape
+with real conformance risk, and not something the L0b fixtures can validate.
+It is left as its own lane rather than attempted blind here.
+
+One residual is named and **not** attributed: the layout phase's own per-element
+cost still grows across the last step (30.3 µs/element at 20,000 against
+57.9 µs at 50,000) while style, paint and parse stay flat, and that residual is
+the whole of the remaining 1.17 exponent.
+
+**What changed.** Three things, in descending order of effect.
+
+1. *The fragment tree learned its own children.* `FragmentTree` now carries a
+   `children` index in slot order beside `slots` and `by_box`. `resize_leaf`'s
+   leaf test becomes a map lookup instead of a whole-document scan;
+   `translate_subtree` walks the subtree instead of testing every fragment's
+   ancestor chain; `structural_children` and `subtree_ids` read the index, which
+   also removes the quadratic in `match_retained_subtree`'s descent.
+2. *Aggregate overflow is rebuilt once per layout pass, not once per mutation.*
+   `translate_subtree`, `resize_leaf` and `reconcile_parent` mark
+   `overflow_dirty`; `flush_overflow` does the rebuild, and the positioned,
+   relative, sticky, retained-root and incremental-query passes each call it
+   once at their end. The result is identical — a focused test replays a
+   mutation sequence against a tree that recomputes after every single mutation,
+   including a shrinking leaf resize, and compares fragment for fragment.
+   `set_overflow` stays eager on purpose: it is the table grid's route, called
+   once per grid, and its result is read immediately.
+3. *Two per-element style costs.* `resolve_container_relative_styles_with_images`
+   cost a clone, a whole-plane structural comparison and a second clone for
+   every document; the descent now reports whether it moved anything and the
+   common document pays one clone. And resolving relative lengths went through
+   `ComputedValues::get`/`set`, building a tagged `PropertyValue` and cloning
+   every non-Copy value once per property per element per pass; a generated
+   `resolve_relative_lengths_in_place` walks the fields directly, and a new
+   `ResolveViewport::RESOLVES_RELATIVE` constant folds the identity families
+   away at compile time.
+
+`TextFrame::translate_subtree` gained the matching bound: it asks first whether
+the translated subtree owns any retained text and returns immediately when it
+does not, and it walks the keyed inline planes by subtree node rather than by
+corpus entry. The two `Vec` scans it keeps — prepared paint groups and text
+clusters — are still whole-corpus **when the subtree does own text**; indexing
+those is left open, and the L0b fixtures carry no text, so this lane could not
+measure it either way.
 
 ---
 
@@ -631,6 +716,24 @@ T3's ordinary image-composition receipt.
   5.830 ms. The presentation wait gives back what the work took, which is why
   T3 asked for the two numbers separately rather than a frame time.
 
+- **2026-09-15** — T2's exponent was four whole-document passes and two
+  whole-vector allocations per positioned box, exactly as hypothesis 1 read it.
+  Removing them takes the L0b grid's fitted growth from n^2.156 to n^1.168 and
+  the 50,000-element first frame from 1,172 s to 7.68 s, with every cell's
+  rendered digest unchanged and a status-identical WPT census.
+- **2026-09-15** — with the exponent gone, the per-element constant is the
+  **cascade**, not parse and not `ComputedValues`' size on its own: at 50,000
+  elements the style phase is 2.03 s of a 7.68 s frame and `IncrementalStyle::update`
+  is 2.25 s of the measured style work, because every rule in the style set is
+  matched against every element with no selector bucketing. This sharpens
+  hypothesis 3: the 160-field struct is real but secondary, and the 1-second
+  bound needs a selector index, not a cheaper clone.
+- **2026-09-15** — the layout phase's own per-element cost still grows between
+  20,000 and 50,000 elements (30.3 to 57.9 µs/element) while style, paint and
+  parse stay flat over the same step. That is the whole of T2's residual 1.17
+  exponent and it is unattributed; a next probe reads it from the spans rather
+  than from a fixture.
+
 ## Progress
 
 - **2026-09-12** — founded. No lane started.
@@ -671,3 +774,21 @@ T3's ordinary image-composition receipt.
   50,000 was not attempted. Script-driven mutation remains a deliberate
   exclusion and was not touched. Native composition rerun and WPT attribution
   for broader T3 acceptance remain open, as do T1, T2 and T4.
+- **2026-09-15** — T2 implemented and measured. A `children` index and a
+  deferred aggregate-overflow rebuild in `buckram`'s `FragmentTree`, the same
+  bound applied to the relative, sticky, retained-root and incremental-query
+  paths and to `TextFrame::translate_subtree`, and two per-element style costs
+  removed in `genet-livery` and `livery`. A `--phase-timing` flag on Ortet over
+  a new `genet_livery::phase` recorder reports parse, style, layout and paint
+  for one frame and wrote this lane's whole attribution without a fixture
+  variant. The L0b grid is rerun on the same host: fitted exponent 2.156 →
+  1.168, the 50,000-element first frame 1,172.21 s → 7.68 s, every digest
+  unchanged. **The 1-second bound at 50,000 is not reached**; 7.68 s is, and the
+  rationale is recorded under T2. Five focused fragment-tree tests, three phase
+  tests and two host-instrument tests added; buckram, genet-livery, livery,
+  ortet and genet-documents suites rerun green. WPT census over
+  `css/css-position`, `css/CSS2/abspos`, `css/CSS2/positioning`,
+  `css/CSS2/normal-flow`, `css/css-transforms` and `css/css-values`, before and
+  after on the same harness sources: zero transitions of any kind. Not
+  committed. T1, T4 and the broader T3 acceptance remain open, and so does T2's
+  per-element constant.

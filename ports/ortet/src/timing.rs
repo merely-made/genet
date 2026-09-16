@@ -77,6 +77,16 @@ pub struct FrameTiming {
     pub mutations: u32,
     /// Elements the engine restyled for them.
     pub restyled: u32,
+    // -- engine phase spans -------------------------------------------------
+    /// HTML parse and DOM construction. It happens once, before the first
+    /// frame, and is drained onto whichever frame first reads the recorder.
+    pub parse_us: u64,
+    /// Cascade and computed-value resolution inside `frame_us`.
+    pub style_us: u64,
+    /// Box generation, formatting and the fragment tree, inside `frame_us`.
+    pub layout_us: u64,
+    /// Paint-list production, inside `frame_us`.
+    pub paint_us: u64,
 }
 
 impl FrameTiming {
@@ -97,11 +107,31 @@ impl FrameTiming {
             .saturating_sub(self.work_us() + self.wait_us())
     }
 
+    /// The engine phases that live inside `frame_us`. Parse is excluded: it
+    /// runs before the frame loop, so it is not part of any frame's span.
+    pub const fn engine_phases_us(&self) -> u64 {
+        self.style_us + self.layout_us + self.paint_us
+    }
+
+    /// What `session.frame` spent outside the three instrumented phases:
+    /// child-frame composition, scene translation, overlays. Reported so the
+    /// attribution never quietly absorbs it.
+    pub const fn frame_other_us(&self) -> u64 {
+        self.frame_us.saturating_sub(self.engine_phases_us())
+    }
+
+    /// Whether the engine phase instrument contributed anything to this frame.
+    pub const fn has_phases(&self) -> bool {
+        self.parse_us + self.engine_phases_us() > 0
+    }
+
     fn json(&self) -> String {
         format!(
             "{{\"frame\":{},\"mutate_us\":{},\"frame_us\":{},\"raster_us\":{},\"compose_us\":{},\
              \"acquire_us\":{},\"present_us\":{},\"work_us\":{},\"wait_us\":{},\"other_us\":{},\
-             \"total_us\":{},\"mutations\":{},\"restyled\":{}}}",
+             \"total_us\":{},\"mutations\":{},\"restyled\":{},\
+             \"parse_us\":{},\"style_us\":{},\"layout_us\":{},\"paint_us\":{},\
+             \"frame_other_us\":{}}}",
             self.index,
             self.mutate_us,
             self.frame_us,
@@ -115,6 +145,11 @@ impl FrameTiming {
             self.total_us,
             self.mutations,
             self.restyled,
+            self.parse_us,
+            self.style_us,
+            self.layout_us,
+            self.paint_us,
+            self.frame_other_us(),
         )
     }
 }
@@ -138,6 +173,13 @@ pub struct TimingSummary {
     pub mutate: Percentiles,
     pub mutations: u64,
     pub restyled: u64,
+    /// Engine phase spans, summed over the measured frames. Sums rather than
+    /// percentiles: on a one-frame first-frame run there is nothing to take a
+    /// percentile of, and parse lands on exactly one frame.
+    pub parse_us: u64,
+    pub style_us: u64,
+    pub layout_us: u64,
+    pub paint_us: u64,
 }
 
 /// Every presented frame's attribution, and the summary over them.
@@ -194,6 +236,10 @@ impl TimingLog {
                 .map(|frame| u64::from(frame.mutations))
                 .sum(),
             restyled: measured.iter().map(|frame| u64::from(frame.restyled)).sum(),
+            parse_us: measured.iter().map(|frame| frame.parse_us).sum(),
+            style_us: measured.iter().map(|frame| frame.style_us).sum(),
+            layout_us: measured.iter().map(|frame| frame.layout_us).sum(),
+            paint_us: measured.iter().map(|frame| frame.paint_us).sum(),
         }
     }
 
@@ -210,7 +256,8 @@ impl TimingLog {
             "  \"summary\": {{\"frames\": {}, \"mutations\": {}, \"restyled\": {}, \
              \"work_median_us\": {}, \"work_p95_us\": {}, \"wait_median_us\": {}, \
              \"wait_p95_us\": {}, \"total_median_us\": {}, \"total_p95_us\": {}, \
-             \"frame_phase_median_us\": {}, \"raster_median_us\": {}, \"mutate_median_us\": {}}},\n",
+             \"frame_phase_median_us\": {}, \"raster_median_us\": {}, \"mutate_median_us\": {}, \
+             \"parse_us\": {}, \"style_us\": {}, \"layout_us\": {}, \"paint_us\": {}}},\n",
             summary.frames,
             summary.mutations,
             summary.restyled,
@@ -223,6 +270,10 @@ impl TimingLog {
             summary.frame_phase.median_us,
             summary.raster.median_us,
             summary.mutate.median_us,
+            summary.parse_us,
+            summary.style_us,
+            summary.layout_us,
+            summary.paint_us,
         ));
         out.push_str("  \"frames\": [\n");
         for (index, frame) in self.frames.iter().enumerate() {
@@ -296,7 +347,30 @@ mod tests {
             total_us: total,
             mutations: 1,
             restyled: 3,
+            ..FrameTiming::default()
         }
+    }
+
+    /// The engine phase spans are a breakdown inside `frame_us`, never an
+    /// addition to it: work stays what the thread computed, and whatever the
+    /// frame did outside the three instrumented phases is named.
+    #[test]
+    fn engine_phases_partition_the_frame_span_without_changing_work() {
+        let mut timing = frame(0, [10, 4_000, 900, 60], [15_800, 120], 45);
+        assert!(!timing.has_phases());
+        assert_eq!(timing.engine_phases_us(), 0);
+        assert_eq!(timing.frame_other_us(), 4_000);
+
+        timing.parse_us = 900_000;
+        timing.style_us = 1_200;
+        timing.layout_us = 2_300;
+        timing.paint_us = 400;
+        assert!(timing.has_phases());
+        assert_eq!(timing.engine_phases_us(), 3_900);
+        assert_eq!(timing.frame_other_us(), 100);
+        // Parse happens before the frame loop, so it never enters work.
+        assert_eq!(timing.work_us(), 4_970);
+        assert_eq!(timing.other_us(), 45);
     }
 
     /// The accounting contract: work and wait name disjoint spans, neither

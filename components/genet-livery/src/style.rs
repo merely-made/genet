@@ -913,14 +913,15 @@ where
         self.values.get_mut(&id)
     }
 
+    /// Resolve one element's relative lengths, reporting whether any changed.
     pub(crate) fn resolve_relative_lengths(
         &mut self,
         id: Id,
         environment: livery::values::RelativeLengthEnvironment,
-    ) {
-        if let Some(computed) = self.values.get_mut(&id) {
-            resolve_relative_lengths(computed, environment);
-        }
+    ) -> bool {
+        self.values
+            .get_mut(&id)
+            .is_some_and(|computed| resolve_relative_lengths(computed, environment))
     }
 
     /// Resolve `ch` after the retained text owner has the document's complete
@@ -935,7 +936,7 @@ where
             let environment = livery::values::RelativeLengthEnvironment::viewport(viewport)
                 .with_vertical_writing(computed.writing_mode.is_vertical())
                 .with_ch_advance(text.ch_advance(computed));
-            resolve_relative_lengths(computed, environment);
+            let _ = resolve_relative_lengths(computed, environment);
         }
     }
 
@@ -1558,19 +1559,20 @@ fn resolve_viewport_units(computed: &mut ComputedValues, device: &Device, tree_c
     let environment = livery::values::RelativeLengthEnvironment::viewport(device.viewport_sizes)
         .with_vertical_writing(computed.writing_mode.is_vertical())
         .with_tree_counts(tree_counts);
-    resolve_relative_lengths(computed, environment);
+    let _ = resolve_relative_lengths(computed, environment);
 }
 
+/// Resolve one element's relative lengths, reporting whether any value moved.
+///
+/// The generated in-place walk replaces a `get`/`set` round trip over all
+/// generated properties: that round trip built a tagged `PropertyValue` and
+/// cloned every non-Copy value once per property per element, on every pass,
+/// which is a first frame's per-element constant rather than its exponent.
 fn resolve_relative_lengths(
     computed: &mut ComputedValues,
     environment: livery::values::RelativeLengthEnvironment,
-) {
-    for &property in PropertyId::ALL {
-        let value = computed.get(property).resolve_relative_lengths(environment);
-        computed
-            .set(property, value)
-            .expect("generated property read and write types agree");
-    }
+) -> bool {
+    computed.resolve_relative_lengths_in_place(environment)
 }
 
 fn resolve_font_metrics(computed: &mut ComputedValues, parent: Option<&ComputedValues>) {

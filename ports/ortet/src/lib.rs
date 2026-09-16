@@ -16,7 +16,7 @@
 //! lane, no smolweb, no profiles, no settings, no persistence. All of those are
 //! product decisions, and product decisions live in Mere.
 //!
-//! Four small pieces:
+//! A handful of small pieces:
 //!
 //! - [`args`] — the command line, and the address normalization the fetch lanes
 //!   and `resolve_href` both rely on.
@@ -24,6 +24,8 @@
 //!   `LocalFetcher`, http(s) to netfetcher, everything else an honest miss.
 //! - [`shell`] — the winit window, the per-frame shape, and navigation.
 //! - [`receipt`] — one composed frame read back to a PNG with its digest.
+//! - [`mutate`] — the host-driven per-frame DOM mutation pattern (`--mutate`).
+//! - [`timing`] — per-frame phase attribution, work kept apart from wait.
 //!
 //! The library half exists so the argument parser and the scheme split can be
 //! unit-tested without a GPU; `main.rs` is a thin wrapper over [`shell::run`].
@@ -33,10 +35,12 @@ pub(crate) mod a11y;
 pub mod args;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod fetch;
+pub mod mutate;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod receipt;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod shell;
+pub mod timing;
 #[cfg(target_arch = "wasm32")]
 pub mod web;
 #[cfg(all(not(target_arch = "wasm32"), feature = "scripted"))]

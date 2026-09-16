@@ -605,6 +605,70 @@ impl SessionPendingWork {
     }
 }
 
+// ── Host mutation ──────────────────────────────────────────────────────────
+
+/// One host-driven DOM change, named in engine-neutral terms.
+///
+/// This is the **non-script** mutation entry: a Rust host changes the loaded
+/// document directly, the way Cambium's Rootstock drives its own DOM through
+/// `LayoutDomMut`, without a script engine in the picture. Sessions translate
+/// it into their own node ids and their own `drain_mutations` / restyle path;
+/// nothing about node identity, dirty bits, or style crosses this boundary.
+///
+/// The target is an element's `id` attribute rather than an opaque node
+/// handle, because a host that did not build the document has no other stable
+/// name for one of its elements.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HostMutation {
+    /// The value of the target element's `id` attribute.
+    pub target_id: String,
+    pub op: HostMutationOp,
+}
+
+impl HostMutation {
+    pub fn new(target_id: impl Into<String>, op: HostMutationOp) -> Self {
+        Self {
+            target_id: target_id.into(),
+            op,
+        }
+    }
+}
+
+/// What a [`HostMutation`] does to its target. The four shapes the T3
+/// instrument needs: replace an attribute (`style`, `class`), drop one, grow
+/// the subtree, shrink it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum HostMutationOp {
+    /// Set or replace an attribute in the null namespace.
+    SetAttribute { name: String, value: String },
+    /// Remove an attribute; absent is not an error.
+    RemoveAttribute { name: String },
+    /// Append one element child, optionally carrying a class and one text node.
+    AppendChild {
+        tag: String,
+        class: Option<String>,
+        text: Option<String>,
+    },
+    /// Remove the target's last element child. A target with no element child
+    /// is reported as a miss, not an error.
+    RemoveLastChild,
+}
+
+/// What one [`DocumentSession::apply_host_mutations`] batch actually did.
+///
+/// `restyled_elements` is the engine's own count for the batch, so a host
+/// receipt can say the mutation reached style rather than assuming it did.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct HostMutationReport {
+    /// Mutations whose target resolved and whose operation was performed.
+    pub applied: usize,
+    /// Mutations whose target id did not resolve, or whose operation had
+    /// nothing to act on (a `RemoveLastChild` on a childless element).
+    pub missed: usize,
+    /// Elements whose cascade the engine recomputed for this batch.
+    pub restyled_elements: usize,
+}
+
 /// Spawns retained document sessions for the engine id it claims. Registered
 /// once per host; holds its lane's construction seams (fetcher, cookie jar,
 /// theme) so the spawn request stays plain data.
@@ -917,6 +981,33 @@ pub trait DocumentSession<F>: Any {
     /// state changed and the host should redraw.
     fn provide_subresource(&mut self, _url: &str, _bytes: &[u8]) -> bool {
         false
+    }
+
+    /// Apply one batch of host-driven DOM changes before the next
+    /// [`Self::frame`], and report what the batch did.
+    ///
+    /// The batch is applied as one turn — resolve, mutate, drain, restyle —
+    /// so a host pays one invalidation for the whole set rather than one per
+    /// mutation. Sessions whose DOM is immutable leave this unsupported; the
+    /// host reports the absence rather than quietly rendering an unchanged
+    /// document.
+    fn apply_host_mutations(
+        &mut self,
+        _mutations: &[HostMutation],
+    ) -> Result<HostMutationReport, SessionError> {
+        Err(SessionError::Unsupported(
+            "host mutation is not wired for this session".into(),
+        ))
+    }
+
+    /// Element `id` attributes beginning with `prefix`, in document order.
+    ///
+    /// The companion read to [`Self::apply_host_mutations`]: a host driving a
+    /// deterministic mutation pattern over "the controls" needs to name them
+    /// without having counted the document by hand. Empty for sessions with no
+    /// element-id plane.
+    fn element_ids_with_prefix(&self, _prefix: &str) -> Vec<String> {
+        Vec::new()
     }
 
     /// Drive timers / pending script work (scripted lanes). No-op default.

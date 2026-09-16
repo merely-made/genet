@@ -2226,3 +2226,196 @@ fn scene_translation(scene: &Scene, transform_id: u32) -> (f32, f32) {
         .get(transform_id as usize)
         .map_or((0.0, 0.0), |transform| (transform.m[12], transform.m[13]))
 }
+
+// ── T3 host mutation seam ──────────────────────────────────────────────────
+//
+// The instrument under `design_docs/2026-09-12_css_3d_transforms_and_first_frame_plan.md`
+// T3: a Rust host changes the loaded document with no script engine present,
+// and the next frame shows it.
+
+/// One bounded document in the Bench B shape: a host-content viewport and a
+/// handful of ordinary controls, each control painting one solid rect.
+#[cfg(feature = "livery")]
+fn host_mutation_fixture() -> Box<dyn DocumentSession<Scene>> {
+    let engine = LiverySessionEngine::new(NoFetch);
+    let request = SessionSpawnRequest::new("https://example.test/bench")
+        .with_body(
+            r#"<html><head><style>
+                html, body { margin: 0; padding: 0; }
+                custom-leaf { display: block; width: 120px; height: 90px; }
+                .ctl { display: block; width: 40px; height: 20px; background: #334455; }
+                .tick { display: block; width: 8px; height: 8px; background: #aa3322; }
+                .warm { background: #cc8844; }
+            </style></head><body>
+            <custom-leaf id="view" key="7"></custom-leaf>
+            <div class="ctl" id="ctl0"></div>
+            <div class="ctl" id="ctl1"></div>
+            <div class="ctl" id="ctl2"></div>
+            </body></html>"#,
+        )
+        .with_viewport(320, 240);
+    engine.spawn(&request).expect("livery session spawns")
+}
+
+#[cfg(feature = "livery")]
+fn rect_count(scene: &Scene) -> usize {
+    scene
+        .ops
+        .iter()
+        .filter(|operation| matches!(operation, netrender::SceneOp::Rect(_)))
+        .count()
+}
+
+/// The host names the controls without having counted them, and gets them in
+/// document order.
+#[cfg(feature = "livery")]
+#[test]
+fn host_mutation_targets_are_listed_by_id_prefix_in_document_order() {
+    let session = host_mutation_fixture();
+    assert_eq!(
+        session.element_ids_with_prefix("ctl"),
+        vec!["ctl0".to_owned(), "ctl1".to_owned(), "ctl2".to_owned()]
+    );
+    assert_eq!(session.element_ids_with_prefix("view"), vec!["view"]);
+    assert!(session.element_ids_with_prefix("absent").is_empty());
+}
+
+/// An attribute change reaches the retained style plane and the next frame,
+/// with no script anywhere in the session.
+#[cfg(feature = "livery")]
+#[test]
+fn a_host_attribute_change_restyles_and_the_next_frame_shows_it() {
+    use document_session_api::session_engine::{HostMutation, HostMutationOp};
+
+    let mut session = host_mutation_fixture();
+    let before = session.frame(320, 240);
+    let before_rects = rect_count(&before);
+
+    let report = session
+        .apply_host_mutations(&[
+            HostMutation::new(
+                "ctl0",
+                HostMutationOp::SetAttribute {
+                    name: "class".to_owned(),
+                    value: "ctl warm".to_owned(),
+                },
+            ),
+            HostMutation::new(
+                "view",
+                HostMutationOp::SetAttribute {
+                    name: "style".to_owned(),
+                    value: "width: 160px; height: 120px;".to_owned(),
+                },
+            ),
+        ])
+        .expect("the livery lane wires host mutation");
+    assert_eq!((report.applied, report.missed), (2, 0));
+    assert!(
+        report.restyled_elements > 0,
+        "an attribute change must recompute at least the changed element's cascade"
+    );
+
+    let after = session.frame(320, 240);
+    assert_eq!(
+        rect_count(&after),
+        before_rects,
+        "a pure attribute change adds no boxes"
+    );
+    assert_ne!(
+        before.ops.len() + before.transforms.len(),
+        0,
+        "the fixture paints something to compare against"
+    );
+    let concrete = session
+        .as_any()
+        .downcast_ref::<LiveryDocumentSession>()
+        .expect("retained livery session");
+    assert_eq!(
+        concrete.document().dom().attribute(
+            super::livery::element_with_id(concrete.document().dom(), "ctl0")
+                .expect("ctl0 is live"),
+            &Namespace::default(),
+            &LocalName::from("class"),
+        ),
+        Some("ctl warm"),
+        "the change is visible in the live DOM the next frame reads"
+    );
+}
+
+/// Structure: an appended child paints, and removing it takes the paint away.
+#[cfg(feature = "livery")]
+#[test]
+fn a_host_append_paints_and_its_removal_repaints_without_it() {
+    use document_session_api::session_engine::{HostMutation, HostMutationOp};
+
+    let mut session = host_mutation_fixture();
+    let baseline = rect_count(&session.frame(320, 240));
+
+    let report = session
+        .apply_host_mutations(&[HostMutation::new(
+            "ctl1",
+            HostMutationOp::AppendChild {
+                tag: "div".to_owned(),
+                class: Some("tick".to_owned()),
+                text: None,
+            },
+        )])
+        .expect("append is wired");
+    assert_eq!((report.applied, report.missed), (1, 0));
+    let appended = rect_count(&session.frame(320, 240));
+    assert_eq!(
+        appended,
+        baseline + 1,
+        "the appended box paints in the frame after the mutation"
+    );
+
+    let report = session
+        .apply_host_mutations(&[HostMutation::new("ctl1", HostMutationOp::RemoveLastChild)])
+        .expect("removal is wired");
+    assert_eq!((report.applied, report.missed), (1, 0));
+    assert_eq!(
+        rect_count(&session.frame(320, 240)),
+        baseline,
+        "removal repaints the document without the removed box"
+    );
+
+    // A second removal has nothing to remove: a miss, not an error and not a
+    // silent success.
+    let report = session
+        .apply_host_mutations(&[HostMutation::new("ctl1", HostMutationOp::RemoveLastChild)])
+        .expect("an empty removal is still a well-formed batch");
+    assert_eq!((report.applied, report.missed), (0, 1));
+}
+
+/// An unresolved id is reported, not fatal: a sweep over a fixture whose ids
+/// run out must say so rather than fail the run.
+#[cfg(feature = "livery")]
+#[test]
+fn an_unresolved_host_mutation_target_is_reported_as_a_miss() {
+    use document_session_api::session_engine::{HostMutation, HostMutationOp};
+
+    let mut session = host_mutation_fixture();
+    let _ = session.frame(320, 240);
+    let report = session
+        .apply_host_mutations(&[
+            HostMutation::new(
+                "ctl9",
+                HostMutationOp::SetAttribute {
+                    name: "class".to_owned(),
+                    value: "ctl warm".to_owned(),
+                },
+            ),
+            HostMutation::new(
+                "ctl2",
+                HostMutationOp::RemoveAttribute {
+                    name: "class".to_owned(),
+                },
+            ),
+        ])
+        .expect("a partially-resolving batch still applies");
+    assert_eq!((report.applied, report.missed), (1, 1));
+    assert_eq!(
+        session.apply_host_mutations(&[]).expect("empty is legal"),
+        document_session_api::session_engine::HostMutationReport::default()
+    );
+}

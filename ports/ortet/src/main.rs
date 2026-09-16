@@ -84,6 +84,41 @@ fn run() -> Result<(), String> {
         census(outcome.live_nodes.0),
         census(outcome.live_nodes.1)
     );
+    // The T3 mutation instrument. Work and presentation wait are reported
+    // separately on purpose: a vsync-bound frame and a layout-bound frame have
+    // the same total and nothing else in common.
+    for stream in &outcome.mutation_streams {
+        println!("ortet: mutation stream {stream}");
+    }
+    if let Some(reason) = outcome.mutation_unsupported.as_deref() {
+        println!("ortet: mutation UNSUPPORTED by this engine: {reason}");
+    }
+    let (applied, missed) = outcome.host_mutations;
+    if applied > 0 || missed > 0 {
+        println!("ortet: host mutations applied={applied} missed={missed}");
+    }
+    let timing = outcome.timing;
+    if timing.frames > 0 {
+        println!(
+            "ortet: timing over {} measured frame(s) — work median {} us p95 {} us; \
+             present wait median {} us p95 {} us; total median {} us p95 {} us",
+            timing.frames,
+            timing.work.median_us,
+            timing.work.p95_us,
+            timing.wait.median_us,
+            timing.wait.p95_us,
+            timing.total.median_us,
+            timing.total.p95_us
+        );
+        println!(
+            "ortet: timing work split — session.frame median {} us, raster median {} us, \
+             mutate median {} us, restyled elements {}",
+            timing.frame_phase.median_us,
+            timing.raster.median_us,
+            timing.mutate.median_us,
+            timing.restyled
+        );
+    }
     Ok(())
 }
 

@@ -167,7 +167,7 @@ readback.
 
 **Status: implemented and measured.** Receipts in
 `Code/testing/genet/t1_css_3d_20260915/results.md` and
-`Code/testing/genet/wpt-ledger/2026-09-15_t1_css_transforms/`. Not committed.
+`Code/testing/genet/wpt-ledger/2026-09-15_t1_css_transforms/`. Committed as `d61978378c1`.
 
 **Where the matrix lives.** `Matrix3D` in
 `components/livery/src/values/transform_matrix.rs` holds sixteen cells in
@@ -902,7 +902,7 @@ T3's ordinary image-composition receipt.
   600 passing with 70 fixed and 4 attributed new failures. Wing fixture
   silhouette against `isometer-mesh`'s bake: 98.73% agreement, no pixel more
   than one pixel out. Yaw and depth-order headless readbacks pass 13 of 13
-  assertions. Not committed. T4 and the broader T3 acceptance remain open, and
+  assertions. Committed as `d61978378c1`. T4 and the broader T3 acceptance remain open, and
   so does T2's per-element constant.
 - **2026-09-15** — T2 implemented and measured. A `children` index and a
   deferred aggregate-overflow rebuild in `buckram`'s `FragmentTree`, the same

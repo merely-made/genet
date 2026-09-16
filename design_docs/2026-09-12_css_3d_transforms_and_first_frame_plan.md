@@ -19,13 +19,18 @@ Bounded native Bench B assembly is accepted on the downstream development
 build. T3's **host mutation instrument is now built and measured** on the
 bounded fixture, with actual work reported apart from presentation wait; the
 large-element mutation sweep is measured at 1,000, 5,000 and 20,000 elements,
-the last on five frames only; 50,000 was not attempted. **T3's acceptance
-rerun, 2026-09-16, leaves bullet 3 open:** at main `f1f21c61d26` the native
-composition receipt reproduces the 2026-09-11 captures byte for byte on Boa and
-Nova, the WebGL and G5 guards and netrender's GPU gate pass, and the focused
-suites pass. The WPT attribution, however, finds one `pass -> fail` introduced
-by the seam commit `101d9e9ade8` itself. Its hit test no longer resolves a
-pointer on an intrinsically sized `<input>` or `<textarea>` to the control.
+the last on five frames only; 50,000 was not attempted. **Genet's T3 seam
+acceptance is complete, 2026-09-16.** The acceptance rerun at main
+`f1f21c61d26` reproduced the 2026-09-11 native composition captures byte for
+byte on Boa and Nova, and the WebGL and G5 guards, netrender's GPU gate and the
+focused suites passed. It also found one `pass -> fail` introduced by the seam
+commit `101d9e9ade8`: its hit test missed unsized form controls, whose border
+boxes have zero extent in Livery. The hit-test fix recorded under T3 admits a
+zero-extent border axis on its own coordinate. The failing pointer-events test
+now passes in 3 of 3 runs, with zero `pass -> anything else` across the eight re-measured WPT
+directories and native captures still byte-identical, so bullet 3 is closed.
+The wing's bench still depends on Mere's producer lifecycle,
+picking/accessibility and update-cost receipts.
 **T4 is implemented and measured in netrender** (`06f3a12f4`): a placement
 inside a rect-clip, alpha or element-filter layer now retains and reads back
 byte-identical to an independently expanded reference, `fragment_lower_count`
@@ -391,12 +396,14 @@ measure it either way.
 
 **Status, 2026-09-16:** bounded engine implementation, automated receipt and
 downstream native Bench B assembly complete. The host mutation instrument is
-built and measured (receipt below). The changed-source acceptance rerun is done
-and **bullet 3 remains open**. Native composition, the WebGL and G5 guards,
-netrender's GPU gate and the focused suites pass, but the WPT attribution finds
+built and measured (receipt below). The changed-source acceptance rerun found
 `pointerevents/pointerup_button_value_matches_corresponding_pointerdown.html`
-going from pass to fail at `101d9e9ade8`, still failing at main (receipt below).
-T3's seam acceptance is therefore not complete. The
+going from pass to fail at `101d9e9ade8`. The hit-test fix receipt below
+repairs it with zero `pass -> anything else` and unchanged native captures.
+**Bullet 3 is closed and Genet's T3 seam acceptance is complete.** The wing's
+bench still closes only with the Mere producer lifecycle, same-identity
+picking/accessibility and application update-cost receipts, as the paragraph
+after "Genet seam done when" states. The
 specimen bench prerequisite section named above is the cross-repository
 assembly authority. T3 specifies the Genet portion, not an application renderer.
 
@@ -602,7 +609,8 @@ that application gate.
 
 ### Acceptance rerun and WPT attribution, 2026-09-16
 
-**Bullet 3 is not closed.** Source: Genet `f1f21c61d26` (clean worktree
+**This rerun left bullet 3 open; the hit-test fix receipt at the end of this
+subsection closes it.** Source: Genet `f1f21c61d26` (clean worktree
 `genet-t3-acceptance-20260916`), with netrender `06f3a12f4`, Boa `52cfb6ff9`,
 Vano `8ad084125` and Piccolo `e77309c64`, all clean. `Cargo.lock` SHA256 is
 `29f7b9dcf2bba7819aad44bbe0ce6f4d6a8df1744c70017324981809ca717c26`; the ignored
@@ -676,6 +684,95 @@ not repaired here.
   netrender `3961aca91` and `06f3a12f4` (reftest).
 - cssom-view: the loss reproduces with the `2ecb56a9a68` and patch runners that
   the initial blank-load lane archived.
+
+#### Hit-test fix receipt, 2026-09-16
+
+**Bullet 3 is closed.**
+
+- **Source:** `d3101be240c` on branch `t3-hit-test-fix`, with the fix
+  uncommitted: the `components/` diff SHA256 is `748a15d7…`, plus one untracked
+  test file. This document was edited after the receipts.
+- **Dependencies:** netrender `06f3a12f4`, Boa `52cfb6ff9`, Vano `8ad084125`
+  and Piccolo `e77309c64`, all clean. `Cargo.lock` and the ignored config are
+  unchanged.
+- **Receipt:** `Code/testing/genet/wpt-ledger/2026-09-16_t3_hit_test_fix/results.md`.
+
+**Root cause.** Livery gives an unsized `<input>` (text, checkbox,
+`type=button`) or empty `<textarea>` a zero-extent border box: `(28, 20, 0, 0)`
+for `<input style="margin:20px">`, and a line for its `display: block` form.
+genet-wpt aims an element-origin pointer at the layout rect's centre, which is
+that point or line.
+
+- The pre-seam hit test compared with closed intervals, which admit it.
+- `ElementGeometry::hits_border` reused the content-mapping `contains`, which
+  requires positive width and height, so the box held no point.
+
+The shared placement reaches the control and maps the pointer onto its local
+origin. Only the containment predicate rejects it. With the recorded binaries,
+the pre-seam hit test admits an unsized input at its exact centre and not 1 px
+away; the seam's never admits it.
+
+**Fix.** `hits_border` tests each border axis with `border_axis_contains`:
+half-open `[0, extent)` on an axis with extent, and exactly `0` on an axis
+without. It still maps through paint's inverse matrix and clip scopes, and
+`map_to_content` and clip containment are unchanged. Closed intervals on every
+border box would also restore the rows, but they would change which box owns
+a shared right or bottom edge between boxes with extent.
+
+**Focused tests.** `tests/form_control_hit.rs` has four tests over the
+regression table's rows plus the block input: centre hits; a zero-extent box
+holding only its own point or line; each control under an f32-exact 2D
+transform; and each control inside a scrolled, clipping scroller. With only
+`placement.rs` reversed, all four fail.
+
+**Suites,** `cargo test --locked --offline`, none failing:
+
+- `-p genet-livery`: 531 passed, 6 ignored. That is 527 at the base plus the
+  four; it includes `host_content_geometry` 10, `interaction` 25, `paint` 74 and
+  `transforms_3d` 8.
+- `-p livery`: 206.
+- `-p ortet`: 32.
+- `-p ortet --features scripted-nova --lib`: 36.
+- `-p genet-documents --features livery`: 51.
+
+**WPT.** A fresh `genet-wpt` release build, whose genet closure was all
+compiled in that build, run in disk mode with Boa and Livery:
+
+- testharness: `pointerevents`, `uievents` and `touch-events`, at
+  `--jobs 8 --timeout 90`;
+- reftest: `css/css-transforms`, `css/css-overflow`, `css/CSS2/visufx`,
+  `css/CSS2/zindex` and `css/css-position`.
+
+| comparison | movements | `pass -> anything else` |
+|---|---|---:|
+| main maps -> fix, testharness | `pointerup_button_value_matches_corresponding_pointerdown.html` fail -> pass; `pointerevent_lostpointercapture_for_disconnected_node.html` fail 0/1 -> fail 0/2 | 0 |
+| main maps -> fix, reftest | none in all five directories | 0 |
+| `2b68c12d72b` maps -> fix, testharness | none, with identical subtest counts | 0 |
+
+The pointerup test passes in 3 of 3 runs. The lostpointercapture test fails
+0/2 in 3 of 3 runs, and its result entry equals the pre-seam binary's. This fix
+restores it, because its actions press the centre of an unsized
+`<input type="button">`. Its remaining failure predates the seam.
+
+**Native.** The standards compositing receipt, WebGL guard and G5 guard ran on
+Boa and Nova at display scale 2. All three reproduce the acceptance rerun:
+
+- all 25 probes pass;
+- the digests are `0xa440137ccc503f9c`, `0xb07e372b0126bea5` and
+  `0xc5d147e70d4e4425`, with G5 at `unpinned=5 collected=6`;
+- the impossible-heading controls fail at 25 ms;
+- all six captures are byte-identical to the acceptance rerun.
+
+Boa presented 5 G5 frames and Nova 6. The committed runners refuse a dirty
+tree, so these receipts were taken with ledger copies. The copies differ only
+in accepting and recording the genet worktree's declared uncommitted diff, and
+every other root must still be clean.
+
+**Open.** A zero-extent axis holds only its exact coordinate. Under an inexact
+matrix, a point computed onto a zero-size control is hit or missed by f32
+rounding: in the probe it was hit at 90° and 45° and missed at 30° and 180°.
+Sized controls are hit at every angle. genet-wpt's resolver aims at the
+untransformed layout rect, so it never computes such a point.
 
 ### Bounded engine receipt, 2026-09-13
 
@@ -995,6 +1092,22 @@ T3's ordinary image-composition receipt.
   0/1. The test assigns `onload` after the parser inserts a `src`-less iframe, so
   the load fires before the handler exists. That lane's 18-file WPT selection
   did not include the directory. Recorded for the realms plan's owner.
+- **2026-09-16** — the seam's form-control miss was a containment predicate,
+  not geometry.
+  - **Cause.** Livery gives an unsized `<input>` or an empty `<textarea>` a
+    zero-extent border box, and genet-wpt aims at that box's layout centre.
+    `ElementGeometry::hits_border` (`placement.rs`) reused `contains`, which
+    holds no point of a box without area. The pre-seam closed comparison had
+    admitted the box's own point or line.
+  - **Evidence.** The shared placement maps the pointer onto the control's
+    local origin, so transforms, clips and stacking are not involved. With the
+    recorded binaries, the pre-seam hit test admits an unsized input at its
+    exact centre and not 1 px away.
+  - **Repair.** A zero-extent border axis now holds its own coordinate; the
+    receipt is under T3.
+  - **Next door, not repaired.** Livery has no intrinsic form-control size.
+    genet-wpt's element-origin resolver aims at the untransformed layout rect,
+    not the painted one.
 
 ## Progress
 
@@ -1128,3 +1241,19 @@ T3's ordinary image-composition receipt.
     T2's, except one cssom-view subtest loss from `e629817a244`.
   - T3's seam acceptance, T1's named gaps and T2's per-element constant remain
     open.
+- **2026-09-16** — T3's form-control hit-test regression was repaired, closing
+  bullet 3.
+  - **Change.** `ElementGeometry::hits_border` admits a zero-extent border axis
+    on its own coordinate and keeps half-open containment elsewhere. Four
+    focused tests were added in `genet-livery`.
+  - **Suites.** genet-livery (531), livery (206), ortet (32), scripted-nova
+    Ortet lib (36) and genet-documents (51) pass.
+  - **WPT.** The runs covered `pointerevents`, `uievents` and `touch-events`
+    plus five reftest directories. The pointerup test passes in 3 of 3 runs,
+    there is zero `pass -> anything else` against the main maps, and the three
+    pointer directories equal the pre-seam maps.
+  - **Native.** The standards, WebGL and G5 receipts reproduce their captures
+    on Boa and Nova.
+  - **Status.** Genet's T3 seam acceptance is complete. The wing's bench still
+    depends on Mere's producer lifecycle, picking/accessibility and update-cost
+    receipts. T1's named gaps and T2's per-element constant remain open.

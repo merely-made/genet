@@ -71,9 +71,21 @@ impl ElementGeometry {
         self.clips[..self.border_clip_count]
             .iter()
             .all(|clip| clip.contains(x, y))
-            && self.map_to_border_local(x, y).is_some_and(|local| {
-                contains((0.0, 0.0, self.border_rect.2, self.border_rect.3), local)
+            && self.map_to_border_local(x, y).is_some_and(|(x, y)| {
+                border_axis_contains(self.border_rect.2, x)
+                    && border_axis_contains(self.border_rect.3, y)
             })
+    }
+}
+
+/// Half-open like painted coverage, except that an axis without extent holds
+/// only its own line: Livery gives an unsized form control a zero-extent box,
+/// and pointers aimed at its centre land exactly there.
+fn border_axis_contains(extent: f32, offset: f32) -> bool {
+    if extent == 0.0 {
+        offset == 0.0
+    } else {
+        extent > 0.0 && offset >= 0.0 && offset < extent
     }
 }
 

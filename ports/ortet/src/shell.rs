@@ -45,7 +45,9 @@ use winit::window::{Window, WindowId};
 use crate::a11y::{Accessibility, RoutedAction};
 use crate::args::{Action, Config};
 use crate::fetch::OrtetFetcher;
+use crate::mutate::MutationPlan;
 use crate::receipt;
+use crate::timing::{FrameTiming, Phase, TimingLog, TimingSummary, json_string};
 #[cfg(feature = "scripted")]
 use crate::webgl::WebGlHost;
 
@@ -80,6 +82,15 @@ pub struct Outcome {
     /// navigates the top level, must not end above where it began: a leaked
     /// outgoing document would leave the last count higher.
     pub live_nodes: (Option<usize>, Option<usize>),
+    /// The T3 mutation instrument's per-frame attribution over the measured
+    /// frames: actual work apart from presentation wait.
+    pub timing: TimingSummary,
+    /// One line per `--mutate` stream, saying how many elements it resolved to.
+    pub mutation_streams: Vec<String>,
+    /// Host mutations the engine reported as applied, and as missed.
+    pub host_mutations: (u64, u64),
+    /// Why host mutation did not run, when it was asked for and refused.
+    pub mutation_unsupported: Option<String>,
 }
 
 /// Build facts that a host receipt can report without guessing a source
@@ -153,6 +164,10 @@ pub fn run(config: Config, fetcher: OrtetFetcher) -> Result<Outcome, String> {
     event_loop
         .run_app(&mut app)
         .map_err(|error| format!("the ortet event loop failed: {error}"))?;
+    // The timing receipt is written even for a failed run: a run that died
+    // part-way still measured the frames it presented, and hiding them would
+    // make a partial sweep cell unreportable.
+    app.write_timing_receipt()?;
     match app.failure {
         Some(failure) => Err(failure),
         None => Ok(app.outcome()),
@@ -299,6 +314,14 @@ struct Ortet {
     /// Driving steps still to apply. They run once, after the first frame has
     /// established geometry, so a `click` has a laid-out box to hit.
     pending_actions: Vec<Action>,
+    /// The resolved `--mutate` streams. Resolved once at construction: the
+    /// document's element ids exist from the parse, and a plan that re-resolved
+    /// every frame would charge its own walk to the measurement.
+    mutations: MutationPlan,
+    mutations_applied: u64,
+    mutations_missed: u64,
+    mutation_unsupported: Option<String>,
+    timing: TimingLog,
     start: Instant,
     capture: Option<(std::path::PathBuf, u64)>,
     /// Top-document arena census at the first laid-out frame and at the most
@@ -332,9 +355,18 @@ impl Ortet {
             .then_some(start + config.receipt_timeout);
         #[cfg(not(feature = "scripted"))]
         let _ = wake;
+        let mutations = MutationPlan::resolve(&config.mutations, |prefix| {
+            session.element_ids_with_prefix(prefix)
+        });
+        let timing = TimingLog::new(config.warmup_frames);
         Self {
             address: config.address.clone(),
             pending_actions: config.actions.clone(),
+            mutations,
+            mutations_applied: 0,
+            mutations_missed: 0,
+            mutation_unsupported: None,
+            timing,
             width: config.size.0,
             height: config.size.1,
             config,
@@ -381,7 +413,86 @@ impl Ortet {
             matched_heading: self.matched_heading.clone(),
             collection_stats: self.session.collection_stats(),
             live_nodes: (self.live_nodes_first, self.live_nodes_last),
+            timing: self.timing.summary(),
+            mutation_streams: self.mutations.describe(),
+            host_mutations: (self.mutations_applied, self.mutations_missed),
+            mutation_unsupported: self.mutation_unsupported.clone(),
         }
+    }
+
+    /// Apply this frame's host mutation batch. Frame zero is left alone: it is
+    /// the document's cold parse/style/layout, and a mutation folded into it
+    /// would be measuring lane T2 instead.
+    fn drive_mutations(&mut self, timing: &mut FrameTiming) {
+        if self.frames == 0 || self.mutations.is_empty() {
+            return;
+        }
+        let batch = self.mutations.batch(self.frames);
+        if batch.is_empty() {
+            return;
+        }
+        match self.session.apply_host_mutations(&batch) {
+            Ok(report) => {
+                self.mutations_applied += report.applied as u64;
+                self.mutations_missed += report.missed as u64;
+                timing.mutations = report.applied as u32;
+                timing.restyled = report.restyled_elements as u32;
+            },
+            Err(error) => {
+                // Recorded once, not per frame: an engine without the seam is
+                // a fact about the run, and the receipt must not claim a
+                // mutation measurement it never made.
+                self.mutation_unsupported
+                    .get_or_insert_with(|| error.to_string());
+            },
+        }
+    }
+
+    /// Write `--timing-json`, when one was asked for.
+    fn write_timing_receipt(&self) -> Result<(), String> {
+        let Some(path) = self.config.timing_json.as_deref() else {
+            return Ok(());
+        };
+        let metadata = build_metadata();
+        let streams = self
+            .mutations
+            .describe()
+            .iter()
+            .map(|line| json_string(line))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let header = vec![
+            ("address", json_string(&self.address)),
+            ("engine", json_string(self.engine.engine_id())),
+            ("backend", json_string(self.config.engine.name())),
+            ("target", json_string(&metadata.target)),
+            ("features", json_string(&metadata.features)),
+            (
+                "source_revision",
+                metadata
+                    .source_revision
+                    .as_deref()
+                    .map_or_else(|| "null".to_owned(), json_string),
+            ),
+            ("size", format!("[{}, {}]", self.width, self.height)),
+            ("scale_factor", format!("{:.4}", self.scale_factor)),
+            ("presented_frames", self.frames.to_string()),
+            ("mutation_streams", format!("[{streams}]")),
+            ("mutations_applied", self.mutations_applied.to_string()),
+            ("mutations_missed", self.mutations_missed.to_string()),
+            (
+                "mutation_unsupported",
+                self.mutation_unsupported
+                    .as_deref()
+                    .map_or_else(|| "null".to_owned(), json_string),
+            ),
+        ];
+        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+            std::fs::create_dir_all(parent)
+                .map_err(|error| format!("could not create {}: {error}", parent.display()))?;
+        }
+        std::fs::write(path, self.timing.to_json(&header))
+            .map_err(|error| format!("could not write {}: {error}", path.display()))
     }
 
     fn logical_size(&self) -> (u32, u32) {
@@ -719,15 +830,28 @@ impl Ortet {
         (handled, result.editable)
     }
 
-    /// The per-frame shape the host crates document: rasterize the scene into a
-    /// texture, acquire the backbuffer, composite, present.
+    /// The per-frame shape the host crates document: apply the host mutation
+    /// batch, rasterize the scene into a texture, acquire the backbuffer,
+    /// composite, present.
+    ///
+    /// Each phase is timed into one [`FrameTiming`], with the two blocking
+    /// phases — acquire and present — kept out of the work total. See
+    /// `crate::timing`.
     fn render(&mut self, event_loop: &ActiveEventLoop) {
+        let frame_started = Instant::now();
+        let mut timing = FrameTiming {
+            index: self.frames,
+            ..FrameTiming::default()
+        };
         let now_ms = self.start.elapsed().as_secs_f64() * 1000.0;
         self.session.pump(now_ms);
         if self.host.is_none() {
             return;
         }
         self.drain_accessibility_actions();
+        let mut phase = Phase::start();
+        self.drive_mutations(&mut timing);
+        timing.mutate_us = phase.lap();
         // The scene is produced before the host is borrowed: driving the
         // pending actions can replace the session, which needs `&mut self`.
         let (width, height) = self.logical_size();
@@ -738,6 +862,7 @@ impl Ortet {
             // session). Present that, not the geometry probe above.
             scene = self.session.frame(width, height);
         }
+        timing.frame_us = phase.lap();
         self.publish_accessibility();
         // Sampled after the frame that laid the document out, so the first
         // reading is a real arena rather than a pre-layout one, and before the
@@ -766,6 +891,9 @@ impl Ortet {
         #[cfg(feature = "scripted")]
         self.webgl
             .sync_external_images(host.renderer(), self.session.external_texture_draws());
+        // The residual so far — accessibility, arena census, receipt
+        // conditions — belongs to neither work nor wait.
+        let _ = phase.lap();
         let (_scene_texture, view) = host.rasterize_scaled(
             &scene,
             self.width.max(1),
@@ -773,6 +901,7 @@ impl Ortet {
             ColorLoad::Clear(wgpu::Color::WHITE),
             self.scale_factor,
         );
+        timing.raster_us = phase.lap();
         let capture_now = receipt_ready
             && self.config.artifact.is_some()
             && self.capture.is_none()
@@ -798,7 +927,14 @@ impl Ortet {
             None
         };
 
+        // The capture read-back is a receipt cost, not a per-frame one.
+        let _ = phase.lap();
+        // Presentation wait: the thread blocks on the swapchain here and again
+        // at present. The compose encode between them is work, and is timed as
+        // work — the two totals are about what the thread was doing, not about
+        // where in the frame it happened.
         let Some(frame) = host.acquire() else { return };
+        timing.acquire_us = phase.lap();
         let target = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -811,7 +947,11 @@ impl Ortet {
             self.height,
             ExternalTexturePlacement::new([0.0, 0.0, self.width as f32, self.height as f32]),
         );
+        timing.compose_us = phase.lap();
         host.queue().present(frame);
+        timing.present_us = phase.lap();
+        timing.total_us = crate::timing::elapsed_us(frame_started.elapsed());
+        self.timing.push(timing);
         self.frames += 1;
         if let Some(captured) = captured {
             self.capture = Some((captured.path, captured.digest));

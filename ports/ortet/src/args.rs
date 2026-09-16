@@ -13,9 +13,13 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::mutate::MutationSpec;
+
 /// The window ortet opens when `--size` is absent.
 pub const DEFAULT_SIZE: (u32, u32) = (960, 640);
 pub const DEFAULT_RECEIPT_TIMEOUT_MS: u64 = 10_000;
+/// Frames the timing summary skips by default: the cold first frame.
+pub const DEFAULT_WARMUP_FRAMES: u32 = 1;
 
 pub const USAGE: &str = "\
 ortet — the raw Genet host: one window, one document, no chrome.
@@ -41,6 +45,17 @@ usage: ortet --url <address> [options]
                          scroll:<dx>,<dy>   scroll at the viewport centre
                          click:<x>,<y>      press and release at a point
                        e.g. --actions 'scroll:0,200' or 'click:40,120'
+  --mutate <list>      Apply a deterministic host-driven DOM mutation every
+                       frame, with no script engine in the session. Streams are
+                       separated by ';' and shaped <id-prefix>:<op>[:<per-frame>],
+                       with <op> one of style, class or child.
+                       e.g. --mutate 'ctl:style:4; view:style; ctl:child'
+  --timing-json <path> Write the per-frame phase receipt: actual work
+                       (mutate, frame, raster, compose) and presentation wait
+                       (acquire, present) for every frame, with medians and p95.
+  --warmup-frames <N>  Frames excluded from the timing summary (default 1). The
+                       first frame of a Genet document is a parse/style/layout
+                       cold start, which is lane T2's measurement, not this one's.
   --help               Print this and exit.
 ";
 
@@ -97,6 +112,14 @@ pub struct Config {
     /// Bound for completion-driven receipt conditions.
     pub receipt_timeout: std::time::Duration,
     pub actions: Vec<Action>,
+    /// The host mutation streams driven once per presented frame. Empty means
+    /// the run measures an unmutated document, which is still a useful
+    /// baseline for the same fixture.
+    pub mutations: Vec<MutationSpec>,
+    /// Where to write the per-frame phase receipt.
+    pub timing_json: Option<PathBuf>,
+    /// Frames excluded from the timing summary.
+    pub warmup_frames: u32,
 }
 
 /// What `parse` produced: a run, or a request for the usage text.
@@ -120,6 +143,9 @@ where
     let mut expect_heading = None;
     let mut receipt_timeout = std::time::Duration::from_millis(DEFAULT_RECEIPT_TIMEOUT_MS);
     let mut actions = Vec::new();
+    let mut mutations = Vec::new();
+    let mut timing_json = None;
+    let mut warmup_frames = DEFAULT_WARMUP_FRAMES;
 
     let mut arguments = arguments.into_iter();
     while let Some(argument) = arguments.next() {
@@ -157,6 +183,14 @@ where
                 receipt_timeout = std::time::Duration::from_millis(millis);
             },
             "--actions" => actions = parse_actions(&value("--actions")?)?,
+            "--mutate" => mutations = crate::mutate::parse_specs(&value("--mutate")?)?,
+            "--timing-json" => timing_json = Some(PathBuf::from(value("--timing-json")?)),
+            "--warmup-frames" => {
+                let raw = value("--warmup-frames")?;
+                warmup_frames = raw
+                    .parse()
+                    .map_err(|_| format!("--warmup-frames wants a whole number, got {raw}"))?;
+            },
             other => return Err(format!("unknown argument {other}")),
         }
     }
@@ -175,6 +209,9 @@ where
         expect_heading,
         receipt_timeout,
         actions,
+        mutations,
+        timing_json,
+        warmup_frames,
     })))
 }
 
@@ -393,6 +430,38 @@ mod tests {
         assert!(parse_action("scroll:0").is_err(), "one operand is not two");
         assert!(parse_action("jump:1,2").is_err(), "unknown action name");
         assert!(parse_action("scroll:a,2").is_err(), "operands are numbers");
+    }
+
+    /// The mutation instrument is opt-in on both halves: a run mutates only
+    /// when asked, and writes a timing receipt only when given a path.
+    #[test]
+    fn the_mutation_instrument_is_opt_in_on_both_halves() {
+        let plain = run(&["--url", "a.html"]);
+        assert!(plain.mutations.is_empty());
+        assert_eq!(plain.timing_json, None);
+        assert_eq!(plain.warmup_frames, DEFAULT_WARMUP_FRAMES);
+
+        let config = run(&[
+            "--url",
+            "a.html",
+            "--frames",
+            "60",
+            "--mutate",
+            "ctl:style:4; view:style",
+            "--timing-json",
+            "bench.json",
+            "--warmup-frames",
+            "2",
+        ]);
+        assert_eq!(config.mutations.len(), 2);
+        assert_eq!(config.mutations[0].prefix, "ctl");
+        assert_eq!(config.mutations[0].per_frame, 4);
+        assert_eq!(config.timing_json, Some(PathBuf::from("bench.json")));
+        assert_eq!(config.warmup_frames, 2);
+
+        assert!(parse(args(&["--url", "a.html", "--mutate"])).is_err());
+        assert!(parse(args(&["--url", "a.html", "--mutate", "ctl:spin"])).is_err());
+        assert!(parse(args(&["--url", "a.html", "--warmup-frames", "many"])).is_err());
     }
 
     #[test]

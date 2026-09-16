@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>T3 bounded mutation bench</title>
+<!--
+  The bounded fixture for the T3 host-mutation instrument
+  (design_docs/2026-09-12_css_3d_transforms_and_first_frame_plan.md).
+
+  It is the wing's Bench B in shape: ONE host-content viewport plus a handful
+  of ordinary controls. There is deliberately no DOM element per body, part or
+  face — the producer owns the scene behind the viewport, and manufacturing
+  elements for its contents is exactly what T3's mutation paragraph forbids.
+
+  Ids are the instrument's handles: `view` is the viewport, `ctl0`..`ctl7` the
+  controls. Run it with
+
+    --mutate 'ctl:style:4; ctl:child; view:style'
+
+  which rewrites four control styles and one control subtree per frame and
+  moves the viewport element's own style once per frame.
+-->
+<style>
+html, body { margin: 0; padding: 0; background: #14161a; color: #d8dce4;
+             font: 14px system-ui, sans-serif; }
+#stage { padding: 12px; }
+custom-leaf { display: block; width: 640px; height: 360px;
+              border: 2px solid #3a4350; padding: 4px; background: #1d222a; }
+#bar { display: block; margin-top: 12px; }
+.ctl { display: inline-block; width: 92px; height: 34px; margin: 0 6px 6px 0;
+       background: #2a3340; border: 1px solid #3d4756; }
+/* The class stream toggles between these two; a selector match, not an inline
+   declaration, so the restyle goes through selector matching. */
+.ctl.warm { background: #6a4a2e; border-color: #8a6238; }
+.tick { display: inline-block; width: 10px; height: 10px; margin: 2px;
+        background: #c4884a; }
+#caption { margin-top: 10px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <custom-leaf id="view" key="7"></custom-leaf>
+  <div id="bar">
+    <div class="ctl" id="ctl0"></div>
+    <div class="ctl" id="ctl1"></div>
+    <div class="ctl" id="ctl2"></div>
+    <div class="ctl" id="ctl3"></div>
+    <div class="ctl" id="ctl4"></div>
+    <div class="ctl" id="ctl5"></div>
+    <div class="ctl" id="ctl6"></div>
+    <div class="ctl" id="ctl7"></div>
+  </div>
+  <p id="caption">T3 bounded mutation bench</p>
+</div>
+</body>
+</html>

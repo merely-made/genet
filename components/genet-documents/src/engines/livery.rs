@@ -181,6 +181,44 @@ impl<Fetch: ResourceFetcher + Send + Sync> SessionEngine<Scene> for LiverySessio
     }
 }
 
+/// The first element whose `id` attribute is exactly `id`, in document order.
+/// Livery keeps no id index, so the host mutation seam pays one pre-order walk
+/// per batch rather than per mutation.
+#[cfg(feature = "livery")]
+pub(crate) fn element_with_id<D: LayoutDom>(dom: &D, id: &str) -> Option<D::NodeId> {
+    fn walk<D: LayoutDom>(dom: &D, node: D::NodeId, id: &str) -> Option<D::NodeId> {
+        let matched = dom
+            .attribute(node, &Namespace::default(), &LocalName::from("id"))
+            .is_some_and(|value| value == id);
+        if matched {
+            return Some(node);
+        }
+        dom.dom_children(node)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .find_map(|child| walk(dom, child, id))
+    }
+    walk(dom, dom.document(), id)
+}
+
+/// Every element `id` beginning with `prefix`, in document order.
+#[cfg(feature = "livery")]
+fn collect_ids_with_prefix<D: LayoutDom>(
+    dom: &D,
+    node: D::NodeId,
+    prefix: &str,
+    out: &mut Vec<String>,
+) {
+    if let Some(value) = dom.attribute(node, &Namespace::default(), &LocalName::from("id"))
+        && value.starts_with(prefix)
+    {
+        out.push(value.to_owned());
+    }
+    for child in dom.dom_children(node).collect::<Vec<_>>() {
+        collect_ids_with_prefix(dom, child, prefix, out);
+    }
+}
+
 /// A trait object over the engine's own fetcher, so the frame builder can take
 /// `Option<&dyn ResourceFetcher>` without the whole child-frame path becoming
 /// generic over the engine's `Fetch` parameter.
@@ -1935,6 +1973,94 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
         let (_, css_height) = self.css_viewport(width, height);
         let content = self.doc.content_height(css_height) as f32;
         self.to_presentation_length(content).ceil() as u32
+    }
+
+    /// The host mutation seam: resolve every target against the pre-mutation
+    /// tree, then apply the whole batch inside one `mutate_dom` turn so the
+    /// recorded `DomMutation` stream reaches the retained style plane exactly
+    /// once. The next `frame` observes the result.
+    fn apply_host_mutations(
+        &mut self,
+        mutations: &[document_session_api::session_engine::HostMutation],
+    ) -> Result<
+        document_session_api::session_engine::HostMutationReport,
+        document_session_api::session_engine::SessionError,
+    > {
+        use document_session_api::session_engine::{HostMutationOp, HostMutationReport};
+
+        let mut report = HostMutationReport::default();
+        if mutations.is_empty() {
+            return Ok(report);
+        }
+        // Resolution happens first and against the tree as it stands: a batch
+        // that appends children must not have a later target resolve to one of
+        // them.
+        let mut plan: Vec<(genet_scripted_dom::NodeId, &HostMutationOp)> =
+            Vec::with_capacity(mutations.len());
+        for mutation in mutations {
+            match element_with_id(self.doc.dom(), &mutation.target_id) {
+                Some(node) => plan.push((node, &mutation.op)),
+                None => report.missed += 1,
+            }
+        }
+        if plan.is_empty() {
+            return Ok(report);
+        }
+        let qual = |name: &str| QualName::new(None, Namespace::default(), LocalName::from(name));
+        let (counts, stats) = self.doc.mutate_dom(|dom| {
+            let mut applied = 0usize;
+            let mut missed = 0usize;
+            for (node, op) in &plan {
+                match op {
+                    HostMutationOp::SetAttribute { name, value } => {
+                        dom.set_attribute(*node, qual(name), value);
+                        applied += 1;
+                    },
+                    HostMutationOp::RemoveAttribute { name } => {
+                        dom.remove_attribute(*node, qual(name));
+                        applied += 1;
+                    },
+                    HostMutationOp::AppendChild { tag, class, text } => {
+                        let child = dom.create_element(qual(tag));
+                        if let Some(class) = class {
+                            dom.set_attribute(child, qual("class"), class);
+                        }
+                        if let Some(text) = text {
+                            let text_node = dom.create_text(text);
+                            dom.append_child(child, text_node);
+                        }
+                        dom.append_child(*node, child);
+                        applied += 1;
+                    },
+                    HostMutationOp::RemoveLastChild => {
+                        let children: Vec<_> = dom.dom_children(*node).collect();
+                        let last = children
+                            .into_iter()
+                            .filter(|child| dom.kind(*child) == NodeKind::Element)
+                            .next_back();
+                        match last {
+                            Some(child) => {
+                                dom.remove(child);
+                                applied += 1;
+                            },
+                            None => missed += 1,
+                        }
+                    },
+                }
+            }
+            (applied, missed)
+        });
+        report.applied = counts.0;
+        report.missed += counts.1;
+        report.restyled_elements = stats.restyled_elements;
+        Ok(report)
+    }
+
+    fn element_ids_with_prefix(&self, prefix: &str) -> Vec<String> {
+        let dom = self.doc.dom();
+        let mut ids = Vec::new();
+        collect_ids_with_prefix(dom, dom.document(), prefix, &mut ids);
+        ids
     }
 
     fn pump(&mut self, now_ms: f64) {

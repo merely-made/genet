@@ -2,10 +2,14 @@
 
 **Date:** 2026-09-12
 
-**Status, 2026-09-13:** prerequisite assessment complete; T3's bounded Genet
+**Status, 2026-09-15:** prerequisite assessment complete; T3's bounded Genet
 content-box and 2D paint/input seam is implemented with automated receipts.
 Bounded native Bench B assembly is accepted on the downstream development
-build; the remaining T3 acceptance and mutation measurement are open.
+build. T3's **host mutation instrument is now built and measured** on the
+bounded fixture, with actual work reported apart from presentation wait; the
+large-element mutation sweep is measured at 1,000, 5,000 and 20,000 elements,
+the last on five frames only; 50,000 was not attempted. The remaining broader
+T3 acceptance (native composition rerun, WPT attribution) is still open.
 Founded 2026-09-12 from the wing's L0 receipts;
 Mark's 2026-09-13 ruling replaces T3's body-fragment proposal with a shared
 scene viewport whose producer owns depth. T1's general CSS 3D work, T2's
@@ -221,10 +225,10 @@ directories shows zero `pass -> anything else`.
 
 ## T3. Scene viewport embedding and host mutation measurement
 
-**Status, 2026-09-13:** bounded engine implementation, automated receipt and
-downstream native Bench B assembly complete. Broader T3 acceptance and mutation
-measurement remain open. The specimen bench prerequisite section named above
-is the cross-repository
+**Status, 2026-09-15:** bounded engine implementation, automated receipt and
+downstream native Bench B assembly complete. The host mutation instrument is
+built and measured (receipt below); broader T3 acceptance remains open. The
+specimen bench prerequisite section named above is the cross-repository
 assembly authority. T3 specifies the Genet portion, not an application renderer.
 
 **The element and paint route.** Reuse the existing `<custom-leaf>` slot and
@@ -306,6 +310,96 @@ For the bench, measure its viewport, bounded controls and producer updates;
 do not manufacture a DOM element for every part or face just to reuse L0b.
 The separate 1,000 / 5,000 / 20,000-element mutation sweep remains a general
 engine measurement alongside T2. Its completion does not gate the first bench.
+
+The instrument landed 2026-09-15 as three pieces. The **seam** is two defaulted
+methods on `DocumentSession<F>` in
+`components/shared/document-session-api/src/session_engine.rs`:
+`apply_host_mutations(&[HostMutation]) -> HostMutationReport` and
+`element_ids_with_prefix(&str) -> Vec<String>`. A `HostMutation` names an
+element by its `id` attribute and carries one of `SetAttribute`,
+`RemoveAttribute`, `AppendChild`, `RemoveLastChild`; the report says how many
+applied, how many missed, and how many elements the engine restyled. The Livery
+lane implements both in `components/genet-documents/src/engines/livery.rs` over
+the existing `LiveryDocument::mutate_dom`, so the batch reaches the same
+`drain_mutations` / `IncrementalStyle` path a script would. It is a trait-level
+seam rather than a Livery-specific method because a host that mutates a document
+is not asking for anything lane-specific, and Cambium's Rootstock drives exactly
+this shape against its own DOM today. It duplicates none of Cambium's logic:
+Rootstock owns its DOM directly and does not route through a session.
+
+The **driver** is Ortet's `--mutate '<id-prefix>:<op>[:<per-frame>]; …'`, with
+`op` one of `style`, `class` or `child`, applied once per presented frame from
+the second frame onward. Batches are a pure function of the frame index, so two
+runs of one spec on one document issue identical mutations. The **instrument**
+is `ports/ortet/src/timing.rs`: per-frame spans for host mutation,
+`session.frame`, rasterization and compose (**work**) kept disjoint from
+swapchain acquire and present (**presentation wait**), with everything else
+(pump, accessibility publication, receipt conditions) reported as a named
+residual rather than folded into either. `--timing-json <path>` writes every
+frame plus medians and p95.
+
+### Host mutation instrument receipt, 2026-09-15
+
+Source: Genet `5ae30cad0ea` plus this change, uncommitted, in the
+`t3-mutation-harness` worktree; netrender `3961aca91`; Rust 1.97.1; release
+profile; Ryzen 9 7940HS / RTX 4060 Laptop, Windows 11, display scale 2.
+Raw receipts, commands, executable hashes and the accounting re-derivation:
+`Code/testing/genet/ortet-t3-20260915/`. The bounded-fixture runs were taken
+with the final source's binary; the sweep cells were taken with an executable
+differing only in two comments, recorded there rather than re-measured at 80
+minutes a cell.
+
+**Bounded fixture** — `ports/ortet/fixtures/bench_b_mutation.html`: one
+`<custom-leaf>` viewport, eight controls, one caption. No DOM element per body
+or face. 960x640 physical, 120 frames, summary over the 119 frames after the
+cold first one. `--mutate 'ctl:style:4; ctl:child; view:style'` rewrites four
+control styles, grows or shrinks one control subtree, and moves the viewport
+element's own style, every frame.
+
+| run | work median / p95 | present wait median / p95 | total median | `session.frame` median |
+|---|---:|---:|---:|---:|
+| no mutation | 0.86 / 1.12 ms | 5.01 / 5.22 ms | 5.911 ms | 0.02 ms |
+| mutating | 2.54 / 3.61 ms | 2.91 / 3.42 ms | 5.830 ms | 0.93 ms |
+
+713 mutations applied, 1 missed (the first `child` frame removes before
+anything has been appended), 654 elements restyled. **The totals are the same
+and the composition is not**: the mutation costs +1.68 ms of work per frame and
+the presentation wait gives back 2.10 ms, for a 1.4 % difference in frame time.
+A run reporting only frame time would have concluded the mutation was free,
+which is the reason the plan asked for the split.
+
+**Large-element sweep** — the L0b fixtures at
+`Code/testing/wing/l0b/n<N>_b50_static.html`, mutating the `style` attribute of
+a fixed 10 % of the body elements per frame (the faces carry no `id`, so the
+fraction is of bodies; each body's change invalidates its own 50-face subtree).
+960x640, warm-up one frame.
+
+| elements | bodies | mutated/frame | frames | work median (mutating) | work median (control, no mutation) | status |
+|---:|---:|---:|---:|---:|---:|---|
+| 1,000 | 20 | 2 | 60 | 531.9 ms | 1.85 ms | measured |
+| 5,000 | 100 | 10 | 60 | 9,820 ms | 4.49 ms | measured |
+| 20,000 | 400 | 40 | 6 | 560,417 ms | not run | measured, 5 frames only |
+
+Presentation wait in every sweep cell is 0.14–0.20 ms: at these costs the
+document never keeps up with the display and never blocks on it, so the work
+number is the whole story — the opposite regime from the bounded fixture.
+
+The 20,000 cell took about 80 minutes of wall clock for six frames, so its
+median and p95 (988,088 ms) are over five values and should be read as an
+order of magnitude, not a stable percentile. Not run, deliberately: a 20,000
+control, the 50,000 cells, and any `b200` variant. The receipt names each and
+why.
+
+**Finding the sweep produced.** A host mutation of two elements in a
+1,000-element document costs 532 ms of work, against 1.85 ms for the same
+document unmutated — 287x — and at 5,000 elements the ratio is about 2,200x.
+`LiveryDocument::apply_dom_mutations` marks layout dirty document-wide and the
+next `frame` rebuilds geometry for the whole document, so the per-frame cost of
+*any* mutation is the document's full layout cost, including the quadratic
+positioned-box term T2 owns. The instrument therefore prices mutation at
+first-frame layout minus parse, and the sweep's shape is T2's shape. This is
+not repaired here: T2 owns it, and `apply_dom_mutations`' own doc comment
+already records the deliberate full-geometry rebuild.
 
 L0b's byte-identical Boa scripted frames and missing wakes remain a finding
 of that fixture and build (`Code/testing/wing/l0b_genet_element_ceiling.md`,
@@ -520,6 +614,23 @@ T3's ordinary image-composition receipt.
   with a zero-layer regression. The existing percentage-padding approximation
   remains explicit. Automated evidence is recorded in T3 above.
 
+- **2026-09-15** — host mutation of a Livery document costs a full-document
+  geometry rebuild, whatever the mutation's size.
+  `LiveryDocument::apply_dom_mutations` marks layout dirty document-wide and
+  the next `frame` rebuilds; measured at 532 ms of work per frame for two
+  mutated elements in the 1,000-element L0b fixture against 1.85 ms unmutated,
+  about 9.8 s against 4.5 ms at 5,000, and about 560 s at 20,000. The
+  per-frame mutation cost is
+  therefore first-frame layout minus parse, and the sweep's growth is T2's
+  growth. Repairing it is T2's lane, not this instrument's; the retained style
+  plane is already incremental (`RestyleStats.restyled_elements` reports only
+  the mutated subtrees), so the cost is geometry, not cascade.
+- **2026-09-15** — on the bounded fixture the mutation is invisible in frame
+  time and obvious in the split: 0.86 ms work / 5.01 ms wait unmutated against
+  2.54 ms work / 2.91 ms wait mutating, with total medians 5.911 ms and
+  5.830 ms. The presentation wait gives back what the work took, which is why
+  T3 asked for the two numbers separately rather than a frame time.
+
 ## Progress
 
 - **2026-09-12** — founded. No lane started.
@@ -547,3 +658,16 @@ T3's ordinary image-composition receipt.
   a separate committed-dependency Mesocosm workspace check passes. Broader T3
   acceptance and mutation measurement, and independent T1/T2/T4 work remain
   open. This is not an Ortet or WPT rerun.
+- **2026-09-15** — T3's host mutation instrument built and measured. A
+  trait-level `apply_host_mutations` / `element_ids_with_prefix` seam on
+  `DocumentSession`, implemented by the Livery lane over the existing
+  `mutate_dom` path; Ortet's `--mutate` driver; and per-frame phase timing that
+  keeps actual work apart from presentation wait, written to a JSON receipt by
+  `--timing-json`. Nine focused tests added (four seam, five timing/accounting)
+  and the existing Livery and Ortet suites rerun; the accounting is also
+  re-derived over all 480 measured frames. The bounded fixture and the 1,000
+  1,000, 5,000 and 20,000-element sweep cells are measured, the last on five
+  frames only and with its reservations and un-run cells named in the receipt;
+  50,000 was not attempted. Script-driven mutation remains a deliberate
+  exclusion and was not touched. Native composition rerun and WPT attribution
+  for broader T3 acceptance remain open, as do T1, T2 and T4.

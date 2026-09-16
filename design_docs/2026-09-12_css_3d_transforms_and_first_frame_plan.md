@@ -19,8 +19,13 @@ Bounded native Bench B assembly is accepted on the downstream development
 build. T3's **host mutation instrument is now built and measured** on the
 bounded fixture, with actual work reported apart from presentation wait; the
 large-element mutation sweep is measured at 1,000, 5,000 and 20,000 elements,
-the last on five frames only; 50,000 was not attempted. The remaining broader
-T3 acceptance (native composition rerun, WPT attribution) is still open.
+the last on five frames only; 50,000 was not attempted. **T3's acceptance
+rerun, 2026-09-16, leaves bullet 3 open:** at main `f1f21c61d26` the native
+composition receipt reproduces the 2026-09-11 captures byte for byte on Boa and
+Nova, the WebGL and G5 guards and netrender's GPU gate pass, and the focused
+suites pass. The WPT attribution, however, finds one `pass -> fail` introduced
+by the seam commit `101d9e9ade8` itself. Its hit test no longer resolves a
+pointer on an intrinsically sized `<input>` or `<textarea>` to the control.
 **T4 is implemented and measured in netrender** (`06f3a12f4`): a placement
 inside a rect-clip, alpha or element-filter layer now retains and reads back
 byte-identical to an independently expanded reference, `fragment_lower_count`
@@ -31,8 +36,8 @@ Founded 2026-09-12 from the wing's L0 receipts;
 Mark's 2026-09-13 ruling replaces T3's body-fragment proposal with a shared
 scene viewport whose producer owns depth. T1's general CSS 3D work, T2's
 large-document scaling and T4's planar retention remain independent lanes,
-not prerequisites for the first specimen bench. Existing native canvas
-acceptance is prior evidence, not a fresh rerun in this implementation.
+not prerequisites for the first specimen bench. The native canvas acceptance
+was rerun at changed sources on 2026-09-16; the receipt is under T3.
 
 **Consumer and cross-repository owner:** the specimen bench prerequisites in
 `isometry/mesocosm/design_docs/2026-09-11_orthographic_voxel_presentation_plan.md#specimen-bench-prerequisites-2026-09-13`.
@@ -384,9 +389,14 @@ measure it either way.
 
 ## T3. Scene viewport embedding and host mutation measurement
 
-**Status, 2026-09-15:** bounded engine implementation, automated receipt and
+**Status, 2026-09-16:** bounded engine implementation, automated receipt and
 downstream native Bench B assembly complete. The host mutation instrument is
-built and measured (receipt below); broader T3 acceptance remains open. The
+built and measured (receipt below). The changed-source acceptance rerun is done
+and **bullet 3 remains open**. Native composition, the WebGL and G5 guards,
+netrender's GPU gate and the focused suites pass, but the WPT attribution finds
+`pointerevents/pointerup_button_value_matches_corresponding_pointerdown.html`
+going from pass to fail at `101d9e9ade8`, still failing at main (receipt below).
+T3's seam acceptance is therefore not complete. The
 specimen bench prerequisite section named above is the cross-repository
 assembly authority. T3 specifies the Genet portion, not an application renderer.
 
@@ -413,7 +423,8 @@ pixel probes on Boa and Nova at display scale 2. Its bounded scope is 2D
 affine transforms and authored origins, rectangular overflow, content-box
 placement, group opacity and source-over. Netrender's GPU gate separately
 covered scales 1, 1.5 and 2 and registration, refresh, resize and removal.
-Those receipts were inspected during this assessment, not freshly rerun.
+Those receipts were inspected during this assessment, not freshly rerun; the
+2026-09-16 acceptance rerun below repeats them at changed sources.
 Cambium's scene producer and transformed picking have the separate downstream
 consumer receipt below.
 
@@ -588,6 +599,83 @@ The wing's bench closes only with the Mere producer lifecycle, same-identity
 picking/accessibility and application update-cost receipts specified by its
 canonical prerequisite section. Genet's seam acceptance alone does not close
 that application gate.
+
+### Acceptance rerun and WPT attribution, 2026-09-16
+
+**Bullet 3 is not closed.** Source: Genet `f1f21c61d26` (clean worktree
+`genet-t3-acceptance-20260916`), with netrender `06f3a12f4`, Boa `52cfb6ff9`,
+Vano `8ad084125` and Piccolo `e77309c64`, all clean. `Cargo.lock` SHA256 is
+`29f7b9dcf2bba7819aad44bbe0ce6f4d6a8df1744c70017324981809ca717c26`; the ignored
+config is byte-identical to the 2026-09-11 run's. Receipts:
+`Code/testing/genet/t3_acceptance_20260916/results.md` and
+`Code/testing/genet/wpt-ledger/2026-09-16_t3_seam_attribution/results.md`.
+
+**Native composition passes.** The committed runners
+(`support/ci/run_ortet_compositing_standards_receipt.ps1`,
+`run_ortet_webgl_receipt.ps1`, `run_ortet_g5_arena_receipt.ps1`) exit 0 with
+identical before/after source identities. All 25 analytic probes pass on Boa
+and Nova at display scale 2, each reading the same RGBA as on 2026-09-11.
+
+- **Standards captures:** byte-identical to 2026-09-11 (digest
+  `0xa440137ccc503f9c`, PNG SHA256 `8202b7bf…`). T1's rewritten transform
+  accumulation therefore reproduces the translate, scale and authored-origin
+  cases exactly.
+- **WebGL guard:** keeps `0xb07e372b0126bea5` on both engines, and its
+  impossible-heading controls fail at 25 ms.
+- **G5 guard:** keeps `0xc5d147e70d4e4425` with `unpinned=5 collected=6` on both
+  engines, and its controls fail at 25 ms. Boa presented six G5 frames against
+  the recorded five. Five repeats of the same binary gave 5, 5, 5, 6 and 5, and
+  the 2026-09-11 receipts already alternate, so this is timer-wakeup variance,
+  not a source change.
+- **Netrender GPU gate:** in its own target directory, 1, 2, 3 and 2 tests
+  pass, the recorded counts.
+
+T4's changed code does not run in these receipts: netrender takes its retained
+master path only for scenes containing `SceneOp::Fragment`, which genet emits
+only through `splice_host_leaf_slots` / `push_host_fragment_at`, and Ortet calls
+neither.
+
+**Focused suites pass** (`--locked --offline`):
+
+- `genet-livery`: `host_content_geometry` 10, `interaction` 25, `paint` 74,
+  `--lib paint::` 23, `hit_test` 2, `stacking_paint_children` 1.
+- `ortet`: default features 32; `--features scripted-nova --lib` 36, which is the
+  23 recorded on 2026-09-11 plus 13 added since.
+- `livery --test values`: 44.
+- Default Ortet's dependency tree holds no script crate.
+
+**WPT fails the zero-`pass -> anything else` condition.** `genet-wpt` release
+binaries were built at `101d9e9ade8^`, `101d9e9ade8` and main, and run in disk
+mode with Boa and Livery.
+
+- **Testharness:** `css/cssom-view`, `css/css-transforms`, `css/css-overflow`,
+  `pointerevents`, `uievents` and `touch-events`. The last three are included
+  because testdriver input is `genet-wpt`'s only route into Livery's hit test;
+  the runtime has no `elementFromPoint`.
+- **Reftest:** `css/css-transforms`, `css/css-overflow`, `css/CSS2/visufx`,
+  `css/CSS2/zindex` and `css/css-position`, for the stacking-item change.
+
+| comparison | reftest | testharness |
+|---|---|---|
+| `101d9e9ade8^` -> `101d9e9ade8` | zero transitions | `pointerevents/pointerup_button_value_matches_corresponding_pointerdown.html` **pass -> fail** (timeout); `pointerevent_lostpointercapture_for_disconnected_node.html` fail 0/2 -> fail 0/1; nothing else |
+| `101d9e9ade8` -> main | css-transforms 70 fail -> pass and 4 pass -> fail, all T1's attributed movements | css-transforms 7 fail -> pass and two subtest losses, all T1's; `css/cssom-view/scrolling-quirks-vs-nonquirks.html` fail 1/15 -> fail 0/1, from `e629817a244`; pointerevents unchanged |
+
+Both pointer-events movements repeat in three of three runs per binary.
+
+**Localization.** Runtime probes put the regression in the hit test. At the
+centre of an `<input>`, `pointerdown` lands on `BODY` after the seam (or on a
+padded wrapper `div`), not on the control. Checkbox, `type=button` and
+`<textarea>` controls miss the same way. An `<input>` with explicit CSS width
+and height is hit, and so are `<button>`, `<div>` and `<span>` targets. It is
+not repaired here.
+
+**Attribution since the seam.**
+
+- css-transforms: the maps at the seam and at main equal T2's and T1's own maps
+  entry for entry (testharness). They also equal T1's FAIL sets across
+  netrender `3961aca91` and `06f3a12f4` (reftest).
+- cssom-view: the loss reproduces with the `2ecb56a9a68` and patch runners that
+  the initial blank-load lane archived.
 
 ### Bounded engine receipt, 2026-09-13
 
@@ -865,6 +953,48 @@ T3's ordinary image-composition receipt.
   handle reuse scheme as the fix. Genet content under an animating CSS
   `filter` would be exposed; this was found in netrender tests, not observed
   through Genet. Recorded for netrender's owner.
+- **2026-09-16** — T3's hit test (`layout/hit_testing.rs` over
+  `PlacementState::enter` and `ElementGeometry::hits_border` in `placement.rs`,
+  `101d9e9ade8`) misses intrinsically sized form controls.
+  - **Evidence.** A pointer at the centre of `<input>` (text, checkbox or
+    `type=button`) or `<textarea>` resolves to the parent instead. Given an
+    explicit CSS width and height, the same `<input>` is hit; `<button>`,
+    `<div>` and `<span>` are unaffected. Measured through `genet-wpt`'s
+    testdriver input, before and after the commit.
+  - **Not the cause.** `Fragment` dereferences to its `PhysicalRect`, so the
+    old code's `physical_rect()` sizing is not the difference.
+  - **Exposure.** Ortet's native click path and Cambium's host input use the
+    same query. No native receipt clicks a form control, so native exposure is
+    unmeasured.
+- **2026-09-16** — netrender `06f3a12f4`'s change is not exercised by genet's
+  own hosts, but it is live in Cambium's. The retained master path runs only for
+  a scene holding `SceneOp::Fragment` (`vello_tile_rasterizer/master.rs`,
+  `has_fragments`). Genet's translator produces one only from
+  `PaintCmd::PlaceRetainedFragment`, which genet emits only from
+  `splice_host_leaf_slots` / `push_host_fragment_at`, and those are called only
+  from tests. Ortet and `genet-wpt` never place a retained fragment, so neither
+  the native canvas receipt nor WPT exercises T4. Cambium's Rootstock does:
+  `sync_leaf_fragments` in `mere/crates/cambium/cambium-rootstock/src/frame.rs`
+  runs every redraw and registers each custom leaf whose splice holds no
+  `DrawExternalTexture` or `DrawShadow` as a retained fragment through
+  `paint_list_render::translate_paint_cmds_to_fragment`. Such a leaf inside a
+  CSS clip, opacity or filter scope now takes T4's retained path, and no
+  Cambium-host receipt covers that yet. The scene viewport is excluded because
+  it draws an external texture. The css-transforms reftest FAIL sets are
+  identical across netrender `3961aca91` and `06f3a12f4`.
+- **2026-09-16** — worktrees sharing one `CARGO_TARGET_DIR` share path-crate
+  artifacts. Cargo keys them by path relative to the workspace root and judges
+  freshness by mtime, so a tree checked out earlier than another tree's build
+  can link that build's artifacts. Here the main build failed on a
+  `script-engine-api` artifact left by the `2b68c12d72b` build. A crate whose
+  new code still compiled would have linked silently. Evidence and the closure
+  check that proves each binary:
+  `Code/testing/genet/wpt-ledger/2026-09-16_t3_seam_attribution/build/`.
+- **2026-09-16** — `e629817a244`'s synchronous initial blank iframe load moves
+  `css/cssom-view/scrolling-quirks-vs-nonquirks.html` from fail 1/15 to fail
+  0/1. The test assigns `onload` after the parser inserts a `src`-less iframe, so
+  the load fires before the handler exists. That lane's 18-file WPT selection
+  did not include the directory. Recorded for the realms plan's owner.
 
 ## Progress
 
@@ -978,3 +1108,23 @@ T3's ordinary image-composition receipt.
   `Code/testing/netrender/t4_20260916/results.md`; netrender's record is in
   `netrender-notes/2026-09-04_wgpu_execution_graph_plan.md`. T1's named gaps,
   T2's per-element constant and the broader T3 acceptance remain open.
+- **2026-09-16** — T3's changed-source acceptance was rerun at main
+  `f1f21c61d26`, netrender `06f3a12f4`. Bullet 3 remains open.
+  - **Native composition passes.** The three committed Ortet runners pass on
+    Boa and Nova at display scale 2: 25 of 25 analytic probes, captures
+    byte-identical to 2026-09-11, the WebGL and G5 guards at their recorded
+    digests and collection counts, and both impossible-heading controls failing
+    as required. Netrender's GPU gate passes with the recorded counts.
+  - **Focused suites pass.** `genet-livery`'s `host_content_geometry`,
+    `interaction` and `paint` tests and T3's lib filters; `ortet` default (32)
+    and scripted-nova lib (36); `livery --test values` (44).
+  - **WPT fails the gate.** Maps at `101d9e9ade8^`, `101d9e9ade8` and main over
+    six testharness and five reftest directories find one `pass -> fail`
+    introduced by `101d9e9ade8`:
+    `pointerevents/pointerup_button_value_matches_corresponding_pointerdown.html`.
+    It is localized to the hit test missing intrinsically sized form controls,
+    and was not repaired.
+  - **Since the seam.** Every movement is T1's, with maps identical to T1's and
+    T2's, except one cssom-view subtest loss from `e629817a244`.
+  - T3's seam acceptance, T1's named gaps and T2's per-element constant remain
+    open.

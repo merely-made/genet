@@ -768,6 +768,13 @@ tree, so these receipts were taken with ledger copies. The copies differ only
 in accepting and recording the genet worktree's declared uncommitted diff, and
 every other root must still be clean.
 
+The three committed runners were then rerun unmodified from the clean fix
+commit `0b49031f1d7`, with every root clean. All three exit 0: 25 of 25
+probes pass on Boa and Nova, the digests and G5 counts above reproduce, Boa
+again presented 5 G5 frames and Nova 6, the impossible-heading controls fail,
+and all six captures are byte-identical to the ledger-copy runs. Receipts:
+`Code/testing/genet/t3_hit_fix_committed_20260916/`.
+
 **Open.** A zero-extent axis holds only its exact coordinate. Under an inexact
 matrix, a point computed onto a zero-size control is hit or missed by f32
 rounding: in the probe it was hit at 90° and 45° and missed at 30° and 180°.
@@ -1253,7 +1260,9 @@ T3's ordinary image-composition receipt.
     there is zero `pass -> anything else` against the main maps, and the three
     pointer directories equal the pre-seam maps.
   - **Native.** The standards, WebGL and G5 receipts reproduce their captures
-    on Boa and Nova.
+    on Boa and Nova, first through ledger copies of the runners on the
+    uncommitted tree and then through the unmodified committed runners from
+    the clean fix commit `0b49031f1d7`, byte-identical both times.
   - **Status.** Genet's T3 seam acceptance is complete. The wing's bench still
     depends on Mere's producer lifecycle, picking/accessibility and update-cost
     receipts. T1's named gaps and T2's per-element constant remain open.

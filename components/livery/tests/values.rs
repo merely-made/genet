@@ -1286,7 +1286,12 @@ fn invalid_seed_values_are_rejected() {
     assert!("all, color".parse::<TransitionProperty>().is_err());
     assert!("opacity, opacity".parse::<TransitionProperty>().is_err());
     assert!("NaN".parse::<Opacity>().is_err());
-    assert!("perspective(20px)".parse::<Transform>().is_err());
+    // T1 admits the Level 2 functions; these stay invalid.
+    assert!("perspective(-20px)".parse::<Transform>().is_err());
+    assert!("rotate3d(0, 0, 0, 45deg)".parse::<Transform>().is_err());
+    assert!("matrix3d(1, 0, 0, 0)".parse::<Transform>().is_err());
+    assert!("translate3d(1px)".parse::<Transform>().is_err());
+    assert!("scale: 1 2 3 4".parse::<Transform>().is_err());
     assert_eq!("120%".parse::<Opacity>().unwrap().value(), 1.0);
     assert_eq!("-0.5".parse::<Opacity>().unwrap().value(), 0.0);
 }

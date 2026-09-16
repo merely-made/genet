@@ -2,8 +2,14 @@
 
 **Date:** 2026-09-12
 
-**Status, 2026-09-15:** prerequisite assessment complete; **T2 is implemented
-and measured** — the L0b grid's first-frame growth falls from n^2.156 to
+**Status, 2026-09-15:** prerequisite assessment complete; **T1 is implemented
+and measured** — the Level 2 surface parses, computes, serializes and
+interpolates, each element's accumulated 4x4 reaches the shared paint and
+hit-test matrix, `css/css-transforms` moves 291 -> 650 subtests and 534 -> 600
+reftests with every movement attributed and zero `pass -> anything else` at
+file level, and the wing fixture's silhouette agrees with the appearance
+crate's bake to 98.73% with no pixel more than one pixel out. **T2 is
+implemented and measured** — the L0b grid's first-frame growth falls from n^2.156 to
 n^1.168 and the 50,000-element cell from 1,172.21 s to 7.68 s, with a
 phase-timing instrument behind `--phase-timing` and a status-identical WPT
 census; the 1-second bound at 50,000 is not reached and the narrower bound is
@@ -156,6 +162,68 @@ bake produces; an individual `rotate` animates one part's yaw without the
 parent's matrix being rewritten; and a `preserve-3d` context with two
 overlapping faces paints them in transformed depth order in a headless
 readback.
+
+### T1 implementation, 2026-09-15
+
+**Status: implemented and measured.** Receipts in
+`Code/testing/genet/t1_css_3d_20260915/results.md` and
+`Code/testing/genet/wpt-ledger/2026-09-15_t1_css_transforms/`. Not committed.
+
+**Where the matrix lives.** `Matrix3D` in
+`components/livery/src/values/transform_matrix.rs` holds sixteen cells in
+`matrix3d()` argument order — the column-major cells of the column-vector
+matrix CSS composes with, which is also `euclid::Transform3D`'s row-vector
+row-major order, so lowering to `LayoutTransform` is a field-for-field copy
+and the existing 2D mapping is the same mapping. `Matrix2D` stays, and is now
+the projection of a composed `Matrix3D` rather than a parallel composer:
+`Matrix2D::from_functions` returns a matrix only when the composition never
+left the plane, which is what keeps the interpolation path honest about lists
+it cannot decompose.
+
+**Where the 4x4 accumulates.** `paint::element_matrix` composes, in the
+spec's order, the parent's perspective over `transform-origin` (all three
+components) over `translate`, `rotate`, `scale`, then the `transform` list.
+`transform_spec` factors the origin back out so the existing `TransformSpec`
+contract — matrix, then placement origin — is unchanged, which is what keeps
+`placement.rs` and `layout/hit_testing.rs` reading paint's exact resolved
+matrix rather than a second CSS parser. T3's shared helpers are untouched.
+
+**Flattening.** The renderer composes the pushed 4x4s and projects the
+product, so a box outside a 3D rendering context has its own matrix projected
+here — `flattens_own_matrix`, true when the element is `flat` *and* its parent
+is not `preserve-3d`. Projecting once at each boundary reproduces the spec's
+flattening of the accumulated matrix, because projection composes: two nested
+`rotateX(45deg)` under the default `flat` are two foreshortenings and not a
+half turn.
+
+**The sort.** `sort_preserve_3d_runs` reorders stacking items by the depth of
+their transformed centre in the accumulated space. Items reach the stacking
+list already flattened out of their DOM parents, so the context is keyed off
+each item's own `preserve-3d` parent rather than off the walk's parent: a
+context whose own box establishes no stacking context still owns its
+children's depth order. Depth replaces the z-order key inside a context rather
+than refining it.
+
+**The cull.** `backface-visibility: hidden` drops a box whose
+`front_facing_z` — the Z of the cross product of the accumulated X and Y axes,
+which is the determinant of the projected affine part — is negative. The
+accumulation stops at the element's own 3D rendering context, not at the
+document root, which is what CSS Transforms 2 means by "only transforms that
+affect the child itself".
+
+**The perspective gap.** `record_transform_gap` reads the element's matrix
+*before* flattening and, when its fourth row is not `0 0 0 1`, records a
+`TransformGap { PerspectiveDivide, border_rect, projection: [m14, m24, m34] }`
+on the paint list with a one-line `message()`. The orthographic projection of
+the same matrix is then painted. The `perspective` property and the
+`perspective()` function both reach it, and an affine 3D transform reports
+nothing.
+
+**Orthographic exactness.** `Matrix3D::rotation` writes cardinal axes out
+directly instead of through Rodrigues, whose unrotated diagonal cell is
+`(1 - cos) + cos` and is not exactly 1 in f32. Without that, every
+`rotateZ()` composed to something that only looked like a 3D matrix, and
+`transform-2d-getComputedStyle-001` said so.
 
 ---
 
@@ -728,6 +796,47 @@ T3's ordinary image-composition receipt.
   matched against every element with no selector bucketing. This sharpens
   hypothesis 3: the 160-field struct is real but secondary, and the 1-second
   bound needs a selector index, not a cheaper clone.
+- **2026-09-15** — the `css/css-transforms` founding count in ledger row 15
+  (143 / 2,296, 2026-09-07) is not comparable to anything the current harness
+  measures. The same directory reads **291 / 5,441** at this lane's base
+  commit `b3250d3d91b`, on the same host and the same invocation. T1 diffs
+  against 291 / 5,441; the ledger keeps 143 / 2,296 as the founding count it
+  is.
+- **2026-09-15** — a property sitting in the catalog's `[[unimplemented]]`
+  table round-trips its declaration text verbatim, which makes WPT parsing
+  tests pass by accident. Nine of `perspective-origin-valid`'s ten passing
+  subtests were keyword position forms passing that way; implementing the
+  property loses them to Livery's origin canonicalization and gains the
+  canonical two-component form. The same shape explains
+  `scale-interpolation`: multi-component `scale` was invalid, so the element
+  under test and the expectation element both computed to `none` and every
+  comparison passed vacuously. **Implementing a property can lower a subtest
+  count without regressing anything.**
+- **2026-09-15** — netrender composes the pushed 4x4s and projects the
+  product, so `transform-style: flat` is not free: without an explicit
+  projection at the boundary, nested 3D transforms compose in 3D all the way
+  to the root. Two nested `rotateX(45deg)` collapsed the box to nothing
+  (`transform-flattening-001`). Projecting at each `flat` boundary is exact,
+  because projection composes.
+- **2026-09-15** — Rodrigues rotation about a cardinal axis is not exact in
+  f32: the unrotated diagonal cell is `(1 - cos) + cos`. Every `rotate()` then
+  serialized as a `matrix3d()`. Cardinal axes are written out directly.
+- **2026-09-15** — `bake_facing` rotates voxel *positions* and always stamps
+  an axis-aligned cube, so a true rotation of the unit box lands one cell off
+  at every non-zero facing. The wing fixture compensates explicitly; without
+  the compensation the two silhouettes are the same hexagon, offset by one
+  voxel unit (69.05% agreement against 98.73%). This is a convention of the
+  bake, recorded here for the appearance crate's owner, not a defect.
+- **2026-09-15** — the CSS Animations clock is not sampled in either WPT
+  harness mode. Every `scale-interpolation` subtest that newly passes is at
+  progress 0 or 1, and `rotate-animation-with-will-change-transform-001`
+  renders its static reference rotated and its animated subject not. Adjacent
+  to this lane; named, not fixed.
+- **2026-09-15** — genet paints `position: absolute; z-index: auto` boxes in
+  the normal-flow walk rather than in the positioned-descendants phase. A
+  `translateZ` face correctly establishing a stacking context makes that
+  visible (`3d-rendering-context-and-z-ordering-001`/`-002`). Next door to
+  this lane.
 - **2026-09-15** — the layout phase's own per-element cost still grows between
   20,000 and 50,000 elements (30.3 to 57.9 µs/element) while style, paint and
   parse stay flat over the same step. That is the whole of T2's residual 1.17
@@ -774,6 +883,27 @@ T3's ordinary image-composition receipt.
   50,000 was not attempted. Script-driven mutation remains a deliberate
   exclusion and was not touched. Native composition rerun and WPT attribution
   for broader T3 acceptance remain open, as do T1, T2 and T4.
+- **2026-09-15** — T1 implemented and measured. CSS Transforms Level 2 in
+  Livery: a `Matrix3D` composer under the existing `Matrix2D`, the Level 2
+  transform functions, the `translate` / `perspective` / `perspective-origin`
+  / `transform-style` / `backface-visibility` properties moved out of the
+  catalog's unimplemented table, and axis and three-component forms for the
+  individual `rotate` and `scale`. In genet-livery the accumulated 4x4 reaches
+  the `TransformSpec` paint and hit-test helpers unchanged, a `flat` boundary
+  projects, a `preserve-3d` context z-sorts its participating boxes,
+  `backface-visibility: hidden` culls against the element's own 3D rendering
+  context, and a perspective divide is recorded as a named `TransformGap`
+  before the orthographic approximation is painted. Seventeen focused tests
+  added (nine livery, eight genet-livery); livery, genet-livery,
+  genet-documents and ortet suites rerun green (206 / 527 / 51 / 32 passed,
+  none failed). `css/css-transforms` re-measured on this host at the base
+  commit and on the lane: testharness 291 -> 650 subtests with zero
+  `pass -> anything else` and two attributed subtest losses; reftest 534 ->
+  600 passing with 70 fixed and 4 attributed new failures. Wing fixture
+  silhouette against `isometer-mesh`'s bake: 98.73% agreement, no pixel more
+  than one pixel out. Yaw and depth-order headless readbacks pass 13 of 13
+  assertions. Not committed. T4 and the broader T3 acceptance remain open, and
+  so does T2's per-element constant.
 - **2026-09-15** — T2 implemented and measured. A `children` index and a
   deferred aggregate-overflow rebuild in `buckram`'s `FragmentTree`, the same
   bound applied to the relative, sticky, retained-root and incremental-query

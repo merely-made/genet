@@ -15,11 +15,12 @@ use layout_dom_api::{LayoutDom, LocalName, Namespace, NodeKind};
 use livery::{
     ComputedValues,
     values::{
-        BackgroundAttachment, BackgroundBox, BackgroundImage, BackgroundSize,
+        BackfaceVisibility, BackgroundAttachment, BackgroundBox, BackgroundImage, BackgroundSize,
         BackgroundSizeComponent, BorderCollapse, BorderStyle as CssBorderStyle,
         BoxShadow as CssBoxShadow, ComputedColor, Display, EmptyCells, FontSize, Length,
-        LengthPercentage, LengthUnit, Matrix2D, Overflow as CssOverflow, Position, Radius,
-        RepeatStyle, Visibility,
+        LengthPercentage, LengthUnit, Matrix3D, Overflow as CssOverflow, Position, Radius,
+        RepeatStyle, Rotate as CssRotate, Scale as CssScale, TransformStyle,
+        Translate as CssTranslate, Visibility,
     },
 };
 use paint_list_api::{
@@ -62,6 +63,45 @@ pub struct LiveryPaintList {
     host_leaf_slots: Vec<HostLeafSlot>,
     #[serde(skip)]
     frame_slots: Vec<FrameSlot>,
+    /// T1's named lowering gaps. The renderer is affine, so a perspective
+    /// divide is reported here and approximated, never silently dropped.
+    #[serde(skip)]
+    transform_gaps: Vec<TransformGap>,
+}
+
+/// A transform this lane lowered with a stated loss of meaning.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TransformGap {
+    pub kind: TransformGapKind,
+    /// The border box of the element whose transform could not be expressed.
+    pub border_rect: LayoutRect,
+    /// The offending fourth-row cells, in `matrix3d()` naming: m14, m24, m34.
+    pub projection: [f32; 3],
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TransformGapKind {
+    /// The accumulated matrix has a perspective divide. Vello reads the planar
+    /// six cells, so the orthographic projection of the same matrix is used.
+    PerspectiveDivide,
+}
+
+impl TransformGap {
+    /// The single-line diagnostic a host prints for this gap.
+    pub fn message(&self) -> String {
+        match self.kind {
+            TransformGapKind::PerspectiveDivide => format!(
+                "css-transforms gap: perspective divide (m14 {}, m24 {}, m34 {}) on the box at                  ({}, {}) {}x{} is not affine; the orthographic projection was painted instead",
+                self.projection[0],
+                self.projection[1],
+                self.projection[2],
+                self.border_rect.min.x,
+                self.border_rect.min.y,
+                self.border_rect.width(),
+                self.border_rect.height(),
+            ),
+        }
+    }
 }
 
 /// A child browsing context's place in the parent document's paint order.
@@ -109,6 +149,11 @@ impl LiveryPaintList {
     /// Focus, caret, selection, and inspection overlays belong to the render
     /// driver rather than CSS paint emission, but they still travel through the
     /// same engine-neutral paint-list boundary.
+    /// The named transform-lowering gaps this paint list carries.
+    pub fn transform_gaps(&self) -> &[TransformGap] {
+        &self.transform_gaps
+    }
+
     pub fn push_overlay_rect(&mut self, rect: LayoutRect, color: ColorF) {
         self.commands.push(PaintCmd::DrawRect(RectItem {
             placement: CommonPlacement::new(rect),
@@ -309,6 +354,7 @@ impl LiveryPaintList {
             image_sources: image_sources.clone(),
             host_leaf_slots: Vec::new(),
             frame_slots: Vec::new(),
+            transform_gaps: Vec::new(),
         }
     }
 
@@ -592,13 +638,22 @@ fn emit_node<D>(
     // box. For a table element that is the wrapper, which carries both under
     // CSS Tables 3 section 3.6.1, so the layer and the coordinate space wrap
     // the captions along with the grid.
+    // A box whose transformed normal faces away is not painted at all, so the
+    // cull runs before any command is pushed for it.
+    if culled_by_backface(dom, styles, fragments, id) {
+        return;
+    }
     let transform = styles
         .get(id)
         .filter(|style| style.display != Display::None && style.visibility == Visibility::Visible)
         .and_then(|style| {
-            fragments
-                .get(id)
-                .and_then(|fragment| transform_spec(style, fragment))
+            fragments.get(id).and_then(|fragment| {
+                let parent = transform_parent(dom, styles, fragments, id);
+                if let Some((_, unflattened)) = element_matrix(style, fragment, parent) {
+                    record_transform_gap(&unflattened, fragment, list);
+                }
+                transform_spec(style, fragment, parent)
+            })
         });
     if let Some(transform) = &transform {
         list.commands
@@ -2282,6 +2337,49 @@ impl<'a> DeferredCollapsedBorders<'a> {
     }
 }
 
+/// A 3D rendering context paints its participating boxes by transformed
+/// depth, farthest first. Depth replaces the z-order key inside the context
+/// rather than refining it, which is what CSS Transforms 2 asks for.
+///
+/// Items reach this list already flattened out of their DOM parents, so the
+/// context is keyed off each item's own `preserve-3d` parent rather than off
+/// the walk's parent: a context whose own box establishes no stacking context
+/// still owns its children's depth order.
+fn sort_preserve_3d_runs<D>(
+    dom: &D,
+    styles: &StylePlane<D::NodeId>,
+    fragments: &LiveryLayout<D::NodeId>,
+    items: &mut [StackingItem<D::NodeId>],
+) where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    let context = |id: D::NodeId| {
+        dom.parent(id).filter(|parent| {
+            styles
+                .get(*parent)
+                .is_some_and(|style| style.transform_style == TransformStyle::Preserve3d)
+        })
+    };
+    let mut start = 0;
+    while start < items.len() {
+        let key = (items[start].level, context(items[start].id));
+        let mut end = start + 1;
+        while end < items.len() && (items[end].level, context(items[end].id)) == key {
+            end += 1;
+        }
+        if key.1.is_some() && end - start > 1 {
+            items[start..end].sort_by(|left, right| {
+                let left = transformed_depth(dom, styles, fragments, left.id);
+                let right = transformed_depth(dom, styles, fragments, right.id);
+                left.partial_cmp(&right)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+        }
+        start = end;
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn emit_children_in_stacking_order<D>(
     dom: &D,
@@ -2311,6 +2409,7 @@ fn emit_children_in_stacking_order<D>(
         &mut items,
     );
     items.sort_by_key(|item| item.level);
+    sort_preserve_3d_runs(dom, styles, fragments, &mut items);
     let roots = items.iter().map(|item| item.id).collect::<HashSet<_>>();
 
     if !items.is_empty()
@@ -2529,6 +2628,11 @@ fn emit_normal_node<'a, D>(
         .stacking_roots
         .is_some_and(|roots| roots.contains(&id))
     {
+        return;
+    }
+    // The backface cull applies to a box that paints in its ancestor's walk
+    // as well as to one that starts its own stacking context.
+    if culled_by_backface(dom, styles, fragments, id) {
         return;
     }
     let Some((inherited, clips_descendants)) =
@@ -2770,8 +2874,103 @@ where
 fn establishes_transform_context(style: &ComputedValues) -> bool {
     style.display != Display::Inline
         && (!style.transform.is_none()
-            || style.rotate.radians().is_some()
-            || style.scale.factor().is_some())
+            || style.rotate != CssRotate::None
+            || style.scale != CssScale::None
+            || style.translate != CssTranslate::None)
+}
+
+/// The perspective an element establishes for its children, in the document
+/// coordinates every fragment already uses.
+fn perspective_matrix(style: &ComputedValues, fragment: &Fragment) -> Option<Matrix3D> {
+    let em = used_font_size(style);
+    let depth = style.perspective.depth_px(em)?;
+    let (x, y) = style
+        .perspective_origin
+        .used(em, fragment.width, fragment.height);
+    let origin = (fragment.x + x, fragment.y + y);
+    let perspective = Matrix3D::perspective(depth)?;
+    Some(
+        Matrix3D::translation(origin.0, origin.1, 0.0)
+            .multiply(&perspective)
+            .multiply(&Matrix3D::translation(-origin.0, -origin.1, 0.0)),
+    )
+}
+
+/// Whether a parent extends its 3D rendering context to its children.
+fn extends_3d_context(parent: Option<(&ComputedValues, &Fragment)>) -> bool {
+    parent.is_some_and(|(style, _)| style.transform_style == TransformStyle::Preserve3d)
+}
+
+/// Whether this element's own matrix is projected into its parent's plane
+/// before the renderer composes it.
+///
+/// Flattening is defined on the *accumulated* matrix at a `flat` boundary,
+/// not per element. The renderer composes the pushed 4x4s and projects the
+/// product, so projecting here reproduces that: a box that neither extends a
+/// 3D context nor sits inside one is the boundary, and everything above and
+/// below it keeps composing in 3D.
+fn flattens_own_matrix(
+    style: &ComputedValues,
+    parent: Option<(&ComputedValues, &Fragment)>,
+) -> bool {
+    style.transform_style != TransformStyle::Preserve3d && !extends_3d_context(parent)
+}
+
+/// The element's own accumulated 4x4 in document coordinates: the parent's
+/// perspective over `transform-origin` over the spec's individual-property
+/// order — translate, rotate, scale, then the `transform` list.
+///
+/// The result is unflattened. `transform_spec` flattens it when the element is
+/// outside a 3D rendering context, and the perspective gap is read from the
+/// unflattened form because flattening is what discards the divide.
+pub(crate) fn element_matrix(
+    style: &ComputedValues,
+    fragment: &Fragment,
+    parent: Option<(&ComputedValues, &Fragment)>,
+) -> Option<(LayoutPoint, Matrix3D)> {
+    if !establishes_transform_context(style) {
+        return None;
+    }
+    let em = used_font_size(style);
+    let reference_box = (fragment.width, fragment.height);
+    let mut authored = Matrix3D::IDENTITY;
+    for step in [
+        style.translate.to_matrix_3d(em, reference_box),
+        style.rotate.to_matrix_3d(),
+        style.scale.to_matrix_3d(),
+        style.transform.to_matrix_3d(em, reference_box),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        authored = authored.multiply(&step);
+    }
+
+    let (origin_x, origin_y) = style
+        .transform_origin
+        .used_2d(em, fragment.width, fragment.height);
+    let origin_z = {
+        let z = style.transform_origin.z;
+        z.unit.to_px(z.value, em, 16.0)
+    };
+    let origin = LayoutPoint::new(fragment.x + origin_x, fragment.y + origin_y);
+    let mut matrix = Matrix3D::translation(origin.x, origin.y, origin_z)
+        .multiply(&authored)
+        .multiply(&Matrix3D::translation(-origin.x, -origin.y, -origin_z));
+    if let Some(perspective) =
+        parent.and_then(|(style, fragment)| perspective_matrix(style, fragment))
+    {
+        matrix = perspective.multiply(&matrix);
+    }
+    matrix.is_finite().then_some((origin, matrix))
+}
+
+fn layout_transform(matrix: &Matrix3D) -> LayoutTransform {
+    let c = matrix.0;
+    LayoutTransform::new(
+        c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11], c[12], c[13],
+        c[14], c[15],
+    )
 }
 
 fn scroll_spec(offset: (f32, f32)) -> Option<TransformSpec> {
@@ -2785,40 +2984,181 @@ fn scroll_spec(offset: (f32, f32)) -> Option<TransformSpec> {
     })
 }
 
-pub(crate) fn transform_spec(style: &ComputedValues, fragment: &Fragment) -> Option<TransformSpec> {
-    if !establishes_transform_context(style) {
-        return None;
-    }
-    let em = used_font_size(style);
-    let mut matrix = Matrix2D::IDENTITY;
-    if let Some(angle) = style.rotate.radians() {
-        let (sin, cos) = angle.sin_cos();
-        matrix = matrix.multiply(Matrix2D::new(cos, sin, -sin, cos, 0.0, 0.0));
-    }
-    if let Some(factor) = style.scale.factor() {
-        matrix = matrix.multiply(Matrix2D::new(factor, 0.0, 0.0, factor, 0.0, 0.0));
-    }
-    if let Some(transform) = style
-        .transform
-        .to_matrix(em, (fragment.width, fragment.height))
-    {
-        matrix = matrix.multiply(transform);
-    }
-    let authored = LayoutTransform::new(
-        matrix.a, matrix.b, 0.0, 0.0, matrix.c, matrix.d, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, matrix.e,
-        matrix.f, 0.0, 1.0,
-    );
-
-    let (origin_x, origin_y) = style
-        .transform_origin
-        .used_2d(em, fragment.width, fragment.height);
-    let origin = LayoutPoint::new(fragment.x + origin_x, fragment.y + origin_y);
-    let transform = LayoutTransform::translation(-origin.x, -origin.y, 0.0).then(&authored);
+/// The element's transform as the shared paint and hit-test command.
+///
+/// `TransformSpec` applies its matrix and then its placement origin, so the
+/// origin translation is factored back out of the accumulated matrix here.
+/// Both consumers read the same cells, which is what keeps paint and input
+/// agreeing about where a transformed box is.
+pub(crate) fn transform_spec(
+    style: &ComputedValues,
+    fragment: &Fragment,
+    parent: Option<(&ComputedValues, &Fragment)>,
+) -> Option<TransformSpec> {
+    let (origin, matrix) = element_matrix(style, fragment, parent)?;
+    // CSS Transforms 2: a box that is not part of a 3D rendering context has
+    // its transform flattened. The renderer composes the pushed 4x4s, so the
+    // flattening has to happen here rather than at rasterization.
+    let matrix = if flattens_own_matrix(style, parent) {
+        Matrix3D::from(matrix.to_affine_2d())
+    } else {
+        matrix
+    };
+    let transform = Matrix3D::translation(-origin.x, -origin.y, 0.0).multiply(&matrix);
     Some(TransformSpec {
         origin,
-        transform,
+        transform: layout_transform(&transform),
         kind: TransformKind::Standard,
     })
+}
+
+/// The product of every transform-establishing ancestor's matrix down to and
+/// including `id`, in document coordinates. Depth sorting and backface culling
+/// both need the accumulated space rather than the element's own.
+pub(crate) fn accumulated_matrix<D>(
+    dom: &D,
+    styles: &StylePlane<D::NodeId>,
+    fragments: &LiveryLayout<D::NodeId>,
+    id: D::NodeId,
+    scope: MatrixScope,
+) -> Matrix3D
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    let mut chain = Vec::new();
+    let mut cursor = Some(id);
+    while let Some(node) = cursor {
+        chain.push(node);
+        let parent = dom.parent(node);
+        cursor = match scope {
+            MatrixScope::Document => parent,
+            // Only the transforms inside the element's own 3D rendering
+            // context count; the walk stops at the flat boundary above it.
+            MatrixScope::RenderingContext => parent.filter(|parent| {
+                styles
+                    .get(*parent)
+                    .is_some_and(|style| style.transform_style == TransformStyle::Preserve3d)
+            }),
+        };
+    }
+    let mut accumulated = Matrix3D::IDENTITY;
+    // Outermost first, so an ancestor's matrix wraps its descendants'.
+    for node in chain.into_iter().rev() {
+        let Some(style) = styles.get(node) else {
+            continue;
+        };
+        let Some(fragment) = fragments.get(node) else {
+            continue;
+        };
+        let fragment: &Fragment = fragment;
+        let parent = transform_parent(dom, styles, fragments, node);
+        if let Some((_, matrix)) = element_matrix(style, fragment, parent) {
+            let matrix = if flattens_own_matrix(style, parent) {
+                Matrix3D::from(matrix.to_affine_2d())
+            } else {
+                matrix
+            };
+            accumulated = accumulated.multiply(&matrix);
+        }
+    }
+    accumulated
+}
+
+/// How far up the tree an accumulated matrix reaches.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum MatrixScope {
+    /// Every ancestor, which is what the renderer composes.
+    Document,
+    /// Only the element's own 3D rendering context, which is what CSS
+    /// Transforms 2 defines `backface-visibility` against.
+    RenderingContext,
+}
+
+/// The parent style and fragment a transform needs for its perspective.
+pub(crate) fn transform_parent<'a, D>(
+    dom: &D,
+    styles: &'a StylePlane<D::NodeId>,
+    fragments: &'a LiveryLayout<D::NodeId>,
+    id: D::NodeId,
+) -> Option<(&'a ComputedValues, &'a Fragment)>
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    let parent = dom.parent(id)?;
+    // `fragments.get` yields a tree fragment; the deref is the physical rect
+    // every transform helper here reads.
+    let fragment: &Fragment = fragments.get(parent)?;
+    Some((styles.get(parent)?, fragment))
+}
+
+/// Whether `backface-visibility: hidden` culls this box.
+///
+/// The test is the Z of the cross product of the accumulated X and Y axes,
+/// which is the determinant of the projected affine part: negative means the
+/// box's front face has turned away from the viewer.
+pub(crate) fn culled_by_backface<D>(
+    dom: &D,
+    styles: &StylePlane<D::NodeId>,
+    fragments: &LiveryLayout<D::NodeId>,
+    id: D::NodeId,
+) -> bool
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    let Some(style) = styles.get(id) else {
+        return false;
+    };
+    if style.backface_visibility != BackfaceVisibility::Hidden {
+        return false;
+    }
+    accumulated_matrix(dom, styles, fragments, id, MatrixScope::RenderingContext).front_facing_z()
+        < 0.0
+}
+
+/// The depth of a box's transform origin in its 3D rendering context. A
+/// `preserve-3d` parent paints its participating boxes in this order.
+fn transformed_depth<D>(
+    dom: &D,
+    styles: &StylePlane<D::NodeId>,
+    fragments: &LiveryLayout<D::NodeId>,
+    id: D::NodeId,
+) -> f32
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    let Some(fragment) = fragments.get(id) else {
+        return 0.0;
+    };
+    let fragment: &Fragment = fragment;
+    let matrix = accumulated_matrix(dom, styles, fragments, id, MatrixScope::Document);
+    let (x, y) = (
+        fragment.x + fragment.width / 2.0,
+        fragment.y + fragment.height / 2.0,
+    );
+    let depth = matrix.at(2, 0) * x + matrix.at(2, 1) * y + matrix.at(2, 3);
+    if depth.is_finite() { depth } else { 0.0 }
+}
+
+/// Record the affine approximation of a non-affine matrix as a named gap.
+fn record_transform_gap(matrix: &Matrix3D, fragment: &Fragment, list: &mut LiveryPaintList) {
+    if matrix.is_affine() {
+        return;
+    }
+    let gap = TransformGap {
+        kind: TransformGapKind::PerspectiveDivide,
+        border_rect: LayoutRect::new(
+            LayoutPoint::new(fragment.x, fragment.y),
+            LayoutPoint::new(fragment.x + fragment.width, fragment.y + fragment.height),
+        ),
+        projection: [matrix.at(3, 0), matrix.at(3, 1), matrix.at(3, 2)],
+    };
+    if !list.transform_gaps.contains(&gap) {
+        list.transform_gaps.push(gap);
+    }
 }
 
 pub(crate) fn descendant_clip(

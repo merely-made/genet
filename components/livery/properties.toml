@@ -25,6 +25,9 @@ url = "https://www.w3.org/TR/css-sizing-4/"
 [sources.css_logical_properties_1]
 url = "https://www.w3.org/TR/css-logical-1/"
 
+[sources.css_transforms_2]
+url = "https://www.w3.org/TR/css-transforms-2/"
+
 [sources.css_position_3]
 url = "https://www.w3.org/TR/css-position-3/"
 
@@ -1556,8 +1559,8 @@ name = "rotate"
 value_type = "rotate"
 inherited = false
 initial = "none"
-grammar = "none | <angle>"
-seed_values = ["none", "deg", "calc()"]
+grammar = "none | [ x | y | z | <number>{3} ]? && <angle>"
+seed_values = ["none", "deg", "calc()", "x 45deg", "1 1 0 45deg"]
 animation = "by-computed-value"
 source = "css_transforms_1"
 
@@ -1566,8 +1569,8 @@ name = "scale"
 value_type = "scale"
 inherited = false
 initial = "none"
-grammar = "none | <number-percentage>"
-seed_values = ["none", "number", "percentage", "calc()"]
+grammar = "none | [ <number> | <percentage> ]{1,3}"
+seed_values = ["none", "number", "percentage", "calc()", "2 3", "1 2 3"]
 animation = "by-computed-value"
 source = "css_transforms_1"
 
@@ -1766,7 +1769,7 @@ value_type = "transform"
 inherited = false
 initial = "none"
 grammar = "none | <transform-list>"
-seed_values = ["translate()", "scale()", "rotate()"]
+seed_values = ["translate()", "scale()", "rotate()", "translate3d()", "rotate3d()", "matrix3d()", "perspective()"]
 animation = "by-computed-value"
 source = "css_transforms_1"
 
@@ -1779,6 +1782,57 @@ grammar = "[ left | center | right | top | bottom | <length-percentage> ]{1,2} [
 seed_values = ["center", "left top", "25% 10px", "top right 3px"]
 animation = "by-computed-value"
 source = "css_transforms_1"
+
+[[property]]
+name = "backface-visibility"
+value_type = "backface-visibility"
+inherited = false
+initial = "visible"
+grammar = "visible | hidden"
+seed_values = ["visible", "hidden"]
+animation = "discrete"
+source = "css_transforms_2"
+
+[[property]]
+name = "perspective"
+value_type = "perspective"
+inherited = false
+initial = "none"
+grammar = "none | <length [0,inf]>"
+seed_values = ["none", "500px", "20em"]
+animation = "by-computed-value"
+source = "css_transforms_2"
+partial = "the perspective matrix composes into the element's accumulated 4x4; the divide itself is projected orthographically and reported as a named transform gap, because the rasterizer is affine"
+
+[[property]]
+name = "perspective-origin"
+value_type = "perspective-origin"
+inherited = false
+initial = "50% 50%"
+grammar = "[ left | center | right | top | bottom | <length-percentage> ]{1,2}"
+seed_values = ["center", "left top", "25% 10px"]
+animation = "by-computed-value"
+source = "css_transforms_2"
+
+[[property]]
+name = "transform-style"
+value_type = "transform-style"
+inherited = false
+initial = "flat"
+grammar = "flat | preserve-3d"
+seed_values = ["flat", "preserve-3d"]
+animation = "discrete"
+source = "css_transforms_2"
+
+[[property]]
+name = "translate"
+value_type = "translate"
+inherited = false
+initial = "none"
+grammar = "none | <length-percentage> [ <length-percentage> <length>? ]?"
+seed_values = ["none", "10px", "10px 20px", "1px 2px 3px"]
+animation = "by-computed-value"
+source = "css_transforms_2"
 
 [[property]]
 name = "transition-duration"
@@ -2075,13 +2129,6 @@ animation = "discrete"
 spec = "https://drafts.csswg.org/css-inline-3/#alignment-baseline"
 
 [[unimplemented]]
-name = "backface-visibility"
-group = "box"
-inherited = false
-animation = "discrete"
-spec = "https://drafts.csswg.org/css-transforms/#backface-visibility-property"
-
-[[unimplemented]]
 name = "baseline-shift"
 group = "box"
 inherited = false
@@ -2124,34 +2171,6 @@ inherited = false
 animation = "discrete"
 logical = true
 spec = "https://drafts.csswg.org/css-overflow-3/#propdef-overflow-inline"
-
-[[unimplemented]]
-name = "perspective"
-group = "box"
-inherited = false
-animation = "by-computed-value"
-spec = "https://drafts.csswg.org/css-transforms/#perspective"
-
-[[unimplemented]]
-name = "perspective-origin"
-group = "box"
-inherited = false
-animation = "by-computed-value"
-spec = "https://drafts.csswg.org/css-transforms-2/#perspective-origin-property"
-
-[[unimplemented]]
-name = "transform-style"
-group = "box"
-inherited = false
-animation = "discrete"
-spec = "https://drafts.csswg.org/css-transforms-2/#transform-style-property"
-
-[[unimplemented]]
-name = "translate"
-group = "box"
-inherited = false
-animation = "by-computed-value"
-spec = "https://drafts.csswg.org/css-transforms-2/#individual-transforms"
 
 [[unimplemented]]
 name = "will-change"

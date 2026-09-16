@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-12
 
-**Status, 2026-09-15:** prerequisite assessment complete; **T1 is implemented
+**Status, 2026-09-16:** prerequisite assessment complete; **T1 is implemented
 and measured** — the Level 2 surface parses, computes, serializes and
 interpolates, each element's accumulated 4x4 reaches the shared paint and
 hit-test matrix, `css/css-transforms` moves 291 -> 650 subtests and 534 -> 600
@@ -21,6 +21,12 @@ bounded fixture, with actual work reported apart from presentation wait; the
 large-element mutation sweep is measured at 1,000, 5,000 and 20,000 elements,
 the last on five frames only; 50,000 was not attempted. The remaining broader
 T3 acceptance (native composition rerun, WPT attribution) is still open.
+**T4 is implemented and measured in netrender** (`06f3a12f4`): a placement
+inside a rect-clip, alpha or element-filter layer now retains and reads back
+byte-identical to an independently expanded reference, `fragment_lower_count`
+stays at one lowering per fragment across placement-only frames, and the
+clip-wrapped L0a rerun holds its 200,000-rectangle cell within 1.07x of the
+same run's unclipped cell. Nothing ran through Genet.
 Founded 2026-09-12 from the wing's L0 receipts;
 Mark's 2026-09-13 ruling replaces T3's body-fragment proposal with a shared
 scene viewport whose producer owns depth. T1's general CSS 3D work, T2's
@@ -661,6 +667,13 @@ T3 mutation/measurement acceptance, T1, T2 and T4 open.
 
 ## T4. Retained fragments inside layer scopes
 
+**Status, 2026-09-16:** implemented and measured in netrender, committed as
+`06f3a12f4`. All four done-conditions below hold on this host. The contained
+shape recorded under **The change** was not taken: the run's sub-scene is a
+netrender op list lowered only at flush, not a `vello::Scene`, so layers now
+push and pop on the master scene instead. The 2026-09-16 progress entry holds
+the receipt. Nothing ran through Genet.
+
 **Finding (2026-09-12).** Genet's paint-list translator lowers every
 `PushClip` to a netrender layer (`emit_push_clip` in
 `netrender/paint_list_render/src/emit.rs`); netrender has no standalone clip
@@ -842,6 +855,16 @@ T3's ordinary image-composition receipt.
   parse stay flat over the same step. That is the whole of T2's residual 1.17
   exponent and it is unattributed; a next probe reads it from the spans rather
   than from a fixture.
+- **2026-09-16** — netrender loses element-filter content from the second
+  frame when a reused `Renderer` draws a filtered layer whose content moves.
+  The filter passes make a fresh GPU texture under the same sentinel
+  `ImageKey` each frame while cached tile scenes keep the previous image
+  handle, so the layer renders blank. It reproduces with no retained fragment
+  in the scene, so it is independent of T4 and was not repaired there;
+  netrender's comment on `preprocess_filters` names a tile-cache-aware key and
+  handle reuse scheme as the fix. Genet content under an animating CSS
+  `filter` would be exposed; this was found in netrender tests, not observed
+  through Genet. Recorded for netrender's owner.
 
 ## Progress
 
@@ -883,6 +906,23 @@ T3's ordinary image-composition receipt.
   50,000 was not attempted. Script-driven mutation remains a deliberate
   exclusion and was not touched. Native composition rerun and WPT attribution
   for broader T3 acceptance remain open, as do T1, T2 and T4.
+- **2026-09-15** — T2 implemented and measured. A `children` index and a
+  deferred aggregate-overflow rebuild in `buckram`'s `FragmentTree`, the same
+  bound applied to the relative, sticky, retained-root and incremental-query
+  paths and to `TextFrame::translate_subtree`, and two per-element style costs
+  removed in `genet-livery` and `livery`. A `--phase-timing` flag on Ortet over
+  a new `genet_livery::phase` recorder reports parse, style, layout and paint
+  for one frame and wrote this lane's whole attribution without a fixture
+  variant. The L0b grid is rerun on the same host: fitted exponent 2.156 →
+  1.168, the 50,000-element first frame 1,172.21 s → 7.68 s, every digest
+  unchanged. **The 1-second bound at 50,000 is not reached**; 7.68 s is, and the
+  rationale is recorded under T2. Five focused fragment-tree tests, three phase
+  tests and two host-instrument tests added; buckram, genet-livery, livery,
+  ortet and genet-documents suites rerun green. WPT census over
+  `css/css-position`, `css/CSS2/abspos`, `css/CSS2/positioning`,
+  `css/CSS2/normal-flow`, `css/css-transforms` and `css/css-values`, before and
+  after on the same harness sources: zero transitions of any kind. Committed as `b3250d3d91b`. T1, T4 and the broader T3 acceptance remain open, and so does T2's
+  per-element constant.
 - **2026-09-15** — T1 implemented and measured. CSS Transforms Level 2 in
   Livery: a `Matrix3D` composer under the existing `Matrix2D`, the Level 2
   transform functions, the `translate` / `perspective` / `perspective-origin`
@@ -904,21 +944,37 @@ T3's ordinary image-composition receipt.
   than one pixel out. Yaw and depth-order headless readbacks pass 13 of 13
   assertions. Committed as `d61978378c1`. T4 and the broader T3 acceptance remain open, and
   so does T2's per-element constant.
-- **2026-09-15** — T2 implemented and measured. A `children` index and a
-  deferred aggregate-overflow rebuild in `buckram`'s `FragmentTree`, the same
-  bound applied to the relative, sticky, retained-root and incremental-query
-  paths and to `TextFrame::translate_subtree`, and two per-element style costs
-  removed in `genet-livery` and `livery`. A `--phase-timing` flag on Ortet over
-  a new `genet_livery::phase` recorder reports parse, style, layout and paint
-  for one frame and wrote this lane's whole attribution without a fixture
-  variant. The L0b grid is rerun on the same host: fitted exponent 2.156 →
-  1.168, the 50,000-element first frame 1,172.21 s → 7.68 s, every digest
-  unchanged. **The 1-second bound at 50,000 is not reached**; 7.68 s is, and the
-  rationale is recorded under T2. Five focused fragment-tree tests, three phase
-  tests and two host-instrument tests added; buckram, genet-livery, livery,
-  ortet and genet-documents suites rerun green. WPT census over
-  `css/css-position`, `css/CSS2/abspos`, `css/CSS2/positioning`,
-  `css/CSS2/normal-flow`, `css/css-transforms` and `css/css-values`, before and
-  after on the same harness sources: zero transitions of any kind. Not
-  committed. T1, T4 and the broader T3 acceptance remain open, and so does T2's
-  per-element constant.
+- **2026-09-16** — T4 implemented and measured in netrender on branch
+  `t4-retained-in-layers` from `3961aca91`, committed to netrender main as
+  `06f3a12f4`. The contained shape this plan recorded, appending into the
+  run's open sub-scene, was not taken: that sub-scene is a netrender op list
+  lowered only at flush, not a `vello::Scene`. Instead `PushLayer` and
+  `PopLayer` flush the pending run and push or pop on the master
+  `vello::Scene`, so a placement appends its cached lowering inside the open
+  layer, the move `compose_master` already makes per tile. Seven headless GPU
+  tests in `netrender/tests/pe4b_retained_in_layers.rs`: rect-clip, alpha and
+  element-filter layers each read back byte-identical to a second `Renderer`
+  inlining the same content under the same layer, each with a non-vacuity
+  control; nested layers hold painter order around a placement;
+  `fragment_lower_count` stays at one across four placement-only frames in all
+  three kinds; a per-body clip fixture emits no fragment-path warning. The L0a
+  probe was copied out of mere unmodified and given a mode that wraps every
+  body in its own content-box clip layer, the shape `emit_push_clip` produces.
+  On an RTX 4060 Laptop GPU over three settled runs, the 1,000-body,
+  200,000-rectangle cell measures 40.46 / 44.26 / 52.04 ms before and
+  8.80 / 9.56 / 9.37 ms after; the 200-body cell 9.86 / 10.41 / 14.58 ms
+  before and 3.78 / 3.98 / 4.03 ms after. `fragment_lower_count` goes from
+  zero to one per body. The tolerance, fixed before the after numbers were
+  read, is the same run's unclipped cell plus 15%; measured ratios are 1.00x,
+  1.07x and 1.02x at 1,000 bodies and 1.07x, 1.06x and 1.05x at 200. The
+  clipped median, 9.37 ms, is also under the 2026-09-11 absolute of 9.96 ms.
+  This host's own spread on the unclipped control was 8.34 to 15.45 ms, so the
+  in-run ratio is the primary statement. A first cold run is kept in the
+  receipts and excluded; its 1,000-body clipped cell also passes the
+  tolerance, at 0.86x. `cargo test --locked --offline -p netrender` passes 272
+  with none failing, in the lane and again in an independent rerun on the
+  final tree. Nested fragments and unregistered ids still do not retain and
+  still warn. The paint-list translator was read, not changed. Receipts:
+  `Code/testing/netrender/t4_20260916/results.md`; netrender's record is in
+  `netrender-notes/2026-09-04_wgpu_execution_graph_plan.md`. T1's named gaps,
+  T2's per-element constant and the broader T3 acceptance remain open.

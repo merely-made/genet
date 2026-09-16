@@ -516,6 +516,13 @@ impl Length {
             .relative_basis(environment)
             .map_or(self, |basis| Self::px(self.value * basis / 100.0))
     }
+
+    /// Serialize keeping the authored unit at zero. `<length>` canonicalizes
+    /// a zero to a bare `0`, which is right where the unit cannot matter; the
+    /// individual transform properties serialize their components as authored.
+    pub fn to_css_with_unit(self) -> String {
+        format!("{}{}", format_number(self.value), self.unit.suffix())
+    }
 }
 
 impl FromStr for Length {
@@ -1718,6 +1725,16 @@ impl FromStr for LengthPercentage {
             return super::calc::parse_math(input).map(Self::Math);
         }
         parse_atomic(input)
+    }
+}
+
+impl LengthPercentage {
+    /// [`Length::to_css_with_unit`] for the length-percentage forms.
+    pub fn to_css_with_unit(self) -> String {
+        match self {
+            Self::Length(length) => length.to_css_with_unit(),
+            other => other.to_string(),
+        }
     }
 }
 

@@ -11,6 +11,7 @@
 
 use super::format_number;
 use super::property::{Transform, TransformFunction};
+use super::{Length, LengthPercentage};
 
 /// A CSS 2D affine matrix in `matrix(a, b, c, d, e, f)` order.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -56,16 +57,13 @@ impl Matrix2D {
     }
 
     /// Compose one transform-list suffix into its equivalent 2D matrix.
+    /// A list that needs a Z axis deliberately has none.
     pub fn from_functions(
         functions: &[TransformFunction],
         em: f32,
         reference_box: (f32, f32),
     ) -> Option<Self> {
-        let mut matrix = Self::IDENTITY;
-        for function in functions {
-            matrix = matrix.multiply(function_matrix(*function, em, reference_box)?);
-        }
-        matrix.is_finite().then_some(matrix)
+        Matrix3D::from_functions(functions, em, reference_box)?.to_matrix_2d()
     }
 
     /// Compose a transform list only when it has no percentage dependency.
@@ -74,13 +72,7 @@ impl Matrix2D {
         functions: &[TransformFunction],
         em: f32,
     ) -> Option<Self> {
-        if functions.iter().any(|function| {
-            matches!(
-                function,
-                TransformFunction::Translate(x, y)
-                    if x.has_percentage() || y.has_percentage()
-            )
-        }) {
+        if has_percentage(functions) {
             return None;
         }
         Self::from_functions(functions, em, (0.0, 0.0))
@@ -114,21 +106,31 @@ impl std::fmt::Display for Matrix2D {
 
 impl Transform {
     /// Resolve this transform list to a 2D matrix. `none` deliberately has no
-    /// matrix so callers can retain its computed serialization.
+    /// matrix so callers can retain its computed serialization, and a list
+    /// that needs a Z axis has none either.
     pub fn to_matrix(&self, em: f32, reference_box: (f32, f32)) -> Option<Matrix2D> {
+        self.to_matrix_3d(em, reference_box)?.to_matrix_2d()
+    }
+
+    /// Resolve this transform list to its full 4x4. This is the lowering
+    /// input: paint projects it, it is not projected here.
+    pub fn to_matrix_3d(&self, em: f32, reference_box: (f32, f32)) -> Option<Matrix3D> {
         match self {
             Self::None => None,
-            Self::Functions(functions) => Matrix2D::from_functions(functions, em, reference_box),
+            Self::Functions(functions) => Matrix3D::from_functions(functions, em, reference_box),
         }
     }
 
-    /// CSSOM resolved-value serialization for the bounded 2D lane.
+    /// CSSOM resolved-value serialization. `Matrix3D`'s own `Display` prints
+    /// `matrix()` when the composition stayed in the plane.
     pub fn to_computed_css(&self, em: f32, reference_box: Option<(f32, f32)>) -> String {
         let matrix = match reference_box {
-            Some(reference_box) => self.to_matrix(em, reference_box),
+            Some(reference_box) => self.to_matrix_3d(em, reference_box),
             None => match self {
-                Self::Functions(functions) => Matrix2D::from_absolute_functions(functions, em),
-                Self::None => None,
+                Self::Functions(functions) if !has_percentage(functions) => {
+                    Matrix3D::from_functions(functions, em, (0.0, 0.0))
+                },
+                _ => None,
             },
         };
         matrix.map_or_else(|| self.to_string(), |matrix| matrix.to_string())
@@ -141,11 +143,238 @@ impl Transform {
             return;
         };
         for function in functions {
-            if let TransformFunction::Translate(x, y) = function {
-                *x = x.resolve_font_relative(em, rem);
-                *y = y.resolve_font_relative(em, rem);
+            match function {
+                TransformFunction::Translate(x, y) => {
+                    *x = x.resolve_font_relative(em, rem);
+                    *y = y.resolve_font_relative(em, rem);
+                },
+                TransformFunction::Translate3D(x, y, z) => {
+                    *x = x.resolve_font_relative(em, rem);
+                    *y = y.resolve_font_relative(em, rem);
+                    *z = resolve_font_relative_length(*z, em, rem);
+                },
+                TransformFunction::TranslateZ(z) => {
+                    *z = resolve_font_relative_length(*z, em, rem);
+                },
+                TransformFunction::Perspective(Some(depth)) => {
+                    *depth = resolve_font_relative_length(*depth, em, rem);
+                },
+                _ => {},
             }
         }
+    }
+}
+
+pub(crate) fn has_percentage(functions: &[TransformFunction]) -> bool {
+    functions.iter().any(|function| match function {
+        TransformFunction::Translate(x, y) | TransformFunction::Translate3D(x, y, _) => {
+            x.has_percentage() || y.has_percentage()
+        },
+        _ => false,
+    })
+}
+
+fn resolve_font_relative_length(length: Length, em: f32, rem: f32) -> Length {
+    match LengthPercentage::Length(length).resolve_font_relative(em, rem) {
+        LengthPercentage::Length(resolved) => resolved,
+        _ => length,
+    }
+}
+
+impl Matrix3D {
+    /// Compose a transform list in CSS order: the first function is outermost.
+    pub fn from_functions(
+        functions: &[TransformFunction],
+        em: f32,
+        reference_box: (f32, f32),
+    ) -> Option<Self> {
+        let mut matrix = Self::IDENTITY;
+        for function in functions {
+            matrix = matrix.multiply(&function_matrix(*function, em, reference_box)?);
+        }
+        matrix.is_finite().then_some(matrix)
+    }
+}
+
+/// A CSS 4x4 transform matrix, stored in `matrix3d()` argument order: the
+/// column-major cells of the column-vector matrix CSS composes with. That is
+/// also `euclid::Transform3D`'s row-major row-vector order, so lowering to
+/// `LayoutTransform` is a field-for-field copy.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Matrix3D(pub [f32; 16]);
+
+impl Matrix3D {
+    pub const IDENTITY: Self = Self([
+        1.0, 0.0, 0.0, 0.0, //
+        0.0, 1.0, 0.0, 0.0, //
+        0.0, 0.0, 1.0, 0.0, //
+        0.0, 0.0, 0.0, 1.0,
+    ]);
+
+    /// Cell at `row`, `column` of the column-vector matrix.
+    pub const fn at(&self, row: usize, column: usize) -> f32 {
+        self.0[column * 4 + row]
+    }
+
+    fn set(&mut self, row: usize, column: usize, value: f32) {
+        self.0[column * 4 + row] = value;
+    }
+
+    pub fn is_finite(&self) -> bool {
+        self.0.iter().copied().all(f32::is_finite)
+    }
+
+    /// `self` composed over `other`: `other` applies to the point first.
+    pub fn multiply(&self, other: &Self) -> Self {
+        let mut out = Self([0.0; 16]);
+        for column in 0..4 {
+            for row in 0..4 {
+                let mut sum = 0.0;
+                for k in 0..4 {
+                    sum += self.at(row, k) * other.at(k, column);
+                }
+                out.set(row, column, sum);
+            }
+        }
+        out
+    }
+
+    pub const fn translation(x: f32, y: f32, z: f32) -> Self {
+        let mut matrix = Self::IDENTITY;
+        matrix.0[12] = x;
+        matrix.0[13] = y;
+        matrix.0[14] = z;
+        matrix
+    }
+
+    pub const fn scaling(x: f32, y: f32, z: f32) -> Self {
+        let mut matrix = Self::IDENTITY;
+        matrix.0[0] = x;
+        matrix.0[5] = y;
+        matrix.0[10] = z;
+        matrix
+    }
+
+    /// Rodrigues rotation about a normalized axis. CSS's Y axis points down,
+    /// which is why this matches `rotate()` for the Z axis without a sign flip.
+    pub fn rotation(x: f32, y: f32, z: f32, angle: f32) -> Option<Self> {
+        let length = (x * x + y * y + z * z).sqrt();
+        if !length.is_finite() || length == 0.0 {
+            return None;
+        }
+        let (x, y, z) = (x / length, y / length, z / length);
+        let (sin, cos) = angle.sin_cos();
+        // A cardinal axis is written out directly. Rodrigues computes the
+        // unrotated diagonal cell as `(1 - cos) + cos`, which is not exactly
+        // 1 in f32 and would leave every `rotateZ()` looking like a 3D matrix.
+        if let Some(axis) = [
+            (x, y, z) == (1.0, 0.0, 0.0),
+            (x, y, z) == (0.0, 1.0, 0.0),
+            (x, y, z) == (0.0, 0.0, 1.0),
+        ]
+        .into_iter()
+        .position(|matched| matched)
+        {
+            let mut matrix = Self::IDENTITY;
+            let (u, v) = [(1, 2), (2, 0), (0, 1)][axis];
+            matrix.set(u, u, cos);
+            matrix.set(v, v, cos);
+            matrix.set(u, v, -sin);
+            matrix.set(v, u, sin);
+            return matrix.is_finite().then_some(matrix);
+        }
+        let t = 1.0 - cos;
+        let mut matrix = Self::IDENTITY;
+        matrix.set(0, 0, t * x * x + cos);
+        matrix.set(0, 1, t * x * y - sin * z);
+        matrix.set(0, 2, t * x * z + sin * y);
+        matrix.set(1, 0, t * x * y + sin * z);
+        matrix.set(1, 1, t * y * y + cos);
+        matrix.set(1, 2, t * y * z - sin * x);
+        matrix.set(2, 0, t * x * z - sin * y);
+        matrix.set(2, 1, t * y * z + sin * x);
+        matrix.set(2, 2, t * z * z + cos);
+        matrix.is_finite().then_some(matrix)
+    }
+
+    /// The `perspective(d)` matrix. A non-positive or non-finite depth is the
+    /// spec's identity-free case and is rejected by the caller's parser.
+    pub fn perspective(depth: f32) -> Option<Self> {
+        (depth.is_finite() && depth > 0.0).then(|| {
+            let mut matrix = Self::IDENTITY;
+            matrix.set(3, 2, -1.0 / depth);
+            matrix
+        })
+    }
+
+    /// Whether the fourth row is the affine `0 0 0 1`, so the projection has
+    /// no perspective divide for netrender's affine rasterizers to lose.
+    pub fn is_affine(&self) -> bool {
+        self.at(3, 0) == 0.0 && self.at(3, 1) == 0.0 && self.at(3, 2) == 0.0 && self.at(3, 3) == 1.0
+    }
+
+    /// Whether every cell outside the 2D affine six is at its identity value.
+    pub fn is_2d(&self) -> bool {
+        const PLANAR: [usize; 8] = [2, 3, 6, 7, 8, 9, 11, 14];
+        PLANAR.into_iter().all(|index| self.0[index] == 0.0)
+            && self.0[10] == 1.0
+            && self.0[15] == 1.0
+    }
+
+    pub fn to_matrix_2d(&self) -> Option<Matrix2D> {
+        self.is_2d().then(|| {
+            Matrix2D::new(
+                self.0[0], self.0[1], self.0[4], self.0[5], self.0[12], self.0[13],
+            )
+        })
+    }
+
+    /// The orthographic projection netrender's rasterizers actually read: the
+    /// planar six cells, with Z dropped rather than divided.
+    pub fn to_affine_2d(&self) -> Matrix2D {
+        Matrix2D::new(
+            self.0[0], self.0[1], self.0[4], self.0[5], self.0[12], self.0[13],
+        )
+    }
+
+    /// The depth of the local origin in the accumulated space, which is what a
+    /// `preserve-3d` context sorts its participating boxes by.
+    pub const fn origin_depth(&self) -> f32 {
+        self.0[14]
+    }
+
+    /// Positive when the front face points at the viewer. This is the Z of the
+    /// cross product of the mapped local X and Y axes, which reduces to the
+    /// determinant of the projected affine part.
+    pub const fn front_facing_z(&self) -> f32 {
+        self.at(0, 0) * self.at(1, 1) - self.at(1, 0) * self.at(0, 1)
+    }
+}
+
+impl From<Matrix2D> for Matrix3D {
+    fn from(matrix: Matrix2D) -> Self {
+        Self([
+            matrix.a, matrix.b, 0.0, 0.0, //
+            matrix.c, matrix.d, 0.0, 0.0, //
+            0.0, 0.0, 1.0, 0.0, //
+            matrix.e, matrix.f, 0.0, 1.0,
+        ])
+    }
+}
+
+impl std::fmt::Display for Matrix3D {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(matrix) = self.to_matrix_2d() {
+            return matrix.fmt(formatter);
+        }
+        formatter.write_str("matrix3d(")?;
+        for (index, value) in self.0.iter().enumerate() {
+            if index > 0 {
+                formatter.write_str(", ")?;
+            }
+            formatter.write_str(&format_number(*value))?;
+        }
+        formatter.write_str(")")
     }
 }
 
@@ -153,23 +382,38 @@ fn function_matrix(
     function: TransformFunction,
     em: f32,
     reference_box: (f32, f32),
-) -> Option<Matrix2D> {
+) -> Option<Matrix3D> {
+    let px = |length: Length| length.unit.to_px(length.value, em, 16.0);
     let matrix = match function {
-        TransformFunction::Translate(x, y) => Matrix2D::new(
-            1.0,
-            0.0,
-            0.0,
-            1.0,
+        TransformFunction::Translate(x, y) => Matrix3D::translation(
             x.to_px(em, 16.0, reference_box.0),
             y.to_px(em, 16.0, reference_box.1),
+            0.0,
         ),
-        TransformFunction::Scale(x, y) => Matrix2D::new(x, 0.0, 0.0, y, 0.0, 0.0),
-        TransformFunction::Rotate(angle) => {
-            let (sin, cos) = angle.sin_cos();
-            Matrix2D::new(cos, sin, -sin, cos, 0.0, 0.0)
+        TransformFunction::Translate3D(x, y, z) => Matrix3D::translation(
+            x.to_px(em, 16.0, reference_box.0),
+            y.to_px(em, 16.0, reference_box.1),
+            px(z),
+        ),
+        TransformFunction::TranslateZ(z) => Matrix3D::translation(0.0, 0.0, px(z)),
+        TransformFunction::Scale(x, y) => Matrix3D::scaling(x, y, 1.0),
+        TransformFunction::Scale3D(x, y, z) => Matrix3D::scaling(x, y, z),
+        TransformFunction::ScaleZ(z) => Matrix3D::scaling(1.0, 1.0, z),
+        TransformFunction::Rotate(angle) | TransformFunction::RotateZ(angle) => {
+            Matrix3D::rotation(0.0, 0.0, 1.0, angle)?
         },
-        TransformFunction::Skew(x, y) => Matrix2D::new(1.0, y.tan(), x.tan(), 1.0, 0.0, 0.0),
-        TransformFunction::Matrix(matrix) => matrix,
+        TransformFunction::RotateX(angle) => Matrix3D::rotation(1.0, 0.0, 0.0, angle)?,
+        TransformFunction::RotateY(angle) => Matrix3D::rotation(0.0, 1.0, 0.0, angle)?,
+        TransformFunction::Rotate3D(x, y, z, angle) => Matrix3D::rotation(x, y, z, angle)?,
+        TransformFunction::Skew(x, y) => Matrix2D::new(1.0, y.tan(), x.tan(), 1.0, 0.0, 0.0).into(),
+        TransformFunction::Perspective(None) => Matrix3D::IDENTITY,
+        TransformFunction::Perspective(Some(depth)) => {
+            // A zero depth has no defined projection, so it stays the
+            // identity rather than dividing by zero.
+            Matrix3D::perspective(px(depth)).unwrap_or(Matrix3D::IDENTITY)
+        },
+        TransformFunction::Matrix(matrix) => matrix.into(),
+        TransformFunction::Matrix3D(matrix) => matrix,
     };
     matrix.is_finite().then_some(matrix)
 }

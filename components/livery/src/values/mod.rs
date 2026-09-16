@@ -27,23 +27,24 @@ pub use length::{
 };
 pub use logical::{LogicalAxis, LogicalSide, PhysicalAxis, PhysicalSide};
 pub use property::{
-    Alignment, AnimationDelay, AnimationName, AspectRatio, BackgroundAttachment, BackgroundBox,
-    BackgroundImage, BackgroundPosition, BackgroundRepeat, BackgroundSize, BackgroundSizeComponent,
-    BorderCollapse, BorderStyle, BorderWidth, BoxShadow, BoxShadowValue, BoxSizing, BreakAfter,
-    BreakBefore, BreakInside, CaptionSide, Clear, ClipPath, ColumnCount, ColumnFill, ColumnWidth,
-    Contain, ContainIntrinsicSize, ContainerName, ContainerType, Direction, Display, Duration,
-    EmptyCells, FlexBasis, FlexDirection, FlexFactor, FlexWrap, Float, FontFamily,
-    FontFeatureSetting, FontFeatureSettings, FontSize, FontStyle, FontVariantLigatures, FontWeight,
-    Gap, GridAutoFlow, GridPlacement, GridTemplate, GridTrack, HangingPunctuation, Hyphens, Inset,
-    LineBreak, LineHeight, ListStylePosition, ListStyleType, Margin, Opacity, Order, Orphans,
-    Overflow, OverflowWrap, Padding, PointerEvents, Position, Radius, RepeatStyle, Rotate, Scale,
-    ShapeOutside, Size, Spacing, TabSize, TableBorderSpacing, TableLayout, TextAlign,
-    TextAlignLast, TextDecorationColor, TextDecorationLine, TextIndent, TextJustify, TextTransform,
+    Alignment, AnimationDelay, AnimationName, AspectRatio, BackfaceVisibility,
+    BackgroundAttachment, BackgroundBox, BackgroundImage, BackgroundPosition, BackgroundRepeat,
+    BackgroundSize, BackgroundSizeComponent, BorderCollapse, BorderStyle, BorderWidth, BoxShadow,
+    BoxShadowValue, BoxSizing, BreakAfter, BreakBefore, BreakInside, CaptionSide, Clear, ClipPath,
+    ColumnCount, ColumnFill, ColumnWidth, Contain, ContainIntrinsicSize, ContainerName,
+    ContainerType, Direction, Display, Duration, EmptyCells, FlexBasis, FlexDirection, FlexFactor,
+    FlexWrap, Float, FontFamily, FontFeatureSetting, FontFeatureSettings, FontSize, FontStyle,
+    FontVariantLigatures, FontWeight, Gap, GridAutoFlow, GridPlacement, GridTemplate, GridTrack,
+    HangingPunctuation, Hyphens, Inset, LineBreak, LineHeight, ListStylePosition, ListStyleType,
+    Margin, Opacity, Order, Orphans, Overflow, OverflowWrap, Padding, Perspective,
+    PerspectiveOrigin, PointerEvents, Position, Radius, RepeatStyle, Rotate, Scale, ShapeOutside,
+    Size, Spacing, TabSize, TableBorderSpacing, TableLayout, TextAlign, TextAlignLast,
+    TextDecorationColor, TextDecorationLine, TextIndent, TextJustify, TextTransform,
     TextTransformCase, TextWrapMode, TimingFunction, Transform, TransformFunction, TransformOrigin,
-    TransitionProperty, VerticalAlign, Visibility, WhiteSpaceCollapse, Widows, WordBreak,
-    WritingMode, ZIndex,
+    TransformStyle, TransitionProperty, Translate, VerticalAlign, Visibility, WhiteSpaceCollapse,
+    Widows, WordBreak, WritingMode, ZIndex,
 };
-pub use transform_matrix::Matrix2D;
+pub use transform_matrix::{Matrix2D, Matrix3D};
 
 /// A rejected CSS value from Livery's bounded first-lane grammar.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -112,6 +113,8 @@ macro_rules! unchanged_viewport_resolution {
 
 unchanged_viewport_resolution!(
     Alignment,
+    BackfaceVisibility,
+    TransformStyle,
     AnimationDelay,
     AnimationName,
     AspectRatio,
@@ -467,10 +470,58 @@ impl ResolveViewport for Transform {
                         x.resolve_relative(environment),
                         y.resolve_relative(environment),
                     ),
+                    TransformFunction::Translate3D(x, y, z) => TransformFunction::Translate3D(
+                        x.resolve_relative(environment),
+                        y.resolve_relative(environment),
+                        z.resolve_relative(environment),
+                    ),
+                    TransformFunction::TranslateZ(z) => {
+                        TransformFunction::TranslateZ(z.resolve_relative(environment))
+                    },
+                    TransformFunction::Perspective(Some(depth)) => {
+                        TransformFunction::Perspective(Some(depth.resolve_relative(environment)))
+                    },
                     function => function,
                 })
                 .collect(),
         )
+    }
+}
+
+impl ResolveViewport for Translate {
+    const RESOLVES_RELATIVE: bool = true;
+
+    fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
+        match *self {
+            Self::None => Self::None,
+            Self::Values(x, y, z) => Self::Values(
+                x.resolve_relative(environment),
+                y.resolve_relative(environment),
+                z.resolve_relative(environment),
+            ),
+        }
+    }
+}
+
+impl ResolveViewport for Perspective {
+    const RESOLVES_RELATIVE: bool = true;
+
+    fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
+        match *self {
+            Self::None => Self::None,
+            Self::Depth(length) => Self::Depth(length.resolve_relative(environment)),
+        }
+    }
+}
+
+impl ResolveViewport for PerspectiveOrigin {
+    const RESOLVES_RELATIVE: bool = true;
+
+    fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
+        Self {
+            x: self.x.resolve_relative(environment),
+            y: self.y.resolve_relative(environment),
+        }
     }
 }
 
@@ -520,6 +571,8 @@ macro_rules! discrete_interpolation {
 }
 
 discrete_interpolation!(
+    BackfaceVisibility,
+    TransformStyle,
     Alignment,
     AnimationDelay,
     AnimationName,
@@ -619,21 +672,58 @@ impl Interpolate for Opacity {
 
 impl Interpolate for Rotate {
     fn interpolate_value(&self, other: &Self, progress: f32) -> Self {
-        match (*self, *other) {
-            (Self::Angle(from), Self::Angle(to)) => {
-                Self::Angle(from + (to - from) * progress.clamp(0.0, 1.0))
+        let progress = progress.clamp(0.0, 1.0);
+        let scalar = |from: f32, to: f32| from + (to - from) * progress;
+        // `none` interpolates as a zero rotation, unless both sides are `none`.
+        let (from, to) = match (*self, *other) {
+            (Self::None, Self::None) => return Self::None,
+            (Self::None, to) => (Self::Angle(0.0), to),
+            (from, Self::None) => (from, Self::Angle(0.0)),
+            pair => pair,
+        };
+        match (from, to) {
+            (Self::Angle(from), Self::Angle(to)) => Self::Angle(scalar(from, to)),
+            // A shared axis interpolates its angle. A differing axis needs
+            // quaternion slerp, which is a named gap: it stays discrete.
+            (Self::Axis(fx, fy, fz, from), Self::Axis(tx, ty, tz, to))
+                if (fx, fy, fz) == (tx, ty, tz) =>
+            {
+                Self::Axis(fx, fy, fz, scalar(from, to))
             },
-            _ if progress < 0.5 => *self,
-            _ => *other,
+            (Self::Angle(from), Self::Axis(0.0, 0.0, 1.0, to)) => Self::Angle(scalar(from, to)),
+            (Self::Axis(0.0, 0.0, 1.0, from), Self::Angle(to)) => Self::Angle(scalar(from, to)),
+            _ if progress < 0.5 => from,
+            _ => to,
         }
     }
 }
 
 impl Interpolate for Scale {
     fn interpolate_value(&self, other: &Self, progress: f32) -> Self {
-        match (*self, *other) {
-            (Self::Uniform(from), Self::Uniform(to)) => {
-                Self::Uniform(from + (to - from) * progress.clamp(0.0, 1.0))
+        let progress = progress.clamp(0.0, 1.0);
+        let scalar = |from: f32, to: f32| from + (to - from) * progress;
+        // `none` interpolates as `1 1 1`, unless both sides are `none`.
+        if matches!((self, other), (Self::None, Self::None)) {
+            return Self::None;
+        }
+        let triple = |value: Scale| match value {
+            Scale::None => Some((1.0, 1.0, 1.0)),
+            Scale::Uniform(value) => Some((value, value, 1.0)),
+            Scale::Values(x, y, z) => Some((x, y, z)),
+            Scale::Deferred(_) => None,
+        };
+        match (triple(*self), triple(*other)) {
+            (Some(from), Some(to)) => {
+                let values = (
+                    scalar(from.0, to.0),
+                    scalar(from.1, to.1),
+                    scalar(from.2, to.2),
+                );
+                if values.0 == values.1 && values.2 == 1.0 {
+                    Self::Uniform(values.0)
+                } else {
+                    Self::Values(values.0, values.1, values.2)
+                }
             },
             _ if progress < 0.5 => *self,
             _ => *other,
@@ -704,6 +794,31 @@ impl Interpolate for Transform {
 impl Interpolate for TransformOrigin {
     fn interpolate_value(&self, other: &Self, progress: f32) -> Self {
         self.interpolate(*other, progress)
+    }
+}
+
+impl Interpolate for PerspectiveOrigin {
+    fn interpolate_value(&self, other: &Self, progress: f32) -> Self {
+        self.interpolate(*other, progress)
+    }
+}
+
+impl Interpolate for Translate {
+    fn interpolate_value(&self, other: &Self, progress: f32) -> Self {
+        self.interpolate(*other, progress)
+    }
+}
+
+impl Interpolate for Perspective {
+    fn interpolate_value(&self, other: &Self, progress: f32) -> Self {
+        match (*self, *other) {
+            (Self::Depth(from), Self::Depth(to)) if from.unit == to.unit => Self::Depth(Length {
+                value: from.value + (to.value - from.value) * progress.clamp(0.0, 1.0),
+                unit: from.unit,
+            }),
+            _ if progress < 0.5 => *self,
+            _ => *other,
+        }
     }
 }
 

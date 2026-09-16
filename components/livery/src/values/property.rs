@@ -7,7 +7,7 @@
 use std::{fmt, str::FromStr};
 
 use super::{
-    ComputedColor, Length, LengthPercentage, MathLengthPercentage, Matrix2D, ParseError,
+    ComputedColor, Length, LengthPercentage, MathLengthPercentage, Matrix2D, Matrix3D, ParseError,
     RelativeLengthEnvironment, UsedColorContext, format_number, keyword_value,
 };
 

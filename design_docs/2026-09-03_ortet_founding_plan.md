@@ -69,6 +69,25 @@ route. Other reference boxes/SVG, 3D, filters, broad WebGL conformance, and the
 runtime's currently hardcoded `devicePixelRatio` getter remain separate work.
 Native scale 1 and fractional scale were not exercised by a physical window.
 
+**Rerun at changed sources, 2026-09-16:** the same three runners pass at clean
+Genet `f1f21c61d26` with netrender `06f3a12f4` and Vano `8ad084125` (Boa and
+Piccolo unchanged). Before/after source identities are identical in each run.
+
+- All 25 probes pass on Boa and Nova at display scale 2. Both captures are
+  byte-identical to the acceptance above (`0xa440137ccc503f9c`).
+- The WebGL gate keeps `0xb07e372b0126bea5`.
+- G5 keeps `0xc5d147e70d4e4425` with `unpinned=5 collected=6`, and every
+  impossible-heading control fails as required.
+- Boa presented six G5 frames this time. Five repeats of one binary gave
+  5, 5, 5, 6 and 5, so the frame count varies with timer wakeups and is not an
+  invariant of this guard.
+- The netrender GPU gate and key/translator tests pass with the counts above.
+- The 23 Ortet library tests pass within today's 36 (`--features scripted-nova
+  --lib`); `paint` passes 74 and `values` 44.
+
+Receipt: `Code/testing/genet/t3_acceptance_20260916/results.md`, which also
+carries the scene viewport plan's T3 WPT attribution.
+
 **Native WebGL wiring, 2026-09-11:** Boa/Nova now create document-local WebGL
 contexts on Ortet's render device before authored scripts run. The native
 capture/presentation path resolves live textures in scene order; resize keeps

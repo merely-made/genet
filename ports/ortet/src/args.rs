@@ -56,6 +56,10 @@ usage: ortet --url <address> [options]
   --warmup-frames <N>  Frames excluded from the timing summary (default 1). The
                        first frame of a Genet document is a parse/style/layout
                        cold start, which is lane T2's measurement, not this one's.
+  --phase-timing       Turn on the engine's parse/style/layout/paint spans and
+                       report them per frame, so a first frame is attributed
+                       without generating a fixture per factor. Printed on exit
+                       and written into --timing-json when both are given.
   --help               Print this and exit.
 ";
 
@@ -120,6 +124,8 @@ pub struct Config {
     pub timing_json: Option<PathBuf>,
     /// Frames excluded from the timing summary.
     pub warmup_frames: u32,
+    /// Whether to turn on the engine's phase spans for this run.
+    pub phase_timing: bool,
 }
 
 /// What `parse` produced: a run, or a request for the usage text.
@@ -145,6 +151,7 @@ where
     let mut actions = Vec::new();
     let mut mutations = Vec::new();
     let mut timing_json = None;
+    let mut phase_timing = false;
     let mut warmup_frames = DEFAULT_WARMUP_FRAMES;
 
     let mut arguments = arguments.into_iter();
@@ -185,6 +192,7 @@ where
             "--actions" => actions = parse_actions(&value("--actions")?)?,
             "--mutate" => mutations = crate::mutate::parse_specs(&value("--mutate")?)?,
             "--timing-json" => timing_json = Some(PathBuf::from(value("--timing-json")?)),
+            "--phase-timing" => phase_timing = true,
             "--warmup-frames" => {
                 let raw = value("--warmup-frames")?;
                 warmup_frames = raw
@@ -212,6 +220,7 @@ where
         mutations,
         timing_json,
         warmup_frames,
+        phase_timing,
     })))
 }
 
@@ -462,6 +471,26 @@ mod tests {
         assert!(parse(args(&["--url", "a.html", "--mutate"])).is_err());
         assert!(parse(args(&["--url", "a.html", "--mutate", "ctl:spin"])).is_err());
         assert!(parse(args(&["--url", "a.html", "--warmup-frames", "many"])).is_err());
+    }
+
+    /// The engine phase instrument is opt-in too, and takes no operand: a run
+    /// that does not ask for it pays nothing and reports nothing.
+    #[test]
+    fn the_phase_instrument_is_opt_in_and_operandless() {
+        assert!(!run(&["--url", "a.html"]).phase_timing);
+        assert!(run(&["--url", "a.html", "--phase-timing"]).phase_timing);
+        let config = run(&[
+            "--url",
+            "a.html",
+            "--frames",
+            "1",
+            "--phase-timing",
+            "--timing-json",
+            "first-frame.json",
+        ]);
+        assert!(config.phase_timing);
+        assert_eq!(config.timing_json, Some(PathBuf::from("first-frame.json")));
+        assert!(USAGE.contains("--phase-timing"));
     }
 
     #[test]

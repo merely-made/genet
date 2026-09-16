@@ -34,6 +34,12 @@ fn run() -> Result<(), String> {
         Invocation::Run(config) => *config,
     };
 
+    // Before anything is fetched or parsed: the parse span has to be armed
+    // ahead of DOM construction to record at all.
+    if config.phase_timing {
+        genet_documents::phase::enable();
+    }
+
     // Both lanes, always: a local page may name a remote stylesheet or image,
     // and the scheme split — not the address ortet was started with — is what
     // decides where each request goes.
@@ -118,6 +124,15 @@ fn run() -> Result<(), String> {
             timing.mutate.median_us,
             timing.restyled
         );
+        // The engine phase spans, summed over the measured frames. They are a
+        // breakdown *inside* session.frame, except parse, which happens before
+        // the frame loop; the residual is named rather than absorbed.
+        if timing.parse_us + timing.style_us + timing.layout_us + timing.paint_us > 0 {
+            println!(
+                "ortet: engine phases over the measured frames — parse {} us, style {} us, layout {} us, paint {} us (style, layout and paint are inside session.frame; parse runs before the first frame)",
+                timing.parse_us, timing.style_us, timing.layout_us, timing.paint_us,
+            );
+        }
     }
     Ok(())
 }

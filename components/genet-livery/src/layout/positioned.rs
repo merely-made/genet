@@ -177,6 +177,9 @@ pub(in crate::layout) fn apply_relative_positioning<D>(
             text.translate_subtree(dom, node, (offset.x, offset.y));
         }
     }
+    // One aggregate-overflow rebuild for the whole relative pass, not one per
+    // positioned box.
+    fragments.flush_overflow();
 }
 
 /// The content-box size of a containing block whose block-axis size is
@@ -850,6 +853,8 @@ pub(in crate::layout) fn apply_absolute_and_fixed_positioning<D>(
         }
         fragments.set_containing_fragment(placement.root, placement.containing_fragment);
     }
+    // One aggregate-overflow rebuild for the whole positioned pass.
+    fragments.flush_overflow();
 }
 
 pub(in crate::layout) fn fragment_baselines<Id, Context, Source>(

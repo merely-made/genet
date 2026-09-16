@@ -19,6 +19,8 @@ mod invalidation;
 mod layout;
 mod legacy_color;
 mod paint;
+/// Engine phase spans behind a host flag (T2's instrument).
+pub mod phase;
 mod placement;
 mod presentational_hints;
 mod style;

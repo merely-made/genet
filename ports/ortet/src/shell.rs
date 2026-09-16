@@ -486,6 +486,7 @@ impl Ortet {
                     .as_deref()
                     .map_or_else(|| "null".to_owned(), json_string),
             ),
+            ("phase_timing", self.config.phase_timing.to_string()),
         ];
         if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
             std::fs::create_dir_all(parent)
@@ -863,6 +864,15 @@ impl Ortet {
             scene = self.session.frame(width, height);
         }
         timing.frame_us = phase.lap();
+        // Drain the engine's phase spans for this frame. On the first frame
+        // the parse span, recorded during document spawn, comes with them.
+        if self.config.phase_timing {
+            let [parse, style, layout, paint] = genet_documents::phase::take();
+            timing.parse_us = parse;
+            timing.style_us = style;
+            timing.layout_us = layout;
+            timing.paint_us = paint;
+        }
         self.publish_accessibility();
         // Sampled after the frame that laid the document out, so the first
         // reading is a real arena rather than a pre-layout one, and before the

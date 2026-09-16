@@ -244,6 +244,14 @@ pub struct FragmentTree {
     fragments: Vec<Fragment>,
     ids: Vec<FragmentId>,
     slots: HashMap<FragmentId, usize>,
+    /// Structural children, in slot order, for every fragment that has any.
+    /// Without it a subtree walk or a leaf test costs a whole-document scan,
+    /// which is one document pass per positioned box (T2).
+    children: HashMap<FragmentId, Vec<FragmentId>>,
+    /// Aggregate overflow is stale and must be rebuilt before it is read.
+    /// Deferring the rebuild turns one whole-document pass per mutation into
+    /// one per layout pass; [`Self::flush_overflow`] is the barrier.
+    overflow_dirty: bool,
     next_id: u32,
     by_box: HashMap<BoxId, Vec<FragmentId>>,
     static_positions: HashMap<BoxId, StaticPosition>,
@@ -270,6 +278,8 @@ impl Default for FragmentTree {
             fragments: Vec::new(),
             ids: Vec::new(),
             slots: HashMap::new(),
+            children: HashMap::new(),
+            overflow_dirty: false,
             next_id: 0,
             by_box: HashMap::new(),
             static_positions: HashMap::new(),
@@ -459,9 +469,14 @@ impl FragmentTree {
         let previous = self.slots.insert(id, self.fragments.len() - 1);
         assert!(previous.is_none(), "a fragment id cannot occupy two slots");
         self.by_box.entry(box_id).or_default().push(id);
-        if parent.is_none() {
-            self.roots.push(id);
+        match parent {
+            // A push always takes the highest slot, so appending keeps the
+            // child list in slot order.
+            Some(parent) => self.children.entry(parent).or_default().push(id),
+            None => self.roots.push(id),
         }
+        // A push deliberately does not mark overflow dirty: construction has
+        // always left aggregate overflow to an explicit recompute.
         id
     }
 
@@ -503,6 +518,7 @@ impl FragmentTree {
     /// than a paint-side union so a later K5h subtree replacement can shrink
     /// as well as extend an ancestor's scrollable overflow.
     pub(crate) fn recompute_overflow(&mut self) {
+        self.overflow_dirty = false;
         for fragment in &mut self.fragments {
             fragment.overflow = fragment.own_overflow;
         }
@@ -518,6 +534,24 @@ impl FragmentTree {
             parent_fragment.overflow =
                 union_logical_rects(parent_fragment.overflow, child_overflow);
         }
+    }
+
+    /// Rebuild aggregate overflow if a geometry mutation deferred it.
+    ///
+    /// Every mutation that changes a fragment's own extent used to rebuild the
+    /// whole document immediately, so a pass over k positioned boxes paid k
+    /// document passes. The mutations now mark instead, and a layout pass
+    /// calls this once at its end. The result is identical; only the number of
+    /// rebuilds changes.
+    pub fn flush_overflow(&mut self) {
+        if self.overflow_dirty {
+            self.recompute_overflow();
+        }
+    }
+
+    /// Whether a geometry mutation is still waiting on [`Self::flush_overflow`].
+    pub fn overflow_is_stale(&self) -> bool {
+        self.overflow_dirty
     }
 
     /// Attach a positioned fragment to the fragment selected by the K5a
@@ -548,8 +582,43 @@ impl FragmentTree {
         let Some(slot) = self.slots.get(&id).copied() else {
             return;
         };
+        let previous = self.fragments[slot].parent;
         self.fragments[slot].parent = parent;
-        self.recompute_overflow();
+        if previous != parent {
+            self.detach_child(previous, id);
+            self.attach_child(parent, id);
+        }
+        self.overflow_dirty = true;
+    }
+
+    /// Drop `id` from its former parent's child list, or from the root list.
+    fn detach_child(&mut self, parent: Option<FragmentId>, id: FragmentId) {
+        match parent {
+            Some(parent) => {
+                if let Some(children) = self.children.get_mut(&parent) {
+                    children.retain(|child| *child != id);
+                    if children.is_empty() {
+                        self.children.remove(&parent);
+                    }
+                }
+            },
+            None => self.roots.retain(|root| *root != id),
+        }
+    }
+
+    /// Insert `id` into its new parent's child list at its slot position, so
+    /// child order keeps matching document order.
+    fn attach_child(&mut self, parent: Option<FragmentId>, id: FragmentId) {
+        let slot = self.slots[&id];
+        let slots = &self.slots;
+        let Some(parent) = parent else {
+            let at = self.roots.partition_point(|root| slots[root] < slot);
+            self.roots.insert(at, id);
+            return;
+        };
+        let children = self.children.entry(parent).or_default();
+        let at = children.partition_point(|child| slots[child] < slot);
+        children.insert(at, id);
     }
 
     /// Replace one fragment's overflow and union it into every structural
@@ -564,6 +633,9 @@ impl FragmentTree {
             return;
         };
         fragment.own_overflow = overflow;
+        // Deliberately eager. This is the table grid's route, called once per
+        // grid rather than once per positioned box, and its result is read
+        // immediately by callers; T2's quadratic term is not here.
         self.recompute_overflow();
     }
 
@@ -579,23 +651,7 @@ impl FragmentTree {
             return;
         }
 
-        let descendants = self
-            .ids
-            .iter()
-            .copied()
-            .filter(|id| {
-                let mut cursor = Some(*id);
-                while let Some(candidate) = cursor {
-                    if candidate == root {
-                        return true;
-                    }
-                    cursor = self.get(candidate).and_then(Fragment::parent);
-                }
-                false
-            })
-            .collect::<Vec<_>>();
-
-        for id in descendants {
+        for id in self.descendants_of(root) {
             let fragment = &mut self.fragments[self.slots[&id]];
             let logical = fragment.flow.logical_offset(offset);
             fragment.logical_rect.inline_start += logical.inline;
@@ -608,7 +664,26 @@ impl FragmentTree {
             fragment.physical_rect.y += offset.y;
         }
 
-        self.recompute_overflow();
+        // Every fragment in the subtree moved by the same offset, so their own
+        // overflow already followed. Only ancestors need the rebuild, and the
+        // layout pass takes it once at the end.
+        self.overflow_dirty = true;
+    }
+
+    /// `root` and its structural descendants, in no particular order.
+    fn descendants_of(&self, root: FragmentId) -> Vec<FragmentId> {
+        let mut collected = Vec::new();
+        if !self.slots.contains_key(&root) {
+            return collected;
+        }
+        let mut stack = vec![root];
+        while let Some(id) = stack.pop() {
+            collected.push(id);
+            if let Some(children) = self.children.get(&id) {
+                stack.extend(children.iter().copied());
+            }
+        }
+        collected
     }
 
     /// Replace a leaf fragment's border-box size while preserving its retained
@@ -619,11 +694,7 @@ impl FragmentTree {
         let Some(slot) = self.slots.get(&id).copied() else {
             return false;
         };
-        if self
-            .ids
-            .iter()
-            .any(|candidate| self.get(*candidate).and_then(Fragment::parent) == Some(id))
-        {
+        if self.children.contains_key(&id) {
             return false;
         }
         let fragment = &mut self.fragments[slot];
@@ -636,7 +707,7 @@ impl FragmentTree {
         fragment.overflow.block_size = logical_size.block;
         fragment.physical_rect.width = size.width;
         fragment.physical_rect.height = size.height;
-        self.recompute_overflow();
+        self.overflow_dirty = true;
         true
     }
 
@@ -900,34 +971,21 @@ impl FragmentTree {
     }
 
     fn structural_children(&self, parent: FragmentId) -> Vec<FragmentId> {
-        self.ids
-            .iter()
-            .copied()
-            .filter(|id| self.get(*id).and_then(Fragment::parent) == Some(parent))
-            .collect()
+        self.children.get(&parent).cloned().unwrap_or_default()
     }
 
     fn subtree_ids(&self, root: FragmentId) -> Vec<FragmentId> {
-        self.ids
-            .iter()
-            .copied()
-            .filter(|id| {
-                let mut cursor = Some(*id);
-                while let Some(candidate) = cursor {
-                    if candidate == root {
-                        return true;
-                    }
-                    cursor = self.get(candidate).and_then(Fragment::parent);
-                }
-                false
-            })
-            .collect()
+        let mut ids = self.descendants_of(root);
+        // Callers read this in document order; the child index is a walk.
+        ids.sort_by_key(|id| self.slots[id]);
+        ids
     }
 
     fn rebuild_indices(&mut self) {
         self.slots.clear();
         self.by_box.clear();
         self.roots.clear();
+        self.children.clear();
         for (slot, fragment) in self.fragments.iter().enumerate() {
             let id = fragment.id;
             assert_eq!(self.ids[slot], id);
@@ -936,8 +994,9 @@ impl FragmentTree {
                 "a fragment id cannot occupy two slots"
             );
             self.by_box.entry(fragment.box_id).or_default().push(id);
-            if fragment.parent.is_none() {
-                self.roots.push(id);
+            match fragment.parent {
+                Some(parent) => self.children.entry(parent).or_default().push(id),
+                None => self.roots.push(id),
             }
         }
     }
@@ -978,6 +1037,15 @@ impl FragmentTree {
             .map(|(slot, id)| (id, slot))
             .collect();
         self.roots = self.roots.iter().map(|id| mapping[id]).collect();
+        self.children = std::mem::take(&mut self.children)
+            .into_iter()
+            .map(|(parent, children)| {
+                (
+                    mapping[&parent],
+                    children.iter().map(|id| mapping[id]).collect(),
+                )
+            })
+            .collect();
         for ids in self.by_box.values_mut() {
             for id in ids {
                 *id = mapping[id];
@@ -1006,10 +1074,29 @@ impl FragmentTree {
             assert!(self.slots.contains_key(root));
             assert_eq!(self.get(*root).and_then(Fragment::parent), None);
         }
+        for (parent, children) in &self.children {
+            assert!(self.slots.contains_key(parent));
+            assert!(!children.is_empty(), "an empty child list must be absent");
+            for child in children {
+                assert_eq!(
+                    self.get(*child).and_then(Fragment::parent),
+                    Some(*parent),
+                    "the child index must not name a fragment it does not parent"
+                );
+            }
+        }
         for id in self.ids.iter().copied() {
             let fragment = self.get(id).expect("a live fragment has storage");
             if let Some(parent) = fragment.parent() {
                 assert!(self.slots.contains_key(&parent));
+                assert!(
+                    self.children
+                        .get(&parent)
+                        .is_some_and(|children| children.contains(&id)),
+                    "the child index must carry every structural child"
+                );
+            } else {
+                assert!(self.roots.contains(&id), "a parentless fragment is a root");
             }
             if let Some(containing) = fragment.containing_fragment() {
                 assert!(self.slots.contains_key(&containing));
@@ -2062,5 +2149,198 @@ mod tests {
             fragment.baselines.last,
             Some(fragment.physical_rect().height)
         );
+    }
+
+    // -- T2: the child index and the deferred overflow rebuild --------------
+
+    /// A three-generation tree with a sibling branch, so a subtree walk that
+    /// silently widened to the whole document would be visible.
+    fn nested_tree() -> (FragmentTree, [FragmentId; 5]) {
+        let mut boxes = CssBoxTree::default();
+        let root_box = push_block_box(&mut boxes, 1, None, ContainingBlock::Initial);
+        let mut fragments = FragmentTree::default();
+        let push = |fragments: &mut FragmentTree, rect: PhysicalRect, parent| {
+            fragments.push(
+                Fragment::from_horizontal_physical(root_box, rect),
+                parent,
+                None,
+            )
+        };
+        let root = push(
+            &mut fragments,
+            PhysicalRect { x: 0.0, y: 0.0, width: 200.0, height: 200.0 },
+            None,
+        );
+        let branch = push(
+            &mut fragments,
+            PhysicalRect { x: 10.0, y: 10.0, width: 50.0, height: 50.0 },
+            Some(root),
+        );
+        let leaf = push(
+            &mut fragments,
+            PhysicalRect { x: 20.0, y: 20.0, width: 10.0, height: 10.0 },
+            Some(branch),
+        );
+        let deep = push(
+            &mut fragments,
+            PhysicalRect { x: 22.0, y: 22.0, width: 4.0, height: 4.0 },
+            Some(leaf),
+        );
+        let sibling = push(
+            &mut fragments,
+            PhysicalRect { x: 100.0, y: 100.0, width: 30.0, height: 30.0 },
+            Some(root),
+        );
+        fragments.recompute_overflow();
+        (fragments, [root, branch, leaf, deep, sibling])
+    }
+
+    fn origins(fragments: &FragmentTree, ids: &[FragmentId]) -> Vec<(f32, f32)> {
+        ids.iter()
+            .map(|id| {
+                let rect = fragments.get(*id).expect("a live fragment").physical_rect();
+                (rect.x, rect.y)
+            })
+            .collect()
+    }
+
+    /// Translating a nested positioned root moves that root and everything
+    /// below it, exactly once each, and leaves the sibling branch alone.
+    #[test]
+    fn translate_subtree_moves_the_subtree_and_nothing_else() {
+        let (mut fragments, [root, branch, leaf, deep, sibling]) = nested_tree();
+
+        fragments.translate_subtree(branch, PhysicalOffset { x: 5.0, y: 7.0 });
+        fragments.flush_overflow();
+
+        assert_eq!(
+            origins(&fragments, &[root, branch, leaf, deep, sibling]),
+            vec![
+                (0.0, 0.0),
+                (15.0, 17.0),
+                (25.0, 27.0),
+                (27.0, 29.0),
+                (100.0, 100.0),
+            ]
+        );
+        // A nested positioned box inside a translated subtree keeps its own
+        // additional offset when it is translated in turn.
+        fragments.translate_subtree(leaf, PhysicalOffset { x: 1.0, y: 0.0 });
+        fragments.flush_overflow();
+        assert_eq!(
+            origins(&fragments, &[branch, leaf, deep]),
+            vec![(15.0, 17.0), (26.0, 27.0), (28.0, 29.0)]
+        );
+    }
+
+    /// A translated subtree's own overflow follows it, and its ancestors'
+    /// aggregate overflow grows to contain it.
+    #[test]
+    fn translate_subtree_propagates_overflow_to_ancestors() {
+        let (mut fragments, [root, branch, ..]) = nested_tree();
+
+        fragments.translate_subtree(branch, PhysicalOffset { x: 0.0, y: 400.0 });
+        assert!(
+            fragments.overflow_is_stale(),
+            "the rebuild is deferred, not skipped"
+        );
+        fragments.flush_overflow();
+        assert!(!fragments.overflow_is_stale());
+
+        let root_overflow = fragments.get(root).expect("a live root").overflow;
+        assert!(root_overflow.block_size >= 460.0, "{root_overflow:?}");
+    }
+
+    /// The deferred rebuild is an optimisation, not a different answer: the
+    /// same mutation sequence flushed once agrees fragment-for-fragment with
+    /// the old whole-tree recompute after every single mutation.
+    #[test]
+    fn deferred_overflow_equals_the_per_mutation_recompute() {
+        let (mut deferred, ids) = nested_tree();
+        let (mut eager, eager_ids) = nested_tree();
+        let [_root, branch, leaf, deep, sibling] = ids;
+        let [_e_root, e_branch, e_leaf, e_deep, e_sibling] = eager_ids;
+
+        let steps: [(FragmentId, FragmentId); 4] = [
+            (branch, e_branch),
+            (leaf, e_leaf),
+            (deep, e_deep),
+            (sibling, e_sibling),
+        ];
+        for (index, (target, eager_target)) in steps.into_iter().enumerate() {
+            let offset = PhysicalOffset {
+                x: index as f32 * 3.0 + 1.0,
+                y: index as f32 * -2.0 - 1.0,
+            };
+            deferred.translate_subtree(target, offset);
+            eager.translate_subtree(eager_target, offset);
+            eager.recompute_overflow();
+        }
+        // A leaf resize that shrinks: only a rebuild that can shrink an
+        // ancestor as well as grow it matches the eager answer.
+        deferred.resize_leaf(deep, PhysicalSize { width: 1.0, height: 1.0 });
+        eager.resize_leaf(e_deep, PhysicalSize { width: 1.0, height: 1.0 });
+        eager.recompute_overflow();
+        let wide = LogicalRect {
+            inline_start: 0.0,
+            block_start: 0.0,
+            inline_size: 400.0,
+            block_size: 400.0,
+        };
+        deferred.set_overflow(sibling, wide);
+        eager.set_overflow(e_sibling, wide);
+        eager.recompute_overflow();
+
+        deferred.flush_overflow();
+        assert!(!deferred.overflow_is_stale());
+        for (deferred_id, eager_id) in ids.into_iter().zip(eager_ids) {
+            assert_eq!(
+                deferred.get(deferred_id).expect("live").overflow,
+                eager.get(eager_id).expect("live").overflow,
+                "overflow disagreed for {deferred_id:?}"
+            );
+            assert_eq!(
+                deferred.get(deferred_id).expect("live").physical_rect(),
+                eager.get(eager_id).expect("live").physical_rect()
+            );
+        }
+    }
+
+    /// The leaf test is now a child-index lookup rather than a document scan.
+    /// It must still decline every fragment that has structural children.
+    #[test]
+    fn resize_leaf_accepts_only_a_childless_fragment() {
+        let (mut fragments, [root, branch, leaf, deep, _sibling]) = nested_tree();
+        let size = PhysicalSize { width: 9.0, height: 9.0 };
+
+        assert!(!fragments.resize_leaf(root, size));
+        assert!(!fragments.resize_leaf(branch, size));
+        assert!(!fragments.resize_leaf(leaf, size));
+        assert!(fragments.resize_leaf(deep, size));
+
+        let rect = fragments.get(deep).expect("a live leaf").physical_rect();
+        assert_eq!((rect.width, rect.height), (9.0, 9.0));
+        // Origin and identity are preserved; only the border-box size changes.
+        assert_eq!((rect.x, rect.y), (22.0, 22.0));
+    }
+
+    /// Reattaching a fragment keeps the child index and the leaf test honest.
+    #[test]
+    fn reconcile_parent_moves_the_fragment_between_child_lists() {
+        let (mut fragments, [root, branch, leaf, deep, sibling]) = nested_tree();
+        let size = PhysicalSize { width: 2.0, height: 2.0 };
+
+        fragments.reconcile_parent(deep, Some(sibling));
+
+        assert!(fragments.resize_leaf(leaf, size), "leaf lost its only child");
+        assert!(!fragments.resize_leaf(sibling, size), "sibling gained one");
+        assert_eq!(fragments.structural_children(sibling), vec![deep]);
+        assert!(fragments.structural_children(leaf).is_empty());
+        assert_eq!(fragments.structural_children(root), vec![branch, sibling]);
+
+        // Detaching to the root list keeps document order in `roots`.
+        fragments.reconcile_parent(branch, None);
+        assert_eq!(fragments.roots, vec![root, branch]);
+        fragments.flush_overflow();
     }
 }

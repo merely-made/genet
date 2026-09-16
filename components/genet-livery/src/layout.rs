@@ -864,15 +864,19 @@ where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
+    // The descent reports whether it moved anything, so the common document —
+    // one with no container-relative length anywhere — costs a single clone
+    // instead of a clone, a whole-plane structural comparison, and a second
+    // clone (T2).
     let mut fallback = styles.clone();
-    resolve_relative_subtree(
+    let changed = resolve_relative_subtree(
         dom,
         dom.document(),
         &mut fallback,
         RelativeLengthEnvironment::container_fallback(viewport),
     );
-    if fallback == *styles {
-        return Ok(styles.clone());
+    if !changed {
+        return Ok(fallback);
     }
     let fragments = layout_impl(
         dom,
@@ -894,12 +898,15 @@ where
     Ok(resolved)
 }
 
+/// Resolve a subtree's container-fallback lengths, reporting whether any
+/// element's computed values actually moved.
 fn resolve_relative_subtree<D>(
     dom: &D,
     id: D::NodeId,
     styles: &mut StylePlane<D::NodeId>,
     environment: RelativeLengthEnvironment,
-) where
+) -> bool
+where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
@@ -908,10 +915,11 @@ fn resolve_relative_subtree<D>(
             .get(id)
             .is_some_and(|style| style.writing_mode.is_vertical()),
     );
-    styles.resolve_relative_lengths(id, environment);
+    let mut changed = styles.resolve_relative_lengths(id, environment);
     for child in dom.flat_children(id) {
-        resolve_relative_subtree(dom, child, styles, environment);
+        changed |= resolve_relative_subtree(dom, child, styles, environment);
     }
+    changed
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -929,7 +937,7 @@ fn resolve_container_subtree<D>(
     let vertical_writing = styles
         .get(id)
         .is_some_and(|style| style.writing_mode.is_vertical());
-    styles.resolve_relative_lengths(
+    let _ = styles.resolve_relative_lengths(
         id,
         RelativeLengthEnvironment::container_axes(
             viewport,

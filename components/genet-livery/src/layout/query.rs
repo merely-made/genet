@@ -404,6 +404,7 @@ where
                 .fragments_mut()
                 .translate_subtree(root, PhysicalOffset { x, y });
         }
+        self.buckram.fragments_mut().flush_overflow();
     }
 
     /// Reposition one retained absolute or fixed fragment subtree when its
@@ -450,6 +451,7 @@ where
             let fragments = self.buckram.fragments_mut();
             fragments.translate_subtree(placement.root, offset);
             fragments.set_containing_fragment(placement.root, placement.containing_fragment);
+            fragments.flush_overflow();
         }
         if let Some(text_frame) = self.text_frame.as_mut() {
             text_frame.translate_subtree(dom, node, (offset.x, offset.y));
@@ -511,6 +513,7 @@ where
         }
         fragments.translate_subtree(placement.root, offset);
         fragments.set_containing_fragment(placement.root, placement.containing_fragment);
+        fragments.flush_overflow();
         if let Some(text_frame) = self.text_frame.as_mut() {
             text_frame.translate_subtree(dom, node, (offset.x, offset.y));
         }

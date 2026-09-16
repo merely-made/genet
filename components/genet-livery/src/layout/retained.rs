@@ -209,6 +209,7 @@ where
             y: retained_rect.y - local_rect.y,
         },
     );
+    fragments.flush_overflow();
     drop(state);
 
     Ok(RetainedRootFormatting::Formatted(Box::new(

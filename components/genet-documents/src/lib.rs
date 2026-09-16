@@ -43,6 +43,11 @@ pub use browsing_context::{
 };
 #[cfg(feature = "livery")]
 pub use engines::{LiveryDocumentSession, LiveryResourcePreparation, LiverySessionEngine};
+/// The engine's phase-span instrument, re-exported so a host that depends on
+/// the session layer alone can turn it on and read it back. The spans are
+/// recorded in genet-livery, except parse, which this crate owns.
+#[cfg(feature = "livery")]
+pub use genet_livery::phase;
 #[cfg(feature = "scripted")]
 pub use engines::{ScriptedDocumentSession, ScriptedSessionEngine};
 pub use fetch::{LocalFetcher, LocalFetcherWith, ResourceFetchPolicy};

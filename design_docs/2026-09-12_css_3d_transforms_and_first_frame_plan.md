@@ -1604,6 +1604,8 @@ T3's ordinary image-composition receipt.
   gains (`animation-play-state` parsing/inheritance), zero reftest movement.
   `css/css-transforms` as a whole and T3's paint-neighbor directories were
   not re-run (this lane's change cannot move them; named in `results.md`).
-  Native compositing receipt not rerun (this lane touches no paint/layout/
-  compositing/hit-test code; named in `results.md`). Receipts:
+  The native standards-compositing receipt was then rerun by the orchestrator
+  through the committed runner at the clean lane commit: 25 of 25 probes on
+  Boa and Nova, digest `0xa440137ccc503f9c`, unchanged
+  (`Code/testing/genet/d_animation_clock_20260916/`). Receipts:
   `Code/testing/genet/wpt-ledger/2026-09-16_d_animation_clock/`.

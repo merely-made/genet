@@ -765,11 +765,20 @@ pub(in crate::layout) fn apply_admitted_positioned_inline_sizes<Context, Source>
     intrinsic_sizes: &HashMap<BoxId, IntrinsicSizes>,
 ) -> bool {
     let mut changed = false;
+    // One lookup table instead of a linear scan of `placements` per candidate.
+    // Both lists carry one entry per positioned box, so the scan was O(n^2)
+    // and was the whole of the layout phase's residual growth on the L0b grid
+    // (19.9 us/element at 50,000 against 1.3 us at 5,000). `or_insert` keeps
+    // the first entry for a repeated box id, which is what `find` returned.
+    let mut placement_by_box: HashMap<BoxId, &PositionedPlacement> =
+        HashMap::with_capacity(placements.len());
+    for placement in placements {
+        placement_by_box
+            .entry(placement.box_id)
+            .or_insert(placement);
+    }
     for (box_id, node) in candidates {
-        let Some(placement) = placements
-            .iter()
-            .find(|placement| placement.box_id == *box_id)
-        else {
+        let Some(placement) = placement_by_box.get(box_id).copied() else {
             continue;
         };
         if intrinsic_sizes.contains_key(box_id)

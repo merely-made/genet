@@ -854,6 +854,14 @@ impl StyleRule {
         self.selectors.crosses_tree_scope()
     }
 
+    /// The rightmost-compound key of each of this rule's selectors, for a
+    /// cascade that buckets rules instead of testing every rule against every
+    /// element. See [`SelectorList::rightmost_keys`](crate::selector::SelectorList::rightmost_keys).
+    /// Purely descriptive: it reads the parsed selectors and decides nothing.
+    pub fn selector_keys(&self) -> Vec<crate::selector::SelectorKey> {
+        self.selectors.rightmost_keys()
+    }
+
     pub fn matched_declarations<E>(&self, element: &E, device: &Device) -> Vec<MatchedDeclaration>
     where
         E: Element<Impl = crate::selector::LiverySelectorImpl>,

@@ -18,8 +18,9 @@ content-box and 2D paint/input seam is implemented with automated receipts.
 Bounded native Bench B assembly is accepted on the downstream development
 build. T3's **host mutation instrument is now built and measured** on the
 bounded fixture, with actual work reported apart from presentation wait; the
-large-element mutation sweep is measured at 1,000, 5,000 and 20,000 elements,
-the last on five frames only; 50,000 was not attempted. **Genet's T3 seam
+large-element mutation sweep is measured at 1,000, 5,000, 20,000 and, after
+T2, 50,000 elements (7.52 s of work per mutating frame at 50,000; 2026-09-16
+progress entry). **Genet's T3 seam
 acceptance is complete, 2026-09-16.** The acceptance rerun at main
 `f1f21c61d26` reproduced the 2026-09-11 native composition captures byte for
 byte on Boa and Nova, and the WebGL and G5 guards, netrender's GPU gate and the
@@ -1266,3 +1267,15 @@ T3's ordinary image-composition receipt.
   - **Status.** Genet's T3 seam acceptance is complete. The wing's bench still
     depends on Mere's producer lifecycle, picking/accessibility and update-cost
     receipts. T1's named gaps and T2's per-element constant remain open.
+- **2026-09-16** — the T3 mutation sweep was rerun at main `2115adbc117`,
+  after T2, with the same fixtures, flags and frame counts as the 2026-09-15
+  receipt, plus the 50,000-element cell that was not attempted then. Work
+  medians per mutating frame: 1,000 elements 532 ms to 51.5 ms; 5,000
+  9,820 ms to 308 ms; 20,000 560 s to 1.80 s (five measured frames both
+  times); 50,000 first measured at 7.52 s, 59 frames. The unmutated controls
+  are 1.08, 2.15, 6.84 and 15.9 ms. On the bounded Bench B fixture the
+  mutating frame's work fell from 2.54 ms to 1.96 ms with total frame time
+  unchanged, presentation wait absorbing the difference as before. The
+  2026-09-15 finding stands: a host mutation still costs a full-document
+  geometry rebuild, and that rebuild now costs what T2 left of the first
+  frame. Receipts: `Code/testing/genet/ortet-e-reprice-20260916/results.md`.

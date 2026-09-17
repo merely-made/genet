@@ -1320,7 +1320,17 @@ T3's ordinary image-composition receipt.
   netrender's comment on `preprocess_filters` names a tile-cache-aware key and
   handle reuse scheme as the fix. Genet content under an animating CSS
   `filter` would be exposed; this was found in netrender tests, not observed
-  through Genet. Recorded for netrender's owner.
+  through Genet. Recorded for netrender's owner. **Closed 2026-09-16** in
+  netrender `aba7d837b`: each filtered layer now owns a texture slot that is
+  registered once and refreshed in place, so cached tiles keep a live handle;
+  element and backdrop filters share the scheme; over 60 animated frames the
+  live registration count stays at one per filtered layer where it grew by
+  one per frame, an unchanged filtered scene still reuses every tile, and a
+  reused renderer is byte-identical to a fresh one across a four-frame walk.
+  Genet content under an animating CSS `filter` no longer needs a per-frame
+  renderer. Residual, pre-existing and deferred: slot keys are global, so two
+  filtered surfaces interleaved through one renderer would share slots.
+  Receipts: `Code/testing/netrender/a_filter_cache_20260916/`.
 - **2026-09-16** — T3's hit test (`layout/hit_testing.rs` over
   `PlacementState::enter` and `ElementGeometry::hits_border` in `placement.rs`,
   `101d9e9ade8`) misses intrinsically sized form controls.

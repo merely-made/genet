@@ -1478,11 +1478,18 @@ T3's ordinary image-composition receipt.
   `sync_leaf_fragments` in `mere/crates/cambium/cambium-rootstock/src/frame.rs`
   runs every redraw and registers each custom leaf whose splice holds no
   `DrawExternalTexture` or `DrawShadow` as a retained fragment through
-  `paint_list_render::translate_paint_cmds_to_fragment`. Such a leaf inside a
-  CSS clip, opacity or filter scope now takes T4's retained path, and no
-  Cambium-host receipt covers that yet. The scene viewport is excluded because
-  it draws an external texture. The css-transforms reftest FAIL sets are
-  identical across netrender `3961aca91` and `06f3a12f4`.
+  `paint_list_render::translate_paint_cmds_to_fragment`. **Corrected
+  2026-09-16:** a headless Cambium host receipt in mere (`49d58f9f`,
+  `Code/testing/mere/cambium_t4_receipt_20260916/`) found that Rootstock's
+  emitter passes a retained-fragment lookup that always answers none, and the
+  fragment map it fills is read nowhere else, so no custom leaf is ever
+  placed as `PlaceRetainedFragment` and `fragment_lower_count` stayed at zero
+  across every captured frame. T4 is therefore reachable from no Cambium
+  document until that wiring is completed; genet also has no CSS `filter`
+  property, so the filter case has no authoring path from Cambium. Neither
+  is netrender's. The scene viewport is excluded regardless because it draws
+  an external texture. The css-transforms reftest FAIL sets are identical
+  across netrender `3961aca91` and `06f3a12f4`.
 - **2026-09-16** — worktrees sharing one `CARGO_TARGET_DIR` share path-crate
   artifacts. Cargo keys them by path relative to the workspace root and judges
   freshness by mtime, so a tree checked out earlier than another tree's build

@@ -504,6 +504,17 @@ impl Length {
         }
     }
 
+    /// A form-control intrinsic size expressed as a character count: the
+    /// HTML rendering section's `size`/`cols` attributes resolve through the
+    /// element's own font metrics via this unit, so no separate font-metrics
+    /// plumbing is needed at the presentational-hint call site.
+    pub const fn ch(value: f32) -> Self {
+        Self {
+            value,
+            unit: LengthUnit::Ch,
+        }
+    }
+
     pub fn resolve_viewport(self, viewport_width: f32, viewport_height: f32) -> Self {
         self.resolve_relative(RelativeLengthEnvironment::uniform_viewport(
             viewport_width,

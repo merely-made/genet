@@ -106,7 +106,10 @@ where
                     ) && !stretched_by_ancestor_context(self.boxes, box_id),
                     // Percentage padding against an indefinite basis is zero.
                     containing_size.0.unwrap_or(0.0),
-                );
+                )
+                .or_else(|| {
+                    apply_form_control_intrinsic_style(&mut taffy_style, self.dom, node, &computed, font_size)
+                });
                 // Taffy exempts a compressible replaced element from block
                 // stretch-sizing (CSS 2.1 10.3.4) and from grid `normal`
                 // stretching (css-grid-1 6.2). Two conditions narrow it.

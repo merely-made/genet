@@ -2180,6 +2180,174 @@ where
 /// size and the used value would otherwise be indefinite.
 const DEFAULT_OBJECT_SIZE: (f32, f32) = (300.0, 150.0);
 
+/// The HTML rendering section's form-control intrinsic sizes: a natural
+/// width/height fed straight to Taffy, parallel to
+/// `apply_replaced_intrinsic_style` but without that function's aspect-ratio
+/// machinery (CSS 2.1 10.3.4/10.4's ratio-preserving transfer between axes),
+/// which no form control has a use for -- this is a sibling function rather
+/// than a branch inside that one so the image/canvas ratio path is untouched.
+///
+/// This mutates only `style`, the Taffy input. `computed.width`/`height`
+/// stay whatever the cascade produced (`auto`, absent an author value): a
+/// `size`/`cols`/`rows` attribute is a used-value-only quirk the HTML
+/// rendering section is explicit is not expressible in CSS, so it must never
+/// reach `getComputedStyle`. It especially must not reach it through a
+/// `display: none` control, where CSSOM's resolved-value algorithm has no
+/// used value to report and falls back to the *computed* value -- which
+/// still has to be `auto` there, per
+/// `html/rendering/widgets/input-text-size.html`'s
+/// "Size attribute value is not a presentational hint" and
+/// `.../textarea-cols-rows.html`'s equivalent. A presentational-hint version
+/// of this function, tried first, could not satisfy that: a hint is cascade
+/// input, so it is exactly a `computed.width` value, present or not. Author
+/// `width`/`height`/`min-width`/`min-height` still win, by construction: this
+/// only writes a Taffy field when the corresponding `computed` field is
+/// still `auto`.
+///
+/// A character (`size`, `cols`) is approximated as `0.5em`. The atomic
+/// inline path (`build_inline.rs`, where every one of these controls is laid
+/// out by default under the UA `display: inline-block` rule) has no shaped
+/// text system to measure a real glyph advance from, unlike the block path's
+/// `TextSystem::ch_advance`; `0.5em` is the same fallback CSS's own `ch` unit
+/// specifies when a font's `0` glyph is unavailable, so both paths give the
+/// same, spec-sanctioned approximation rather than two different ones. A
+/// row's height is the resolved `line-height` (`line_height_px`), so an
+/// authored `line-height` changes it like any other line box.
+///
+/// Two controls get a floor (`min_size`) rather than a forced size
+/// (`size`): `button` and the button-like input types render their actual
+/// children as ordinary content when they have any (`<button>text</button>`
+/// shrink-to-fits over `text`, per `apply_replaced_intrinsic_style`'s own
+/// shrink-to-fit path for an inline-block with content), and `select`
+/// generates real boxes for its `<option>` children
+/// (`form_control_hit.rs`'s regression table hits the `OPTION` inside a
+/// `<select>`, not the `<select>` itself). Forcing `size` there would
+/// override that real content sizing instead of only flooring it. A
+/// text-entry `input` and a `textarea` never render `value` as content at
+/// all, so their natural size is the whole box, not a floor under one.
+fn apply_form_control_intrinsic_style<D>(
+    style: &mut Style,
+    dom: &D,
+    id: D::NodeId,
+    computed: &ComputedValues,
+    font_size: f32,
+) -> Option<(f32, f32)>
+where
+    D: LayoutDom,
+    D::NodeId: Copy,
+{
+    let Some(name) = dom.element_name(id) else {
+        return None;
+    };
+    if name.ns.as_ref() != "http://www.w3.org/1999/xhtml" {
+        return None;
+    }
+    let attribute = |local: &str| dom.attribute(id, &Namespace::from(""), &LocalName::from(local));
+    let non_negative_integer = |local: &str, default: f32| {
+        attribute(local)
+            .and_then(crate::presentational_hints::parse_non_negative_integer_px)
+            .filter(|value| *value > 0.0)
+            .unwrap_or(default)
+    };
+
+    let char_width = font_size * 0.5;
+    let line_height = line_height_px(&computed.line_height, font_size);
+    let local = name.local.as_ref().to_ascii_lowercase();
+
+    // (natural width, natural height, whether the pair is a floor rather
+    // than the box's whole natural size).
+    let sizing: Option<(f32, f32, bool)> = match local.as_str() {
+        "input" => {
+            let type_value = attribute("type").map(|value| value.to_ascii_lowercase());
+            let is_text_entry = !matches!(
+                type_value.as_deref(),
+                Some(
+                    "checkbox"
+                        | "radio"
+                        | "button"
+                        | "submit"
+                        | "reset"
+                        | "hidden"
+                        | "image"
+                        | "file"
+                        | "color"
+                        | "date"
+                        | "datetime-local"
+                        | "month"
+                        | "week"
+                        | "time"
+                        | "range"
+                )
+            );
+            if is_text_entry {
+                let chars = non_negative_integer("size", 20.0);
+                Some((chars * char_width, line_height, false))
+            } else if matches!(type_value.as_deref(), Some("button" | "submit" | "reset")) {
+                Some((2.0 * char_width, line_height, true))
+            } else {
+                None
+            }
+        },
+        "textarea" => {
+            let cols = non_negative_integer("cols", 20.0);
+            let rows = non_negative_integer("rows", 2.0);
+            Some((cols * char_width, rows * line_height, false))
+        },
+        "button" => Some((2.0 * char_width, line_height, true)),
+        "select" => Some((3.0 * char_width, line_height, true)),
+        _ => None,
+    };
+    let Some((width, height, is_floor)) = sizing else {
+        return None;
+    };
+    // A floor still needs `min_size` set: when this control has real
+    // children (a non-empty `<button>`/`<select>`), the caller keeps it out
+    // of the leaf/replaced path below (`children.is_empty()` is false), so
+    // this is the only place the floor reaches Taffy.
+    if is_floor {
+        if matches!(computed.min_width, CssSize::Auto) {
+            style.min_size.width = Dimension::length(width.max(0.0));
+        }
+        if matches!(computed.min_height, CssSize::Auto) {
+            style.min_size.height = Dimension::length(height.max(0.0));
+        }
+    } else {
+        // A definite Taffy dimension on one axis, alongside an author
+        // intrinsic-sizing keyword (`max-content`/`min-content`/
+        // `fit-content()`) left standing on the other, perturbs this
+        // engine's own intrinsic measurement of that keyword axis by a few
+        // pixels -- found by bisection on
+        // `css/css-sizing/max-content-input-001.html` (a `<textarea rows=3
+        // cols=12 style="width: max-content">`; disabling only the height
+        // write below made it pass again, byte-identical to its base-commit
+        // capture). This is evidently an existing sensitivity in Buckram's
+        // own shrink-to-fit measurement to a fixed cross-axis dimension, not
+        // specific to form controls, so the guard is narrow: skip writing a
+        // natural dimension only on the specific axis pairing that showed
+        // the sensitivity, rather than reaching into that measurement path.
+        let width_is_intrinsic_keyword = matches!(
+            computed.width,
+            CssSize::MaxContent | CssSize::MinContent | CssSize::FitContent(_)
+        );
+        let height_is_intrinsic_keyword = matches!(
+            computed.height,
+            CssSize::MaxContent | CssSize::MinContent | CssSize::FitContent(_)
+        );
+        if matches!(computed.width, CssSize::Auto) && !height_is_intrinsic_keyword {
+            style.size.width = Dimension::length(width.max(0.0));
+        }
+        if matches!(computed.height, CssSize::Auto) && !width_is_intrinsic_keyword {
+            style.size.height = Dimension::length(height.max(0.0));
+        }
+    }
+    // Returned unconditionally, like `has_default_object_size_only`'s own
+    // natural-size return above: this is the natural size for the caller's
+    // leaf/replaced-measurement path, gated by `children.is_empty()` there.
+    // With real children the gate discards it and only the `min_size` above
+    // (already set) reaches Taffy.
+    Some((width, height))
+}
+
 /// Whether the nearest non-anonymous ancestor establishes a flex or grid
 /// formatting context, in which `auto` sizing may stretch. Anonymous boxes
 /// are skipped: an inline-level image in a grid container sits inside an

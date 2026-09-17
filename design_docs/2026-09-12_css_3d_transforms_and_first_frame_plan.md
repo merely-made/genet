@@ -776,11 +776,16 @@ again presented 5 G5 frames and Nova 6, the impossible-heading controls fail,
 and all six captures are byte-identical to the ledger-copy runs. Receipts:
 `Code/testing/genet/t3_hit_fix_committed_20260916/`.
 
-**Open.** A zero-extent axis holds only its exact coordinate. Under an inexact
-matrix, a point computed onto a zero-size control is hit or missed by f32
-rounding: in the probe it was hit at 90° and 45° and missed at 30° and 180°.
-Sized controls are hit at every angle. genet-wpt's resolver aims at the
-untransformed layout rect, so it never computes such a point.
+**Open, closed 2026-09-16 for default controls.** A zero-extent axis holds
+only its exact coordinate. Under an inexact matrix, a point computed onto a
+zero-size control is hit or missed by f32 rounding: in the probe it was hit
+at 90° and 45° and missed at 30° and 180°. Sized controls are hit at every
+angle. genet-wpt's resolver aims at the untransformed layout rect, so it
+never computes such a point. The "Form-control intrinsic sizes" subsection
+below gives every default-styled control the HTML rendering section's own
+non-zero size, closing this residual for the default case; an author can
+still author a control to `width: 0; height: 0`, and the half-open
+containment fix above is unchanged and still covers that case.
 
 ### Bounded engine receipt, 2026-09-13
 
@@ -855,6 +860,214 @@ Cambium focused fixtures. The deliberate failure exits 1 with `ok: false` and
 two fresh captures. These are bounded consumer checks, distinct from an Ortet
 or WPT rerun. They preserve the 61-check Genet receipt above and leave broader
 T3 mutation/measurement acceptance, T1, T2 and T4 open.
+
+### Form-control intrinsic sizes, 2026-09-16
+
+The hit-test fix above admits a zero-extent axis, but leaves the residual its
+own "Open" paragraph names: under an inexact rotation matrix, a pointer
+computed onto a zero-size control is hit or missed by f32 rounding. **That
+residual is closed for every default-styled control**: `button`, `input`,
+`select` and `textarea` now carry the HTML rendering section's own intrinsic
+sizes, so none of them is zero-extent by default any more, and the exact-vs-
+inexact-matrix distinction the "Open" paragraph drew no longer applies to a
+default control. An author can still force `width: 0; height: 0`, and
+`border_axis_contains`'s half-open treatment of that authored case is
+unchanged and still covered
+(`form_control_hit.rs::author_zero_size_keeps_the_half_open_containment_fix`).
+
+**Design, reworked 2026-09-16 after a first pass regressed two WPT
+subtests.** The first implementation took option (a) of two — UA stylesheet
+declarations plus presentational hints for `size`/`cols`/`rows` — reasoning
+that option (b), folding form controls into `apply_replaced_intrinsic_style`
+(`components/genet-livery/src/layout.rs:2258`), was disproportionate because
+that function is built around a natural aspect *ratio* (CSS 2.1 10.3.4/10.4)
+no form control has. That reasoning about (b)'s ratio machinery held, but (a)
+itself does not: a presentational hint is cascade input, so it is exactly a
+`computed.width`/`height` value, present or not, and the HTML rendering
+section is explicit that `size`/`cols`/`rows` are *not* expressible in CSS —
+their effect must reach the used size only, never `computed.width`/`height`.
+Two WPT subtests caught the difference directly:
+`html/rendering/widgets/input-text-size.html`'s "Size attribute value is not
+a presentational hint" and `.../textarea-cols-rows.html`'s equivalent, both
+of which construct a `display: none` element with an explicit `size`/`cols`/
+`rows` and check that `getComputedStyle` still reads `auto` — which it
+cannot, once the attribute has become a hint, because CSSOM's resolved-value
+algorithm has no used value to report for a boxless element and falls back to
+the computed value instead.
+
+**The implemented design is a third place, ratio-less and hint-less**: a
+sibling function next to `apply_replaced_intrinsic_style`, called from the
+same two build sites (`layout/build_block.rs` ~648, `layout/build_inline.rs`
+~96), that writes a natural width/height straight into the Taffy `Style`
+input and never touches `ComputedValues` at all.
+`apply_form_control_intrinsic_style` (`components/genet-livery/src/layout.rs`)
+takes the DOM node, its already-cascaded `ComputedValues` and the resolved
+font size; for `input` (classified text-entry the same way the rendering
+section's input type state defaults to `Text`), `textarea`, `button` and
+`select` it computes a natural `(width, height)` from `size`/`cols`/`rows`
+(defaults 20/20/2) and the resolved `line-height`, and writes it to
+`style.size` only on an axis where `computed.width`/`height` is still `auto`
+— so author CSS wins by construction, and `getComputedStyle` never sees
+anything but `auto` for these, `display: none` included. A character is
+approximated as `0.5em`: the atomic inline path (`build_inline.rs`, where
+every one of these controls is laid out by default under the UA
+`display: inline-block` rule) has no shaped text system to measure a real
+glyph advance from, unlike the block path's `TextSystem::ch_advance`, and
+`0.5em` is the same fallback CSS's own `ch` unit specifies when a font's `0`
+glyph is unavailable — one approximation shared by both paths rather than two
+different ones. `button` and the button-like input types, and `select`, get a
+`min_size` floor instead of a forced `size`: they render real children when
+they have any (a `<button>text</button>` shrink-fits over `text`; a
+`<select>` generates real boxes for its `<option>`s, per
+`form_control_hit.rs`'s regression table hitting the `OPTION` inside one, not
+the `<select>` itself), so forcing a size would override that real content
+sizing rather than only flooring it. A text-entry `input` and a `textarea`
+never render `value` as content at all (a separate, pre-existing gap, see
+below), so their natural size is the whole box.
+
+The UA stylesheet (`components/genet-livery/src/lib.rs`) keeps only the parts
+that are ordinary CSS regardless of any attribute: `input[type=hidden i]`
+`display: none` (previously absent — a hidden input rendered as an ordinary,
+if zero-extent, inline-block); checkbox/radio a fixed `13px` square (a real
+UA default, not derived from an attribute or a content measurement); and
+`button`/button-like inputs' `padding: 1px 6px`. No UA rule sets `width`,
+`height`, `min-width` or `min-height` on any of these any more — those come
+from `apply_form_control_intrinsic_style` alone, invisibly to the cascade.
+`presentational_hints.rs` is unchanged from before this lane. The only change
+to `livery` itself is the `Length::ch` constructor added for the (abandoned)
+first pass; it is kept because a `ch` value is still a normal, useful CSS
+length regardless of this lane's own use of it, and removing it would touch
+`livery` for no reason connected to the fix.
+
+**Found and fixed while investigating the reftest regression the coordinator
+asked for evidence on, not a hypothesis:** `css/css-sizing/max-content-input-
+001.html` (reftest) also regressed under the first ratio-less layout
+implementation, before the guard below. Bisection (disabling one write at a
+time, rebuilding `genet-wpt`, re-diffing the reftest's rendered PNG against
+its reference) isolated it precisely: the test's fourth paragraph is a
+`<textarea rows=3 cols=12 style="width: max-content">`, and only this lane's
+**height** write touches it (`width: max-content` leaves the width branch
+untaken, since `computed.width` is not `auto`). Writing a definite
+`style.size.height` on an element whose `style.size.width` is independently
+`max-content` perturbed this engine's own intrinsic max-content width
+measurement for that element by a few pixels (2939 pixels over a
+20/255-per-channel threshold, all clustered in one glyph run) — an existing
+sensitivity in Buckram's shrink-to-fit measurement to a fixed cross-axis
+dimension, evidenced by disabling only the height write and reproducing a
+byte-identical (`maxδ=0`) capture against the pre-lane baseline, then
+restoring it and reproducing the failure again. The fix is a narrow guard in
+`apply_form_control_intrinsic_style`: skip writing a natural dimension on an
+axis when the *other* axis is left at an intrinsic-sizing keyword
+(`max-content`/`min-content`/`fit-content()`) rather than `auto`, rather than
+reaching into Buckram's own measurement path (out of this lane's scope). With
+the guard, `genet-wpt dump` on this file reproduces `diff=0% maxδ=0` again,
+and the full WPT rerun below (`css/css-sizing` included) has zero
+regressions. Evidence and the before/after captures:
+`Code/testing/genet/wpt-ledger/2026-09-16_c_form_controls/max_content_investigation/`.
+
+**Known gap, pre-existing and unaffected.** Button-like controls (`button`,
+`input[type=button/submit/reset]`) get a non-zero padding-and-floor box
+regardless of their label, but do not actually shrink-wrap a rendered value
+or label: this engine has never rendered a form control's `value` attribute
+or a `button`'s children as measured content for sizing purposes beyond
+whatever ordinary content the box already has (there is no anonymous-content
+generation for `value`), so "shrink-to-fit around the value" is only
+exercised here by the empty-label floor for `input[type=button/submit/reset]`
+(whose `value` is never rendered) and by real shrink-to-fit for `<button>`
+(whose children, when present, are ordinary rendered content).
+`form_control_sizing.rs::button_like_controls_have_a_non_zero_shrink_to_fit_minimum`
+checks the floor and that a longer *actual child text* widens a `<button>`,
+not that `value` text does. The max-content investigation above independently
+confirms this from the pixel side: neither `<input>` in that WPT fixture
+paints anything visible in either the test or the reference capture.
+
+**Focused tests**, `components/genet-livery/tests/`:
+
+- `form_control_sizing.rs` (new, 11 tests): every required control type is
+  non-zero and follows `size`/`cols`/`rows` where the HTML rendering section
+  gives it one; `size=0` is invalid and falls back to 20; checkbox/radio are
+  exactly 13x13; author `width`/`height` (with `box-sizing: border-box` to
+  isolate the assertion from the UA stylesheet's own button padding) wins
+  over every default and natural size; `display: block` does not collapse to
+  a line; hidden inputs generate no fragment; `type=image` is untouched
+  (computed `width`/`height` stay `auto`, which the existing natural-size
+  path depends on); and `size_cols_rows_never_reach_computed_style` checks
+  the exact invariant the WPT regression was about, over `input` and
+  `textarea`, styled and `display: none`, directly against
+  `ComputedValues.width`/`height` (there is no `getComputedStyle`/script
+  binding in this focused-test harness).
+- `form_control_hit.rs`: the old zero-extent assertions (`CONTROLS[0]`/`[1]`,
+  which are now non-zero by default) were replaced by
+  `default_controls_are_no_longer_zero_extent` (every regression-table
+  control, non-zero) and `author_zero_size_keeps_the_half_open_containment_fix`
+  (an explicit `width: 0; height: 0` author override, keeping the 2026-09-16
+  half-open-containment path exercised). `non_exact_rotations_are_hit_where_paint_places_them`
+  is new: `rotate(30deg)` and `rotate(180deg)`, authored directly rather than
+  as a matrix, over the same nine-control table, each asserting a hit at the
+  control's painted centre (computed independently via the CSS rotation
+  matrix convention, not the placement code under test).
+- One pre-existing integration test's fixture changed:
+  `genet-documents/src/engines/tests.rs::livery_accessibility_actions_reject_stale_revisions`
+  hit-tested a scroll point `(5.0, 5.0)` that relied on an `<input>` above a
+  `#scroller` being zero-extent so the point fell through to the scroller;
+  with the input now sized, the point moved to `fragment_rect(scroller)`'s
+  own top-left plus 5px, independent of the input's height.
+- No `presentational_hints.rs` test changed: that file has a zero net diff
+  from before this lane, since the abandoned first pass was fully reverted
+  from it (`git diff --stat` confirms).
+
+**Suites**, `cargo test --locked --offline`, from
+`C:\Users\mark_\Code\worktrees\genet-c-controls-20260916`, on the final
+(post-rework) source:
+
+| Command | Result |
+|---|---:|
+| `-p genet-livery` | 543 passed, 6 ignored (531+6 at the prior T3 receipt, plus 2 in `form_control_hit.rs` and 11 new in `form_control_sizing.rs`) |
+| `-p livery` | 206 passed (unchanged; only the new, unused-by-this-lane `Length::ch` constructor) |
+| `-p ortet` | 32 passed |
+| `-p ortet --features scripted-nova --lib` | 36 passed |
+| `-p genet-documents --features livery` | 51 passed (1 fixture updated, see above) |
+
+**WPT.** `genet-wpt` release, disk mode, Boa, Livery, `--jobs 8 --timeout 90`,
+both `testharness` and `reftest`, over `html/rendering/widgets`,
+`html/rendering/replaced-elements`, `css/css-sizing`,
+`html/semantics/forms/the-input-element`,
+`html/semantics/forms/the-textarea-element`,
+`html/semantics/forms/the-button-element`, `pointerevents` and `uievents`.
+`pointerevents`/`uievents` were diffed against the T3 hit-test-fix lane's own
+`fix/` maps (`2026-09-16_t3_hit_test_fix/fix/{pointerevents,uievents}_boa.json`)
+rather than a fresh before-run, since this lane's base commit already
+contains that fix and nothing between it and this lane's start touches those
+directories; the other six directories have no prior map on this harness, so
+a fresh before-run was taken once at base commit `69639de469e` and reused
+across both implementation passes (a temporary WIP commit was soft-reset back
+to `69639de469e` after each pass building `genet-wpt`; final hash
+`ebd1d69c6130` before its own soft-reset). Maps and logs:
+`Code/testing/genet/wpt-ledger/2026-09-16_c_form_controls/`.
+
+| directory | testharness pass→other | reftest pass→other | notes |
+|---|---:|---:|---|
+| `html/rendering/widgets` | 0 | 0 | — |
+| `html/rendering/replaced-elements` | 0 | 0 | one improvement: `the-select-element/select-1-block-size-001.html` fail→pass, from `select` now having a non-zero natural size |
+| `css/css-sizing` | 0 | 0 | `max-content-input-001.html` investigated and fixed, see above; zero status change in the final map |
+| `html/semantics/forms/the-input-element` | 0 | 0 | reftest all `skip` (no ref pairs in this subset) |
+| `html/semantics/forms/the-textarea-element` | 0 | 0 | reftest all `skip` |
+| `html/semantics/forms/the-button-element` | 0 | 0 | — |
+| `pointerevents` (vs T3 baseline) | 0 | n/a | reftest: 0/0/0, all 265 `skip` — no ref pairs in this subset either state |
+| `uievents` (vs T3 baseline) | 0 | n/a | reftest: 0/0/0, all 76 `skip` |
+
+**Zero `pass -> anything else` in every directory, both testharness and
+reftest.** `diff_maps.py` output: `diff_before_fix_boa.txt`,
+`diff_before_fix_reftest.txt` (both `REGRESSIONS: 0`).
+
+**Native.** `support/ci/run_ortet_compositing_standards_receipt.ps1
+-ArtifactDir C:\Users\mark_\Code\testing\genet\c_form_controls_20260916\native_receipt_v2
+-TargetDir C:\Users\mark_\Code\targets\genet-bench-b-check -BuildJobs 8`, run
+against the final WIP commit `ebd1d69c6130` before its soft-reset (the script
+refuses a dirty tree). **25 of 25 probes pass on Boa and Nova, digest
+`0xa440137ccc503f9c`** — unchanged from the T3 receipt above, as expected: the
+native receipt fixture does not exercise unstyled form controls at a size
+this lane's natural sizes would change its composited pixels.
 
 ---
 
@@ -1116,6 +1329,24 @@ T3's ordinary image-composition receipt.
   - **Next door, not repaired.** Livery has no intrinsic form-control size.
     genet-wpt's element-origin resolver aims at the untransformed layout rect,
     not the painted one.
+- **2026-09-16** — that "next door" gap is closed for every default-styled
+  control: the UA stylesheet's only prior rule for `button`/`input`/`select`/
+  `textarea` was `display: inline-block`, so an unstyled control had zero
+  intrinsic size in either axis. A first pass gave it the HTML rendering
+  section's sizes through the `AuthorPresentationalHint` cascade origin;
+  that regressed two WPT subtests that check `size`/`cols`/`rows` never reach
+  `getComputedStyle` (they cannot, once the attribute is cascade input), so
+  it was reworked the same day into a hint-less, ratio-less sibling of
+  `apply_replaced_intrinsic_style` that writes the natural size straight to
+  Taffy and never touches `ComputedValues`. That rework also found and fixed
+  a real (not hypothesized) reftest regression in
+  `css/css-sizing/max-content-input-001.html`, isolated by bisection to a
+  fixed cross-axis dimension perturbing this engine's own max-content
+  measurement, guarded narrowly rather than papered over. The final pass has
+  zero WPT regressions across all eight directories it was run over,
+  testharness and reftest. Full account, including the abandoned first
+  design and the bisection evidence, is under T3's "Form-control intrinsic
+  sizes" subsection.
 
 ## Progress
 
@@ -1279,3 +1510,24 @@ T3's ordinary image-composition receipt.
   2026-09-15 finding stands: a host mutation still costs a full-document
   geometry rebuild, and that rebuild now costs what T2 left of the first
   frame. Receipts: `Code/testing/genet/ortet-e-reprice-20260916/results.md`.
+- **2026-09-16** — form controls given the HTML rendering section's intrinsic
+  sizes, closing the hit-test fix's "Open" rotation residual for every
+  default-styled control. A first pass (UA defaults plus `size`/`cols`/`rows`
+  presentational hints) regressed two WPT subtests that check the attribute
+  never reaches `getComputedStyle`; reworked the same day into a hint-less,
+  ratio-less sibling of `apply_replaced_intrinsic_style` that writes the
+  natural size straight to Taffy, leaving `ComputedValues` untouched. That
+  rework's own bisection also found and fixed a real
+  `css/css-sizing/max-content-input-001.html` reftest regression (a fixed
+  cross-axis dimension perturbing an unrelated max-content measurement), with
+  before/after pixel evidence rather than a hypothesis. Final state: 543
+  `genet-livery` (531+6 prior, +12 new/changed), 206 `livery`, 32 `ortet`, 36
+  `ortet --features scripted-nova`, 51 `genet-documents --features livery`
+  (one fixture updated) all pass. WPT testharness+reftest over eight
+  directories: **zero regressions**, one improvement
+  (`the-select-element/select-1-block-size-001.html` fail→pass). Native
+  standards-compositing receipt unchanged: 25 of 25 probes, digest
+  `0xa440137ccc503f9c`, reproduced again after the rework. Receipts:
+  `Code/testing/genet/wpt-ledger/2026-09-16_c_form_controls/` (including
+  `max_content_investigation/` for the bisection) and
+  `Code/testing/genet/c_form_controls_20260916/native_receipt_v2/`.

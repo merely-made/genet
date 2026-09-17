@@ -145,12 +145,38 @@ fn each_control_is_hit_at_its_layout_centre() {
     }
 }
 
+/// The residual this lane closes: with the HTML rendering section's
+/// intrinsic sizes in place (`components/genet-livery/src/lib.rs`'s UA
+/// stylesheet plus the `size`/`cols`/`rows` presentational hints), none of
+/// the regression table's default-styled controls are zero-extent any more,
+/// so a rotated pointer's f32 rounding never lands them on a degenerate box.
+/// `form_control_sizing.rs` covers the sizes themselves; this only re-checks
+/// the hit-test angle the table exists for.
 #[test]
-fn a_zero_extent_box_holds_only_its_own_point_or_line() {
-    let page = Page::new(CONTROLS[0].0);
-    assert_eq!(page.rect("target").2, 0.0, "unsized input has no width");
-    assert_eq!(page.rect("target").3, 0.0, "unsized input has no height");
+fn default_controls_are_no_longer_zero_extent() {
+    for (control, _) in CONTROLS {
+        let page = Page::new(control);
+        let (_, _, width, height) = page.rect("target");
+        assert!(width > 0.0 && height > 0.0, "{control}: {width}x{height}");
+    }
+}
+
+/// An author can still force a control to zero extent (`width: 0; height: 0`
+/// beats every default and every hint), so `border_axis_contains`'s
+/// half-open treatment of a zero-extent axis (2026-09-16) must keep holding
+/// for that authored case even though it is no longer form controls' own
+/// default.
+#[test]
+fn author_zero_size_keeps_the_half_open_containment_fix() {
+    let page = Page::new(r#"<input id="target" style="margin: 20px; width: 0; height: 0">"#);
+    assert_eq!(page.rect("target").2, 0.0, "author-forced input has no width");
+    assert_eq!(
+        page.rect("target").3,
+        0.0,
+        "author-forced input has no height"
+    );
     let (x, y) = page.centre("target");
+    assert_eq!(page.hit((x, y)).as_deref(), Some("INPUT#target"));
     for point in [(x + 1.0, y), (x - 1.0, y), (x, y + 1.0), (x, y - 1.0)] {
         assert_ne!(
             page.hit(point).as_deref(),
@@ -159,12 +185,13 @@ fn a_zero_extent_box_holds_only_its_own_point_or_line() {
         );
     }
 
-    let page = Page::new(CONTROLS[1].0);
-    let (left, top, width, height) = page.rect("target");
-    assert!(
-        width > 2.0 && height == 0.0,
-        "block input is a horizontal line"
+    // A `display: block` input authored to zero height is still a line, one
+    // axis at a time.
+    let page = Page::new(
+        r#"<input id="target" style="margin: 20px; display: block; height: 0">"#,
     );
+    let (left, top, width, height) = page.rect("target");
+    assert!(width > 2.0 && height == 0.0, "authored zero-height line");
     for point in [
         (left, top),
         (left + width / 2.0, top),
@@ -176,11 +203,7 @@ fn a_zero_extent_box_holds_only_its_own_point_or_line() {
             "{point:?}"
         );
     }
-    for point in [
-        (left + width, top),
-        (left + 1.0, top + 1.0),
-        (left + 1.0, top - 1.0),
-    ] {
+    for point in [(left + width, top), (left + 1.0, top + 1.0)] {
         assert_ne!(
             page.hit(point).as_deref(),
             Some("INPUT#target"),
@@ -202,6 +225,21 @@ fn a_zero_extent_box_holds_only_its_own_point_or_line() {
     );
 }
 
+/// Maps a point through `translate(tx, ty) rotate(angle_degrees)` about a
+/// `0 0` transform origin, matching the CSS transform matrix convention
+/// (`matrix(cos, sin, -sin, cos, 0, 0)`) so the expected painted point is
+/// computed independently of the placement code under test.
+fn rotated(origin: (f32, f32), point: (f32, f32), tx: f32, ty: f32, angle_degrees: f32) -> (f32, f32) {
+    let (ox, oy) = origin;
+    let (x, y) = (point.0 - ox, point.1 - oy);
+    let radians = angle_degrees.to_radians();
+    let (sin, cos) = (radians.sin(), radians.cos());
+    (
+        ox + tx + x * cos - y * sin,
+        oy + ty + x * sin + y * cos,
+    )
+}
+
 #[test]
 fn transformed_controls_are_hit_where_paint_places_them() {
     for (control, expected) in CONTROLS {
@@ -219,6 +257,31 @@ fn transformed_controls_are_hit_where_paint_places_them() {
             Some(expected),
             "untransformed layout centre of {control}"
         );
+    }
+}
+
+/// The T3 hit-test fix's regression table under rotations that are NOT exact
+/// in f32 (`rotate(30deg)`), and one that is (`rotate(180deg)`), each authored
+/// directly rather than as a matrix. With the intrinsic sizes in this lane,
+/// every control's painted centre is a genuine area, not a rounded-to point
+/// or line, so these are an ordinary geometry check rather than an exact-hit
+/// edge case.
+#[test]
+fn non_exact_rotations_are_hit_where_paint_places_them() {
+    for angle in [30.0_f32, 180.0_f32] {
+        for (control, expected) in CONTROLS {
+            let page = Page::new(&format!(
+                r#"<div id="frame" style="width: 250px; transform-origin: 0 0; transform: translate(200px, 30px) rotate({angle}deg)">{control}</div>"#
+            ));
+            let (ox, oy, _, _) = page.rect("frame");
+            let centre = page.centre("target");
+            let painted = rotated((ox, oy), centre, 200.0, 30.0, angle);
+            assert_eq!(
+                page.hit(painted).as_deref(),
+                Some(expected),
+                "{angle}deg {control}"
+            );
+        }
     }
 }
 

@@ -1305,7 +1305,19 @@ fn livery_accessibility_actions_reject_stale_revisions() {
     let tail = livery_node_with_id(session, "tail");
     let target = DocumentA11yNodeId::new(session.document().dom().opaque_id(tail));
     let scroller = livery_node_with_id(session, "scroller");
-    let _ = session.doc.scroll_at(5.0, 5.0, 0.0, 20.0);
+    // A point 5px inside the scroller's own top-left, not the page's: the
+    // `#query` input above it is no longer a zero-extent box once it has the
+    // HTML rendering section's intrinsic size, so it pushes `#scroller` down
+    // by roughly a line height and a literal `(5.0, 5.0)` would land on the
+    // input instead.
+    let [scroller_x, scroller_y, ..] = session
+        .document()
+        .fragment_rect(scroller)
+        .expect("scroller has retained geometry");
+    let scroll_point = (scroller_x + 5.0, scroller_y + 5.0);
+    let _ = session
+        .doc
+        .scroll_at(scroll_point.0, scroll_point.1, 0.0, 20.0);
     let scrolled = session
         .accessibility_projection()
         .expect("scrolled projection remains available");
@@ -1321,7 +1333,9 @@ fn livery_accessibility_actions_reject_stale_revisions() {
             .node(target)
             .is_some_and(|node| node.actions.contains(&DocumentA11yAction::ScrollIntoView))
     );
-    let _ = session.doc.scroll_at(5.0, 5.0, 0.0, 30.0);
+    let _ = session
+        .doc
+        .scroll_at(scroll_point.0, scroll_point.1, 0.0, 30.0);
     assert!(
         session
             .doc

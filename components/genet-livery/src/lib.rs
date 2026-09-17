@@ -188,6 +188,32 @@ button, input, select, textarea {
     display: inline-block;
 }
 
+/* HTML's rendering section, "Form controls": a hidden input never
+   participates in layout. */
+input[type=hidden i] {
+    display: none;
+}
+
+/* "Form controls": checkbox and radio boxes are a fixed small square. This
+   is a real UA default (unlike the natural sizes below, it is not derived
+   from any attribute or from a natural-content measurement), so it is
+   ordinary CSS rather than a layout-only natural size. */
+input[type=checkbox i], input[type=radio i] {
+    width: 13px;
+    height: 13px;
+}
+
+/* "Form controls": a button-like control's padding around its label. This
+   is a real box-model default; the label's own shrink-to-fit size and the
+   non-zero floor for an empty label are natural sizes, handed to Taffy
+   directly by `apply_form_control_intrinsic_style`
+   (`components/genet-livery/src/layout.rs`) rather than expressed as CSS, so
+   they stay invisible to `getComputedStyle` exactly as `size`/`cols`/`rows`
+   must (see that function's own doc comment). */
+button, input[type=button i], input[type=submit i], input[type=reset i] {
+    padding: 1px 6px;
+}
+
 img {
     display: inline-block;
 }

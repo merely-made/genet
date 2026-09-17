@@ -19,7 +19,10 @@ use livery::{
     PropertyValue,
     selector::StatePseudoClass,
     stylesheet::Keyframes,
-    values::{AnimationName, ColorScheme, Opacity, Overflow, TimingFunction, TransitionProperty},
+    values::{
+        AnimationName, AnimationPlayState, ColorScheme, Opacity, Overflow, TimingFunction,
+        TransitionProperty,
+    },
 };
 use paint_list_api::DeviceIntSize;
 
@@ -156,6 +159,16 @@ struct KeyframeAnimation<Id> {
     duration_ms: f64,
     delay_ms: f64,
     timing: TimingFunction,
+    /// Whether `animation-play-state: paused` was in effect when this
+    /// animation was (re)scheduled. While true, sampling uses
+    /// `scheduled_at_ms` instead of the live document clock, so the
+    /// negative-`animation-delay` + `paused` pattern WPT uses for a
+    /// deterministic mid-progress capture freezes at that progress rather
+    /// than drifting as the harness advances its virtual clock.
+    paused: bool,
+    /// The document clock's value at the moment this animation was
+    /// scheduled — the frozen "now" a paused animation samples against.
+    scheduled_at_ms: f64,
 }
 
 /// A retained DOM plus the Livery state that should survive between frames.

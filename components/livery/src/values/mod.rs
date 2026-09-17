@@ -27,7 +27,7 @@ pub use length::{
 };
 pub use logical::{LogicalAxis, LogicalSide, PhysicalAxis, PhysicalSide};
 pub use property::{
-    Alignment, AnimationDelay, AnimationName, AspectRatio, BackfaceVisibility,
+    Alignment, AnimationDelay, AnimationName, AnimationPlayState, AspectRatio, BackfaceVisibility,
     BackgroundAttachment, BackgroundBox, BackgroundImage, BackgroundPosition, BackgroundRepeat,
     BackgroundSize, BackgroundSizeComponent, BorderCollapse, BorderStyle, BorderWidth, BoxShadow,
     BoxShadowValue, BoxSizing, BreakAfter, BreakBefore, BreakInside, CaptionSide, Clear, ClipPath,
@@ -117,6 +117,7 @@ unchanged_viewport_resolution!(
     TransformStyle,
     AnimationDelay,
     AnimationName,
+    AnimationPlayState,
     AspectRatio,
     BackgroundAttachment,
     BackgroundBox,
@@ -576,6 +577,7 @@ discrete_interpolation!(
     Alignment,
     AnimationDelay,
     AnimationName,
+    AnimationPlayState,
     AspectRatio,
     BreakAfter,
     BreakBefore,

@@ -75,10 +75,12 @@ where
             .transitions
             .iter()
             .all(|transition| self.clock_ms >= transition.start_ms + transition.duration_ms);
-        let keyframe_settled = self
-            .keyframe_animation
-            .as_ref()
-            .is_none_or(|animation| self.clock_ms >= animation.start_ms + animation.duration_ms);
+        let keyframe_settled = self.keyframe_animation.as_ref().is_none_or(|animation| {
+            // A paused animation's sample is frozen (see `apply_keyframe_animation`),
+            // so it will never produce a different frame on its own and counts as
+            // settled regardless of where the live clock sits.
+            animation.paused || self.clock_ms >= animation.start_ms + animation.duration_ms
+        });
         transitions_settled && keyframe_settled
     }
 
@@ -104,12 +106,22 @@ where
         let Some(keyframes) = self.style_set.keyframes(&animation.name) else {
             return;
         };
+        // A paused animation samples against the clock value it was
+        // scheduled at, not the live clock: this is what lets negative
+        // `animation-delay` + `animation-play-state: paused` freeze a
+        // deterministic mid-progress value while the document clock keeps
+        // advancing underneath it (see `KeyframeAnimation::scheduled_at_ms`).
+        let sample_at_ms = if animation.paused {
+            animation.scheduled_at_ms
+        } else {
+            self.clock_ms
+        };
         let progress = if animation.duration_ms == 0.0 {
             1.0
         } else {
-            ((self.clock_ms - animation.start_ms) / animation.duration_ms).clamp(0.0, 1.0) as f32
+            ((sample_at_ms - animation.start_ms) / animation.duration_ms).clamp(0.0, 1.0) as f32
         };
-        if self.clock_ms < animation.start_ms {
+        if sample_at_ms < animation.start_ms {
             return;
         }
         let progress = animation.timing.sample(progress);
@@ -138,7 +150,7 @@ where
         styles: &StylePlane<D::NodeId>,
     ) {
         let candidate = self.find_keyframe_animation(self.dom.document(), styles);
-        let Some((node, name, duration_ms, delay_ms, timing)) = candidate else {
+        let Some((node, name, duration_ms, delay_ms, timing, paused)) = candidate else {
             self.keyframe_animation = None;
             return;
         };
@@ -148,6 +160,7 @@ where
                 && animation.duration_ms == duration_ms
                 && animation.delay_ms == delay_ms
                 && animation.timing == timing
+                && animation.paused == paused
         }) {
             return;
         }
@@ -158,6 +171,8 @@ where
             duration_ms,
             delay_ms,
             timing,
+            paused,
+            scheduled_at_ms: self.clock_ms,
         });
     }
 
@@ -165,7 +180,7 @@ where
         &self,
         id: D::NodeId,
         styles: &StylePlane<D::NodeId>,
-    ) -> Option<(D::NodeId, String, f64, f64, TimingFunction)> {
+    ) -> Option<(D::NodeId, String, f64, f64, TimingFunction, bool)> {
         if let Some(style) = styles.get(id)
             && let AnimationName::Name(name) = &style.animation_name
         {
@@ -177,6 +192,7 @@ where
                     duration_ms,
                     f64::from(style.animation_delay.milliseconds()),
                     style.animation_timing_function,
+                    style.animation_play_state == AnimationPlayState::Paused,
                 ));
             }
         }

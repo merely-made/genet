@@ -784,4 +784,40 @@ mod frame_composite_tests {
         assert!(!list.commands().is_empty());
         std::fs::remove_dir_all(&dir).ok();
     }
+
+    /// The reftest capture instant, proved without a GPU: `render_html`'s
+    /// document construction (`StaticDocument::parse` + `LiveryDocument::new`
+    /// + one `.frame()` call, exactly reproduced here) never runs script and
+    /// never pumps a clock, so it captures at the WPT convention for a page
+    /// with no `reftest-wait`: immediately, at time zero. A CSS Animation
+    /// reaches that same instant through `animation-delay`/`animation-play-state`
+    /// rather than through the harness advancing any clock — this is what the
+    /// 2026-09-16 correction to the 2026-09-15 Findings entry means by
+    /// "reftest mode already samples the negative-delay convention correctly".
+    #[test]
+    fn reftest_capture_samples_the_negative_delay_convention_at_time_zero() {
+        let document = StaticDocument::parse(
+            r#"<body style="margin:0"><div style="width:10px;height:10px;background:black;
+                animation: fade 1s linear -0.5s; animation-play-state: paused;"></div></body>"#,
+        );
+        let styles = LiveryStyleSet::cambium(&[
+            "@keyframes fade { from { opacity: 0; } to { opacity: 1; } }",
+        ]);
+        let mut session =
+            genet_livery::LiveryDocument::new(document, styles, LiveryDevice::screen(10.0, 10.0));
+        let list = session.frame(10, 10).expect("reftest capture frame");
+        let opacity = list
+            .commands()
+            .iter()
+            .find_map(|command| match command {
+                PaintCmd::PushLayer(layer) => Some(layer.opacity),
+                _ => None,
+            })
+            .expect("the animated opacity opens a layer");
+        assert!(
+            (opacity - 0.5).abs() < 0.05,
+            "a reftest's single capture, taken at time zero with no script, must already \
+             reflect the negative-delay + paused convention's mid-progress value: {opacity}"
+        );
+    }
 }

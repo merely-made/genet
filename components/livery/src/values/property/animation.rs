@@ -112,6 +112,19 @@ impl fmt::Display for AnimationDelay {
     }
 }
 
+keyword_value! {
+    /// `animation-play-state`: whether the retained keyframe clock advances
+    /// this element's animation. `Paused` freezes the sample at whatever
+    /// elapsed time was in effect when the animation was scheduled — the
+    /// WPT convention for a deterministic mid-progress reftest capture is
+    /// a negative `animation-delay` paired with this keyword, so the two
+    /// properties are read together in `document/animation.rs`.
+    pub enum AnimationPlayState {
+        Running => "running",
+        Paused => "paused",
+    }
+}
+
 /// A bounded CSS animation name. The first animation gate accepts one custom
 /// identifier or `none`; comma-separated animation lists remain outside the
 /// lane.

@@ -23,6 +23,7 @@ use livery::{
     },
     custom::CustomProperties,
     media::{Device, ViewportSizes},
+    selector::SelectorKey,
     stylesheet::{
         ContainerSnapshot, CssomRule, FontFaceRule, Keyframes, RuleMutationError, StyleRule,
         Stylesheet, StylesheetDiagnostic,
@@ -174,11 +175,100 @@ impl DerefMut for AuthorStylesheet {
     }
 }
 
+/// Rules bucketed by what their rightmost compound requires of a candidate
+/// element, so the cascade tests a handful of rules per element instead of
+/// every rule in the set.
+///
+/// Each bucket holds *positions into `StyleSet::rules`*, ascending, because
+/// they are filled in rule order. That is the whole of how cascade order is
+/// preserved: a candidate list is the sorted, deduplicated merge of the
+/// buckets an element hits, so the rules are visited in exactly the source
+/// order the unbucketed loop visited them in, and every rule still runs the
+/// same full `SelectorList` match it ran before. The index only decides which
+/// rules are *offered*; it never decides whether one matches.
+///
+/// A rule appears once per distinct key across its selector list, so
+/// `.a, #b { }` sits in two buckets and the merge's dedup keeps it from being
+/// matched twice.
+#[derive(Clone, Debug, Default, PartialEq)]
+struct SelectorIndex {
+    by_id: HashMap<Box<str>, Vec<u32>>,
+    by_class: HashMap<Box<str>, Vec<u32>>,
+    by_local_name: HashMap<Box<str>, Vec<u32>>,
+    /// Rules whose rightmost compound names nothing indexable, plus every
+    /// tree-scope-crossing rule. Offered to every element.
+    universal: Vec<u32>,
+}
+
+impl SelectorIndex {
+    fn build(rules: &[StyleRule]) -> Self {
+        let mut index = Self::default();
+        for (position, rule) in rules.iter().enumerate() {
+            let position = position as u32;
+            let mut keys = rule.selector_keys();
+            keys.sort();
+            keys.dedup();
+            for key in keys {
+                match key {
+                    SelectorKey::Id(name) => index.by_id.entry(name).or_default().push(position),
+                    SelectorKey::Class(name) => {
+                        index.by_class.entry(name).or_default().push(position)
+                    },
+                    SelectorKey::LocalName(name) => {
+                        index.by_local_name.entry(name).or_default().push(position)
+                    },
+                    SelectorKey::Universal => index.universal.push(position),
+                }
+            }
+        }
+        index
+    }
+
+    /// The positions of every rule that could match an element with this
+    /// lowercased local name, `id` attribute and `class` attribute, ascending
+    /// and deduplicated. `out` is a caller-owned scratch buffer so the descent
+    /// does not allocate one per element.
+    fn candidates(
+        &self,
+        local_name: Option<&str>,
+        id: Option<&str>,
+        classes: Option<&str>,
+        out: &mut Vec<u32>,
+    ) {
+        out.clear();
+        out.extend_from_slice(&self.universal);
+        if let Some(local_name) = local_name {
+            if let Some(bucket) = self.by_local_name.get(local_name) {
+                out.extend_from_slice(bucket);
+            }
+        }
+        if let Some(id) = id {
+            if let Some(bucket) = self.by_id.get(id) {
+                out.extend_from_slice(bucket);
+            }
+        }
+        if let Some(classes) = classes {
+            for class in classes.split_ascii_whitespace() {
+                if let Some(bucket) = self.by_class.get(class) {
+                    out.extend_from_slice(bucket);
+                }
+            }
+        }
+        // Back into source order, which is what makes the bucketed visit
+        // indistinguishable from the unbucketed one.
+        out.sort_unstable();
+        out.dedup();
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct StyleSet {
     ua: Stylesheet,
     authors: Vec<AuthorStylesheet>,
     rules: Vec<StyleRule>,
+    /// `rules` bucketed by rightmost compound. Rebuilt with `rules`; it is a
+    /// derived view, so it takes part in `PartialEq` harmlessly.
+    index: SelectorIndex,
     /// The author sheet each entry of `rules` came from, `None` for a UA rule.
     /// The style pass turns this into a tree scope per rule; without it a
     /// flattened cascade cannot say which shadow tree a rule belongs to.
@@ -346,6 +436,7 @@ impl StyleSet {
             self.font_faces.extend(author.resolved_font_faces());
             self.keyframes.extend(author.keyframes().iter().cloned());
         }
+        self.index = SelectorIndex::build(&self.rules);
         self.generation = self.generation.saturating_add(1);
     }
 
@@ -1342,6 +1433,23 @@ where
     })
 }
 
+/// An element's local name, ASCII-lowercased for the selector index.
+///
+/// `ElementRef::has_local_name` compares case-insensitively, so the index has
+/// to key both sides the same way. Parsed HTML names are already lowercase, so
+/// the borrow is the common path and the allocation is the XML-ish exception.
+fn element_local_name<D>(dom: &D, id: D::NodeId) -> Option<std::borrow::Cow<'_, str>>
+where
+    D: LayoutDom,
+{
+    let local = dom.element_name(id)?.local.as_ref();
+    if local.bytes().any(|byte| byte.is_ascii_uppercase()) {
+        Some(std::borrow::Cow::Owned(local.to_ascii_lowercase()))
+    } else {
+        Some(std::borrow::Cow::Borrowed(local))
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn resolve_subtree_on_this_stack<D, P>(
     selector_tree: &SelectorTree<'_, D>,
@@ -1373,8 +1481,24 @@ where
             .map_or(&[][..], Vec::as_slice);
         let mut matched = Vec::new();
         let mut matched_custom = Vec::new();
+        // Only the rules the selector index offers this element are matched.
+        // They arrive in ascending rule position, so the visit order — and
+        // with it the cascade order the `source_order` on each matched
+        // declaration carries — is the unbucketed loop's order exactly.
+        let mut rule_candidates = Vec::new();
+        style_set.index.candidates(
+            element_local_name(selector_tree.dom(), id).as_deref(),
+            selector_tree
+                .dom()
+                .attribute(id, &Namespace::from(""), &LocalName::from("id")),
+            selector_tree
+                .dom()
+                .attribute(id, &Namespace::from(""), &LocalName::from("class")),
+            &mut rule_candidates,
+        );
         if scopes.is_empty() {
-            for rule in &style_set.rules {
+            for &position in &rule_candidates {
+                let rule = &style_set.rules[position as usize];
                 matched.extend(
                     rule.matched_declarations_with_containers(&element, device, candidates),
                 );
@@ -1391,7 +1515,9 @@ where
                 .dom()
                 .containing_shadow_root(id)
                 .map(|root| selector_tree.dom().opaque_id(root));
-            for (index, rule) in style_set.rules.iter().enumerate() {
+            for &position in &rule_candidates {
+                let index = position as usize;
+                let rule = &style_set.rules[index];
                 let rule_scope = scopes.scope_of(index);
                 // UA rules are not scoped: `slot { display: contents }` has to
                 // reach inside every shadow tree.

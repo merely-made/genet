@@ -434,3 +434,81 @@ fn selector_dependencies(input: &str) -> SelectorDependencies {
         structural: structural || sibling,
     }
 }
+
+/// The name a rule's rightmost compound requires of any element it can match.
+///
+/// This is bucketing input for a cascade's selector index, not a matching
+/// decision: a key is sound only when *every* element the selector matches
+/// carries it, so a compound that names nothing indexable — or one that can
+/// reach across a tree scope — keys as [`SelectorKey::Universal`] and is
+/// offered to every element. Attribute selectors and pseudo-classes only
+/// narrow a compound, so they never change the key; they land in the bucket of
+/// whatever else the compound names, else in the universal bucket.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum SelectorKey {
+    /// The compound names `#id`. Case-sensitive, as `NoQuirks` matching is.
+    Id(Box<str>),
+    /// The compound names `.class`. Case-sensitive, as `NoQuirks` matching is.
+    Class(Box<str>),
+    /// The compound names an element type, ASCII-lowercased to match
+    /// `Element::has_local_name`, which compares case-insensitively.
+    LocalName(Box<str>),
+    /// Nothing indexable; the rule must be offered to every element.
+    Universal,
+}
+
+impl SelectorList {
+    /// One [`SelectorKey`] per selector in this list, in list order.
+    ///
+    /// A rule is a candidate for an element when *any* of its selectors' keys
+    /// matches, so a caller indexes the rule under each distinct key returned.
+    pub fn rightmost_keys(&self) -> Vec<SelectorKey> {
+        self.selectors
+            .slice()
+            .iter()
+            .zip(&self.reach)
+            .map(|(selector, reach)| rightmost_key(selector, *reach))
+            .collect()
+    }
+}
+
+/// The key for one selector. `iter()` walks the rightmost compound and stops
+/// at the first combinator, which is exactly the compound the candidate
+/// element has to satisfy itself.
+fn rightmost_key(selector: &Selector<LiverySelectorImpl>, reach: SelectorReach) -> SelectorKey {
+    // `::slotted()`, `::part()` and `:host` match an element chosen by the
+    // scope boundary rather than by this compound, so none of them may be
+    // bucketed on what the compound names.
+    if reach != SelectorReach::Inner {
+        return SelectorKey::Universal;
+    }
+    let mut id = None;
+    let mut class = None;
+    let mut local_name = None;
+    for component in selector.iter() {
+        match component {
+            // `:is()`, `:where()` and `:not()` arguments are deliberately not
+            // descended into. A key drawn from one branch of an `:is()` would
+            // be unsound for the others, and taking the intersection is worth
+            // neither the code nor the risk here.
+            Component::ID(value) if id.is_none() => id = Some(value.as_str()),
+            Component::Class(value) if class.is_none() => class = Some(value.as_str()),
+            Component::LocalName(name) if local_name.is_none() => {
+                local_name = Some(name.lower_name.as_str());
+            },
+            _ => {},
+        }
+    }
+    // Most selective first, which is also the order that keeps the buckets
+    // smallest.
+    if let Some(id) = id {
+        return SelectorKey::Id(id.into());
+    }
+    if let Some(class) = class {
+        return SelectorKey::Class(class.into());
+    }
+    if let Some(local_name) = local_name {
+        return SelectorKey::LocalName(local_name.into());
+    }
+    SelectorKey::Universal
+}

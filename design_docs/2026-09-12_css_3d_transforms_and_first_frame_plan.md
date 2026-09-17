@@ -263,6 +263,26 @@ lane's narrow scope.
 
 ## T2. First-frame scaling
 
+**Status, 2026-09-16:** the second half is implemented and measured. A
+selector index replaces the every-rule-against-every-element loop, and the
+layout residual the 2026-09-15 status left unattributed is attributed and
+closed: it was a second quadratic, a linear scan of `placements` inside a
+per-positioned-box loop in `apply_admitted_positioned_inline_sizes`
+(`components/genet-livery/src/layout/positioned.rs`), growing n^2.19 and
+costing 994 ms of the 50,000-element frame. With both changes the
+50,000-element first frame falls from **5.93 s to 4.80 s** on this host, the
+20,000 → 50,000 growth exponent from **1.242 to 1.016**, and **every phase's
+per-element cost is now flat across the whole grid** (layout 24.65 → 44.87
+µs/element across the last step becomes 21.99 → 24.31). Every cell's rendered
+digest is unchanged. The 1-second bound at 50,000 is **still not** reached;
+4.80 s is the restated bound and what stands between is recorded below under
+"The bound after lane F". The measurement also **corrects the 2026-09-15
+reading**: the rule-matching loop was 157 ms of the style phase, not 2.25 s,
+so the index is worth 42x on that loop but only 5% of the style phase. WPT over
+five testharness and five reftest directories shows zero transitions of any
+kind. Receipts: `Code/testing/wing/l0b_f_2026-09-16/results.md` and
+`Code/testing/genet/wpt-ledger/2026-09-16_f_selector_index/`.
+
 **Status, 2026-09-15:** implemented and measured. The quadratic term is gone:
 the L0b grid's fitted growth exponent falls from **2.156 to 1.168** and the
 50,000-element cell's first frame from **1,172.21 s to 7.68 s** over baseline,
@@ -399,6 +419,109 @@ the whole of the remaining 1.17 exponent.
    `resolve_relative_lengths_in_place` walks the fields directly, and a new
    `ResolveViewport::RESOLVES_RELATIVE` constant folds the identity families
    away at compile time.
+
+**What lane F reached, 2026-09-16.** Receipt:
+`Code/testing/wing/l0b_f_2026-09-16/results.md`. Same host, same fixtures, same
+method, with one change: every cell now runs in well under two minutes at both
+ends, so every cell takes the median of 3 rather than a single run at 50,000.
+Both ends were measured in one session on this machine rather than copied from
+the 2026-09-15 receipt, so the base's own numbers differ from it — main has
+moved since — and four of the five cells' digests differ from T2's for the same
+reason. What this gates is before against after within lane F, where every
+digest is identical.
+
+| elements | before (lane base) | after | speed-up | before µs/element | after µs/element |
+|---:|---:|---:|---:|---:|---:|
+| 1,000 | 0.075 s | 0.060 s | 1.25x | 75.4 | 60.4 |
+| 5,000 | 0.398 s | 0.379 s | 1.05x | 79.6 | 75.9 |
+| 20,000 | 1.901 s | 1.891 s | 1.01x | 95.0 | 94.6 |
+| 50,000 | 5.929 s | **4.797 s** | 1.24x | 118.6 | 95.9 |
+
+The whole-grid least-squares exponent is **1.112 before and 1.126 after**, and
+reporting only that would hide the result. It does not move because the smallest
+cell improved proportionally as much as the largest, and a four-point regression
+is steered by its ends. The pairwise steps are where the effect is:
+1,000 → 5,000 1.034 → 1.142, 5,000 → 20,000 1.128 → 1.159, and
+**20,000 → 50,000 1.242 → 1.016**. The residual growth at the top of the grid —
+the thing the 2026-09-15 entry named and could not attribute — is gone. The
+1,000 → 5,000 rise is an artefact of that cell's absolute size, 60 ms over a
+1.236 s baseline whose own spread is tens of milliseconds. The per-phase table
+says the same without a regression: after the lane every phase's per-element
+cost is flat across the whole grid (parse 2.6–2.8, style 31.6–34.5, layout
+17.1–24.3, paint 13.7–16.7 µs/element), where before layout ran 18.1 → 44.9.
+
+**Two changes, in ascending order of effect.**
+
+1. *A selector index, which is the smaller one.* `SelectorIndex` in
+   `components/genet-livery/src/style.rs` buckets the flattened rule list by
+   what each rule's rightmost compound requires of a candidate element — id,
+   class, local name, or a universal bucket for a compound that names none of
+   them. It is built once in `StyleSet::rebuild`, so CSSOM mutation and sheet
+   replacement rebuild it with everything else. Each bucket holds ascending
+   positions into `rules`, and a candidate list is the sorted, deduplicated
+   merge of the buckets an element hits, so rules are visited in exactly the
+   source order the unbucketed loop used, every rule still runs the same full
+   `SelectorList` match, and the index decides only which rules are *offered*.
+   A key is used only when every element the selector matches must carry it, so
+   `:is()`/`:where()`/`:not()` arguments are not descended into and every
+   tree-scope-crossing rule (`:host`, `::slotted()`, `::part()`) goes to the
+   universal bucket wholesale; attribute selectors and pseudo-classes only
+   narrow a compound and so never change its key. Both of
+   `resolve_subtree_on_this_stack`'s loops take the same candidate list, and the
+   scoped branch applies `TreeScopes::scope_of` and the UA-origin exemption per
+   candidate as before — that filter only removes rules, so applying it to a
+   candidate list is equivalent. The only change in `livery` is additive and
+   read-only: `SelectorList::rightmost_keys` and `StyleRule::selector_keys`
+   report what the parsed selectors already say; no matching semantics moved.
+2. *The second quadratic, which is the larger one.*
+   `apply_admitted_positioned_inline_sizes` looped once per positioned box and,
+   for each, ran `placements.iter().find(...)` over a list with one entry per
+   positioned box. A lookup table built once replaces it, `or_insert` keeping
+   the first entry per box id exactly as `find` returned it. At 50,000 elements
+   that function falls from **994.2 ms to 6.3 ms**, 157x.
+
+**The 2026-09-15 reading of the cascade was wrong, and the instrument says so.**
+A temporary finer split — nested probes inside the style and layout phases, plus
+a control that makes one binary offer every rule — was run and removed. With
+every rule against every element the rule-matching loop costs **157.1 ms** at
+50,000; with the index, **3.7 ms**. That is 42x on the loop, but the loop was
+only 9.7% of `resolve_styles` and 8.4% of the style phase to begin with. The
+2.25 s the 2026-09-15 entry attributed to it was `IncrementalStyle::update` as a
+whole. Measured, `resolve_styles`' 1,499 ms at 50,000 is 690 ms
+`cascade_with_logical_properties`, ~649 ms the rest of the descent, 157 ms the
+inline `style` parse and 4 ms rule matching. **The per-element style constant is
+`ComputedValues`' shape, not selector matching** — that function cascades twice
+(once to learn writing mode and direction, then again over mapped
+declarations), each pass allocating a 160-slot winner table and walking every
+`PropertyId` in `resolve_computed_colors`. Hypothesis 3's "160-field struct is
+real but secondary" is thereby reversed: it is primary, and the index was
+secondary.
+
+**The inline-style parse is measured and deliberately not cached.**
+`parse_declaration_block` on each element's inline `style` costs 156.5 ms at
+50,000 — 3.13 µs per element, 9.1% of the style phase, 2.6% of the frame. Every
+element in the L0b grid carries a *distinct* inline declaration, so a cache
+keyed on declaration text would hit approximately never on a first frame and
+there is nothing for a short-circuit to short-circuit: the block genuinely has
+to be parsed once per element. Caching would pay only across frames on a
+document whose inline styles do not change, which is the retained style plane's
+job and is already incremental.
+
+**The bound after lane F.** The 50,000-element first frame is **4.80 s**, not
+under 1 s, so the bound is restated again:
+
+> **50,000 elements, first frame 4.80 s over baseline** (from 5.93 s at lane F's
+> base, and 1,172.21 s before T2), with 20,000 → 50,000 growth at n^1.016 and
+> every phase's per-element cost flat across the grid.
+
+What stands between that and 1 s is now a pure per-element constant, with no
+superlinear term left anywhere in the four phases. At 50,000 the phases account
+for 3.91 s at 78.2 µs per element; 1 s needs about 20 µs. The terms are: the
+double cascade and 160-property colour walk, ~26.8 µs/element; box-tree
+construction and fragment emission, ~15.0; paint, 16.7; the inline `style`
+parse, 3.1; parse, 2.7. The largest is how computed values are stored, which is
+a different change from how rules are found, and it is left to its own lane
+rather than attempted here.
 
 `TextFrame::translate_subtree` gained the matching bound: it asks first whether
 the translated subtree owns any retained text and returns immediately when it
@@ -1408,6 +1531,59 @@ T3's ordinary image-composition receipt.
   design and the bisection evidence, is under T3's "Form-control intrinsic
   sizes" subsection.
 
+- **2026-09-16** — T2's unattributed layout residual was a **second
+  quadratic**, of exactly hypothesis 1's shape and missed by it.
+  `apply_admitted_positioned_inline_sizes`
+  (`components/genet-livery/src/layout/positioned.rs`) loops once per positioned
+  box and ran `placements.iter().find(|placement| placement.box_id == *box_id)`
+  over a list that also holds one entry per positioned box. Measured with a
+  temporary probe on the L0b grid: 6.4 ms at 5,000 elements, 110.0 ms at 20,000,
+  **994.2 ms at 50,000** — 1.28, 5.50 and 19.88 µs per element, fitting n^2.19.
+  Everything else inside `layout_inline_groups` is flat over the same range
+  (`build_box` 10.41 → 10.70 µs/element, `compute_layout` 1.68 → 1.78,
+  `apply_absolute` 2.19 → 2.42), and the conditional second layout pass the
+  function can trigger **never runs at all** on this fixture (0 µs at every
+  cell), so the scan was the whole of it. A lookup table built once, preserving
+  `find`'s first-match semantics, takes it to 6.3 ms at 50,000 — 157x — with
+  every rendered digest unchanged. This closes the residual the 2026-09-15
+  finding named.
+- **2026-09-16** — the 2026-09-15 finding that the per-element style constant is
+  the **cascade's rule matching** is **wrong, and was a reading rather than a
+  measurement**. A control that makes one binary offer every rule against every
+  element puts that loop at **157.1 ms** at 50,000 elements, against 3.7 ms with
+  a selector index: 42x on the loop, but the loop was 9.7% of `resolve_styles`
+  and 8.4% of the style phase before the index existed. The 2.25 s the earlier
+  finding cited was `IncrementalStyle::update` *as a whole*. Split: of
+  `resolve_styles`' 1,499 ms at 50,000, **690 ms is
+  `cascade_with_logical_properties`**, ~649 ms the rest of the descent, 157 ms
+  the inline `style` parse and 4 ms rule matching. So hypothesis 3's ranking
+  inverts — the 160-field `ComputedValues` is **primary**, not secondary, and the
+  1-second bound needs a cheaper computed-value representation, not a selector
+  index. The index is still worth having (it is what makes rule matching
+  disappear rather than scale with sheet size), but it bought 5% of the style
+  phase, not the order of magnitude the earlier finding implied.
+- **2026-09-16** — the inline `style` parse costs 156.5 ms at 50,000 elements,
+  3.13 µs per element and 9.1% of the style phase, and is **not worth caching**:
+  every element in the L0b fixtures carries a distinct declaration by design, so
+  a text-keyed cache would never hit on a first frame and the parse genuinely
+  happens once per element. It is first-frame work, not repeated work.
+- **2026-09-16** — a four-point least-squares exponent over the L0b grid is a
+  **poor instrument for a change that lowers the per-element constant**. Lane F
+  removed the grid's last superlinear term and the fitted exponent moved from
+  1.112 to 1.126, because the 1,000-element cell improved proportionally as much
+  as the 50,000 one and the regression is steered by its ends. The pairwise
+  steps show it (20,000 → 50,000, 1.242 → 1.016) and the per-phase per-element
+  table shows it without a regression at all. Quote the pairwise steps beside
+  any fitted exponent on this grid.
+- **2026-09-16** — `css/css-scoping` is **not in genet's WPT checkout**, so no
+  lane can cite it. Shadow-tree scoping evidence has to come from
+  genet-livery's `shadow_flat_tree` tests instead. Two more directories in the
+  lane brief's list are null results in the mode they were run: `css/CSS2/selectors`
+  skips all 612 files in testharness mode (they are reftests) and `shadow-dom`
+  skips all 314 in reftest mode. A directory appearing in a WPT table with
+  identical before and after counts is not evidence when every file in it was
+  skipped.
+
 ## Progress
 
 - **2026-09-12** — founded. No lane started.
@@ -1619,3 +1795,36 @@ T3's ordinary image-composition receipt.
   Boa and Nova, digest `0xa440137ccc503f9c`, unchanged
   (`Code/testing/genet/d_animation_clock_20260916/`). Receipts:
   `Code/testing/genet/wpt-ledger/2026-09-16_d_animation_clock/`.
+
+- **2026-09-16** — T2's second half is implemented and measured on branch
+  `f-selector-index` from `f15547d8a34`. A rightmost-compound selector index
+  (id / class / local name / universal) replaces the cascade's
+  every-rule-against-every-element loop in both branches of
+  `resolve_subtree_on_this_stack`, preserving cascade order by merging bucket
+  candidates back into source order before matching; and a lookup table replaces
+  the linear `placements` scan in `apply_admitted_positioned_inline_sizes`,
+  which the finer split identified as a second quadratic and as the whole of
+  T2's unattributed layout residual. The L0b grid rerun on the same host, both
+  ends measured in one session: the 50,000-element first frame 5.93 s → 4.80 s,
+  the 20,000 → 50,000 growth exponent 1.242 → 1.016, every phase's per-element
+  cost flat across the grid, every rendered digest unchanged. The whole-grid
+  fitted exponent is 1.112 → 1.126 and is a poor instrument here; the pairwise
+  steps and the per-phase table are the result. The 1-second bound at 50,000 is
+  still not reached and 4.80 s is the restated bound, with the remaining
+  per-element constant attributed to `ComputedValues`' shape rather than to
+  selector matching — which corrects the 2026-09-15 cascade finding. The
+  mutation reprice at 50,000 (lane E's command, both binaries) gives 6.96 s →
+  6.01 s of work per mutating frame, the gain entirely in `session.frame`.
+  WPT before and after over `css/selectors`, `css/css-cascade`,
+  `css/css-position`, `css/CSS2/selectors` and `dom/nodes` in testharness mode
+  and `css/selectors`, `css/css-cascade`, `css/css-position`,
+  `css/CSS2/selectors` and `shadow-dom` in reftest mode: **zero transitions of
+  any kind** in all ten runs. `css/css-scoping` is absent from the checkout and
+  was not run. Eight focused tests added; genet-livery 556, livery 206,
+  genet-documents 51, ortet 32, all green. The native compositing receipt
+  reproduces 25/25 probes on both engines at digest `0xa440137ccc503f9c`. The
+  temporary phase probes were removed before the lane closed; the instrumented
+  tree is preserved in the receipt. Receipts:
+  `Code/testing/wing/l0b_f_2026-09-16/results.md`,
+  `Code/testing/genet/wpt-ledger/2026-09-16_f_selector_index/` and
+  `Code/testing/genet/f_selector_index_20260916/`.

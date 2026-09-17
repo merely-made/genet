@@ -792,9 +792,18 @@ impl RenderSession {
         false
     }
 
-    /// One rendering turn at `now_ms`: rAF callbacks, mutation apply, animation
-    /// tick, then transition + animation event dispatch. Returns how much work
-    /// happened (0 = the turn was a no-op), which feeds the quiescence check.
+    /// One rendering turn at `now_ms`: rAF callbacks, then a mutation-triggered
+    /// relayout/repaint. There is deliberately no "animation tick" step here:
+    /// the scripted DOM's style route (`IncrementalStyle`, reached through
+    /// `LiveryCssom::frame`) carries no CSS Animations/Transitions clock at
+    /// all, unlike the static-document `LiveryDocument` the reftest route
+    /// uses (`document::animation`'s `pump`/`clock_ms`). `getComputedStyle`
+    /// under `testharness` therefore never reflects `@keyframes` or
+    /// transition progress, at any `now_ms` — see the 2026-09-16 correction
+    /// to the 2026-09-15 Findings entry in
+    /// `design_docs/2026-09-12_css_3d_transforms_and_first_frame_plan.md`.
+    /// Returns how much work happened (0 = the turn was a no-op), which feeds
+    /// the quiescence check.
     fn turn<E: ScriptEngine>(&self, rt: &mut Runtime<E>, now_ms: f64) -> usize {
         let mut work = rt.run_animation_frame_callbacks(now_ms).unwrap_or(0);
         let pending = {

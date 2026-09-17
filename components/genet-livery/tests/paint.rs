@@ -402,6 +402,167 @@ fn negative_delay_keyframe_background_color_reaches_the_canvas() {
 }
 
 #[test]
+fn negative_delay_keyframe_rotate_reaches_the_paint_transform() {
+    let document = StaticDocument::parse(r#"<html><body><div class="box"></div></body></html>"#);
+    let styles = StyleSet::cambium(&[r#"
+        .box {
+            width: 20px;
+            height: 20px;
+            animation: spin 1000000s linear -500000s;
+        }
+        @keyframes spin {
+            0% { rotate: 0deg; }
+            100% { rotate: 90deg; }
+        }
+    "#]);
+    let mut retained = LiveryDocument::new(document, styles, Device::screen(320.0, 240.0));
+    let list = retained.frame(320, 240).expect("initial animation frame");
+    let transform = list
+        .commands()
+        .iter()
+        .find_map(|command| match command {
+            PaintCmd::PushTransform(spec) => Some(spec.transform),
+            _ => None,
+        })
+        .expect("individual `rotate` keyframe should open a coordinate space at 50% progress");
+    assert!(
+        (transform.m11).abs() < 0.9,
+        "expected a rotated (non-identity) transform at 50% progress, got {transform:?}"
+    );
+}
+
+/// `animation-play-state: paused` must freeze the sampled progress at the
+/// clock value in effect when the animation was scheduled, even once the
+/// document clock is later pumped forward — this is what lets a WPT
+/// reftest's negative-delay + paused convention capture a deterministic
+/// mid-progress frame regardless of when (or whether) the harness advances
+/// its virtual clock.
+#[test]
+fn paused_keyframe_rotate_freezes_progress_across_a_later_pump() {
+    let document = StaticDocument::parse(r#"<html><body><div class="box"></div></body></html>"#);
+    let styles = StyleSet::cambium(&[r#"
+        .box {
+            width: 20px;
+            height: 20px;
+            animation: spin 1000ms linear -500ms;
+            animation-play-state: paused;
+        }
+        @keyframes spin {
+            0% { rotate: 0deg; }
+            100% { rotate: 90deg; }
+        }
+    "#]);
+    let mut retained = LiveryDocument::new(document, styles, Device::screen(320.0, 240.0));
+    let first = retained.frame(320, 240).expect("initial animation frame");
+    let first_transform = first
+        .commands()
+        .iter()
+        .find_map(|command| match command {
+            PaintCmd::PushTransform(spec) => Some(spec.transform),
+            _ => None,
+        })
+        .expect("paused animation still opens a coordinate space at its frozen progress");
+
+    // Advance the document clock well past the animation's duration. A
+    // paused animation must not move.
+    retained.pump(10_000.0);
+    let second = retained.frame(320, 240).expect("frame after pump");
+    let second_transform = second
+        .commands()
+        .iter()
+        .find_map(|command| match command {
+            PaintCmd::PushTransform(spec) => Some(spec.transform),
+            _ => None,
+        })
+        .expect("paused animation still opens a coordinate space after a pump");
+
+    assert_eq!(
+        first_transform, second_transform,
+        "a paused keyframe animation must not advance when the document clock is pumped"
+    );
+    // And the frozen value should be the mid-progress rotation (45deg), not
+    // the start (0deg) or end (90deg) of the keyframe range.
+    assert!(
+        (first_transform.m11 - std::f32::consts::FRAC_1_SQRT_2).abs() < 0.01,
+        "expected the -500ms delay to freeze at 50% progress (45deg), got {first_transform:?}"
+    );
+}
+
+#[test]
+fn zero_delay_running_keyframe_rotate_applies_at_progress_zero() {
+    let document = StaticDocument::parse(r#"<html><body><div class="box"></div></body></html>"#);
+    let styles = StyleSet::cambium(&[r#"
+        .box {
+            width: 20px;
+            height: 20px;
+            animation: spin 10s linear;
+        }
+        @keyframes spin {
+            from { rotate: 0 1 0 44deg; }
+            to { rotate: 0 1 0 44deg; }
+        }
+    "#]);
+    let mut retained = LiveryDocument::new(document, styles, Device::screen(320.0, 240.0));
+    let list = retained.frame(320, 240).expect("initial animation frame");
+    let transform = list
+        .commands()
+        .iter()
+        .find_map(|command| match command {
+            PaintCmd::PushTransform(spec) => Some(spec.transform),
+            _ => None,
+        })
+        .expect("a from/to-constant `rotate` keyframe still applies at progress 0");
+    // cos(44deg) ~= 0.719.
+    assert!(
+        (transform.m11 - 44.0_f32.to_radians().cos()).abs() < 0.01,
+        "expected the constant 44deg rotate keyframe value at progress 0, got {transform:?}"
+    );
+}
+
+/// The opacity counterpart to `paused_keyframe_rotate_freezes_progress_across_a_later_pump`:
+/// a paused, negative-delay `opacity` keyframe animation must sample its
+/// mid-progress value and hold it across a later clock pump, matching the
+/// WPT reftest convention `scale-interpolation` and its siblings rely on.
+#[test]
+fn paused_keyframe_opacity_freezes_progress_across_a_later_pump() {
+    let document = StaticDocument::parse(r#"<html><body><div class="box"></div></body></html>"#);
+    let styles = StyleSet::cambium(&[r#"
+        .box {
+            width: 20px;
+            height: 20px;
+            background-color: black;
+            animation: fade 1000ms linear -500ms;
+            animation-play-state: paused;
+        }
+        @keyframes fade {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    "#]);
+    let mut retained = LiveryDocument::new(document, styles, Device::screen(320.0, 240.0));
+    let opacity_of = |list: &genet_livery::LiveryPaintList| {
+        list.commands().iter().find_map(|command| match command {
+            PaintCmd::PushLayer(layer) => Some(layer.opacity),
+            _ => None,
+        })
+    };
+    let first = retained.frame(320, 240).expect("initial animation frame");
+    let first_opacity = opacity_of(&first).expect("paused animation still emits an opacity layer");
+    assert!(
+        (first_opacity - 0.5).abs() < 0.05,
+        "expected the -500ms delay to freeze at 50% progress, got {first_opacity}"
+    );
+
+    retained.pump(10_000.0);
+    let second = retained.frame(320, 240).expect("frame after pump");
+    let second_opacity = opacity_of(&second).expect("paused animation still emits an opacity layer");
+    assert_eq!(
+        first_opacity, second_opacity,
+        "a paused keyframe animation must not advance when the document clock is pumped"
+    );
+}
+
+#[test]
 fn border_radii_reach_the_neutral_border_primitive() {
     let list = render(
         r#"<html><body><div class="card"></div></body></html>"#,

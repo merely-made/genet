@@ -242,6 +242,23 @@ directly instead of through Rodrigues, whose unrotated diagonal cell is
 `rotateZ()` composed to something that only looked like a 3D matrix, and
 `transform-2d-getComputedStyle-001` said so.
 
+**Animation sampling, 2026-09-16.** T1's individual `rotate`/`translate`/
+`scale` interpolate and apply correctly under `@keyframes` — confirmed by
+direct paint-transform tests
+(`components/genet-livery/tests/paint.rs`:
+`negative_delay_keyframe_rotate_reaches_the_paint_transform`,
+`zero_delay_running_keyframe_rotate_applies_at_progress_zero`) and, in the
+WPT **reftest** lane, by the standard negative-delay + `animation-play-state:
+paused` convention sampling mid-progress correctly (see the animation-clock
+lane, `Code/testing/genet/wpt-ledger/2026-09-16_d_animation_clock/`). That
+lane's one reftest failure naming an individual-transform animation
+(`rotate-animation-with-will-change-transform-001`) traced to an unrelated
+`animation` shorthand gap, not to T1. The WPT **testharness** lane's
+`getComputedStyle`-driven interpolation tests (`scale-interpolation` and
+siblings) remain unsampled: that lane's own scripted-DOM style route has no
+animation clock at all, which is outside T1 and outside the animation-clock
+lane's narrow scope.
+
 ---
 
 ## T2. First-frame scaling
@@ -1251,6 +1268,39 @@ T3's ordinary image-composition receipt.
   progress 0 or 1, and `rotate-animation-with-will-change-transform-001`
   renders its static reference rotated and its animated subject not. Adjacent
   to this lane; named, not fixed.
+  - **2026-09-16 correction.** Runtime controls (positive and negative,
+    `Code/testing/genet/wpt-ledger/2026-09-16_d_animation_clock/controls.md`)
+    show this was two different things, only one of them a clock problem.
+    **Testharness mode** has no clock at all: the scripted DOM's style route
+    (`IncrementalStyle`, in `components/genet-livery/src/invalidation.rs`,
+    reached through `LiveryCssom::frame` in
+    `components/genet-scripted/livery.rs`) never calls
+    `schedule_keyframe_animation`/`apply_keyframe_animation` — confirmed by
+    reading (no such call anywhere in `components/genet-livery/src/style.rs`)
+    and by three repeated runs of a rAF-sampling fixture whose
+    `getComputedStyle` reads never move off the property's initial value.
+    That is why `scale-interpolation` (driven entirely through
+    `getComputedStyle`, per `css/support/interpolation-testcommon.js`'s
+    `cssAnimationsInterpolation`) never sees a mid-progress sample; it is a
+    structural gap in the scripted style route, not a pump call this lane can
+    add. **Reftest mode was not broken for the WPT convention this lane
+    checked**: its one-shot, script-free `LiveryDocument::frame()` already
+    samples `animation-delay: -Xs; animation-play-state: paused` correctly at
+    `clock_ms == 0`, proven with a passing reftest and a must-fail control
+    reftest that correctly fails (`diff=2% maxδ=127`). What reftest mode
+    *was* missing was `animation-play-state` itself — the property sat in
+    `properties.toml`'s `[[unimplemented]]` table, so a paused animation was
+    never distinguished from a running one; latent rather than observable
+    today, because reftest mode's virtual clock never advances past `0.0`
+    regardless, but load-bearing the moment anything does. That is
+    implemented and tested now (`components/genet-livery/src/document.rs`,
+    `document/animation.rs`, `components/livery/properties.toml`). And
+    `rotate-animation-with-will-change-transform-001`'s failure is **not a
+    clock or T1 defect at all**: a differential fixture isolated it to the
+    `animation` shorthand rejecting the whole declaration when
+    `animation-iteration-count` (`infinite`) is present — a shorthand-grammar
+    gap, named and left for its own lane. Full reasoning, commands and
+    captures in `controls.md` and `results.md` alongside it.
 - **2026-09-15** — genet paints `position: absolute; z-index: auto` boxes in
   the normal-flow walk rather than in the positioned-descendants phase. A
   `translateZ` face correctly establishing a stacking context makes that
@@ -1531,3 +1581,29 @@ T3's ordinary image-composition receipt.
   `Code/testing/genet/wpt-ledger/2026-09-16_c_form_controls/` (including
   `max_content_investigation/` for the bisection) and
   `Code/testing/genet/c_form_controls_20260916/native_receipt_v2/`.
+- **2026-09-16** — the 2026-09-15 CSS Animations clock finding investigated
+  and corrected (see the dated correction under Findings above): testharness
+  mode has no animation clock at all (a structural gap in the scripted DOM's
+  style route, not fixed here — its own lane); reftest mode's negative-delay
+  convention already worked before this pass; `animation-play-state` was
+  unimplemented and is now implemented with paused-freeze semantics
+  (`components/genet-livery/src/document.rs`, `document/animation.rs`,
+  `components/livery/properties.toml`,
+  `components/livery/src/values/property/animation.rs`); and
+  `rotate-animation-with-will-change-transform-001`'s failure traced to an
+  unrelated `animation` shorthand gap (`animation-iteration-count`), not to
+  the clock or to T1. Five focused tests added (four `genet-livery`, one
+  `genet-wpt`); `livery` (64), `genet-livery`, `genet-documents --features
+  livery` (51), `genet-wpt` (13) and `ortet` (32) suites rerun green. WPT
+  testharness+reftest before/after over `css/css-transforms/animation`,
+  `css/css-animations`, `css/css-transitions`, `web-animations` (testharness)
+  and `css/css-transforms/animation`, `css/css-animations` (reftest): one
+  attributed regression (`animation-play-state-valid.html`'s comma-list
+  subtest, a vacuous pass removed by implementing the property to the same
+  "one animation" partial scope as `animation-name`/`animation-delay`), five
+  gains (`animation-play-state` parsing/inheritance), zero reftest movement.
+  `css/css-transforms` as a whole and T3's paint-neighbor directories were
+  not re-run (this lane's change cannot move them; named in `results.md`).
+  Native compositing receipt not rerun (this lane touches no paint/layout/
+  compositing/hit-test code; named in `results.md`). Receipts:
+  `Code/testing/genet/wpt-ledger/2026-09-16_d_animation_clock/`.

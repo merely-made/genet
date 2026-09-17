@@ -1896,6 +1896,17 @@ animation = "discrete"
 source = "css_animations_1"
 
 [[property]]
+name = "animation-play-state"
+value_type = "animation-play-state"
+inherited = false
+initial = "running"
+grammar = "running | paused"
+seed_values = ["running", "paused"]
+animation = "discrete"
+source = "css_animations_1"
+partial = "one animation's play state; comma-separated animation lists remain deferred, matching animation-name/animation-delay"
+
+[[property]]
 name = "transition-property"
 value_type = "transition-property"
 inherited = false
@@ -2771,13 +2782,6 @@ group = "ui"
 inherited = false
 animation = "none"
 spec = "https://drafts.csswg.org/css-animations/#propdef-animation-iteration-count"
-
-[[unimplemented]]
-name = "animation-play-state"
-group = "ui"
-inherited = false
-animation = "none"
-spec = "https://drafts.csswg.org/css-animations/#propdef-animation-play-state"
 
 [[unimplemented]]
 name = "animation-range-end"

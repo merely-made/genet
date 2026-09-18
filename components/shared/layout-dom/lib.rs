@@ -81,7 +81,7 @@ pub trait LayoutDom {
     fn parent(&self, id: Self::NodeId) -> Option<Self::NodeId>;
 
     /// Previous sibling in DOM order. Hot on selector-matching paths
-    /// (`prev_sibling_element` in `selectors::Element`); deriving it from
+    /// (`prev_sibling_element` in `cadency::Element`); deriving it from
     /// `dom_children(parent)` would be O(siblings) per call.
     fn prev_sibling(&self, id: Self::NodeId) -> Option<Self::NodeId>;
 
@@ -198,7 +198,7 @@ pub trait LayoutDom {
     fn kind(&self, id: Self::NodeId) -> NodeKind;
 
     /// Stable per-node identity as a `u64`. Used by foreign trait adapters
-    /// (`selectors::OpaqueElement`, host reflector maps) that need a
+    /// (host reflector maps) that need a
     /// pointer-shaped value for identity comparisons in the cascade.
     ///
     /// Must satisfy: distinct nodes within the same backing store return

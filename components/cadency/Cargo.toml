@@ -1,0 +1,13 @@
+[package]
+name = "cadency"
+version = "0.0.1"
+edition = "2024"
+license = "MPL-2.0"
+repository = "https://github.com/merely-made/genet"
+description = "CSS selector parsing and matching over any element tree: combinators, structural and logical pseudo-classes, and the shadow-tree forms, with a consumer-supplied state vocabulary."
+readme = "README.md"
+keywords = ["css", "selectors", "dom"]
+categories = ["web-programming", "parser-implementations"]
+
+[dependencies]
+cssparser.workspace = true

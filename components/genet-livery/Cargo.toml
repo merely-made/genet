@@ -19,7 +19,6 @@ layout-dom-api = { version = "0.1.1", path = "../shared/layout-dom" }
 livery = { version = "0.0.4", path = "../livery" }
 paint_list_api.workspace = true
 parley.workspace = true
-selectors = "0.39"
 serde.workspace = true
 # Grows the layout recursion's stack on demand; see `layout::build_block::build_box`.
 stacker.workspace = true

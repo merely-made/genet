@@ -6,7 +6,7 @@
 
 //! Absolute WPT conformance accounting.
 //!
-//! This is deliberately separate from the Stylo-versus-Livery differential.
+//! This is deliberately separate from any engine-versus-engine differential.
 //! It joins exact per-test result files to the authoritative WPT manifest, so
 //! tests that did not run remain visible instead of disappearing from a pass
 //! count.
@@ -231,9 +231,8 @@ pub fn build_report(
         version: REPORT_VERSION,
         subset: inputs.subset.trim_matches('/').to_string(),
         testharness_cssom: inputs.renderer.to_string(),
-        // The current scripted Livery route owns CSSOM and computed style, but
-        // retains Stylo as its geometry and animation driver.
-        testharness_geometry: "stylo".to_string(),
+        // Livery owns CSSOM and computed style; Buckram lays out from it.
+        testharness_geometry: "buckram".to_string(),
         reftest_renderer: inputs.renderer.to_string(),
         testharness_engine: inputs.testharness_engine.to_string(),
         complete,
@@ -1104,7 +1103,7 @@ mod tests {
             version: REPORT_VERSION,
             subset: "css".into(),
             testharness_cssom: "livery".into(),
-            testharness_geometry: "stylo".into(),
+            testharness_geometry: "buckram".into(),
             reftest_renderer: "livery".into(),
             testharness_engine: "boa".into(),
             complete: true,

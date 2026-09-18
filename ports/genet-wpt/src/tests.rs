@@ -120,7 +120,7 @@ fn reference_verification_rejects_duplicates_and_renderer_drift() {
     assert!(error.contains("reason `reference-unverified`"), "{error}");
 
     let error =
-        ReferenceVerification::parse(CHECKED_REFERENCE_VERIFICATION, "checked fixture", "stylo")
+        ReferenceVerification::parse(CHECKED_REFERENCE_VERIFICATION, "checked fixture", "foreign")
             .err()
             .expect("renderer mismatch is invalid");
     assert!(error.contains("records renderer `livery`"), "{error}");
@@ -181,9 +181,9 @@ fn expectations_accept_exact_statuses() {
             subtest_results: None,
         },
     ];
-    write_expectations(&path, test_result_metadata("stylo", "dom"), &actuals)
+    write_expectations(&path, test_result_metadata("foreign", "dom"), &actuals)
         .expect("write expectations");
-    check_expectations(&path, "stylo", &actuals).expect("expectations match exactly");
+    check_expectations(&path, "foreign", &actuals).expect("expectations match exactly");
     let _ = fs::remove_file(path);
 }
 
@@ -197,7 +197,7 @@ fn expectations_reject_changed_statuses() {
         subtests: None,
         subtest_results: None,
     }];
-    write_expectations(&path, test_result_metadata("stylo", "dom"), &expected)
+    write_expectations(&path, test_result_metadata("foreign", "dom"), &expected)
         .expect("write expectations");
     let actual = vec![ActualRecord {
         test: "dom/example.html".into(),
@@ -207,7 +207,7 @@ fn expectations_reject_changed_statuses() {
         subtest_results: None,
     }];
     let err =
-        check_expectations(&path, "stylo", &actual).expect_err("changed status is unexpected");
+        check_expectations(&path, "foreign", &actual).expect_err("changed status is unexpected");
     assert!(err.contains("expected pass, got fail"), "{err}");
     let _ = fs::remove_file(path);
 }
@@ -231,9 +231,9 @@ fn expectations_accept_pinned_reasons_and_legacy_strings() {
             subtest_results: None,
         },
     ];
-    write_expectations(&path, test_result_metadata("stylo", "dom"), &expected)
+    write_expectations(&path, test_result_metadata("foreign", "dom"), &expected)
         .expect("write expectations");
-    check_expectations(&path, "stylo", &expected).expect("expectations match exact reason");
+    check_expectations(&path, "foreign", &expected).expect("expectations match exact reason");
     let _ = fs::remove_file(path);
 }
 
@@ -247,7 +247,7 @@ fn expectations_reject_changed_pinned_reason() {
         subtests: None,
         subtest_results: None,
     }];
-    write_expectations(&path, test_result_metadata("stylo", "dom"), &expected)
+    write_expectations(&path, test_result_metadata("foreign", "dom"), &expected)
         .expect("write expectations");
     let actual = vec![ActualRecord {
         test: "dom/example.html".into(),
@@ -257,7 +257,7 @@ fn expectations_reject_changed_pinned_reason() {
         subtest_results: None,
     }];
     let err =
-        check_expectations(&path, "stylo", &actual).expect_err("changed reason is unexpected");
+        check_expectations(&path, "foreign", &actual).expect_err("changed reason is unexpected");
     assert!(
         err.contains("expected skip (worker-only), got skip (xhtml)"),
         "{err}"
@@ -366,7 +366,7 @@ fn opt_in_expected_nonpasses_require_a_reason() {
             "version": 1,
             "command": "testharness",
             "engine": "boa",
-            "renderer": "stylo",
+            "renderer": "foreign",
             "policy": "opt-in",
             "tests": {
                 "dom/example.html": {
@@ -404,7 +404,7 @@ fn generated_opt_in_todo_is_not_an_accepted_reason() {
             status: "fail".into(),
         }]),
     }];
-    let mut metadata = test_result_metadata("stylo", "dom/example.html");
+    let mut metadata = test_result_metadata("foreign", "dom/example.html");
     metadata.policy = ExpectationPolicy::OptIn;
     write_expectations(&path, metadata, &actuals).expect("write opt-in skeleton");
 
@@ -427,7 +427,7 @@ fn opt_in_policy_rejects_file_level_nonexecution_statuses() {
             "version": 1,
             "command": "testharness",
             "engine": "boa",
-            "renderer": "stylo",
+            "renderer": "foreign",
             "policy": "opt-in",
             "tests": {
                 "dom/example.html": {
@@ -471,7 +471,7 @@ fn opt_in_policy_uses_the_expectation_map_as_its_include_list() {
         },
     ];
     let expectations = Expectations {
-        renderer: Some("stylo".into()),
+        renderer: Some("foreign".into()),
         policy: ExpectationPolicy::OptIn,
         tests: BTreeMap::from([(
             "dom/selected.html".into(),
@@ -522,15 +522,15 @@ fn expectations_reject_a_renderer_mismatch() {
     }];
     write_expectations(&path, test_result_metadata("livery", "css"), &expected)
         .expect("write expectations");
-    let err = check_expectations(&path, "stylo", &expected)
-        .expect_err("a Livery baseline must not vouch for a Stylo run");
+    let err = check_expectations(&path, "foreign", &expected)
+        .expect_err("a Livery baseline must not vouch for a foreign run");
     assert!(err.contains("written under renderer `livery`"), "{err}");
     let _ = fs::remove_file(path);
 }
 
 #[test]
 fn reftest_renderer_accepts_only_the_owned_lane() {
-    assert_eq!(ReftestRenderer::parse("stylo"), None);
+    assert_eq!(ReftestRenderer::parse("foreign"), None);
     assert_eq!(
         ReftestRenderer::parse("LIVERY"),
         Some(ReftestRenderer::Livery)

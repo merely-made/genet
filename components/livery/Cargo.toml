@@ -9,8 +9,7 @@ readme = "README.md"
 
 [dependencies]
 cssparser.workspace = true
-precomputed-hash = "0.1"
-selectors = "0.39"
+cadency = { version = "0.0.1", path = "../cadency" }
 
 [build-dependencies]
 serde = { version = "1", features = ["derive"] }

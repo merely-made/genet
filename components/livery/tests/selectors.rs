@@ -7,9 +7,7 @@
 use std::{collections::HashSet, sync::Arc};
 
 use livery::selector::{
-    Atom, AttrSelectorOperation, BloomFilter, CaseSensitivity, Element, ElementSelectorFlags,
-    LiverySelectorImpl, NamespaceConstraint, NoPseudoElement, OpaqueElement, SelectorList,
-    StatePseudoClass,
+    AttrOperation, CaseSensitivity, Element, NamespaceConstraint, SelectorList, StatePseudoClass,
 };
 use livery::{
     cascade::{CascadeLayer, Origin},
@@ -17,7 +15,6 @@ use livery::{
     stylesheet::{StyleRule, cascade_rules},
     values::Color,
 };
-use selectors::matching::MatchingContext;
 
 thread_local! {
     static NAME_MATCHES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -69,10 +66,10 @@ impl ElementRef {
 }
 
 impl Element for ElementRef {
-    type Impl = LiverySelectorImpl;
+    type PseudoClass = StatePseudoClass;
 
-    fn opaque(&self) -> OpaqueElement {
-        OpaqueElement::new(self.node())
+    fn is_same(&self, other: &Self) -> bool {
+        self.id == other.id
     }
 
     fn parent_element(&self) -> Option<Self> {
@@ -80,18 +77,6 @@ impl Element for ElementRef {
             dom: self.dom.clone(),
             id,
         })
-    }
-
-    fn parent_node_is_shadow_root(&self) -> bool {
-        false
-    }
-
-    fn containing_shadow_host(&self) -> Option<Self> {
-        None
-    }
-
-    fn is_pseudo_element(&self) -> bool {
-        false
     }
 
     fn prev_sibling_element(&self) -> Option<Self> {
@@ -102,24 +87,17 @@ impl Element for ElementRef {
         self.sibling(1)
     }
 
-    fn first_element_child(&self) -> Option<Self> {
-        self.node().children.first().copied().map(|id| Self {
-            dom: self.dom.clone(),
-            id,
-        })
-    }
-
     fn is_html_element_in_html_document(&self) -> bool {
         true
     }
 
-    fn has_local_name(&self, local_name: &Atom) -> bool {
+    fn has_local_name(&self, local_name: &str) -> bool {
         NAME_MATCHES.set(NAME_MATCHES.get() + 1);
-        self.node().name.eq_ignore_ascii_case(local_name.as_str())
+        self.node().name.eq_ignore_ascii_case(local_name)
     }
 
-    fn has_namespace(&self, namespace: &Atom) -> bool {
-        namespace.as_str().is_empty()
+    fn has_namespace(&self, namespace: &str) -> bool {
+        namespace.is_empty()
     }
 
     fn is_same_type(&self, other: &Self) -> bool {
@@ -128,66 +106,32 @@ impl Element for ElementRef {
 
     fn attr_matches(
         &self,
-        namespace: &NamespaceConstraint<&Atom>,
-        local_name: &Atom,
-        operation: &AttrSelectorOperation<&livery::selector::AttributeValue>,
+        namespace: &NamespaceConstraint<'_>,
+        local_name: &str,
+        operation: &AttrOperation<'_>,
     ) -> bool {
-        if matches!(namespace, NamespaceConstraint::Specific(ns) if !ns.as_str().is_empty()) {
+        if matches!(namespace, NamespaceConstraint::Specific(ns) if !ns.is_empty()) {
             return false;
         }
-        self.attribute(local_name.as_str())
+        self.attribute(local_name)
             .is_some_and(|value| operation.eval_str(value))
     }
 
-    fn match_non_ts_pseudo_class(
-        &self,
-        pseudo: &StatePseudoClass,
-        _context: &mut MatchingContext<LiverySelectorImpl>,
-    ) -> bool {
+    fn matches_pseudo_class(&self, pseudo: &StatePseudoClass) -> bool {
         self.node().states.contains(pseudo)
     }
 
-    fn match_pseudo_element(
-        &self,
-        pseudo: &NoPseudoElement,
-        _context: &mut MatchingContext<LiverySelectorImpl>,
-    ) -> bool {
-        match *pseudo {}
-    }
-
-    fn apply_selector_flags(&self, _flags: ElementSelectorFlags) {}
-
-    fn is_link(&self) -> bool {
-        self.node().name == "a" && self.attribute("href").is_some()
-    }
-
-    fn is_html_slot_element(&self) -> bool {
-        false
-    }
-
-    fn has_id(&self, id: &Atom, case_sensitivity: CaseSensitivity) -> bool {
+    fn has_id(&self, id: &str, case_sensitivity: CaseSensitivity) -> bool {
         self.attribute("id")
-            .is_some_and(|value| case_sensitivity.eq(value.as_bytes(), id.as_str().as_bytes()))
+            .is_some_and(|value| case_sensitivity.eq(value, id))
     }
 
-    fn has_class(&self, class: &Atom, case_sensitivity: CaseSensitivity) -> bool {
+    fn has_class(&self, class: &str, case_sensitivity: CaseSensitivity) -> bool {
         self.attribute("class").is_some_and(|classes| {
             classes
                 .split_ascii_whitespace()
-                .any(|value| case_sensitivity.eq(value.as_bytes(), class.as_str().as_bytes()))
+                .any(|value| case_sensitivity.eq(value, class))
         })
-    }
-
-    fn has_custom_state(&self, _name: &Atom) -> bool {
-        false
-    }
-
-    fn imported_part(&self, _name: &Atom) -> Option<Atom> {
-        None
-    }
-
-    fn is_part(&self, _name: &Atom) -> bool {
-        false
     }
 
     fn is_empty(&self) -> bool {
@@ -196,10 +140,6 @@ impl Element for ElementRef {
 
     fn is_root(&self) -> bool {
         self.node().parent.is_none()
-    }
-
-    fn add_element_unique_hashes(&self, _filter: &mut BloomFilter) -> bool {
-        false
     }
 }
 

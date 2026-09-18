@@ -11,10 +11,8 @@ use std::{
 
 use layout_dom_api::{LayoutDom, NodeKind};
 use livery::selector::{
-    Atom, AttrSelectorOperation, BloomFilter, CaseSensitivity, Element, ElementSelectorFlags,
-    LiverySelectorImpl, NamespaceConstraint, NoPseudoElement, OpaqueElement, StatePseudoClass,
+    AttrOperation, CaseSensitivity, Element, NamespaceConstraint, StatePseudoClass,
 };
-use selectors::matching::MatchingContext;
 
 /// Host-supplied dynamic pseudo-class state for one document.
 pub struct InteractionStates<Id> {
@@ -216,16 +214,10 @@ impl<'tree, 'dom, D: LayoutDom> ElementRef<'tree, 'dom, D> {
 }
 
 impl<D: LayoutDom> Element for ElementRef<'_, '_, D> {
-    type Impl = LiverySelectorImpl;
+    type PseudoClass = StatePseudoClass;
 
-    fn opaque(&self) -> OpaqueElement {
-        OpaqueElement::new(
-            self.tree
-                .identities
-                .get(&self.id)
-                .expect("selector identity exists")
-                .as_ref(),
-        )
+    fn is_same(&self, other: &Self) -> bool {
+        self.id == other.id
     }
 
     fn parent_element(&self) -> Option<Self> {
@@ -251,16 +243,12 @@ impl<D: LayoutDom> Element for ElementRef<'_, '_, D> {
         self.tree.element(host)
     }
 
-    /// The slot this element is assigned to (`::slotted()`'s jump). The
-    /// selectors crate walks this to decide whether a `::slotted` rule from a
-    /// shadow tree reaches a light-DOM element.
+    /// The slot this element is assigned to (`::slotted()`'s jump), walked to
+    /// decide whether a `::slotted` rule from a shadow tree reaches a
+    /// light-DOM element.
     fn assigned_slot(&self) -> Option<Self> {
         let slot = self.dom().assigned_slot(self.id)?;
         self.tree.element(slot)
-    }
-
-    fn is_pseudo_element(&self) -> bool {
-        false
     }
 
     fn prev_sibling_element(&self) -> Option<Self> {
@@ -271,30 +259,22 @@ impl<D: LayoutDom> Element for ElementRef<'_, '_, D> {
         self.sibling_element(false)
     }
 
-    fn first_element_child(&self) -> Option<Self> {
-        self.dom()
-            .dom_children(self.id)
-            .find_map(|id| self.tree.element(id))
-    }
-
     fn is_html_element_in_html_document(&self) -> bool {
         self.dom()
             .element_name(self.id)
             .is_some_and(|name| name.ns.as_ref() == "http://www.w3.org/1999/xhtml")
     }
 
-    fn has_local_name(&self, local_name: &Atom) -> bool {
-        self.dom().element_name(self.id).is_some_and(|name| {
-            name.local
-                .as_ref()
-                .eq_ignore_ascii_case(local_name.as_str())
-        })
-    }
-
-    fn has_namespace(&self, namespace: &Atom) -> bool {
+    fn has_local_name(&self, local_name: &str) -> bool {
         self.dom()
             .element_name(self.id)
-            .is_some_and(|name| name.ns.as_ref() == namespace.as_str())
+            .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case(local_name))
+    }
+
+    fn has_namespace(&self, namespace: &str) -> bool {
+        self.dom()
+            .element_name(self.id)
+            .is_some_and(|name| name.ns.as_ref() == namespace)
     }
 
     fn is_same_type(&self, other: &Self) -> bool {
@@ -303,71 +283,47 @@ impl<D: LayoutDom> Element for ElementRef<'_, '_, D> {
 
     fn attr_matches(
         &self,
-        namespace: &NamespaceConstraint<&Atom>,
-        local_name: &Atom,
-        operation: &AttrSelectorOperation<&livery::selector::AttributeValue>,
+        namespace: &NamespaceConstraint<'_>,
+        local_name: &str,
+        operation: &AttrOperation<'_>,
     ) -> bool {
         self.dom().attributes(self.id).any(|attribute| {
             let namespace_matches = match namespace {
                 NamespaceConstraint::Any => true,
-                NamespaceConstraint::Specific(namespace) => {
-                    attribute.name.ns.as_ref() == namespace.as_str()
-                },
+                NamespaceConstraint::Specific(namespace) => attribute.name.ns.as_ref() == *namespace,
             };
             namespace_matches
-                && attribute.name.local.as_ref() == local_name.as_str()
+                && attribute.name.local.as_ref() == local_name
                 && operation.eval_str(attribute.value)
         })
     }
 
-    fn match_non_ts_pseudo_class(
-        &self,
-        pseudo: &StatePseudoClass,
-        _context: &mut MatchingContext<LiverySelectorImpl>,
-    ) -> bool {
+    fn matches_pseudo_class(&self, pseudo: &StatePseudoClass) -> bool {
         self.tree.states.matches(self.id, *pseudo)
     }
 
-    fn match_pseudo_element(
-        &self,
-        pseudo: &NoPseudoElement,
-        _context: &mut MatchingContext<LiverySelectorImpl>,
-    ) -> bool {
-        match *pseudo {}
+    fn is_slot(&self) -> bool {
+        self.has_local_name("slot")
     }
 
-    fn apply_selector_flags(&self, _flags: ElementSelectorFlags) {}
-
-    fn is_link(&self) -> bool {
-        self.has_local_name(&Atom::from("a")) && self.attribute("", "href").is_some()
-    }
-
-    fn is_html_slot_element(&self) -> bool {
-        self.has_local_name(&Atom::from("slot"))
-    }
-
-    fn has_id(&self, id: &Atom, case_sensitivity: CaseSensitivity) -> bool {
+    fn has_id(&self, id: &str, case_sensitivity: CaseSensitivity) -> bool {
         self.attribute("", "id")
-            .is_some_and(|value| case_sensitivity.eq(value.as_bytes(), id.as_str().as_bytes()))
+            .is_some_and(|value| case_sensitivity.eq(value, id))
     }
 
-    fn has_class(&self, class: &Atom, case_sensitivity: CaseSensitivity) -> bool {
+    fn has_class(&self, class: &str, case_sensitivity: CaseSensitivity) -> bool {
         self.attribute("", "class").is_some_and(|classes| {
             classes
                 .split_ascii_whitespace()
-                .any(|value| case_sensitivity.eq(value.as_bytes(), class.as_str().as_bytes()))
+                .any(|value| case_sensitivity.eq(value, class))
         })
-    }
-
-    fn has_custom_state(&self, _name: &Atom) -> bool {
-        false
     }
 
     /// `exportparts` on this element: the outer name a part is re-exported
     /// under, given the inner `name`. Parsed per read; the attribute is short
     /// and only consulted while a `::part()` selector is climbing shadow
     /// boundaries.
-    fn imported_part(&self, name: &Atom) -> Option<Atom> {
+    fn imported_part(&self, name: &str) -> Option<String> {
         let mapping = self.attribute("", "exportparts")?;
         for entry in mapping.split(',') {
             let entry = entry.trim();
@@ -375,8 +331,8 @@ impl<D: LayoutDom> Element for ElementRef<'_, '_, D> {
                 Some((inner, outer)) => (inner.trim(), outer.trim()),
                 None => (entry, entry),
             };
-            if inner == name.as_str() {
-                return Some(Atom::from(outer));
+            if inner == name {
+                return Some(outer.to_string());
             }
         }
         None
@@ -384,11 +340,11 @@ impl<D: LayoutDom> Element for ElementRef<'_, '_, D> {
 
     /// Whether this element carries part `name` in its `part` attribute — the
     /// whitespace-separated token list `::part()` matches against.
-    fn is_part(&self, name: &Atom) -> bool {
+    fn is_part(&self, name: &str) -> bool {
         self.attribute("", "part").is_some_and(|parts| {
             parts
                 .split_ascii_whitespace()
-                .any(|part| part == name.as_str())
+                .any(|part| part == name)
         })
     }
 
@@ -404,9 +360,5 @@ impl<D: LayoutDom> Element for ElementRef<'_, '_, D> {
 
     fn is_root(&self) -> bool {
         self.parent_element().is_none()
-    }
-
-    fn add_element_unique_hashes(&self, _filter: &mut BloomFilter) -> bool {
-        false
     }
 }

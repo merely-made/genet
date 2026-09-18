@@ -13,4 +13,3 @@ test = false
 
 [dependencies]
 malloc_size_of = { workspace = true }
-servo_arc = { workspace = true }

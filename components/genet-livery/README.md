@@ -1,15 +1,15 @@
 # Genet Livery
 
 `genet-livery` is Genet's integration path for the clean-room Livery CSS
-engine. It adapts any `LayoutDom` to Livery's selector substrate, resolves a
+engine. It adapts any `LayoutDom` to `cadency`'s `Element` trait, resolves a
 concrete Livery style plane, lays the bounded Cambium lane out, and emits box
 backgrounds, physical borders, and shared inline text runs through the neutral
 `PaintList` API without importing Stylo. Text shaping uses the
 MIT/Apache Parley crate directly; the MPL `netrender_text` adapter is not part
 of this path.
 
-Fullweb documents continue through `genet-layout` and Genet Stylo. Runtime
-document routing stays above both concrete paths.
+Fullweb documents run on this path as well; the `genet-layout` and Stylo route
+was deleted on 2026-08-21.
 
 The retained `LiveryDocument` owns Parley's font database, shaping scratch
 space, stable font resources, and a cached paint frame. Consecutive text and

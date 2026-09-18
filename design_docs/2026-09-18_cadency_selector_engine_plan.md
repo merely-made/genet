@@ -225,3 +225,8 @@ Both are outward actions and Mark's.
   exactly. `css/css-scoping` and `css/css-shadow-parts` are absent from the
   checkout and unclaimed. Receipt
   `Code/testing/genet/wpt-ledger/2026-09-18_cadency_selector_engine/results.md`.
+- 2026-09-18. The preserved `imported_part` bug is fixed in a commit of its own,
+  after the measurement: `components/genet-livery/src/dom.rs` now reads
+  `exportparts` outer to inner. `exportparts_renames_a_part_for_the_outer_scope`
+  in `tests/shadow_flat_tree.rs` failed before the fix and passes after;
+  genet-livery 557 green. No WPT directory in the checkout covers renaming.

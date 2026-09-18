@@ -283,3 +283,47 @@ fn slotted_content_and_fallback_content_both_get_boxes() {
         "fallback content of a filled slot must not be rendered"
     );
 }
+
+/// `exportparts="knob: handle"` exposes the inner tree's `knob` to the outer
+/// scope as `handle`. The outer name reaches it; the inner name does not.
+#[test]
+fn exportparts_renames_a_part_for_the_outer_scope() {
+    let dom = StaticDocument::parse(
+        "<!doctype html><html><body>\
+         <div id='outer'><template shadowrootmode='open'>\
+           <div id='inner' exportparts='knob: handle, plain'><template shadowrootmode='open'>\
+             <i id='knob' part='knob'>k</i><i id='plain' part='plain'>p</i>\
+           </template></div>\
+         </template></div>\
+         </body></html>",
+    );
+    let styles = resolve_styles(
+        &dom,
+        &style_set(
+            &dom,
+            "#outer::part(handle) { color: rgb(255, 0, 0); } \
+             #outer::part(knob) { font-style: italic; } \
+             #outer::part(plain) { color: rgb(0, 128, 0); }",
+        ),
+        &Device::screen(800.0, 600.0),
+        &InteractionStates::default(),
+    );
+    let knob = by_id(&dom, "knob");
+    assert_eq!(
+        styles.computed_style(knob, "color").as_deref(),
+        Some("rgb(255, 0, 0)"),
+        "the exported name must reach the renamed part"
+    );
+    assert_eq!(
+        styles.computed_style(knob, "font-style").as_deref(),
+        Some("normal"),
+        "the inner name is not visible from the outer scope"
+    );
+    assert_eq!(
+        styles
+            .computed_style(by_id(&dom, "plain"), "color")
+            .as_deref(),
+        Some("rgb(0, 128, 0)"),
+        "an unrenamed export forwards under its own name"
+    );
+}

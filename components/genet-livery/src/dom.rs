@@ -319,23 +319,19 @@ impl<D: LayoutDom> Element for ElementRef<'_, '_, D> {
         })
     }
 
-    /// `exportparts` on this element: the outer name a part is re-exported
-    /// under, given the inner `name`. Parsed per read; the attribute is short
-    /// and only consulted while a `::part()` selector is climbing shadow
-    /// boundaries.
-    fn imported_part(&self, name: &str) -> Option<String> {
-        let mapping = self.attribute("", "exportparts")?;
-        for entry in mapping.split(',') {
+    /// `exportparts` on this host, read outer to inner: the name a part has
+    /// inside this host's shadow tree, given the `outer_name` it is exposed
+    /// under. Parsed per read; the attribute is short and only consulted while
+    /// a `::part()` selector is climbing shadow boundaries.
+    fn imported_part(&self, outer_name: &str) -> Option<String> {
+        self.attribute("", "exportparts")?.split(',').find_map(|entry| {
             let entry = entry.trim();
             let (inner, outer) = match entry.split_once(':') {
                 Some((inner, outer)) => (inner.trim(), outer.trim()),
                 None => (entry, entry),
             };
-            if inner == name {
-                return Some(outer.to_string());
-            }
-        }
-        None
+            (outer == outer_name).then(|| inner.to_string())
+        })
     }
 
     /// Whether this element carries part `name` in its `part` attribute — the

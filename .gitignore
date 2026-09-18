@@ -9,7 +9,6 @@
 # would pin them to a dev-history commit that goes stale as we develop. Tracking
 # their branch tips (and resolving crates.io deps to the latest matching release)
 # is what keeps the dependency landscape current rather than expiring on a pin.
-# Load-bearing upstreams we don't own (servo/stylo) stay rev-pinned in Cargo.toml.
 Cargo.lock
 # cargo-check / reftest log artifacts (root + per-crate, any depth): test
 # outputs, reftest dumps, pass/fail lists. The committed cargo-check-env.ps1
@@ -35,7 +34,6 @@ Cargo.lock
 # tests/wpt/.../the-form-element/resources/target (a real test dir, not
 # build output).
 /components/script-engine-boa/target
-/components/livery/tools/import-stylo-db/target
 /probes/*/target
 /tests/wpt/reftests-report/report.html
 /python/_virtualenv*

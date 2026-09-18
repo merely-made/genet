@@ -23,7 +23,7 @@ struct Database {
     shorthands: BTreeMap<String, Shorthand>,
     property: Vec<Property>,
     /// Harvest H0: the servo-lane property space livery does not implement
-    /// yet, imported as data by tools/import-stylo-db. Known to the
+    /// yet, imported once as data (the import tool is deleted). Known to the
     /// catalog and rejected with a known-unimplemented diagnostic.
     #[serde(default)]
     unimplemented: Vec<Unimplemented>,

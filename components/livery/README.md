@@ -4,8 +4,9 @@ Livery is Genet's generated CSS property and cascade engine. Its property
 catalog and original core began under MIT or Apache-2.0; the crate is now
 licensed under MPL-2.0 as it incorporates provenance-marked Stylo harvests.
 
-The first lane is Cambium structural UI. Fullweb documents continue to use
-Genet Stylo.
+The first lane was Cambium structural UI. Fullweb documents run on Livery too
+since the Stylo route was deleted on 2026-08-21. Selector parsing and matching
+come from the `cadency` crate.
 
 The 87-property native lane catalog generates concrete property metadata and a
 typed `ComputedValues`. The current ratchet adds box geometry (`right`,

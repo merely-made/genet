@@ -864,7 +864,7 @@ impl StyleRule {
 
     pub fn matched_declarations<E>(&self, element: &E, device: &Device) -> Vec<MatchedDeclaration>
     where
-        E: Element<Impl = crate::selector::LiverySelectorImpl>,
+        E: Element<PseudoClass = crate::selector::StatePseudoClass>,
     {
         self.matched_declarations_with_containers(element, device, &[])
     }
@@ -876,7 +876,7 @@ impl StyleRule {
         containers: &[ContainerSnapshot],
     ) -> Vec<MatchedDeclaration>
     where
-        E: Element<Impl = crate::selector::LiverySelectorImpl>,
+        E: Element<PseudoClass = crate::selector::StatePseudoClass>,
     {
         self.matched_declarations_scoped(element, device, containers, true, None)
     }
@@ -893,7 +893,7 @@ impl StyleRule {
         shadow_host: Option<E>,
     ) -> Vec<MatchedDeclaration>
     where
-        E: Element<Impl = crate::selector::LiverySelectorImpl>,
+        E: Element<PseudoClass = crate::selector::StatePseudoClass>,
     {
         if self.declarations.declarations.is_empty() {
             return Vec::new();
@@ -944,7 +944,7 @@ impl StyleRule {
         device: &Device,
     ) -> Vec<MatchedCustomDeclaration>
     where
-        E: Element<Impl = crate::selector::LiverySelectorImpl>,
+        E: Element<PseudoClass = crate::selector::StatePseudoClass>,
     {
         self.matched_custom_declarations_with_containers(element, device, &[])
     }
@@ -956,7 +956,7 @@ impl StyleRule {
         containers: &[ContainerSnapshot],
     ) -> Vec<MatchedCustomDeclaration>
     where
-        E: Element<Impl = crate::selector::LiverySelectorImpl>,
+        E: Element<PseudoClass = crate::selector::StatePseudoClass>,
     {
         self.matched_custom_declarations_scoped(element, device, containers, true, None)
     }
@@ -972,7 +972,7 @@ impl StyleRule {
         shadow_host: Option<E>,
     ) -> Vec<MatchedCustomDeclaration>
     where
-        E: Element<Impl = crate::selector::LiverySelectorImpl>,
+        E: Element<PseudoClass = crate::selector::StatePseudoClass>,
     {
         if self.declarations.custom.is_empty() {
             return Vec::new();
@@ -1024,7 +1024,7 @@ pub fn cascade_rules<E>(
     rules: &[StyleRule],
 ) -> ComputedValues
 where
-    E: Element<Impl = crate::selector::LiverySelectorImpl>,
+    E: Element<PseudoClass = crate::selector::StatePseudoClass>,
 {
     cascade_rules_with_custom(parent, None, element, device, rules).0
 }
@@ -1039,7 +1039,7 @@ pub fn cascade_rules_with_custom<E>(
     rules: &[StyleRule],
 ) -> (ComputedValues, CustomProperties)
 where
-    E: Element<Impl = crate::selector::LiverySelectorImpl>,
+    E: Element<PseudoClass = crate::selector::StatePseudoClass>,
 {
     cascade_with_custom(
         parent,

@@ -51,12 +51,83 @@ use std::collections::BinaryHeap;
 use std::ffi::CString;
 use std::hash::{BuildHasher, Hash};
 use std::ops::Range;
+use std::os::raw::c_void;
 use std::rc::Rc;
 use std::sync::{Arc, OnceLock};
 
 use resvg::usvg::fontdb::Source;
 use resvg::usvg::{self, tiny_skia_path};
-pub use stylo_malloc_size_of::MallocSizeOfOps;
+
+/// A C function that takes a pointer to a heap allocation and returns its size.
+type VoidPtrToSizeFn = unsafe extern "C" fn(ptr: *const c_void) -> usize;
+
+/// A closure implementing a stateful predicate on pointers.
+type VoidPtrToBoolFnMut = dyn FnMut(*const c_void) -> bool;
+
+/// Operations used when measuring heap usage of data structures.
+pub struct MallocSizeOfOps {
+    /// A function that returns the size of a heap allocation.
+    size_of_op: VoidPtrToSizeFn,
+
+    /// Like `size_of_op`, but can take an interior pointer. Optional because
+    /// not all allocators support this operation.
+    enclosing_size_of_op: Option<VoidPtrToSizeFn>,
+
+    /// Check if a pointer has been seen before, and remember it for next time.
+    /// Useful when measuring `Rc`s and `Arc`s.
+    have_seen_ptr_op: Option<Box<VoidPtrToBoolFnMut>>,
+}
+
+impl MallocSizeOfOps {
+    pub fn new(
+        size_of: VoidPtrToSizeFn,
+        malloc_enclosing_size_of: Option<VoidPtrToSizeFn>,
+        have_seen_ptr: Option<Box<VoidPtrToBoolFnMut>>,
+    ) -> Self {
+        MallocSizeOfOps {
+            size_of_op: size_of,
+            enclosing_size_of_op: malloc_enclosing_size_of,
+            have_seen_ptr_op: have_seen_ptr,
+        }
+    }
+
+    /// Check if an allocation is empty. `align_of` is unavailable on a
+    /// `?Sized` T, so approximate with a first-page address bound.
+    fn is_empty<T: ?Sized>(ptr: *const T) -> bool {
+        ptr as *const usize as usize <= 256
+    }
+
+    /// Call `size_of_op` on `ptr`, first checking that the allocation isn't
+    /// empty, because some types (such as `Vec`) utilize empty allocations.
+    pub unsafe fn malloc_size_of<T: ?Sized>(&self, ptr: *const T) -> usize {
+        if MallocSizeOfOps::is_empty(ptr) {
+            0
+        } else {
+            unsafe { (self.size_of_op)(ptr as *const c_void) }
+        }
+    }
+
+    /// Is an `enclosing_size_of_op` available?
+    pub fn has_malloc_enclosing_size_of(&self) -> bool {
+        self.enclosing_size_of_op.is_some()
+    }
+
+    /// Call `enclosing_size_of_op`, which must be available, on `ptr`, which
+    /// must not be empty.
+    pub unsafe fn malloc_enclosing_size_of<T>(&self, ptr: *const T) -> usize {
+        assert!(!MallocSizeOfOps::is_empty(ptr));
+        unsafe { (self.enclosing_size_of_op.unwrap())(ptr as *const c_void) }
+    }
+
+    /// Call `have_seen_ptr_op` on `ptr`.
+    pub fn have_seen_ptr<T>(&mut self, ptr: *const T) -> bool {
+        let have_seen_ptr_op = self
+            .have_seen_ptr_op
+            .as_mut()
+            .expect("missing have_seen_ptr_op");
+        have_seen_ptr_op(ptr as *const c_void)
+    }
+}
 
 /// Trait for measuring the "deep" heap usage of a data structure. This is the
 /// most commonly-used of the traits.
@@ -627,38 +698,6 @@ impl<T: MallocConditionalSizeOf> MallocConditionalSizeOf for OnceLock<T> {
 // this.
 // impl<T> !MallocSizeOf for Arc<T> { }
 // impl<T> !MallocShallowSizeOf for Arc<T> { }
-
-impl<T> MallocUnconditionalShallowSizeOf for servo_arc::Arc<T> {
-    fn unconditional_shallow_size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        unsafe { ops.malloc_size_of(self.heap_ptr()) }
-    }
-}
-
-impl<T: MallocSizeOf> MallocUnconditionalSizeOf for servo_arc::Arc<T> {
-    fn unconditional_size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        self.unconditional_shallow_size_of(ops) + (**self).size_of(ops)
-    }
-}
-
-impl<T> MallocConditionalShallowSizeOf for servo_arc::Arc<T> {
-    fn conditional_shallow_size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        if ops.have_seen_ptr(self.heap_ptr()) {
-            0
-        } else {
-            self.unconditional_shallow_size_of(ops)
-        }
-    }
-}
-
-impl<T: MallocSizeOf> MallocConditionalSizeOf for servo_arc::Arc<T> {
-    fn conditional_size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        if ops.have_seen_ptr(self.heap_ptr()) {
-            0
-        } else {
-            self.unconditional_size_of(ops)
-        }
-    }
-}
 
 impl<T> MallocUnconditionalShallowSizeOf for Arc<T> {
     fn unconditional_shallow_size_of(&self, ops: &mut MallocSizeOfOps) -> usize {

@@ -11,11 +11,9 @@
 //! (`docs/2026-07-13_genet_consumed_css_property_audit.md`). Its receipt is
 //! "the census reads 128/128 consumed implemented".
 //!
-//! That receipt lives here rather than only in `tools/import-stylo-db` on
-//! purpose. The tool needs a stylo fork checkout to run at all, and the fork
-//! archives at F5 of the cutover plan; a receipt that needs it would die with
-//! it. This test reads two checked-in files and nothing else, so it keeps
-//! working after the fork is gone.
+//! That receipt lives here on purpose. The import tool that first produced
+//! the census needed a fork checkout, and both are deleted. This test reads
+//! two checked-in files and nothing else.
 
 use std::collections::BTreeSet;
 

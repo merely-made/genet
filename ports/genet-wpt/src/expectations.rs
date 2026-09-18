@@ -422,8 +422,8 @@ pub(crate) fn write_expectations(
 
 pub(crate) struct Expectations {
     /// The renderer the file was written under. Absent in files written before
-    /// the field existed; those cannot distinguish a Stylo from a Livery
-    /// baseline by content.
+    /// the field existed; those cannot be attributed to a
+    /// renderer by content.
     pub(crate) renderer: Option<String>,
     pub(crate) policy: ExpectationPolicy,
     pub(crate) tests: BTreeMap<String, ExpectedRecord>,

@@ -5,14 +5,12 @@
 /**
 ```
 extern crate malloc_size_of;
-extern crate servo_arc;
 
 fn sizeable<T: malloc_size_of::MallocSizeOf>() {}
 fn shallow_sizeable<T: malloc_size_of::MallocShallowSizeOf>() {}
 fn cloneable<T: Clone>() {}
 
 fn main() {
-    cloneable::<servo_arc::Arc<i32>>();
     cloneable::<std::sync::Arc<i32>>();
     cloneable::<std::rc::Rc<i32>>();
 }
@@ -22,20 +20,6 @@ pub fn imports_ok() {}
 
 #[rustfmt::skip]
 pub mod does_not_impl_malloc_size_of {
-    /**
-    ```compile_fail,E0277
-    extern crate malloc_size_of;
-    extern crate servo_arc;
-
-    fn sizeable<T: malloc_size_of::MallocSizeOf>() {}
-
-    fn main() {
-        sizeable::<servo_arc::Arc<i32>>();
-    }
-    ```
-    */
-    pub fn servo_arc() {}
-
     /**
     ```compile_fail,E0277
     extern crate malloc_size_of;
@@ -65,20 +49,6 @@ pub mod does_not_impl_malloc_size_of {
 
 #[rustfmt::skip]
 pub mod does_not_impl_malloc_shallow_size_of {
-    /**
-    ```compile_fail,E0277
-    extern crate malloc_size_of;
-    extern crate servo_arc;
-
-    fn shallow_sizeable<T: malloc_size_of::MallocShallowSizeOf>() {}
-
-    fn main() {
-        shallow_sizeable::<servo_arc::Arc<i32>>();
-    }
-    ```
-    */
-    pub fn servo_arc() {}
-
     /**
     ```compile_fail,E0277
     extern crate malloc_size_of;

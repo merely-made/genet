@@ -86,7 +86,7 @@ $baselines = @(
         # shadow DOM, layout geometry, and registered properties, so this is
         # pinned to move visibly as those slices land. Baselines record their
         # renderer and the runner refuses a mismatched --renderer, so a Livery
-        # baseline cannot silently vouch for a Stylo run.
+        # baseline cannot silently vouch for a foreign run.
         Subset = "css/css-values/tree-counting"
         Engine = "boa"
         Renderer = "livery"

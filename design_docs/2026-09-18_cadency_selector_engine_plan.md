@@ -2,8 +2,8 @@
 
 **Date:** 2026-09-18
 
-**Status:** S0 and C0-C3 landed in the working tree 2026-09-18, uncommitted. C4
-(publication) is Mark's and not executed.
+**Status:** landed and published, 2026-09-20. Nothing published from genet
+depends on a servo/stylo-repository crate any more.
 
 **Parent:** [The stylo fork deletion lane](../docs/2026-08-16_stylo_fork_deletion_lane_plan.md),
 complete 2026-08-21. That lane removed the fork. This one removes what the
@@ -230,3 +230,12 @@ Both are outward actions and Mark's.
   `exportparts` outer to inner. `exportparts_renames_a_part_for_the_outer_scope`
   in `tests/shadow_flat_tree.rs` failed before the fix and passes after;
   genet-livery 557 green. No WPT directory in the checkout covers renaming.
+- 2026-09-20. C4 done by Mark, with one drift found on the way. Published:
+  `cadency` 0.0.1, `livery` 0.0.5, `buckram` 0.0.3, `genet-livery` 0.0.4.
+  `genet-livery` first failed registry verification because published `buckram`
+  0.0.2 predated `FragmentTree::flush_overflow`; a source diff against the
+  registry copies showed `buckram` was the only real drift among its path
+  dependencies. Yanked, all for depending on upstream `selectors`: `livery`
+  0.0.2-0.0.4 and `genet-livery` 0.0.2-0.0.3. mere and woodshed pin both by git
+  rev and are unaffected. Still open on crates.io, not this plan's: deleting the
+  `genet-stylo` family, which has no dependents.

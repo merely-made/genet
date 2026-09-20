@@ -139,6 +139,9 @@ Not executed by this plan. `cadency` needs a real publish to hold the name, and
 livery and genet-livery need breaking bumps before they can publish against it.
 Both are outward actions and Mark's.
 
+**Executed by Mark, 2026-09-18 (`cadency`) and 2026-09-20 (the rest).** The
+versions, the buckram drift and the yanks are under Progress.
+
 ## Findings
 
 - 2026-09-18. The fork left `Cargo.lock` on 2026-08-21. What remained at

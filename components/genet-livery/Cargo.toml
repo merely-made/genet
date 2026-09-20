@@ -9,7 +9,7 @@ readme = "README.md"
 publish = true
 
 [dependencies]
-buckram = { version = "0.0.2", path = "../buckram" }
+buckram = { version = "0.0.3", path = "../buckram" }
 cssparser.workspace = true
 data-url = { workspace = true }
 genet-document-resources = { workspace = true }

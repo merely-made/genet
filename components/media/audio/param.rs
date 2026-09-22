@@ -2,12 +2,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use malloc_size_of_derive::MallocSizeOf;
-
 use crate::block::{Block, FRAMES_PER_BLOCK_USIZE, Tick};
 use crate::node::BlockInfo;
 
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, MallocSizeOf)]
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub enum ParamType {
     Frequency,
     Detune,
@@ -22,7 +20,7 @@ pub enum ParamType {
     Offset,
 }
 
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd, MallocSizeOf)]
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub enum ParamDir {
     X,
     Y,
@@ -48,7 +46,7 @@ pub struct Param {
     dirty: bool,
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug, MallocSizeOf)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum ParamRate {
     /// Value is held for entire block
     KRate,
@@ -270,7 +268,7 @@ impl Param {
     }
 }
 
-#[derive(Clone, Copy, Eq, PartialEq, Debug, MallocSizeOf)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub enum RampKind {
     Linear,
     Exponential,
@@ -292,7 +290,7 @@ pub(crate) enum AutomationEvent {
     CancelScheduledValues(Tick),
 }
 
-#[derive(Clone, PartialEq, Debug, MallocSizeOf)]
+#[derive(Clone, PartialEq, Debug)]
 /// An AutomationEvent that uses times in s instead of Ticks
 pub enum UserAutomationEvent {
     SetValue(f32),

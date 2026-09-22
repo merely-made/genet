@@ -5,8 +5,6 @@
 use std::cmp;
 use std::f32::consts::PI;
 
-use malloc_size_of_derive::MallocSizeOf;
-
 use crate::block::{Block, Chunk, FRAMES_PER_BLOCK_USIZE};
 use crate::node::{AudioNodeEngine, AudioNodeType, BlockInfo, ChannelInfo, ChannelInterpretation};
 
@@ -50,7 +48,6 @@ pub const MAX_BLOCK_COUNT: usize = MAX_FFT_SIZE / FRAMES_PER_BLOCK_USIZE;
 /// The actual analysis is done on the DOM side. We provide
 /// the actual base functionality in this struct, so the DOM
 /// just has to do basic shimming
-#[derive(MallocSizeOf)]
 pub struct AnalysisEngine {
     /// The number of past sample-frames to consider in the FFT
     fft_size: usize,
@@ -59,7 +56,6 @@ pub struct AnalysisEngine {
     max_decibels: f64,
     /// This is a ring buffer containing the last MAX_FFT_SIZE
     /// sample-frames
-    #[ignore_malloc_size_of = "Do not know how"]
     data: Box<[f32; MAX_FFT_SIZE]>,
     /// The index of the current block
     current_block: usize,

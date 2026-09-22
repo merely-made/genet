@@ -4,11 +4,9 @@
 
 use std::sync::Arc;
 
-use malloc_size_of_derive::MallocSizeOf;
-
-#[derive(Clone, MallocSizeOf)]
+#[derive(Clone)]
 pub enum VideoFrameData {
-    Raw(#[conditional_malloc_size_of] Arc<Vec<u8>>),
+    Raw(Arc<Vec<u8>>),
     Texture(u32),
     OESTexture(u32),
 }
@@ -17,12 +15,11 @@ pub trait Buffer: Send + Sync {
     fn to_vec(&self) -> Option<VideoFrameData>;
 }
 
-#[derive(Clone, MallocSizeOf)]
+#[derive(Clone)]
 pub struct VideoFrame {
     width: i32,
     height: i32,
     data: VideoFrameData,
-    #[ignore_malloc_size_of = "Difficult"]
     _buffer: Arc<dyn Buffer>,
 }
 

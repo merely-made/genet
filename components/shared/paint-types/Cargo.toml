@@ -1,6 +1,6 @@
 [package]
 name = "genet-paint-types"
-version = "0.1.0"
+version = "0.2.0"
 repository = "https://github.com/merely-made/genet"
 publish = true
 authors.workspace = true
@@ -16,6 +16,4 @@ path = "lib.rs"
 [dependencies]
 app_units = { workspace = true }
 euclid = { workspace = true, features = ["serde"] }
-malloc_size_of = { workspace = true }
-malloc_size_of_derive = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

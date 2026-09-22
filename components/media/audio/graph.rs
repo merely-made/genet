@@ -5,8 +5,6 @@
 use std::cell::{RefCell, RefMut};
 use std::{cmp, fmt, hash};
 
-use malloc_size_of::MallocSizeOf as MallocSizeOfTrait;
-use malloc_size_of_derive::MallocSizeOf;
 use petgraph::Direction;
 use petgraph::graph::DefaultIx;
 use petgraph::stable_graph::{NodeIndex, StableGraph};
@@ -19,10 +17,10 @@ use crate::listener::AudioListenerNode;
 use crate::node::{AudioNodeEngine, BlockInfo, ChannelCountMode, ChannelInterpretation};
 use crate::param::ParamType;
 
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash, Debug, MallocSizeOf)]
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash, Debug)]
 /// A unique identifier for nodes in the graph. Stable
 /// under graph mutation.
-pub struct NodeId(#[ignore_malloc_size_of = "External Type"] NodeIndex<DefaultIx>);
+pub struct NodeId(NodeIndex<DefaultIx>);
 
 impl NodeId {
     pub fn input(self, port: u32) -> PortId<InputPort> {
@@ -48,7 +46,7 @@ impl NodeId {
 ///
 /// Kind is a zero sized type and is useful for distinguishing
 /// between input and output ports (which may otherwise share indices)
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash, Debug, MallocSizeOf)]
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash, Debug)]
 pub enum PortIndex<Kind: PortKind> {
     Port(u32),
     Param(Kind::ParamId),
@@ -70,27 +68,25 @@ pub trait PortKind {
         + Ord
         + PartialOrd
         + hash::Hash
-        + fmt::Debug
-        + MallocSizeOfTrait;
+        + fmt::Debug;
     type Listener: Copy
         + Eq
         + PartialEq
         + Ord
         + PartialOrd
         + hash::Hash
-        + fmt::Debug
-        + MallocSizeOfTrait;
+        + fmt::Debug;
 }
 
 /// An identifier for a port.
-#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash, Debug, MallocSizeOf)]
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash, Debug)]
 pub struct PortId<Kind: PortKind>(NodeId, PortIndex<Kind>);
 
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug, MallocSizeOf)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug)]
 /// Marker type for denoting that the port is an input port
 /// of the node it is connected to
 pub struct InputPort;
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug, MallocSizeOf)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug)]
 /// Marker type for denoting that the port is an output port
 /// of the node it is connected to
 pub struct OutputPort;
@@ -100,7 +96,7 @@ impl PortKind for InputPort {
     type Listener = ();
 }
 
-#[derive(Debug, Hash, PartialOrd, Ord, PartialEq, Eq, Copy, Clone, MallocSizeOf)]
+#[derive(Debug, Hash, PartialOrd, Ord, PartialEq, Eq, Copy, Clone)]
 pub enum Void {}
 
 impl PortKind for OutputPort {

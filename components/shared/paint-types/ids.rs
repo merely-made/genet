@@ -4,7 +4,6 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 // SPDX-License-Identifier: MPL-2.0
 
-use malloc_size_of_derive::MallocSizeOf;
 use serde::{Deserialize, Serialize};
 
 #[derive(
@@ -15,7 +14,6 @@ use serde::{Deserialize, Serialize};
     Deserialize,
     Eq,
     Hash,
-    MallocSizeOf,
     Ord,
     PartialEq,
     PartialOrd,
@@ -24,7 +22,7 @@ use serde::{Deserialize, Serialize};
 pub struct IdNamespace(pub u32);
 
 #[derive(
-    Clone, Copy, Debug, Default, Deserialize, Eq, Hash, MallocSizeOf, PartialEq, Serialize,
+    Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize,
 )]
 pub struct ImageKey(pub IdNamespace, pub u32);
 
@@ -35,7 +33,7 @@ impl ImageKey {
 }
 
 #[derive(
-    Clone, Copy, Debug, Default, Deserialize, Eq, Hash, MallocSizeOf, PartialEq, Serialize,
+    Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize,
 )]
 pub struct FontKey(pub IdNamespace, pub u32);
 
@@ -46,7 +44,7 @@ impl FontKey {
 }
 
 #[derive(
-    Clone, Copy, Debug, Default, Deserialize, Eq, Hash, MallocSizeOf, PartialEq, Serialize,
+    Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize,
 )]
 pub struct FontInstanceKey(pub IdNamespace, pub u32);
 
@@ -57,26 +55,26 @@ impl FontInstanceKey {
 }
 
 #[derive(
-    Clone, Copy, Debug, Default, Deserialize, Eq, Hash, MallocSizeOf, PartialEq, Serialize,
+    Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize,
 )]
 pub struct PipelineId(pub u32, pub u32);
 
 #[derive(
-    Clone, Copy, Debug, Default, Deserialize, Eq, Hash, MallocSizeOf, PartialEq, Serialize,
+    Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize,
 )]
 pub struct DocumentId(pub u32, pub u32);
 
 #[derive(
-    Clone, Copy, Debug, Default, Deserialize, Eq, Hash, MallocSizeOf, PartialEq, Serialize,
+    Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize,
 )]
 pub struct Epoch(pub u32);
 
 #[derive(
-    Clone, Copy, Debug, Default, Deserialize, Eq, Hash, MallocSizeOf, PartialEq, Serialize,
+    Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize,
 )]
 pub struct ExternalImageId(pub u64);
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, MallocSizeOf, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct ExternalScrollId(pub u64, pub PipelineId);
 
 impl Default for ExternalScrollId {
@@ -92,12 +90,12 @@ impl ExternalScrollId {
 }
 
 #[derive(
-    Clone, Copy, Debug, Default, Deserialize, Eq, Hash, MallocSizeOf, PartialEq, Serialize,
+    Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize,
 )]
 pub struct SpatialId(pub u64, pub PipelineId);
 
 #[derive(
-    Clone, Copy, Debug, Default, Deserialize, Eq, Hash, MallocSizeOf, PartialEq, Serialize,
+    Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize,
 )]
 pub struct SpatialTreeItemKey(pub u64, pub u64);
 

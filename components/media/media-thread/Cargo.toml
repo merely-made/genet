@@ -23,5 +23,3 @@ rustc-hash = { workspace = true }
 serde = { workspace = true }
 servo-media = { workspace = true }
 servo-config = { workspace = true }
-malloc_size_of = { workspace = true }
-malloc_size_of_derive = { workspace = true }

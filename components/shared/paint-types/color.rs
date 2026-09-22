@@ -4,16 +4,15 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 // SPDX-License-Identifier: MPL-2.0
 
-use malloc_size_of_derive::MallocSizeOf;
 use serde::{Deserialize, Serialize};
 
 /// The three non-alpha components of an absolute CSS color.
-#[derive(Clone, Copy, Debug, Deserialize, MallocSizeOf, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 #[repr(C)]
 pub struct ColorComponents(pub f32, pub f32, pub f32);
 
 /// A color space supported by absolute CSS colors.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, MallocSizeOf, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[repr(u8)]
 pub enum ColorSpace {
     Srgb = 0,
@@ -34,7 +33,7 @@ pub enum ColorSpace {
 }
 
 /// Serialization flags retained with an absolute CSS color.
-#[derive(Clone, Copy, Debug, Default, Deserialize, MallocSizeOf, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[repr(transparent)]
 pub struct ColorFlags(pub u8);
 
@@ -48,7 +47,7 @@ impl ColorFlags {
 
 /// A resolved CSS color suitable for canvas messages and other paint-tier
 /// boundaries.
-#[derive(Clone, Copy, Debug, Deserialize, MallocSizeOf, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 #[repr(C)]
 pub struct AbsoluteColor {
     pub components: ColorComponents,
@@ -111,7 +110,7 @@ impl AbsoluteColor {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, MallocSizeOf, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
 pub struct ColorF {
     pub r: f32,
     pub g: f32,

@@ -2,10 +2,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use malloc_size_of_derive::MallocSizeOf;
 use markup5ever::QualName;
 
-#[derive(Clone, Debug, MallocSizeOf, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
     Binary(Box<Expression>, BinaryOperator, Box<Expression>),
     Negate(Box<Expression>),
@@ -20,7 +19,7 @@ pub enum Expression {
     Function(CoreFunction),
 }
 
-#[derive(Clone, Debug, MallocSizeOf, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum BinaryOperator {
     Or,
     And,
@@ -49,7 +48,7 @@ pub enum BinaryOperator {
     Modulo,
 }
 
-#[derive(Clone, Debug, MallocSizeOf, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PathExpression {
     /// Whether this is an absolute (as opposed to a relative) path expression.
     ///
@@ -61,26 +60,26 @@ pub struct PathExpression {
     pub(crate) steps: Vec<Expression>,
 }
 
-#[derive(Clone, Debug, MallocSizeOf, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PredicateListExpression {
     pub(crate) predicates: Vec<Expression>,
 }
 
-#[derive(Clone, Debug, MallocSizeOf, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct FilterExpression {
     pub(crate) expression: Box<Expression>,
     pub(crate) predicates: PredicateListExpression,
 }
 
 /// <https://www.w3.org/TR/1999/REC-xpath-19991116/#section-Location-Steps>
-#[derive(Clone, Debug, MallocSizeOf, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct LocationStepExpression {
     pub(crate) axis: Axis,
     pub(crate) node_test: NodeTest,
     pub(crate) predicate_list: PredicateListExpression,
 }
 
-#[derive(Clone, Debug, MallocSizeOf, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Axis {
     Child,
     Descendant,
@@ -97,14 +96,14 @@ pub(crate) enum Axis {
     AncestorOrSelf,
 }
 
-#[derive(Clone, Debug, MallocSizeOf, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) enum NodeTest {
     Name(QualName),
     Wildcard,
     Kind(KindTest),
 }
 
-#[derive(Clone, Debug, MallocSizeOf, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct QName {
     pub(crate) prefix: Option<String>,
     pub(crate) local_part: String,
@@ -119,7 +118,7 @@ impl std::fmt::Display for QName {
     }
 }
 
-#[derive(Clone, Debug, MallocSizeOf, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) enum KindTest {
     PI(Option<String>),
     Comment,
@@ -127,7 +126,7 @@ pub(crate) enum KindTest {
     Node,
 }
 
-#[derive(Clone, Debug, MallocSizeOf, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Literal {
     Integer(i64),
     Decimal(f64),
@@ -135,7 +134,7 @@ pub enum Literal {
 }
 
 /// In the DOM we do not support custom functions, so we can enumerate the usable ones
-#[derive(Clone, Debug, MallocSizeOf, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum CoreFunction {
     // Node Set Functions
     /// last()

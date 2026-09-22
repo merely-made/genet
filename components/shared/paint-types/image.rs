@@ -4,7 +4,6 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 // SPDX-License-Identifier: MPL-2.0
 
-use malloc_size_of_derive::MallocSizeOf;
 use serde::{Deserialize, Serialize};
 #[cfg(any(
     target_os = "linux",
@@ -17,16 +16,16 @@ use std::path::PathBuf;
 use crate::ids::ExternalImageId;
 use crate::units::{DeviceIntSize, TexelRect};
 
-#[derive(Clone, Debug, Default, Deserialize, MallocSizeOf, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 pub struct BuiltDisplayListDescriptor;
 
-#[derive(Clone, Debug, Default, Deserialize, MallocSizeOf, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 pub struct BuiltDisplayListData {
     pub items_data: Vec<u8>,
     pub spatial_tree: Vec<u8>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, MallocSizeOf, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 pub struct BuiltDisplayList {
     pub data: BuiltDisplayListData,
     pub descriptor: BuiltDisplayListDescriptor,
@@ -38,7 +37,7 @@ impl BuiltDisplayList {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, MallocSizeOf, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub enum ImageFormat {
     R8,
     R16,
@@ -60,7 +59,7 @@ impl ImageFormat {
 }
 
 #[derive(
-    Clone, Copy, Debug, Default, Deserialize, Eq, Hash, MallocSizeOf, PartialEq, Serialize,
+    Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize,
 )]
 pub struct ImageDescriptorFlags(pub u32);
 
@@ -81,7 +80,7 @@ impl ImageDescriptorFlags {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, MallocSizeOf, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub struct ImageDescriptor {
     pub size: DeviceIntSize,
     pub stride: Option<i32>,
@@ -102,7 +101,7 @@ impl ImageDescriptor {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, MallocSizeOf, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub enum ImageData {
     Raw(Vec<u8>),
     External(ExternalImageData),
@@ -114,13 +113,13 @@ impl ImageData {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, MallocSizeOf, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct SerializableImageData {
     pub descriptor: ImageDescriptor,
     pub data: ImageData,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, MallocSizeOf, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct ExternalImageData {
     pub id: ExternalImageId,
     pub channel_index: u8,
@@ -128,13 +127,13 @@ pub struct ExternalImageData {
     pub normalized_uvs: bool,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, MallocSizeOf, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub enum ExternalImageType {
     TextureHandle(ImageBufferKind),
     Buffer,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, MallocSizeOf, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub enum ImageBufferKind {
     Texture2D,
     TextureRect,
@@ -142,13 +141,13 @@ pub enum ImageBufferKind {
     Buffer,
 }
 
-#[derive(Clone, Debug, Deserialize, MallocSizeOf, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct ExternalImage {
     pub uv: TexelRect,
     pub source: ExternalImageSource,
 }
 
-#[derive(Clone, Debug, Deserialize, MallocSizeOf, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub enum ExternalImageSource {
     NativeTexture(u32),
     RawData(Vec<u8>),
@@ -172,14 +171,14 @@ pub trait ExternalImageHandler {
     target_os = "freebsd",
     target_os = "windows"
 ))]
-#[derive(Clone, Debug, Deserialize, Eq, Hash, MallocSizeOf, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct NativeFontHandle {
     pub path: PathBuf,
     pub index: u32,
 }
 
 #[cfg(target_os = "macos")]
-#[derive(Clone, Debug, Deserialize, Eq, Hash, MallocSizeOf, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct NativeFontHandle {
     pub name: String,
     pub path: String,
@@ -195,5 +194,5 @@ pub struct NativeFontHandle {
     target_os = "windows",
     target_os = "macos"
 )))]
-#[derive(Clone, Debug, Deserialize, Eq, Hash, MallocSizeOf, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct NativeFontHandle;

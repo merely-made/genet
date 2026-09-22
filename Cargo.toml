@@ -83,7 +83,6 @@ members = [
     # Offline generator for the scripted tier's interface table, from WPT's
     # vendored WebIDL (design_docs/2026-09-07_idl_interface_table_plan.md).
     "support/idl-interface-table",
-    "tests/unit/malloc_size_of",
 ]
 default-members = ["ports/ortet"]
 # The SpiderMonkey-backed scripting stack (components/script,
@@ -212,7 +211,6 @@ libc = "0.2"
 lru = "0.18"
 log = "0.4.29"
 mach2 = "0.6"
-malloc_size_of_derive = "0.1"
 markup5ever = "0.39"
 memmap2 = "0.9.10"
 mime = "0.3.13"
@@ -295,8 +293,6 @@ syn = { version = "2", default-features = false, features = ["clone-impls", "der
 synstructure = "0.13"
 taffy = { version = "0.10.1", default-features = false, features = ["calc", "detailed_layout_info", "grid", "std"] }
 tendril = { version = "0.5", features = ["encoding_rs"] }
-tikv-jemalloc-sys = "0.6.1"
-tikv-jemallocator = "0.6.1"
 time = { package = "time", version = "0.3", features = ["large-dates", "local-offset", "serde"] }
 tokio = "1"
 tokio-rustls = { version = "0.26", default-features = false, features = ["logging"] }
@@ -349,9 +345,8 @@ zeroize = "1.8"
 # be listed here, between the `Begin` and `End` comments, so that we can easily find and
 # update the version requirements when bumping the workspace version.
 # Begin workspace-version dependencies - Don't change this comment, we grep for it in scripts!
-engine_observables_api = { package = "engine-observables-api", version = "=0.1.1", path = "components/shared/engine-observables-api" }
+engine_observables_api = { package = "engine-observables-api", version = "=0.2.0", path = "components/shared/engine-observables-api" }
 layout_dom_api = { package = "layout-dom-api", version = "=0.1.1", path = "components/shared/layout-dom" }
-malloc_size_of = { package = "servo-malloc-size-of", version = "=0.2.0", path = "components/malloc_size_of" }
 media = { package = "servo-media-thread", version = "=0.2.0", path = "components/media/media-thread" }
 genet-compositor = { version = "=0.2.0", path = "components/genet-compositor" }
 # Moved to the netrender workspace as a neutral, engine-agnostic crate
@@ -360,7 +355,7 @@ paint_list_api = { git = "https://github.com/merely-made/netrender.git", rev = "
 # The PaintCmd -> netrender::Scene translator; also lives in the netrender
 # workspace so any engine can reuse the lowering.
 paint_list_render = { git = "https://github.com/merely-made/netrender.git", rev = "3961aca919f707ab09a786379eb4ce8bb121258e", version = "0.1.0" }
-paint_types = { package = "genet-paint-types", version = "=0.1.0", path = "components/shared/paint-types" }
+paint_types = { package = "genet-paint-types", version = "=0.2.0", path = "components/shared/paint-types" }
 # `servo = "..."` workspace.dep removed 2026-05-15 per Mark's audit:
 # genet used to be servo-the-fork, but the umbrella servo crate is no
 # longer load-bearing. The two examples that depended on it
@@ -369,7 +364,6 @@ paint_types = { package = "genet-paint-types", version = "=0.1.0", path = "compo
 # below are kept for now since several still serve as workspace-internal
 # paths for components that may be referenced — separate cleanup pass if
 # they turn out to be vestigial.
-servo-allocator = { version = "=0.2.0", path = "components/allocator" }
 servo-config-macro = { version = "=0.2.0", path = "components/config/macro" }
 servo-media = { version = "=0.2.0", path = "components/media/servo-media" }
 servo-media-audio = { version = "=0.2.0", path = "components/media/audio" }
@@ -387,12 +381,6 @@ servo-media-webrtc = { version = "=0.2.0", path = "components/media/webrtc" }
 webgl_wgpu = { package = "servo-webgl-wgpu", version = "=0.2.0", path = "components/webgl-wgpu" }
 xpath = { package = "servo-xpath", version = "=0.2.0", path = "components/xpath" }
 # End workspace-version dependencies - Don't change this comment, we grep for it in scripts!
-
-# Force tikv-jemalloc-sys to build with at least -O1.
-# This can help with build environments that force _FORTIFY_SOURCE, such as Nix.
-# More details: <https://github.com/tikv/jemallocator/issues/108>
-[profile.dev.package.tikv-jemalloc-sys]
-opt-level = 1
 
 # An optimized build for CI, to improve test runtime, but with debug assertions turned on.
 [profile.checked-release]

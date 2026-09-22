@@ -45,7 +45,6 @@ pub type RasterRect = euclid::Box2D<f32, RasterPixel>;
     Copy,
     Debug,
     Default,
-    malloc_size_of_derive::MallocSizeOf,
     PartialEq,
     serde::Deserialize,
     serde::Serialize,

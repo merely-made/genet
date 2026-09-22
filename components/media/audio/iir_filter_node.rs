@@ -6,7 +6,6 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use log::warn;
-use malloc_size_of_derive::MallocSizeOf;
 use num_complex::Complex64;
 
 use crate::block::Chunk;
@@ -14,11 +13,9 @@ use crate::node::{AudioNodeEngine, AudioNodeType, BlockInfo, ChannelInfo};
 
 const MAX_COEFFS: usize = 20;
 
-#[derive(Debug, MallocSizeOf)]
+#[derive(Debug)]
 pub struct IIRFilterNodeOptions {
-    #[conditional_malloc_size_of]
     pub feedforward: Arc<Vec<f64>>,
-    #[conditional_malloc_size_of]
     pub feedback: Arc<Vec<f64>>,
 }
 

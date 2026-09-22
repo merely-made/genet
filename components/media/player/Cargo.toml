@@ -16,7 +16,5 @@ path = "lib.rs"
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
 ipc-channel = { workspace = true }
-malloc_size_of = { workspace = true }
-malloc_size_of_derive = { workspace = true }
 servo-media-streams = { workspace = true }
 servo-media-traits = { workspace = true }

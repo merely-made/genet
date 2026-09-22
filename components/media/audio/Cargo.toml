@@ -23,8 +23,6 @@ servo-media-traits = { workspace = true }
 servo-media-streams = { workspace = true }
 smallvec = { workspace = true }
 speexdsp-resampler = { workspace = true }
-malloc_size_of = { workspace = true }
-malloc_size_of_derive = { workspace = true }
 num-complex = { workspace = true }
 
 [dependencies.petgraph]

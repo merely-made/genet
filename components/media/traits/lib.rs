@@ -5,10 +5,9 @@
 use std::num::NonZeroU32;
 use std::sync::mpsc::Sender;
 
-use malloc_size_of_derive::MallocSizeOf;
 /// An ID for clients to track instances of Players and AudioContexts belonging to the same tab and mute them simultaneously.
 /// Current tuple implementation matches one of Servo's BrowsingContextId.
-#[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, MallocSizeOf)]
+#[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
 pub struct ClientContextId(u32, NonZeroU32);
 
 impl ClientContextId {
@@ -37,7 +36,6 @@ pub trait MediaInstance: Send {
     fn resume(&self) -> Result<(), MediaInstanceError>;
 }
 
-#[derive(MallocSizeOf)]
 pub enum BackendMsg {
     /// Message to notify about a media instance shutdown.
     /// The given `usize` is the media instance ID.

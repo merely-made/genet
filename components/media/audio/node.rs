@@ -5,7 +5,6 @@
 use std::cmp::min;
 use std::sync::mpsc::Sender;
 
-use malloc_size_of_derive::MallocSizeOf;
 use servo_media_streams::{MediaSocket, MediaStreamId};
 
 use crate::biquad_filter_node::{BiquadFilterNodeMessage, BiquadFilterNodeOptions};
@@ -23,9 +22,8 @@ use crate::stereo_panner::StereoPannerOptions;
 use crate::wave_shaper_node::{WaveShaperNodeMessage, WaveShaperNodeOptions};
 
 /// Information required to construct an audio node
-#[derive(MallocSizeOf)]
 pub enum AudioNodeInit {
-    AnalyserNode(#[ignore_malloc_size_of = "Fn"] Box<dyn FnMut(Block) + Send>),
+    AnalyserNode(Box<dyn FnMut(Block) + Send>),
     BiquadFilterNode(BiquadFilterNodeOptions),
     AudioBuffer,
     AudioBufferSourceNode(AudioBufferSourceNodeOptions),
@@ -38,7 +36,7 @@ pub enum AudioNodeInit {
     GainNode(GainNodeOptions),
     IIRFilterNode(IIRFilterNodeOptions),
     MediaElementSourceNode,
-    MediaStreamDestinationNode(#[ignore_malloc_size_of = "Fn"] Box<dyn MediaSocket>),
+    MediaStreamDestinationNode(Box<dyn MediaSocket>),
     MediaStreamSourceNode(MediaStreamId),
     OscillatorNode(OscillatorNodeOptions),
     PannerNode(PannerNodeOptions),
@@ -49,7 +47,7 @@ pub enum AudioNodeInit {
 }
 
 /// Type of AudioNodeEngine.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, MallocSizeOf)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AudioNodeType {
     /// Not a constructable node
     AudioListenerNode,
@@ -77,14 +75,14 @@ pub enum AudioNodeType {
     WaveShaperNode,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug, MallocSizeOf)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ChannelCountMode {
     Max,
     ClampedMax,
     Explicit,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug, MallocSizeOf)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ChannelInterpretation {
     Discrete,
     Speakers,
@@ -105,7 +103,6 @@ impl BlockInfo {
     }
 }
 
-#[derive(MallocSizeOf)]
 pub struct ChannelInfo {
     pub count: u8,
     pub mode: ChannelCountMode,
@@ -210,7 +207,6 @@ pub(crate) trait AudioNodeEngine: Send + AudioNodeCommon {
     }
 }
 
-#[derive(MallocSizeOf)]
 pub enum AudioNodeMessage {
     AudioBufferSourceNode(AudioBufferSourceNodeMessage),
     AudioScheduledSourceNode(AudioScheduledSourceNodeMessage),
@@ -236,14 +232,13 @@ impl OnEndedCallback {
 }
 
 /// Type of message directed to AudioScheduledSourceNodes.
-#[derive(MallocSizeOf)]
 pub enum AudioScheduledSourceNodeMessage {
     /// Schedules a sound to playback at an exact time.
     Start(f64),
     /// Schedules a sound to stop playback at an exact time.
     Stop(f64),
     /// Register onended event callback.
-    RegisterOnEndedCallback(#[ignore_malloc_size_of = "Fn"] OnEndedCallback),
+    RegisterOnEndedCallback(OnEndedCallback),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

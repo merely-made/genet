@@ -7,7 +7,6 @@
 use std::hash::{Hash, Hasher};
 use std::ops::{BitOr, BitOrAssign};
 
-use malloc_size_of_derive::MallocSizeOf;
 use serde::{Deserialize, Serialize};
 
 pub mod border;
@@ -37,7 +36,7 @@ pub use image::{
 pub use property::{PropertyBindingKey, PropertyValue};
 pub use sticky::StickyOffsetBounds;
 
-#[derive(Clone, Copy, Debug, Deserialize, MallocSizeOf, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub struct FontVariation {
     pub tag: u32,
     pub value: f32,
@@ -53,7 +52,7 @@ impl Hash for FontVariation {
 }
 
 #[derive(
-    Clone, Copy, Debug, Default, Deserialize, Eq, Hash, MallocSizeOf, PartialEq, Serialize,
+    Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize,
 )]
 pub struct FontInstanceFlags(pub u32);
 
@@ -81,7 +80,7 @@ impl BitOrAssign for FontInstanceFlags {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, MallocSizeOf, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub enum ScrollLocation {
     Delta(units::LayoutVector2D),
     Start,

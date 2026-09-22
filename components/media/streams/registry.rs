@@ -5,7 +5,6 @@
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex};
 
-use malloc_size_of_derive::MallocSizeOf;
 use uuid::Uuid;
 
 use super::MediaStream;
@@ -15,7 +14,7 @@ type RegisteredMediaStream = Arc<Mutex<dyn MediaStream>>;
 static MEDIA_STREAMS_REGISTRY: LazyLock<Mutex<HashMap<MediaStreamId, RegisteredMediaStream>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-#[derive(Clone, Copy, Hash, Eq, PartialEq, MallocSizeOf)]
+#[derive(Clone, Copy, Hash, Eq, PartialEq)]
 pub struct MediaStreamId(Uuid);
 impl MediaStreamId {
     pub fn new() -> MediaStreamId {

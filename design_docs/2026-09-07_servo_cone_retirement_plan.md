@@ -36,7 +36,9 @@ Everything else had no consumer once the reftest lane rendered through
 Kept deliberately: the servo-media family (woodshed's redshank playback
 spike took a path dependency on 2026-09-04), WebGL wgpu and ESSL,
 script-engine-piccolo (the game wing), malloc_size_of and allocator (used by
-paint-types and xpath).
+paint-types and xpath; both removed 2026-09-22 by the
+[MallocSizeOf removal plan](2026-09-22_malloc_size_of_removal_plan.md) once
+the derives proved to have no consumer).
 
 ## Work
 

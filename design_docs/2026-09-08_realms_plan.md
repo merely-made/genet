@@ -1,5 +1,44 @@
 # Realms: one agent, one realm per browsing context
 
+**Status (reviewed 2026-09-22 at `4163a1b5d32`):** The core realms and
+ordinary/shadow/template adoption work is landed, including stable WindowProxy,
+child and top-level realm replacement, wrapper identity after source-realm
+disposal, and headed G5 acceptance on both engines. The latest implementation
+phase is [base snapshots and retained reads](#phase-base-snapshots-and-retained-reads-2026-09-13),
+landed in `84ff6969e9d`. Its 160 focused passes, matched WPT comparison and six
+headed runs are dated September 13 receipts, not new measurements of this checkout.
+
+The [remaining inventory](#remaining-inventory) governs follow-on work. The
+principal realm-owned gaps are synthetic/template document metadata, mutation
+through retained retired documents, and history restoration of inherited bases.
+Live-context canvas adoption still refuses transfer in
+`components/script-runtime-api/dom/adoption.rs`; its context storage and host
+producer must move together before that refusal can be lifted. Parser timing,
+additional navigation/security surfaces, scripted accessibility action dispatch
+and complete capture replay retain their separate owners and gates.
+
+A bounded next slice is **synthetic and template document metadata**: first
+reproduce URL/documentURI/baseURI behavior for `createHTMLDocument`,
+`createDocument`, document cloning and template-content owner documents; then
+implement the missing ownership metadata. Done means both-engine regressions
+cover creation, adoption and retained reads after teardown, a matched WPT
+comparison attributes every movement, and existing base/identity gates stay
+green. This slice is proposed, not started or accepted by the existing receipts.
+
+This review checked the current runtime/adoption/capture sources and their
+commit history. The runtime's latest change remains `84ff6969e9d`; capture still
+provides identity translation rather than a complete replayer. It did not rerun
+Cargo, WPT or headed gates. The earlier opaque-root timing failure is now
+qualified by the later passing isolated guards, as recorded in the inventory.
+
+## Historical status snapshots
+
+The dated summaries below describe their own source revisions. Statements such
+as “still open”, “running” or “on the working tree” in these snapshots and older
+phases are historical; later closure phases and the current inventory supersede
+them. In particular, navigation, shadow/template adoption and full headed G5
+must not be reopened from their earlier status text.
+
 **Status (2026-09-13):** Canonical wrapper identity after source-realm disposal
 is closed for ordinary nodes, nested open/closed shadow trees and template
 contents. All 657 engine/runtime tests pass. Three headed runs per engine
@@ -2647,7 +2686,7 @@ landed; their labels now point to the continuation and navigation phases.
 | Scripted accessibility action dispatch and stale-target validation | Scripted document session. The headed G5 receipt proves projection only. |
 | Actual capture replay | Capture owner. The accessor phase supplied imported-identity translation and tests, not a complete replayer. |
 | Range and charset-test throughput | WPT measurement. The default 30-second guards time out under load; isolated pre/post controls are recorded below. The large data-change file still exceeds 120 seconds on both runners. |
-| Opaque-root policy timing | Runtime measurement. The [initial blank-load phase](#phase-initial-blank-load-ordering-2026-09-13) records a failing 50 ms cost guard separately from passing GC-soak and functional checks. Keep the timing failure visible. |
+| Opaque-root policy timing | The later [base snapshots and retained reads phase](#phase-base-snapshots-and-retained-reads-2026-09-13) passes both unchanged isolated 50 ms guards over 4,003 nodes: Boa 2,786/8,921 us and Nova 2,897/14,104 us. The earlier aggregate-run failure remains a timing variability qualification, not an outstanding isolated failure or a fresh checkout measurement. |
 | Inherited server-mode fetch count | Fetch/WPT server route. The earlier 55 unexpected results used `--features netfetch --spawn-server`; this phase's unchanged disk-mode census does not close that separate receipt. |
 | Glyph digest instability | Livery/compositing. Keep CSS viewport and display scale attached to each headed receipt. |
 

@@ -2,9 +2,10 @@
 
 **Date:** 2026-09-22
 
-**Status:** founded. Mark ruled 2026-09-22: full removal, media crates
-included, the global allocator dropped rather than kept as an opt-in, and
-the publishing bumps authorized.
+**Status:** landed and published, 2026-09-22 (`333c31285a2`). Mark ruled
+the same day: full removal, media crates included, the global allocator
+dropped rather than kept as an opt-in, and the publishing bumps authorized.
+Every done-condition below is met; the receipt is under Progress.
 
 **Owns:** the `MallocSizeOf` derive surface across genet, the two inherited
 Servo crates that supply it (`components/malloc_size_of`, published as
@@ -110,3 +111,28 @@ and `servo-allocator` names on crates.io are the Servo project's.
 ## Progress
 
 - 2026-09-22. Founded.
+- 2026-09-22. Landed as `333c31285a2` from base `3e8a6d3b684`: 55 files,
+  +239 / -2,249 lines. The derive removal across the seven crates was done
+  by a haiku subagent against a file list and rules; the workspace deletion,
+  every gate and the commits were run here.
+  - `cargo tree -i` finds none of `servo-malloc-size-of`, `servo-allocator`,
+    `malloc_size_of_derive`, `tikv-jemallocator`; `git grep` over `*.rs` and
+    `*.toml` returns only the dated webrender comment in `Cargo.toml`.
+  - Script-free Ortet: **401 -> 353** distinct crates.
+  - Suites: cadency 10, livery 206, genet-livery 557, genet-documents 51,
+    ortet 32 and 36 (scripted-nova lib), genet-wpt 68, servo-xpath 26,
+    servo-media-player 7, genet-paint-types and the other media crates 0,
+    all as at the base commit, none failed.
+  - Native standards-compositing receipt through the committed runner at
+    the clean commit, warm `genet-bench-b-check` target: both engines at
+    digest `0xa440137ccc503f9c`, heading present, `unpinned=0 collected=1`,
+    live nodes 43 -> 43, source identity unchanged across the run, exit 0.
+    `Code/testing/genet/malloc_removal_20260922/standards/`.
+  - Published in order, each verifying against the registry:
+    `genet-paint-types` 0.2.0, `engine-observables-api` 0.2.0,
+    `genet-scripted-dom` 0.1.2. Mere's `genet-scripted-dom = "=0.1.1"` pin
+    moves to `=0.1.2` at its next repin.
+  - Not run: a WPT census. The change removes derives and a global allocator
+    and touches no layout, style or paint logic; the native receipt and the
+    suites are the evidence, and a census would measure nothing this lane can
+    move.

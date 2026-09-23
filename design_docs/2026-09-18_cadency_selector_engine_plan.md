@@ -152,6 +152,9 @@ versions, the buckram drift and the yanks are under Progress.
   The type is 3 fields and 5 methods and is now owned there. This changes the
   type's identity for anything that mixed it with upstream's, so
   `servo-malloc-size-of` takes a breaking bump when it next publishes.
+  Superseded 2026-09-22: `components/malloc_size_of` was removed outright by
+  the [MallocSizeOf removal plan](2026-09-22_malloc_size_of_removal_plan.md),
+  so there is no next publish.
 - 2026-09-18. `servo_arc` had no consumer but four `MallocSizeOf` impls and
   their compile-fail doctests.
 - 2026-09-18. `Element` has two implementors in the whole `Code` tree:

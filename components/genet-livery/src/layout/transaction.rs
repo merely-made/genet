@@ -110,7 +110,7 @@ where
         text,
         image_sources,
     )?;
-    let fragments = layout_inline_groups(
+    let mut fragments = layout_inline_groups(
         dom,
         &styles,
         boxes,
@@ -119,6 +119,7 @@ where
         &atomic,
         image_sources,
     )?;
+    fragments.prepare_atomic_inline_text(dom, &styles, text);
     Ok((styles, fragments))
 }
 

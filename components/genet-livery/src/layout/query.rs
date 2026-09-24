@@ -33,6 +33,33 @@ where
         }
     }
 
+    /// Text inside an atomic inline box is formatted with the box's own
+    /// subtree, apart from the line that holds the box, so it never reached
+    /// the retained frame: paint shaped it into a frame it then dropped, and
+    /// caret, hit and selection queries found nothing there. Prepare it here,
+    /// with every box at its final position, as paint would; paint then finds
+    /// it prepared and shapes nothing twice.
+    pub(in crate::layout) fn prepare_atomic_inline_text<D>(
+        &mut self,
+        dom: &D,
+        styles: &StylePlane<Id>,
+        text: &mut TextSystem,
+    ) where
+        D: LayoutDom<NodeId = Id>,
+    {
+        let Some(mut frame) = self.text_frame.take() else {
+            return;
+        };
+        let mut elements = Vec::new();
+        atomic_inline_elements(dom, styles, dom.document(), false, &mut elements);
+        for element in elements {
+            if let Some(style) = styles.get(element) {
+                text.prepare_inline_children(&mut frame, dom, styles, self, element, style);
+            }
+        }
+        self.text_frame = Some(frame);
+    }
+
     pub fn buckram(&self) -> &LayoutResult<Id> {
         &self.buckram
     }
@@ -693,5 +720,28 @@ where
 
     pub(crate) fn text_frame(&self) -> Option<&TextFrame<Id>> {
         self.text_frame.as_ref()
+    }
+}
+
+/// Every element inside an atomic inline box, the box itself included, in
+/// document order: the elements whose inline content the atom's own subtree
+/// formatted.
+fn atomic_inline_elements<D>(
+    dom: &D,
+    styles: &StylePlane<D::NodeId>,
+    node: D::NodeId,
+    inside: bool,
+    out: &mut Vec<D::NodeId>,
+) where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    let inside =
+        inside || (dom.kind(node) == NodeKind::Element && is_atomic_inline_box(dom, styles, node));
+    if inside && dom.kind(node) == NodeKind::Element {
+        out.push(node);
+    }
+    for child in dom.dom_children(node) {
+        atomic_inline_elements(dom, styles, child, inside, out);
     }
 }

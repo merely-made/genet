@@ -1333,6 +1333,76 @@ fn buckram_queries_atomic_inline_intrinsics_without_float_placement() {
 }
 
 #[test]
+fn an_out_of_flow_child_adds_nothing_to_its_parents_intrinsic_width() {
+    /// The used width of a row flex item whose text measures 120 at
+    /// max-content, with an optional 300px-wide positioned child.
+    fn flex_item_width(position: Option<crate::BlockPosition>) -> f32 {
+        let mut tree = AlgorithmTree::<Style, Vec<AlgorithmAvailableSpace>, u8>::new();
+        let lines = tree.new_leaf_with_context_and_block_style(
+            BlockStyle::anonymous(FlowAxes::HORIZONTAL_LTR, FlowAxes::HORIZONTAL_LTR),
+            Style::default(),
+            Vec::new(),
+            1,
+        );
+        let mut children = vec![lines];
+        if let Some(position) = position {
+            children.push(tree.new_with_children_and_block_style(
+                AlgorithmKind::Block,
+                BlockStyle {
+                    position,
+                    size: crate::BlockDimensions::new(
+                        BlockSizeValue::Length(crate::FlowLength::px(300.0)),
+                        BlockSizeValue::Length(crate::FlowLength::px(40.0)),
+                    ),
+                    ..BlockStyle::default()
+                },
+                Style::default(),
+                &[],
+                3,
+            ));
+        }
+        let item = tree.new_with_children_and_block_style(
+            AlgorithmKind::Block,
+            BlockStyle::default(),
+            Style::default(),
+            &children,
+            2,
+        );
+        let root = tree.new_with_children(
+            AlgorithmKind::Flex,
+            Style {
+                display: Display::Flex,
+                size: taffy::Size {
+                    width: Dimension::length(400.0),
+                    height: Dimension::auto(),
+                },
+                ..Style::default()
+            },
+            &[item],
+            0,
+        );
+
+        tree.compute_layout_with_measure(
+            root,
+            available(400.0, 200.0),
+            |known, available, _, _, _| {
+                let width = match available.width {
+                    AlgorithmAvailableSpace::Definite(width) => width.min(120.0),
+                    AlgorithmAvailableSpace::MinContent => 40.0,
+                    AlgorithmAvailableSpace::MaxContent => 120.0,
+                };
+                AlgorithmSize::new(known.width.unwrap_or(width), known.height.unwrap_or(10.0))
+            },
+        );
+        tree.layout(item).width
+    }
+
+    assert_eq!(flex_item_width(None), 120.0);
+    assert_eq!(flex_item_width(Some(crate::BlockPosition::Absolute)), 120.0);
+    assert_eq!(flex_item_width(Some(crate::BlockPosition::Fixed)), 120.0);
+}
+
+#[test]
 fn buckram_remeasures_opted_in_bfcs_inside_the_float_band() {
     let mut tree = AlgorithmTree::<Style, Vec<f32>, u8>::new();
     let float = tree.new_with_children_and_block_style(

@@ -2468,6 +2468,40 @@ fn an_inline_block_paints_its_border_once_around_its_box() {
     assert_eq!(borders[0].height(), fragment.height, "around the whole box");
 }
 
+/// A popover's anchor in a wrapping toolbar: an absolute panel and a fixed
+/// dismiss layer inside it must not widen it, or it takes a line of its own.
+#[test]
+fn positioned_children_do_not_widen_a_flex_item() {
+    let anchor_width = |inner: &str| {
+        let html = format!(
+            "<html><body><div id=row><button>Site</button><div id=anchor>{inner}</div>\
+             <button>Save</button></div></body></html>"
+        );
+        let mut dom = ScriptedDom::from_serialized_document(&html);
+        let mut initial_mutations = Vec::new();
+        dom.drain_mutations(&mut initial_mutations);
+        let mut document = LiveryDocument::new(
+            dom,
+            StyleSet::cambium(&["html, body { margin: 0; } \
+                 #row { display: flex; flex-wrap: wrap; gap: 8px; width: 1000px; } \
+                 #anchor { position: relative; } \
+                 #layer { position: fixed; left: 0px; top: 0px; right: 0px; bottom: 0px; } \
+                 #panel { position: absolute; left: 0px; top: 100%; width: 582px; }"]),
+            Device::screen(1100.0, 400.0),
+        );
+        document.frame(1100, 400).expect("frame");
+        let anchor = by_id(document.dom(), "anchor");
+        let layout = document.layout.as_ref().expect("completed frame");
+        let fragment = layout.fragments.get(anchor).expect("anchor fragment");
+        (fragment.width, fragment.y)
+    };
+    let (alone, _) = anchor_width("<button>Open</button>");
+    let (with_both, y) =
+        anchor_width("<button>Open</button><div id=layer></div><div id=panel>Panel</div>");
+    assert_eq!(with_both, alone, "the button alone sizes the anchor");
+    assert_eq!(y, 0.0, "and it stays on the toolbar's first line");
+}
+
 #[test]
 fn a_percentage_top_inset_takes_the_containing_blocks_height() {
     let mut dom = ScriptedDom::from_serialized_document(

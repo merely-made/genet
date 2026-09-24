@@ -510,6 +510,12 @@ where
                     let mut float_max_content = 0.0_f32;
                     for child in children {
                         let child_style = self.tree.nodes[child.index()].block_style;
+                        // An absolutely or fixed positioned child is out of
+                        // flow: it adds nothing to its parent's intrinsic
+                        // sizes.
+                        if child_style.is_out_of_flow() {
+                            continue;
+                        }
                         let child_sizes =
                             if style.flow.is_horizontal() == child_style.flow.is_horizontal() {
                                 self.intrinsic_inline_outer_contribution(

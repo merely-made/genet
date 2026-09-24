@@ -12,7 +12,7 @@
 
 use crate::{
     BlockBoxSizing, BlockDimensions, BlockSizeValue, BlockStyle, IntrinsicSizes, LogicalRect,
-    LogicalSides, LogicalSize,
+    LogicalSides, LogicalSize, PhysicalSides,
 };
 
 /// Inputs that remain after a formatting context has supplied a static
@@ -66,9 +66,16 @@ pub struct PositionedBoxGeometry {
 /// retained as the unsupported fallback.
 pub fn solve_positioned_box(style: BlockStyle, input: PositionedBoxInput) -> PositionedBoxGeometry {
     let containing_inline = input.containing_size.inline;
-    let insets = style
-        .containing_flow
-        .logical_sides(style.inset.map(|value| value.resolve(containing_inline)));
+    // CSS Position 3 §3.1: a percentage inset refers to the containing block
+    // in its own physical axis, top and bottom to its height, left and right
+    // to its width.
+    let containing = style.containing_flow.physical_size(input.containing_size);
+    let insets = style.containing_flow.logical_sides(PhysicalSides {
+        top: style.inset.top.resolve(containing.height),
+        right: style.inset.right.resolve(containing.width),
+        bottom: style.inset.bottom.resolve(containing.height),
+        left: style.inset.left.resolve(containing.width),
+    });
     let margins = style.logical_margin(containing_inline);
     let padding_border = style.logical_padding_border(containing_inline);
     let dimensions = logical_dimensions(style.containing_flow, style.size);
@@ -624,6 +631,37 @@ mod tests {
                 inline_size: 30.0,
                 block_size: 20.0,
             }
+        );
+    }
+
+    #[test]
+    fn percentage_insets_resolve_against_their_own_axis() {
+        // The containing block is 200 wide and 100 tall.
+        let mut style = positioned();
+        style.inset.top = FlowLengthAuto::Value(FlowLength::percent(1.0));
+        style.inset.left = FlowLengthAuto::Value(FlowLength::percent(0.5));
+        assert_eq!(
+            solve_positioned_box(style, input()).logical_rect,
+            LogicalRect {
+                inline_start: 100.0,
+                block_start: 100.0,
+                inline_size: 30.0,
+                block_size: 20.0,
+            }
+        );
+
+        let mut style = positioned();
+        style.inset.bottom = FlowLengthAuto::Value(FlowLength::percent(1.0));
+        style.inset.right = FlowLengthAuto::Value(FlowLength::percent(0.0));
+        assert_eq!(
+            solve_positioned_box(style, input()).logical_rect,
+            LogicalRect {
+                inline_start: 170.0,
+                block_start: -20.0,
+                inline_size: 30.0,
+                block_size: 20.0,
+            },
+            "bottom: 100% puts the box just above its containing block",
         );
     }
 

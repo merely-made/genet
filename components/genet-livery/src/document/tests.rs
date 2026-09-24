@@ -2430,3 +2430,27 @@ fn text_inside_an_inline_block_paints_once() {
         "the atom's text is one run of {inside} glyphs: {runs:?}",
     );
 }
+
+#[test]
+fn a_percentage_top_inset_takes_the_containing_blocks_height() {
+    let mut dom = ScriptedDom::from_serialized_document(
+        "<html><body><div id=anchor><span>trigger</span><div id=panel>panel</div></div></body></html>",
+    );
+    let mut initial_mutations = Vec::new();
+    dom.drain_mutations(&mut initial_mutations);
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&["html, body { margin: 0; } \
+             #anchor { position: relative; width: 120px; height: 24px; } \
+             #panel { position: absolute; top: 100%; left: 0px; }"]),
+        Device::screen(400.0, 200.0),
+    );
+    document.frame(400, 200).expect("frame");
+    let anchor = by_id(document.dom(), "anchor");
+    let panel = by_id(document.dom(), "panel");
+    let layout = document.layout.as_ref().expect("completed frame");
+    let anchor = layout.fragments.get(anchor).expect("anchor fragment");
+    let panel = layout.fragments.get(panel).expect("panel fragment");
+    assert_eq!(panel.y, anchor.y + 24.0, "100% of the anchor's 24px height");
+    assert_eq!(panel.x, anchor.x);
+}

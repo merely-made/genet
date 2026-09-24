@@ -2344,3 +2344,89 @@ fn transferred_subtree_pending_mutations_damage_both_retained_documents() {
     assert_eq!(destination.dom.text(text), Some("changed"));
     assert!(!generated_ids(&destination, node).is_empty());
 }
+
+/// A document with `inside text` in a span of the given display, between
+/// plain text, framed at 400 x 120.
+fn inline_atom_document(display: &str) -> (LiveryDocument<ScriptedDom>, NodeId, NodeId) {
+    let mut dom = ScriptedDom::from_serialized_document(
+        "<html><body><div>before <span id=atom>inside text</span> after</div></body></html>",
+    );
+    let mut initial_mutations = Vec::new();
+    dom.drain_mutations(&mut initial_mutations);
+    let sheet = format!("html, body {{ margin: 0; }} #atom {{ display: {display}; }}");
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&[sheet.as_str()]),
+        Device::screen(400.0, 120.0),
+    );
+    let atom = by_id(document.dom(), "atom");
+    let source = document
+        .dom()
+        .dom_children(atom)
+        .find(|node| document.dom().kind(*node) == NodeKind::Text)
+        .expect("atom text source");
+    document.frame(400, 120).expect("frame");
+    (document, atom, source)
+}
+
+/// The glyph count of each text run the frame paints.
+fn painted_runs(document: &mut LiveryDocument<ScriptedDom>) -> Vec<usize> {
+    document
+        .frame(400, 120)
+        .expect("frame")
+        .commands()
+        .iter()
+        .filter_map(|command| match command {
+            paint_list_api::PaintCmd::DrawText(run) => Some(run.glyphs.len()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn text_inside_an_inline_block_has_caret_hit_and_selection_geometry() {
+    let (document, atom, source) = inline_atom_document("inline-block");
+    let layout = document.layout.as_ref().expect("completed frame");
+    let atom_fragment = layout.fragments.get(atom).expect("atom fragment");
+    let (atom_x, atom_width) = (atom_fragment.x, atom_fragment.width);
+    let caret = document
+        .caret_rect(source, 0)
+        .expect("a caret at the start of the inline-block's text");
+    assert!(
+        caret.x >= atom_x - 0.5 && caret.x <= atom_x + atom_width,
+        "the caret at {} sits inside the atom's {}..{}",
+        caret.x,
+        atom_x,
+        atom_x + atom_width,
+    );
+    // Mid-word, clear of the boundary the atom shares with `before `.
+    let inside = document
+        .caret_rect(source, 3)
+        .expect("a caret inside the word");
+    assert_eq!(
+        document.text_position_at_point(inside.x, inside.y + inside.height * 0.5),
+        Some((source, 3)),
+    );
+    let selection = layout
+        .fragments
+        .text_selection(TextRange {
+            anchor_node: source,
+            anchor_offset: 0,
+            focus_node: source,
+            focus_offset: 6,
+        })
+        .expect("a selection inside the inline-block");
+    assert!(!selection.rects.is_empty());
+}
+
+#[test]
+fn text_inside_an_inline_block_paints_once() {
+    let (mut document, _, _) = inline_atom_document("inline-block");
+    let runs = painted_runs(&mut document);
+    let inside = "inside text".len();
+    assert_eq!(
+        runs.iter().filter(|glyphs| **glyphs == inside).count(),
+        1,
+        "the atom's text is one run of {inside} glyphs: {runs:?}",
+    );
+}

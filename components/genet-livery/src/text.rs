@@ -1732,6 +1732,21 @@ where
     }
 }
 
+/// One element's recorded inline boxes and the lines they sit on.
+pub(crate) struct InlineBoxes {
+    fragments: Option<Vec<Fragment>>,
+    line_keys: Option<Vec<f32>>,
+    #[cfg(test)]
+    baselines: Option<Vec<f32>>,
+}
+
+fn restore<Id: Eq + Hash, V>(map: &mut HashMap<Id, V>, key: Id, value: Option<V>) {
+    match value {
+        Some(value) => map.insert(key, value),
+        None => map.remove(&key),
+    };
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct TextFrame<Id> {
     prepared_groups: Vec<Vec<PreparedCommand<Id>>>,
@@ -2015,6 +2030,25 @@ where
 
     pub(crate) fn inline_fragments(&self, source: Id) -> Option<&[Fragment]> {
         self.inline_fragments.get(&source).map(Vec::as_slice)
+    }
+
+    /// `source`'s recorded inline boxes, to put back with
+    /// [`Self::restore_inline_boxes`].
+    pub(crate) fn inline_boxes(&self, source: Id) -> InlineBoxes {
+        InlineBoxes {
+            fragments: self.inline_fragments.get(&source).cloned(),
+            line_keys: self.inline_line_keys.get(&source).cloned(),
+            #[cfg(test)]
+            baselines: self.inline_baselines.get(&source).cloned(),
+        }
+    }
+
+    /// Put back the inline boxes [`Self::inline_boxes`] read for `source`.
+    pub(crate) fn restore_inline_boxes(&mut self, source: Id, boxes: InlineBoxes) {
+        restore(&mut self.inline_fragments, source, boxes.fragments);
+        restore(&mut self.inline_line_keys, source, boxes.line_keys);
+        #[cfg(test)]
+        restore(&mut self.inline_baselines, source, boxes.baselines);
     }
 
     pub(crate) fn first_inline_line(&self, source: Id) -> Option<f32> {

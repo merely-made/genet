@@ -2432,6 +2432,43 @@ fn text_inside_an_inline_block_paints_once() {
 }
 
 #[test]
+fn an_inline_block_paints_its_border_once_around_its_box() {
+    let mut dom = ScriptedDom::from_serialized_document(concat!(
+        "<html><body><div><div id=atom><span>A heading</span>\n\n",
+        "A paragraph long enough to wrap onto more than one line in the box.\n\n",
+        "<span>Another heading</span></div></div></body></html>",
+    ));
+    let mut initial_mutations = Vec::new();
+    dom.drain_mutations(&mut initial_mutations);
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&["html, body { margin: 0; } \
+             #atom { display: inline-block; width: 200px; white-space: pre-wrap; \
+               padding: 8px; border: 1px solid black; background: #eef; }"]),
+        Device::screen(400.0, 300.0),
+    );
+    let borders: Vec<_> = document
+        .frame(400, 300)
+        .expect("frame")
+        .commands()
+        .iter()
+        .filter_map(|command| match command {
+            paint_list_api::PaintCmd::DrawBorder(border) => Some(border.placement.bounds),
+            _ => None,
+        })
+        .collect();
+    let atom = by_id(document.dom(), "atom");
+    let layout = document.layout.as_ref().expect("completed frame");
+    let fragment = layout.fragments.get(atom).expect("atom fragment");
+    assert_eq!(
+        borders.len(),
+        1,
+        "one border, not one per line: {borders:?}"
+    );
+    assert_eq!(borders[0].height(), fragment.height, "around the whole box");
+}
+
+#[test]
 fn a_percentage_top_inset_takes_the_containing_blocks_height() {
     let mut dom = ScriptedDom::from_serialized_document(
         "<html><body><div id=anchor><span>trigger</span><div id=panel>panel</div></div></body></html>",

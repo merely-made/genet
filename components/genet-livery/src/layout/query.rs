@@ -54,7 +54,13 @@ where
         atomic_inline_elements(dom, styles, dom.document(), false, &mut elements);
         for element in elements {
             if let Some(style) = styles.get(element) {
+                // An element's inline boxes are its boxes in the lines that
+                // hold it. Formatting its own content records those lines
+                // under it too, and an inline-block paints its background and
+                // border once per box, so keep what it had.
+                let own = frame.inline_boxes(element);
                 text.prepare_inline_children(&mut frame, dom, styles, self, element, style);
+                frame.restore_inline_boxes(element, own);
             }
         }
         self.text_frame = Some(frame);

@@ -174,6 +174,56 @@ fn button_like_controls_have_a_non_zero_shrink_to_fit_minimum() {
         labeled_width > empty_width,
         "empty {empty_width} vs labeled {labeled_width}"
     );
+
+    // White space is no content: such a button keeps the empty one's floor.
+    assert_eq!(
+        size(r#"<button id="target"> </button>"#),
+        size(r#"<button id="target"></button>"#)
+    );
+}
+
+/// A button with content takes the automatic minimum in a shrinking flex
+/// column (css-flexbox-1 4.5), with its padding and border inside it under the
+/// UA's `border-box`. The floor used to stand in for that minimum as a
+/// content-box length read as border-box, and the button fell to 22 of its 38.
+#[test]
+fn a_button_in_a_shrinking_flex_column_keeps_its_content_height() {
+    let (dom, fragments) = layout_body(
+        "<div style='display:flex; flex-direction:column; max-height:100px; overflow:auto; \
+         width:300px; font-size:16px; line-height:20px'><span id=a>one</span>\
+         <button id=b style='padding:8px; border:1px solid'>Refresh</button>\
+         <div id=c style='height:300px'>tall</div></div>",
+    );
+    let heights: Vec<f32> = ["a", "b", "c"]
+        .iter()
+        .map(|id| rect(&dom, &fragments, id).3)
+        .collect();
+    assert_eq!(heights, [20.0, 38.0, 42.0]);
+}
+
+/// A text input's and a textarea's natural size is content-box, so an author's
+/// `box-sizing: border-box` adds their padding and border rather than carving
+/// them out of it.
+#[test]
+fn border_box_text_controls_keep_their_padding_and_border() {
+    for (control, expected) in [
+        (
+            "<input id=target style='line-height:20px; padding:8px; border:1px solid; box-sizing:{}'>",
+            (178.0, 38.0),
+        ),
+        (
+            "<textarea id=target style='line-height:20px; padding:8px; border:1px solid; box-sizing:{}'></textarea>",
+            (178.0, 58.0),
+        ),
+    ] {
+        for sizing in ["content-box", "border-box"] {
+            assert_eq!(
+                size(&control.replace("{}", sizing)),
+                expected,
+                "{sizing}: {control}"
+            );
+        }
+    }
 }
 
 #[test]

@@ -1209,6 +1209,26 @@ refuses a dirty tree). **25 of 25 probes pass on Boa and Nova, digest
 native receipt fixture does not exercise unstyled form controls at a size
 this lane's natural sizes would change its composited pixels.
 
+**Correction, 2026-09-25: box-sizing and the flex minimum.** The floor and
+the forced size above are content-box lengths, written into Taffy's
+`min_size` and `size`, which Taffy reads in the style's box-sizing. Once
+buttons became `border-box` by UA rule (`6065322e039`), and wherever an
+author sets `box-sizing: border-box` on a text input or textarea, they lost
+the control's padding and border: a padded button in a shrinking flex column
+fell to 22 of its 38 (the Knot session's step 4c), a border-box text input
+was 20 tall instead of 38, a textarea 40 instead of 58. The floor, as a
+definite minimum, also stood in for flexbox's automatic minimum. Mark ruled
+the fix: both lengths now add the control's padding and border under
+`border-box` (`box_edges`, shared with `apply_replaced_intrinsic_style`'s
+border-box route), and the floor reaches `min_size` only for a control with
+no content of its own (no element child, no text beyond white space), so a
+control with content keeps `min-width`/`min-height: auto` and its
+content-based automatic minimum (css-flexbox-1 4.5). Thirty control-size
+baselines (empty, white-space and labelled buttons, button inputs, selects,
+text inputs and textareas, under the UA sheet, `border-box` and
+`content-box`) are unchanged. Receipt:
+`Code/testing/genet/wpt-ledger/2026-09-25_form_control_box_sizing/`.
+
 ---
 
 ## T4. Retained fragments inside layer scopes
@@ -1835,3 +1855,12 @@ T3's ordinary image-composition receipt.
   `Code/testing/wing/l0b_f_2026-09-16/results.md`,
   `Code/testing/genet/wpt-ledger/2026-09-16_f_selector_index/` and
   `Code/testing/genet/f_selector_index_20260916/`.
+- **2026-09-25** — form-control floors and natural sizes made box-sizing
+  correct, and the flex minimum left to content (the correction above). Two
+  new `form_control_sizing` tests, both failing without the change, and a
+  white-space guard; genet-livery 576, genet-render 25, genet-documents 9,
+  genet-scripted 87, taproot 20. WPT over `html/rendering/widgets`,
+  `css/css-ui`, `css/css-sizing` and `css/css-flexbox`, testharness and
+  reftest: zero transitions of any kind; the two-pair positive control fails
+  on the base and passes with the change. Receipt:
+  `Code/testing/genet/wpt-ledger/2026-09-25_form_control_box_sizing/results.md`.

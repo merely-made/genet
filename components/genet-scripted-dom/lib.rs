@@ -22,7 +22,7 @@ use engine_observables_api::{DomArenaStats, DomNodeKindStats};
 use genet_static_dom::{StaticDocument, StaticNodeId};
 use layout_dom_api::{
     AttributeView, DoctypeView, DomMutation, LayoutDom, LayoutDomMut, LocalName, Namespace,
-    NodeKind, QualName,
+    NodeKind, QualName, QuirksMode,
 };
 
 mod adoption;
@@ -289,6 +289,10 @@ pub struct ScriptedDom {
     /// "appropriate template contents owner document", which is what makes
     /// `a.content.ownerDocument === b.content.ownerDocument` true.
     template_document: Option<NodeId>,
+    /// Documents in quirks or limited-quirks mode, by store key. Any other
+    /// document is in no-quirks mode, as one no parser decided is
+    /// (`createHTMLDocument`, an XML document).
+    document_modes: std::collections::HashMap<u64, QuirksMode>,
     /// Unique allocation namespace. Storage may later accept identities born elsewhere.
     arena_id: u32,
 }
@@ -428,6 +432,7 @@ impl ScriptedDom {
             template_contents: std::collections::HashMap::new(),
             template_content_owners: std::collections::HashMap::new(),
             template_document: None,
+            document_modes: std::collections::HashMap::new(),
             arena_id,
         };
         dom.root = dom.try_push(Node::new(NodeKind::Document))?;
@@ -850,6 +855,25 @@ impl ScriptedDom {
         self.push(Node::new(NodeKind::Document))
     }
 
+    /// `document`'s mode (HTML's quirks mode).
+    pub fn quirks_mode_of(&self, document: NodeId) -> QuirksMode {
+        self.try_index(document)
+            .and_then(|key| self.document_modes.get(&key).copied())
+            .unwrap_or(QuirksMode::NoQuirks)
+    }
+
+    /// Set `document`'s mode, as its parser decides it from the doctype.
+    pub fn set_quirks_mode(&mut self, document: NodeId, mode: QuirksMode) {
+        let Some(key) = self.try_index(document) else {
+            return;
+        };
+        if mode == QuirksMode::NoQuirks {
+            self.document_modes.remove(&key);
+        } else {
+            self.document_modes.insert(key, mode);
+        }
+    }
+
     /// Create a detached `Comment` node carrying `data`.
     pub fn create_comment(&mut self, data: &str) -> NodeId {
         let mut node = Node::new(NodeKind::Comment);
@@ -950,6 +974,8 @@ impl ScriptedDom {
             let copied = dom.copy_fragment_node(&src, child);
             dom.attach_silent(dom.root, copied);
         }
+        let root = dom.root;
+        dom.set_quirks_mode(root, LayoutDom::quirks_mode(&src));
         dom.mutations.clear();
         dom
     }
@@ -1117,6 +1143,8 @@ impl ScriptedDom {
         let pruned = before - self.nodes.len();
         self.prune_shadow_tables();
         self.prune_template_tables();
+        let nodes = &self.nodes;
+        self.document_modes.retain(|key, _| nodes.contains_key(key));
         pruned
     }
 
@@ -1335,6 +1363,10 @@ impl LayoutDom for ScriptedDom {
 
     fn document(&self) -> NodeId {
         self.root
+    }
+
+    fn quirks_mode(&self) -> QuirksMode {
+        self.quirks_mode_of(self.root)
     }
 
     /// The dangle-contract liveness check (see [`LayoutDom::is_live`]). Live iff
@@ -1710,6 +1742,24 @@ mod tests {
         let mut again = Vec::new();
         dom.drain_mutations(&mut again);
         assert!(again.is_empty());
+    }
+
+    #[test]
+    fn each_document_keeps_its_own_mode_until_it_is_collected() {
+        let mut dom = ScriptedDom::from_serialized_document("<p>x</p>");
+        assert_eq!(dom.quirks_mode(), QuirksMode::Quirks);
+        let secondary = dom.create_document();
+        assert_eq!(dom.quirks_mode_of(secondary), QuirksMode::NoQuirks);
+        dom.set_quirks_mode(secondary, QuirksMode::LimitedQuirks);
+        assert_eq!(dom.quirks_mode_of(secondary), QuirksMode::LimitedQuirks);
+        assert_eq!(dom.quirks_mode(), QuirksMode::Quirks);
+        // Nothing pins the secondary document, so it collects with its mode.
+        dom.collect(std::iter::empty());
+        assert_eq!(dom.document_modes.len(), 1);
+        assert_eq!(
+            ScriptedDom::from_serialized_document("<!DOCTYPE html><p>x</p>").quirks_mode(),
+            QuirksMode::NoQuirks
+        );
     }
 
     #[test]

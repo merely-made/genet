@@ -3007,7 +3007,7 @@
     }
   });
   // Document IDL accessors (Lever 10): title walks to <title> (whitespace-collapsed);
-  // dir reflects documentElement's dir; compatMode/readyState are constants.
+  // dir reflects documentElement's dir; compatMode reads the document's mode.
   Object.defineProperty(Document.prototype, 'title', {
     configurable: true,
     get: function() {
@@ -3031,7 +3031,7 @@
     set: function(v) { var r = this.documentElement; if (r) r.dir = v; }
   });
   Object.defineProperty(Document.prototype, 'compatMode', {
-    configurable: true, get: function() { return 'CSS1Compat'; }
+    configurable: true, get: function() { return __documentCompatMode(this.__ref); }
   });
   // readyState is a *host* fact: the parser driver moves it through
   // loading -> interactive -> complete at HTML's points. A document nobody

@@ -54,7 +54,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use genet_scripted_dom::{NodeId, ScriptedDom};
-use layout_dom_api::{LayoutDom, LayoutDomMut, LocalName, Namespace, NodeKind, QualName};
+use layout_dom_api::{
+    LayoutDom, LayoutDomMut, LocalName, Namespace, NodeKind, QualName, QuirksMode,
+};
 use markup5ever::Prefix;
 use script_engine_api::{CallCx, NativeFn, ScriptEngine};
 
@@ -83,6 +85,10 @@ pub(crate) fn clone_into<D: LayoutDom>(
     dst: &mut ScriptedDom,
     dst_parent: NodeId,
 ) {
+    // A document's mode travels with its tree.
+    if src.kind(src_node) == NodeKind::Document && dst.kind(dst_parent) == NodeKind::Document {
+        dst.set_quirks_mode(dst_parent, src.quirks_mode());
+    }
     for child in src.dom_children(src_node) {
         match src.kind(child) {
             NodeKind::Element => {
@@ -186,6 +192,7 @@ pub(crate) fn install_dom_surface<E: ScriptEngine>(
     engine.set_function::<CreateDoctype>("__createDoctype", 3)?;
     engine.set_function::<DoctypeField>("__doctypeField", 2)?;
     engine.set_function::<DocumentDoctype>("__documentDoctype", 1)?;
+    engine.set_function::<DocumentCompatMode>("__documentCompatMode", 1)?;
     engine.set_function::<GetOuterHtml>("__getOuterHtml", 1)?;
     engine.set_function::<ParseDocument>("__parseDocument", 2)?;
     engine.set_function::<AttributeRecords>("__attributeRecords", 1)?;

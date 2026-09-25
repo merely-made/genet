@@ -43,8 +43,8 @@ use crate::{
     text::{TextFrame, TextSystem},
 };
 use buckram::{
-    BoxId, DisplayInside, FragmentId, GridEdgeOrientation, PhysicalSize, TableBorderStyle,
-    TableFragmentRole,
+    BoxId, DisplayInside, DisplayOutside, FragmentId, GridEdgeOrientation, PhysicalSize,
+    TableBorderStyle, TableFragmentRole,
 };
 
 /// Genet paint output produced by the Livery CSS/layout path.
@@ -874,6 +874,22 @@ where
                 Some(DisplayInside::Flex | DisplayInside::Grid)
             )
         })
+}
+
+/// Whether `id`'s principal box is an inline box, which owns the text under
+/// it in its parent's inline formatting context. A span that a flex or grid
+/// container, a float or absolute positioning blockifies roots its own
+/// formatting context instead, so its text has no inline owner.
+fn generates_inline_box<Id>(fragments: &LiveryLayout<Id>, id: Id) -> bool
+where
+    Id: Copy + Eq + Hash,
+{
+    let boxes = fragments.boxes();
+    boxes.principal_box(id).is_some_and(|box_id| {
+        let display = &boxes[box_id].display;
+        display.outside == Some(DisplayOutside::Inline)
+            && display.inside == Some(DisplayInside::Flow)
+    })
 }
 
 fn begin_node<'a, D>(
@@ -2437,10 +2453,7 @@ fn emit_children_in_stacking_order<D>(
         PaintScope {
             inherited,
             stacking_roots: Some(&roots),
-            inline_owner: styles
-                .get(parent)
-                .filter(|style| style.display == Display::Inline)
-                .map(|_| parent),
+            inline_owner: generates_inline_box(fragments, parent).then_some(parent),
             canvas_background_source,
             external_textures,
         },

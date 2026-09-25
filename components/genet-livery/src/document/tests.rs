@@ -2523,13 +2523,26 @@ fn a_buttons_declared_size_includes_its_padding() {
     document.frame(400, 200).expect("frame");
     let layout = document.layout.as_ref().expect("completed frame");
     let size = |id| {
-        let fragment = layout.fragments.get(by_id(document.dom(), id)).expect("fragment");
+        let fragment = layout
+            .fragments
+            .get(by_id(document.dom(), id))
+            .expect("fragment");
         (fragment.width, fragment.height)
     };
-    assert_eq!(size("sized"), (120.0, 40.0), "padding inside the declared size");
+    assert_eq!(
+        size("sized"),
+        (120.0, 40.0),
+        "padding inside the declared size"
+    );
     let ((padded_w, padded_h), (bare_w, bare_h)) = (size("padded"), size("bare"));
-    assert!((padded_w - bare_w - 12.0).abs() < 0.01, "{padded_w} vs {bare_w}");
-    assert!((padded_h - bare_h - 2.0).abs() < 0.01, "{padded_h} vs {bare_h}");
+    assert!(
+        (padded_w - bare_w - 12.0).abs() < 0.01,
+        "{padded_w} vs {bare_w}"
+    );
+    assert!(
+        (padded_h - bare_h - 2.0).abs() < 0.01,
+        "{padded_h} vs {bare_h}"
+    );
 }
 #[test]
 fn a_percentage_top_inset_takes_the_containing_blocks_height() {
@@ -2766,4 +2779,61 @@ fn a_percentage_height_on_an_atom_needs_a_definite_containing_height() {
         auto[0].3
     );
     assert_near(definite[0].3, 100.0, "half of a 200px block");
+}
+
+/// How many glyphs the frame paints for `body` under `sheet`.
+fn painted_glyph_count(body: &str, sheet: &str) -> usize {
+    let mut dom =
+        ScriptedDom::from_serialized_document(&format!("<html><body>{body}</body></html>"));
+    let mut initial_mutations = Vec::new();
+    dom.drain_mutations(&mut initial_mutations);
+    let sheet = format!("html, body {{ margin: 0; }} {sheet}");
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&[sheet.as_str()]),
+        Device::screen(400.0, 120.0),
+    );
+    document
+        .frame(400, 120)
+        .expect("frame")
+        .commands()
+        .iter()
+        .map(|command| match command {
+            paint_list_api::PaintCmd::DrawText(run) => run.glyphs.len(),
+            _ => 0,
+        })
+        .sum()
+}
+
+/// A span blockified as a flex or grid item, a float or an absolutely
+/// positioned box roots its own inline formatting context, so it is not the
+/// inline owner of its text. Its text paints when it also starts a stacking
+/// context, as it does without one.
+#[test]
+fn a_blockified_span_that_starts_a_stacking_context_paints_its_text() {
+    let body = "<div id=row><span>one</span><span id=item>two <b>three</b></span>\
+                <span>four</span></div>";
+    for (row, item) in [
+        ("display: flex", ""),
+        ("display: grid; grid-template-columns: auto auto auto", ""),
+        ("position: relative", "position: absolute; left: 200px"),
+        ("", "float: left"),
+        ("", ""),
+    ] {
+        let sheet = |stacking: &str| format!("#row {{ {row} }} #item {{ {item}; {stacking} }}");
+        let plain = painted_glyph_count(body, &sheet(""));
+        for stacking in ["opacity: 0.6", "position: relative; z-index: 1"] {
+            // An absolutely positioned item keeps its own position.
+            let stacking = if item.contains("absolute") {
+                stacking.replace("position: relative;", "")
+            } else {
+                stacking.to_owned()
+            };
+            assert_eq!(
+                painted_glyph_count(body, &sheet(&stacking)),
+                plain,
+                "#row {{ {row} }} #item {{ {item}; {stacking} }}",
+            );
+        }
+    }
 }

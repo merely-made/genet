@@ -9,7 +9,7 @@ use crate::{
     Device, InteractionStates, StyleSet, emit_paint_list_with_text_system, resolve_styles,
 };
 use genet_static_dom::StaticDocument;
-use paint_list_api::DeviceIntSize;
+use paint_list_api::{DeviceIntSize, PaintList};
 
 fn node_by_id(
     dom: &StaticDocument,
@@ -3220,9 +3220,11 @@ fn k4e4_an_inline_table_sits_in_the_text_line() {
 }
 
 /// B3: K4d5's first table baseline positions a baseline-aligned
-/// inline-table. The second row makes the table much taller than its first
-/// row, so the old wrapper block-end fallback would put the first cell's
-/// text far above its inline peer.
+/// inline-table. It is the first row's, which is its first cell's first line
+/// box's (CSS 2.1 17.5.3). The cell is taller than its word and the second
+/// row makes the table taller still, so neither the cell's block end (40px)
+/// nor the wrapper's (100px) can stand in for it. Chromium puts the peer and
+/// the cell's word on one baseline, with the table's top at the line's.
 #[test]
 fn b3_inline_table_uses_its_first_table_baseline() {
     fn by_id(
@@ -3243,7 +3245,7 @@ fn b3_inline_table_uses_its_first_table_baseline() {
 
     let dom = StaticDocument::parse(
         "<div id=host><span id=peer>peer</span><span id=table class=t><span class=r>\
-         <span id=first class=c>table</span></span>\
+         <span id=first class=c><span id=word>table</span></span></span>\
          <span class=r><span class=c id=second>lower</span></span></span></div>",
     );
     let styles = resolve_styles(
@@ -3259,7 +3261,7 @@ fn b3_inline_table_uses_its_first_table_baseline() {
         &InteractionStates::default(),
     );
     let mut text = TextSystem::new();
-    let (_, layout) = layout_with_text_system(
+    let (styles, layout) = layout_with_text_system(
         &dom,
         &styles,
         320.0,
@@ -3269,31 +3271,58 @@ fn b3_inline_table_uses_its_first_table_baseline() {
         &HashMap::new(),
     )
     .expect("layout");
-    let peer_node = by_id(&dom, dom.document(), "peer").expect("peer");
-    let peer = layout
-        .text_frame()
-        .and_then(|frame| frame.first_inline_baseline(peer_node))
-        .expect("peer shaped-line baseline");
-    let first_cell = layout
-        .get(by_id(&dom, dom.document(), "first").expect("first cell"))
-        .expect("first cell fragment");
-    // This table's default cell baseline is its first row's cell block
-    // end. Its row is 40px while the full table is 100px, so the receipt
-    // rejects the old 100px wrapper block-end fallback.
-    let cell = first_cell.physical_rect().y + first_cell.physical_rect().height;
     let rect = |id| {
         layout
             .get(by_id(&dom, dom.document(), id).expect(id))
             .expect(id)
             .physical_rect()
     };
+    let (word, first, table) = (rect("word"), rect("first"), rect("table"));
+    let paint = emit_paint_list_with_text_system(
+        &dom,
+        &styles,
+        &layout,
+        DeviceIntSize::new(320, 240),
+        1,
+        &mut text,
+    );
+    // A glyph's pen position sits on its line's baseline.
+    let glyphs = paint
+        .commands()
+        .iter()
+        .flat_map(|command| match command {
+            paint_list_api::PaintCmd::DrawText(run) => {
+                run.glyphs.iter().map(|glyph| glyph.point).collect()
+            },
+            _ => Vec::new(),
+        })
+        .collect::<Vec<_>>();
+    let peer = glyphs
+        .iter()
+        .filter(|point| point.x < word.x)
+        .map(|point| point.y)
+        .collect::<Vec<_>>();
+    let cell = glyphs
+        .iter()
+        .filter(|point| point.x >= word.x && point.y < first.y + first.height)
+        .map(|point| point.y)
+        .collect::<Vec<_>>();
 
+    assert_eq!((peer.len(), cell.len()), (4, 5), "{glyphs:?}");
     assert!(
-        (peer - cell).abs() < 0.5,
-        "the inline peer and first table-row baseline must agree: peer={peer}, cell={cell}, peer_rect={:?}, cell_rect={:?}, table_rect={:?}",
-        rect("peer"),
-        rect("first"),
-        rect("table"),
+        peer.iter()
+            .chain(&cell)
+            .all(|baseline| (baseline - cell[0]).abs() < 0.5),
+        "the inline peer and the first cell's line must share a baseline: peer={peer:?}, \
+         cell={cell:?}, cell_rect={first:?}, table_rect={table:?}"
+    );
+    assert!(
+        (first.height - 40.0).abs() < 0.5 && (table.height - 100.0).abs() < 0.5,
+        "cell {first:?}, table {table:?}"
+    );
+    assert!(
+        table.y.abs() < 0.5,
+        "the table's top at the line's: {table:?}"
     );
 }
 

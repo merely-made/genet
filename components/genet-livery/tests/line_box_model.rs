@@ -16,7 +16,8 @@ use layout_dom_api::{LayoutDom, LocalName, Namespace, NodeKind};
 const CSS: &str = "body { margin: 0; } .case { width: 160px; font: 16px/20px Ahem; } \
     .ib { display: inline-block; width: 15px; height: 10px; border: 1px solid; } \
     .tall { display: inline-block; width: 20px; height: 40px; } \
-    .wide { display: inline-block; width: 80px; height: 40px; }";
+    .wide { display: inline-block; width: 80px; height: 40px; } \
+    button, input, select, textarea { font: inherit; }";
 
 /// A case's markup, then Chromium's block height and atom offset.
 type Case = (&'static str, &'static str, f32, Option<f32>);
@@ -332,6 +333,246 @@ fn quirks_mode_line_boxes_match_chromium() {
                 "<span style='padding: 0 5px; line-height: 40px'></span>",
                 40.0,
                 None,
+            ),
+        ],
+    );
+}
+
+/// Atoms align on their own baselines: an inline-block or button on its last
+/// line box, unless it has none or scrolls; a table cell on its first, which
+/// an inline table exports; a single-line text control on its centred line.
+/// Controls carry explicit padding and borders so both engines draw the same
+/// boxes and only the baseline rules differ.
+#[test]
+fn atom_baselines_match_chromium() {
+    assert_matches_chromium(
+        "<!DOCTYPE html>",
+        &[
+            (
+                "inline-block",
+                "x <span id=atom style='display: inline-block; padding: 8px; border: 1px solid'>\
+                 x</span> x",
+                38.0,
+                Some(0.0),
+            ),
+            (
+                "inline-block-two-lines",
+                "x <span id=atom style='display: inline-block; width: 32px'>xx xx</span> x",
+                40.0,
+                Some(0.0),
+            ),
+            (
+                "inline-block-overflow",
+                "x <span id=atom style='display: inline-block; overflow: hidden; padding: 8px'>\
+                 x</span> x",
+                41.0,
+                Some(0.0),
+            ),
+            (
+                "inline-block-atoms-only",
+                "x <span id=atom style='display: inline-block'><span class=tall></span></span> x",
+                45.0,
+                Some(0.0),
+            ),
+            (
+                "inline-block-empty",
+                "x <span id=atom style='display: inline-block; width: 20px; height: 20px'></span> x",
+                25.0,
+                Some(0.0),
+            ),
+            (
+                "button",
+                "x <button id=atom style='padding: 8px; border: 1px solid'>x</button> x",
+                38.0,
+                Some(0.0),
+            ),
+            // A button takes its content's baseline even when it scrolls.
+            (
+                "button-overflow-hidden",
+                "x <button id=atom style='padding: 8px; border: 1px solid; overflow: hidden'>\
+                 x</button> x",
+                38.0,
+                Some(0.0),
+            ),
+            // A preserved newline keeps its line from being phantom, so the
+            // inline-block aligns on it (WPT's `inline-block-baseline-016`).
+            (
+                "inline-block-newline-only",
+                "<span class=ib id=atom></span> \
+                 <span style='display: inline-block; white-space: pre'>\n</span> x",
+                20.0,
+                Some(3.0),
+            ),
+            (
+                "inline-block-br-only",
+                "<span class=ib id=atom></span> <span style='display: inline-block'><br></span> x",
+                20.0,
+                Some(3.0),
+            ),
+            (
+                "button-two-lines",
+                "x <button id=atom style='padding: 1px 6px; border: 2px solid'>x<br>x</button> x",
+                46.0,
+                Some(0.0),
+            ),
+            (
+                "inline-table",
+                "x <span id=atom style='display: inline-table'>\
+                 <span style='display: table-cell; padding: 8px'>x</span></span> x",
+                36.0,
+                Some(0.0),
+            ),
+            (
+                "baseline-row",
+                "<table style='border-spacing: 0'><tr>\
+                 <td style='vertical-align: baseline; padding: 0'>x<span class=ib id=atom></span></td>\
+                 <td style='vertical-align: baseline; padding: 0; font-size: 40px'>x</td>\
+                 </tr></table>",
+                27.0,
+                Some(10.0),
+            ),
+            // A cell counts a nested table's first row; an inline-block
+            // counts only line boxes, so it skips the table. The marker's
+            // bottom edge sits on the outer baseline.
+            (
+                "cell-nested-table",
+                "<table style='border-spacing: 0'><tr>\
+                 <td style='vertical-align: baseline; padding: 0'><span class=ib id=atom></span></td>\
+                 <td style='vertical-align: baseline; padding: 0'><span style='display: table'>\
+                 <span style='display: table-cell; padding: 8px'>x</span></span></td>\
+                 </tr></table>",
+                36.0,
+                Some(11.0),
+            ),
+            (
+                "inline-block-table-only",
+                "<span class=ib id=atom></span> <span style='display: inline-block'>\
+                 <span style='display: table'><span style='display: table-cell; padding: 8px'>\
+                 x</span></span></span> x",
+                41.0,
+                Some(24.0),
+            ),
+            (
+                "inline-block-text-then-table",
+                "<span class=ib id=atom></span> <span style='display: inline-block'>x\
+                 <span style='display: table'><span style='display: table-cell; \
+                 padding: 8px 8px 20px'>x</span></span></span> x",
+                68.0,
+                Some(3.0),
+            ),
+            (
+                "inline-block-table-then-text",
+                "<span class=ib id=atom></span> <span style='display: inline-block'>\
+                 <span style='display: table'><span style='display: table-cell; \
+                 padding: 8px 8px 20px'>x</span></span>x</span> x",
+                68.0,
+                Some(51.0),
+            ),
+            // A cell with no line box takes no part in its row's baseline; a
+            // row with none sits on its cells' content edges, each cell's box
+            // filling the row.
+            (
+                "inline-table-empty-tall-cell",
+                "<span class=ib id=atom></span> <span style='display: inline-table'>\
+                 <span style='display: table-cell; height: 40px'></span></span> x",
+                45.0,
+                Some(28.0),
+            ),
+            (
+                "inline-table-empty-tall-padded-cell",
+                "<span class=ib id=atom></span> <span style='display: inline-table'>\
+                 <span style='display: table-cell; height: 40px; padding: 4px 0 6px'></span>\
+                 </span> x",
+                50.0,
+                Some(32.0),
+            ),
+            (
+                "inline-table-tall-text-cell",
+                "<span class=ib id=atom></span> <span style='display: inline-table'>\
+                 <span style='display: table-cell; height: 40px'>x</span></span> x",
+                40.0,
+                Some(3.0),
+            ),
+            (
+                "row-empty-tall-cell",
+                "<table style='border-spacing: 0'><tr>\
+                 <td style='vertical-align: baseline; padding: 0'><span class=ib id=atom></span></td>\
+                 <td style='vertical-align: baseline; padding: 0; height: 40px'></td>\
+                 </tr></table>",
+                40.0,
+                Some(3.0),
+            ),
+            (
+                "inline-table-stretched-row",
+                "<span class=ib id=atom></span> <span style='display: inline-table; height: 80px; \
+                 border-spacing: 0'><span style='display: table-cell; vertical-align: top'>x</span>\
+                 <span style='display: table-cell; vertical-align: bottom'>x<br>x</span></span> x",
+                85.0,
+                Some(68.0),
+            ),
+            // A table's caption is no line box of what holds the table: a
+            // cell and an inline table align on the first row below it, an
+            // inline-block on its bottom edge.
+            (
+                "cell-captioned-table",
+                "<table style='border-spacing: 0'><tr>\
+                 <td style='vertical-align: baseline; padding: 0'><span class=ib id=atom></span></td>\
+                 <td style='vertical-align: baseline; padding: 0'><span style='display: table'>\
+                 <span style='display: table-caption'>x</span>\
+                 <span style='display: table-cell; padding: 8px'>x</span></span></td>\
+                 </tr></table>",
+                56.0,
+                Some(31.0),
+            ),
+            (
+                "inline-block-captioned-table",
+                "<span class=ib id=atom></span> <span style='display: inline-block'>\
+                 <span style='display: table'><span style='display: table-caption'>x</span>\
+                 <span style='display: table-cell; padding: 8px'>x</span></span></span> x",
+                61.0,
+                Some(44.0),
+            ),
+            (
+                "inline-captioned-table",
+                "<span class=ib id=atom></span> <span style='display: inline-table'>\
+                 <span style='display: table-caption'>x</span>\
+                 <span style='display: table-cell; padding: 8px'>x</span></span> x",
+                56.0,
+                Some(31.0),
+            ),
+            (
+                "input",
+                "x <input id=atom value=xx style='width: 40px; padding: 1px; border: 2px solid'> x",
+                26.0,
+                Some(0.0),
+            ),
+            (
+                "input-tall",
+                "x <input id=atom value=xx \
+                 style='width: 40px; height: 40px; padding: 1px; border: 2px solid'> x",
+                46.0,
+                Some(0.0),
+            ),
+            (
+                "select",
+                "x <select id=atom style='box-sizing: border-box; height: 40px; padding: 0; \
+                 border: 1px solid; line-height: 20px'><option>xx</option></select> x",
+                40.0,
+                Some(0.0),
+            ),
+            (
+                "textarea",
+                "x <textarea id=atom rows=2 \
+                 style='width: 40px; padding: 2px; border: 1px solid; line-height: 20px'>\
+                 xx</textarea> x",
+                51.0,
+                Some(0.0),
+            ),
+            (
+                "checkbox",
+                "x <input id=atom type=checkbox style='margin: 0'> x",
+                20.0,
+                Some(2.0),
             ),
         ],
     );

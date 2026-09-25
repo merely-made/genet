@@ -654,6 +654,46 @@ where
                 .merge(std::mem::take(&mut state.table_shadow));
             continue;
         };
+        // An inline-block or button aligns on its last line box, unless it
+        // has none or is a scroll container (CSS 2.1 10.8.1); a single-line
+        // text control on its own centred line. The value is border-box
+        // relative, as the inline table's below.
+        if let BoxOrigin::Element(node) = boxes[box_id].origin
+            && !replaced_atomic_root
+            && boxes[box_id].display.internal_table.is_none()
+            && let Some(computed) = styles.get(node)
+        {
+            let font_size = crate::paint::used_font_size(computed);
+            let control = state.text.as_deref_mut().and_then(|text| {
+                form_control_baseline(
+                    dom,
+                    node,
+                    computed,
+                    font_size,
+                    basis_width,
+                    root_rect.height,
+                    text.line_box(computed),
+                )
+            });
+            let baseline = match control {
+                Some(ControlBaseline::Line(baseline)) => Some(baseline),
+                Some(ControlBaseline::BottomEdge) => None,
+                control => {
+                    let visible =
+                        |overflow| matches!(overflow, CssOverflow::Visible | CssOverflow::Clip);
+                    (matches!(control, Some(ControlBaseline::Content))
+                        || (visible(computed.overflow_x) && visible(computed.overflow_y)))
+                    .then(|| {
+                        feed_line_baselines(&mut state.tree, atomic_root, false, text_baselines)
+                    })
+                    .filter(|lines| *lines)
+                    .and_then(|_| state.tree.baselines(atomic_root).last)
+                },
+            };
+            if let Some(baseline) = baseline.filter(|baseline| baseline.is_finite()) {
+                plane.inline_baselines.insert(box_id, baseline);
+            }
+        }
         // The wrapper can have captions before the grid, so derive the
         // baseline from the actual grid origin rather than assuming that the
         // grid begins at the atomic root. Buckram's K4d5 baseline remains

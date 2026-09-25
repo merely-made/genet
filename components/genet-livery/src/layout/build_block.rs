@@ -426,6 +426,7 @@ where
                             context.height,
                         )
                     },
+                    text_baselines,
                 ))
             });
             pending.block = buckram_table_block(
@@ -720,6 +721,7 @@ where
                                 min_width: width,
                                 max_width: width,
                                 height,
+                                baselines: None,
                                 wrap: None,
                             },
                             Some(box_id),
@@ -830,6 +832,7 @@ where
                     1
                 };
                 let mut height = line_count as f32 * line_height;
+                let mut baselines = None;
                 let mut wrap = None;
                 if let Some(text_system) = self.text.as_deref_mut()
                     && let Some(parent_style) = inherited
@@ -865,17 +868,18 @@ where
                                 line_constraints: None,
                             },
                         )
-                        .map(|layout| layout.size());
+                        .map(|layout| (layout.size(), layout.baselines()));
                     if let Some((minimum, _)) = minimum {
                         min_width = minimum;
                     }
-                    if let Some((maximum, maximum_height)) = maximum {
+                    if let Some(((maximum, maximum_height), maximum_baselines)) = maximum {
                         max_width = maximum.max(min_width);
                         height = maximum_height;
+                        baselines = maximum_baselines;
                         wrap = Some(Box::new(TextWrap {
                             source: box_id,
                             parent_style: parent_style.clone(),
-                            heights: Vec::new(),
+                            formatted: Vec::new(),
                         }));
                     }
                 }
@@ -889,6 +893,7 @@ where
                         min_width,
                         max_width,
                         height,
+                        baselines,
                         wrap,
                     },
                     Some(box_id),
@@ -932,6 +937,7 @@ where
                         min_width,
                         max_width: max_width.max(min_width),
                         height: line_height,
+                        baselines: None,
                         wrap: None,
                     },
                     Some(box_id),

@@ -1120,8 +1120,10 @@ fn inline_replaced_image_uses_the_shaped_line_fragment() {
         "data:image/png;base64,{}",
         base64::engine::general_purpose::STANDARD.encode(png)
     );
+    // Standards mode: in quirks mode a line holding only the image shrinks to
+    // it, so `vertical-align` cannot move it (the line height quirk).
     let html = format!(
-        r#"<html><body><div class="label"><img src="{data_uri}" class="image"></div></body></html>"#
+        r#"<!DOCTYPE html><html><body><div class="label"><img src="{data_uri}" class="image"></div></body></html>"#
     );
     let image_position = |extra: &str| {
         let list = render(

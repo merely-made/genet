@@ -2502,6 +2502,35 @@ fn positioned_children_do_not_widen_a_flex_item() {
     assert_eq!(y, 0.0, "and it stays on the toolbar's first line");
 }
 
+/// Buttons size by their border box, as in Chromium's html.css and Firefox's
+/// forms.css: a declared size includes the UA padding, and an auto-sized
+/// button still pads its label.
+#[test]
+fn a_buttons_declared_size_includes_its_padding() {
+    let mut dom = ScriptedDom::from_serialized_document(
+        "<html><body><button id=sized>Save</button><button id=padded>Save</button>\
+         <button id=bare>Save</button></body></html>",
+    );
+    let mut initial_mutations = Vec::new();
+    dom.drain_mutations(&mut initial_mutations);
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&["html, body { margin: 0; } \
+             #sized { display: block; width: 120px; height: 40px; } \
+             #bare { padding: 0; }"]),
+        Device::screen(400.0, 200.0),
+    );
+    document.frame(400, 200).expect("frame");
+    let layout = document.layout.as_ref().expect("completed frame");
+    let size = |id| {
+        let fragment = layout.fragments.get(by_id(document.dom(), id)).expect("fragment");
+        (fragment.width, fragment.height)
+    };
+    assert_eq!(size("sized"), (120.0, 40.0), "padding inside the declared size");
+    let ((padded_w, padded_h), (bare_w, bare_h)) = (size("padded"), size("bare"));
+    assert!((padded_w - bare_w - 12.0).abs() < 0.01, "{padded_w} vs {bare_w}");
+    assert!((padded_h - bare_h - 2.0).abs() < 0.01, "{padded_h} vs {bare_h}");
+}
 #[test]
 fn a_percentage_top_inset_takes_the_containing_blocks_height() {
     let mut dom = ScriptedDom::from_serialized_document(

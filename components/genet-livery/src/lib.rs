@@ -203,7 +203,9 @@ input[type=checkbox i], input[type=radio i] {
     height: 13px;
 }
 
-/* "Form controls": a button-like control's padding around its label. This
+/* "Form controls": a button-like control's padding around its label, sized
+   by the border box as Chromium's html.css and Firefox's forms.css both do,
+   so a declared width or height includes the padding. This
    is a real box-model default; the label's own shrink-to-fit size and the
    non-zero floor for an empty label are natural sizes, handed to Taffy
    directly by `apply_form_control_intrinsic_style`
@@ -212,6 +214,7 @@ input[type=checkbox i], input[type=radio i] {
    must (see that function's own doc comment). */
 button, input[type=button i], input[type=submit i], input[type=reset i] {
     padding: 1px 6px;
+    box-sizing: border-box;
 }
 
 img {

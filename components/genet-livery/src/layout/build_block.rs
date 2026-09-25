@@ -80,6 +80,9 @@ pub(in crate::layout) struct BuildState<'a, D: LayoutDom> {
     pub(in crate::layout) text: Option<&'a mut TextSystem>,
     pub(in crate::layout) table_shadow: TableShadowLedger,
     pub(in crate::layout) pending_tables: Vec<PendingTable<D::NodeId>>,
+    /// An atomic inline root formatted for its contribution: its own
+    /// containing-block percentages act as CSS Sizing 3 section 5.2.1 says.
+    pub(in crate::layout) contribution_root: Option<D::NodeId>,
 }
 
 impl<D> BuildState<'_, D>
@@ -554,7 +557,10 @@ where
     ) -> Result<Option<AlgorithmNodeId>, LayoutError> {
         match self.boxes[box_id].origin {
             BoxOrigin::Element(node) => {
-                let computed = self.styles.get(node).cloned().unwrap_or_default();
+                let mut computed = self.styles.get(node).cloned().unwrap_or_default();
+                if self.contribution_root == Some(node) {
+                    contribution_style(&mut computed);
+                }
                 // K4e1: the wrapper above this grid took the properties
                 // CSS 2.1 section 17.4 assigns to it; the grid sees them unset.
                 let (computed, table_style) =

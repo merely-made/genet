@@ -100,6 +100,7 @@ where
     taffy_style::reset_calc_scratch();
     let styles =
         resolve_container_relative_styles_with_images(dom, styles, viewport, image_sources)?;
+    let viewport_size = (viewport_width, viewport_height);
     let boxes = GeneratedBoxTree::from_dom(dom, &styles);
     let atomic = layout_atomic_subtrees(
         dom,
@@ -107,6 +108,7 @@ where
         &boxes,
         viewport_width,
         viewport_height,
+        &AtomicPass::Contribution,
         text,
         image_sources,
     )?;
@@ -114,11 +116,47 @@ where
         dom,
         &styles,
         boxes,
-        (viewport_width, viewport_height),
+        viewport_size,
         text,
         &atomic,
         image_sources,
     )?;
+    // Buckram K7: an atomic root whose size depends on the containing block
+    // the main layout gave it is formatted again against that block, and the
+    // main layout runs once more with it.
+    let bases = basis_sensitive_roots(&styles, &fragments, &atomic, viewport_size);
+    if !bases.is_empty() {
+        let contributions = bases
+            .keys()
+            .filter_map(|root| atomic.get(*root).map(|fragment| (*root, fragment.width)))
+            .collect();
+        let boxes = GeneratedBoxTree::from_dom(dom, &styles);
+        let atomic = layout_atomic_subtrees(
+            dom,
+            &styles,
+            &boxes,
+            viewport_width,
+            viewport_height,
+            &AtomicPass::Basis {
+                bases: &bases,
+                contributions: &contributions,
+            },
+            text,
+            image_sources,
+        )?;
+        fragments = layout_inline_groups(
+            dom,
+            &styles,
+            boxes,
+            viewport_size,
+            text,
+            &atomic,
+            image_sources,
+        )?;
+        debug_assert_bases_held(&styles, &fragments, &bases, viewport_size);
+        #[cfg(test)]
+        note_basis_pass();
+    }
     fragments.prepare_atomic_inline_text(dom, &styles, text);
     Ok((styles, fragments))
 }
@@ -148,6 +186,7 @@ where
         text: None,
         table_shadow: TableShadowLedger::default(),
         pending_tables: Vec::new(),
+        contribution_root: None,
     };
     let children = boxes
         .roots()
@@ -345,6 +384,7 @@ pub(in crate::layout) fn layout_atomic_subtrees<D>(
     boxes: &GeneratedBoxTree<D::NodeId>,
     viewport_width: f32,
     viewport_height: f32,
+    pass: &AtomicPass<'_>,
     text: &mut TextSystem,
     image_sources: &ImageSources,
 ) -> Result<AtomicLayoutPlane, LayoutError>
@@ -383,6 +423,21 @@ where
     let mut plane = AtomicLayoutPlane::default();
 
     for box_id in roots {
+        // The basis pass formats a sensitive root against its real
+        // containing block; every other root, and every root in the first
+        // pass, is formatted for its contribution against the viewport.
+        let basis = match pass {
+            AtomicPass::Contribution => None,
+            AtomicPass::Basis { bases, .. } => bases.get(&box_id).copied(),
+        };
+        let (basis_width, basis_height) = basis
+            .map_or((viewport_width, Some(viewport_height)), |basis| {
+                (basis.width, basis.height)
+            });
+        let contribution_root = match (basis, boxes[box_id].origin) {
+            (None, BoxOrigin::Element(node)) => Some(node),
+            _ => None,
+        };
         let mut state = BuildState {
             dom,
             styles,
@@ -396,13 +451,9 @@ where
             text: Some(&mut *text),
             table_shadow: TableShadowLedger::default(),
             pending_tables: Vec::new(),
+            contribution_root,
         };
-        let built = state.build_box(
-            box_id,
-            None,
-            16.0,
-            (Some(viewport_width), Some(viewport_height)),
-        )?;
+        let built = state.build_box(box_id, None, 16.0, (Some(basis_width), basis_height))?;
         // Harvest before any continue below: the shadow already ran inside
         // build_box, and both skip paths would otherwise drop its ledger.
         plane
@@ -440,22 +491,28 @@ where
         // to the wrapper's width and derives its height from the natural ratio.
         // A `display: inline-block` image therefore painted at viewport width
         // times its ratio while `display: inline` on the same bytes was correct.
-        let root = if state.tree.uses_intrinsic_shrink_to_fit(atomic_root) && !replaced_atomic_root
+        // The basis pass wraps every sensitive root the same way, in a block
+        // the size of its real containing block, which is what its
+        // percentages resolve against.
+        let root = if (state.tree.uses_intrinsic_shrink_to_fit(atomic_root) || basis.is_some())
+            && !replaced_atomic_root
         {
             state.tree.new_with_children_and_block_style(
                 AlgorithmKind::Block,
                 BlockStyle {
                     size: BlockDimensions::new(
-                        BlockSizeValue::Length(FlowLength::px(viewport_width)),
-                        BlockSizeValue::Length(FlowLength::px(viewport_height)),
+                        BlockSizeValue::Length(FlowLength::px(basis_width)),
+                        basis_height.map_or(BlockSizeValue::Auto, |height| {
+                            BlockSizeValue::Length(FlowLength::px(height))
+                        }),
                     ),
                     ..BlockStyle::default()
                 },
                 Style {
                     display: Display::Block,
                     size: Size {
-                        width: Dimension::length(viewport_width),
-                        height: Dimension::length(viewport_height),
+                        width: Dimension::length(basis_width),
+                        height: basis_height.map_or(Dimension::auto(), Dimension::length),
                     },
                     ..Style::default()
                 },
@@ -472,6 +529,19 @@ where
         }) {
             plane.intrinsic_inline.insert(box_id, intrinsic);
         }
+        // A sensitive root keeps its contribution-pass width for intrinsic
+        // queries, so a container sized from it is not re-resolved (CSS
+        // Sizing 3 section 5.2.1); lines take the width formatted here.
+        if let AtomicPass::Basis { contributions, .. } = pass
+            && let Some(width) = contributions.get(&box_id)
+            && let Some(contribution) = IntrinsicSizes::new(*width, *width)
+        {
+            plane.intrinsic_inline.entry(box_id).or_insert(contribution);
+        }
+        let basis_block_size = basis_height.map_or(
+            AlgorithmAvailableSpace::MaxContent,
+            AlgorithmAvailableSpace::Definite,
+        );
         let available = if replaced_atomic_root {
             AlgorithmSize::new(
                 AlgorithmAvailableSpace::MaxContent,
@@ -479,8 +549,8 @@ where
             )
         } else {
             AlgorithmSize::new(
-                AlgorithmAvailableSpace::Definite(viewport_width),
-                AlgorithmAvailableSpace::Definite(viewport_height),
+                AlgorithmAvailableSpace::Definite(basis_width),
+                basis_block_size,
             )
         };
         state.tree.compute_layout_with_measure(

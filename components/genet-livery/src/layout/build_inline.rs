@@ -658,6 +658,11 @@ where
                     |context, geometry| {
                         measure_inline_context(text, *dom, styles, boxes, atomic, context, geometry)
                     },
+                    |context, width| {
+                        context
+                            .layout_for_width(width)
+                            .and_then(|layout| layout.baselines())
+                    },
                 ))
             });
             pending.block = buckram_table_block(

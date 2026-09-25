@@ -889,9 +889,14 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
     /// Propagate child formatting-context baseline outputs through the
     /// standards-owned scratch tree. This consumes each child's declared
     /// output and parent-relative placement, never Taffy's child traversal.
+    /// A `Table` node keeps the baselines its table algorithm declared, as it
+    /// keeps the size it was given.
     pub fn propagate_baselines(&mut self) {
         for node in &mut self.nodes {
-            node.baselines = Baselines::synthesized_from_block_end(node.final_layout.size.height);
+            if node.kind != AlgorithmKind::Table {
+                node.baselines =
+                    Baselines::synthesized_from_block_end(node.final_layout.size.height);
+            }
         }
         self.propagate_declared_baselines();
     }
@@ -900,35 +905,60 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
     /// line-formatting baselines for admitted measured contexts.
     pub fn propagate_declared_baselines(&mut self) {
         for index in (0..self.nodes.len()).rev() {
-            let children = self.nodes[index].children.clone();
-            let first = children.iter().copied().find_map(|child| {
-                let child_node = &self.nodes[child.index()];
-                (child_node.block_style.float == FloatSide::None
-                    && !child_node.block_style.is_out_of_flow())
-                .then(|| {
-                    child_node
-                        .baselines
-                        .first
-                        .map(|baseline| child_node.final_layout.location.y + baseline)
-                })
-                .flatten()
-            });
-            let last = children.iter().rev().copied().find_map(|child| {
-                let child_node = &self.nodes[child.index()];
-                (child_node.block_style.float == FloatSide::None
-                    && !child_node.block_style.is_out_of_flow())
-                .then(|| {
-                    child_node
-                        .baselines
-                        .last
-                        .map(|baseline| child_node.final_layout.location.y + baseline)
-                })
-                .flatten()
-            });
-            if first.is_some() || last.is_some() {
-                self.nodes[index].baselines = Baselines::new(first, last)
-                    .expect("child baseline outputs remain finite logical offsets");
-            }
+            self.select_declared_baselines(index);
+        }
+    }
+
+    /// [`Self::propagate_declared_baselines`] over the subtree at `root`,
+    /// children before parents, for a formatter that finishes one subtree
+    /// before the rest of the tree, as a table cell does.
+    pub fn propagate_declared_baselines_within(&mut self, root: AlgorithmNodeId) {
+        let mut order = Vec::new();
+        let mut stack = vec![root];
+        while let Some(id) = stack.pop() {
+            order.push(id);
+            stack.extend(self.nodes[id.index()].children.iter().copied());
+        }
+        for id in order.into_iter().rev() {
+            self.select_declared_baselines(id.index());
+        }
+    }
+
+    /// Give the node at `index` the first and last baselines of its in-flow
+    /// children's declared outputs, when any child has one. A `Table` node's
+    /// come from its rows, which its table algorithm already chose.
+    fn select_declared_baselines(&mut self, index: usize) {
+        if self.nodes[index].kind == AlgorithmKind::Table {
+            return;
+        }
+        let children = self.nodes[index].children.clone();
+        let first = children.iter().copied().find_map(|child| {
+            let child_node = &self.nodes[child.index()];
+            (child_node.block_style.float == FloatSide::None
+                && !child_node.block_style.is_out_of_flow())
+            .then(|| {
+                child_node
+                    .baselines
+                    .first
+                    .map(|baseline| child_node.final_layout.location.y + baseline)
+            })
+            .flatten()
+        });
+        let last = children.iter().rev().copied().find_map(|child| {
+            let child_node = &self.nodes[child.index()];
+            (child_node.block_style.float == FloatSide::None
+                && !child_node.block_style.is_out_of_flow())
+            .then(|| {
+                child_node
+                    .baselines
+                    .last
+                    .map(|baseline| child_node.final_layout.location.y + baseline)
+            })
+            .flatten()
+        });
+        if first.is_some() || last.is_some() {
+            self.nodes[index].baselines = Baselines::new(first, last)
+                .expect("child baseline outputs remain finite logical offsets");
         }
     }
 

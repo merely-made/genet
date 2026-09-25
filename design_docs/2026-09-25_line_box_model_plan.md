@@ -3,8 +3,8 @@
 **Status:** in progress, 2026-09-25. Mark ruled the home the same day:
 genet-livery's line pass, with Parley kept upstream-shaped rather than
 patched. Slice A (the model with nested alignment, the line height quirk,
-and the scripted tier's quirks mode) is implemented and receipted; slice B
-(atom baselines) is next.
+and the scripted tier's quirks mode) and slice B (atom baselines) are
+implemented and receipted; the items under Next remain.
 
 ## The gap
 
@@ -233,7 +233,52 @@ All 2026-09-25.
   baselines before `populate_inline_baselines` has fed the text's in. The
   `b3_inline_table_uses_its_first_table_baseline` test records the behavior.
   In standards mode an inline table alone on a line is then 48 tall where
-  Chromium gives 37. By Mark's ruling this is slice B's.
+  Chromium gives 37. By Mark's ruling this is slice B's, which fixed it.
+- **A table's own baselines did not outlive the next layout run.** Every
+  `compute_layout_with_measure` ends in `AlgorithmTree::propagate_baselines`
+  (`components/buckram/src/taffy_adapter.rs`), which gave every node a
+  baseline synthesized at its block end and then re-chose each parent's from
+  its children, a `Table` node's included. The K4d5 baselines that
+  `commit_table_block` (`components/genet-livery/src/table_block.rs`) writes
+  on the grid node therefore lasted only until the next run anywhere in the
+  tree, such as the next cell's formatting: a table nested in a cell reported
+  its bottom edge. Invisible while every cell reported its bottom edge too;
+  with slice B's text baselines a row holding a nested table grew by 11px
+  (`inferred_cells_with_nested_tables_match_html_table_glyphs`). A `Table`
+  node now keeps its declared baselines through a run, as it keeps the size
+  it was given.
+- **K4d5 synthesized a row's baseline from measured content.** With no
+  baseline-aligned cell taking part, `align_table_cells`
+  (`components/buckram/src/table/rows.rs`) took the lowest cell content edge
+  from each cell's measured content. genet hands a cell's specified height
+  to Buckram as a row constraint rather than content, so an empty 40px cell
+  measured 0, and an inline table holding one hung from the baseline. It
+  now takes each cell's box as filling its row. The previous finding hid
+  this: the inline table read its grid's bottom edge, which is right for one
+  row with no bottom padding.
+- **genet's cell formatter gave an empty cell a baseline** at its measured
+  content's end, so an empty baseline-aligned cell took part in its row's
+  baseline. Chromium leaves it out, as K4d5's own unit test intends
+  (`a_row_without_baseline_cells_synthesizes_from_the_lowest_content_edge`).
+  It now reports none.
+- **livery does not parse `display: inline-flex` or `inline-grid`:** the
+  `Display` keywords (`components/livery/src/values/property/animation.rs`)
+  stop at `inline-table`, so the declaration is dropped and the element keeps
+  its UA display. Chromium aligns both on their first baseline (a column of
+  two flex items and a grid of two rows alike).
+- **An inline-block holding only an atom is too short.** With a 40px
+  inline-block alone inside it, Chromium makes the outer inline-block 45 tall
+  (its line box puts the strut's descent under the atom) and genet 40. The
+  line around it agrees (45), because the outer box's baseline comes from
+  that inner line; its height does not. Not traced yet.
+- **genet's UA sheet lacks some of Chromium's control edges.** Chromium's
+  default button has `padding: 1px 6px` and a 2px outset border, and its text
+  input `padding: 1px 2px` and a 2px inset border. genet's sheet (the UA
+  string in `components/genet-livery/src/lib.rs`) gives the button that
+  padding but no border and the input neither, so with the ground-truth font
+  a two-line default button is 42 tall where Chromium's is 46, and a default
+  input 20 where Chromium's is 26. The ground-truth rows set both explicitly,
+  so only the baseline rules differ.
 - **The scripted arena had no quirks mode.** The parser recorded html5ever's
   decision in `ParserPolicy` and nothing read it
   (`2026-09-08_parser_script_interleaving_plan.md`, residual 6;
@@ -245,15 +290,120 @@ All 2026-09-25.
   through `LayoutDom::quirks_mode` (`ScopedDom` asks for its own document's)
   and by script through `__documentCompatMode`.
 
+## Slice B: atom baselines
+
+Mark set the scope on 2026-09-25: inline-blocks and buttons, table cells,
+atom-only lines, and form controls; the subtree-scoped baseline propagation
+lives in buckram.
+
+**What CSS and HTML require, and what Chromium does** (Ahem 16px/20px,
+standards mode, device pixel ratio 1; genet after slice A in the last
+column):
+
+| Case | Chromium | genet |
+|---|---|---|
+| an inline-block with padding 8px and a border around text | 38, atom at 0 | 43 |
+| a two-line inline-block | 40 | 45 |
+| an `overflow: hidden` inline-block (baseline at its bottom edge) | 41 | 41 |
+| an inline-block holding only a 40px atom | 45, the inline-block 45 tall | 45, the inline-block 40 tall |
+| an empty inline-block (bottom edge) | 25 | 25 |
+| a padded button | 38 | 43 |
+| an inline table with a padded cell | 36 | 41 |
+| a baseline-aligned row of a 16px and a 40px cell | 27, the small cell's text at 9 | 20, at 0 |
+
+- An inline-block's baseline is its last in-flow line box's, or its bottom
+  margin edge when it has none or is a scroll container (CSS 2.1 10.8.1). A
+  line holding only a forced break or a preserved newline counts: it is no
+  phantom (9.4.2; WPT's `visudet/inline-block-baseline-016.html`).
+  A button takes its last line's too (WPT's
+  `html/rendering/widgets/button-layout/inline-level.html`: "1<br>2" aligns
+  on the "2"), and keeps it when it scrolls: Chromium aligns buttons with
+  `overflow: hidden`, `visible` and `auto` alike, where an `overflow:
+  hidden` inline-block drops to its bottom edge
+  (`button-layout/scrollable-button-centering.html`).
+  A table inside an inline-block is not one of its line boxes: Chromium
+  skips it, so an inline-block holding only a table sits on its bottom edge
+  (the line 41, where the row's baseline would give 36), and one holding a
+  line and then a table sits on that line.
+- A table cell's baseline is its first in-flow line box's or table row's,
+  whichever comes first (CSS 2.1 17.5.3): a cell holding only a nested
+  table aligns on the table's first row. An inline table exports its first
+  row's. CSS 2.1 gives a cell with neither the bottom of its content box;
+  Chromium leaves it out of its row's baseline instead, which genet
+  follows: beside a text cell, an empty 40px cell leaves the row on the
+  text's baseline. A row with no part sits on the bottom
+  content edge of its lowest cell, each cell's box filling the row: an
+  inline table holding one empty 40px cell sits on 40 (44 with `padding:
+  4px 0 6px`), and an 80px inline table of top- and bottom-aligned cells on
+  80.
+- A table's caption is no line box of what holds the table: a cell and an
+  inline table align on the first row below a top caption (Chromium: the
+  row 56, its marker at 31), and an inline-block holding a captioned table
+  sits on its bottom edge.
+- A line holding only atoms still has a baseline; a block container's first
+  and last baselines count it.
+- Form controls, measured in Chromium with `font: inherit`: a single-line
+  text input, an `input` button and a dropdown `select` centre one line box
+  of their own font and `line-height` in the content box, and the baseline
+  is that line's (18 in a 26px default input, 28 in a 40px-tall one, 25 in a
+  40px-tall select). A textarea and a listbox `select` are scroll containers
+  and take the bottom edge; a checkbox, radio or range sits on its
+  border-box bottom.
+
+**Design.**
+
+1. buckram: `AlgorithmTree::propagate_declared_baselines_within(root)`, the
+   same first/last selection as `propagate_declared_baselines` over one
+   subtree in post-order.
+2. A table cell (`format_table_cell`) feeds its line formatting contexts'
+   baselines into the cell's subtree after formatting it and propagates them
+   there, so the cell reports its first line's baseline
+   (`feed_line_baselines`, which counts a nested table's rows for a cell,
+   hides them for an inline-block, and never counts a caption's lines).
+3. The line pass records each line's baseline, lines of atoms or of a forced
+   break alone included, and `InlineLayout::baselines` reports the first and
+   last.
+4. Each atomic root, once laid out on its own, exports its baseline through
+   the plane inline tables already use: an inline-block its last line's
+   unless it scrolls, a button its last line's even when it scrolls, a
+   single-line input or dropdown its centred line's (`form_control_baseline`,
+   whose `ControlBaseline::BottomEdge` keeps a textarea, a listbox or a
+   control without text of its own on its bottom edge).
+5. buckram's `propagate_baselines` leaves a `Table` node's baselines as its
+   table algorithm declared them (see Findings), so a table in a cell reports
+   its first row's.
+6. A cell with no line box or row reports no baseline, and K4d5 synthesizes
+   a row without one from its cells' boxes as they fill the row
+   (`align_table_cells`, with `CellBlockOffsets::block_end`).
+
+**Done-conditions.**
+
+- Every row above matches Chromium in a genet-livery test, with the form
+  control rows beside them.
+- The three WPT files that waited on this pass again
+  (`inline-box-border-line-break`, `inline-box-padding-line-break`,
+  `line-breaking-atomic-007`).
+- The suites keep their counts, except tests that encode the bottom-edge
+  baselines, each named and justified.
+- WPT before and after over slice A's directories plus
+  `html/rendering/widgets`, `css/css-tables`, `css/CSS2/tables`,
+  `css/css-flexbox`, `css/css-grid` and `css/css-align`, every
+  `pass -> anything else` attributed, the checked baselines through both
+  binaries, and a positive control that flips.
+
 ## Next
 
-- **Slice B, atom baselines.** An inline-block exports its last in-flow line
-  box's baseline (overflow visible), and a table cell its first line's, so an
-  inline table's first-row baseline comes from content. Chromium's rows:
-  `text <inline-block, padding 8px, border 1px>in</inline-block> text` is 38
-  with the atom at 0 (genet: 43); a two-line inline-block, 40 (45); a padded
-  button, 38 (43); an `overflow: hidden` inline-block keeps its bottom edge,
-  41 (41).
+- **Button centring.** Chromium centres a button's content in a button
+  taller than it (a 40px `<button>` has its baseline at 25); genet lays it
+  out from the top, so its exported baseline follows genet's layout (18).
+- **An inline-block holding only an atom** is 40 tall where Chromium's is 45
+  (Findings); its baseline is already right.
+- **`inline-flex` and `inline-grid`:** parse them and lay them out as atomic
+  inlines aligned on their first baseline (Findings).
+- **Control edges in the UA sheet:** a button's 2px border and a text
+  input's padding and border (Findings). Adding them moves every
+  default-styled control, so they want their own WPT pass over
+  `html/rendering/widgets` and the form element directories.
 - **Device pixels.** At a device pixel ratio of 2 Chromium gives a 16px
   Arial `normal` line 18.5 and the Arial atom line 44.5, where at 1 it gives
   18 and 45: for a system font its rounding follows the device pixel. genet
@@ -308,3 +458,46 @@ All 2026-09-25.
   after, save two `css/css-position` reftests that now pass
   (`position-absolute-in-inline-003` and `-margin-top`), repinned in
   `ports/genet-wpt/expectations/reftest/css_position_boa.json`.
+- **2026-09-25, slice B.** Atoms align on their own baselines. The line
+  pass records each line's baseline, a line of atoms or of a forced break
+  alone included (`components/genet-livery/src/text.rs`). A table cell feeds
+  its subtree's line baselines in and carries them up through buckram's new
+  `propagate_declared_baselines_within`, counting a nested table's rows and
+  no caption's lines (`feed_line_baselines`, `format_table_cell`). The
+  atomic pre-pass exports an inline-block's or button's last line baseline
+  and a form control's (`form_control_baseline`, `layout/transaction.rs`).
+  In buckram, `propagate_baselines` keeps a `Table` node's declared
+  baselines, and K4d5 synthesizes a row with no part from its cells' boxes as
+  they fill it (`table/rows.rs`). `tests/line_box_model.rs`'s
+  `atom_baselines_match_chromium` holds 29 rows, every one matching
+  Chromium: the table above, the form controls, and the nested-table,
+  caption, empty-cell, scrollable-button and forced-break cases.
+  genet-livery, buckram, genet-scripted-dom, script-runtime-api,
+  genet-scripted, genet-documents, genet-render and taproot: 1712 passed,
+  none failing. One test changed its expectation:
+  `b3_inline_table_uses_its_first_table_baseline` asserted that the first
+  cell's bottom edge was the table's baseline; CSS 2.1 17.5.3 and Chromium
+  put it on the cell's text, so the test now reads both baselines from the
+  painted glyphs and asserts they agree, with the table's top on the line's,
+  as Chromium measures. Two buckram tests gained assertions:
+  `an_owned_table_context_keeps_the_geometry_it_was_given` (the declared
+  baselines survive the walk) and
+  `a_row_without_baseline_cells_synthesizes_from_the_lowest_content_edge` (a
+  row stretched by its table's height sits on its end).
+  `TextFrame::first_inline_baseline` and its test-only record are removed:
+  b3 was their last reader.
+
+  WPT receipt: `Code/testing/genet/wpt-ledger/2026-09-25_atom_baselines/`.
+  Reftests over slice A's directories and the six added: 29 `fail -> pass`,
+  among them the three that waited on this slice, seven table baseline
+  alignment files and seven fixed table layout files. One `pass -> fail`,
+  `css-flexbox/flex-inline.html`, was a false pass: livery does not parse
+  `inline-flex`, and its inline-block reference, on its bottom edge, had
+  been pulled off screen with it. Testharness has no `pass -> anything
+  else`; one file's `fail -> no-results` was load, shown by rerunning the
+  directory with the binaries alternating. The first attempt had six
+  regressions; five were real, from three causes, and led to K4d5's row
+  fallback and empty cells reporting none, forced-break lines counting, and
+  scrollable buttons keeping their content's baseline. The positive control
+  flips. The checked baselines report, after, exactly the stale entries
+  slice A's receipt recorded, and nothing else.

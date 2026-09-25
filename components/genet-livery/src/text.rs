@@ -380,6 +380,18 @@ impl TextSystem {
         metrics
     }
 
+    /// The line box one line of `style`'s own text makes: its space above the
+    /// baseline and its height (CSS 2.1 10.8.1).
+    pub(crate) fn line_box(&mut self, style: &ComputedValues) -> (f32, f32) {
+        let metrics = self.box_metrics(style);
+        let (above, below) = leading_extent(
+            metrics.ascent,
+            metrics.descent,
+            used_line_height(style, metrics),
+        );
+        (above, above + below)
+    }
+
     fn space_advance(&mut self, style: &ComputedValues) -> f32 {
         let font_size = super::paint::used_font_size(style);
         let key = metric_key(style, font_size);
@@ -521,7 +533,11 @@ impl TextSystem {
             return None;
         }
 
-        let Shaped { items, break_lines } = self.shape(
+        let Shaped {
+            items,
+            break_lines,
+            baselines,
+        } = self.shape(
             &text,
             &mut spans,
             &inline_boxes,
@@ -561,6 +577,7 @@ impl TextSystem {
             Some(InlineLayout {
                 width: right.max(0.0),
                 height: (bottom - top).max(0.0),
+                baselines,
                 items,
                 text,
                 text_sources,
@@ -569,6 +586,7 @@ impl TextSystem {
             Some(InlineLayout {
                 width: 0.0,
                 height: 0.0,
+                baselines: None,
                 items,
                 text,
                 text_sources,
@@ -1215,6 +1233,7 @@ impl TextSystem {
         // Parley's float-aware breaking started them.
         let mut drift = 0.0_f32;
         let mut span_cursor = 0;
+        let mut baselines: Option<(f32, f32)> = None;
         for line in layout.lines() {
             let source_metrics = *line.metrics();
             let content_height =
@@ -1365,6 +1384,7 @@ impl TextSystem {
                     (upper.min(top), lower.max(bottom))
                 }));
             }
+            let emitted = result.len();
             for (item, position) in line.items().zip(positions) {
                 let own_baseline = position.map_or(baseline, |(anchor, _)| {
                     extents.baseline_at(anchor, baseline, line_top, line_height)
@@ -1435,7 +1455,6 @@ impl TextSystem {
                             source,
                             owners: span.map_or_else(Vec::new, |span| span.owners.clone()),
                             trailing_content_end,
-                            line_baseline: baseline,
                             line_y: line_top,
                             fragment: Fragment {
                                 x: run.offset(),
@@ -1499,11 +1518,18 @@ impl TextSystem {
                     },
                 }
             }
+            // A line ending in a forced break is no phantom even with nothing
+            // else on it (CSS 2.1 9.4.2).
+            if result.len() > emitted || line.break_reason() == BreakReason::Explicit {
+                baselines =
+                    Some(baselines.map_or((baseline, baseline), |(first, _)| (first, baseline)));
+            }
         }
         append_positioned_inline_start_markers(&mut result, inline_boxes);
         Shaped {
             items: result,
             break_lines,
+            baselines,
         }
     }
 
@@ -1554,6 +1580,7 @@ pub(crate) struct InlineRequest<'a> {
 pub(crate) struct InlineLayout<Source> {
     width: f32,
     height: f32,
+    baselines: Option<(f32, f32)>,
     items: Vec<ShapedItem<Source>>,
     text: String,
     text_sources: Vec<TextSource<Source>>,
@@ -1607,28 +1634,14 @@ where
         (self.width, self.height)
     }
 
-    /// Return the first and last text-line baselines relative to this inline
-    /// formatting context's block-start edge. Atomic-only lines deliberately
-    /// leave this unset so their formatting context can synthesize the
-    /// block-end fallback instead.
+    /// The first and last line boxes' baselines, relative to this inline
+    /// formatting context's block-start edge; a line of atoms alone has one
+    /// too (CSS 2.1 10.8), as does a line holding only a forced break (9.4.2).
+    /// None when no line holds anything, so the formatting context
+    /// synthesizes its block-end fallback.
     pub(crate) fn baselines(&self) -> Option<(f32, f32)> {
-        let mut first = None::<f32>;
-        let mut last = None::<f32>;
-        for item in &self.items {
-            let ShapedItem::Text(run) = item else {
-                continue;
-            };
-            // Parley reports this metric in the inline layout's coordinate
-            // space already. `line_y` locates the painted fragment, not an
-            // extra offset to add to the baseline output.
-            let baseline = run.line_baseline;
-            if !baseline.is_finite() || baseline < 0.0 {
-                continue;
-            }
-            first = Some(first.map_or(baseline, |current| current.min(baseline)));
-            last = Some(last.map_or(baseline, |current| current.max(baseline)));
-        }
-        first.zip(last)
+        self.baselines
+            .filter(|(first, last)| first.is_finite() && last.is_finite())
     }
 
     pub(crate) fn place<Id, Resolve>(
@@ -1673,8 +1686,6 @@ where
                     let mut fragment = run.fragment;
                     translate_fragment(&mut fragment, origin);
                     let line_y = run.line_y + origin.1;
-                    #[cfg(test)]
-                    let line_baseline = run.line_baseline + origin.1;
                     let mut glyphs = run.glyphs.clone();
                     for glyph in &mut glyphs {
                         glyph.point.x += origin.0;
@@ -1685,8 +1696,6 @@ where
                         continue;
                     };
                     frame.record_inline_fragment(source_node, fragment, line_y);
-                    #[cfg(test)]
-                    frame.record_inline_baseline(source_node, line_baseline);
                     for cluster in &run.clusters {
                         let Some(cluster_node) = node_for(cluster.source) else {
                             continue;
@@ -1713,8 +1722,6 @@ where
                         );
                         placement.record(*owner, decorated, line_y);
                         frame.record_inline_fragment(owner_node, decorated, line_y);
-                        #[cfg(test)]
-                        frame.record_inline_baseline(owner_node, line_baseline);
                         command_owners.push(owner_node);
                     }
                     frame.used_fonts.insert(run.font_instance);
@@ -1788,8 +1795,6 @@ where
 pub(crate) struct InlineBoxes {
     fragments: Option<Vec<Fragment>>,
     line_keys: Option<Vec<f32>>,
-    #[cfg(test)]
-    baselines: Option<Vec<f32>>,
 }
 
 fn restore<Id: Eq + Hash, V>(map: &mut HashMap<Id, V>, key: Id, value: Option<V>) {
@@ -1806,8 +1811,6 @@ pub(crate) struct TextFrame<Id> {
     prepared_sources: HashSet<Id>,
     inline_fragments: HashMap<Id, Vec<Fragment>>,
     inline_line_keys: HashMap<Id, Vec<f32>>,
-    #[cfg(test)]
-    inline_baselines: HashMap<Id, Vec<f32>>,
     painted_decorations: HashSet<Id>,
     used_fonts: HashSet<FontInstanceKey>,
     text_order: Vec<Id>,
@@ -1829,8 +1832,6 @@ impl<Id> Default for TextFrame<Id> {
             prepared_sources: HashSet::new(),
             inline_fragments: HashMap::new(),
             inline_line_keys: HashMap::new(),
-            #[cfg(test)]
-            inline_baselines: HashMap::new(),
             painted_decorations: HashSet::new(),
             used_fonts: HashSet::new(),
             text_order: Vec::new(),
@@ -1956,12 +1957,6 @@ where
                 self.inline_line_keys.insert(*source, lines.clone());
             }
         }
-        #[cfg(test)]
-        for (source, baselines) in &source_frame.inline_baselines {
-            if includes(*source) {
-                self.inline_baselines.insert(*source, baselines.clone());
-            }
-        }
         let copied = source_frame
             .text_clusters
             .iter()
@@ -2046,12 +2041,6 @@ where
                     *line += offset.1;
                 }
             }
-            #[cfg(test)]
-            if let Some(baselines) = self.inline_baselines.get_mut(node) {
-                for baseline in baselines {
-                    *baseline += offset.1;
-                }
-            }
         }
         for cluster in &mut self.text_clusters {
             if nodes.contains(&cluster.source) {
@@ -2090,8 +2079,6 @@ where
         InlineBoxes {
             fragments: self.inline_fragments.get(&source).cloned(),
             line_keys: self.inline_line_keys.get(&source).cloned(),
-            #[cfg(test)]
-            baselines: self.inline_baselines.get(&source).cloned(),
         }
     }
 
@@ -2099,8 +2086,6 @@ where
     pub(crate) fn restore_inline_boxes(&mut self, source: Id, boxes: InlineBoxes) {
         restore(&mut self.inline_fragments, source, boxes.fragments);
         restore(&mut self.inline_line_keys, source, boxes.line_keys);
-        #[cfg(test)]
-        restore(&mut self.inline_baselines, source, boxes.baselines);
     }
 
     pub(crate) fn first_inline_line(&self, source: Id) -> Option<f32> {
@@ -2112,31 +2097,6 @@ where
     #[cfg(test)]
     pub(crate) fn text_order(&self) -> &[Id] {
         &self.text_order
-    }
-
-    /// The first shaped line baseline for an inline source, in document
-    /// coordinates. Test receipts use it to compare another baseline provider
-    /// against the line that placed it without inferring one from a fragment's
-    /// block edge.
-    #[cfg(test)]
-    pub(crate) fn first_inline_baseline(&self, source: Id) -> Option<f32> {
-        self.inline_baselines
-            .get(&source)
-            .and_then(|baselines| baselines.first().copied())
-    }
-
-    #[cfg(test)]
-    fn record_inline_baseline(&mut self, source: Id, baseline: f32) {
-        if !baseline.is_finite() {
-            return;
-        }
-        let baselines = self.inline_baselines.entry(source).or_default();
-        if baselines
-            .last()
-            .is_none_or(|previous| (previous - baseline).abs() > 0.5)
-        {
-            baselines.push(baseline);
-        }
     }
 
     fn record_inline_fragment(&mut self, source: Id, fragment: Fragment, line_y: f32) {
@@ -2645,6 +2605,9 @@ struct Shaped<Id> {
     /// forced break. Such a line box may hold no item, yet CSS 2.1 section
     /// 9.4.2 gives it height; an empty line after a trailing break has none.
     break_lines: Option<(f32, f32)>,
+    /// The first and last baselines of the line boxes that hold anything,
+    /// a line of atoms alone or of a forced break alone included.
+    baselines: Option<(f32, f32)>,
 }
 
 enum ShapedItem<Id> {
@@ -2664,7 +2627,6 @@ struct ShapedRun<Id> {
     source: Option<Id>,
     owners: Vec<Id>,
     trailing_content_end: Option<f32>,
-    line_baseline: f32,
     line_y: f32,
     fragment: Fragment,
     line_fragment: Fragment,

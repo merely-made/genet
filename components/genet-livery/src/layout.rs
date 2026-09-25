@@ -193,9 +193,10 @@ struct AtomicLayoutPlane {
     // table grid's intrinsic pair, not the viewport-sized atomic fragment
     // produced for ordinary placement.
     intrinsic_inline: HashMap<BoxId, IntrinsicSizes>,
-    // K4d5 table-grid first baselines, expressed from their inline-table
-    // wrapper's margin-box block-start. Only inline-table wrappers populate
-    // this map; other atomic boxes retain the existing block-end fallback.
+    // Each atom's baseline from its border-box block-start: an inline table's
+    // first row's (K4d5), an inline-block's or button's last line box's, a
+    // single-line text control's centred line's. An atom not here keeps its
+    // bottom margin edge.
     inline_baselines: HashMap<BoxId, f32>,
     subtrees: Vec<AtomicSubtree>,
     // Accumulated K4c5a shadow ledgers from each atomic root's BuildState.
@@ -291,6 +292,8 @@ struct TextMeasure {
     min_width: f32,
     max_width: f32,
     height: f32,
+    /// The run's first and last line baselines at its max-content width.
+    baselines: Option<(f32, f32)>,
     /// A run the text system formatted, which the atomic pre-pass formats
     /// again at a narrower width than its max-content, since it wraps there.
     wrap: Option<Box<TextWrap>>,
@@ -300,8 +303,8 @@ struct TextMeasure {
 struct TextWrap {
     source: BoxId,
     parent_style: ComputedValues,
-    /// Heights already formatted, by width.
-    heights: Vec<(f32, f32)>,
+    /// Widths already formatted, with the height and line baselines at each.
+    formatted: Vec<(f32, f32, Option<(f32, f32)>)>,
 }
 
 /// `context`'s height at `width`. A run narrower than its max-content wraps,
@@ -325,14 +328,14 @@ where
     if width >= context.max_width - 0.5 {
         return context.height;
     }
-    if let Some((_, height)) = wrap
-        .heights
+    if let Some(&(_, height, _)) = wrap
+        .formatted
         .iter()
-        .find(|(formatted, _)| (formatted - width).abs() <= 0.01)
+        .find(|(formatted, ..)| (formatted - width).abs() <= 0.01)
     {
-        return *height;
+        return height;
     }
-    let height = text
+    let (height, baselines) = text
         .format_inline_group(
             dom,
             styles,
@@ -346,9 +349,84 @@ where
                 line_constraints: None,
             },
         )
-        .map_or(context.height, |layout| layout.size().1);
-    wrap.heights.push((width, height));
+        .map_or((context.height, None), |layout| {
+            (layout.size().1, layout.baselines())
+        });
+    wrap.formatted.push((width, height, baselines));
     height
+}
+
+/// `context`'s first and last line baselines at `width`: as it was formatted
+/// there, or on its one line where nothing reformatted it, which is the
+/// height its measure used.
+fn text_baselines(context: &TextMeasure, width: f32) -> Option<(f32, f32)> {
+    context
+        .wrap
+        .as_deref()
+        .filter(|_| width < context.max_width - 0.5)
+        .and_then(|wrap| {
+            wrap.formatted
+                .iter()
+                .find(|(formatted, ..)| (formatted - width).abs() <= 0.01)
+        })
+        .map_or(context.baselines, |(_, _, baselines)| *baselines)
+}
+
+/// Feed the line formatting contexts below `root` their first and last line
+/// baselines and carry them up to `root` (CSS 2.1 10.8.1, 17.5.3). Every other
+/// box first drops the block-end baseline layout synthesized for it, so only
+/// real line boxes reach `root`. A nested table's rows count where
+/// `table_rows` says so, as a cell's do (17.5.3); an inline-block's baseline
+/// is its last line box's alone, as Chromium's skips a table. A table's
+/// captions count for nothing either way. Whether any line or counted row
+/// did.
+fn feed_line_baselines<Context, Source>(
+    tree: &mut AlgorithmTree<Style, Context, Source>,
+    root: AlgorithmNodeId,
+    table_rows: bool,
+    line_baselines: impl Fn(&Context, f32) -> Option<(f32, f32)>,
+) -> bool {
+    let mut found = false;
+    let mut hidden = Vec::new();
+    // Each node with whether it sits in a caption.
+    let mut stack = vec![(root, false)];
+    while let Some((id, muted)) = stack.pop() {
+        if id != root && tree.kind(id) == AlgorithmKind::Table {
+            let rows = tree.baselines(id);
+            if table_rows && !muted {
+                found |= rows.first.is_some();
+            } else {
+                // Put back below: an inline table's export reads it later.
+                hidden.push((id, rows));
+                tree.set_baselines(id, Baselines::default());
+            }
+            continue;
+        }
+        // A table wrapper's other children are its captions.
+        let wrapper = tree
+            .children(id)
+            .iter()
+            .any(|child| tree.kind(*child) == AlgorithmKind::Table);
+        stack.extend(tree.children(id).iter().map(|child| {
+            (
+                *child,
+                muted || (wrapper && tree.kind(*child) != AlgorithmKind::Table),
+            )
+        }));
+        let width = tree.layout(id).width;
+        let lines = tree
+            .context(id)
+            .filter(|_| !muted)
+            .and_then(|context| line_baselines(context, width))
+            .and_then(|(first, last)| Baselines::new(Some(first), Some(last)));
+        found |= lines.is_some();
+        tree.set_baselines(id, lines.unwrap_or_default());
+    }
+    tree.propagate_declared_baselines_within(root);
+    for (id, rows) in hidden {
+        tree.set_baselines(id, rows);
+    }
+    found
 }
 
 fn measure_text_algorithm_node(
@@ -653,6 +731,7 @@ fn format_table_cell<Context, Source>(
     request: TableCellLayoutInput,
     cell: &CellBlockInput,
     mut measure: impl FnMut(&mut Context, InlineMeasureGeometry<'_>) -> (f32, f32),
+    line_baselines: impl Fn(&Context, f32) -> Option<(f32, f32)>,
 ) -> TableCellLayoutOutput {
     let offsets = cell.style.offsets;
     let style = tree.style_mut(node);
@@ -702,12 +781,26 @@ fn format_table_cell<Context, Source>(
             )
         },
     );
+    // A cell's baseline is its first line box's or table row's (CSS 2.1
+    // 17.5.3), which Buckram reads from the content box's block-start. A cell
+    // with neither reports none and takes no part in its row's baseline, as
+    // in Chromium; K4d5 synthesizes a row with no part from its cells'
+    // content edges.
+    let lines = feed_line_baselines(tree, node, true, line_baselines);
     let border_box = tree.unrounded_layout(node).height;
-    let baselines = tree.baselines(node);
+    let content = cell_content_block_size(border_box, offsets);
+    let start = offsets.block_start();
+    let own = tree.baselines(node);
+    let baselines = Baselines::new(
+        own.first.map(|baseline| baseline - start),
+        own.last.map(|baseline| baseline - start),
+    )
+    .filter(|_| lines && own.first.is_some())
+    .unwrap_or_default();
     let style = tree.style_mut(node);
     (style.size, style.min_size, style.max_size, style.box_sizing) = saved;
     TableCellLayoutOutput {
-        content_block_size: cell_content_block_size(border_box, offsets),
+        content_block_size: content,
         // CSS 2.1 section 10.7 leaves min-height and max-height undefined on
         // a table cell, and the K4d4c matrix measured both engines ignoring
         // them outright, so a cell carries no border-box floor of its own.
@@ -2643,6 +2736,76 @@ where
         style.aspect_ratio = None;
     }
     intrinsic
+}
+
+/// How a form control aligns in a line where it differs from an
+/// inline-block, which aligns on its last line box.
+pub(in crate::layout) enum ControlBaseline {
+    /// A single-line input, an input button, or a dropdown `select`: one line
+    /// box of its own text, centred in the content box as both engines draw
+    /// it. The value is the baseline from the border-box block-start.
+    Line(f32),
+    /// A textarea or listbox `select`, scroll containers in both engines, and
+    /// the controls with no text of their own: the bottom margin edge.
+    BottomEdge,
+    /// A `button`: its content's last line box, as an inline-block's, but
+    /// even when it scrolls (Chromium; WPT's
+    /// `button-layout/scrollable-button-centering.html`).
+    Content,
+}
+
+/// `id`'s alignment as a form control, or None when it is not one. `line` is
+/// the `(above, height)` of one line box of the control's own text.
+fn form_control_baseline<D>(
+    dom: &D,
+    id: D::NodeId,
+    computed: &ComputedValues,
+    font_size: f32,
+    containing_width: f32,
+    border_box_height: f32,
+    (above, line_height): (f32, f32),
+) -> Option<ControlBaseline>
+where
+    D: LayoutDom,
+    D::NodeId: Copy,
+{
+    let name = dom.element_name(id)?;
+    if name.ns.as_ref() != "http://www.w3.org/1999/xhtml" {
+        return None;
+    }
+    let attribute = |local: &str| dom.attribute(id, &Namespace::from(""), &LocalName::from(local));
+    let one_line = match name.local.as_ref().to_ascii_lowercase().as_str() {
+        "input" => !matches!(
+            attribute("type").map(str::to_ascii_lowercase).as_deref(),
+            Some("checkbox" | "radio" | "range" | "color" | "file" | "image" | "hidden")
+        ),
+        "select" => {
+            attribute("multiple").is_none()
+                && attribute("size")
+                    .and_then(crate::presentational_hints::parse_non_negative_integer_px)
+                    .is_none_or(|size| size <= 1.0)
+        },
+        "textarea" => false,
+        "button" => return Some(ControlBaseline::Content),
+        _ => return None,
+    };
+    if !one_line {
+        return Some(ControlBaseline::BottomEdge);
+    }
+    let px = |value: CssLengthPercentage| {
+        absolute_length_percentage(value, font_size, 16.0, containing_width)
+    };
+    let top = px(computed.padding_top.0)
+        + border_width_px(
+            computed.border_top_style,
+            computed.border_top_width,
+            font_size,
+        );
+    let (_, edges) = box_edges(computed, font_size, containing_width);
+    let content = border_box_height - edges;
+    Some(ControlBaseline::Line(
+        top + (content - line_height) * 0.5 + above,
+    ))
 }
 
 /// A box's horizontal and vertical padding plus border, in px, with

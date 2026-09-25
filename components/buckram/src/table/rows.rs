@@ -311,6 +311,12 @@ impl CellBlockOffsets {
         self.border_start + self.padding_start
     }
 
+    /// The distance from the cell's content-box block-end edge to its
+    /// border-box block-end edge.
+    pub fn block_end(self) -> f32 {
+        self.border_end + self.padding_end
+    }
+
     pub fn total(self) -> Option<f32> {
         let values = [
             self.padding_start,
@@ -982,8 +988,9 @@ pub fn align_table_cells(
             }
             let output = &cell_outputs[index].1;
             let style = cell_styles[index];
-            lowest_content =
-                lowest_content.max(style.offsets.block_start() + output.content_block_size);
+            // The cell's box fills its row, so its content edge ends its own
+            // block-end padding and border above the row's end.
+            lowest_content = lowest_content.max(sizing.row_sizes[row] - style.offsets.block_end());
             if style.alignment == TableCellAlignment::Baseline
                 && let Some(baseline) = cell_baseline(style, output)
             {
@@ -996,7 +1003,9 @@ pub fn align_table_cells(
                 from_aligned_cell: true,
             },
             // CSS 2.1: with no baseline-aligned cell the row's baseline is
-            // synthesized from the lowest cell content edge.
+            // synthesized from the lowest cell content edge, the cells' boxes
+            // filling the row (Chromium: an 80px inline table of top- and
+            // bottom-aligned cells sits on its bottom).
             None => TableRowBaseline {
                 baseline: lowest_content,
                 from_aligned_cell: false,
@@ -2577,6 +2586,18 @@ mod tests {
         let (empty, _, _) = align_case(vec![(TableCellAlignment::Baseline, 0.0, None)], None);
         assert!(!empty.rows[0].from_aligned_cell);
         assert!((empty.rows[0].baseline).abs() < 0.05);
+
+        // The content edge is that of a cell box stretched to its row: a
+        // table's height makes the row 80 tall, and the baseline follows.
+        let (stretched, sizing, _) = align_case(
+            vec![
+                (TableCellAlignment::Top, 30.0, Some(8.0)),
+                (TableCellAlignment::Bottom, 45.0, Some(9.0)),
+            ],
+            Some(80.0),
+        );
+        assert!((sizing.row_sizes[0] - 80.0).abs() < 0.05, "{sizing:?}");
+        assert!((stretched.rows[0].baseline - 80.0).abs() < 0.05);
     }
 
     /// The table exports its first baseline from its first row and its last

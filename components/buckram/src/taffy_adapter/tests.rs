@@ -2597,10 +2597,76 @@ fn adapter_propagates_declared_bfc_baselines_without_backend_child_walks() {
     );
 }
 
+/// A formatter that finishes one subtree, as a table cell does, propagates
+/// declared baselines through that subtree alone: its nodes take their
+/// in-flow children's, and nothing outside it moves.
+#[test]
+fn declared_baselines_propagate_within_one_subtree() {
+    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut leaf = |height: f32, source: u8| {
+        tree.new_with_children_and_block_style(
+            AlgorithmKind::Flex,
+            BlockStyle {
+                establishes_bfc: true,
+                ..BlockStyle::default()
+            },
+            Style {
+                display: Display::Flex,
+                size: taffy::Size {
+                    width: Dimension::length(80.0),
+                    height: Dimension::length(height),
+                },
+                ..Style::default()
+            },
+            &[],
+            source,
+        )
+    };
+    let spacer = leaf(10.0, 1);
+    let line = leaf(20.0, 2);
+    let other = leaf(20.0, 4);
+    let mut block = |children: &[AlgorithmNodeId], source: u8| {
+        tree.new_with_children_and_block_style(
+            AlgorithmKind::Block,
+            BlockStyle {
+                establishes_bfc: true,
+                ..BlockStyle::default()
+            },
+            Style {
+                display: Display::Block,
+                size: taffy::Size {
+                    width: Dimension::length(80.0),
+                    height: Dimension::auto(),
+                },
+                ..Style::default()
+            },
+            children,
+            source,
+        )
+    };
+    let cell = block(&[spacer, line], 3);
+    let root = block(&[cell, other], 0);
+
+    tree.compute_layout_with_measure(root, available(80.0, 200.0), zero_measure);
+    tree.set_baselines(spacer, Baselines::default());
+    tree.set_baselines(line, Baselines::new(Some(15.0), Some(15.0)).expect("line"));
+    tree.set_baselines(other, Baselines::new(Some(3.0), Some(3.0)).expect("other"));
+    let root_before = tree.baselines(root);
+    tree.propagate_declared_baselines_within(cell);
+
+    assert_eq!(tree.layout(line).y, 10.0);
+    assert_eq!(
+        tree.baselines(cell),
+        Baselines::new(Some(25.0), Some(25.0)).unwrap()
+    );
+    assert_eq!(tree.baselines(root), root_before);
+}
+
 /// K4d6b's seam: a formatting context Buckram owns writes its own and its
 /// children's rectangles before the backend walk, and the walk must not
 /// overwrite them. A `Table` node reports the size it was given and never
-/// lays out a child.
+/// lays out a child; its K4d5 baselines survive the walk the same way and
+/// reach its parent.
 #[test]
 fn an_owned_table_context_keeps_the_geometry_it_was_given() {
     let mut tree: AlgorithmTree<Style, (), u8> = AlgorithmTree::new();
@@ -2670,13 +2736,20 @@ fn an_owned_table_context_keeps_the_geometry_it_was_given() {
             height: 25.0,
         },
     );
+    let declared = Baselines::new(Some(18.0), Some(20.0)).expect("table baselines");
+    tree.set_baselines(table, declared);
 
     tree.compute_layout_with_measure(root, available(200.0, 200.0), zero_measure);
 
-    // The table reported Buckram's size, and every cell rectangle
-    // survived the walk untouched.
+    // The table reported Buckram's size and baselines, and every cell
+    // rectangle survived the walk untouched.
     let table_layout = tree.layout(table);
     assert_eq!((table_layout.width, table_layout.height), (100.0, 25.0));
+    assert_eq!(tree.baselines(table), declared);
+    assert_eq!(
+        tree.baselines(root),
+        Baselines::new(Some(table_layout.y + 18.0), Some(table_layout.y + 20.0)).unwrap()
+    );
     for (cell, expected) in cells.iter().zip(decided) {
         let layout = tree.layout(*cell);
         assert_eq!(

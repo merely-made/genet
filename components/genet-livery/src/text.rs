@@ -18,7 +18,7 @@ use buckram::{
     BoxId, BoxOrigin, CssBoxTree, DisplayInside, DisplayOutside, FloatLineConstraints,
     FormattingContextKind, InternalTableRole, IntrinsicSizeKind, IntrinsicSizes,
 };
-use layout_dom_api::{LayoutDom, LocalName, Namespace, NodeKind};
+use layout_dom_api::{LayoutDom, LocalName, Namespace, NodeKind, QuirksMode};
 use livery::{
     ComputedValues,
     values::{
@@ -189,8 +189,33 @@ pub struct TextSystem {
     font_keys: HashMap<(u64, u32), FontInstanceKey>,
     ch_advances: HashMap<ChMetricKey, f32>,
     space_advances: HashMap<ChMetricKey, f32>,
+    box_metrics: HashMap<ChMetricKey, FontBoxMetrics>,
     font_face_features: HashMap<String, Box<[FontFeatureSetting]>>,
     shape_count: u64,
+}
+
+/// A font at a style's size: its ascent, descent, line gap and x-height, which
+/// CSS 2.1 10.8 builds an inline box's extent from.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct FontBoxMetrics {
+    font_size: f32,
+    ascent: f32,
+    descent: f32,
+    line_gap: f32,
+    x_height: f32,
+}
+
+fn metric_key(style: &ComputedValues, font_size: f32) -> ChMetricKey {
+    ChMetricKey {
+        family: style.font_family.to_string(),
+        font_size: font_size.to_bits(),
+        font_weight: font_weight(style).to_bits(),
+        font_style: match style.font_style {
+            CssFontStyle::Normal => 0,
+            CssFontStyle::Italic => 1,
+            CssFontStyle::Oblique => 2,
+        },
+    }
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -216,6 +241,7 @@ impl TextSystem {
             font_keys: HashMap::new(),
             ch_advances: HashMap::new(),
             space_advances: HashMap::new(),
+            box_metrics: HashMap::new(),
             font_face_features: HashMap::new(),
             shape_count: 0,
         }
@@ -241,6 +267,7 @@ impl TextSystem {
             .register_fonts(parley::fontique::Blob::new(Arc::new(bytes)), None);
         self.ch_advances.clear();
         self.space_advances.clear();
+        self.box_metrics.clear();
     }
 
     /// Register one host-resolved `@font-face` source under its authored CSS
@@ -267,6 +294,7 @@ impl TextSystem {
         );
         self.ch_advances.clear();
         self.space_advances.clear();
+        self.box_metrics.clear();
     }
 
     /// Resolve one CSS `ch` unit from the same font collection and matching
@@ -274,16 +302,7 @@ impl TextSystem {
     /// when no usable `0` advance is available.
     pub(crate) fn ch_advance(&mut self, style: &ComputedValues) -> f32 {
         let font_size = super::paint::used_font_size(style);
-        let key = ChMetricKey {
-            family: style.font_family.to_string(),
-            font_size: font_size.to_bits(),
-            font_weight: font_weight(style).to_bits(),
-            font_style: match style.font_style {
-                CssFontStyle::Normal => 0,
-                CssFontStyle::Italic => 1,
-                CssFontStyle::Oblique => 2,
-            },
-        };
+        let key = metric_key(style, font_size);
         if let Some(advance) = self.ch_advances.get(&key) {
             return *advance;
         }
@@ -314,18 +333,56 @@ impl TextSystem {
         advance
     }
 
+    /// `style`'s first available font's box metrics, probed once per font.
+    fn box_metrics(&mut self, style: &ComputedValues) -> FontBoxMetrics {
+        let font_size = super::paint::used_font_size(style);
+        let key = metric_key(style, font_size);
+        if let Some(metrics) = self.box_metrics.get(&key) {
+            return *metrics;
+        }
+        let mut builder =
+            self.layout_context
+                .ranged_builder(&mut self.font_context, "x", 1.0, true);
+        builder.push_default(StyleProperty::FontSize(font_size));
+        builder.push_default(font_family(style));
+        builder.push_default(StyleProperty::FontWeight(FontWeight::new(font_weight(
+            style,
+        ))));
+        builder.push_default(StyleProperty::FontStyle(font_style(style)));
+        let mut layout = builder.build("x");
+        layout.break_all_lines(None);
+        let metrics = layout
+            .lines()
+            .next()
+            .and_then(|line| {
+                line.items().find_map(|item| match item {
+                    PositionedLayoutItem::GlyphRun(run) => {
+                        let metrics = run.run().metrics();
+                        Some(FontBoxMetrics {
+                            font_size,
+                            ascent: metrics.ascent,
+                            descent: metrics.descent,
+                            line_gap: metrics.leading,
+                            x_height: metrics.x_height.unwrap_or(font_size * 0.5),
+                        })
+                    },
+                    PositionedLayoutItem::InlineBox(_) => None,
+                })
+            })
+            .unwrap_or(FontBoxMetrics {
+                font_size,
+                ascent: font_size * 0.8,
+                descent: font_size * 0.2,
+                line_gap: 0.0,
+                x_height: font_size * 0.5,
+            });
+        self.box_metrics.insert(key, metrics);
+        metrics
+    }
+
     fn space_advance(&mut self, style: &ComputedValues) -> f32 {
         let font_size = super::paint::used_font_size(style);
-        let key = ChMetricKey {
-            family: style.font_family.to_string(),
-            font_size: font_size.to_bits(),
-            font_weight: font_weight(style).to_bits(),
-            font_style: match style.font_style {
-                CssFontStyle::Normal => 0,
-                CssFontStyle::Italic => 1,
-                CssFontStyle::Oblique => 2,
-            },
-        };
+        let key = metric_key(style, font_size);
         if let Some(advance) = self.space_advances.get(&key) {
             return *advance;
         }
@@ -438,6 +495,7 @@ impl TextSystem {
         let mut text = String::new();
         let mut spans = Vec::new();
         let mut inline_boxes = Vec::new();
+        let mut inline_styles = HashMap::new();
         let mut owners = Vec::new();
         {
             let mut collector = BoxInlineCollector {
@@ -449,6 +507,7 @@ impl TextSystem {
                 text: &mut text,
                 spans: &mut spans,
                 inline_boxes: &mut inline_boxes,
+                inline_styles: &mut inline_styles,
                 percentage_basis: request.width,
                 intrinsic_kind: request.intrinsic_kind,
             };
@@ -466,6 +525,8 @@ impl TextSystem {
             &text,
             &mut spans,
             &inline_boxes,
+            &inline_styles,
+            line_height_quirk(dom.quirks_mode(), parent_style),
             request.width,
             parent_style,
             request.line_constraints,
@@ -480,57 +541,9 @@ impl TextSystem {
                 })
             })
             .collect();
-        let zero_line_strut = text.is_empty()
-            && spans.is_empty()
-            && !inline_boxes.is_empty()
-            && super::layout::line_height_px(
-                &parent_style.line_height,
-                super::paint::used_font_size(parent_style),
-            ) <= 0.0;
-        let zero_line_minimal_alignment = zero_line_strut
-            && inline_boxes.iter().all(|inline_box| {
-                matches!(
-                    inline_box.vertical_align,
-                    VerticalAlign::Top
-                        | VerticalAlign::TextTop
-                        | VerticalAlign::Bottom
-                        | VerticalAlign::TextBottom
-                )
-            });
-        let strut_center_height = if zero_line_strut {
-            let mut strut_spans = Vec::<SourceSpan<()>>::new();
-            let strut_items = self.shape::<()>(
-                "\u{200b}",
-                &mut strut_spans,
-                &[],
-                request.width,
-                parent_style,
-                None,
-                None,
-            );
-            strut_items.items.into_iter().find_map(|item| match item {
-                ShapedItem::Text(run) => Some(
-                    (run.line_baseline - (run.line_block_min + run.line_block_max) * 0.5).abs(),
-                ),
-                ShapedItem::InlineBox { .. } => None,
-            })
-        } else {
-            None
-        };
         let mut right = 0.0_f32;
         let mut top = f32::INFINITY;
         let mut bottom = f32::NEG_INFINITY;
-        let empty_line_height = inline_boxes
-            .iter()
-            .filter(|inline_box| {
-                !inline_box.edge && !inline_box.paint && inline_box.line_width == 0.0
-            })
-            .map(|inline_box| inline_box.line_box_height)
-            .reduce(f32::max);
-        let parent_line_height = super::layout::line_height_px(
-            &parent_style.line_height,
-            super::paint::used_font_size(parent_style),
-        );
         for item in &items {
             let fragment = match item {
                 ShapedItem::Text(run) => run.line_fragment,
@@ -545,16 +558,9 @@ impl TextSystem {
             bottom = bottom.max(lower);
         }
         if top.is_finite() && bottom.is_finite() {
-            let measured_height = (bottom - top).max(strut_center_height.unwrap_or(0.0));
             Some(InlineLayout {
                 width: right.max(0.0),
-                height: if zero_line_minimal_alignment {
-                    0.0
-                } else if let Some(empty_line_height) = empty_line_height {
-                    empty_line_height.max(parent_line_height)
-                } else {
-                    measured_height
-                },
+                height: (bottom - top).max(0.0),
                 items,
                 text,
                 text_sources,
@@ -793,6 +799,8 @@ impl TextSystem {
                 text.as_ref(),
                 &mut spans,
                 &[],
+                &HashMap::new(),
+                false,
                 fragment.width,
                 style,
                 None,
@@ -854,6 +862,7 @@ impl TextSystem {
         let mut text = String::new();
         let mut spans = Vec::new();
         let mut inline_boxes = Vec::new();
+        let mut inline_styles = HashMap::new();
         let mut owners = vec![owner];
         {
             let mut collector = InlineCollector {
@@ -865,6 +874,7 @@ impl TextSystem {
                 text: &mut text,
                 spans: &mut spans,
                 inline_boxes: &mut inline_boxes,
+                inline_styles: &mut inline_styles,
                 percentage_basis: available_width,
             };
             for root in roots {
@@ -898,6 +908,8 @@ impl TextSystem {
                 &text,
                 &mut spans,
                 &inline_boxes,
+                &inline_styles,
+                line_height_quirk(dom.quirks_mode(), parent_style),
                 available_width,
                 parent_style,
                 None,
@@ -1005,20 +1017,22 @@ impl TextSystem {
 
     #[expect(
         clippy::too_many_arguments,
-        reason = "one shaping transaction carries the text, source spans, inline atoms, width, root policy, and optional line constraints"
+        reason = "one shaping transaction carries the text, source spans, inline atoms and styles, document mode, width, root policy, and optional line constraints"
     )]
     fn shape<Id>(
         &mut self,
         text: &str,
         spans: &mut [SourceSpan<Id>],
         inline_boxes: &[InlineAtom<Id>],
+        inline_styles: &HashMap<Id, ComputedValues>,
+        quirks: bool,
         width: f32,
         root_style: &ComputedValues,
         line_constraints: Option<&FloatLineConstraints>,
         intrinsic_kind: Option<IntrinsicSizeKind>,
     ) -> Shaped<Id>
     where
-        Id: Copy + Eq,
+        Id: Copy + Eq + Hash,
     {
         self.shape_count = self.shape_count.saturating_add(1);
         let default_style = spans.first().map_or(root_style, |span| &span.style);
@@ -1127,166 +1141,239 @@ impl TextSystem {
 
         let mut result = Vec::new();
         let mut break_lines: Option<(f32, f32)> = None;
+        // CSS 2.1 10.8: a line box is the union of its boxes' extents about
+        // the baseline, starting from a strut in the root's own font.
+        let root_metrics = self.box_metrics(root_style);
+        let strut = leading_extent(
+            root_metrics.ascent,
+            root_metrics.descent,
+            used_line_height(root_style, root_metrics),
+        );
+        // Each inline box's parent box, from the ownership chains; a box with
+        // none sits in the line's root.
+        let mut parents = HashMap::new();
+        let chains = spans
+            .iter()
+            .map(|span| (span.owners.as_slice(), None))
+            .chain(inline_boxes.iter().map(|inline_box| {
+                let own = inline_box.edge || inline_box.empty_line;
+                (
+                    inline_box.owners.as_slice(),
+                    own.then_some(inline_box.source),
+                )
+            }));
+        for (owners, own) in chains {
+            let mut parent = None;
+            for id in owners.iter().copied().chain(own) {
+                if inline_styles.contains_key(&id) {
+                    if let Some(parent) = parent {
+                        parents.insert(id, parent);
+                    }
+                    parent = Some(id);
+                }
+            }
+        }
+        let box_fonts = inline_styles
+            .iter()
+            .map(|(id, style)| (*id, self.box_metrics(style)))
+            .collect::<HashMap<_, _>>();
+        // Each box's extent, and its raise over its parent box's baseline
+        // against the parent's font (CSS 2.1 10.8.1).
+        let box_placements = inline_styles
+            .iter()
+            .map(|(id, style)| {
+                let parent = parents
+                    .get(id)
+                    .map_or(root_metrics, |parent| box_fonts[parent]);
+                (*id, inline_box_placement(style, box_fonts[id], parent))
+            })
+            .collect::<HashMap<_, _>>();
+        let mut box_anchors = HashMap::new();
+        for id in inline_styles.keys() {
+            anchor_of(*id, &parents, &box_placements, &mut box_anchors);
+        }
+        let innermost = |owners: &[Id]| {
+            owners
+                .iter()
+                .rev()
+                .copied()
+                .find(|id| box_placements.contains_key(id))
+        };
+        // The line height calculation quirk, as Chromium applies it: in quirks
+        // mode an inline box counts on a line only where it holds text or a
+        // forced break directly, or has inline-axis borders or padding (not
+        // margins); the strut only where the root holds text, or a forced
+        // break on a line where nothing else counts.
+        let edged = quirks.then(|| {
+            inline_boxes
+                .iter()
+                .filter(|inline_box| inline_box.edge && inline_box.paint)
+                .map(|inline_box| inline_box.source)
+                .collect::<HashSet<_>>()
+        });
+        // How far the model's line boxes have moved lines from where
+        // Parley's float-aware breaking started them.
+        let mut drift = 0.0_f32;
+        let mut span_cursor = 0;
         for line in layout.lines() {
             let source_metrics = *line.metrics();
             let content_height =
                 (source_metrics.block_max_coord - source_metrics.block_min_coord).max(0.0);
-            let (has_text_top, has_text_bottom) =
-                line.items()
-                    .fold((false, false), |(has_text_top, has_text_bottom), item| {
-                        let PositionedLayoutItem::GlyphRun(run) = item else {
-                            return (has_text_top, has_text_bottom);
-                        };
-                        let value = spans
-                            .get(run.style().brush.source_index)
-                            .map(|span| span.style.vertical_align);
-                        (
-                            has_text_top || matches!(value, Some(VerticalAlign::TextTop)),
-                            has_text_bottom || matches!(value, Some(VerticalAlign::TextBottom)),
-                        )
-                    });
-            let requested_line_height = std::iter::once(root_style)
-                .chain(spans.iter().map(|span| &span.style))
-                .filter_map(explicit_line_height)
-                .chain(
-                    inline_boxes
-                        .iter()
-                        .filter(|inline_box| !inline_box.marker)
-                        .map(|inline_box| inline_box.line_box_height)
-                        .filter(|height| *height > 0.0),
-                )
-                .reduce(f32::max);
-            let has_in_flow_atom = inline_boxes
-                .iter()
-                .any(|inline_box| !inline_box.edge && !inline_box.marker);
-            let line_box_height = if has_in_flow_atom {
-                source_metrics
-                    .line_height
-                    .max(content_height)
-                    .max(requested_line_height.unwrap_or(0.0))
-            } else {
-                requested_line_height.unwrap_or(source_metrics.line_height.max(content_height))
-            } + if has_text_top || has_text_bottom {
-                (source_metrics.leading * 0.5).max(0.0)
-            } else {
-                0.0
+            let line_top = parley_line_top(&source_metrics) + drift;
+            let mut extents = LineExtents::new();
+            if !quirks {
+                extents.include(Anchor::root(), strut);
             }
-            .max(0.0);
-            let extra_leading = (line_box_height - content_height).max(0.0);
-            let edge_leading = if has_text_top || has_text_bottom {
-                (source_metrics.leading * 0.5).max(0.0)
-            } else {
-                0.0
-            };
-            let common_vertical_shift = if has_text_bottom {
-                edge_leading - extra_leading * 0.5
-            } else if has_text_top {
-                -extra_leading * 0.5
-            } else {
-                0.0
-            };
-            // Parley positions an atomic inline box from its block-start and
-            // otherwise gives a line containing only that atom its
-            // block-end baseline. An inline table instead exports its first
-            // table-row baseline. Choose that baseline before positioning the
-            // atom: translating the atom afterwards would preserve Parley's
-            // old bottom baseline and introduce a false leading gap above a
-            // table-only line.
-            let atom_baseline = line
-                .items()
-                .filter_map(|item| {
-                    let PositionedLayoutItem::InlineBox(positioned) = item else {
-                        return None;
-                    };
-                    let inline_box = usize::try_from(positioned.id)
-                        .ok()
-                        .and_then(|index| inline_boxes.get(index))?;
-                    if !inline_box.exported_baseline
-                        || !matches!(
-                            inline_box.vertical_align,
-                            VerticalAlign::Baseline
-                                | VerticalAlign::Sub
-                                | VerticalAlign::Super
-                                | VerticalAlign::Length(_)
-                        )
-                    {
-                        return None;
+            let mut positions = Vec::new();
+            let mut seen_boxes = Vec::new();
+            for item in line.items() {
+                let (position, counts) = match item {
+                    PositionedLayoutItem::GlyphRun(run) => {
+                        // Text sits on its parent inline box's baseline.
+                        let span = spans.get(run.style().brush.source_index);
+                        let (anchor, mut extent) = span
+                            .and_then(|span| innermost(&span.owners))
+                            .map_or((Anchor::root(), strut), |owner| {
+                                (box_anchors[&owner], box_placements[&owner].extent)
+                            });
+                        // A fallback font's own metrics count under `normal`.
+                        if span.is_some_and(|span| {
+                            matches!(span.style.line_height, CssLineHeight::Normal)
+                        }) {
+                            let metrics = run.run().metrics();
+                            let (above, below) = leading_extent(
+                                metrics.ascent,
+                                metrics.descent,
+                                normal_line_height(
+                                    metrics.ascent,
+                                    metrics.descent,
+                                    metrics.leading,
+                                ),
+                            );
+                            extent = (extent.0.max(above), extent.1.max(below));
+                        }
+                        (Some((anchor, extent)), true)
+                    },
+                    PositionedLayoutItem::InlineBox(positioned) => {
+                        let inline_box = usize::try_from(positioned.id)
+                            .ok()
+                            .and_then(|index| inline_boxes.get(index));
+                        let position = inline_box.and_then(|inline_box| {
+                            // The box an edge belongs to is on this line, and
+                            // so are an atom's inline ancestors.
+                            if inline_box.edge {
+                                extents.include_boxes(
+                                    &mut seen_boxes,
+                                    std::slice::from_ref(&inline_box.source),
+                                    (&box_placements, &box_anchors),
+                                    edged.as_ref(),
+                                );
+                            }
+                            extents.include_boxes(
+                                &mut seen_boxes,
+                                &inline_box.owners,
+                                (&box_placements, &box_anchors),
+                                edged.as_ref(),
+                            );
+                            if inline_box.edge {
+                                None
+                            } else if inline_box.empty_line {
+                                box_placements.get(&inline_box.source).map(|placement| {
+                                    (box_anchors[&inline_box.source], placement.extent)
+                                })
+                            } else {
+                                // An atom aligns within its parent inline box.
+                                let parent = innermost(&inline_box.owners);
+                                let extent = (
+                                    inline_box.baseline,
+                                    inline_box.line_box_height - inline_box.baseline,
+                                );
+                                let raise = vertical_align_raise(
+                                    inline_box.vertical_align,
+                                    inline_box.font_size,
+                                    inline_box.line_height,
+                                    extent,
+                                    parent.map_or(root_metrics, |parent| box_fonts[&parent]),
+                                );
+                                let anchor = match raise {
+                                    Some(raise) => parent
+                                        .map_or(Anchor::root(), |parent| box_anchors[&parent])
+                                        .raised(raise),
+                                    None => Anchor {
+                                        group: Some((inline_box.source, inline_box.vertical_align)),
+                                        raise: 0.0,
+                                    },
+                                };
+                                Some((anchor, extent))
+                            }
+                        });
+                        // An empty inline box holds no text.
+                        let counts =
+                            !(quirks && inline_box.is_some_and(|inline_box| inline_box.empty_line));
+                        (position, counts)
+                    },
+                };
+                if counts && let Some((anchor, extent)) = position {
+                    extents.include(anchor, extent);
+                }
+                positions.push(position);
+            }
+            // Text on the line puts its inline boxes there, with their own
+            // extents, even a box whose only content here is a preserved
+            // newline or forced break that Parley gives no item. An atom-only
+            // line's range is empty.
+            let range = line.text_range();
+            let mut root_break = false;
+            if range.start < range.end {
+                while spans
+                    .get(span_cursor)
+                    .is_some_and(|span| span.range.end <= range.start)
+                {
+                    span_cursor += 1;
+                }
+                for span in spans[span_cursor..]
+                    .iter()
+                    .take_while(|span| span.range.start < range.end)
+                {
+                    let part = span.range.start.max(range.start)..span.range.end.min(range.end);
+                    match innermost(&span.owners) {
+                        Some(owner) => {
+                            extents.include(box_anchors[&owner], box_placements[&owner].extent)
+                        },
+                        None if quirks && text[part].bytes().all(|byte| byte == b'\n') => {
+                            root_break = true;
+                        },
+                        None => extents.include(Anchor::root(), strut),
                     }
-                    Some(positioned.y + inline_box.baseline)
-                })
-                .reduce(f32::max);
-            // `positioned_glyphs` advances Parley's positioned-run iterator.
-            // Do not inspect it for ordinary lines: only a line that actually
-            // contains an exported table baseline needs to distinguish a
-            // table-only line from one with text peers.
-            let line_has_glyph = atom_baseline.is_some()
-                && line.items().any(|item| {
-                    matches!(item, PositionedLayoutItem::GlyphRun(run) if run.positioned_glyphs().next().is_some())
-                });
-            let mut metrics = source_metrics;
-            metrics.line_height = line_box_height;
-            metrics.block_max_coord = metrics.block_min_coord + metrics.line_height;
-            metrics.baseline = atom_baseline
-                .filter(|_| !line_has_glyph)
-                .unwrap_or(metrics.baseline)
-                + extra_leading * 0.5;
+                    extents.include_boxes(
+                        &mut seen_boxes,
+                        &span.owners,
+                        (&box_placements, &box_anchors),
+                        edged.as_ref(),
+                    );
+                }
+            }
+            if root_break && extents.is_empty() {
+                extents.include(Anchor::root(), strut);
+            }
+            let (above, line_height) = extents.resolve();
+            let baseline = line_top + above;
+            drift += line_height - source_metrics.line_height;
             if line.break_reason() == BreakReason::Explicit {
-                let (top, bottom) = (
-                    metrics.block_min_coord,
-                    metrics.block_min_coord + metrics.line_height,
-                );
+                let (top, bottom) = (line_top, line_top + line_height);
                 break_lines = Some(break_lines.map_or((top, bottom), |(upper, lower)| {
                     (upper.min(top), lower.max(bottom))
                 }));
             }
-            let strut_height = super::layout::line_height_px(
-                &root_style.line_height,
-                super::paint::used_font_size(root_style),
-            );
-            let empty_line_shift = inline_boxes
-                .iter()
-                .filter(|inline_box| {
-                    !inline_box.edge && !inline_box.paint && inline_box.line_width == 0.0
-                })
-                .map(|inline_box| {
-                    ((inline_box.line_box_height - strut_height).max(0.0)) * 0.5
-                        + ((metrics.block_max_coord
-                            - metrics.block_min_coord
-                            - inline_box.line_box_height)
-                            .max(0.0)
-                            * 0.5)
-                })
-                .fold(0.0, f32::max);
-            for item in line.items() {
+            for (item, position) in line.items().zip(positions) {
+                let own_baseline = position.map_or(baseline, |(anchor, _)| {
+                    extents.baseline_at(anchor, baseline, line_top, line_height)
+                });
                 match item {
                     PositionedLayoutItem::GlyphRun(run) => {
                         let parley_run = run.run();
                         let brush = &run.style().brush;
                         let span = spans.get(brush.source_index);
-                        let vertical_shift = span.map_or(0.0, |span| {
-                            let edge_shift = match span.style.vertical_align {
-                                VerticalAlign::TextTop if has_text_top => edge_leading,
-                                VerticalAlign::TextBottom if has_text_bottom => -edge_leading,
-                                _ => 0.0,
-                            };
-                            common_vertical_shift
-                                + edge_shift
-                                + vertical_align_shift(
-                                    span.style.vertical_align,
-                                    super::paint::used_font_size(&span.style),
-                                    super::layout::line_height_px(
-                                        &span.style.line_height,
-                                        super::paint::used_font_size(&span.style),
-                                    ),
-                                    &metrics,
-                                    source_metrics.block_min_coord,
-                                    super::layout::line_height_px(
-                                        &span.style.line_height,
-                                        super::paint::used_font_size(&span.style),
-                                    ),
-                                    false,
-                                )
-                        });
                         let mut glyphs = run
                             .positioned_glyphs()
                             .map(|glyph| GlyphInstance {
@@ -1297,16 +1384,11 @@ impl TextSystem {
                         if glyphs.is_empty() {
                             continue;
                         }
+                        // Parley set every glyph on its own line's baseline.
                         for glyph in &mut glyphs {
-                            glyph.point.y +=
-                                vertical_shift + extra_leading * 0.5 - empty_line_shift;
+                            glyph.point.y += own_baseline - source_metrics.baseline;
                         }
-                        let line_fragment_y = metrics.block_min_coord
-                            + if has_text_top || has_text_bottom {
-                                common_vertical_shift
-                            } else {
-                                vertical_shift
-                            };
+                        let line_fragment_y = line_top + (own_baseline - baseline);
                         let mut cluster_x = run.offset();
                         let mut clusters = Vec::new();
                         for cluster in parley_run.visual_clusters() {
@@ -1327,7 +1409,7 @@ impl TextSystem {
                                             x: cluster_x,
                                             y: line_fragment_y,
                                             width: advance,
-                                            height: metrics.line_height.max(0.0),
+                                            height: line_height.max(0.0),
                                         },
                                         rtl: cluster.is_rtl(),
                                     });
@@ -1349,30 +1431,23 @@ impl TextSystem {
                                 .max_by(|left, right| left.total_cmp(right))
                         });
                         let [red, green, blue, alpha] = brush.color;
-                        let paint_height = metrics.line_height.max(content_height);
                         result.push(ShapedItem::Text(ShapedRun {
                             source,
                             owners: span.map_or_else(Vec::new, |span| span.owners.clone()),
                             trailing_content_end,
-                            // Keep the font-content metrics separate from the
-                            // explicit line box.  Zero-height struts use this
-                            // center to place replaced atoms without turning
-                            // glyph overflow into flow height.
-                            line_baseline: source_metrics.baseline,
-                            line_block_min: source_metrics.block_min_coord,
-                            line_block_max: source_metrics.block_max_coord,
-                            line_y: metrics.block_min_coord,
+                            line_baseline: baseline,
+                            line_y: line_top,
                             fragment: Fragment {
-                                x: run.offset(),
-                                y: metrics.block_min_coord + vertical_shift,
-                                width: run.advance().max(0.0),
-                                height: paint_height.max(0.0),
-                            },
-                            line_fragment: Fragment {
                                 x: run.offset(),
                                 y: line_fragment_y,
                                 width: run.advance().max(0.0),
-                                height: metrics.line_height.max(0.0),
+                                height: line_height.max(content_height).max(0.0),
+                            },
+                            line_fragment: Fragment {
+                                x: run.offset(),
+                                y: line_top,
+                                width: run.advance().max(0.0),
+                                height: line_height.max(0.0),
                             },
                             font_instance: self.intern_font(parley_run.font()),
                             font_size: parley_run.font_size(),
@@ -1388,87 +1463,38 @@ impl TextSystem {
                         else {
                             continue;
                         };
-                        let line_height = (metrics.block_max_coord - metrics.block_min_coord)
-                            .max(positioned.height)
-                            .max(0.0);
-                        let height = if inline_box.edge {
-                            line_height
-                        } else {
-                            positioned.height
-                        };
-                        let base_y = if inline_box.edge {
-                            metrics.block_min_coord
-                        } else {
-                            positioned.y
-                        };
-                        let vertical_shift = if inline_box.edge {
-                            0.0
-                        } else {
-                            let baseline_shift = if inline_box.exported_baseline
-                                && matches!(
-                                    inline_box.vertical_align,
-                                    VerticalAlign::Baseline
-                                        | VerticalAlign::Sub
-                                        | VerticalAlign::Super
-                                        | VerticalAlign::Length(_)
-                                ) {
-                                metrics.baseline - (base_y + inline_box.baseline)
-                            } else {
-                                0.0
-                            };
-                            baseline_shift
-                                + vertical_align_shift(
-                                    inline_box.vertical_align,
-                                    inline_box.font_size,
-                                    inline_box.line_height,
-                                    &metrics,
-                                    base_y,
-                                    height,
-                                    true,
-                                )
+                        // The margin box's top; an edge spans the line box.
+                        let top = match position {
+                            Some((_, (above, _))) => own_baseline - above,
+                            None => line_top,
                         };
                         result.push(ShapedItem::InlineBox {
                             source: inline_box.source,
                             owners: inline_box.owners.clone(),
-                            fragment: Fragment {
-                                x: positioned.x
-                                    + if inline_box.edge {
-                                        0.0
-                                    } else {
-                                        inline_box.margin_left
-                                    },
-                                y: base_y
-                                    + vertical_shift
-                                    + if inline_box.edge {
-                                        0.0
-                                    } else {
-                                        inline_box.margin_top
-                                    },
-                                width: if inline_box.edge {
-                                    positioned.width
-                                } else {
-                                    inline_box.fragment.width
-                                },
-                                height: if inline_box.edge {
-                                    height
-                                } else {
-                                    inline_box.fragment.height
-                                },
+                            fragment: if inline_box.edge {
+                                Fragment {
+                                    x: positioned.x,
+                                    y: top,
+                                    width: positioned.width,
+                                    height: line_height.max(0.0),
+                                }
+                            } else {
+                                Fragment {
+                                    x: positioned.x + inline_box.margin_left,
+                                    y: top + inline_box.margin_top,
+                                    width: inline_box.fragment.width,
+                                    height: inline_box.fragment.height,
+                                }
                             },
                             line_fragment: Fragment {
                                 x: positioned.x,
-                                y: base_y
-                                    + if inline_box.edge && (has_text_top || has_text_bottom) {
-                                        common_vertical_shift
-                                    } else {
-                                        vertical_shift
-                                    },
+                                y: line_top,
                                 width: positioned.width,
-                                height: line_height,
+                                height: line_height.max(0.0),
                             },
                             edge: inline_box.edge,
                             paint: inline_box.paint,
-                            line_y: metrics.block_min_coord,
+                            line_y: line_top,
                         });
                     },
                 }
@@ -2599,14 +2625,14 @@ struct InlineAtom<Id> {
     /// First baseline from this atom's margin-box block-start. Non-table
     /// atomic boxes keep their prior block-end fallback here.
     baseline: f32,
-    /// True only when a layout producer supplied the baseline above. The
-    /// ordinary block-end fallback must not alter a line's own metrics.
-    exported_baseline: bool,
     margin_left: f32,
     margin_top: f32,
     edge: bool,
     paint: bool,
     marker: bool,
+    /// An empty inline element standing in for its own box on the line; its
+    /// extent comes from its font, not from `line_box_height`.
+    empty_line: bool,
     vertical_align: VerticalAlign,
     font_size: f32,
     line_height: f32,
@@ -2639,8 +2665,6 @@ struct ShapedRun<Id> {
     owners: Vec<Id>,
     trailing_content_end: Option<f32>,
     line_baseline: f32,
-    line_block_min: f32,
-    line_block_max: f32,
     line_y: f32,
     fragment: Fragment,
     line_fragment: Fragment,
@@ -2833,6 +2857,7 @@ where
     text: &'a mut String,
     spans: &'a mut Vec<SourceSpan<BoxId>>,
     inline_boxes: &'a mut Vec<InlineAtom<BoxId>>,
+    inline_styles: &'a mut HashMap<BoxId, ComputedValues>,
     percentage_basis: f32,
     intrinsic_kind: Option<IntrinsicSizeKind>,
 }
@@ -2903,6 +2928,7 @@ where
                 if self.text.len() == text_start && !has_inline_content {
                     self.push_empty_line_box(box_id, &style, &ancestor_owners);
                 }
+                self.inline_styles.insert(box_id, style);
             },
             BoxOrigin::Anonymous { .. } => {
                 // K4e4: an inline-table's wrapper is the atom that occupies
@@ -2981,12 +3007,12 @@ where
             line_width,
             line_box_height,
             baseline,
-            exported_baseline: exported_baseline.is_some(),
             margin_left,
             margin_top,
             edge: false,
             paint: true,
             marker: false,
+            empty_line: false,
             vertical_align: style.vertical_align,
             font_size,
             line_height: super::layout::line_height_px(&style.line_height, font_size),
@@ -3011,12 +3037,12 @@ where
                     line_width: width,
                     line_box_height: 0.0,
                     baseline: 0.0,
-                    exported_baseline: false,
                     margin_left: 0.0,
                     margin_top: 0.0,
                     edge: true,
                     paint,
                     marker: false,
+                    empty_line: false,
                     vertical_align: style.vertical_align,
                     font_size: em,
                     line_height: super::layout::line_height_px(&style.line_height, em),
@@ -3059,12 +3085,12 @@ where
             line_width: 0.0,
             line_box_height: line_height,
             baseline: line_height,
-            exported_baseline: false,
             margin_left: 0.0,
             margin_top: 0.0,
             edge: false,
             paint: true,
             marker: true,
+            empty_line: false,
             vertical_align: style.vertical_align,
             font_size,
             line_height,
@@ -3096,7 +3122,6 @@ where
             line_width: 0.0,
             line_box_height: height,
             baseline: height,
-            exported_baseline: false,
             margin_left: 0.0,
             margin_top: 0.0,
             edge: false,
@@ -3106,14 +3131,16 @@ where
             // rectangle without making it consume inline space.
             paint: retain_source_fragment,
             marker: false,
+            empty_line: true,
             vertical_align: style.vertical_align,
             font_size,
             line_height: height,
         });
     }
 
-    fn push_forced_line_break(&mut self, _source: BoxId, _style: &ComputedValues) {
-        append_forced_line_break(self.text);
+    fn push_forced_line_break(&mut self, _source: BoxId, style: &ComputedValues) {
+        let start = append_forced_line_break(self.text);
+        push_forced_break_span(self.spans, self.owners, style, start..self.text.len());
     }
 }
 
@@ -3215,6 +3242,7 @@ where
     text: &'a mut String,
     spans: &'a mut Vec<SourceSpan<D::NodeId>>,
     inline_boxes: &'a mut Vec<InlineAtom<D::NodeId>>,
+    inline_styles: &'a mut HashMap<D::NodeId, ComputedValues>,
     percentage_basis: f32,
 }
 
@@ -3269,12 +3297,12 @@ where
                             line_width,
                             line_box_height,
                             baseline: line_box_height,
-                            exported_baseline: false,
                             margin_left,
                             margin_top,
                             edge: false,
                             paint: true,
                             marker: false,
+                            empty_line: false,
                             vertical_align: style.vertical_align,
                             font_size,
                             line_height: super::layout::line_height_px(
@@ -3298,12 +3326,12 @@ where
                             line_width,
                             line_box_height,
                             baseline: line_box_height,
-                            exported_baseline: false,
                             margin_left,
                             margin_top,
                             edge: false,
                             paint: true,
                             marker: false,
+                            empty_line: false,
                             vertical_align: style.vertical_align,
                             font_size: super::paint::used_font_size(&style),
                             line_height: super::layout::line_height_px(
@@ -3331,6 +3359,7 @@ where
                 if self.text.len() == text_start && !has_inline_content {
                     self.push_empty_line_box(id, &style, &ancestor_owners);
                 }
+                self.inline_styles.insert(id, style);
             },
             _ => {},
         }
@@ -3367,12 +3396,12 @@ where
                     line_width: width,
                     line_box_height: 0.0,
                     baseline: 0.0,
-                    exported_baseline: false,
                     margin_left: 0.0,
                     margin_top: 0.0,
                     edge: true,
                     paint,
                     marker: false,
+                    empty_line: false,
                     vertical_align: style.vertical_align,
                     font_size: em,
                     line_height: super::layout::line_height_px(&style.line_height, em),
@@ -3407,12 +3436,12 @@ where
             line_width: 0.0,
             line_box_height: line_height,
             baseline: line_height,
-            exported_baseline: false,
             margin_left: 0.0,
             margin_top: 0.0,
             edge: false,
             paint: true,
             marker: true,
+            empty_line: false,
             vertical_align: style.vertical_align,
             font_size,
             line_height,
@@ -3445,20 +3474,21 @@ where
             line_width: 0.0,
             line_box_height: height,
             baseline: height,
-            exported_baseline: false,
             margin_left: 0.0,
             margin_top: 0.0,
             edge: false,
             paint: false,
             marker: false,
+            empty_line: true,
             vertical_align: style.vertical_align,
             font_size,
             line_height: height,
         });
     }
 
-    fn push_forced_line_break(&mut self, _source: D::NodeId, _style: &ComputedValues) {
-        append_forced_line_break(self.text);
+    fn push_forced_line_break(&mut self, _source: D::NodeId, style: &ComputedValues) {
+        let start = append_forced_line_break(self.text);
+        push_forced_break_span(self.spans, self.owners, style, start..self.text.len());
     }
 }
 
@@ -3818,6 +3848,24 @@ fn append_preserving_breaks(target: &mut String, source: &str) {
     }
 }
 
+/// A forced break sits in its parent inline box on the line, as text does, so
+/// that box's extent counts there; with no source it is not text content.
+fn push_forced_break_span<Id>(
+    spans: &mut Vec<SourceSpan<Id>>,
+    owners: &[Id],
+    style: &ComputedValues,
+    range: Range<usize>,
+) where
+    Id: Copy,
+{
+    spans.push(SourceSpan {
+        source: None,
+        owners: owners.to_vec(),
+        style: style.clone(),
+        range,
+    });
+}
+
 fn append_forced_line_break(target: &mut String) -> usize {
     let index = target.len();
     target.push('\n');
@@ -4057,40 +4105,261 @@ fn text_wrap_mode(style: &ComputedValues) -> ParleyTextWrapMode {
     }
 }
 
-fn vertical_align_shift(
+/// The used `line-height` of a box in `style` whose font has `metrics`.
+fn used_line_height(style: &ComputedValues, metrics: FontBoxMetrics) -> f32 {
+    match style.line_height {
+        CssLineHeight::Normal => {
+            normal_line_height(metrics.ascent, metrics.descent, metrics.line_gap)
+        },
+        _ => super::layout::line_height_px(&style.line_height, super::paint::used_font_size(style)),
+    }
+}
+
+/// `line-height: normal`: ascent, descent and line gap each rounded, as
+/// Chromium's font metrics do, so a normal line box is a whole number of
+/// pixels (18 for Arial at 16px, not 18.4).
+fn normal_line_height(ascent: f32, descent: f32, line_gap: f32) -> f32 {
+    ascent.round() + descent.round() + line_gap.round()
+}
+
+/// An inline box's space above and below its baseline (CSS 2.1 10.8.1): its
+/// font's ascent and descent, rounded first, plus half the leading on each
+/// side, the larger half below. Chromium's rule, which Parley's quantized
+/// metrics follow for whole-pixel leadings.
+fn leading_extent(ascent: f32, descent: f32, line_height: f32) -> (f32, f32) {
+    let (ascent, descent) = (ascent.round(), descent.round());
+    let leading = line_height - (ascent + descent);
+    let above = (leading * 0.5).floor();
+    (ascent + above, descent + leading - above)
+}
+
+/// How far `vertical-align` raises a box whose extent about its baseline is
+/// `(above, below)`, against its parent's font; `sub` and `super` take
+/// Chromium's offsets from the parent's size. None for `top` and `bottom`,
+/// which align to the line box once the rest are placed.
+fn vertical_align_raise(
     value: VerticalAlign,
     font_size: f32,
-    line_box_height: f32,
-    metrics: &parley::LineMetrics,
-    item_y: f32,
-    item_height: f32,
-    is_inline_box: bool,
-) -> f32 {
-    match value {
+    line_height: f32,
+    (above, below): (f32, f32),
+    parent: FontBoxMetrics,
+) -> Option<f32> {
+    Some(match value {
         VerticalAlign::Baseline => 0.0,
-        VerticalAlign::Sub => font_size * 0.2,
-        VerticalAlign::Super => -font_size * 0.4,
+        VerticalAlign::Sub => -(parent.font_size / 5.0 + 1.0),
+        VerticalAlign::Super => parent.font_size / 3.0 + 1.0,
         VerticalAlign::Length(value) => {
-            -super::layout::signed_length_percentage_px(value, font_size, line_box_height)
+            super::layout::signed_length_percentage_px(value, font_size, line_height)
         },
-        VerticalAlign::Middle if is_inline_box => {
-            metrics.baseline + font_size * 0.5 - (item_y + item_height * 0.5)
+        VerticalAlign::TextTop => parent.ascent.round() - above,
+        VerticalAlign::TextBottom => below - parent.descent.round(),
+        VerticalAlign::Middle => (parent.x_height + below - above) * 0.5,
+        VerticalAlign::MiddleWithBaseline => (below - above) * 0.5,
+        VerticalAlign::Top | VerticalAlign::Bottom => return None,
+    })
+}
+
+/// Whether the line height calculation quirk applies to lines whose root is
+/// `root`: in quirks and limited-quirks mode, except in a list item, which
+/// forces strict line height (whatwg/quirks#38, as Chromium does).
+fn line_height_quirk(mode: QuirksMode, root: &ComputedValues) -> bool {
+    mode != QuirksMode::NoQuirks && root.display != Display::ListItem
+}
+
+/// Where Parley started a line: its baseline less the quantized ascent and
+/// upper half-leading it added.
+fn parley_line_top(metrics: &parley::LineMetrics) -> f32 {
+    let (ascent, descent) = (metrics.ascent.round(), metrics.descent.round());
+    let leading = metrics.line_height - (ascent + descent);
+    metrics.baseline - ascent - (leading * 0.5).floor()
+}
+
+/// One inline box: its `vertical-align`, its extent (above, below) about its
+/// own baseline, and how far that baseline sits above its parent box's; None
+/// for `top` and `bottom`.
+#[derive(Clone, Copy)]
+struct Placement {
+    value: VerticalAlign,
+    extent: (f32, f32),
+    raise: Option<f32>,
+}
+
+/// Where a baseline sits on the line: in the root's aligned subtree (`group`
+/// None) or in the one a `top` or `bottom` box heads, `raise` above that
+/// subtree's baseline (CSS 2.1 10.8.1's aligned subtrees).
+#[derive(Clone, Copy)]
+struct Anchor<Id> {
+    group: Option<(Id, VerticalAlign)>,
+    raise: f32,
+}
+
+impl<Id> Anchor<Id> {
+    fn root() -> Self {
+        Self {
+            group: None,
+            raise: 0.0,
+        }
+    }
+
+    /// A baseline `raise` above this one.
+    fn raised(self, raise: f32) -> Self {
+        Self {
+            group: self.group,
+            raise: self.raise + raise,
+        }
+    }
+}
+
+/// An inline box in `style` with font `metrics`: its extent about its baseline
+/// and its `vertical-align` raise over its parent's (CSS 2.1 10.8.1).
+fn inline_box_placement(
+    style: &ComputedValues,
+    metrics: FontBoxMetrics,
+    parent: FontBoxMetrics,
+) -> Placement {
+    let line_height = used_line_height(style, metrics);
+    let extent = leading_extent(metrics.ascent, metrics.descent, line_height);
+    Placement {
+        value: style.vertical_align,
+        extent,
+        raise: vertical_align_raise(
+            style.vertical_align,
+            super::paint::used_font_size(style),
+            line_height,
+            extent,
+            parent,
+        ),
+    }
+}
+
+/// `id`'s anchor: its own aligned subtree when it is `top` or `bottom`, else
+/// its parent's anchor raised by its own raise. Memoized in `anchors`.
+fn anchor_of<Id>(
+    id: Id,
+    parents: &HashMap<Id, Id>,
+    placements: &HashMap<Id, Placement>,
+    anchors: &mut HashMap<Id, Anchor<Id>>,
+) -> Anchor<Id>
+where
+    Id: Copy + Eq + Hash,
+{
+    if let Some(anchor) = anchors.get(&id) {
+        return *anchor;
+    }
+    let placement = placements[&id];
+    let anchor = match placement.raise {
+        Some(raise) => parents
+            .get(&id)
+            .map_or(Anchor::root(), |parent| {
+                anchor_of(*parent, parents, placements, anchors)
+            })
+            .raised(raise),
+        None => Anchor {
+            group: Some((id, placement.value)),
+            raise: 0.0,
         },
-        VerticalAlign::MiddleWithBaseline if is_inline_box => {
-            metrics.baseline - (item_y + item_height * 0.5)
-        },
-        VerticalAlign::Top | VerticalAlign::TextTop if is_inline_box => {
-            metrics.block_min_coord - item_y
-        },
-        VerticalAlign::Bottom | VerticalAlign::TextBottom if is_inline_box => {
-            metrics.block_max_coord - (item_y + item_height)
-        },
-        VerticalAlign::Middle
-        | VerticalAlign::MiddleWithBaseline
-        | VerticalAlign::Top
-        | VerticalAlign::TextTop
-        | VerticalAlign::Bottom
-        | VerticalAlign::TextBottom => 0.0,
+    };
+    anchors.insert(id, anchor);
+    anchor
+}
+
+/// The space a line box needs about its baseline (CSS 2.1 10.8): the root's
+/// aligned subtree, and each subtree a `top` or `bottom` box heads, held back
+/// until the rest is placed and then growing the line if taller.
+struct LineExtents<Id> {
+    above: f32,
+    below: f32,
+    held: Vec<(Id, VerticalAlign, f32, f32)>,
+}
+
+impl<Id> LineExtents<Id>
+where
+    Id: Copy + Eq + Hash,
+{
+    fn new() -> Self {
+        Self {
+            above: f32::NEG_INFINITY,
+            below: f32::NEG_INFINITY,
+            held: Vec::new(),
+        }
+    }
+
+    /// Whether nothing on the line has counted yet.
+    fn is_empty(&self) -> bool {
+        !self.above.is_finite() && self.held.is_empty()
+    }
+
+    /// Include a box whose baseline sits at `anchor`, with its extent about it.
+    fn include(&mut self, anchor: Anchor<Id>, (above, below): (f32, f32)) {
+        let (above, below) = (above + anchor.raise, below - anchor.raise);
+        match anchor.group {
+            None => {
+                self.above = self.above.max(above);
+                self.below = self.below.max(below);
+            },
+            Some((id, value)) => match self.held.iter_mut().find(|held| held.0 == id) {
+                Some(held) => {
+                    held.2 = held.2.max(above);
+                    held.3 = held.3.max(below);
+                },
+                None => self.held.push((id, value, above, below)),
+            },
+        }
+    }
+
+    /// Include each of `boxes` not yet seen on this line by its own extent;
+    /// in quirks mode, only those in `edged`.
+    fn include_boxes(
+        &mut self,
+        seen: &mut Vec<Id>,
+        boxes: &[Id],
+        (placements, anchors): (&HashMap<Id, Placement>, &HashMap<Id, Anchor<Id>>),
+        edged: Option<&HashSet<Id>>,
+    ) {
+        for id in boxes {
+            if seen.contains(id) || edged.is_some_and(|edged| !edged.contains(id)) {
+                continue;
+            }
+            seen.push(*id);
+            if let (Some(placement), Some(anchor)) = (placements.get(id), anchors.get(id)) {
+                self.include(*anchor, placement.extent);
+            }
+        }
+    }
+
+    /// The space above the root's baseline, and the line box's height.
+    fn resolve(&self) -> (f32, f32) {
+        // Only a quirks-mode line can hold nothing that counts.
+        let (mut above, mut below) = if self.above.is_finite() {
+            (self.above, self.below)
+        } else {
+            (0.0, 0.0)
+        };
+        for &(_, value, held_above, held_below) in &self.held {
+            let height = held_above + held_below;
+            if height > above + below {
+                if matches!(value, VerticalAlign::Top) {
+                    below = height - above;
+                } else {
+                    above = height - below;
+                }
+            }
+        }
+        (above, above + below)
+    }
+
+    /// The baseline at `anchor`, on a line box with the given root baseline,
+    /// top and height.
+    fn baseline_at(&self, anchor: Anchor<Id>, baseline: f32, line_top: f32, height: f32) -> f32 {
+        let group = anchor.group.and_then(|(id, value)| {
+            let &(_, _, above, below) = self.held.iter().find(|held| held.0 == id)?;
+            Some(if matches!(value, VerticalAlign::Bottom) {
+                line_top + height - below
+            } else {
+                line_top + above
+            })
+        });
+        group.unwrap_or(baseline) - anchor.raise
     }
 }
 
@@ -4146,17 +4415,6 @@ fn line_height(style: &ComputedValues) -> StyleProperty<'static, Brush> {
         )),
     };
     StyleProperty::LineHeight(value)
-}
-
-fn explicit_line_height(style: &ComputedValues) -> Option<f32> {
-    if matches!(style.line_height, CssLineHeight::Normal) {
-        None
-    } else {
-        Some(super::layout::line_height_px(
-            &style.line_height,
-            super::paint::used_font_size(style),
-        ))
-    }
 }
 
 fn content_key(bytes: &[u8], index: u32) -> FontInstanceKey {

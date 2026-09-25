@@ -469,13 +469,13 @@
       "reason": "non-reftest",
       "status": "skip"
     },
-    "css/css-position/position-absolute-in-inline-003.html": "fail",
+    "css/css-position/position-absolute-in-inline-003.html": "pass",
     "css/css-position/position-absolute-in-inline-004.html": "pass",
     "css/css-position/position-absolute-in-inline-crash.html": {
       "reason": "non-reftest",
       "status": "skip"
     },
-    "css/css-position/position-absolute-in-inline-margin-top.html": "fail",
+    "css/css-position/position-absolute-in-inline-margin-top.html": "pass",
     "css/css-position/position-absolute-large-negative-inset.html": "pass",
     "css/css-position/position-absolute-margin-auto-001.html": {
       "reason": "non-reftest",

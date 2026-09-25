@@ -306,7 +306,9 @@ receipt belongs to a server-mode run, which is the XHR plan's open next proof.
    `DOMParser`'s XML documents are built from.
 6. **`document.doctype` has no quirks-mode consequence in the scripted tier.**
    The arena's doctype is a node, not a mode: quirks still comes from the static
-   parse.
+   parse. **Closed 2026-09-25** by `2026-09-25_line_box_model_plan.md`: the
+   arena keeps each document's mode, set by its parser or carried from the
+   parsed source, and layout and `compatMode` read it.
 7. **`outerHTML`'s setter uses the parent's local name as the fragment-parsing
    context** rather than the full HTML fragment-parsing algorithm with a
    context element, so a `<td>` replaced inside a `<tr>` parses as a `tr`

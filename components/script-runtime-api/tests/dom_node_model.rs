@@ -266,6 +266,26 @@ fn dom_parser_and_base_uri_work<E: ScriptEngine>() {
     );
 }
 
+/// `compatMode` reads each document's own mode: the parse's for a loaded page
+/// and a `DOMParser` result, no-quirks for a document no parser decided.
+fn compat_mode_follows_the_document_works<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.load_dom(&StaticDocument::parse("<html><body></body></html>"));
+    rt.eval(
+        "console.log(document.compatMode);\
+         var mode = function(s) {\
+           return new DOMParser().parseFromString(s, 'text/html').compatMode;\
+         };\
+         console.log(mode('<p>x') + ',' + mode('<!DOCTYPE html><p>x'));\
+         console.log(document.implementation.createHTMLDocument('t').compatMode);",
+    )
+    .expect("script");
+    assert_eq!(
+        rt.host().borrow().console.clone(),
+        vec!["BackCompat", "BackCompat,CSS1Compat", "CSS1Compat"],
+    );
+}
+
 macro_rules! per_backend {
     ($body:ident, $boa:ident, $nova:ident) => {
         #[test]
@@ -316,4 +336,9 @@ per_backend!(
     dom_parser_and_base_uri_work,
     dom_parser_on_boa,
     dom_parser_on_nova
+);
+per_backend!(
+    compat_mode_follows_the_document_works,
+    compat_mode_on_boa,
+    compat_mode_on_nova
 );

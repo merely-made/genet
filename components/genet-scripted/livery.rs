@@ -1609,7 +1609,7 @@ impl LayoutDom for ScopedDom<'_> {
     }
 
     fn quirks_mode(&self) -> QuirksMode {
-        self.dom.quirks_mode()
+        self.dom.quirks_mode_of(self.document)
     }
 
     fn parent(&self, id: Self::NodeId) -> Option<Self::NodeId> {

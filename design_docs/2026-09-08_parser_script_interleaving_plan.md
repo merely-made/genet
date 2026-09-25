@@ -387,6 +387,9 @@ Named, not silently deferred:
 6. **Quirks mode is recorded but dropped.** The arena has no quirks-mode field
    (the bootstrap reports `compatMode` as the constant `'CSS1Compat'`), so
    `ParserPolicy` keeps what html5ever inferred and nothing reads it yet.
+   **Closed 2026-09-25** by `2026-09-25_line_box_model_plan.md`: the arena
+   keeps each document's mode, the parser sink sets it, layout and
+   `compatMode` read it, and `ParserPolicy`'s record is gone.
 7. **`is_mathml_annotation_xml_integration_point` is always false** on the
    scripted sink. The arena stores no per-element flag for it; the static tier's
    copy is a parse-time fact the tree copy already dropped, so this is not a

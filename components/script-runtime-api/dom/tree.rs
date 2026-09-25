@@ -574,6 +574,23 @@ impl<E: ScriptEngine> NativeFn<E> for DocumentDoctype {
     }
 }
 
+/// `__documentCompatMode(document)` → `"BackCompat"` for a document in quirks
+/// mode, else `"CSS1Compat"`.
+pub(crate) struct DocumentCompatMode;
+impl<E: ScriptEngine> NativeFn<E> for DocumentCompatMode {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let scope = cx.arg(0);
+        let quirks = match cx.owned_node(&scope)? {
+            Some(document) => with_dom::<E, _>(cx, |dom| {
+                dom.quirks_mode_of(document.id()) == QuirksMode::Quirks
+            })
+            .unwrap_or(false),
+            None => false,
+        };
+        cx.make_string(if quirks { "BackCompat" } else { "CSS1Compat" })
+    }
+}
+
 /// `__getOuterHtml(node)` serializes the node itself and its subtree.
 pub(crate) struct GetOuterHtml;
 impl<E: ScriptEngine> NativeFn<E> for GetOuterHtml {

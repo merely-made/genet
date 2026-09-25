@@ -90,24 +90,11 @@ struct PolicyState {
     /// it writes an empty `<script>`, sets its `src`, and expects the **parser**
     /// to fetch and run it when it pops it, not the `src` assignment to.
     parser_created_scripts: HashSet<NodeId>,
-    /// The quirks mode the tree builder inferred from the doctype.
-    quirks_mode: QuirksModeRecord,
     /// Whether the registry holds any custom element definition at all. While
     /// it does, the driver feeds the tokenizer a tag at a time so an upgrade
     /// runs at the element's *creation* rather than at the next script pause.
     /// A document that never defines one pays nothing for this.
     upgrade_at_creation: bool,
-}
-
-/// The arena has no quirks-mode field (the scripted tier reports `compatMode`
-/// as a constant), so the parser records what html5ever decided here rather
-/// than dropping it. Named a residual in the lane plan.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum QuirksModeRecord {
-    #[default]
-    NoQuirks,
-    LimitedQuirks,
-    Quirks,
 }
 
 impl ParserPolicy {
@@ -124,11 +111,6 @@ impl ParserPolicy {
     /// Take the elements the parser created that could name a custom element.
     pub fn take_custom_candidates(&self) -> Vec<NodeId> {
         std::mem::take(&mut self.inner.borrow_mut().custom_candidates)
-    }
-
-    /// The quirks mode html5ever inferred.
-    pub fn quirks_mode(&self) -> QuirksModeRecord {
-        self.inner.borrow().quirks_mode
     }
 
     /// Whether any custom element is defined. Set by the host at each policy
@@ -179,10 +161,6 @@ impl ParserPolicy {
 
     fn note_parser_created_script(&self, id: NodeId) {
         self.inner.borrow_mut().parser_created_scripts.insert(id);
-    }
-
-    fn set_quirks_mode(&self, mode: QuirksModeRecord) {
-        self.inner.borrow_mut().quirks_mode = mode;
     }
 }
 
@@ -468,10 +446,9 @@ impl<A: DomAccess> TreeSink for ScriptedTreeSink<A> {
     }
 
     fn set_quirks_mode(&self, mode: QuirksMode) {
-        self.policy.set_quirks_mode(match mode {
-            QuirksMode::Quirks => QuirksModeRecord::Quirks,
-            QuirksMode::LimitedQuirks => QuirksModeRecord::LimitedQuirks,
-            QuirksMode::NoQuirks => QuirksModeRecord::NoQuirks,
+        self.access.with(|dom| {
+            let document = dom.document();
+            dom.set_quirks_mode(document, mode);
         });
     }
 
@@ -950,6 +927,22 @@ mod tests {
         let dom = dom.borrow();
         let template = find_local(&dom, "template").expect("template stays ordinary");
         assert!(dom.template_contents_of(template).is_some());
+    }
+
+    #[test]
+    fn the_parser_sets_the_documents_mode_from_its_doctype() {
+        for (html, mode) in [
+            ("<p>x", QuirksMode::Quirks),
+            ("<!DOCTYPE html><p>x", QuirksMode::NoQuirks),
+            (
+                "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \
+                 \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\"><p>x",
+                QuirksMode::LimitedQuirks,
+            ),
+        ] {
+            let (dom, _) = parse_pauses(html);
+            assert_eq!(dom.borrow().quirks_mode(), mode, "{html}");
+        }
     }
 
     fn find_local(dom: &ScriptedDom, local: &str) -> Option<NodeId> {

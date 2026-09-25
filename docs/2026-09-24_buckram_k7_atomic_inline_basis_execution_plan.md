@@ -1,7 +1,8 @@
 # Buckram K7: atomic inline boxes against their containing block
 
-**Status:** first slice landed 2026-09-24; a second slice, closing the two
-pre-pass gaps the first one found, is next. Execution note under the
+**Status:** two slices, 2026-09-24. The first resolves atoms against their
+real containing block; the second closes the two pre-pass gaps the first one
+found. Execution note under the
 [Buckram master plan's K7](2026-07-26_buckram_css_layout_engine_plan.md#k7-foundational-sizing-and-dispatch-closure).
 
 ## Why this slice
@@ -101,27 +102,26 @@ and testharness, over `css/CSS2/visudet`, `css/CSS2/normal-flow`,
 attributed. Receipt under
 `Code/testing/genet/wpt-ledger/2026-09-24_k7_atomic_basis/`.
 
-Three of these wait on the second slice, their fixtures ignored with the gap
-they name: percentage padding, the percentage child, and the auto
-inline-block that wraps in its column.
+The first slice met all but three, which the second slice met: percentage
+padding, the percentage child, and the auto inline-block that wraps in its
+column.
 
 ## Named gaps, not closed here
 
-- **Next slice.** An atom that Buckram does not admit to intrinsic
-  shrink-to-fit, such as one with percentage padding or a percentage child,
-  fills its containing block instead of shrinking to fit. Before the first
-  slice it filled the viewport.
-- **Next slice.** The atomic pre-pass measures an atom's text at one line
-  whatever width it wraps at, so the text of a narrowed atom overruns its
-  box. The `pre-wrap` case below is one face of it.
+- An image inside an atom is formatted as a block leaf stretched to the
+  atom's width, so its min/max limits under `box-sizing: border-box` do not
+  hold there. `css/css-sizing/box-sizing-replaced-001` to `-003` pass
+  vacuously while the atom fills the viewport and fail honestly once it
+  shrinks to fit (second slice).
+- The pre-pass formats each text run of an atom on its own, so an atom whose
+  inline content spans several nodes can be measured shorter than its text.
+  A 200px inline-block holding a heading span, a `pre-wrap` paragraph and a
+  second span is 73px tall before the second slice and 110px after, while its
+  text paints to y=133.
 - A replaced atom keeps its natural-size path, so its percentages (such as
   `max-width:100%`) stay unresolved in the pre-pass, as before.
 - One pass-one width answers both min-content and max-content queries for an
   atom, as before this slice.
-- An inline-block with `white-space: pre-wrap` is measured with its newlines
-  collapsed. A 200px inline-block holding six pre-wrap lines gets a 73px box
-  while its text paints to y=133, with or without the retained preparation of
-  its text (found 2026-09-24).
 - Nested atoms are formatted inside their outer atom's subtree, which this
   slice does not change.
 - A percentage height sees a definite containing height only when that block
@@ -158,3 +158,26 @@ inline-block that wraps in its column.
   the six directories: no `pass -> anything else` in 12 runs, and
   `css/css-sizing/intrinsic-percent-replaced-011.html` fail -> pass. Receipt
   `Code/testing/genet/wpt-ledger/2026-09-24_k7_atomic_basis/results.md`.
+
+- **2026-09-24, second slice.** Both pre-pass gaps closed. An auto-width
+  atom Buckram does not admit to shrink-to-fit is measured through Taffy's
+  min-content and max-content queries, with the share of `basis_width` its
+  percentage padding takes added back, and built again at the CSS 2.1
+  §10.3.9 width (`fallback_shrink_to_fit_width`). A text run the text system
+  formatted keeps a handle to itself (`TextWrap`), so the pre-pass measure
+  formats it again at any width narrower than its max-content instead of
+  keeping the one-line height. The three ignored fixtures pass: percentage
+  padding gives a 120px box with 50px on each side, the percentage child
+  settles at 200 and 100 with no basis pass, and the paragraph wraps within
+  its 300px column. A fixture for §10.5 was added at the Genet roadmap
+  session's asking: `height:50%` computes to `auto` in an auto-height block
+  and resolves to 100 in a 200px one.
+
+  genet-livery 571 with 6 ignored (the ignores older than this note), buckram
+  269. WPT over the same six directories: testharness identical; reftest
+  five `fail -> pass`, among them
+  `css/CSS2/normal-flow/inline-block-non-replaced-width-003` and `-004`, and
+  three `pass -> fail` that remove vacuous passes
+  (`css/css-sizing/box-sizing-replaced-001` to `-003`, whose tests and
+  references both rendered wrong the same way before; see the named gap).
+  Receipt `Code/testing/genet/wpt-ledger/2026-09-24_k7_atomic_basis_slice2/results.md`.

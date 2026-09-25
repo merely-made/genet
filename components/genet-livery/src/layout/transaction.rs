@@ -187,6 +187,7 @@ where
         table_shadow: TableShadowLedger::default(),
         pending_tables: Vec::new(),
         contribution_root: None,
+        width_override: None,
     };
     let children = boxes
         .roots()
@@ -378,6 +379,38 @@ where
     ))
 }
 
+/// A fresh build state for one atomic root.
+fn atomic_build_state<'a, D>(
+    dom: &'a D,
+    styles: &'a StylePlane<D::NodeId>,
+    boxes: &'a GeneratedBoxTree<D::NodeId>,
+    image_sources: &'a ImageSources,
+    text: &'a mut TextSystem,
+    contribution_root: Option<D::NodeId>,
+    width_override: Option<(D::NodeId, f32)>,
+) -> BuildState<'a, D>
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    BuildState {
+        dom,
+        styles,
+        boxes,
+        tree: {
+            let mut tree = AlgorithmTree::new();
+            tree.set_calc_resolver(resolve_taffy_calc);
+            tree
+        },
+        image_sources,
+        text: Some(text),
+        table_shadow: TableShadowLedger::default(),
+        pending_tables: Vec::new(),
+        contribution_root,
+        width_override,
+    }
+}
+
 pub(in crate::layout) fn layout_atomic_subtrees<D>(
     dom: &D,
     styles: &StylePlane<D::NodeId>,
@@ -438,22 +471,34 @@ where
             (None, BoxOrigin::Element(node)) => Some(node),
             _ => None,
         };
-        let mut state = BuildState {
+        let mut state = atomic_build_state(
             dom,
             styles,
             boxes,
-            tree: {
-                let mut tree = AlgorithmTree::new();
-                tree.set_calc_resolver(resolve_taffy_calc);
-                tree
-            },
             image_sources,
-            text: Some(&mut *text),
-            table_shadow: TableShadowLedger::default(),
-            pending_tables: Vec::new(),
+            text,
             contribution_root,
-        };
-        let built = state.build_box(box_id, None, 16.0, (Some(basis_width), basis_height))?;
+            None,
+        );
+        let mut built = state.build_box(box_id, None, 16.0, (Some(basis_width), basis_height))?;
+        // An auto-width root that Buckram does not shrink to fit would fill
+        // its containing block, so it is built again at its shrink-to-fit
+        // width.
+        if let (Some(root), BoxOrigin::Element(node)) = (built, boxes[box_id].origin)
+            && let Some(width) = fallback_shrink_to_fit_width(&mut state, root, node, basis_width)
+        {
+            drop(state);
+            state = atomic_build_state(
+                dom,
+                styles,
+                boxes,
+                image_sources,
+                text,
+                contribution_root,
+                Some((node, width)),
+            );
+            built = state.build_box(box_id, None, 16.0, (Some(basis_width), basis_height))?;
+        }
         // Harvest before any continue below: the shadow already ran inside
         // build_box, and both skip paths would otherwise drop its ledger.
         plane
@@ -553,6 +598,10 @@ where
                 basis_block_size,
             )
         };
+        // A text run narrower than its max-content wraps: the measure formats
+        // it again there for its height, through the text system the build
+        // lent the tree.
+        let mut text_system = state.text.take();
         state.tree.compute_layout_with_measure(
             root,
             available,
@@ -565,14 +614,23 @@ where
                     AlgorithmAvailableSpace::MinContent => context.min_width,
                     AlgorithmAvailableSpace::MaxContent => context.max_width,
                 };
-                AlgorithmSize::new(
-                    known
-                        .width
-                        .unwrap_or(context.max_width.min(available_width.max(0.0))),
-                    known.height.unwrap_or(context.height),
-                )
+                let width = known
+                    .width
+                    .unwrap_or(context.max_width.min(available_width.max(0.0)));
+                let height = known.height.unwrap_or_else(|| {
+                    wrapped_text_height(
+                        context,
+                        width,
+                        text_system.as_deref_mut(),
+                        dom,
+                        styles,
+                        boxes,
+                    )
+                });
+                AlgorithmSize::new(width, height)
             },
         );
+        state.text = text_system;
 
         let table_paint = state.table_paint_plane();
         let tables = table_paint.fragments();

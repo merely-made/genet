@@ -214,6 +214,52 @@ where
     })
 }
 
+/// The shrink-to-fit border-box width (CSS 2.1 section 10.3.9) of an
+/// auto-width atomic root that Buckram does not admit to its intrinsic
+/// shrink-to-fit, such as one with percentage padding or a percentage child,
+/// which would otherwise fill `basis_width`. `None` when the root is sized
+/// some other way. Taffy's intrinsic widths leave percentage padding out, so
+/// its share of `basis_width` is added back.
+pub(in crate::layout) fn fallback_shrink_to_fit_width<D>(
+    state: &mut BuildState<'_, D>,
+    root: AlgorithmNodeId,
+    node: D::NodeId,
+    basis_width: f32,
+) -> Option<f32>
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    if state.tree.uses_intrinsic_shrink_to_fit(root) || is_replaced_element(state.dom, node) {
+        return None;
+    }
+    let mut style = state.styles.get(node)?.clone();
+    if state.contribution_root == Some(node) {
+        contribution_style(&mut style);
+    }
+    if style.width != CssSize::Auto
+        || matches!(style.display, CssDisplay::Table | CssDisplay::InlineTable)
+    {
+        return None;
+    }
+    let min = state.measure_intrinsic_width(root, AlgorithmAvailableSpace::MinContent);
+    let max = state.measure_intrinsic_width(root, AlgorithmAvailableSpace::MaxContent);
+    let em = crate::paint::used_font_size(&style);
+    let percentage_padding: f32 = [style.padding_left.0, style.padding_right.0]
+        .into_iter()
+        .map(|padding| {
+            taffy_style::length_percentage_px(padding, em, basis_width)
+                - taffy_style::length_percentage_px(padding, em, 0.0)
+        })
+        .sum();
+    let available = (basis_width - horizontal_margins(&style, basis_width)).max(0.0);
+    Some(
+        available
+            .min(max + percentage_padding)
+            .max(min + percentage_padding),
+    )
+}
+
 fn horizontal_margins(style: &ComputedValues, basis: f32) -> f32 {
     let em = crate::paint::used_font_size(style);
     [style.margin_left, style.margin_right]

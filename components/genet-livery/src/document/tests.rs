@@ -2525,3 +2525,193 @@ fn a_percentage_top_inset_takes_the_containing_blocks_height() {
     assert_eq!(panel.y, anchor.y + 24.0, "100% of the anchor's 24px height");
     assert_eq!(panel.x, anchor.x);
 }
+
+/// Lay `body` out under `sheet` in a `width` x 400 viewport and return the
+/// border box of each element named in `ids`, as (x, y, width, height).
+fn atomic_rects(body: &str, sheet: &str, width: f32, ids: &[&str]) -> Vec<(f32, f32, f32, f32)> {
+    let mut dom =
+        ScriptedDom::from_serialized_document(&format!("<html><body>{body}</body></html>"));
+    let mut initial_mutations = Vec::new();
+    dom.drain_mutations(&mut initial_mutations);
+    let sheet = format!("html, body {{ margin: 0; }} {sheet}");
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&[sheet.as_str()]),
+        Device::screen(width, 400.0),
+    );
+    document.frame(width as u32, 400).expect("frame");
+    let layout = document.layout.as_ref().expect("completed frame");
+    ids.iter()
+        .map(|id| {
+            let fragment = layout
+                .fragments
+                .get(by_id(document.dom(), id))
+                .unwrap_or_else(|| panic!("#{id} has a fragment"));
+            (fragment.x, fragment.y, fragment.width, fragment.height)
+        })
+        .collect()
+}
+
+#[track_caller]
+fn assert_near(actual: f32, expected: f32, what: &str) {
+    assert!(
+        (actual - expected).abs() <= 0.5,
+        "{what}: expected {expected}, got {actual}",
+    );
+}
+
+/// Buckram K7: an atomic inline box's percentage width resolves against its
+/// containing block, not the viewport the atomic pre-pass starts from.
+#[test]
+fn a_percentage_width_on_an_atomic_inline_takes_its_containing_block() {
+    for (what, child) in [
+        (
+            "an inline-block",
+            "<div id=atom style=\"display:inline-block; width:100%\">x</div>",
+        ),
+        (
+            "a border-box inline-block",
+            "<div id=atom style=\"display:inline-block; width:100%; box-sizing:border-box; \
+             padding:16px; border:1px solid\">x</div>",
+        ),
+        (
+            "a textarea",
+            "<textarea id=atom style=\"width:100%; box-sizing:border-box\"></textarea>",
+        ),
+    ] {
+        let rects = atomic_rects(
+            &format!("<div id=column style=\"width:500px\">{child}</div>"),
+            "",
+            1100.0,
+            &["atom"],
+        );
+        assert_near(rects[0].2, 500.0, what);
+    }
+}
+
+/// Percentage padding resolves against the containing block's inline size on
+/// all four sides.
+#[test]
+#[ignore = "K7 gap: an atom with percentage padding is not admitted to shrink-to-fit"]
+fn percentage_padding_on_an_inline_block_takes_the_containing_width() {
+    let rects = atomic_rects(
+        "<div style=\"width:500px\"><div id=atom style=\"display:inline-block; \
+         padding:10%\"><div id=inner style=\"width:20px; height:20px\"></div></div></div>",
+        "",
+        1100.0,
+        &["atom", "inner"],
+    );
+    let (atom, inner) = (rects[0], rects[1]);
+    assert_near(inner.0 - atom.0, 50.0, "left padding");
+    assert_near(inner.1 - atom.1, 50.0, "top padding");
+    assert_near(atom.2, 120.0, "width with left and right padding");
+    assert_near(atom.3, 120.0, "height with top and bottom padding");
+}
+
+/// A shrink-to-fit inline-block wraps at its column, not the viewport.
+#[test]
+#[ignore = "K7 gap: the atomic pre-pass measures text at one line at any width"]
+fn an_auto_inline_block_wraps_within_its_column() {
+    let rects = atomic_rects(
+        "<div style=\"width:300px\"><div id=atom style=\"display:inline-block\">A paragraph \
+         long enough that it wraps across several lines of a three hundred pixel column \
+         but would sit on one line of the viewport.</div></div>",
+        "",
+        1100.0,
+        &["atom"],
+    );
+    assert!(
+        rects[0].2 <= 300.5,
+        "the inline-block is {} wide",
+        rects[0].2
+    );
+    assert!(rects[0].3 > 40.0, "and wraps: {} tall", rects[0].3);
+}
+
+/// A containing block wider than the viewport lets a shrink-to-fit
+/// inline-block reach its max-content width.
+#[test]
+fn an_inline_block_in_a_block_wider_than_the_viewport_reaches_its_max_content() {
+    let words = "wide ".repeat(60);
+    let rects = atomic_rects(
+        &format!(
+            "<div style=\"width:2000px\"><div id=atom style=\"display:inline-block\">{words}\
+             </div></div>"
+        ),
+        "",
+        1100.0,
+        &["atom"],
+    );
+    assert!(
+        rects[0].2 > 1100.5,
+        "the inline-block is {} wide, not clamped to the viewport",
+        rects[0].2
+    );
+}
+
+/// CSS Sizing 3 section 5.2.1: a float sized from a `width:50%` inline-block
+/// takes the inline-block's contribution with the percentage as `auto`; the
+/// percentage then resolves against the float, which is not re-resolved.
+#[test]
+fn a_float_keeps_the_contribution_of_its_percentage_inline_block() {
+    let rects = atomic_rects(
+        "<div id=float style=\"float:left\"><div id=atom style=\"display:inline-block; \
+         width:50%\"><div style=\"width:300px; height:10px\"></div></div></div>",
+        "",
+        1100.0,
+        &["float", "atom"],
+    );
+    assert_near(rects[0].2, 300.0, "the float");
+    assert_near(rects[1].2, 150.0, "the inline-block, half the float");
+}
+
+/// An auto inline-block holding a 200px line and a `width:50%` child settles
+/// at 200 with a 100px child, and needs no basis pass.
+#[test]
+#[ignore = "K7 gap: an atom with a percentage child is not admitted to shrink-to-fit"]
+fn a_percentage_child_of_an_auto_inline_block_settles_in_one_pass() {
+    let before = crate::layout::basis_passes();
+    let rects = atomic_rects(
+        "<div style=\"width:600px\"><div id=outer style=\"display:inline-block\">\
+         <div style=\"width:200px; height:10px\"></div>\
+         <div id=child style=\"width:50%; height:10px\"></div></div></div>",
+        "",
+        1100.0,
+        &["outer", "child"],
+    );
+    assert_near(rects[0].2, 200.0, "the inline-block");
+    assert_near(rects[1].2, 100.0, "its percentage child");
+    assert_eq!(crate::layout::basis_passes(), before, "one settle");
+}
+
+/// An atom inside a flex item and one inside a table cell resolve against
+/// that item and that cell.
+#[test]
+fn atoms_in_a_flex_item_and_a_table_cell_take_their_own_block() {
+    let rects = atomic_rects(
+        "<div style=\"display:flex\"><div id=item style=\"width:300px\"><span id=in-item \
+         style=\"display:inline-block; width:100%\">x</span></div></div>\
+         <table style=\"border-spacing:0\"><tr><td id=cell style=\"width:250px; padding:0\">\
+         <span id=in-cell style=\"display:inline-block; width:100%\">x</span></td></tr></table>",
+        "",
+        1100.0,
+        &["item", "in-item", "cell", "in-cell"],
+    );
+    assert_near(rects[1].2, rects[0].2, "the flex item's atom");
+    assert_near(rects[3].2, rects[2].2, "the table cell's atom");
+}
+
+/// Atoms that fit their block already stand after the contribution pass: a row
+/// of short buttons takes no basis pass.
+#[test]
+fn a_row_of_fitting_buttons_needs_no_basis_pass() {
+    let before = crate::layout::basis_passes();
+    atomic_rects(
+        "<div id=row style=\"width:800px\"><button>Site</button> <button>New</button> \
+         <button>Open</button> <button>Save</button></div>",
+        "",
+        1100.0,
+        &["row"],
+    );
+    assert_eq!(crate::layout::basis_passes(), before);
+}

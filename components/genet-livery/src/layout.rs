@@ -80,6 +80,7 @@ use crate::{
     text::{InlineLayout, InlineRequest, TextFrame},
 };
 
+mod atomic_basis;
 mod build_block;
 mod build_inline;
 mod hit_testing;
@@ -92,6 +93,9 @@ mod taffy_style;
 mod tests;
 mod transaction;
 
+#[cfg(test)]
+pub(crate) use atomic_basis::basis_passes;
+use atomic_basis::*;
 use build_block::*;
 use build_inline::*;
 use positioned::*;
@@ -324,6 +328,9 @@ struct InlineMeasure {
 
 struct InlineLayoutEntry {
     width: f32,
+    /// Formatted for an intrinsic query, where an atomic box takes its
+    /// contribution width rather than its used one.
+    intrinsic: bool,
     constraints: Option<FloatLineConstraints>,
     layout: InlineLayout<BoxId>,
 }
@@ -339,12 +346,15 @@ impl InlineMeasure {
     fn cached_size(
         &self,
         width: f32,
+        intrinsic: bool,
         constraints: Option<&FloatLineConstraints>,
     ) -> Option<(f32, f32)> {
         self.layouts
             .iter()
             .find(|entry| {
-                (entry.width - width).abs() <= 0.01 && entry.constraints.as_ref() == constraints
+                (entry.width - width).abs() <= 0.01
+                    && entry.intrinsic == intrinsic
+                    && entry.constraints.as_ref() == constraints
             })
             .map(|entry| entry.layout.size())
     }
@@ -352,18 +362,22 @@ impl InlineMeasure {
     fn remember(
         &mut self,
         width: f32,
+        intrinsic: bool,
         constraints: Option<&FloatLineConstraints>,
         layout: InlineLayout<BoxId>,
     ) -> (f32, f32) {
         let size = layout.size();
         self.layouts.push(InlineLayoutEntry {
             width,
+            intrinsic,
             constraints: constraints.cloned(),
             layout,
         });
         size
     }
 
+    /// The layout placed at `width`: the nearest width, and at an equal one
+    /// the layout formatted with used atomic widths over an intrinsic query's.
     fn layout_for_width(&self, width: f32) -> Option<&InlineLayout<BoxId>> {
         self.layouts
             .iter()
@@ -372,6 +386,7 @@ impl InlineMeasure {
                 (left.width - width)
                     .abs()
                     .total_cmp(&(right.width - width).abs())
+                    .then(left.intrinsic.cmp(&right.intrinsic))
             })
             .map(|entry| &entry.layout)
     }
@@ -401,24 +416,27 @@ where
     if let Some(constraints) = constraints {
         context.placement_constraints = Some(constraints.clone());
     }
-    context.cached_size(width, constraints).unwrap_or_else(|| {
-        let formatted = text.format_inline_group(
-            dom,
-            styles,
-            boxes,
-            atomic,
-            InlineRequest {
-                roots: &context.roots,
-                parent_style: &context.style,
-                width,
-                intrinsic_kind,
-                line_constraints: constraints,
-            },
-        );
-        formatted.map_or((context.width, context.height), |layout| {
-            context.remember(width, constraints, layout)
+    let intrinsic = intrinsic_kind.is_some();
+    context
+        .cached_size(width, intrinsic, constraints)
+        .unwrap_or_else(|| {
+            let formatted = text.format_inline_group(
+                dom,
+                styles,
+                boxes,
+                atomic,
+                InlineRequest {
+                    roots: &context.roots,
+                    parent_style: &context.style,
+                    width,
+                    intrinsic_kind,
+                    line_constraints: constraints,
+                },
+            );
+            formatted.map_or((context.width, context.height), |layout| {
+                context.remember(width, intrinsic, constraints, layout)
+            })
         })
-    })
 }
 
 #[expect(

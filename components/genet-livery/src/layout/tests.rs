@@ -153,6 +153,7 @@ fn nested_multicol_build_admits_only_the_outer_algorithm_node() {
         text: None,
         table_shadow: TableShadowLedger::default(),
         pending_tables: Vec::new(),
+        contribution_root: None,
     };
     let outer_node = state
         .build_box(outer_box, None, 16.0, (Some(320.0), Some(240.0)))

@@ -38,7 +38,8 @@ use parley::{
     Alignment, AlignmentOptions, FontContext, FontFamily, FontFeature, FontFeatures, FontStyle,
     FontWeight, GenericFamily, IndentOptions, InlineBox, InlineBoxKind, LayoutContext,
     OverflowWrap as ParleyOverflowWrap, PositionedLayoutItem, StyleProperty,
-    TextWrapMode as ParleyTextWrapMode, WordBreak as ParleyWordBreak, layout::YieldData,
+    TextWrapMode as ParleyTextWrapMode, WordBreak as ParleyWordBreak,
+    layout::{BreakReason, YieldData},
 };
 
 use crate::{LiveryLayout, StylePlane, TextDirective, layout::Fragment, paint::resolve_color};
@@ -455,11 +456,13 @@ impl TextSystem {
                 collector.collect(*root, parent_style);
             }
         }
-        if spans.is_empty() && inline_boxes.is_empty() {
+        // A forced break adds text without a span, so a block holding only
+        // `<br>` still formats its line.
+        if text.is_empty() && inline_boxes.is_empty() {
             return None;
         }
 
-        let items = self.shape(
+        let Shaped { items, break_lines } = self.shape(
             &text,
             &mut spans,
             &inline_boxes,
@@ -505,7 +508,7 @@ impl TextSystem {
                 None,
                 None,
             );
-            strut_items.into_iter().find_map(|item| match item {
+            strut_items.items.into_iter().find_map(|item| match item {
                 ShapedItem::Text(run) => Some(
                     (run.line_baseline - (run.line_block_min + run.line_block_max) * 0.5).abs(),
                 ),
@@ -536,6 +539,10 @@ impl TextSystem {
             right = right.max(fragment.x + fragment.width);
             top = top.min(fragment.y);
             bottom = bottom.max(fragment.y + fragment.height);
+        }
+        if let Some((upper, lower)) = break_lines {
+            top = top.min(upper);
+            bottom = bottom.max(lower);
         }
         if top.is_finite() && bottom.is_finite() {
             let measured_height = (bottom - top).max(strut_center_height.unwrap_or(0.0));
@@ -781,15 +788,18 @@ impl TextSystem {
             style: style.clone(),
             range: 0..text.len(),
         }];
-        for item in self.shape(
-            text.as_ref(),
-            &mut spans,
-            &[],
-            fragment.width,
-            style,
-            None,
-            None,
-        ) {
+        for item in self
+            .shape(
+                text.as_ref(),
+                &mut spans,
+                &[],
+                fragment.width,
+                style,
+                None,
+                None,
+            )
+            .items
+        {
             let ShapedItem::Text(mut run) = item else {
                 continue;
             };
@@ -883,15 +893,18 @@ impl TextSystem {
             .filter_map(|span| Some((span.source?, text.get(span.range.clone())?.to_owned())))
             .collect();
         frame.record_text_group(text_sources);
-        for item in self.shape(
-            &text,
-            &mut spans,
-            &inline_boxes,
-            available_width,
-            parent_style,
-            None,
-            None,
-        ) {
+        for item in self
+            .shape(
+                &text,
+                &mut spans,
+                &inline_boxes,
+                available_width,
+                parent_style,
+                None,
+                None,
+            )
+            .items
+        {
             match item {
                 ShapedItem::Text(mut run) => {
                     let Some(source) = run.source else {
@@ -1003,7 +1016,7 @@ impl TextSystem {
         root_style: &ComputedValues,
         line_constraints: Option<&FloatLineConstraints>,
         intrinsic_kind: Option<IntrinsicSizeKind>,
-    ) -> Vec<ShapedItem<Id>>
+    ) -> Shaped<Id>
     where
         Id: Copy + Eq,
     {
@@ -1113,6 +1126,7 @@ impl TextSystem {
         );
 
         let mut result = Vec::new();
+        let mut break_lines: Option<(f32, f32)> = None;
         for line in layout.lines() {
             let source_metrics = *line.metrics();
             let content_height =
@@ -1216,6 +1230,15 @@ impl TextSystem {
                 .filter(|_| !line_has_glyph)
                 .unwrap_or(metrics.baseline)
                 + extra_leading * 0.5;
+            if line.break_reason() == BreakReason::Explicit {
+                let (top, bottom) = (
+                    metrics.block_min_coord,
+                    metrics.block_min_coord + metrics.line_height,
+                );
+                break_lines = Some(break_lines.map_or((top, bottom), |(upper, lower)| {
+                    (upper.min(top), lower.max(bottom))
+                }));
+            }
             let strut_height = super::layout::line_height_px(
                 &root_style.line_height,
                 super::paint::used_font_size(root_style),
@@ -1452,7 +1475,10 @@ impl TextSystem {
             }
         }
         append_positioned_inline_start_markers(&mut result, inline_boxes);
-        result
+        Shaped {
+            items: result,
+            break_lines,
+        }
     }
 
     fn intern_font(&mut self, font: &parley::FontData) -> FontInstanceKey {
@@ -2584,6 +2610,15 @@ struct InlineAtom<Id> {
     vertical_align: VerticalAlign,
     font_size: f32,
     line_height: f32,
+}
+
+/// What shaping one inline formatting context produced.
+struct Shaped<Id> {
+    items: Vec<ShapedItem<Id>>,
+    /// The block extent of the line boxes that end in a preserved newline or
+    /// forced break. Such a line box may hold no item, yet CSS 2.1 section
+    /// 9.4.2 gives it height; an empty line after a trailing break has none.
+    break_lines: Option<(f32, f32)>,
 }
 
 enum ShapedItem<Id> {

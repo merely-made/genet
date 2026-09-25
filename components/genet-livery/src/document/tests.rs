@@ -2592,7 +2592,6 @@ fn a_percentage_width_on_an_atomic_inline_takes_its_containing_block() {
 /// Percentage padding resolves against the containing block's inline size on
 /// all four sides.
 #[test]
-#[ignore = "K7 gap: an atom with percentage padding is not admitted to shrink-to-fit"]
 fn percentage_padding_on_an_inline_block_takes_the_containing_width() {
     let rects = atomic_rects(
         "<div style=\"width:500px\"><div id=atom style=\"display:inline-block; \
@@ -2610,7 +2609,6 @@ fn percentage_padding_on_an_inline_block_takes_the_containing_width() {
 
 /// A shrink-to-fit inline-block wraps at its column, not the viewport.
 #[test]
-#[ignore = "K7 gap: the atomic pre-pass measures text at one line at any width"]
 fn an_auto_inline_block_wraps_within_its_column() {
     let rects = atomic_rects(
         "<div style=\"width:300px\"><div id=atom style=\"display:inline-block\">A paragraph \
@@ -2668,7 +2666,6 @@ fn a_float_keeps_the_contribution_of_its_percentage_inline_block() {
 /// An auto inline-block holding a 200px line and a `width:50%` child settles
 /// at 200 with a 100px child, and needs no basis pass.
 #[test]
-#[ignore = "K7 gap: an atom with a percentage child is not admitted to shrink-to-fit"]
 fn a_percentage_child_of_an_auto_inline_block_settles_in_one_pass() {
     let before = crate::layout::basis_passes();
     let rects = atomic_rects(
@@ -2714,4 +2711,30 @@ fn a_row_of_fitting_buttons_needs_no_basis_pass() {
         &["row"],
     );
     assert_eq!(crate::layout::basis_passes(), before);
+}
+
+/// CSS 2.1 section 10.5: an atom's percentage height resolves against a
+/// definite containing height and computes to `auto` against an auto one, so
+/// the basis wrapper must not make an auto height definite.
+#[test]
+fn a_percentage_height_on_an_atom_needs_a_definite_containing_height() {
+    let atom = "<div id=atom style=\"display:inline-block; height:50%\">text</div>";
+    let auto = atomic_rects(
+        &format!("<div style=\"width:500px\">{atom}</div>"),
+        "",
+        1100.0,
+        &["atom"],
+    );
+    let definite = atomic_rects(
+        &format!("<div style=\"width:500px; height:200px\">{atom}</div>"),
+        "",
+        1100.0,
+        &["atom"],
+    );
+    assert!(
+        auto[0].3 < 30.0,
+        "content height in an auto-height block, not {}",
+        auto[0].3
+    );
+    assert_near(definite[0].3, 100.0, "half of a 200px block");
 }

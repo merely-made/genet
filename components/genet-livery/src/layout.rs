@@ -291,6 +291,64 @@ struct TextMeasure {
     min_width: f32,
     max_width: f32,
     height: f32,
+    /// A run the text system formatted, which the atomic pre-pass formats
+    /// again at a narrower width than its max-content, since it wraps there.
+    wrap: Option<Box<TextWrap>>,
+}
+
+#[derive(Clone, Debug)]
+struct TextWrap {
+    source: BoxId,
+    parent_style: ComputedValues,
+    /// Heights already formatted, by width.
+    heights: Vec<(f32, f32)>,
+}
+
+/// `context`'s height at `width`. A run narrower than its max-content wraps,
+/// so the text system formats it again there; otherwise it keeps its
+/// one-line height.
+fn wrapped_text_height<D>(
+    context: &mut TextMeasure,
+    width: f32,
+    text: Option<&mut TextSystem>,
+    dom: &D,
+    styles: &StylePlane<D::NodeId>,
+    boxes: &GeneratedBoxTree<D::NodeId>,
+) -> f32
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    let (Some(wrap), Some(text)) = (context.wrap.as_deref_mut(), text) else {
+        return context.height;
+    };
+    if width >= context.max_width - 0.5 {
+        return context.height;
+    }
+    if let Some((_, height)) = wrap
+        .heights
+        .iter()
+        .find(|(formatted, _)| (formatted - width).abs() <= 0.01)
+    {
+        return *height;
+    }
+    let height = text
+        .format_inline_group(
+            dom,
+            styles,
+            boxes,
+            &AtomicLayoutPlane::default(),
+            InlineRequest {
+                roots: &[wrap.source],
+                parent_style: &wrap.parent_style,
+                width,
+                intrinsic_kind: None,
+                line_constraints: None,
+            },
+        )
+        .map_or(context.height, |layout| layout.size().1);
+    wrap.heights.push((width, height));
+    height
 }
 
 fn measure_text_algorithm_node(

@@ -83,6 +83,9 @@ pub(in crate::layout) struct BuildState<'a, D: LayoutDom> {
     /// An atomic inline root formatted for its contribution: its own
     /// containing-block percentages act as CSS Sizing 3 section 5.2.1 says.
     pub(in crate::layout) contribution_root: Option<D::NodeId>,
+    /// An atomic inline root given its shrink-to-fit border-box width, for
+    /// the roots Buckram does not size that way itself.
+    pub(in crate::layout) width_override: Option<(D::NodeId, f32)>,
 }
 
 impl<D> BuildState<'_, D>
@@ -561,6 +564,15 @@ where
                 if self.contribution_root == Some(node) {
                     contribution_style(&mut computed);
                 }
+                if let Some((target, width)) = self.width_override
+                    && target == node
+                {
+                    computed.width = CssSize::Value(CssLengthPercentage::Length(Length {
+                        value: width,
+                        unit: livery::values::LengthUnit::Px,
+                    }));
+                    computed.box_sizing = CssBoxSizing::BorderBox;
+                }
                 // K4e1: the wrapper above this grid took the properties
                 // CSS 2.1 section 17.4 assigns to it; the grid sees them unset.
                 let (computed, table_style) =
@@ -701,6 +713,7 @@ where
                                 min_width: width,
                                 max_width: width,
                                 height,
+                                wrap: None,
                             },
                             Some(box_id),
                         )
@@ -810,6 +823,7 @@ where
                     1
                 };
                 let mut height = line_count as f32 * line_height;
+                let mut wrap = None;
                 if let Some(text_system) = self.text.as_deref_mut()
                     && let Some(parent_style) = inherited
                 {
@@ -851,6 +865,11 @@ where
                     if let Some((maximum, maximum_height)) = maximum {
                         max_width = maximum.max(min_width);
                         height = maximum_height;
+                        wrap = Some(Box::new(TextWrap {
+                            source: box_id,
+                            parent_style: parent_style.clone(),
+                            heights: Vec::new(),
+                        }));
                     }
                 }
                 let node = self.tree.new_leaf_with_context_and_block_style(
@@ -863,6 +882,7 @@ where
                         min_width,
                         max_width,
                         height,
+                        wrap,
                     },
                     Some(box_id),
                 );
@@ -905,6 +925,7 @@ where
                         min_width,
                         max_width: max_width.max(min_width),
                         height: line_height,
+                        wrap: None,
                     },
                     Some(box_id),
                 );

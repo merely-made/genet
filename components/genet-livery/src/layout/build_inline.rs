@@ -108,7 +108,14 @@ where
                     containing_size.0.unwrap_or(0.0),
                 )
                 .or_else(|| {
-                    apply_form_control_intrinsic_style(&mut taffy_style, self.dom, node, &computed, font_size)
+                    apply_form_control_intrinsic_style(
+                        &mut taffy_style,
+                        self.dom,
+                        node,
+                        &computed,
+                        font_size,
+                        containing_size.0.unwrap_or(0.0),
+                    )
                 });
                 // Taffy exempts a compressible replaced element from block
                 // stretch-sizing (CSS 2.1 10.3.4) and from grid `normal`

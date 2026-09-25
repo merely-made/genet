@@ -2301,12 +2301,23 @@ const DEFAULT_OBJECT_SIZE: (f32, f32) = (300.0, 150.0);
 /// override that real content sizing instead of only flooring it. A
 /// text-entry `input` and a `textarea` never render `value` as content at
 /// all, so their natural size is the whole box, not a floor under one.
+///
+/// The floor reaches `min_size` only for a control with no content of its
+/// own (no element child, no text beyond white space). A control with content
+/// keeps `min-width`/`min-height: auto`, so a flex or grid container gives it
+/// the content-based automatic minimum (css-flexbox-1 4.5); as a definite
+/// floor it displaced that minimum, and a padded button in a shrinking flex
+/// column fell below its own label. The floor and the forced size are
+/// content-box lengths, and Taffy reads `min_size` and `size` in the style's
+/// box-sizing, so under `border-box` the control's padding and border are
+/// added.
 fn apply_form_control_intrinsic_style<D>(
     style: &mut Style,
     dom: &D,
     id: D::NodeId,
     computed: &ComputedValues,
     font_size: f32,
+    containing_width: f32,
 ) -> Option<(f32, f32)>
 where
     D: LayoutDom,
@@ -2376,16 +2387,22 @@ where
     let Some((width, height, is_floor)) = sizing else {
         return None;
     };
-    // A floor still needs `min_size` set: when this control has real
-    // children (a non-empty `<button>`/`<select>`), the caller keeps it out
-    // of the leaf/replaced path below (`children.is_empty()` is false), so
-    // this is the only place the floor reaches Taffy.
+    let (edge_x, edge_y) = if matches!(computed.box_sizing, CssBoxSizing::BorderBox) {
+        box_edges(computed, font_size, containing_width)
+    } else {
+        (0.0, 0.0)
+    };
+    // A control with children stays off the caller's leaf path, so a floor
+    // reaches Taffy only here, and only while the control has no content of
+    // its own; one with content keeps `auto` for the automatic minimum.
     if is_floor {
-        if matches!(computed.min_width, CssSize::Auto) {
-            style.min_size.width = Dimension::length(width.max(0.0));
-        }
-        if matches!(computed.min_height, CssSize::Auto) {
-            style.min_size.height = Dimension::length(height.max(0.0));
+        if !has_own_content(dom, id) {
+            if matches!(computed.min_width, CssSize::Auto) {
+                style.min_size.width = Dimension::length(width.max(0.0) + edge_x);
+            }
+            if matches!(computed.min_height, CssSize::Auto) {
+                style.min_size.height = Dimension::length(height.max(0.0) + edge_y);
+            }
         }
     } else {
         // A definite Taffy dimension on one axis, alongside an author
@@ -2410,10 +2427,10 @@ where
             CssSize::MaxContent | CssSize::MinContent | CssSize::FitContent(_)
         );
         if matches!(computed.width, CssSize::Auto) && !height_is_intrinsic_keyword {
-            style.size.width = Dimension::length(width.max(0.0));
+            style.size.width = Dimension::length(width.max(0.0) + edge_x);
         }
         if matches!(computed.height, CssSize::Auto) && !width_is_intrinsic_keyword {
-            style.size.height = Dimension::length(height.max(0.0));
+            style.size.height = Dimension::length(height.max(0.0) + edge_y);
         }
     }
     // Returned unconditionally, like `has_default_object_size_only`'s own
@@ -2612,33 +2629,7 @@ where
             && *w > 0.0
             && *h > 0.0
     }) {
-        let px = |value: CssLengthPercentage| {
-            absolute_length_percentage(value, font_size, 16.0, containing_width)
-        };
-        let edge_x = px(computed.padding_left.0)
-            + px(computed.padding_right.0)
-            + border_width_px(
-                computed.border_left_style,
-                computed.border_left_width,
-                font_size,
-            )
-            + border_width_px(
-                computed.border_right_style,
-                computed.border_right_width,
-                font_size,
-            );
-        let edge_y = px(computed.padding_top.0)
-            + px(computed.padding_bottom.0)
-            + border_width_px(
-                computed.border_top_style,
-                computed.border_top_width,
-                font_size,
-            )
-            + border_width_px(
-                computed.border_bottom_style,
-                computed.border_bottom_width,
-                font_size,
-            );
+        let (edge_x, edge_y) = box_edges(computed, font_size, containing_width);
         let content = |size: CssSize, edge: f32| definite_size(size, font_size).map(|v| v - edge);
         let (used_width, used_height) = replaced_min_max(
             natural,
@@ -2652,6 +2643,56 @@ where
         style.aspect_ratio = None;
     }
     intrinsic
+}
+
+/// A box's horizontal and vertical padding plus border, in px, with
+/// percentage padding resolved against `containing_width`.
+fn box_edges(computed: &ComputedValues, font_size: f32, containing_width: f32) -> (f32, f32) {
+    let px = |value: CssLengthPercentage| {
+        absolute_length_percentage(value, font_size, 16.0, containing_width)
+    };
+    let edge_x = px(computed.padding_left.0)
+        + px(computed.padding_right.0)
+        + border_width_px(
+            computed.border_left_style,
+            computed.border_left_width,
+            font_size,
+        )
+        + border_width_px(
+            computed.border_right_style,
+            computed.border_right_width,
+            font_size,
+        );
+    let edge_y = px(computed.padding_top.0)
+        + px(computed.padding_bottom.0)
+        + border_width_px(
+            computed.border_top_style,
+            computed.border_top_width,
+            font_size,
+        )
+        + border_width_px(
+            computed.border_bottom_style,
+            computed.border_bottom_width,
+            font_size,
+        );
+    (edge_x, edge_y)
+}
+
+/// Whether a control has content of its own to size by: an element child, or
+/// text beyond CSS white space. An element hidden with `display: none` still
+/// counts, so such a control gives up the floor for its empty content.
+fn has_own_content<D>(dom: &D, id: D::NodeId) -> bool
+where
+    D: LayoutDom,
+    D::NodeId: Copy,
+{
+    dom.flat_children(id).any(|child| match dom.kind(child) {
+        NodeKind::Element => true,
+        NodeKind::Text => dom
+            .text(child)
+            .is_some_and(|text| text.chars().any(|c| !matches!(c, ' ' | '\t' | '\n' | '\r'))),
+        _ => false,
+    })
 }
 
 /// Pass natural replaced dimensions across the browser-facing K5d edge.

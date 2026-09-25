@@ -2837,3 +2837,34 @@ fn a_blockified_span_that_starts_a_stacking_context_paints_its_text() {
         }
     }
 }
+
+/// CSS 2.1 section 9.4.2: a line box that ends in a preserved newline or a
+/// forced break has height even when it holds nothing else, and the empty
+/// line after a trailing break has none.
+#[test]
+fn a_line_ending_in_a_break_has_height_even_when_empty() {
+    let pre = |text: &str| format!("<div id=block style=\"white-space:pre-wrap\">{text}</div>");
+    for (body, expected) in [
+        (pre("\n"), 20.0),
+        (pre("\na"), 40.0),
+        (pre("a\n\n"), 40.0),
+        (pre("a\n\nb"), 60.0),
+        (pre("a\n"), 20.0),
+        ("<div id=block><br></div>".to_owned(), 20.0),
+        ("<div id=block>a<br><br></div>".to_owned(), 40.0),
+        (
+            "<div id=block style=\"white-space:pre-wrap\">\
+             <span style=\"line-height:40px\">\na</span></div>"
+                .to_owned(),
+            80.0,
+        ),
+    ] {
+        let block = atomic_rects(
+            &body,
+            "body { font-size: 16px; line-height: 20px; }",
+            400.0,
+            &["block"],
+        );
+        assert_near(block[0].3, expected, &format!("the height of {body:?}"));
+    }
+}

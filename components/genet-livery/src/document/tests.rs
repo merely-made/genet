@@ -1809,6 +1809,55 @@ fn positioned_inset_mutation_reuses_a_stable_fragment_subtree() {
     assert_eq!(retained.content_height(0), fresh.content_height(0));
 }
 
+/// An inset change on an absolute box holding a fixed box does not take the
+/// retained translation: the fixed box's containing block, the viewport,
+/// stays put, so the ordinary layout places the subtree.
+#[test]
+fn positioned_inset_mutation_over_a_fixed_box_keeps_it_on_the_viewport() {
+    let initial = "<html><body><div id=positioned><div id=fixed></div></div></body></html>";
+    let final_document = "<html><body><div id=positioned style=\"left: 70px\"><div id=fixed></div></div></body></html>";
+    let styles = || {
+        StyleSet::cambium(&["html, body { margin: 0; padding: 0; } \
+             #positioned { position: absolute; left: 10px; top: 5px; width: 40px; height: 20px; } \
+             #fixed { position: fixed; left: 0; top: 0; width: 30px; height: 10px; }"])
+    };
+    let mut dom = ScriptedDom::from_serialized_document(initial);
+    let mut initial_mutations = Vec::new();
+    dom.drain_mutations(&mut initial_mutations);
+    let mut retained = LiveryDocument::new(dom, styles(), Device::screen(240.0, 120.0));
+    retained.frame(240, 120).expect("initial frame");
+
+    retained.mutate_dom(|dom| {
+        dom.set_attribute(by_id(dom, "positioned"), attr("style"), "left: 70px");
+    });
+    let retained_paint = retained.frame(240, 120).expect("repositioned frame");
+
+    let rect = |id| {
+        let node = by_id(retained.dom(), id);
+        retained
+            .layout
+            .as_ref()
+            .and_then(|layout| layout.fragments.get(node))
+            .map(|fragment| {
+                let rect = fragment.physical_rect();
+                (rect.x, rect.y, rect.width, rect.height)
+            })
+            .expect(id)
+    };
+    assert_eq!(rect("positioned"), (70.0, 5.0, 40.0, 20.0));
+    assert_eq!(rect("fixed"), (0.0, 0.0, 30.0, 10.0));
+    let mut fresh_dom = ScriptedDom::from_serialized_document(final_document);
+    let mut fresh_mutations = Vec::new();
+    fresh_dom.drain_mutations(&mut fresh_mutations);
+    let mut fresh = LiveryDocument::new(fresh_dom, styles(), Device::screen(240.0, 120.0));
+    let fresh_paint = fresh.frame(240, 120).expect("fresh final frame");
+    assert_eq!(
+        format!("{:?}", retained_paint.commands()),
+        format!("{:?}", fresh_paint.commands()),
+        "the retained result must match a fresh final-document layout",
+    );
+}
+
 #[test]
 fn positioned_inset_reuse_updates_nested_scroll_range() {
     let initial =

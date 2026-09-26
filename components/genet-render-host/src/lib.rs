@@ -184,6 +184,35 @@ mod ordered_external_texture_tests {
     }
 }
 
+#[cfg(test)]
+mod boot_feature_tests {
+    use super::*;
+
+    #[test]
+    fn optional_features_reach_the_device_when_the_adapter_offers_them() {
+        let wanted = wgpu::Features::TIMESTAMP_QUERY;
+        let core = match RenderCore::boot(NetrenderOptions {
+            optional_features: wanted,
+            ..Default::default()
+        }) {
+            Ok(core) => core,
+            Err(error) => {
+                eprintln!("skipping GPU feature receipt: {error}");
+                return;
+            },
+        };
+        let offered = core
+            .renderer()
+            .wgpu_device
+            .core
+            .adapter
+            .features()
+            .contains(wanted);
+        eprintln!("the adapter offers TIMESTAMP_QUERY: {offered}");
+        assert_eq!(core.device().features().contains(wanted), offered);
+    }
+}
+
 /// The shared present core: one wgpu device + netrender [`Renderer`], booted once
 /// and shared across **every** surface. Per-target [`WindowSurface`]s are created
 /// from it via [`create_surface`](Self::create_surface), so N surfaces present
@@ -201,12 +230,13 @@ impl RenderCore {
     pub fn boot(options: NetrenderOptions) -> Result<Self, String> {
         // `options.backends` lets a host force a backend (e.g. D3D12 for same-API
         // system-WebView import); `None` honors `WGPU_BACKEND`, else all available.
-        // Limit bucketing is a host policy call and rides on TenantNeeds, so
-        // boot through the shared path even with no tenant: the plain
-        // `boot`/`boot_with` pair takes TenantNeeds::default() and would drop
-        // whatever the host decided.
+        // Limit bucketing and optional features are host calls that ride on
+        // TenantNeeds, so boot through the shared path even with no tenant:
+        // the plain `boot`/`boot_with` pair takes TenantNeeds::default() and
+        // would drop whatever the host decided.
         let needs = netrender::TenantNeeds {
             apply_limit_buckets: options.apply_limit_buckets,
+            optional_features: options.optional_features,
             ..Default::default()
         };
         let handles = netrender::boot_shared(
@@ -229,6 +259,7 @@ impl RenderCore {
     pub async fn boot_async(options: NetrenderOptions) -> Result<Self, String> {
         let needs = netrender::TenantNeeds {
             apply_limit_buckets: options.apply_limit_buckets,
+            optional_features: options.optional_features,
             ..Default::default()
         };
         let handles = netrender::boot_async_shared(

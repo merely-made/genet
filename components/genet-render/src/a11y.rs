@@ -148,6 +148,7 @@ fn label_text<D: LayoutDom>(dom: &D, node: D::NodeId) -> String {
 fn accessible_name<D: LayoutDom>(
     dom: &D,
     node: D::NodeId,
+    role: DocumentA11yRole,
     label_context: Option<&str>,
 ) -> Option<String> {
     dom.attribute(node, &Namespace::default(), &LocalName::from("aria-label"))
@@ -155,6 +156,11 @@ fn accessible_name<D: LayoutDom>(
         .filter(|label| !label.is_empty())
         .map(str::to_owned)
         .or_else(|| {
+            // A text field's content is its value, and ARIA never names a
+            // textbox from its content.
+            if role == DocumentA11yRole::TextField {
+                return None;
+            }
             let text = direct_text(dom, node);
             (!text.is_empty()).then_some(text)
         })
@@ -176,9 +182,11 @@ fn text_control_value<D: LayoutDom>(dom: &D, node: D::NodeId) -> Option<String> 
                 "text" | "search" | "email" | "url" | "tel"
             )
             .then(|| {
+                // A retained document can carry a field's text as the input's
+                // children rather than in `value`.
                 dom.attribute(node, &Namespace::default(), &LocalName::from("value"))
-                    .unwrap_or("")
-                    .to_owned()
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| descendant_text(dom, node))
             })
         },
         _ => None,
@@ -750,7 +758,7 @@ where
             height: fragment.height,
         }
     });
-    let name = accessible_name(dom, node, label_context);
+    let name = accessible_name(dom, node, role, label_context);
     let value = text_control_value(dom, node);
     let actions = neutral_actions(dom, node, role, state, scroll_offsets);
     let numeric_value = aria_number(dom, node, "aria-valuenow");
@@ -847,7 +855,7 @@ mod tests {
     use accesskit::{Action, HasPopup, Live, Node as AccessNode, Orientation, Role, Toggled};
     use document_session_api::{DocumentA11yRole, DocumentA11yToggled};
     use genet_scripted_dom::ScriptedDom;
-    use layout_dom_api::{LayoutDom, LayoutDomMut, NodeKind};
+    use layout_dom_api::{LayoutDom, LayoutDomMut, NodeKind, QualName};
 
     use super::{accesskit_tree, accesskit_tree_with_scroll, document_a11y_projection};
     use crate::{ScrollOffsets, fragments_from_scripted_dom};
@@ -901,6 +909,41 @@ mod tests {
         assert_eq!(field.name.as_deref(), Some("Board revision"));
         assert_eq!(field.value.as_deref(), Some("3"));
         assert_eq!(projection.revision(), 7);
+    }
+
+    /// A retained document can carry a field's text as the input's children
+    /// rather than in `value`, as Cambium's field does. The field is still
+    /// named by its label, and its text is its value: a textbox is never named
+    /// from its content.
+    #[test]
+    fn a_field_holding_its_text_as_children_keeps_its_label_as_its_name() {
+        let html = |local: &str| {
+            QualName::new(
+                None,
+                layout_dom_api::Namespace::from("http://www.w3.org/1999/xhtml"),
+                local.into(),
+            )
+        };
+        let mut dom = ScriptedDom::new();
+        let document = dom.document();
+        let label = dom.create_element(html("label"));
+        let caption = dom.create_text("Name ");
+        let input = dom.create_element(html("input"));
+        let typed = dom.create_text("Hi");
+        dom.append_child(input, typed);
+        dom.append_child(label, caption);
+        dom.append_child(label, input);
+        dom.append_child(document, label);
+        let fragments = fragments_from_scripted_dom(&dom, &["label { display: block; }"], 400, 300)
+            .expect("layout");
+        let projection = document_a11y_projection(&dom, &fragments, None, 0);
+        let field = projection
+            .nodes()
+            .iter()
+            .find(|node| node.role == DocumentA11yRole::TextField)
+            .expect("the field is projected");
+        assert_eq!(field.name.as_deref(), Some("Name"));
+        assert_eq!(field.value.as_deref(), Some("Hi"));
     }
 
     #[test]

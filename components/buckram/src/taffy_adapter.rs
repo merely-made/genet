@@ -715,6 +715,11 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
 
     fn intrinsic_inline_subtree_is_admitted(&self, id: AlgorithmNodeId, is_root: bool) -> bool {
         let node = &self.nodes[id.index()];
+        // An absolute or fixed child adds nothing to its parent's intrinsic
+        // sizes, and the measurement skips it, so it cannot refuse the query.
+        if !is_root && node.block_style.is_out_of_flow() {
+            return true;
+        }
         let measured_replaced_leaf =
             node.kind == AlgorithmKind::Leaf && node.context.is_some() && node.block_style.replaced;
         if (node.block_style.replaced || node.block_style.aspect_ratio.is_some())

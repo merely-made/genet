@@ -473,6 +473,16 @@ where
         {
             return false;
         }
+        // A fixed box below would move with the subtree though its containing
+        // block stays put, so the ordinary layout places it.
+        let boxes = self.buckram.boxes();
+        if boxes.iter().any(|(_, css_box)| {
+            css_box.positioning == PositioningScheme::Fixed
+                && std::iter::successors(css_box.parent(), |parent| boxes[*parent].parent())
+                    .any(|ancestor| ancestor == placement.box_id)
+        }) {
+            return false;
+        }
         let offset = PhysicalOffset {
             x: placement.containing_rect.x + target.x - placement.current.x,
             y: placement.containing_rect.y + target.y - placement.current.y,

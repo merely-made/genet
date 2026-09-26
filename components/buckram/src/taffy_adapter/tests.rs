@@ -233,6 +233,51 @@ fn positioned_empty_leaf_has_zero_intrinsic_inline_contributions() {
     );
 }
 
+/// An absolute or fixed child adds nothing to a positioned root's intrinsic
+/// inline sizes and does not refuse the query; a relative child counts as a
+/// static one does.
+#[test]
+fn positioned_intrinsic_sizes_skip_out_of_flow_children_and_count_relative_ones() {
+    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut child = |width: f32, position, source| {
+        tree.new_with_children_and_block_style(
+            AlgorithmKind::Block,
+            BlockStyle {
+                position,
+                size: crate::BlockDimensions::new(
+                    BlockSizeValue::Length(FlowLength::px(width)),
+                    BlockSizeValue::Auto,
+                ),
+                ..BlockStyle::default()
+            },
+            Style::default(),
+            &[],
+            source,
+        )
+    };
+    let children = [
+        child(20.0, crate::BlockPosition::Static, 2),
+        child(30.0, crate::BlockPosition::Relative, 3),
+        child(50.0, crate::BlockPosition::Absolute, 4),
+        child(60.0, crate::BlockPosition::Fixed, 5),
+    ];
+    let positioned = tree.new_with_children_and_block_style(
+        AlgorithmKind::Block,
+        BlockStyle {
+            position: crate::BlockPosition::Absolute,
+            ..BlockStyle::default()
+        },
+        Style::default(),
+        &children,
+        1,
+    );
+
+    assert_eq!(
+        tree.positioned_intrinsic_inline_sizes(positioned, zero_measure),
+        IntrinsicSizes::new(30.0, 30.0),
+    );
+}
+
 #[test]
 fn vertical_positioned_block_intrinsic_and_inline_size_follow_height() {
     use crate::{Direction, WritingMode};

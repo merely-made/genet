@@ -1826,8 +1826,10 @@ pub(in crate::taffy_adapter) fn intrinsic_inline_style_is_admitted(
     style: BlockStyle,
     is_root: bool,
 ) -> bool {
+    // A relative or sticky box sizes as a static one; its offset only moves
+    // it afterwards.
     if style.flow != style.containing_flow
-        || style.position != crate::BlockPosition::Static
+        || style.is_out_of_flow()
         || style.size_containment.width
         || style.size_containment.height
         || style.has_nonlinear_lengths

@@ -757,3 +757,11 @@ The full source/lock/font manifest and all failed attempts remain in the raw
 receipt. Consumer metadata at Isometry `7cdd5eb` still selects 19 Genet packages
 at `0cf4f30`; a patched consumer build has not yet run, and its dependency
 closure must be reconciled explicitly before this lane can merge.
+
+**Sealed receipt:** tested code commit
+`9b730e7b02dba56a8a486f1b6560c1fa054eb7bd`; 71 raw files in
+`Code/testing/genet/receipts/2026-09-27/text-fragment-combined/SHA256SUMS`,
+manifest SHA-256
+`f44b8ee9acf90c820661650e5fc78e6d6b09c356a8c956f94851a297d1f25d59`.
+This seals the CPU checkpoint and its historical attempts. Later consumer or
+pixel evidence must be a new receipt, with its own source qualification.

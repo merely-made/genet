@@ -9,7 +9,7 @@
 
 use std::fmt;
 
-pub use cadency::{AttrOperation, CaseSensitivity, Element, NamespaceConstraint};
+pub use cadency::{AttrOperation, CaseSensitivity, Element, GeneratedPseudo, NamespaceConstraint};
 
 use crate::cascade::Specificity;
 
@@ -65,6 +65,7 @@ pub struct SelectorList {
     reach: Vec<SelectorReach>,
     sibling_dependency: bool,
     structural_dependency: bool,
+    generated_dependency: bool,
 }
 
 impl SelectorList {
@@ -76,6 +77,9 @@ impl SelectorList {
         Ok(Self {
             reach: each.iter().map(cadency::Selector::reach).collect(),
             sibling_dependency,
+            generated_dependency: each
+                .iter()
+                .any(|selector| selector.generated_pseudo().is_some()),
             // Deliberately conservative: a sibling dependency widens the
             // structural scope too, never narrows it.
             structural_dependency: sibling_dependency
@@ -92,6 +96,10 @@ impl SelectorList {
     /// Child-list changes may alter `:empty`, positional, or sibling matching.
     pub fn has_structural_dependency(&self) -> bool {
         self.structural_dependency
+    }
+
+    pub fn has_generated_pseudo(&self) -> bool {
+        self.generated_dependency
     }
 
     pub fn matching_specificity<E>(&self, element: &E) -> Option<Specificity>
@@ -120,12 +128,27 @@ impl SelectorList {
     where
         E: Element<PseudoClass = StatePseudoClass>,
     {
+        self.matching_specificity_for_pseudo(element, same_scope, shadow_host, None)
+    }
+
+    pub fn matching_specificity_for_pseudo<E>(
+        &self,
+        element: &E,
+        same_scope: bool,
+        shadow_host: Option<E>,
+        pseudo: Option<GeneratedPseudo>,
+    ) -> Option<Specificity>
+    where
+        E: Element<PseudoClass = StatePseudoClass>,
+    {
         self.selectors
             .selectors()
             .iter()
             .zip(&self.reach)
             .filter(|(_, reach)| same_scope || **reach != SelectorReach::Inner)
-            .filter(|(selector, _)| selector.matches(element, shadow_host.as_ref()))
+            .filter(|(selector, _)| {
+                selector.matches_generated(element, shadow_host.as_ref(), pseudo)
+            })
             .map(|(selector, _)| Specificity(selector.specificity()))
             .max()
     }

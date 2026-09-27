@@ -975,7 +975,14 @@ where
                 }));
                 clips_descendants += 1;
             }
-            if style.display == Display::ListItem {
+            if style.display == Display::ListItem
+                || styles
+                    .generated_text(id, buckram::PseudoElement::Before)
+                    .is_some()
+                || styles
+                    .generated_text(id, buckram::PseudoElement::After)
+                    .is_some()
+            {
                 // A generated marker is shaped against its Buckram pseudo box,
                 // then attributed to the owning list-item DOM node. Normal text
                 // drains at its text node, but a marker has no DOM text node of

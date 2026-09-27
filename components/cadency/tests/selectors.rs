@@ -49,7 +49,12 @@ struct Node {
 struct Dom(Vec<Node>);
 
 impl Dom {
-    fn add(&mut self, parent: Option<usize>, name: &'static str, attributes: &[(&'static str, &'static str)]) -> usize {
+    fn add(
+        &mut self,
+        parent: Option<usize>,
+        name: &'static str,
+        attributes: &[(&'static str, &'static str)],
+    ) -> usize {
         let id = self.0.len();
         let containing_host = parent.and_then(|p| self.0[p].containing_host);
         self.0.push(Node {
@@ -66,7 +71,12 @@ impl Dom {
     }
 
     /// A top-level child of `host`'s shadow root.
-    fn add_shadow(&mut self, host: usize, name: &'static str, attributes: &[(&'static str, &'static str)]) -> usize {
+    fn add_shadow(
+        &mut self,
+        host: usize,
+        name: &'static str,
+        attributes: &[(&'static str, &'static str)],
+    ) -> usize {
         let id = self.add(None, name, attributes);
         self.0[id].shadow_host = Some(host);
         self.0[id].containing_host = Some(host);
@@ -87,7 +97,11 @@ impl El {
     }
 
     fn attribute(&self, name: &str) -> Option<&'static str> {
-        self.node().attributes.iter().find(|(n, _)| *n == name).map(|(_, v)| *v)
+        self.node()
+            .attributes
+            .iter()
+            .find(|(n, _)| *n == name)
+            .map(|(_, v)| *v)
     }
 
     fn sibling(&self, offset: isize) -> Option<Self> {
@@ -144,9 +158,18 @@ impl Element for El {
         self.attribute("class")
             .is_some_and(|value| value.split_ascii_whitespace().any(|c| case.eq(c, class)))
     }
-    fn attr_matches(&self, namespace: &NamespaceConstraint<'_>, name: &str, operation: &AttrOperation<'_>) -> bool {
-        matches!(namespace, NamespaceConstraint::Any | NamespaceConstraint::Specific(""))
-            && self.attribute(name).is_some_and(|value| operation.eval_str(value))
+    fn attr_matches(
+        &self,
+        namespace: &NamespaceConstraint<'_>,
+        name: &str,
+        operation: &AttrOperation<'_>,
+    ) -> bool {
+        matches!(
+            namespace,
+            NamespaceConstraint::Any | NamespaceConstraint::Specific("")
+        ) && self
+            .attribute(name)
+            .is_some_and(|value| operation.eval_str(value))
     }
     fn matches_pseudo_class(&self, state: &State) -> bool {
         match state {
@@ -167,11 +190,15 @@ impl Element for El {
         self.node().name == "slot"
     }
     fn is_part(&self, name: &str) -> bool {
-        self.attribute("part").is_some_and(|v| v.split_ascii_whitespace().any(|p| p == name))
+        self.attribute("part")
+            .is_some_and(|v| v.split_ascii_whitespace().any(|p| p == name))
     }
     fn imported_part(&self, outer: &str) -> Option<String> {
         self.attribute("exportparts")?.split(',').find_map(|entry| {
-            let (inner, exposed) = entry.trim().split_once(':').unwrap_or((entry.trim(), entry.trim()));
+            let (inner, exposed) = entry
+                .trim()
+                .split_once(':')
+                .unwrap_or((entry.trim(), entry.trim()));
             (exposed.trim() == outer).then(|| inner.trim().to_string())
         })
     }
@@ -208,7 +235,11 @@ impl Fixture {
         let ul = dom.add(Some(body), "ul", &[("id", "list")]);
         let li = [
             dom.add(Some(ul), "li", &[("class", "a")]),
-            dom.add(Some(ul), "li", &[("class", "b"), ("lang", "EN"), ("data-k", "x-y z")]),
+            dom.add(
+                Some(ul),
+                "li",
+                &[("class", "b"), ("lang", "EN"), ("data-k", "x-y z")],
+            ),
             dom.add(Some(ul), "li", &[("class", "a")]),
             dom.add(Some(ul), "li", &[("class", "b")]),
             dom.add(Some(ul), "li", &[("class", "a")]),
@@ -248,59 +279,194 @@ impl Fixture {
     }
 
     fn matches_in(&self, selector: &str, id: usize, host: usize) -> bool {
-        List::parse(selector).unwrap().matches(&self.el(id), Some(&self.el(host)))
+        List::parse(selector)
+            .unwrap()
+            .matches(&self.el(id), Some(&self.el(host)))
     }
 
     /// Which of the five `li` match.
     fn li(&self, selector: &str) -> Vec<usize> {
-        (0..5).filter(|i| self.matches(selector, self.li[*i])).map(|i| i + 1).collect()
+        (0..5)
+            .filter(|i| self.matches(selector, self.li[*i]))
+            .map(|i| i + 1)
+            .collect()
+    }
+}
+
+#[test]
+fn generated_pseudo_is_a_distinct_target() {
+    let fixture = Fixture::new();
+    for (source, pseudo) in [
+        ("p::before", cadency::GeneratedPseudo::Before),
+        ("p:after", cadency::GeneratedPseudo::After),
+    ] {
+        let list = List::parse(source).unwrap();
+        let selector = &list.selectors()[0];
+        assert!(!selector.matches(&fixture.el(fixture.p_text), None));
+        assert!(selector.matches_generated(&fixture.el(fixture.p_text), None, Some(pseudo)));
+        assert_eq!(selector.specificity(), 2);
+    }
+    assert!(!fixture.matches(":is(p::before)", fixture.p_text));
+    for invalid in [
+        "p::before.class",
+        "p::before > b",
+        "p::before:hover",
+        ":not(p::before)",
+        "p::before::after",
+    ] {
+        assert!(List::parse(invalid).is_err(), "{invalid}");
     }
 }
 
 #[test]
 fn the_enabled_grammar_parses() {
     for selector in [
-        "*", "li", "LI", "*|li", "|li", "*|*", "#list", ".a.b", "li.a#x",
-        "[lang]", "[lang=en]", "[lang='en' i]", "[lang=\"en\" s]", "[*|lang~=en]", "[|lang|=en]",
-        "[a^=b]", "[a$=b]", "[a*=b]", "ul li", "ul > li", "li + li", "li ~ li", "ul>li",
-        " ul  >  li ", "a, b , c",
-        ":root", ":empty", ":scope", ":first-child", ":last-child", ":only-child",
-        ":first-of-type", ":last-of-type", ":only-of-type",
-        ":nth-child(2n+1)", ":nth-child( odd )", ":nth-last-child(-n+3)", ":nth-of-type(2)",
-        ":nth-last-of-type(even)", ":nth-child(2 of .a, .b)", ":nth-last-child(1 of li > b)",
-        ":not(.a)", ":not(.a, ul > .b)", ":is(.a, .b)", ":where(ul li)", ":is(:bogus, .a)", ":is()",
-        "li:hover", "li:HOVER:checked",
-        ":host", ":host(.wide)", ":host( .wide )", ":host > section",
-        "::slotted(span)", "slot::slotted(.lit)", "section ::slotted(*)",
-        "::part(action)", "x-card::part(action handle)", "body x-card::part(action):hover",
+        "*",
+        "li",
+        "LI",
+        "*|li",
+        "|li",
+        "*|*",
+        "#list",
+        ".a.b",
+        "li.a#x",
+        "[lang]",
+        "[lang=en]",
+        "[lang='en' i]",
+        "[lang=\"en\" s]",
+        "[*|lang~=en]",
+        "[|lang|=en]",
+        "[a^=b]",
+        "[a$=b]",
+        "[a*=b]",
+        "ul li",
+        "ul > li",
+        "li + li",
+        "li ~ li",
+        "ul>li",
+        " ul  >  li ",
+        "a, b , c",
+        ":root",
+        ":empty",
+        ":scope",
+        ":first-child",
+        ":last-child",
+        ":only-child",
+        ":first-of-type",
+        ":last-of-type",
+        ":only-of-type",
+        ":nth-child(2n+1)",
+        ":nth-child( odd )",
+        ":nth-last-child(-n+3)",
+        ":nth-of-type(2)",
+        ":nth-last-of-type(even)",
+        ":nth-child(2 of .a, .b)",
+        ":nth-last-child(1 of li > b)",
+        ":not(.a)",
+        ":not(.a, ul > .b)",
+        ":is(.a, .b)",
+        ":where(ul li)",
+        ":is(:bogus, .a)",
+        ":is()",
+        "li:hover",
+        "li:HOVER:checked",
+        ":host",
+        ":host(.wide)",
+        ":host( .wide )",
+        ":host > section",
+        "::slotted(span)",
+        "slot::slotted(.lit)",
+        "section ::slotted(*)",
+        "::part(action)",
+        "x-card::part(action handle)",
+        "body x-card::part(action):hover",
         "::part(action):not(:hover)",
         // Forgiving: the bad argument is dropped, leaving an empty `:is()`.
         ":is(::part(a))",
     ] {
-        assert!(List::parse(selector).is_ok(), "{selector} should parse: {:?}", List::parse(selector));
+        assert!(
+            List::parse(selector).is_ok(),
+            "{selector} should parse: {:?}",
+            List::parse(selector)
+        );
     }
 }
 
 #[test]
 fn everything_else_is_a_parse_error() {
     for selector in [
-        "", ",", "li,", ", li", "li >", "> li", "li > > b", "li!", "#1", ".", "li .", "[", "[]",
-        "[=a]", "[a=]", "[a=b x]", "[a=b i i]",
-        "svg|rect", "[svg|href]", "*|", "|",
-        ":has(li)", "li:has(> b)", ":bogus", ":nth-child()", ":nth-child(x)", ":nth-of-type(2 of .a)",
-        ":not()", ":not(:bogus)", ":not(.a,)", ":host(ul li)", ":host-context(.x)",
-        "::before", ":before", ":after", ":first-line", "::marker", "::slotted()", "::slotted(a b)",
-        "::part()", "::part(a, b)", "::bogus(x)",
-        "::slotted(span) b", "::slotted(span).x", "::slotted(span):hover", "::slotted(span)::part(x)",
-        "::part(a) b", "::part(a) > b", "::part(a).x", "::part(a)#x", "::part(a)[x]",
-        "::part(a):first-child", "::part(a):nth-child(1)", "::part(a):not(.x)", "::part(a)::part(b)",
-        ":not(::slotted(a))", ":host(::part(a))",
+        "",
+        ",",
+        "li,",
+        ", li",
+        "li >",
+        "> li",
+        "li > > b",
+        "li!",
+        "#1",
+        ".",
+        "li .",
+        "[",
+        "[]",
+        "[=a]",
+        "[a=]",
+        "[a=b x]",
+        "[a=b i i]",
+        "svg|rect",
+        "[svg|href]",
+        "*|",
+        "|",
+        ":has(li)",
+        "li:has(> b)",
+        ":bogus",
+        ":nth-child()",
+        ":nth-child(x)",
+        ":nth-of-type(2 of .a)",
+        ":not()",
+        ":not(:bogus)",
+        ":not(.a,)",
+        ":host(ul li)",
+        ":host-context(.x)",
+        ":first-line",
+        "::marker",
+        "::slotted()",
+        "::slotted(a b)",
+        "::part()",
+        "::part(a, b)",
+        "::bogus(x)",
+        "::slotted(span) b",
+        "::slotted(span).x",
+        "::slotted(span):hover",
+        "::slotted(span)::part(x)",
+        "::part(a) b",
+        "::part(a) > b",
+        "::part(a).x",
+        "::part(a)#x",
+        "::part(a)[x]",
+        "::part(a):first-child",
+        "::part(a):nth-child(1)",
+        "::part(a):not(.x)",
+        "::part(a)::part(b)",
+        ":not(::slotted(a))",
+        ":host(::part(a))",
     ] {
-        assert!(List::parse(selector).is_err(), "{selector:?} should not parse");
+        assert!(
+            List::parse(selector).is_err(),
+            "{selector:?} should not parse"
+        );
     }
-    assert_eq!(List::parse("svg|rect").unwrap_err().kind, ParseErrorKind::NamespacePrefix("svg".into()));
-    assert_eq!(List::parse("li:bogus").unwrap_err().kind, ParseErrorKind::UnsupportedPseudo(":bogus".into()));
-    assert_eq!(List::parse("::part(a).x").unwrap_err().kind, ParseErrorKind::Misplaced);
+    assert_eq!(
+        List::parse("svg|rect").unwrap_err().kind,
+        ParseErrorKind::NamespacePrefix("svg".into())
+    );
+    assert_eq!(
+        List::parse("li:bogus").unwrap_err().kind,
+        ParseErrorKind::UnsupportedPseudo(":bogus".into())
+    );
+    assert_eq!(
+        List::parse("::part(a).x").unwrap_err().kind,
+        ParseErrorKind::Misplaced
+    );
 }
 
 #[test]
@@ -331,7 +497,10 @@ fn specificity_is_packed_id_class_element() {
 fn a_list_reports_its_strongest_match() {
     let f = Fixture::new();
     let list = List::parse("li, .a, #nope").unwrap();
-    assert_eq!(list.matching_specificity(&f.el(f.li[0]), None), Some(1 << 10));
+    assert_eq!(
+        list.matching_specificity(&f.el(f.li[0]), None),
+        Some(1 << 10)
+    );
     assert_eq!(list.matching_specificity(&f.el(f.li[1]), None), Some(1));
     assert_eq!(list.matching_specificity(&f.el(f.p_text), None), None);
 }

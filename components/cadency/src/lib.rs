@@ -17,7 +17,7 @@ mod parse;
 
 use std::fmt;
 
-pub use ast::{Combinator, Key, Nth, Reach, Selector, SelectorList, Simple};
+pub use ast::{Combinator, GeneratedPseudo, Key, Nth, Reach, Selector, SelectorList, Simple};
 pub use attr::{AttrOperation, AttrOperator, Attribute, CaseSensitivity, NamespaceConstraint};
 pub use parse::{ParseError, ParseErrorKind};
 

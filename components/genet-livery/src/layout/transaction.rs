@@ -188,6 +188,7 @@ where
         pending_tables: Vec::new(),
         contribution_root: None,
         width_override: None,
+        measuring_root: None,
     };
     let children = boxes
         .roots()
@@ -408,6 +409,7 @@ where
         pending_tables: Vec::new(),
         contribution_root,
         width_override,
+        measuring_root: None,
     }
 }
 

@@ -11,6 +11,7 @@ use std::{error::Error, fmt, str::FromStr};
 mod calc;
 mod color;
 mod color_scheme;
+mod content;
 mod length;
 mod logical;
 mod property;
@@ -21,6 +22,7 @@ pub use color::{
     UsedColorContext,
 };
 pub use color_scheme::{ColorScheme, ColorSchemeList};
+pub use content::{Content, ContentItem};
 pub use length::{
     CalcLengthPercentage, ContainerAxisSize, Length, LengthPercentage, LengthUnit,
     MathLengthPercentage, RelativeLengthEnvironment, TreeCounts,
@@ -159,6 +161,7 @@ unchanged_viewport_resolution!(
     LineBreak,
     ListStylePosition,
     ListStyleType,
+    Content,
     Opacity,
     Order,
     Overflow,
@@ -623,6 +626,7 @@ discrete_interpolation!(
     LineHeight,
     ListStylePosition,
     ListStyleType,
+    Content,
     Margin,
     Order,
     Overflow,

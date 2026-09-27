@@ -1,0 +1,20 @@
+diff --git a/crates/system/document-lanes/src/reader.rs b/crates/system/document-lanes/src/reader.rs
+index 56f59e7e..432ce4de 100644
+--- a/crates/system/document-lanes/src/reader.rs
++++ b/crates/system/document-lanes/src/reader.rs
+@@ -452,6 +452,7 @@ impl ReaderDocumentSession {
+                 parent: Some(root),
+                 children: Vec::new(),
+                 role: DocumentA11yRole::Link,
++                description: None,
+                 name: Some(link.label),
+                 value: None,
+                 numeric_value: None,
+@@ -467,6 +468,7 @@ impl ReaderDocumentSession {
+             parent: None,
+             children: links.iter().map(|link| link.id).collect(),
+             role: DocumentA11yRole::Document,
++            description: None,
+             name: Some(title),
+             value: None,
+             numeric_value: None,

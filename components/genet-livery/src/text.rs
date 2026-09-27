@@ -550,6 +550,7 @@ impl TextSystem {
         );
         let text_sources = spans
             .iter()
+            .filter(|span| span.selectable)
             .filter_map(|span| {
                 span.source.map(|source| TextSource {
                     source,
@@ -647,27 +648,61 @@ impl TextSystem {
             let content_box = Self::inline_content_box(fragments.boxes(), inline_box);
             let anchor_fragment = content_box
                 .and_then(|content_box| {
-                    fragments.fragments().fragment_ids_for_box(content_box).last().and_then(|id| {
-                        fragments.fragments().get(*id).map(|fragment| fragment.physical_rect())
-                    })
+                    fragments
+                        .fragments()
+                        .fragment_ids_for_box(content_box)
+                        .last()
+                        .and_then(|id| {
+                            fragments
+                                .fragments()
+                                .get(*id)
+                                .map(|fragment| fragment.physical_rect())
+                        })
                 })
                 .or_else(|| {
                     marker_box.and_then(|marker_box| {
-                        fragments.fragments().fragment_ids_for_box(marker_box).last().and_then(|id| {
-                            fragments.fragments().get(*id).map(|fragment| fragment.physical_rect())
-                        })
+                        fragments
+                            .fragments()
+                            .fragment_ids_for_box(marker_box)
+                            .last()
+                            .and_then(|id| {
+                                fragments
+                                    .fragments()
+                                    .get(*id)
+                                    .map(|fragment| fragment.physical_rect())
+                            })
                     })
                 })
                 .or_else(|| {
                     (inline_box == parent_box)
-                        .then(|| frame.inline_fragments(parent).and_then(|items| items.first()).or_else(|| fragments.get(parent).map(|fragment| &**fragment)).copied())
+                        .then(|| {
+                            frame
+                                .inline_fragments(parent)
+                                .and_then(|items| items.first())
+                                .or_else(|| fragments.get(parent).map(|fragment| &**fragment))
+                                .copied()
+                        })
                         .flatten()
                 })
-                .or_else(|| fragments.fragments().fragment_ids_for_box(inline_box).last().and_then(|id| fragments.fragments().get(*id).map(|fragment| fragment.physical_rect())));
+                .or_else(|| {
+                    fragments
+                        .fragments()
+                        .fragment_ids_for_box(inline_box)
+                        .last()
+                        .and_then(|id| {
+                            fragments
+                                .fragments()
+                                .get(*id)
+                                .map(|fragment| fragment.physical_rect())
+                        })
+                });
             let Some(anchor_fragment) = anchor_fragment else {
                 return;
             };
-            let width = fragments.fragments().fragment_ids_for_box(parent_box).last()
+            let width = fragments
+                .fragments()
+                .fragment_ids_for_box(parent_box)
+                .last()
                 .and_then(|id| fragments.fragments().get(*id))
                 .map(|fragment| crate::content_box_size(parent_style, fragment).0)
                 .unwrap_or(anchor_fragment.width);
@@ -725,6 +760,52 @@ impl TextSystem {
         };
         if matches!(parent_style.position, Position::Absolute | Position::Fixed) {
             inline_parent_style.vertical_align = VerticalAlign::Baseline;
+        }
+        if styles
+            .generated_text(parent, buckram::PseudoElement::Before)
+            .is_some()
+            || styles
+                .generated_text(parent, buckram::PseudoElement::After)
+                .is_some()
+        {
+            if frame.prepared_sources.contains(&parent) {
+                return;
+            }
+            let (width, origin) = fragments
+                .get(parent)
+                .map(|fragment| {
+                    let edges = inline_decoration_edges(parent_style, fragment.width);
+                    (
+                        crate::content_box_size(parent_style, fragment).0,
+                        (fragment.x + edges.left, fragment.y + edges.top),
+                    )
+                })
+                .unwrap_or((
+                    parent_fragment.width,
+                    (parent_fragment.x, parent_fragment.y),
+                ));
+            if let Some(layout) = self.format_inline_group(
+                dom,
+                styles,
+                fragments.boxes(),
+                fragments,
+                InlineRequest {
+                    roots: fragments.boxes()[parent_box].children(),
+                    parent_style: &inline_parent_style,
+                    width,
+                    intrinsic_kind: None,
+                    line_constraints: None,
+                },
+            ) {
+                layout.place(
+                    frame,
+                    styles,
+                    |box_id| fragments.boxes().origin_node(box_id),
+                    origin,
+                    width,
+                );
+            }
+            return;
         }
         let mut group = Vec::new();
         for child in dom.flat_children(parent) {
@@ -788,7 +869,13 @@ impl TextSystem {
     {
         boxes[inline_box].children().iter().copied().find(|child| {
             boxes[*child].display.outside == Some(DisplayOutside::Inline)
-                && !matches!(boxes[*child].origin, BoxOrigin::Pseudo { pseudo: buckram::PseudoElement::Marker, .. })
+                && !matches!(
+                    boxes[*child].origin,
+                    BoxOrigin::Pseudo {
+                        pseudo: buckram::PseudoElement::Marker,
+                        ..
+                    }
+                )
         })
     }
 
@@ -807,6 +894,7 @@ impl TextSystem {
             return;
         }
         let mut spans = vec![SourceSpan::<Id> {
+            selectable: true,
             source: None,
             owners: Vec::new(),
             style: style.clone(),
@@ -918,6 +1006,7 @@ impl TextSystem {
         let mut prepared_sources = Vec::new();
         let text_sources = spans
             .iter()
+            .filter(|span| span.selectable)
             .filter_map(|span| Some((span.source?, text.get(span.range.clone())?.to_owned())))
             .collect();
         frame.record_text_group(text_sources);
@@ -1003,12 +1092,7 @@ impl TextSystem {
                         frame.record_inline_fragment(
                             source,
                             if edge {
-                                decorated_inline_fragment(
-                                    styles,
-                                    source,
-                                    fragment,
-                                    available_width,
-                                )
+                                decorated_inline_fragment(styles, source, fragment, available_width)
                             } else {
                                 fragment
                             },
@@ -1018,12 +1102,7 @@ impl TextSystem {
                     for owner in owners {
                         frame.record_inline_fragment(
                             owner,
-                            decorated_inline_fragment(
-                                styles,
-                                owner,
-                                fragment,
-                                available_width,
-                            ),
+                            decorated_inline_fragment(styles, owner, fragment, available_width),
                             line_y,
                         );
                     }
@@ -1433,6 +1512,7 @@ impl TextSystem {
                             let global = cluster.text_range();
                             let source_span = spans
                                 .get(cluster.first_style().brush.source_index)
+                                .filter(|span| span.selectable)
                                 .and_then(|span| span.source.map(|source| (source, span)));
                             if let Some((source, source_span)) = source_span {
                                 let start = global.start.max(source_span.range.start);
@@ -2077,7 +2157,10 @@ where
     {
         let mut nodes = HashSet::new();
         collect_subtree_nodes(dom, root, &mut nodes);
-        if !nodes.iter().any(|node| self.source_groups.contains_key(node)) {
+        if !nodes
+            .iter()
+            .any(|node| self.source_groups.contains_key(node))
+        {
             return false;
         }
         self.prepared_groups
@@ -2527,6 +2610,7 @@ struct RetainedTextCluster<Id> {
 }
 
 struct SourceSpan<Id> {
+    selectable: bool,
     source: Option<Id>,
     owners: Vec<Id>,
     style: ComputedValues,
@@ -2555,6 +2639,7 @@ fn append_generated_marker<Id>(
     text.push_str(marker);
     if text.len() != start {
         spans.push(SourceSpan {
+            selectable: true,
             source: Some(source),
             owners: owners.to_vec(),
             style: style.clone(),
@@ -2579,6 +2664,7 @@ fn append_generated_marker_control<Id>(
     let start = text.len();
     text.push(control);
     spans.push(SourceSpan {
+        selectable: true,
         source: None,
         owners: owners.to_vec(),
         style: style.clone(),
@@ -2857,6 +2943,7 @@ where
                     return;
                 }
                 self.spans.push(SourceSpan {
+                    selectable: true,
                     source: Some(box_id),
                     owners: self.owners.clone(),
                     style: inherited.clone(),
@@ -2946,16 +3033,27 @@ where
                     return;
                 };
                 // Marker pseudo-elements preserve an authored string verbatim.
-                append_generated_marker(
-                    self.text,
-                    self.spans,
-                    box_id,
-                    self.owners,
-                    style,
-                    &marker,
-                );
+                append_generated_marker(self.text, self.spans, box_id, self.owners, style, &marker);
             },
-            BoxOrigin::Pseudo { .. } => {},
+            BoxOrigin::Pseudo { owner, pseudo } => {
+                let Some(style) = self.styles.generated_style(owner, pseudo) else {
+                    return;
+                };
+                let Some(text) = self.styles.generated_text(owner, pseudo) else {
+                    return;
+                };
+                let start = self.text.len();
+                append_inline_text(self.text, text, style);
+                if self.text.len() > start {
+                    self.spans.push(SourceSpan {
+                        selectable: false,
+                        source: Some(box_id),
+                        owners: self.owners.clone(),
+                        style: style.clone(),
+                        range: start..self.text.len(),
+                    });
+                }
+            },
         }
     }
 
@@ -3243,6 +3341,7 @@ where
                     return;
                 }
                 self.spans.push(SourceSpan {
+                    selectable: true,
                     source: Some(id),
                     owners: self.owners.clone(),
                     style: inherited.clone(),
@@ -3838,6 +3937,7 @@ fn push_forced_break_span<Id>(
     Id: Copy,
 {
     spans.push(SourceSpan {
+        selectable: true,
         source: None,
         owners: owners.to_vec(),
         style: style.clone(),
@@ -4352,7 +4452,16 @@ fn spacing_px(spacing: Spacing, font_size: f32) -> Option<f32> {
 fn brush(style: &ComputedValues, source_index: usize) -> Brush {
     let color = resolve_color(&style.color);
     Brush {
-        color: [color.r, color.g, color.b, color.a],
+        color: [
+            color.r,
+            color.g,
+            color.b,
+            if style.visibility == livery::values::Visibility::Visible {
+                color.a
+            } else {
+                0.0
+            },
+        ],
         source_index,
     }
 }

@@ -2433,3 +2433,70 @@ fn an_unresolved_host_mutation_target_is_reported_as_a_miss() {
         document_session_api::session_engine::HostMutationReport::default()
     );
 }
+
+#[cfg(feature = "livery")]
+#[test]
+fn livery_editor_uses_shared_grapheme_boundaries_for_keys() {
+    let engine = LiverySessionEngine::new(NoFetch);
+    let request = SessionSpawnRequest::new("fixtures/form/graphemes.html")
+        .with_body("<html><body><input id='query'></body></html>")
+        .with_viewport(400, 240);
+    let mut boxed = engine.spawn(&request).expect("form session spawns");
+    let session = boxed
+        .as_any()
+        .downcast_mut::<LiveryDocumentSession>()
+        .unwrap();
+    let query = livery_node_with_id(session, "query");
+    let query_id = session.document().dom().opaque_id(query);
+    assert!(session.replace_accessible_text_value(query_id, "🇺🇸🇨🇦a\u{301}"));
+    for (key, expected_caret) in [
+        (SessionKey::ArrowLeft, 16),
+        (SessionKey::ArrowLeft, 8),
+        (SessionKey::ArrowRight, 16),
+    ] {
+        assert_eq!(
+            session.key_input(
+                key,
+                SessionButtonState::Pressed,
+                SessionModifiers::default(),
+                false
+            ),
+            SessionEffect::Handled
+        );
+        assert_eq!(session.editor.as_ref().unwrap().caret, expected_caret);
+    }
+    assert_eq!(
+        session.key_input(
+            SessionKey::Delete,
+            SessionButtonState::Pressed,
+            SessionModifiers::default(),
+            false
+        ),
+        SessionEffect::Handled
+    );
+    assert_eq!(session.editor.as_ref().unwrap().value, "🇺🇸🇨🇦");
+    assert_eq!(
+        session.key_input(
+            SessionKey::Backspace,
+            SessionButtonState::Pressed,
+            SessionModifiers::default(),
+            false
+        ),
+        SessionEffect::Handled
+    );
+    assert_eq!(session.editor.as_ref().unwrap().value, "🇺🇸");
+    assert_eq!(session.editor.as_ref().unwrap().caret, 8);
+    // A scalar-aligned hit-test position inside a flag must retain context
+    // from the beginning of the complete string when moving right.
+    session.editor.as_mut().unwrap().caret = 4;
+    assert_eq!(
+        session.key_input(
+            SessionKey::ArrowRight,
+            SessionButtonState::Pressed,
+            SessionModifiers::default(),
+            false
+        ),
+        SessionEffect::Handled
+    );
+    assert_eq!(session.editor.as_ref().unwrap().caret, 8);
+}

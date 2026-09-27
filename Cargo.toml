@@ -23,6 +23,7 @@ members = [
     "components/genet-scripted-worker",
     # Render-free live-document extraction and structured reader shapes.
     "components/fleece",
+    "components/genet-text",
     # The content lanes as session engines (2026-07-10 session-engines plan):
     # static/scripted/smolweb retained documents, promoted out of pelt.
     "components/genet-documents",
@@ -249,8 +250,8 @@ genet-documents = { version = "=0.1.0", path = "components/genet-documents", def
 genet-document-resources = { version = "=0.2.1", path = "components/genet-document-resources" }
 genet-host-api = { version = "=0.2.0", path = "components/genet-host-api" }
 genet-render-host = { path = "components/genet-render-host" }
-netrender = { git = "https://github.com/merely-made/netrender.git", rev = "c8c09f16bbd729ce932589334eb81f58e418c1bd", version = "0.1.0" }
-netrender_device = { git = "https://github.com/merely-made/netrender.git", rev = "c8c09f16bbd729ce932589334eb81f58e418c1bd", version = "0.1.0" }
+netrender = { git = "https://github.com/merely-made/netrender.git", rev = "9607d16f1907f6c2085648ae96abcaa30d7c3d41", version = "0.1.0" }
+netrender_device = { git = "https://github.com/merely-made/netrender.git", rev = "9607d16f1907f6c2085648ae96abcaa30d7c3d41", version = "0.1.0" }
 # (No xilem git deps remain. The Masonry-era `xilem` / `masonry` /
 # `masonry_winit` git deps left with pelt-viewer's retirement, 2026-06-12. The
 # remaining native UI substrate moved to the sibling Cambium repository in
@@ -351,10 +352,10 @@ media = { package = "servo-media-thread", version = "=0.2.0", path = "components
 genet-compositor = { version = "=0.2.0", path = "components/genet-compositor" }
 # Moved to the netrender workspace as a neutral, engine-agnostic crate
 # (extraction plan 2026-05-20). genet is now a consumer, not the owner.
-paint_list_api = { git = "https://github.com/merely-made/netrender.git", rev = "c8c09f16bbd729ce932589334eb81f58e418c1bd", version = "0.1.0" }
+paint_list_api = { git = "https://github.com/merely-made/netrender.git", rev = "9607d16f1907f6c2085648ae96abcaa30d7c3d41", version = "0.1.0" }
 # The PaintCmd -> netrender::Scene translator; also lives in the netrender
 # workspace so any engine can reuse the lowering.
-paint_list_render = { git = "https://github.com/merely-made/netrender.git", rev = "c8c09f16bbd729ce932589334eb81f58e418c1bd", version = "0.1.0" }
+paint_list_render = { git = "https://github.com/merely-made/netrender.git", rev = "9607d16f1907f6c2085648ae96abcaa30d7c3d41", version = "0.1.0" }
 paint_types = { package = "genet-paint-types", version = "=0.2.0", path = "components/shared/paint-types" }
 # `servo = "..."` workspace.dep removed 2026-05-15 per Mark's audit:
 # genet used to be servo-the-fork, but the umbrella servo crate is no

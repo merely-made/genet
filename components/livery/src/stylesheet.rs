@@ -862,6 +862,10 @@ impl StyleRule {
         self.selectors.rightmost_keys()
     }
 
+    pub fn has_generated_pseudo(&self) -> bool {
+        self.selectors.has_generated_pseudo()
+    }
+
     pub fn matched_declarations<E>(&self, element: &E, device: &Device) -> Vec<MatchedDeclaration>
     where
         E: Element<PseudoClass = crate::selector::StatePseudoClass>,
@@ -895,6 +899,28 @@ impl StyleRule {
     where
         E: Element<PseudoClass = crate::selector::StatePseudoClass>,
     {
+        self.matched_declarations_scoped_for_pseudo(
+            element,
+            device,
+            containers,
+            same_scope,
+            shadow_host,
+            None,
+        )
+    }
+
+    pub fn matched_declarations_scoped_for_pseudo<E>(
+        &self,
+        element: &E,
+        device: &Device,
+        containers: &[ContainerSnapshot],
+        same_scope: bool,
+        shadow_host: Option<E>,
+        pseudo: Option<crate::selector::GeneratedPseudo>,
+    ) -> Vec<MatchedDeclaration>
+    where
+        E: Element<PseudoClass = crate::selector::StatePseudoClass>,
+    {
         if self.declarations.declarations.is_empty() {
             return Vec::new();
         }
@@ -913,10 +939,12 @@ impl StyleRule {
         {
             return Vec::new();
         }
-        let Some(specificity) =
-            self.selectors
-                .matching_specificity_scoped(element, same_scope, shadow_host)
-        else {
+        let Some(specificity) = self.selectors.matching_specificity_for_pseudo(
+            element,
+            same_scope,
+            shadow_host,
+            pseudo,
+        ) else {
             return Vec::new();
         };
         self.declarations
@@ -974,6 +1002,28 @@ impl StyleRule {
     where
         E: Element<PseudoClass = crate::selector::StatePseudoClass>,
     {
+        self.matched_custom_declarations_scoped_for_pseudo(
+            element,
+            device,
+            containers,
+            same_scope,
+            shadow_host,
+            None,
+        )
+    }
+
+    pub fn matched_custom_declarations_scoped_for_pseudo<E>(
+        &self,
+        element: &E,
+        device: &Device,
+        containers: &[ContainerSnapshot],
+        same_scope: bool,
+        shadow_host: Option<E>,
+        pseudo: Option<crate::selector::GeneratedPseudo>,
+    ) -> Vec<MatchedCustomDeclaration>
+    where
+        E: Element<PseudoClass = crate::selector::StatePseudoClass>,
+    {
         if self.declarations.custom.is_empty() {
             return Vec::new();
         }
@@ -992,10 +1042,12 @@ impl StyleRule {
         {
             return Vec::new();
         }
-        let Some(specificity) =
-            self.selectors
-                .matching_specificity_scoped(element, same_scope, shadow_host)
-        else {
+        let Some(specificity) = self.selectors.matching_specificity_for_pseudo(
+            element,
+            same_scope,
+            shadow_host,
+            pseudo,
+        ) else {
             return Vec::new();
         };
         self.declarations

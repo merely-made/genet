@@ -57,11 +57,12 @@ struct State {
     after_slotted: bool,
     /// Right of `::part()`: state pseudo-classes and functional ones.
     after_part: bool,
+    after_generated: bool,
 }
 
 impl State {
     fn after_pseudo(self) -> bool {
-        self.after_slotted || self.after_part
+        self.after_slotted || self.after_part || self.after_generated
     }
 
     fn nest(self) -> Self {
@@ -202,13 +203,33 @@ fn parse_compound<'i, P: PseudoClass>(
                 return Err(custom(input, ParseErrorKind::Misplaced));
             },
             Token::Colon => {
+                if state.after_generated {
+                    return Err(custom(input, ParseErrorKind::Misplaced));
+                }
                 let double = input
                     .try_parse(|input| match input.next_including_whitespace() {
                         Ok(Token::Colon) => Ok(()),
                         _ => Err(()),
                     })
                     .is_ok();
-                if double {
+                let generated = input
+                    .try_parse(|input| match input.next_including_whitespace() {
+                        Ok(Token::Ident(name)) if name.eq_ignore_ascii_case("before") => {
+                            Ok(crate::GeneratedPseudo::Before)
+                        },
+                        Ok(Token::Ident(name)) if name.eq_ignore_ascii_case("after") => {
+                            Ok(crate::GeneratedPseudo::After)
+                        },
+                        _ => Err(()),
+                    })
+                    .ok();
+                if let Some(pseudo) = generated {
+                    if state.nested || state.after_pseudo() {
+                        return Err(custom(input, ParseErrorKind::Misplaced));
+                    }
+                    simples.push(Simple::Generated(pseudo));
+                    state.after_generated = true;
+                } else if double {
                     // Close the compound so far (possibly empty, as in a bare
                     // `::slotted(p)`) and open the subject compound.
                     compounds.push(std::mem::take(&mut simples));
@@ -275,12 +296,19 @@ fn parse_type_selector<'i, P>(
     match token {
         Token::Ident(name) => {
             if bar(input) {
-                return Err(custom(input, ParseErrorKind::NamespacePrefix(name.to_string())));
+                return Err(custom(
+                    input,
+                    ParseErrorKind::NamespacePrefix(name.to_string()),
+                ));
             }
             simples.push(local_name(&name));
         },
         Token::Delim('*') => {
-            let simple = if bar(input) { after_bar(input)? } else { Simple::Universal };
+            let simple = if bar(input) {
+                after_bar(input)?
+            } else {
+                Simple::Universal
+            };
             simples.push(simple);
         },
         Token::Delim('|') => {
@@ -308,7 +336,10 @@ fn parse_attribute<'i>(input: &mut Parser<'i, '_>) -> Result<Attribute, Error<'i
                 })
                 .is_ok();
             if prefixed {
-                return Err(custom(input, ParseErrorKind::NamespacePrefix(name.to_string())));
+                return Err(custom(
+                    input,
+                    ParseErrorKind::NamespacePrefix(name.to_string()),
+                ));
             }
             (false, false, name)
         },
@@ -379,7 +410,10 @@ fn parse_pseudo_element<'i, P: PseudoClass>(
     let name = match input.next_including_whitespace()?.clone() {
         Token::Function(name) => name,
         Token::Ident(name) => {
-            return Err(custom(input, ParseErrorKind::UnsupportedPseudo(format!("::{name}"))));
+            return Err(custom(
+                input,
+                ParseErrorKind::UnsupportedPseudo(format!("::{name}")),
+            ));
         },
         token => return Err(location.new_unexpected_token_error(token)),
     };
@@ -404,7 +438,10 @@ fn parse_pseudo_element<'i, P: PseudoClass>(
         state.after_part = true;
         Ok(Combinator::Part)
     } else {
-        Err(custom(input, ParseErrorKind::UnsupportedPseudo(format!("::{name}()"))))
+        Err(custom(
+            input,
+            ParseErrorKind::UnsupportedPseudo(format!("::{name}()")),
+        ))
     }
 }
 
@@ -426,8 +463,9 @@ fn parse_pseudo_class<'i, P: PseudoClass>(
     state: State,
 ) -> Result<Simple<P>, Error<'i>> {
     let location = input.current_source_location();
-    let unsupported =
-        |input: &Parser<'i, '_>, name: &str| custom(input, ParseErrorKind::UnsupportedPseudo(format!(":{name}")));
+    let unsupported = |input: &Parser<'i, '_>, name: &str| {
+        custom(input, ParseErrorKind::UnsupportedPseudo(format!(":{name}")))
+    };
     let edge = |kind| {
         Simple::Nth(Nth {
             kind,
@@ -480,7 +518,9 @@ fn parse_pseudo_class<'i, P: PseudoClass>(
                 if let Some(kind) = nth {
                     let (a, b) = cssparser::parse_nth(input)?;
                     let of = if !kind.of_type()
-                        && input.try_parse(|input| input.expect_ident_matching("of")).is_ok()
+                        && input
+                            .try_parse(|input| input.expect_ident_matching("of"))
+                            .is_ok()
                     {
                         parse_list(input, nested, false)?
                     } else {
@@ -492,7 +532,9 @@ fn parse_pseudo_class<'i, P: PseudoClass>(
                     "not" => Ok(Simple::Not(parse_list(input, nested, false)?)),
                     "is" => Ok(Simple::Is(parse_list(input, nested, true)?)),
                     "where" => Ok(Simple::Where(parse_list(input, nested, true)?)),
-                    "host" => Ok(Simple::Host(Some(Box::new(parse_compound_only(input, nested)?)))),
+                    "host" => Ok(Simple::Host(Some(Box::new(parse_compound_only(
+                        input, nested,
+                    )?)))),
                     _ => Err(unsupported(input, &format!("{lower}()"))),
                 }
             })

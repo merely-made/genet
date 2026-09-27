@@ -344,6 +344,15 @@ pub trait Automatable {
     /// through its own surface plan (that routing is app-specific).
     fn press(&mut self, x: f32, y: f32);
 
+    /// Handle a selector click using host-owned layout and delivery.
+    /// `None` uses the ordinary resolve/press/release path. `Some(false)` is
+    /// an authoritative miss; `Some(true)` means the host accepted delivery.
+    /// A host that defers delivery (for example, to scroll after layout) must
+    /// hold scenario ticks until delivery completes and report any failure.
+    fn click_target(&mut self, _sel: &Selector) -> Option<bool> {
+        None
+    }
+
     /// Deliver a synthetic pointer move (for drags).
     fn moved(&mut self, x: f32, y: f32);
 
@@ -383,6 +392,9 @@ pub trait AutomatableExt: Automatable {
     /// Resolve `sel` and click it (press+release at its centre). `true` if it
     /// hit; `false` is the driver's attributable miss.
     fn click(&mut self, sel: &Selector) -> bool {
+        if let Some(handled) = self.click_target(sel) {
+            return handled;
+        }
         // `resolve` returns an owned Option<Hit> and the surfaces borrow ends
         // with it, so the mutable pointer delivery below does not alias it.
         match self.resolve(sel) {
@@ -651,6 +663,7 @@ mod tests {
     struct HostSelectorApp {
         dom: ScriptedDom,
         target: SelectorTarget,
+        click_result: Option<bool>,
         pressed: Option<(f32, f32)>,
         released: Option<(f32, f32)>,
     }
@@ -667,6 +680,10 @@ mod tests {
 
         fn selector_target(&self, _sel: &Selector) -> SelectorTarget {
             self.target
+        }
+
+        fn click_target(&mut self, _sel: &Selector) -> Option<bool> {
+            self.click_result
         }
 
         fn snapshot(&self) -> ProbeSnapshot {
@@ -700,6 +717,7 @@ mod tests {
                 surface: "host-canvas",
                 point: (37.0, 91.0),
             }),
+            click_result: None,
             pressed: None,
             released: None,
         };
@@ -717,6 +735,7 @@ mod tests {
             // surface geometry.
             dom: strip_dom(),
             target: SelectorTarget::Miss,
+            click_result: None,
             pressed: None,
             released: None,
         };
@@ -726,5 +745,24 @@ mod tests {
         assert!(!app.click(&selector));
         assert_eq!(app.pressed, None);
         assert_eq!(app.released, None);
+    }
+
+    #[test]
+    fn a_host_click_hook_accepts_or_misses_without_fallback_pointer_delivery() {
+        for accepted in [true, false] {
+            let mut app = HostSelectorApp {
+                dom: strip_dom(),
+                target: SelectorTarget::Unsupported,
+                click_result: Some(accepted),
+                pressed: None,
+                released: None,
+            };
+            assert_eq!(
+                app.click(&Selector::class("tab").containing("Links")),
+                accepted
+            );
+            assert_eq!(app.pressed, None);
+            assert_eq!(app.released, None);
+        }
     }
 }

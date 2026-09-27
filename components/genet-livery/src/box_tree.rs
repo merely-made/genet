@@ -96,8 +96,24 @@ where
                     // would both paint the fallback and stop the element being
                     // a measured replaced leaf.
                     if !is_frame_container(dom, node) {
+                        if !is_replaced_element(dom, node) {
+                            generated_text_input(
+                                styles,
+                                node,
+                                buckram::PseudoElement::Before,
+                                &mut children,
+                            );
+                        }
                         for child in dom.flat_children(node) {
                             collect(dom, styles, child, Some(&computed), &mut children);
+                        }
+                        if !is_replaced_element(dom, node) {
+                            generated_text_input(
+                                styles,
+                                node,
+                                buckram::PseudoElement::After,
+                                &mut children,
+                            );
                         }
                     }
                     output.push(
@@ -148,6 +164,25 @@ where
     pub(crate) fn into_tree(self) -> CssBoxTree<Id> {
         self.tree
     }
+}
+
+fn generated_text_input<Id: Copy + Eq + Hash>(
+    styles: &StylePlane<Id>,
+    owner: Id,
+    pseudo: buckram::PseudoElement,
+    children: &mut Vec<BoxTreeInput<Id>>,
+) {
+    let Some(style) = styles.generated_style(owner, pseudo) else {
+        return;
+    };
+    // The pseudo retains its own provenance. It is not inserted into the DOM,
+    // and its text is resolved by the same style-plane consumer as AccName.
+    children.push(BoxTreeInput::text(
+        BoxOrigin::Pseudo { owner, pseudo },
+        flow_axes(style),
+        false,
+        false,
+    ));
 }
 
 /// CSS 2.1 17.2.1 and css-display-3: a replaced element cannot become an
@@ -280,7 +315,7 @@ where
         .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case("iframe"))
 }
 
-fn is_replaced_element<D>(dom: &D, node: D::NodeId) -> bool
+pub(crate) fn is_replaced_element<D>(dom: &D, node: D::NodeId) -> bool
 where
     D: LayoutDom,
 {

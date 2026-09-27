@@ -661,6 +661,7 @@ impl StyleSet {
 #[derive(Clone, Debug)]
 pub struct StylePlane<Id> {
     values: HashMap<Id, ComputedValues>,
+    generated: HashMap<(Id, buckram::PseudoElement), (ComputedValues, String)>,
     custom: HashMap<Id, CustomProperties>,
     inline_diagnostics: HashMap<Id, Vec<DeclarationError>>,
     presentational_hint_diagnostics: HashMap<Id, Vec<PresentationalHintDiagnostic>>,
@@ -674,6 +675,7 @@ where
 {
     fn eq(&self, other: &Self) -> bool {
         self.values == other.values
+            && self.generated == other.generated
             && self.custom == other.custom
             && self.inline_diagnostics == other.inline_diagnostics
             && self.presentational_hint_diagnostics == other.presentational_hint_diagnostics
@@ -686,6 +688,7 @@ impl<Id> Default for StylePlane<Id> {
     fn default() -> Self {
         Self {
             values: HashMap::new(),
+            generated: HashMap::new(),
             custom: HashMap::new(),
             inline_diagnostics: HashMap::new(),
             presentational_hint_diagnostics: HashMap::new(),
@@ -703,6 +706,21 @@ where
         self.values.get(&id)
     }
 
+    /// Resolved, admitted inline generated text; shared by layout and AccName.
+    pub fn generated_text(&self, id: Id, pseudo: buckram::PseudoElement) -> Option<&str> {
+        self.generated
+            .get(&(id, pseudo))
+            .map(|(_, text)| text.as_str())
+    }
+
+    pub(crate) fn generated_style(
+        &self,
+        id: Id,
+        pseudo: buckram::PseudoElement,
+    ) -> Option<&ComputedValues> {
+        self.generated.get(&(id, pseudo)).map(|(style, _)| style)
+    }
+
     /// Whether only `background-color` changed for already styled elements.
     /// This is the first K5h paint-only reuse admission: it deliberately
     /// excludes every property that can alter box generation, geometry,
@@ -710,6 +728,7 @@ where
     pub(crate) fn differs_only_in_background_color(&self, previous: &Self) -> bool {
         let mut changed = false;
         let only_background = self.values.len() == previous.values.len()
+            && self.generated == previous.generated
             && self.custom == previous.custom
             && self.inline_diagnostics == previous.inline_diagnostics
             && self.color_context == previous.color_context
@@ -737,6 +756,7 @@ where
         Id: Copy,
     {
         if self.values.len() != previous.values.len()
+            || self.generated != previous.generated
             || self.custom != previous.custom
             || self.inline_diagnostics != previous.inline_diagnostics
             || self.color_context != previous.color_context
@@ -776,6 +796,7 @@ where
         Id: Copy,
     {
         if self.values.len() != previous.values.len()
+            || self.generated != previous.generated
             || self.custom != previous.custom
             || self.inline_diagnostics != previous.inline_diagnostics
             || self.color_context != previous.color_context
@@ -846,6 +867,13 @@ where
                 values
                     .set(property, value)
                     .expect("generated property read and write types agree");
+            }
+        }
+        for (values, _) in used.generated.values_mut() {
+            let context = self.used_color_context_for(values);
+            for &property in PropertyId::ALL {
+                let value = resolve_property_used_colors(values.get(property), context);
+                values.set(property, value).expect("matching property type");
             }
         }
         used
@@ -1058,6 +1086,7 @@ where
     }
 
     pub(crate) fn remove(&mut self, id: Id) {
+        self.generated.retain(|(owner, _), _| *owner != id);
         self.values.remove(&id);
         self.custom.remove(&id);
         self.inline_diagnostics.remove(&id);
@@ -1070,6 +1099,7 @@ where
         Id: Copy,
     {
         self.values.retain(|id, _| keep(*id));
+        self.generated.retain(|(id, _), _| keep(*id));
         self.custom.retain(|id, _| keep(*id));
         self.inline_diagnostics.retain(|id, _| keep(*id));
         self.presentational_hint_diagnostics
@@ -1597,6 +1627,86 @@ where
         );
         resolve_viewport_units(&mut computed, device, tree_counts);
         resolve_font_metrics(&mut computed, parent);
+        for (selector_pseudo, box_pseudo) in [
+            (
+                livery::selector::GeneratedPseudo::Before,
+                buckram::PseudoElement::Before,
+            ),
+            (
+                livery::selector::GeneratedPseudo::After,
+                buckram::PseudoElement::After,
+            ),
+        ] {
+            let mut pseudo_matched = Vec::new();
+            let mut pseudo_custom = Vec::new();
+            let element_scope = selector_tree
+                .dom()
+                .containing_shadow_root(id)
+                .map(|root| selector_tree.dom().opaque_id(root));
+            for &position in &rule_candidates {
+                let rule = &style_set.rules[position as usize];
+                let scope = scopes.scope_of(position as usize);
+                if !rule.has_generated_pseudo() {
+                    continue;
+                }
+                let same_scope = rule.origin() == Origin::UserAgent
+                    || scope.map(|(root, _)| root) == element_scope;
+                let host = scope.and_then(|(_, host)| selector_tree.element(host));
+                pseudo_matched.extend(rule.matched_declarations_scoped_for_pseudo(
+                    &element,
+                    device,
+                    candidates,
+                    same_scope,
+                    host,
+                    Some(selector_pseudo),
+                ));
+                pseudo_custom.extend(rule.matched_custom_declarations_scoped_for_pseudo(
+                    &element,
+                    device,
+                    candidates,
+                    same_scope,
+                    host,
+                    Some(selector_pseudo),
+                ));
+            }
+            plane.generated.remove(&(id, box_pseudo));
+            if pseudo_matched.is_empty() && pseudo_custom.is_empty() {
+                continue;
+            }
+            let (mut pseudo_style, _) = cascade_with_logical_properties(
+                Some(&computed),
+                Some(&custom),
+                pseudo_matched,
+                pseudo_custom,
+                ColorComputeContext::from_device(device),
+            );
+            resolve_viewport_units(&mut pseudo_style, device, tree_counts);
+            resolve_font_metrics(&mut pseudo_style, Some(&computed));
+            // First slice admits inline text only. Unsupported box geometries
+            // remain absent rather than being silently flattened to inline.
+            if computed.display != livery::values::Display::None
+                && pseudo_style.display == livery::values::Display::Inline
+                && pseudo_style.position == Position::Static
+                && pseudo_style.float == livery::values::Float::None
+                && let Some(text) = pseudo_style.content.resolve(|name| {
+                    let name = if selector_tree.dom().element_name(id).is_some_and(|element| {
+                        element.ns.as_ref() == "http://www.w3.org/1999/xhtml"
+                    }) {
+                        name.to_ascii_lowercase()
+                    } else {
+                        name.to_owned()
+                    };
+                    selector_tree
+                        .dom()
+                        .attribute(id, &Namespace::default(), &LocalName::from(name))
+                        .map(str::to_owned)
+                })
+            {
+                plane
+                    .generated
+                    .insert((id, box_pseudo), (pseudo_style, text));
+            }
+        }
         let mut resolved = 1;
         for (child, child_counts) in cascade_children(selector_tree.dom(), id) {
             resolved += resolve_subtree_with_containers(

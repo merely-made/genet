@@ -1,5 +1,32 @@
 # Ortet founding plan
 
+## Classic scene-buffer dependency follow-up, 2026-09-27
+
+**Status: repin implemented and compatibility verified.** The four workspace
+netrender dependencies now use `9607d16f1907f6c2085648ae96abcaa30d7c3d41`,
+which requires the published `netrender-vello` 0.10.1. This adds asynchronous
+GPU allocation-count sizing to the retained Classic renderer. An overflowing
+frame may remain blank until a later render can use the read-back counts;
+device storage limits still apply. Host redraw policy is unchanged.
+
+Done-conditions for this dependency slice are source-resolution verification,
+the native `genet-render` library tests, and wasm32 checks of `genet-render`
+and `genet-render-host`. Mere/web adoption and the headed 2,000-node scenarios
+remain downstream gates. This slice does not establish their rendering or
+performance, or add pictograph viewport culling.
+
+**Verification, 2026-09-27:** based on clean remote Genet `34626a6c82e`,
+without local Cargo path overrides, `cargo test --locked -j 2 -p genet-render
+--lib` passed **26 tests**. `cargo check --locked -j 2 -p genet-render
+-p genet-render-host --target wasm32-unknown-unknown` passed. The reverse
+dependency tree confirms registry Vello 0.10.1 through netrender `9607d16f1`.
+The ignored lockfile was seeded from the same-base checkout and updated only
+for this dependency chain; its saved SHA-256 is
+`4b37f75f36a97bc208bff010d9d253c36d2327a446315c85fb06210df2c7158c`.
+Resolution, tree, test and wasm logs plus the lockfile are under
+`Code/testing/mere/genet-vello-repin*`. These are automated compatibility
+receipts; no headed browser receipt was taken in this slice.
+
 ## Canvas composition follow-up, 2026-09-11
 
 **Status: native acceptance passed.** Native external canvas content now uses

@@ -231,6 +231,7 @@ impl<'a, D: LayoutDom> Names<'a, D> {
         }
         // Native text fields get names from labels, never their editable value.
         let content = if matches!(self.tag(node), Some("input" | "textarea" | "select"))
+            || super::document_role(self.dom, node) == document_session_api::DocumentA11yRole::TextField
             || self.dom.kind(node) == NodeKind::Document
             || (!referenced
                 && matches!(

@@ -1409,6 +1409,23 @@ impl TextSystem {
                             glyph.point.y += own_baseline - source_metrics.baseline;
                         }
                         let line_fragment_y = line_top + (own_baseline - baseline);
+                        // Under `line-height: normal` text paints over its box's
+                        // content area, the rounded ascent and descent its extent
+                        // was built from, as Chromium paints it; the extent adds
+                        // the rounded line gap.
+                        let (fragment_y, fragment_height) = span
+                            .filter(|span| matches!(span.style.line_height, CssLineHeight::Normal))
+                            .map(|span| {
+                                innermost(&span.owners)
+                                    .map_or(root_metrics, |owner| box_fonts[&owner])
+                            })
+                            .map_or(
+                                (line_fragment_y, line_height.max(content_height)),
+                                |metrics| {
+                                    let ascent = metrics.ascent.round();
+                                    (own_baseline - ascent, ascent + metrics.descent.round())
+                                },
+                            );
                         let mut cluster_x = run.offset();
                         let mut clusters = Vec::new();
                         for cluster in parley_run.visual_clusters() {
@@ -1458,9 +1475,9 @@ impl TextSystem {
                             line_y: line_top,
                             fragment: Fragment {
                                 x: run.offset(),
-                                y: line_fragment_y,
+                                y: fragment_y,
                                 width: run.advance().max(0.0),
-                                height: line_height.max(content_height).max(0.0),
+                                height: fragment_height.max(0.0),
                             },
                             line_fragment: Fragment {
                                 x: run.offset(),

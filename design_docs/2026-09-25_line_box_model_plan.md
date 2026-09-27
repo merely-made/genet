@@ -1,10 +1,12 @@
 # Line box model: CSS 2.1 §10.8 in Livery's line pass
 
-**Status:** in progress, 2026-09-25. Mark ruled the home the same day:
+**Status:** in progress, 2026-09-27. Mark ruled the home on 2026-09-25:
 genet-livery's line pass, with Parley kept upstream-shaped rather than
 patched. Slice A (the model with nested alignment, the line height quirk,
 and the scripted tier's quirks mode) and slice B (atom baselines) are
-implemented and receipted; the items under Next remain.
+implemented and receipted. Since 2026-09-27, under `line-height: normal`,
+each text run paints over its box's content area inside its line box. The
+items under Next remain.
 
 ## The gap
 
@@ -127,7 +129,13 @@ In the line loop of `TextSystem::shape`, per line:
 5. Emit every item at its CSS position: glyph runs translated from Parley's
    baseline to their own, atoms at their baseline minus their baseline
    offset. Every item's line fragment is the line box, which is what the
-   formatting context's height is the union of.
+   formatting context's height is the union of. A glyph run's painted
+   fragment, which its text node and the inline boxes around it report and
+   paint, is under `line-height: normal` its box's content area: the
+   rounded ascent and descent the box's extent was built from, about the
+   run's baseline. Under an explicit `line-height` it is still the line
+   box's height at the run's baseline offset, or Parley's extent where that
+   is taller (see Next).
 
 In quirks and limited-quirks mode an inline box counts only where it holds
 text or a forced break directly, or has inline-axis borders or padding; the
@@ -175,7 +183,7 @@ placed as one against the line box once the root's subtree is (CSS 2.1
 
 ## Findings
 
-All 2026-09-25.
+All 2026-09-25, except where an entry gives its own date.
 
 - **Parley's line metrics** (`support/patches/parley/src/layout/line_break.rs`,
   `finish_line`). A line has one `line_height`, the running maximum of its
@@ -289,6 +297,87 @@ All 2026-09-25.
   `from_serialized_document` from their source document, read by layout
   through `LayoutDom::quirks_mode` (`ScopedDom` asks for its own document's)
   and by script through `__documentCompatMode`.
+- **The text fragment kept Parley's extent** (2026-09-27; Isometry's wing
+  design record, ruling 329). Slice A built each line box from rounded
+  metrics but left each glyph run's painted fragment (`ShapedRun::fragment`
+  in `text.rs`) at `line_height.max(content_height)`, where `content_height`
+  is Parley's quantized extent for the line. Parley rounds ascent and
+  descent but takes the leading from the unrounded line height and splits it
+  floor above and round below (Parley's line metrics, above). Under
+  `line-height: normal` its extent therefore carries the rounding of ascent
+  and descent, while the line box rounds the line gap on its own. At 11, 12
+  and 13px Arial the fragment was 13, 15 and 16 in line boxes of 12, 14 and
+  15. Lato (`tests/wpt/tests/fonts/Lato-Medium.ttf`) overhung at 14 of the 33
+  sizes from 8 to 40px. The fragment also took the whole line box's height at
+  the offset of its own baseline. So text beside a taller box reported the
+  line box (16px text beside a 32px span: 37 at 0), and raised text left it
+  (a 13px `super` span's: 20.33 at -5.33). Before slice A, with no requested
+  line height, the row and the fragment were both Parley's
+  `line_height.max(content_height)` (`5ae30ca`), one number by construction.
+  Isometry's side panel receipt
+  (`crates/isometry-genet/src/host_zoom/text_rows.rs`) found 39 of its 187
+  text rows, across three panel states, a pixel shorter than their text.
+- **Chromium paints text over its content area** (2026-09-27): the font's
+  rounded ascent plus rounded descent, about the text's baseline, whatever
+  the line height. Measured in Chromium 153 on Windows at a device pixel
+  ratio of 1: one 300px Arial block per case, its text read through
+  `Range.getBoundingClientRect` over the text node, tops relative to the
+  block:
+
+  | Case | Line box | Text fragment |
+  |---|---|---|
+  | 11 / 12 / 13 / 14px, `normal` | 12 / 14 / 15 / 16 | 12 / 14 / 15 / 16, at 0 |
+  | 16 / 18px, `normal` | 18 / 21 | 17 / 20, at 0 |
+  | 16px text, then a 32px span, `normal` | 37 | 17 at 15; the span's 36 at 0 |
+  | 13px text, then a `super` span, `normal` | 20.33 | 15 at 5.33; the span's 15 at 0 |
+  | 16px/20px | 20 | 17 at 1 |
+  | 13px/1 / 16px/10px | 13 / 10 | 15 at -1 / 17 at -4 |
+  | 18px/1.5 | 27 | 20 at 3 |
+  | 16px/20px, a `super` / `sub` span | 26.33 / 24.19 | the span's 17 at 1 / 17 at 5.19 |
+
+  A span's own rect is the same content area: 15 at 0 around 13px text, 17
+  at 0 around 16px. Under `normal` the line box is that content area plus the
+  rounded line gap, so text stays inside it. Under an explicit `line-height`
+  shorter than the content area, text overhangs the line box on both sides,
+  half the difference each with the odd pixel above (16px/10px: 4 above, 3
+  below). Chromium 153 reproduces the Arial ground-truth table above exactly
+  as Chromium 152 measured it.
+- **An inline box's edges still span the line box** (2026-09-27). genet
+  emits an inline box's borders and padding, and its margins unpainted, as
+  separate items (`push_edge`) whose fragment is the whole line box. The
+  box's fragment on a line is the union of its painted edges' and its
+  text's (`TextFrame::record_inline_fragment`). With the text at its
+  content area, a box paints the line box on a line holding one of its
+  edges and its content area on its other lines. Painted backgrounds, per
+  line, of a span
+  wrapping onto three lines in 16px Arial, `normal` (Chromium's through
+  `getClientRects`):
+
+  | Span | genet before | genet after | Chromium |
+  |---|---|---|---|
+  | background only | 18, 18, 18 | 17, 17, 17 | 17, 17, 17 |
+  | `border: 1px solid` | 20, 20, 20 | 20, 19, 20 | 19, 19, 19 |
+  | `padding-left: 4px` | 18, 18, 18 | 18, 17, 17 | 17, 17, 17 |
+
+- **Wrapped lines sit off whole pixels** (2026-09-27; since slice A). A
+  line's top is `parley_line_top` plus `drift` (`TextSystem::shape`).
+  `parley_line_top` recovers Parley's quantized start, `round(y)`, but
+  `drift` sums the model's heights less Parley's unquantized ones. So a
+  line lands `round(y) - y` from where the model's heights put it, up to
+  half a pixel, wherever Parley's line height is fractional, as under
+  `normal` in most fonts (18.4 for 16px Arial). Glyph baselines of one
+  wrapped paragraph, identical before and after the text fragment change:
+
+  | Arial, `normal` | Chromium | genet |
+  |---|---|---|
+  | 13px | 12, 27 | 12, 27.05 |
+  | 16px | 14, 32, 50 | 14, 31.6, 50.2 |
+  | 18px | 16, 37, 58 | 16, 37.3, 57.6 |
+
+  Consecutive line boxes therefore overlap or gap by that much. Slice A's
+  progress entry says each line starts where the one before it ends. That
+  holds only where Parley's line heights are whole pixels, as in Ahem and
+  the whole-pixel explicit heights the tests use.
 
 ## Slice B: atom baselines
 
@@ -413,6 +502,30 @@ column):
   taller keeps Parley's float constraints.
 - **Quirks mode's collapsed whitespace:** a box whose only text on a line is
   a hanging or collapsible trailing space still counts there.
+- **Text fragments under an explicit `line-height`.** Under an explicit
+  `line-height`, genet's fragment is still the line box's height at the
+  run's baseline offset, or Parley's extent where taller. Chromium's is the
+  content area (Findings, 2026-09-27):
+
+  | Case | genet | Chromium |
+  |---|---|---|
+  | 16px/20px Arial | 20 at 0 | 17 at 1 |
+  | 13px/1 | 15 at 0 | 15 at -1 |
+  | the table's `super` row, the raised text | 26.33 at -6.33, over the line box's top | 17 at 1 |
+
+  Following Chromium would also move every such inline box's background and
+  border onto its content area. So it waits on Mark's ruling; ruling 329
+  fixed `normal` only.
+- **Inline box edges under `normal`.** A box with borders or padding paints
+  the line box on the lines holding its edges and its content area
+  elsewhere (Findings, 2026-09-27). Two ways out, for Mark:
+  - Place each edge on its box's content area as the text is, which is
+    Chromium's painting.
+  - Keep inline boxes on the line box, and move only the text node's own
+    fragment.
+- **Lines off whole pixels.** Carry Parley's unquantized line start, or the
+  model's own running top where no float moved the line, so wrapped
+  `normal` lines land on Chromium's whole pixels (Findings, 2026-09-27).
 
 ## Risks
 
@@ -501,3 +614,41 @@ column):
   scrollable buttons keeping their content's baseline. The positive control
   flips. The checked baselines report, after, exactly the stale entries
   slice A's receipt recorded, and nothing else.
+- **2026-09-27, the text fragment** (Isometry's ruling 329). Under
+  `line-height: normal` a glyph run's painted fragment is its box's content
+  area (`TextSystem::shape`, `components/genet-livery/src/text.rs`); explicit
+  `line-height` is unchanged (Next). The new
+  `tests/text_fragment_line_box.rs` measures text fragments against their
+  line boxes. Lato from 8 to 40px must not overhang, on every platform. On
+  Windows, Arial at 11, 12, 13, 14, 16 and 18px and the two mixed lines must
+  match Chromium 153, and the Arial ground-truth table must still match
+  Chromium. Before the change the first two fail (Lato overhangs at 14
+  sizes; Arial at 11 to 13px, and every row whose Chromium fragment is
+  shorter than its line box); the ground-truth rows pass before and after.
+  genet-livery, buckram, genet-scripted-dom, script-runtime-api,
+  genet-scripted, genet-documents, genet-render and taproot: 1716 passed,
+  the 1713 before plus these three, none failing. The other crates that
+  depend on genet-livery, genet-scripted-worker, genet-wpt and ortet: 104
+  passed, none failing. Isometry's
+  `every_side_panel_text_row_holds_its_text`, unignored in a scratch copy of
+  Isometry `b981fee` with its genet `0cf4f30b` crates patched to this tree:
+  all 187 rows hold, where 39 were a pixel short.
+
+  WPT before and after over slice B's directories, with slice B's runner,
+  both binaries built from this tree. Testharness has no transition.
+  Reftests have one `pass -> fail`,
+  `css/CSS2/linebox/inline-formatting-context-004.xht`, a false pass. The
+  test draws a 100px left border on an inline box of default-font text,
+  and the reference is a float whose black padding fills its line box.
+  genet painted both line-box tall (18), so they matched. Now the
+  reference's white span paints its content area (17), as in Chromium, and
+  the float shows a row of black below the text. The test's border still
+  spans the line box, because its edge does (Findings). Chromium fails the
+  file too: its test stripe is 17 and its reference 18, 167 pixels apart.
+  The positive control, two reftest pairs of an Arial span's background at
+  13 and 16px against Chromium's 15 and 17, fails before and passes after;
+  Chromium renders both pairs identical. The checked baselines report,
+  after, exactly the entries slice B's run did, name for name, both reftest
+  baselines none. The before binary reported one more,
+  `dom/ranges/Range-mutations-replaceData.html` hang-killed, while a cargo
+  build ran beside it.

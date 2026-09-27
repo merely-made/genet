@@ -129,8 +129,8 @@ fn text_control_value<D: LayoutDom>(dom: &D, node: D::NodeId) -> Option<String> 
             )
             .then(|| {
                 dom.attribute(node, &Namespace::default(), &LocalName::from("value"))
-                    .unwrap_or("")
-                    .to_owned()
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| descendant_text(dom, node))
             })
         },
         _ => None,
@@ -838,7 +838,7 @@ mod tests {
     use accesskit::{Action, HasPopup, Live, Node as AccessNode, Orientation, Role, Toggled};
     use document_session_api::{DocumentA11yRole, DocumentA11yToggled};
     use genet_scripted_dom::ScriptedDom;
-    use layout_dom_api::{LayoutDom, LayoutDomMut, NodeKind};
+    use layout_dom_api::{LayoutDom, LayoutDomMut, NodeKind, QualName};
 
     use super::{accesskit_tree, accesskit_tree_with_scroll, document_a11y_projection};
     use crate::{ScrollOffsets, fragments_from_scripted_dom};
@@ -966,6 +966,41 @@ mod tests {
                 .collect()
         }
         assert_eq!(collect(document.dom(), document.dom().document()), "Save");
+    }
+
+    /// A retained document can carry a field's text as the input's children
+    /// rather than in `value`, as Cambium's field does. The field is still
+    /// named by its label, and its text is its value: a textbox is never named
+    /// from its content.
+    #[test]
+    fn a_field_holding_its_text_as_children_keeps_its_label_as_its_name() {
+        let html = |local: &str| {
+            QualName::new(
+                None,
+                layout_dom_api::Namespace::from("http://www.w3.org/1999/xhtml"),
+                local.into(),
+            )
+        };
+        let mut dom = ScriptedDom::new();
+        let document = dom.document();
+        let label = dom.create_element(html("label"));
+        let caption = dom.create_text("Name ");
+        let input = dom.create_element(html("input"));
+        let typed = dom.create_text("Hi");
+        dom.append_child(input, typed);
+        dom.append_child(label, caption);
+        dom.append_child(label, input);
+        dom.append_child(document, label);
+        let fragments = fragments_from_scripted_dom(&dom, &["label { display: block; }"], 400, 300)
+            .expect("layout");
+        let projection = document_a11y_projection(&dom, &fragments, None, 0);
+        let field = projection
+            .nodes()
+            .iter()
+            .find(|node| node.role == DocumentA11yRole::TextField)
+            .expect("the field is projected");
+        assert_eq!(field.name.as_deref(), Some("Name"));
+        assert_eq!(field.value.as_deref(), Some("Hi"));
     }
 
     #[test]

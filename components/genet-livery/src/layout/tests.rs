@@ -1838,11 +1838,16 @@ fn absolute_siblings_in_one_inline_keep_an_empty_first_fragment() {
         .fragments_for_box(box_for("containing"))
         .map(TreeFragment::physical_rect)
         .collect::<Vec<_>>();
+    // The empty first fragment is at the formatting line's top. The prefix's
+    // font content can bleed above that line under an explicit line-height.
+    let marker = containing_fragments.first().expect("empty first fragment");
+    assert_eq!((marker.width, marker.height), (0.0, 0.0));
+    assert_eq!(marker.y, rect_for("container").y);
     assert_eq!(
         rect_for("first"),
         PhysicalRect {
             x: prefix.x + prefix.width - 30.0,
-            y: prefix.y,
+            y: marker.y,
             width: 50.0,
             height: 100.0,
         },
@@ -1852,7 +1857,7 @@ fn absolute_siblings_in_one_inline_keep_an_empty_first_fragment() {
         rect_for("second"),
         PhysicalRect {
             x: prefix.x + prefix.width - 80.0,
-            y: prefix.y,
+            y: marker.y,
             width: 50.0,
             height: 100.0,
         }
@@ -5620,6 +5625,8 @@ fn live_nowrap_nested_inline_content_uses_float_bands_in_both_directions() {
          <span id=\"ltr-copy\"><span><span>aa aa aa aa</span></span></span></div>\
          <div id=\"rtl\" class=\"host\"><div class=\"float\"></div>\
          <span id=\"rtl-copy\"><span><span>aa aa aa aa</span></span></span></div>\
+         <div id=\"reference\" class=\"host\">\
+         <span id=\"reference-copy\"><span><span>aa aa aa aa</span></span></span></div>\
          </body></html>",
     );
     let styles = resolve_styles(
@@ -5662,15 +5669,26 @@ fn live_nowrap_nested_inline_content_uses_float_bands_in_both_directions() {
     let rtl = rect("rtl");
     let ltr_lines = copy_lines("ltr-copy");
     let rtl_lines = copy_lines("rtl-copy");
+    let reference = rect("reference");
+    let reference_lines = copy_lines("reference-copy");
     let algorithms = layout.block_algorithm_counts();
 
     assert_eq!(ltr_lines.len(), 1, "nowrap must remain one line");
     assert_eq!(rtl_lines.len(), 1, "nowrap must remain one line");
-    assert_eq!((ltr_lines[0].x, ltr_lines[0].y), (ltr.x + 80.0, ltr.y));
+    assert_eq!(reference_lines.len(), 1);
+    // Float bands change available inline space, not the font content's
+    // vertical alignment within its explicit 20px formatting line.
+    let content_top = reference_lines[0].y - reference.y;
+    assert_eq!(
+        (ltr_lines[0].x, ltr_lines[0].y),
+        (ltr.x + 80.0, ltr.y + content_top)
+    );
+    assert_eq!(ltr_lines[0].height, reference_lines[0].height);
+    assert_eq!(rtl_lines[0].height, reference_lines[0].height);
     assert!(
         rtl_lines[0].x >= rtl.x + 80.0 - 0.5
             && rtl_lines[0].x + rtl_lines[0].width <= rtl.x + rtl.width + 0.5
-            && (rtl_lines[0].y - rtl.y).abs() <= 0.5,
+            && (rtl_lines[0].y - rtl.y - content_top).abs() <= 0.5,
         "rtl host={rtl:?}, lines={rtl_lines:?}"
     );
     assert_eq!(algorithms.taffy, 0);

@@ -6,7 +6,7 @@ patched. Slice A (the model with nested alignment, the line height quirk,
 and the scripted tier's quirks mode) and slice B (atom baselines) are
 implemented and receipted. Since 2026-09-27, under `line-height: normal`,
 each text run paints over its box's content area inside its line box. The
-items under Next remain. Ruling 379 (2026-09-27) authorizes the explicit-line-height and wrapped inline-edge bounds fixes; implementation and combined verification are now in progress.
+items under Next remain. Ruling 379 (2026-09-27) authorizes the explicit-line-height and wrapped inline-edge bounds fixes; the combined implementation and CPU verification are complete, with independent review and consumer acceptance still pending.
 
 ## The gap
 
@@ -692,3 +692,68 @@ consumer evidence before main integration. Current Isometry's ignored
 count must be reported from the run. Independent review and applicable
 regression / consumer gates still block integration. No broader line-box,
 UA control styling, fractional wrapping, or fallback-font redesign is ruled.
+
+### 2026-09-27 implementation checkpoint: ruling 379
+
+The combined code now uses each box's rounded font ascent and descent for text
+content under normal and explicit line heights. Edge fragments use their own
+box's font and aligned baseline, including empty decorated boxes. The separate
+formatting line fragments, line-height calculation, glyph baselines and the
+current-main generated-text selection filter are preserved.
+
+Six CPU fixture tests pass: the existing three normal/line-box tests, four
+explicit-height rows, six wrapped decoration cases (four painted fragments
+each), and ten aligned edge cases (baseline, super, sub, top, bottom, each
+empty and nonempty). Fresh Arial 7.07 measurements are:
+
+| Fixture | Formatting line | Content top | Content height |
+|---|---:|---:|---:|
+| 16px / 20px | 20 | 1 | 17 |
+| 16px / 8px | 8 | -5 | 17 |
+| 16px / 0 | 0 | -9 | 17 |
+| 13px / 1 | 13 | -1 | 15 |
+
+Wrapped 16px Arial with a 1px border has four 19px-high painted rectangles
+under normal, 24px and 8px line heights; with 2px vertical padding it has four
+21px-high rectangles. The normal pre-fix border heights were 20, 19, 19, 20.
+Reverting only the explicit text-bounds hunk fails the explicit fixture;
+reverting only the edge-bounds hunk fails the wrapped fixture. Both failures
+and exact temporary sources are preserved, then the fixed source was restored
+byte for byte. These are layout/paint-command bounds, not glyph-ink or GPU pixels.
+
+The broader suite initially found four assertions that equated font content
+bounds with line-box bounds. The tests now separately assert: an absolute
+child stays at the empty first formatting marker; float bands preserve the
+vertical alignment of an equivalent un-floated reference; following block flow
+consumes the line-group height rather than the background's content height;
+and vertical padding/borders attach by their exact widths to text content.
+The original failing logs remain in the receipt. Full regression completion,
+consumer evidence and independent review are pending this checkpoint.
+
+Raw evidence is under
+`Code/testing/genet/receipts/2026-09-27/text-fragment-combined`. The ignored lane
+lock was preserved before offline resolution against current-main manifests;
+this receipt uses the published netrender `9607d16f1907f6c2085648ae96abcaa30d7c3d41`
+closure, without primary Genet's local dependency overrides. Rust 1.97.1,
+source, lock and both font hashes are recorded there. The separate known
+fractional wrapped-line start drift is still visible and remains outside 379.
+
+**CPU gate completion, 2026-09-27:** 867 tests passed across the affected
+Livery/Buckram suites, with 6 existing ignored tests. This is an aggregate of
+`regression-final` (866 pass, one paint assertion failure) and the corrected
+`paint-final` target (78/78 pass, replacing its earlier 77/78 result). The last
+failure was in the new test's measurement: `DrawText` placement names the
+container, not the text content fragment. The final assertion reads the text
+node's retained fragment and verifies exact top/bottom decoration offsets.
+The production source did not change during these assertion repairs. The
+broader source run includes the generated-text, line-box, out-of-flow and
+selection suites. No GPU or WPT gate was run.
+
+Changed Rust passes formatting except two unchanged existing formatting hunks
+in the old layout/paint test files; `baseline-format-config` reproduces exactly
+those hunks from the branch's pre-change files with the same rustfmt config.
+`text.rs` and the new fixture file pass rustfmt; `git diff --check` passes.
+The full source/lock/font manifest and all failed attempts remain in the raw
+receipt. Consumer metadata at Isometry `7cdd5eb` still selects 19 Genet packages
+at `0cf4f30`; a patched consumer build has not yet run, and its dependency
+closure must be reconciled explicitly before this lane can merge.

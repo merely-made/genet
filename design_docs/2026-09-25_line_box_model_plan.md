@@ -6,7 +6,7 @@ patched. Slice A (the model with nested alignment, the line height quirk,
 and the scripted tier's quirks mode) and slice B (atom baselines) are
 implemented and receipted. Since 2026-09-27, under `line-height: normal`,
 each text run paints over its box's content area inside its line box. The
-items under Next remain.
+items under Next remain. Ruling 379 (2026-09-27) authorizes the explicit-line-height and wrapped inline-edge bounds fixes; implementation and combined verification are now in progress.
 
 ## The gap
 
@@ -652,3 +652,43 @@ column):
   baselines none. The before binary reported one more,
   `dom/ranges/Range-mutations-replaceData.html` hang-killed, while a cargo
   build ran beside it.
+
+### 2026-09-27 annotation: ruling 379, combined text-bound scope
+
+Mark selected A, "Fix both now (recommended). Add explicit-line-height and
+wrapped-border fixtures, correct the bounds, and verify the combined change
+before merging." The canonical ruling is 379 in
+`isometry/mesocosm/design_docs/2026-09-18_wing_design_plan.md`, extending 329.
+This supersedes the two waiting-for-ruling statements under Next, without
+rewriting their dated evidence. Livery's line pass remains the owner; Parley
+and the CSS line-box layout model stay unchanged.
+
+The approved change makes text paint fragments use font content bounds under
+explicit line-height too, and makes non-replaced inline border/padding edges
+attach to those content bounds rather than expanding them to the line box.
+CSS 2.2 sections 10.6.1 and 10.8 permit content to bleed beyond short line
+boxes; the line-height itself must remain the authored formatting extent.
+
+Lane L reconciled current main `c858738c4cda7436dc3ec953aa7bda89dafd7280`
+with the existing normal-fragment patch, preserving generated-text and
+nonselectable-source filtering. Only the documentation index conflicted;
+its current-main entries and the lane's line-box status were both retained.
+
+The pre-change receipt at
+`Code/testing/genet/receipts/2026-09-27/text-fragment` freshly passes three
+CPU layout tests on Rust 1.97.1 and Arial 7.07: 16px Arial content is 17px
+inside an 18px normal line. Its SHA256SUMS is
+`430e5158c7b13b83a62e88de95f3e0b25091b3057bd7a9d3277e242aa68c704b`.
+The explicit and decorated defects are source-proven there, not freshly
+pixel-measured. The older 187-row, Chromium 153 and WPT statements above
+remain historical; their raw September 27 receipts were not located by the
+bounded audit and are not claimed as current acceptance.
+
+Done conditions for this slice: measured explicit-height and wrapped-border
+fixtures, independent broken controls for both corrections, combined normal /
+explicit / decorated regression checks on reconciled source, and qualified
+consumer evidence before main integration. Current Isometry's ignored
+`every_side_panel_text_row_holds_its_text` is the consumer gate; its live row
+count must be reported from the run. Independent review and applicable
+regression / consumer gates still block integration. No broader line-box,
+UA control styling, fractional wrapping, or fallback-font redesign is ruled.

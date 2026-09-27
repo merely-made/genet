@@ -765,3 +765,25 @@ manifest SHA-256
 `f44b8ee9acf90c820661650e5fc78e6d6b09c356a8c956f94851a297d1f25d59`.
 This seals the CPU checkpoint and its historical attempts. Later consumer or
 pixel evidence must be a new receipt, with its own source qualification.
+
+### 2026-09-27 consumer resolution boundary
+
+A bounded Isometry consumer dry run at clean main `7cdd5eb` preserved its exact
+tracked lock and configs, then used an external Cargo config covering all 19
+Genet packages at Lane L `367626adb64`. `cargo metadata --offline --locked`
+stopped before compilation: Lane L's Genet render host requests Netrender
+`9607d16` / netrender-vello `^0.10.1`, while Mere `7bb5bfda`'s Cambium host
+selects Netrender `c8c09f16` with locked netrender-vello `0.10.0`. Configured
+paths do not establish a successfully resolved coherent graph. No consumer
+row test ran, and the primary lock remained byte-identical.
+
+The rendering closure and separate test-lock approach now need coordinator
+disposition before that gate proceeds. A bounded local compatibility test
+holding all four rendering crates at the consumer's existing revision would
+qualify that combination only; it would not prove a portable Genet repin to
+this lane's manifest closure. No rendering repin is part of ruling 379.
+
+The 16-file dry-run receipt is
+`Code/testing/genet/receipts/2026-09-27/text-fragment-consumer-resolution/SHA256SUMS`,
+SHA-256 `7a92f9869a8e07d48dd8922305def5b66889bace78f7651f1598a3ba05ea5109`.
+The CPU implementation receipt and its source qualifications remain unchanged.

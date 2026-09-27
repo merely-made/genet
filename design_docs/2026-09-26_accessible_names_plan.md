@@ -102,13 +102,14 @@ counters, markers and CSS alternative text require their own admission rules.
 
 ## Remaining gates
 
-Mere currently pins an older Genet/document-session-api revision (`ad20ad...`).
+At initial implementation, Mere pinned an older Genet/document-session-api revision (`ad20ad...`).
 Its two Reader constructor additions are preserved as
 [`mere-adoption.patch`](receipts/2026-09-26_accessible_names/mere-adoption.patch),
 not applied to that checkout. Apply the patch from Mere's repository root when
 Mere adopts a Genet revision containing this description-field change, then run
-its document-lanes checks against that committed dependency graph. The containing
-revision is pending commit; local path overrides are not an adoption receipt.
+its document-lanes checks against that committed dependency graph. The source was committed in `b36ac01d3f2` and integrated with newer main in
+`04c44e90397`. Downstream owners must select a containing published revision;
+local path overrides are not an adoption receipt.
 
 Complete role rules, computed visibility, shadow scope and flat-tree traversal,
 embedded controls, generated block spacing, WPT coverage and a headed physical
@@ -117,3 +118,25 @@ uses the retained provider; the scripted session currently exposes retained
 fragments without the style plane, so generated text in that projection needs
 an additional CSSOM-owner query before adoption. No new worktree, isolated
 Cargo home or isolated target was created.
+
+
+## Main integration (2026-09-27)
+
+The merge preserves the remote text-field label/value fix and its regression
+fixture: an input holding text as children keeps its wrapping label as name and
+exposes the child text as value. TextField-role content is excluded from the
+shared name fallback. Updated rendering dependencies and selector click delivery
+from origin main are retained.
+
+Downstream Taproot can consume `DocumentA11yProjection::nodes()` from the public
+`genet_render::document_a11y_projection` family. Each node's `id.get()` matches
+`LayoutDom::opaque_id`; `role`, `name` and `description` are owner-computed.
+Explicit class/text selector policy remains downstream. This does not expose
+private name traversal or make the scripted generated-text gap disappear.
+
+Focused integration gates on `04c44e90397` passed: genet-render 38, genet-documents
+with livery 52, document-session-api 16, genet-livery library 279 and generated
+text integration 6, genet-text 2 unit and 3 official-corpus tests, Ortet a11y 5.
+Commands used `CARGO_TARGET_DIR=C:/Users/mark_/Code/repos/genet/target` and
+`--offline`. Existing repository sibling path patches were active; this is
+local integration evidence, not a clean-clone or physical AT receipt.

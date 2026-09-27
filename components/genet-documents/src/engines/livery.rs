@@ -29,9 +29,9 @@ use genet_document_resources::{
 };
 use genet_host_api::ResourceFetcher;
 use genet_host_api::ResourceResponse;
+use genet_text::{next_grapheme_boundary, previous_grapheme_boundary};
 use layout_dom_api::{LayoutDom, LayoutDomMut, LocalName, Namespace, NodeKind, QualName};
 use netrender::Scene;
-use unicode_segmentation::UnicodeSegmentation;
 
 use super::*;
 
@@ -747,12 +747,13 @@ impl LiveryDocumentSession {
     /// scroll and page-zoom transforms at the session boundary.
     fn unrevisioned_accessibility_projection(&self) -> Option<DocumentA11yProjection> {
         let fragments = self.doc.retained_layout()?;
-        let projection = genet_render::document_a11y_projection_with_scroll(
+        let projection = genet_render::document_a11y_projection_with_generated_text(
             self.doc.dom(),
             fragments,
             self.focused_node,
             0,
-            self.doc.element_scroll(),
+            Some(self.doc.element_scroll()),
+            &|node| self.doc.generated_text(node),
         );
         let (scroll_x, scroll_y) = self.doc.scroll();
         let zoom = self.zoom();
@@ -1201,10 +1202,9 @@ impl LiveryDocumentSession {
         if editor.caret == 0 {
             return true;
         }
-        let previous = editor.value[..editor.caret]
-            .grapheme_indices(true)
-            .next_back()
-            .map_or(0, |(index, _)| index);
+        let Some(previous) = previous_grapheme_boundary(&editor.value, editor.caret) else {
+            return false;
+        };
         editor.value.replace_range(previous..editor.caret, "");
         editor.caret = previous;
         self.apply_editor();
@@ -1226,10 +1226,9 @@ impl LiveryDocumentSession {
         if editor.caret == editor.value.len() {
             return true;
         }
-        let next = editor.value[editor.caret..]
-            .grapheme_indices(true)
-            .nth(1)
-            .map_or(editor.value.len(), |(offset, _)| editor.caret + offset);
+        let Some(next) = next_grapheme_boundary(&editor.value, editor.caret) else {
+            return false;
+        };
         editor.value.replace_range(editor.caret..next, "");
         self.apply_editor();
         true
@@ -1241,17 +1240,11 @@ impl LiveryDocumentSession {
         };
         editor.selection = None;
         editor.caret = if direction < 0 {
-            editor.value[..editor.caret]
-                .grapheme_indices(true)
-                .next_back()
-                .map_or(0, |(index, _)| index)
+            previous_grapheme_boundary(&editor.value, editor.caret).unwrap_or(editor.caret)
         } else if editor.caret == editor.value.len() {
             editor.caret
         } else {
-            editor.value[editor.caret..]
-                .grapheme_indices(true)
-                .nth(1)
-                .map_or(editor.value.len(), |(offset, _)| editor.caret + offset)
+            next_grapheme_boundary(&editor.value, editor.caret).unwrap_or(editor.caret)
         };
         true
     }

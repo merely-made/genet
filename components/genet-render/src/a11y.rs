@@ -112,55 +112,7 @@ fn document_role<D: LayoutDom>(dom: &D, node: D::NodeId) -> DocumentA11yRole {
     }
 }
 
-fn direct_text<D: LayoutDom>(dom: &D, node: D::NodeId) -> String {
-    dom.dom_children(node)
-        .filter_map(|child| {
-            (dom.kind(child) == NodeKind::Text)
-                .then(|| dom.text(child))
-                .flatten()
-        })
-        .collect()
-}
-
-/// Text contributed by a wrapping `<label>`, excluding the control it names.
-/// This keeps a field's accessible name stable while its value changes.
-fn label_text<D: LayoutDom>(dom: &D, node: D::NodeId) -> String {
-    fn collect<D: LayoutDom>(dom: &D, node: D::NodeId, out: &mut String) {
-        for child in dom.dom_children(node) {
-            match dom.kind(child) {
-                NodeKind::Text => out.push_str(dom.text(child).unwrap_or("")),
-                NodeKind::Element => {
-                    let tag = dom.element_name(child).map(|name| name.local.as_ref());
-                    if matches!(tag, Some("button" | "input" | "select" | "textarea")) {
-                        continue;
-                    }
-                    collect(dom, child, out);
-                },
-                _ => {},
-            }
-        }
-    }
-    let mut text = String::new();
-    collect(dom, node, &mut text);
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-fn accessible_name<D: LayoutDom>(
-    dom: &D,
-    node: D::NodeId,
-    label_context: Option<&str>,
-) -> Option<String> {
-    dom.attribute(node, &Namespace::default(), &LocalName::from("aria-label"))
-        .map(str::trim)
-        .filter(|label| !label.is_empty())
-        .map(str::to_owned)
-        .or_else(|| {
-            let text = direct_text(dom, node);
-            (!text.is_empty()).then_some(text)
-        })
-        .or_else(|| label_context.map(str::to_owned))
-}
-
+mod name;
 fn text_control_value<D: LayoutDom>(dom: &D, node: D::NodeId) -> Option<String> {
     let tag = dom.element_name(node).map(|name| name.local.as_ref())?;
     match tag {
@@ -482,6 +434,9 @@ where
             if let Some(name) = &node.name {
                 access.set_label(name.clone());
             }
+            if let Some(description) = &node.description {
+                access.set_description(description.clone());
+            }
             if let Some(value) = &node.value {
                 access.set_value(value.clone());
             }
@@ -690,7 +645,7 @@ fn projection_walk<D>(
     scroll_offsets: Option<&ScrollOffsets<D::NodeId>>,
     node: D::NodeId,
     parent: Option<DocumentA11yNodeId>,
-    label_context: Option<&str>,
+    names: &name::Names<D>,
     focus: Option<D::NodeId>,
     out: &mut Vec<DocumentA11yNode>,
 ) -> Vec<DocumentA11yNodeId>
@@ -701,14 +656,6 @@ where
     if aria_true(dom, node, "aria-hidden") {
         return Vec::new();
     }
-    let is_label = dom
-        .element_name(node)
-        .is_some_and(|name| name.local.as_ref() == "label");
-    let own_label = is_label.then(|| label_text(dom, node));
-    let child_label = own_label
-        .as_deref()
-        .filter(|label| !label.is_empty())
-        .or(label_context);
     let projected = dom.kind(node) == NodeKind::Document || fragments.get(node).is_some();
     let id = projected.then(|| neutral_node_id(dom, node));
     let child_parent = id.or(parent);
@@ -722,7 +669,7 @@ where
                 scroll_offsets,
                 child,
                 child_parent,
-                child_label,
+                names,
                 focus,
                 out,
             )
@@ -750,7 +697,8 @@ where
             height: fragment.height,
         }
     });
-    let name = accessible_name(dom, node, label_context);
+    let name = names.name(node);
+    let description = names.description(node);
     let value = text_control_value(dom, node);
     let actions = neutral_actions(dom, node, role, state, scroll_offsets);
     let numeric_value = aria_number(dom, node, "aria-valuenow");
@@ -762,6 +710,7 @@ where
         children: children.clone(),
         role,
         name,
+        description,
         value,
         numeric_value,
         numeric_minimum,
@@ -821,6 +770,48 @@ where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
+    projection_with_names(
+        dom,
+        fragments,
+        focus,
+        revision,
+        scroll_offsets,
+        &name::Names::new(dom),
+    )
+}
+
+/// Project names with rendered inline `::before`/`::after` text from the style
+/// owner. The provider must return only admitted rendered text, in that order.
+pub fn document_a11y_projection_with_generated_text<D>(
+    dom: &D,
+    fragments: &LiveryLayout<D::NodeId>,
+    focus: Option<D::NodeId>,
+    revision: u64,
+    scroll_offsets: Option<&ScrollOffsets<D::NodeId>>,
+    generated: &dyn Fn(D::NodeId) -> (String, String),
+) -> DocumentA11yProjection
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    projection_with_names(
+        dom,
+        fragments,
+        focus,
+        revision,
+        scroll_offsets,
+        &name::Names::new(dom).with_generated(generated),
+    )
+}
+
+fn projection_with_names<D: LayoutDom>(
+    dom: &D,
+    fragments: &LiveryLayout<D::NodeId>,
+    focus: Option<D::NodeId>,
+    revision: u64,
+    scroll_offsets: Option<&ScrollOffsets<D::NodeId>>,
+    names: &name::Names<D>,
+) -> DocumentA11yProjection {
     let root = dom.document();
     let root_id = neutral_node_id(dom, root);
     let mut nodes = Vec::new();
@@ -830,7 +821,7 @@ where
         scroll_offsets,
         root,
         None,
-        None,
+        names,
         focus,
         &mut nodes,
     );
@@ -901,6 +892,80 @@ mod tests {
         assert_eq!(field.name.as_deref(), Some("Board revision"));
         assert_eq!(field.value.as_deref(), Some("3"));
         assert_eq!(projection.revision(), 7);
+    }
+
+    #[test]
+    fn name_and_description_reach_accesskit_separately() {
+        let node = with_role(
+            "<span id=label>Save</span><span id=help>Writes to disk</span><button aria-labelledby=label aria-describedby=help title=Wrong>Fallback</button>",
+            Role::Button,
+        );
+        assert_eq!(node.label(), Some("Save"));
+        assert_eq!(node.description(), Some("Writes to disk"));
+    }
+
+    #[test]
+    fn generated_inline_text_enters_names_but_does_not_override_author_labels() {
+        let mut dom = ScriptedDom::new();
+        dom.set_inner_html(
+            dom.document(),
+            "<button>Save</button><button aria-label=Author>Other</button>",
+        );
+        let fragments = fragments_from_scripted_dom(&dom, SHEET, 400, 300).expect("layout");
+        let projection = super::document_a11y_projection_with_generated_text(
+            &dom,
+            &fragments,
+            None,
+            7,
+            None,
+            &|_| ("[".into(), "]".into()),
+        );
+        let names: Vec<_> = projection
+            .nodes()
+            .iter()
+            .filter(|node| node.role == DocumentA11yRole::Button)
+            .map(|node| node.name.as_deref())
+            .collect();
+        assert_eq!(names, vec![Some("[Save]"), Some("Author")]);
+    }
+
+    #[test]
+    fn css_generated_names_use_retained_text_without_changing_dom() {
+        use genet_livery::{Device, LiveryDocument, StyleSet};
+        let dom = ScriptedDom::from_serialized_document(
+            "<html><body><button data-prefix='['>Save</button></body></html>",
+        );
+        let mut document = LiveryDocument::new(
+            dom,
+            StyleSet::cambium(&[
+                "button::before { content: attr(data-prefix); } button::after { content: ']'; }",
+            ]),
+            Device::screen(400.0, 300.0),
+        );
+        document.frame(400, 300).expect("retained generated frame");
+        let projection = super::document_a11y_projection_with_generated_text(
+            document.dom(),
+            document.retained_layout().expect("layout"),
+            None,
+            0,
+            None,
+            &|node| document.generated_text(node),
+        );
+        let button = projection
+            .nodes()
+            .iter()
+            .find(|node| node.role == DocumentA11yRole::Button)
+            .expect("button");
+        assert_eq!(button.name.as_deref(), Some("[Save]"));
+        fn collect<D: LayoutDom>(dom: &D, node: D::NodeId) -> String {
+            if dom.kind(node) == NodeKind::Text {
+                return dom.text(node).unwrap_or_default().to_owned();
+            }
+            dom.dom_children(node)
+                .map(|child| collect(dom, child))
+                .collect()
+        }
+        assert_eq!(collect(document.dom(), document.dom().document()), "Save");
     }
 
     #[test]

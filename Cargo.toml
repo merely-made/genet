@@ -23,6 +23,7 @@ members = [
     "components/genet-scripted-worker",
     # Render-free live-document extraction and structured reader shapes.
     "components/fleece",
+    "components/genet-text",
     # The content lanes as session engines (2026-07-10 session-engines plan):
     # static/scripted/smolweb retained documents, promoted out of pelt.
     "components/genet-documents",

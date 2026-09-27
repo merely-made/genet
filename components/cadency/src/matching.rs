@@ -31,7 +31,9 @@ impl<P: PseudoClass> SelectorList<P> {
     where
         E: Element<PseudoClass = P>,
     {
-        self.0.iter().any(|selector| selector.matches(element, shadow_host))
+        self.0
+            .iter()
+            .any(|selector| selector.matches(element, shadow_host))
     }
 }
 
@@ -43,7 +45,21 @@ impl<P: PseudoClass> Selector<P> {
     where
         E: Element<PseudoClass = P>,
     {
-        matches_from(self, 0, element, false, shadow_host)
+        self.matches_generated(element, shadow_host, None)
+    }
+
+    /// Match a generated pseudo against its originating element. Ordinary
+    /// element queries never match a generated pseudo selector.
+    pub fn matches_generated<E>(
+        &self,
+        element: &E,
+        shadow_host: Option<&E>,
+        pseudo: Option<crate::GeneratedPseudo>,
+    ) -> bool
+    where
+        E: Element<PseudoClass = P>,
+    {
+        self.generated_pseudo() == pseudo && matches_from(self, 0, element, false, shadow_host)
     }
 }
 
@@ -53,7 +69,8 @@ fn list_matches<E: Element>(
     featureless: bool,
     host: Option<&E>,
 ) -> bool {
-    list.iter().any(|selector| matches_from(selector, 0, element, featureless, host))
+    list.iter()
+        .any(|selector| matches_from(selector, 0, element, featureless, host))
 }
 
 /// Match `selector.compounds[index..]` with `element` as the candidate for
@@ -67,7 +84,10 @@ fn matches_from<E: Element>(
     host: Option<&E>,
 ) -> bool {
     let compound = &selector.compounds[index];
-    if !compound.iter().all(|simple| matches_simple(simple, element, featureless, host)) {
+    if !compound
+        .iter()
+        .all(|simple| matches_simple(simple, element, featureless, host))
+    {
         return false;
     }
     let Some(combinator) = selector.combinators.get(index) else {
@@ -79,15 +99,20 @@ fn matches_from<E: Element>(
     }
     let next = index + 1;
     match combinator {
-        Combinator::Child => ancestor_step(element)
-            .is_some_and(|(parent, featureless)| matches_from(selector, next, &parent, featureless, host)),
+        Combinator::Child => ancestor_step(element).is_some_and(|(parent, featureless)| {
+            matches_from(selector, next, &parent, featureless, host)
+        }),
         Combinator::Descendant => {
             let mut current = ancestor_step(element);
             while let Some((ancestor, featureless)) = current {
                 if matches_from(selector, next, &ancestor, featureless, host) {
                     return true;
                 }
-                current = if featureless { None } else { ancestor_step(&ancestor) };
+                current = if featureless {
+                    None
+                } else {
+                    ancestor_step(&ancestor)
+                };
             }
             false
         },
@@ -136,7 +161,10 @@ fn same<E: Element>(a: Option<&E>, b: Option<&E>) -> bool {
 fn slot_in_scope<E: Element>(element: &E, host: Option<&E>) -> Option<E> {
     let host = host?;
     let mut slot = element.assigned_slot()?;
-    while !slot.containing_shadow_host().is_some_and(|h| h.is_same(host)) {
+    while !slot
+        .containing_shadow_host()
+        .is_some_and(|h| h.is_same(host))
+    {
         slot = slot.assigned_slot()?;
     }
     Some(slot)
@@ -193,7 +221,9 @@ fn matches_part<E: Element>(element: &E, names: &[Box<str>], scope: Option<&E>) 
 /// `:host` alone, the only compound that can name a featureless host.
 fn host_only<P>(selector: &Selector<P>) -> bool {
     selector.combinators.is_empty()
-        && selector.compounds[0].iter().all(|simple| matches!(simple, Simple::Host(_)))
+        && selector.compounds[0]
+            .iter()
+            .all(|simple| matches!(simple, Simple::Host(_)))
 }
 
 fn matches_simple<E: Element>(
@@ -247,7 +277,11 @@ fn matches_simple<E: Element>(
                     value,
                 },
             };
-            let name = if html { &attribute.name_lower } else { &attribute.name };
+            let name = if html {
+                &attribute.name_lower
+            } else {
+                &attribute.name
+            };
             element.attr_matches(&namespace, name, &operation)
         },
         Simple::Root => element.is_root(),
@@ -263,9 +297,12 @@ fn matches_simple<E: Element>(
         Simple::Is(list) | Simple::Where(list) => list_matches(list, element, false, host),
         Simple::Host(_) => matches_host(simple, element, host),
         // Slots are never slotted content themselves.
-        Simple::Slotted(inner) => !element.is_slot() && matches_from(inner, 0, element, false, host),
+        Simple::Slotted(inner) => {
+            !element.is_slot() && matches_from(inner, 0, element, false, host)
+        },
         Simple::Part(names) => matches_part(element, names, host),
         Simple::State(state) => element.matches_pseudo_class(state),
+        Simple::Generated(_) => true,
     }
 }
 
@@ -291,7 +328,13 @@ fn sibling_index<E: Element>(
     of: &[Selector<E::PseudoClass>],
     host: Option<&E>,
 ) -> i32 {
-    let step = |e: &E| if from_end { e.next_sibling_element() } else { e.prev_sibling_element() };
+    let step = |e: &E| {
+        if from_end {
+            e.next_sibling_element()
+        } else {
+            e.prev_sibling_element()
+        }
+    };
     let mut index = 1;
     let mut current = step(element);
     while let Some(sibling) = current {
@@ -307,7 +350,13 @@ fn matches_nth<E: Element>(nth: &Nth<E::PseudoClass>, element: &E, host: Option<
     if !nth.of.is_empty() && !list_matches(&nth.of, element, false, host) {
         return false;
     }
-    let index = sibling_index(element, nth.kind.of_type(), nth.kind.counts_from_end(), &nth.of, host);
+    let index = sibling_index(
+        element,
+        nth.kind.of_type(),
+        nth.kind.counts_from_end(),
+        &nth.of,
+        host,
+    );
     // index = a*n + b for some n >= 0.
     let offset = i64::from(index) - i64::from(nth.b);
     match i64::from(nth.a) {

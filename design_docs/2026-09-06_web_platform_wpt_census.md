@@ -4,6 +4,14 @@
 
 **Status:** complete. Measurement only; no renderer or runtime source changed.
 
+**Historical baseline notice — 2026-09-26:** this is the September 6 Boa
+disk-mode snapshot, not current implementation status or a Vano census.
+Selection/Range, MutationObserver, Dedicated Worker and substantial Shadow DOM
+support landed afterward. See the
+[dated ledger reconciliation](2026-09-07_standards_to_features_ledger.md#implementation-reconciliation--2026-09-26)
+for their scoped receipts and open gates. Vano is the current backend behind the
+retained `--engine nova` name. No census was rerun for this documentation update.
+
 **Parent:** the CSS ledgers under
 [`docs/2026-08-24_wpt_harness_ledger_execution_plan.md`](../docs/2026-08-24_wpt_harness_ledger_execution_plan.md)
 and [`docs/2026-07-28_absolute_css_conformance_ledger.md`](../docs/2026-07-28_absolute_css_conformance_ledger.md),

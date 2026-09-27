@@ -1,0 +1,66 @@
+diff --git a/crates/intel/eidetic-search/Cargo.toml b/crates/intel/eidetic-search/Cargo.toml
+index f237c464..d60039be 100644
+--- a/crates/intel/eidetic-search/Cargo.toml
++++ b/crates/intel/eidetic-search/Cargo.toml
+@@ -13,10 +13,10 @@ path = "src/lib.rs"
+ 
+ [dependencies]
+ eidetic = { workspace = true }
+-# The only engine dependency: UAX #29 word segmentation, standing in for
+-# genet's segmentation component (see `src/tokenize.rs`). The scorer itself is
++# The only engine dependency: versioned UAX #29 word segmentation from
++# Genet (see `src/tokenize.rs`). The scorer itself is
+ # in-tree — no mmap, no threads, no C, so the crate reaches wasm/OPFS.
+-unicode-segmentation = "1"
++genet-text = { version = "0.1.0", git = "https://github.com/merely-made/genet.git", branch = "main" }
+ serde = { version = "1", features = ["derive"] }
+ serde_json = "1"
+ thiserror = "1"
+diff --git a/crates/intel/eidetic-search/src/tokenize.rs b/crates/intel/eidetic-search/src/tokenize.rs
+index f195fa7b..72a4fb59 100644
+--- a/crates/intel/eidetic-search/src/tokenize.rs
++++ b/crates/intel/eidetic-search/src/tokenize.rs
+@@ -6,17 +6,14 @@
+ 
+ //! One tokenizer, used for indexing and for querying.
+ //!
+-//! **Stand-in.** This is a placeholder for genet's UAX #29 segmentation
+-//! component — the platform primitive Mark ruled to found, which Selection,
+-//! find-in-page, `Intl.Segmenter`, this index and `esp`'s lexical embedder all
+-//! want (lighter-recall brief §3.4). The swap point is
+-//! [`Tokenizer::segment`]: replace its body with the genet call and every
+-//! consumer of [`Tokenizer::tokens`] follows. Nothing else here is
+-//! segmentation — the rest is normalization.
++//! Genet supplies the versioned UAX #29 default word boundaries. Everything
++//! after that seam is search policy: connector splitting, lowercasing and
++//! optional stemming. Locale dictionaries remain a separate future profile.
+ //!
+ //! Public so `esp` can share it rather than grow a second token stream.
+ 
+-use unicode_segmentation::UnicodeSegmentation;
++/// Boundary profile used before search-specific normalization.
++pub const SEGMENTATION_PROFILE: &str = genet_text::PROFILE;
+ 
+ /// The tokenizer's name, recorded in the index spec.
+ pub const TOKENIZER_NAME: &str = "unicode-words";
+@@ -44,9 +41,9 @@ impl Tokenizer {
+         Self { stem: Some(stem) }
+     }
+ 
+-    /// The segmentation seam — the only part genet's component replaces.
++    /// The shared boundary seam; search normalization follows separately.
+     fn segment(text: &str) -> impl Iterator<Item = &str> {
+-        text.unicode_words()
++        genet_text::words(text)
+     }
+ 
+     /// Tokens for one field of text, in order.
+@@ -116,7 +113,7 @@ mod tests {
+         assert_eq!(tokenizer.tokens("Grüße, Welt"), ["grüße", "welt"]);
+         // UAX #29 alone has no dictionary, so unspaced scripts fall to one
+         // token per ideograph. Recall still works, precision does not — the
+-        // genet component behind `segment` is where a dictionary lands.
++        // default profile makes no dictionary-segmentation claim.
+         assert_eq!(tokenizer.tokens("東京 tower"), ["東", "京", "tower"]);
+     }
+ }

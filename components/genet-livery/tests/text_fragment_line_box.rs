@@ -321,4 +321,128 @@ mod arial {
             .collect::<Vec<_>>();
         assert!(failures.is_empty(), "{}", failures.join("\n"));
     }
+
+    /// Content height is a font metric, even with positive or negative leading.
+    /// These are current Genet measurements, not a fresh browser comparison.
+    #[test]
+    fn explicit_height_keeps_font_content_bounds() {
+        let face = arial();
+        let mut failures = Vec::new();
+        for (size, height, expected_line, expected_top, content) in [
+            (16, "20px", 20.0, 1.0, 17.0),
+            (16, "8px", 8.0, -5.0, 17.0),
+            (16, "0", 0.0, -9.0, 17.0),
+            (13, "1", 13.0, -1.0, 15.0),
+        ] {
+            let body = format!(
+                "<div id=b style='font:{size}px receipt-arial;line-height:{height}'><span id=t>Text</span></div>"
+            );
+            let session = alone(&body, "body { margin:0 }", &face);
+            let (line, top, actual) = text_in_line(&session, "b", "t");
+            println!(
+                "EXPLICIT size={size} line-height={height} line={line} content-top={top} content-height={actual}"
+            );
+            if (actual - content).abs() > 0.01 {
+                failures.push(format!(
+                    "{size}/{height}: content {actual}, expected {content}"
+                ));
+            }
+            if (line - expected_line).abs() > 0.01 || (top - expected_top).abs() > 0.01 {
+                failures.push(format!("{size}/{height}: line {line}, top {top}; expected {expected_line}, {expected_top}"));
+            }
+        }
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
+    /// Inspect every emitted border/background rectangle, including the first
+    /// and last wrapped edge. The font content area is 17px at Arial 16px.
+    #[test]
+    fn wrapped_decorations_use_font_content_bounds() {
+        use paint_list_api::{ColorF, PaintCmd, PaintList};
+        let face = arial();
+        let mut failures = Vec::new();
+        for line_height in ["normal", "24px", "8px"] {
+            for (decoration, extra) in [
+                ("border:1px solid red", 2.0),
+                ("padding:2px 4px;background:red", 4.0),
+            ] {
+                let body = format!(
+                    "<div id=b style='width:90px;font:16px receipt-arial;line-height:{line_height}'><span id=t style='{decoration}'>alpha beta gamma delta epsilon zeta</span></div>"
+                );
+                let mut session = alone(&body, "body { margin:0 }", &face);
+                let list = session.frame(320, 2400).unwrap();
+                let boxes: Vec<_> = list
+                    .commands()
+                    .iter()
+                    .filter_map(|cmd| match cmd {
+                        PaintCmd::DrawBorder(item) => Some(item.placement.bounds),
+                        PaintCmd::DrawRect(item)
+                            if item.color == ColorF::new(1.0, 0.0, 0.0, 1.0) =>
+                        {
+                            Some(item.placement.bounds)
+                        },
+                        _ => None,
+                    })
+                    .collect();
+                println!(
+                    "WRAPPED line-height={line_height} decoration={decoration} boxes={boxes:?}"
+                );
+                assert!(
+                    boxes.len() >= 3,
+                    "fixture must wrap across at least three painted fragments"
+                );
+                for (i, bounds) in boxes.iter().enumerate() {
+                    let actual = bounds.max.y - bounds.min.y;
+                    if (actual - (17.0 + extra)).abs() > 0.01 {
+                        failures.push(format!(
+                            "{line_height}/{decoration} fragment {i}: height {actual}, expected {}",
+                            17.0 + extra
+                        ));
+                    }
+                }
+            }
+        }
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
+    #[test]
+    fn decorated_edges_follow_their_own_aligned_baseline() {
+        use paint_list_api::{PaintCmd, PaintList};
+        let face = arial();
+        for align in ["baseline", "super", "sub", "top", "bottom"] {
+            for empty in [false, true] {
+                let content = if empty { "" } else { "Text" };
+                let body = format!(
+                    "<div id=b style='font:32px receipt-arial;line-height:40px'>Big<span id=t style='font-size:16px;line-height:20px;vertical-align:{align};border:1px solid red'>{content}</span><span id=reference style='font-size:16px;line-height:20px;vertical-align:{align}'>Text</span></div>"
+                );
+                let mut session = alone(&body, "body { margin:0 }", &face);
+                let (_, text_top, text_height) = text_in_line(&session, "b", "reference");
+                let block_top = rect(&session, "b")[1];
+                let list = session.frame(320, 2400).unwrap();
+                let borders: Vec<_> = list
+                    .commands()
+                    .iter()
+                    .filter_map(|cmd| match cmd {
+                        PaintCmd::DrawBorder(item) => Some(item.placement.bounds),
+                        _ => None,
+                    })
+                    .collect();
+                assert_eq!(borders.len(), 1);
+                let border = borders[0];
+                let top = border.min.y - block_top;
+                let height = border.max.y - border.min.y;
+                println!(
+                    "ALIGNED align={align} empty={empty} border-top={top} border-height={height} reference-top={text_top} reference-height={text_height}"
+                );
+                assert!(
+                    (height - 19.0).abs() < 0.01,
+                    "edge must use its own 16px font, not the 32px parent's"
+                );
+                assert!(
+                    (top - (text_top - 1.0)).abs() < 0.01,
+                    "edge must use its own aligned baseline"
+                );
+            }
+        }
+    }
 }

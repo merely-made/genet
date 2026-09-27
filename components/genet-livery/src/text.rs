@@ -1315,8 +1315,6 @@ impl TextSystem {
         let mut baselines: Option<(f32, f32)> = None;
         for line in layout.lines() {
             let source_metrics = *line.metrics();
-            let content_height =
-                (source_metrics.block_max_coord - source_metrics.block_min_coord).max(0.0);
             let line_top = parley_line_top(&source_metrics) + drift;
             let mut extents = LineExtents::new();
             if !quirks {
@@ -1488,23 +1486,15 @@ impl TextSystem {
                             glyph.point.y += own_baseline - source_metrics.baseline;
                         }
                         let line_fragment_y = line_top + (own_baseline - baseline);
-                        // Under `line-height: normal` text paints over its box's
-                        // content area, the rounded ascent and descent its extent
-                        // was built from, as Chromium paints it; the extent adds
-                        // the rounded line gap.
-                        let (fragment_y, fragment_height) = span
-                            .filter(|span| matches!(span.style.line_height, CssLineHeight::Normal))
-                            .map(|span| {
-                                innermost(&span.owners)
-                                    .map_or(root_metrics, |owner| box_fonts[&owner])
-                            })
-                            .map_or(
-                                (line_fragment_y, line_height.max(content_height)),
-                                |metrics| {
-                                    let ascent = metrics.ascent.round();
-                                    (own_baseline - ascent, ascent + metrics.descent.round())
-                                },
-                            );
+                        // CSS 2.2 10.6.1: font content bounds are independent
+                        // of line-height. Negative leading may put them outside
+                        // the formatting line box, which still owns layout.
+                        let metrics = span.map_or(root_metrics, |span| {
+                            innermost(&span.owners).map_or(root_metrics, |owner| box_fonts[&owner])
+                        });
+                        let ascent = metrics.ascent.round();
+                        let fragment_y = own_baseline - ascent;
+                        let fragment_height = ascent + metrics.descent.round();
                         let mut cluster_x = run.offset();
                         let mut clusters = Vec::new();
                         for cluster in parley_run.visual_clusters() {
@@ -1579,7 +1569,8 @@ impl TextSystem {
                         else {
                             continue;
                         };
-                        // The margin box's top; an edge spans the line box.
+                        // Atoms use their margin box; edges use their own font
+                        // content area and baseline, independently of line-height.
                         let top = match position {
                             Some((_, (above, _))) => own_baseline - above,
                             None => line_top,
@@ -1588,11 +1579,22 @@ impl TextSystem {
                             source: inline_box.source,
                             owners: inline_box.owners.clone(),
                             fragment: if inline_box.edge {
+                                let metrics = box_fonts
+                                    .get(&inline_box.source)
+                                    .copied()
+                                    .unwrap_or(root_metrics);
+                                let anchor = box_anchors
+                                    .get(&inline_box.source)
+                                    .copied()
+                                    .unwrap_or_else(Anchor::root);
+                                let edge_baseline =
+                                    extents.baseline_at(anchor, baseline, line_top, line_height);
+                                let ascent = metrics.ascent.round();
                                 Fragment {
                                     x: positioned.x,
-                                    y: top,
+                                    y: edge_baseline - ascent,
                                     width: positioned.width,
-                                    height: line_height.max(0.0),
+                                    height: ascent + metrics.descent.round(),
                                 }
                             } else {
                                 Fragment {

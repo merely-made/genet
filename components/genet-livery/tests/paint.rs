@@ -2106,7 +2106,7 @@ fn shaped_text_height_moves_the_following_block() {
 }
 
 #[test]
-fn shared_inline_group_height_matches_its_painted_lines() {
+fn shared_inline_group_height_contains_its_painted_lines() {
     let document = StaticDocument::parse(
         r#"<html><body><div class="label"><span class="all">one <em>two three</em><span class="badge"></span> four five six</span></div><div class="after"></div></body></html>"#,
     );
@@ -2143,9 +2143,19 @@ fn shared_inline_group_height_matches_its_painted_lines() {
         })
         .expect("the following block paints");
 
+    let label = document
+        .dom()
+        .first_with_class(document.dom().document(), "label")
+        .expect("label");
+    let [_, top, _, height] = document.fragment_rect(label).expect("line group");
+    assert_eq!(
+        following_top,
+        top + height,
+        "block flow consumes the line group"
+    );
     assert!(
-        (following_top - inline_bottom).abs() <= 0.5,
-        "Taffy block flow must consume exactly the shared Parley group height: inline_bottom={inline_bottom}, following_top={following_top}"
+        inline_bottom <= following_top && following_top - inline_bottom < 20.0,
+        "font content fits in the final line without having to fill its leading: inline_bottom={inline_bottom}, following_top={following_top}"
     );
 }
 
@@ -2350,7 +2360,7 @@ fn wrapped_inline_borders_use_slice_edges() {
 #[test]
 fn vertical_inline_edges_paint_outside_the_line_box() {
     let document = StaticDocument::parse(
-        r#"<html><body><div class="label"><span>text</span></div><div class="after"></div></body></html>"#,
+        r#"<html><body><div class="label"><span class="text">text</span></div><div class="after"></div></body></html>"#,
     );
     let mut document = LiveryDocument::new(
         document,
@@ -2384,7 +2394,21 @@ fn vertical_inline_edges_paint_outside_the_line_box() {
         })
         .expect("following block paints");
 
-    assert!(decoration.height() >= 33.5);
+    let span = document
+        .dom()
+        .first_with_class(document.dom().document(), "text")
+        .expect("text owner");
+    let text = document
+        .dom()
+        .dom_children(span)
+        .find(|node| document.dom().text(*node).is_some())
+        .expect("text node");
+    let [_, content_top, _, content_height] =
+        document.fragment_rect(text).expect("text content fragment");
+    // Top padding4 + border2, bottom padding6 + border2 attach to the
+    // font content area, independently of the explicit 20px line height.
+    assert_eq!(decoration.min.y, content_top - 6.0);
+    assert_eq!(decoration.max.y, content_top + content_height + 8.0);
     assert!(
         following_top < decoration.max.y,
         "vertical inline edges are paint overflow, not line-height input"

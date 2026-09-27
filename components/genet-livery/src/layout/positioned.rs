@@ -384,7 +384,46 @@ where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
-    let candidates = boxes
+    positioned_candidates(fragments, boxes, styles)
+        .into_iter()
+        .filter_map(|candidate| {
+            positioned_placement(
+                fragments,
+                boxes,
+                styles,
+                dom,
+                image_sources,
+                intrinsic_sizes,
+                (viewport_width, viewport_height),
+                candidate,
+            )
+        })
+        .collect()
+}
+
+/// An absolute or fixed box awaiting placement. Its static-position record is
+/// relative to its source fragment, so a move leaves it valid.
+struct PositionedCandidate<Id> {
+    box_id: BoxId,
+    node: Id,
+    root: FragmentId,
+    static_position: StaticPosition,
+}
+
+/// Every absolute and fixed box the formatting pass gave a fragment and a
+/// static position, ancestors before descendants.
+fn positioned_candidates<Id>(
+    fragments: &FragmentTree,
+    boxes: &buckram::CssBoxTree<Id>,
+    styles: &StylePlane<Id>,
+) -> Vec<PositionedCandidate<Id>>
+where
+    Id: Copy + Eq + Hash,
+{
+    let depth = |box_id: BoxId| {
+        std::iter::successors(boxes[box_id].parent(), |parent| boxes[*parent].parent()).count()
+    };
+    let mut candidates = boxes
         .iter()
         .filter_map(|(box_id, css_box)| {
             if !matches!(
@@ -400,157 +439,182 @@ where
             styles.get(node)?;
             let root = fragments.fragment_ids_for_box(box_id).first().copied()?;
             let static_position = *fragments.static_position_for_box(box_id)?;
-            Some((box_id, node, root, static_position))
+            Some(PositionedCandidate {
+                box_id,
+                node,
+                root,
+                static_position,
+            })
         })
         .collect::<Vec<_>>();
-
+    candidates.sort_by_key(|candidate| depth(candidate.box_id));
     candidates
-        .into_iter()
-        .filter_map(|(box_id, node, root, static_position)| {
-            let current = fragments.get(root).map(TreeFragment::physical_rect)?;
-            let (containing_fragment, containing_rect, containing_flow) =
-                match static_position.containing_block {
-                    ContainingBlock::Initial => (
-                        None,
-                        Fragment {
-                            x: 0.0,
-                            y: 0.0,
-                            width: viewport_width,
-                            height: viewport_height,
+}
+
+/// `candidate`'s placement, read from the fragment tree as it stands now.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one placement needs the same fragment, box, style, replaced-source, intrinsic, and viewport inputs as the batch"
+)]
+fn positioned_placement<D>(
+    fragments: &FragmentTree,
+    boxes: &buckram::CssBoxTree<D::NodeId>,
+    styles: &StylePlane<D::NodeId>,
+    dom: &D,
+    image_sources: &ImageSources,
+    intrinsic_sizes: &HashMap<BoxId, IntrinsicSizes>,
+    (viewport_width, viewport_height): (f32, f32),
+    candidate: PositionedCandidate<D::NodeId>,
+) -> Option<PositionedPlacement>
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    let PositionedCandidate {
+        box_id,
+        node,
+        root,
+        static_position,
+    } = candidate;
+    let current = fragments.get(root).map(TreeFragment::physical_rect)?;
+    let (containing_fragment, containing_rect, containing_flow) = match static_position
+        .containing_block
+    {
+        ContainingBlock::Initial => (
+            None,
+            Fragment {
+                x: 0.0,
+                y: 0.0,
+                width: viewport_width,
+                height: viewport_height,
+            },
+            FlowAxes::HORIZONTAL_LTR,
+        ),
+        ContainingBlock::Box(containing_box) => {
+            let fragment_id = fragments
+                .fragment_ids_for_box(containing_box)
+                .first()
+                .copied()?;
+            let border_rect = fragments
+                .get(fragment_id)
+                .map(TreeFragment::physical_rect)?;
+            let rect = match (
+                static_position.source,
+                static_position.containing_block_area,
+            ) {
+                (StaticPositionSource::Fragment(source), Some(area)) if source == fragment_id => {
+                    let area = boxes[containing_box].flow.physical_rect(
+                        area,
+                        PhysicalSize {
+                            width: border_rect.width,
+                            height: border_rect.height,
                         },
-                        FlowAxes::HORIZONTAL_LTR,
-                    ),
-                    ContainingBlock::Box(containing_box) => {
-                        let fragment_id = fragments
-                            .fragment_ids_for_box(containing_box)
-                            .first()
-                            .copied()?;
-                        let border_rect = fragments
-                            .get(fragment_id)
-                            .map(TreeFragment::physical_rect)?;
-                        let rect = match (
-                            static_position.source,
-                            static_position.containing_block_area,
-                        ) {
-                            (StaticPositionSource::Fragment(source), Some(area))
-                                if source == fragment_id =>
-                            {
-                                let area = boxes[containing_box].flow.physical_rect(
-                                    area,
-                                    PhysicalSize {
-                                        width: border_rect.width,
-                                        height: border_rect.height,
-                                    },
-                                );
-                                PhysicalRect {
-                                    x: border_rect.x + area.x,
-                                    y: border_rect.y + area.y,
-                                    width: area.width,
-                                    height: area.height,
-                                }
-                            },
-                            _ => positioned_containing_block_rect(
-                                border_rect,
-                                containing_box,
-                                fragments,
-                                boxes,
-                                styles,
-                            ),
-                        };
-                        (Some(fragment_id), rect, boxes[containing_box].flow)
-                    },
-                };
-            let (source_origin, source_size) = match static_position.source {
-                StaticPositionSource::InitialContainingBlock => (
+                    );
+                    PhysicalRect {
+                        x: border_rect.x + area.x,
+                        y: border_rect.y + area.y,
+                        width: area.width,
+                        height: area.height,
+                    }
+                },
+                _ => positioned_containing_block_rect(
+                    border_rect,
+                    containing_box,
+                    fragments,
+                    boxes,
+                    styles,
+                ),
+            };
+            (Some(fragment_id), rect, boxes[containing_box].flow)
+        },
+    };
+    let (source_origin, source_size) = match static_position.source {
+        StaticPositionSource::InitialContainingBlock => (
+            (0.0, 0.0),
+            PhysicalSize {
+                width: viewport_width,
+                height: viewport_height,
+            },
+        ),
+        StaticPositionSource::Fragment(source) => fragments
+            .get(source)
+            .map(TreeFragment::physical_rect)
+            .map_or(
+                (
                     (0.0, 0.0),
                     PhysicalSize {
                         width: viewport_width,
                         height: viewport_height,
                     },
                 ),
-                StaticPositionSource::Fragment(source) => fragments
-                    .get(source)
-                    .map(TreeFragment::physical_rect)
-                    .map_or(
-                        (
-                            (0.0, 0.0),
-                            PhysicalSize {
-                                width: viewport_width,
-                                height: viewport_height,
-                            },
-                        ),
-                        |rect| {
-                            (
-                                (rect.x, rect.y),
-                                PhysicalSize {
-                                    width: rect.width,
-                                    height: rect.height,
-                                },
-                            )
+                |rect| {
+                    (
+                        (rect.x, rect.y),
+                        PhysicalSize {
+                            width: rect.width,
+                            height: rect.height,
                         },
-                    ),
-            };
-            let static_in_source = boxes[box_id]
-                .flow
-                .physical_rect(static_position.logical_rect, source_size);
-            let static_in_containing = PhysicalRect {
-                x: source_origin.0 + static_in_source.x - containing_rect.x,
-                y: source_origin.1 + static_in_source.y - containing_rect.y,
-                width: static_in_source.width,
-                height: static_in_source.height,
-            };
-            let computed = styles
-                .get(node)
-                .expect("a generated positioned box keeps its computed style");
-            let computed =
-                if boxes[box_id].display.internal_table == Some(InternalTableRole::Wrapper) {
-                    wrapper_style(computed)
-                } else {
-                    computed.clone()
-                };
-            let font_size = font_size_px(&computed.font_size, LIVE_ROOT_FONT_SIZE);
-            let style = to_block_style(boxes, styles, box_id, &computed, font_size);
-            let replaced = positioned_replaced_input(dom, node, image_sources, &style);
-            let containing_size = containing_flow.logical_size(PhysicalSize {
-                width: containing_rect.width,
-                height: containing_rect.height,
-            });
-            let static_rect = containing_flow.logical_rect(
-                static_in_containing,
-                PhysicalSize {
-                    width: containing_rect.width,
-                    height: containing_rect.height,
+                    )
                 },
-            );
-            let intrinsic_inline =
-                positioned_contain_intrinsic_inline(&computed, &style, font_size)
-                    .or_else(|| intrinsic_sizes.get(&box_id).copied());
-            let geometry = buckram::solve_positioned_box(
-                style,
-                buckram::PositionedBoxInput {
-                    containing_size,
-                    static_rect,
-                    measured_size: containing_flow.logical_size(PhysicalSize {
-                        width: current.width,
-                        height: current.height,
-                    }),
-                    intrinsic_inline,
-                    replaced,
-                },
-            );
-            Some(PositionedPlacement {
-                box_id,
-                root,
-                containing_fragment,
-                current,
-                containing_rect,
-                containing_flow,
-                containing_size,
-                style,
-                geometry,
-            })
-        })
-        .collect()
+            ),
+    };
+    let static_in_source = boxes[box_id]
+        .flow
+        .physical_rect(static_position.logical_rect, source_size);
+    let static_in_containing = PhysicalRect {
+        x: source_origin.0 + static_in_source.x - containing_rect.x,
+        y: source_origin.1 + static_in_source.y - containing_rect.y,
+        width: static_in_source.width,
+        height: static_in_source.height,
+    };
+    let computed = styles
+        .get(node)
+        .expect("a generated positioned box keeps its computed style");
+    let computed = if boxes[box_id].display.internal_table == Some(InternalTableRole::Wrapper) {
+        wrapper_style(computed)
+    } else {
+        computed.clone()
+    };
+    let font_size = font_size_px(&computed.font_size, LIVE_ROOT_FONT_SIZE);
+    let style = to_block_style(boxes, styles, box_id, &computed, font_size);
+    let replaced = positioned_replaced_input(dom, node, image_sources, &style);
+    let containing_size = containing_flow.logical_size(PhysicalSize {
+        width: containing_rect.width,
+        height: containing_rect.height,
+    });
+    let static_rect = containing_flow.logical_rect(
+        static_in_containing,
+        PhysicalSize {
+            width: containing_rect.width,
+            height: containing_rect.height,
+        },
+    );
+    let intrinsic_inline = positioned_contain_intrinsic_inline(&computed, &style, font_size)
+        .or_else(|| intrinsic_sizes.get(&box_id).copied());
+    let geometry = buckram::solve_positioned_box(
+        style,
+        buckram::PositionedBoxInput {
+            containing_size,
+            static_rect,
+            measured_size: containing_flow.logical_size(PhysicalSize {
+                width: current.width,
+                height: current.height,
+            }),
+            intrinsic_inline,
+            replaced,
+        },
+    );
+    Some(PositionedPlacement {
+        box_id,
+        root,
+        containing_fragment,
+        current,
+        containing_rect,
+        containing_flow,
+        containing_size,
+        style,
+        geometry,
+    })
 }
 
 /// Supply the explicit substitute intrinsic contribution for the positioned
@@ -829,16 +893,23 @@ pub(in crate::layout) fn apply_absolute_and_fixed_positioning<D>(
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
-    for placement in positioned_placements(
-        fragments,
-        boxes,
-        styles,
-        dom,
-        image_sources,
-        intrinsic_sizes,
-        viewport_width,
-        viewport_height,
-    ) {
+    // Each box is placed from the tree as its ancestors' moves left it. A
+    // fixed box's containing block, the viewport, stays put while an absolute
+    // ancestor's move carries the fixed box along, so a placement resolved
+    // before that move would undo only its own.
+    for candidate in positioned_candidates(fragments, boxes, styles) {
+        let Some(placement) = positioned_placement(
+            fragments,
+            boxes,
+            styles,
+            dom,
+            image_sources,
+            intrinsic_sizes,
+            (viewport_width, viewport_height),
+            candidate,
+        ) else {
+            continue;
+        };
         let target = placement.target_rect();
         // The formatter owns positioned subtrees, but a fragment with no
         // descendants has no child containing block to invalidate. Publish

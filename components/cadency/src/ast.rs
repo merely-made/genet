@@ -49,6 +49,13 @@ pub struct Nth<P> {
 }
 
 /// One simple selector.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum GeneratedPseudo {
+    Before,
+    After,
+}
+
+/// One simple selector.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Simple<P> {
     /// `*`. Matches everything; kept so an explicit universal is a compound.
@@ -77,6 +84,7 @@ pub enum Simple<P> {
     Slotted(Box<Selector<P>>),
     Part(Vec<Box<str>>),
     State(P),
+    Generated(GeneratedPseudo),
 }
 
 /// How far out of its own tree scope a selector can reach.
@@ -151,7 +159,9 @@ impl<P> Selector<P> {
         for simple in compounds.iter().flatten() {
             match simple {
                 Simple::Universal | Simple::NoNamespace | Simple::Where(_) => {},
-                Simple::LocalName { .. } | Simple::Part(_) => counts.element += 1,
+                Simple::LocalName { .. } | Simple::Part(_) | Simple::Generated(_) => {
+                    counts.element += 1
+                },
                 Simple::Id(_) => counts.id += 1,
                 Simple::Class(_)
                 | Simple::Attribute(_)
@@ -192,6 +202,13 @@ impl<P> Selector<P> {
     /// The subject compound.
     pub fn subject(&self) -> &[Simple<P>] {
         &self.compounds[0]
+    }
+
+    pub fn generated_pseudo(&self) -> Option<GeneratedPseudo> {
+        self.subject().iter().find_map(|simple| match simple {
+            Simple::Generated(pseudo) => Some(*pseudo),
+            _ => None,
+        })
     }
 
     pub fn reach(&self) -> Reach {

@@ -16,7 +16,7 @@ default = []
 livery = [
     "dep:genet-livery", "dep:genet-scripted-dom", "dep:paint_list_render",
     "dep:paint_list_api",
-    "dep:genet-render", "dep:unicode-segmentation", "dep:url",
+    "dep:genet-render", "dep:genet-text", "dep:url",
 ]
 # The scripted lane: a live LiveryScriptedDocument on Boa.
 scripted = [
@@ -52,7 +52,7 @@ script-engine-api = { path = "../script-engine-api", optional = true }
 script-engine-boa = { path = "../script-engine-boa", optional = true }
 script-engine-nova = { path = "../script-engine-nova", optional = true }
 url = { workspace = true, optional = true }
-unicode-segmentation = { workspace = true, optional = true }
+genet-text = { path = "../genet-text", version = "0.1.0", optional = true }
 
 [dev-dependencies]
 # Livery resource tests encode small PNG fixtures even when the smolweb

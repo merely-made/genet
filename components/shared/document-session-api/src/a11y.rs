@@ -241,6 +241,9 @@ pub struct DocumentA11yNode {
     pub children: Vec<DocumentA11yNodeId>,
     pub role: DocumentA11yRole,
     pub name: Option<String>,
+    /// Supplemental text, separate from the control name and current value.
+    #[serde(default)]
+    pub description: Option<String>,
     pub value: Option<String>,
     pub numeric_value: Option<f64>,
     pub numeric_minimum: Option<f64>,
@@ -401,6 +404,7 @@ mod tests {
             parent: None,
             children: Vec::new(),
             role: DocumentA11yRole::Document,
+            description: None,
             name: Some("Example".into()),
             value: None,
             numeric_value: None,

@@ -34,6 +34,9 @@ url = "https://www.w3.org/TR/css-position-3/"
 [sources.css_lists_3]
 url = "https://www.w3.org/TR/css-lists-3/#propdef-list-style-type"
 
+[sources.css_content_3]
+url = "https://www.w3.org/TR/CSS22/generate.html#content"
+
 [sources.css_box_4]
 url = "https://www.w3.org/TR/css-box-4/"
 
@@ -2300,12 +2303,15 @@ animation = "by-computed-value"
 source = "css_break_3"
 
 # group: counters
-[[unimplemented]]
+[[property]]
 name = "content"
-group = "counters"
+value_type = "content"
 inherited = false
+initial = "normal"
+grammar = "normal | none | [ <string> | attr(<ident>) ]+"
+seed_values = ["normal", "none"]
 animation = "discrete"
-spec = "https://drafts.csswg.org/css-content/#propdef-content"
+source = "css_content_3"
 
 [[unimplemented]]
 name = "counter-increment"

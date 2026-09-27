@@ -242,6 +242,9 @@ fn lower_node(
     if let Some(name) = &node.name {
         access.set_label(name.clone());
     }
+    if let Some(description) = &node.description {
+        access.set_description(description.clone());
+    }
     if let Some(value) = &node.value {
         access.set_value(value.clone());
     }
@@ -462,6 +465,7 @@ mod tests {
                     parent: None,
                     children: vec![checkbox, slider],
                     role: DocumentA11yRole::Document,
+                    description: None,
                     name: None,
                     value: None,
                     numeric_value: None,
@@ -476,6 +480,7 @@ mod tests {
                     parent: Some(root),
                     children: Vec::new(),
                     role: DocumentA11yRole::CheckBox,
+                    description: Some("Receive updates".into()),
                     name: Some("Subscribe".into()),
                     value: None,
                     numeric_value: None,
@@ -495,6 +500,7 @@ mod tests {
                     parent: Some(root),
                     children: Vec::new(),
                     role: DocumentA11yRole::Slider,
+                    description: None,
                     name: Some("Volume".into()),
                     value: None,
                     numeric_value: Some(4.0),
@@ -519,6 +525,7 @@ mod tests {
             .expect("checkbox")
             .1;
         assert_eq!(checkbox.toggled(), Some(Toggled::True));
+        assert_eq!(checkbox.description(), Some("Receive updates"));
         assert_eq!(checkbox.is_selected(), Some(false));
         assert_eq!(checkbox.live(), Some(Live::Polite));
         let root = &tree.nodes.iter().find(|(_, node)| node.role() == Role::Document).expect("root").1;

@@ -86,6 +86,9 @@ pub(in crate::layout) struct BuildState<'a, D: LayoutDom> {
     /// An atomic inline root given its shrink-to-fit border-box width, for
     /// the roots Buckram does not size that way itself.
     pub(in crate::layout) width_override: Option<(D::NodeId, f32)>,
+    /// The atomic inline root a scratch build formats to measure its
+    /// shrink-to-fit width, which it does not measure again.
+    pub(in crate::layout) measuring_root: Option<D::NodeId>,
 }
 
 impl<D> BuildState<'_, D>
@@ -552,6 +555,49 @@ where
         })
     }
 
+    /// `node`'s shrink-to-fit border-box width against `containing_size`,
+    /// measured on a scratch build of its box, when Buckram does not size it
+    /// that way itself (`fallback_shrink_to_fit_width`).
+    fn measured_shrink_to_fit_width(
+        &self,
+        box_id: BoxId,
+        node: D::NodeId,
+        inherited: Option<&ComputedValues>,
+        parent_font_size: f32,
+        containing_size: (Option<f32>, Option<f32>),
+    ) -> Result<Option<f32>, LayoutError> {
+        let Some(basis_width) = containing_size.0 else {
+            return Ok(None);
+        };
+        let mut scratch = BuildState {
+            dom: self.dom,
+            styles: self.styles,
+            boxes: self.boxes,
+            tree: {
+                let mut tree = AlgorithmTree::new();
+                tree.set_calc_resolver(resolve_taffy_calc);
+                tree
+            },
+            image_sources: self.image_sources,
+            text: None,
+            table_shadow: TableShadowLedger::default(),
+            pending_tables: Vec::new(),
+            contribution_root: None,
+            width_override: None,
+            measuring_root: Some(node),
+        };
+        let Some(root) = scratch.build_box(box_id, inherited, parent_font_size, containing_size)?
+        else {
+            return Ok(None);
+        };
+        Ok(fallback_shrink_to_fit_width(
+            &mut scratch,
+            root,
+            node,
+            basis_width,
+        ))
+    }
+
     fn build_box_on_this_stack(
         &mut self,
         box_id: BoxId,
@@ -565,9 +611,32 @@ where
                 if self.contribution_root == Some(node) {
                     contribution_style(&mut computed);
                 }
-                if let Some((target, width)) = self.width_override
-                    && target == node
-                {
+                // The one-shot entry has no atomic pass, so an atomic root
+                // Buckram does not shrink to fit takes that pass's fallback
+                // here, against its real containing block.
+                let width = match self.width_override {
+                    Some((target, width)) if target == node => Some(width),
+                    _ if self.text.is_none()
+                        && computed.width == CssSize::Auto
+                        && computed.display != CssDisplay::InlineTable
+                        && self.measuring_root != Some(node)
+                        && self.boxes.principal_box(node) == Some(box_id)
+                        && self.boxes[box_id].display.outside == Some(DisplayOutside::Inline)
+                        && is_atomic_inline_box(self.dom, self.styles, node)
+                        && !is_replaced_element(self.dom, node)
+                        && !has_atomic_inline_ancestor(self.dom, self.styles, self.boxes, node) =>
+                    {
+                        self.measured_shrink_to_fit_width(
+                            box_id,
+                            node,
+                            inherited,
+                            parent_font_size,
+                            containing_size,
+                        )?
+                    },
+                    _ => None,
+                };
+                if let Some(width) = width {
                     computed.width = CssSize::Value(CssLengthPercentage::Length(Length {
                         value: width,
                         unit: livery::values::LengthUnit::Px,

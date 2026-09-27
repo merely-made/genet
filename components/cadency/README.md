@@ -10,7 +10,9 @@ Covers type, universal, id, class and attribute selectors; the four
 combinators; `:not()`, `:is()`, `:where()`; the structural family including
 `:nth-child(an+b of S)`; and `:host`, `:host()`, `::slotted()`, `::part()`
 across shadow-tree scopes. `:has()`, named namespace prefixes, quirks mode and
-other pseudo-elements are not parsed.
+other pseudo-elements are not parsed, except terminal `::before` / `::after`
+(also `:before` / `:after`). Those use `Selector::matches_generated` against
+the originating element; ordinary element matching never selects them.
 
 Each parsed selector also reports what a cascade index needs: its specificity,
 whether it reaches across a tree scope, the key its rightmost compound

@@ -119,8 +119,11 @@ impl<'a, D: LayoutDom> SelectorTree<'a, D> {
         }
         if include_siblings {
             let neighborhood: Vec<_> = included.iter().copied().collect();
+            let mut parents = HashSet::new();
             for id in neighborhood {
-                if let Some(parent) = dom.parent(id) {
+                if let Some(parent) = dom.parent(id)
+                    && parents.insert(parent)
+                {
                     included.extend(dom.dom_children(parent));
                 }
             }

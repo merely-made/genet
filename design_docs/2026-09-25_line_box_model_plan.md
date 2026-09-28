@@ -6,7 +6,7 @@ patched. Slice A (the model with nested alignment, the line height quirk,
 and the scripted tier's quirks mode) and slice B (atom baselines) are
 implemented and receipted. Since 2026-09-27, under `line-height: normal`,
 each text run paints over its box's content area inside its line box. The
-items under Next remain. Ruling 379 (2026-09-27) authorizes the explicit-line-height and wrapped inline-edge bounds fixes; the combined implementation and CPU verification are complete, with independent review and consumer acceptance still pending.
+items under Next remain. Ruling 379 (2026-09-27) authorizes the explicit-line-height and wrapped inline-edge bounds fixes. The combined implementation, its original bounded CPU/consumer checks and independent review are complete. Integration refresh against current main's retained motion/restyle changes is complete, including the current-family consumer pair. The lane awaits coordinator review and integration; no primary Genet merge or consumer pin change has occurred.
 
 ## The gap
 
@@ -854,3 +854,92 @@ Integration remains with the coordinator. A fresh primary Genet inspection
 found concurrent retained-motion work at main `c858738`; this lane must not
 merge underneath that owner. Its clean-lane code/lock receipts remain valid,
 and the existing worktree stays available until a safe integration window.
+
+### 2026-09-27 current-main integration refresh
+
+The previous primary-worktree collision cleared. Exact main
+`f2e2850fcc49ade2a00a40c9aef220013336aa0b` is merged into this lane at
+`07128173b486b88ee274625bbafb9a55bdcc15c1`, without conflicts. Main's eight
+changed paths and the text lane's six paths did not overlap; the merge retains
+positioned-transform layout reuse and shared incremental-restyle preparation.
+Manifests and the lane's published dependency lock are unchanged. This is an
+integration refresh, not a new rendering or text policy.
+
+The retained-motion fixture previously used undecorated, unwrapped normal-line
+captions. A new bounded cross-fixture loads the recorded Arial font at 16px with
+8px line height, produces four wrapped 19px-high border fragments, verifies
+layout reuse under move/scale, and compares the complete retained paint commands
+with a freshly laid-out equivalent. Changing line height to 24px must rebuild
+layout and again match fresh commands. The fixture and all four existing motion
+cases pass, as do the six text fixtures and four invalidation-work tests.
+
+The explicit-text and wrapped-edge fault controls were refreshed against
+this combined source. The first explicit-control attempt copied an archived
+source timestamp, allowing Cargo to reuse the fixed binary; that invalid
+attempt is retained and is not a fault-detection receipt. Both controls rerun
+with fresh timestamps fail as intended, the fixed source is restored byte for
+byte, and all six text fixtures pass again. The affected Livery/Buckram and
+four boundary-package suites now pass as recorded below.
+
+Isometry now selects Mere `ac41628a`, Genet `92b249af` and NetRender `9607d16`.
+Its original 799-package default graph and the external full-Genet lane override
+each have 799 packages: all 19 Genet packages move coherently to this lane, all
+four NetRender packages retain their published `9607d16` Git identities, and no
+other Git or registry source identity changes. The netrender-vello 0.10.1 and wgpu 30.0.1 packages each
+have one resolved identity. The current-family paired consumer gate ran
+with an external config and separate external lock, preserving primary pins,
+configs and lock. This replaces neither the earlier c8 receipt nor its limits.
+
+Fresh raw evidence is under
+`Code/testing/genet/receipts/2026-09-27/text-fragment-current-main` and
+`Code/testing/genet/receipts/2026-09-27/text-fragment-consumer-current-family`.
+Final manifests and outcomes follow below. No GPU, fresh
+Chromium comparison, WPT, glyph-ink or pixel claim follows from these CPU gates.
+
+**Refresh completed, 2026-09-27:** the combined Livery/Buckram run passes 876
+tests, with zero failures and 6 existing ignored cases across 46 target results.
+The four boundary packages pass 200 tests, with zero failures or ignored cases:
+genet-documents 54, genet-render 38, genet-scripted 85 plus worker-service 2,
+and taproot 21. Four doctest targets contain no cases. The boundary scope uses
+Livery/Boa through `genet-documents/scripted`; optional Vano remains outside it.
+The 876 count is the previous 867 plus main's four motion tests, four restyle
+work tests, and the new combination test. Changed-source rustfmt and diff checks
+pass. All combined source, lock and font hashes remain unchanged across gates.
+
+The CPU receipt has 82 files in
+`Code/testing/genet/receipts/2026-09-27/text-fragment-current-main/SHA256SUMS`,
+manifest SHA-256
+`89d27a56f301230e9972781f78008ef6bd784e9f85a2b98a9ea0cffbc7d4a3c9`.
+Tested source is merge `07128173b486b88ee274625bbafb9a55bdcc15c1` plus the
+sealed 75-line test-only patch. The complete retained-motion test file has
+SHA-256 `01825583df4a645232938c2fc35ef0a87b50975de3653f289cd01c500f865b15`.
+The existing production text fix remains byte-identical to its reviewed source.
+The initial invalid cached control, both recompiled fault controls and restored
+run are preserved separately. Control claims use compile/source/behavior evidence;
+no historical control executable hash was captured or inferred.
+
+The current-family consumer pair freshly measures 187 rows in both arms
+(expanded 61, composing 64, picking 62): the lane has zero short rows; published
+Genet `92b249af` has 39, thirteen in each state, and fails the detector as intended.
+Both command-time primary heads are Isometry `04b26d8`; source, config and tracked
+lock hashes remain unchanged. All 799 resolved nodes, features and dependency
+edges match after normalizing only the 19 Genet source replacements. The two
+pre-existing `vello_encoding` 0.10.0 identities (registry and Git `4354955`) remain
+in both arms; the single-identity statement above covers the named
+`netrender-vello` and wgpu packages, not the whole Vello family.
+
+The consumer receipt has 42 files in
+`Code/testing/genet/receipts/2026-09-27/text-fragment-consumer-current-family/SHA256SUMS`,
+manifest SHA-256
+`0787fe0778647feae5b7d112628691ca34f6074179f8dfb2654a35b7d060136f`.
+It uses installed Rust/Cargo 1.98.1 with a separate external test lock, whereas
+the owning Genet suites use repo Rust 1.97.1 and the unchanged published lane
+lock. This is acceptance of the named current-family local Genet combination;
+it does not represent a committed portable consumer repin. The ignored primary
+detector remains ignored until that independently owned integration occurs.
+
+All lane-owned builds/tests are finished and the stable Genet/Isometry targets
+are released. The pre-existing embedded target remains untouched, with marker,
+reparse and historical executable inventory in the CPU receipt. No current gate
+uses it; retirement remains the coordinator's responsibility after integration.
+The new source and documentation are held for the requested pre-commit review.

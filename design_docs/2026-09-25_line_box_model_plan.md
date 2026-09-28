@@ -1,4 +1,11 @@
 # Line box model: CSS 2.1 §10.8 in Livery's line pass
+**Publication, 2026-09-28:** independent review accepted the nine-path scroll
+repair and its sealed CPU evidence. Exact tested source
+`7a60ad7965a1ae81292211b405a53210c554f70c` is committed and pushed to main/origin.
+This status annotation is documentation only; consumers should pin that tested
+source commit. Mere adoption, its original 12px retention gate and later
+Isometry publication remain pending. The original raw manifest is unchanged
+(SHA256 `865c6a8fe1150e0692bdfe9f13a70daabe24041a49395e07bf02f3cf570cc65a`).
 
 **Current follow-up, 2026-09-28:** the accepted font-content bounds exposed a
 scroll-range omission in both Genet's nested clamp and Mere rootstock. Genet's

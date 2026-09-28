@@ -35,6 +35,7 @@ where
     }
 
     pub(in crate::document) fn record_full_layout_damage(&mut self, kind: LayoutDamageKind) {
+        self.style_only_damage = false;
         self.last_layout_damage = Some(LayoutDamage {
             kind,
             roots: vec![self.dom.document()],
@@ -46,6 +47,10 @@ where
         &mut self,
         mutations: &[DomMutation<D::NodeId>],
     ) {
+        self.style_only_damage &= mutations.iter().all(|mutation| {
+            matches!(mutation, DomMutation::AttributeChanged { name, .. }
+                if name.ns == Namespace::from("") && name.local == LocalName::from("style"))
+        });
         let mut roots = Vec::new();
         for mutation in mutations {
             match *mutation {
@@ -217,6 +222,29 @@ where
         // Opened here so the retained fast paths' geometry work is attributed
         // to layout as well; `take` closes it without moving the binding.
         let mut layout_span = crate::phase::span(crate::phase::Phase::Layout);
+        if !viewport_changed
+            && self.layout_dirty
+            && self.style_only_damage
+            && self.transitions.is_empty()
+            && self.keyframe_animation.is_none()
+            && self
+                .layout
+                .as_ref()
+                .is_some_and(|layout| styles.differs_only_in_positioned_motion(&layout.styles))
+        {
+            // These nodes already establish transformed containing blocks.
+            // Paint and input consume their new transforms/stacking order
+            // from styles; their boxes and shaped text remain valid.
+            self.layout
+                .as_mut()
+                .expect("checked retained layout")
+                .styles = styles;
+            self.identity_source = None;
+            self.layout_dirty = false;
+            self.generation = self.generation.saturating_add(1);
+            let _ = layout_span.take();
+            return self.paint_active_layout(width, height);
+        }
         if !viewport_changed
             && self.layout_dirty
             && self.transitions.is_empty()
@@ -469,6 +497,7 @@ where
             &self.image_sources,
         );
         self.cached = Some(((width, height), list.clone()));
+        self.style_only_damage = true;
         Ok(list.translated(-self.scroll.0, -self.scroll.1))
     }
 

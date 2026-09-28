@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     hash::Hash,
     ops::{Deref, DerefMut},
 };
@@ -744,6 +744,50 @@ where
         only_background && changed
     }
 
+    /// Repaint already transformed positioned boxes without reformatting.
+    ///
+    /// Changing `none` to a transform changes containing-block establishment;
+    /// changing an automatic stacking level changes context establishment.
+    /// Both stay on the layout path, as do all non-motion computed values.
+    /// The caller must separately exclude text/structural/resource mutations.
+    pub(crate) fn differs_only_in_positioned_motion(&self, previous: &Self) -> bool {
+        use livery::values::{Transform, TransformStyle, ZIndex};
+
+        let two_dimensional = |transform: &Transform| {
+            matches!(transform, Transform::Functions(functions)
+                if !functions.is_empty() && functions.iter().all(|function| !function.is_3d()))
+        };
+        let mut changed = false;
+        let only_motion = self.values.len() == previous.values.len()
+            && self.generated == previous.generated
+            && self.custom == previous.custom
+            && self.inline_diagnostics == previous.inline_diagnostics
+            && self.color_context == previous.color_context
+            && self.values.iter().all(|(id, current)| {
+                let Some(previous) = previous.values.get(id) else {
+                    return false;
+                };
+                if current == previous {
+                    return true;
+                }
+                changed = true;
+                if !matches!(current.position, Position::Absolute | Position::Fixed)
+                    || current.transform_style != TransformStyle::Flat
+                    || !two_dimensional(&current.transform)
+                    || !two_dimensional(&previous.transform)
+                    || !matches!(current.z_index, ZIndex::Integer(_))
+                    || !matches!(previous.z_index, ZIndex::Integer(_))
+                {
+                    return false;
+                }
+                let mut normalized = previous.clone();
+                normalized.transform = current.transform.clone();
+                normalized.z_index = current.z_index;
+                normalized == *current
+            });
+        only_motion && changed
+    }
+
     /// Return the sole absolute/fixed element whose computed insets changed.
     ///
     /// This is a deliberately narrow K5h admission: every other computed
@@ -1316,15 +1360,13 @@ pub(crate) fn resolve_subtree<D>(
     id: D::NodeId,
     parent: Option<&ComputedValues>,
     parent_custom: Option<&CustomProperties>,
-    tree_counts: TreeCounts,
+    context: &SubtreeStyleContext<D::NodeId>,
     plane: &mut StylePlane<D::NodeId>,
 ) -> usize
 where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
-    let hints = PresentationalHints::from_html_dom(selector_tree.dom());
-    let scopes = tree_scopes(selector_tree.dom(), style_set);
     resolve_subtree_with_containers(
         selector_tree,
         style_set,
@@ -1332,11 +1374,15 @@ where
         id,
         parent,
         parent_custom,
-        tree_counts,
+        context
+            .counts
+            .get(&id)
+            .copied()
+            .unwrap_or(TreeCounts::Deferred),
         plane,
-        &hints,
+        &context.hints,
         None,
-        &scopes,
+        &context.scopes,
     )
 }
 
@@ -1406,21 +1452,36 @@ where
         .collect()
 }
 
-/// The counts for one element, recovered from its parent. An incremental
-/// restyle enters mid-tree, so a restyle root has to look its own ordinal up
-/// rather than inherit it from the walk.
-pub(crate) fn tree_counts_of<D>(dom: &D, id: D::NodeId) -> TreeCounts
-where
-    D: LayoutDom,
-    D::NodeId: Copy + Eq,
-{
-    dom.parent(id)
-        .and_then(|parent| {
-            child_tree_counts(dom, parent)
-                .into_iter()
-                .find_map(|(child, counts)| (child == id).then_some(counts))
-        })
-        .unwrap_or(TreeCounts::Deferred)
+/// Immutable document facts shared by every disjoint root in one restyle.
+/// The DOM cannot mutate during an update, so hints/scopes need one traversal
+/// and root ordinals need one sibling traversal per distinct node-tree parent.
+pub(crate) struct SubtreeStyleContext<Id: Eq + Hash> {
+    hints: PresentationalHints<Id>,
+    scopes: TreeScopes<Id>,
+    counts: HashMap<Id, TreeCounts>,
+}
+
+impl<Id: Copy + Eq + Hash> SubtreeStyleContext<Id> {
+    pub(crate) fn new<D: LayoutDom<NodeId = Id>>(
+        dom: &D,
+        style_set: &StyleSet,
+        roots: &[Id],
+    ) -> Self {
+        let mut parents = HashSet::new();
+        let mut counts = HashMap::new();
+        for root in roots {
+            if let Some(parent) = dom.parent(*root)
+                && parents.insert(parent)
+            {
+                counts.extend(child_tree_counts(dom, parent));
+            }
+        }
+        Self {
+            hints: PresentationalHints::from_html_dom(dom),
+            scopes: tree_scopes(dom, style_set),
+            counts,
+        }
+    }
 }
 
 /// The single entry every nesting level of the cascade descent passes through:

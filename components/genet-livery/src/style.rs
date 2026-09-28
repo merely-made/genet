@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     hash::Hash,
     ops::{Deref, DerefMut},
 };
@@ -1360,15 +1360,13 @@ pub(crate) fn resolve_subtree<D>(
     id: D::NodeId,
     parent: Option<&ComputedValues>,
     parent_custom: Option<&CustomProperties>,
-    tree_counts: TreeCounts,
+    context: &SubtreeStyleContext<D::NodeId>,
     plane: &mut StylePlane<D::NodeId>,
 ) -> usize
 where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
-    let hints = PresentationalHints::from_html_dom(selector_tree.dom());
-    let scopes = tree_scopes(selector_tree.dom(), style_set);
     resolve_subtree_with_containers(
         selector_tree,
         style_set,
@@ -1376,11 +1374,15 @@ where
         id,
         parent,
         parent_custom,
-        tree_counts,
+        context
+            .counts
+            .get(&id)
+            .copied()
+            .unwrap_or(TreeCounts::Deferred),
         plane,
-        &hints,
+        &context.hints,
         None,
-        &scopes,
+        &context.scopes,
     )
 }
 
@@ -1450,21 +1452,36 @@ where
         .collect()
 }
 
-/// The counts for one element, recovered from its parent. An incremental
-/// restyle enters mid-tree, so a restyle root has to look its own ordinal up
-/// rather than inherit it from the walk.
-pub(crate) fn tree_counts_of<D>(dom: &D, id: D::NodeId) -> TreeCounts
-where
-    D: LayoutDom,
-    D::NodeId: Copy + Eq,
-{
-    dom.parent(id)
-        .and_then(|parent| {
-            child_tree_counts(dom, parent)
-                .into_iter()
-                .find_map(|(child, counts)| (child == id).then_some(counts))
-        })
-        .unwrap_or(TreeCounts::Deferred)
+/// Immutable document facts shared by every disjoint root in one restyle.
+/// The DOM cannot mutate during an update, so hints/scopes need one traversal
+/// and root ordinals need one sibling traversal per distinct node-tree parent.
+pub(crate) struct SubtreeStyleContext<Id: Eq + Hash> {
+    hints: PresentationalHints<Id>,
+    scopes: TreeScopes<Id>,
+    counts: HashMap<Id, TreeCounts>,
+}
+
+impl<Id: Copy + Eq + Hash> SubtreeStyleContext<Id> {
+    pub(crate) fn new<D: LayoutDom<NodeId = Id>>(
+        dom: &D,
+        style_set: &StyleSet,
+        roots: &[Id],
+    ) -> Self {
+        let mut parents = HashSet::new();
+        let mut counts = HashMap::new();
+        for root in roots {
+            if let Some(parent) = dom.parent(*root)
+                && parents.insert(parent)
+            {
+                counts.extend(child_tree_counts(dom, parent));
+            }
+        }
+        Self {
+            hints: PresentationalHints::from_html_dom(dom),
+            scopes: tree_scopes(dom, style_set),
+            counts,
+        }
+    }
 }
 
 /// The single entry every nesting level of the cascade descent passes through:

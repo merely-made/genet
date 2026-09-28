@@ -11,12 +11,15 @@
 //! selector dependency summaries only to widen a scope. Ambiguity therefore
 //! costs work, never correctness.
 
-use std::{collections::HashMap, hash::Hash};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+};
 
 use layout_dom_api::{DomMutation, LayoutDom, NodeKind, QualName};
 use livery::{ComputedValues, custom::CustomProperties, media::Device};
 
-use crate::style::{resolve_subtree, tree_counts_of};
+use crate::style::{SubtreeStyleContext, resolve_subtree};
 use crate::{InteractionStates, SelectorTree, StylePlane, StyleSet, resolve_styles};
 
 /// One pre-mutation attribute value retained for invalidation diagnostics.
@@ -212,6 +215,7 @@ where
         // innerHTML can retire old ids before the mutation is observed.
         self.plane.retain(|id| dom.is_live(id));
         roots.retain(|id| dom.is_live(*id));
+        coalesce_roots(dom, &mut roots);
         let selector_tree = SelectorTree::for_roots(
             dom,
             states,
@@ -219,6 +223,7 @@ where
             sibling_dependencies || structural_dependencies,
         );
         let selector_elements = selector_tree.len();
+        let context = (!roots.is_empty()).then(|| SubtreeStyleContext::new(dom, style_set, &roots));
         let mut restyled_elements = 0;
         for root in roots.iter().copied() {
             let (parent, parent_custom) = inherited_parent(dom, &self.plane, root);
@@ -230,7 +235,7 @@ where
                 root,
                 parent.as_ref(),
                 parent_custom.as_ref(),
-                tree_counts_of(dom, root),
+                context.as_ref().expect("nonempty restyle roots"),
                 &mut self.plane,
             );
         }
@@ -321,26 +326,33 @@ fn push_root<D>(dom: &D, roots: &mut Vec<D::NodeId>, root: D::NodeId)
 where
     D: LayoutDom,
 {
-    if !dom.is_live(root) || roots.iter().any(|ancestor| contains(dom, *ancestor, root)) {
-        return;
+    if dom.is_live(root) {
+        roots.push(root);
     }
-    roots.retain(|descendant| !contains(dom, root, *descendant));
-    roots.push(root);
 }
 
-fn contains<D>(dom: &D, ancestor: D::NodeId, mut node: D::NodeId) -> bool
+// Coalesce the complete candidate set once. Checking each root against all
+// earlier roots makes a batch of moving siblings quadratic. An ancestor walk
+// gives the same disjoint coverage and preserves first-occurrence order.
+fn coalesce_roots<D>(dom: &D, roots: &mut Vec<D::NodeId>)
 where
     D: LayoutDom,
 {
-    loop {
-        if node == ancestor {
-            return true;
-        }
-        let Some(parent) = dom.parent(node) else {
+    let candidates: HashSet<_> = roots.iter().copied().collect();
+    let mut seen = HashSet::new();
+    roots.retain(|node| {
+        if !seen.insert(*node) {
             return false;
-        };
-        node = parent;
-    }
+        }
+        let mut ancestor = dom.parent(*node);
+        while let Some(parent) = ancestor {
+            if candidates.contains(&parent) {
+                return false;
+            }
+            ancestor = dom.parent(parent);
+        }
+        true
+    });
 }
 
 fn inherited_parent<D>(

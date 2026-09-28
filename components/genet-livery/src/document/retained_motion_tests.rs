@@ -197,3 +197,78 @@ fn retained_motion_rejects_resources_viewport_and_active_animation() {
         );
     }
 }
+
+// This combines the retained-motion admission with ruling 379's font-content
+// bounds. Explicit negative leading and wrapped edges must survive reuse.
+#[cfg(target_os = "windows")]
+#[test]
+fn retained_motion_preserves_wrapped_edges_with_negative_leading() {
+    fn wrapped(motion: &str, line_height: u32) -> LiveryDocument<ScriptedDom> {
+        let html = format!(
+            "<!DOCTYPE html><html><body><div id=a style=\"{motion}\"><span id=caption>alpha beta gamma delta epsilon zeta</span></div></body></html>"
+        );
+        let sheet = format!(
+            "@font-face {{ font-family: receipt-arial; src: url('receipt-arial.ttf'); }}
+             html, body {{ margin: 0; padding: 0; }}
+             #a {{ position: absolute; left: 0; top: 0; width: 90px;
+                   transform-origin: 0 0; font: 16px receipt-arial;
+                   line-height: {line_height}px; }}
+             #caption {{ border: 1px solid red; }}"
+        );
+        let mut dom = ScriptedDom::from_serialized_document(&html);
+        dom.drain_mutations(&mut Vec::new());
+        let mut document = LiveryDocument::new(
+            dom,
+            StyleSet::cambium(&[&sheet]),
+            Device::screen(240.0, 140.0),
+        );
+        document.set_font_resource(
+            "receipt-arial.ttf",
+            std::fs::read("C:/Windows/Fonts/arial.ttf").expect("receipt Arial font"),
+        );
+        document
+    }
+
+    let mut document = wrapped(INITIAL_A, 8);
+    let initial = paint(&mut document);
+    let edges: Vec<_> = initial
+        .commands()
+        .iter()
+        .filter_map(|cmd| match cmd {
+            PaintCmd::DrawBorder(item) => Some(item.placement.bounds),
+            _ => None,
+        })
+        .collect();
+    assert!(edges.len() >= 3, "must actually wrap: {edges:?}");
+    assert!(
+        initial
+            .commands()
+            .iter()
+            .any(|cmd| matches!(cmd, PaintCmd::DrawText(run) if !run.glyphs.is_empty()))
+    );
+    for edge in &edges {
+        assert!(
+            (edge.max.y - edge.min.y - 19.0).abs() < 0.01,
+            "Arial 16px content plus two 1px borders: {edge:?}"
+        );
+    }
+    let generation = document.layout_generation();
+    set_style(&mut document, "a", MOVED_A);
+    let moved = paint(&mut document);
+    assert_eq!(document.layout_generation(), generation);
+    assert_ne!(
+        format!("{:?}", initial.commands()),
+        format!("{:?}", moved.commands())
+    );
+    assert_fresh(&mut document, &mut wrapped(MOVED_A, 8));
+    assert_eq!(document.layout_generation(), generation);
+
+    set_style(&mut document, "a", &format!("{MOVED_A}; line-height: 24px"));
+    paint(&mut document);
+    assert!(document.layout_generation() > generation);
+    assert_fresh(&mut document, &mut wrapped(MOVED_A, 24));
+    println!(
+        "WRAPPED-MOTION edges={} initial-line-height=8 moved-layout-reused=true changed-line-height=24 reformatted=true retained-fresh-equal=true",
+        edges.len()
+    );
+}

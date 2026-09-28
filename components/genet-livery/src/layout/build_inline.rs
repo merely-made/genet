@@ -148,6 +148,7 @@ where
                             taffy_style,
                             InlineMeasure {
                                 owner: Some(box_id),
+                                formatting_owner: box_id,
                                 roots: vec![box_id],
                                 style: computed.clone(),
                                 width,
@@ -220,7 +221,7 @@ where
             },
             BoxOrigin::Text(_) => {
                 let style = inherited.cloned().unwrap_or_default();
-                self.build_inline_group(Some(box_id), &[box_id], &style, parent_font_size)
+                self.build_inline_group(Some(box_id), box_id, &[box_id], &style, parent_font_size)
                     .map(Some)
             },
             BoxOrigin::Pseudo { .. } | BoxOrigin::Anonymous { .. } => {
@@ -927,6 +928,7 @@ where
             if !self.inline_group_is_blank(&inline_group, parent_style) {
                 children.push(self.build_inline_group(
                     intrinsic_owner,
+                    parent,
                     &inline_group,
                     parent_style,
                     parent_font_size,
@@ -948,6 +950,7 @@ where
         if !self.inline_group_is_blank(&inline_group, parent_style) {
             children.push(self.build_inline_group(
                 intrinsic_owner,
+                parent,
                 &inline_group,
                 parent_style,
                 parent_font_size,
@@ -1010,6 +1013,7 @@ where
     pub(in crate::layout) fn build_inline_group(
         &mut self,
         owner: Option<BoxId>,
+        formatting_owner: BoxId,
         roots: &[BoxId],
         parent_style: &ComputedValues,
         _parent_font_size: f32,
@@ -1039,6 +1043,7 @@ where
             },
             InlineMeasure {
                 owner,
+                formatting_owner,
                 roots: roots.to_vec(),
                 style: parent_style.clone(),
                 width,

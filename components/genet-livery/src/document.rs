@@ -40,6 +40,8 @@ use crate::{
 
 mod animation;
 mod frame;
+#[cfg(all(test, windows))]
+mod line_scroll_tests;
 mod resources;
 #[cfg(test)]
 mod retained_motion_tests;

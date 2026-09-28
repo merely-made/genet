@@ -340,7 +340,11 @@ where
         let Some(container) = layout.fragments.get(node) else {
             return (0.0, 0.0);
         };
-        let mut extent = (0.0, 0.0);
+        let mut extent = (0.0_f32, 0.0_f32);
+        if let Some(lines) = layout.fragments.inline_scroll_bounds(node) {
+            extent.0 = extent.0.max(lines.x + lines.width - container.x);
+            extent.1 = extent.1.max(lines.y + lines.height - container.y);
+        }
         for child in self.dom.dom_children(node) {
             self.extend_nested_extent(child, node, layout, &mut extent);
         }
@@ -357,20 +361,25 @@ where
         layout: &LayoutState<D::NodeId>,
         extent: &mut (f32, f32),
     ) {
-        let Some(style) = layout.styles.get(id) else {
-            return;
-        };
-        if style.display == livery::values::Display::None {
+        let style = layout.styles.get(id);
+        if style.is_some_and(|style| style.display == livery::values::Display::None) {
             return;
         }
-        if let (Some(container), Some(fragment)) =
-            (layout.fragments.get(container), layout.fragments.get(id))
-        {
-            extent.0 = extent.0.max(fragment.x + fragment.width - container.x);
-            extent.1 = extent.1.max(fragment.y + fragment.height - container.y);
+        if let Some(container) = layout.fragments.get(container) {
+            for fragment in layout.fragments.fragments_for_node(id) {
+                extent.0 = extent.0.max(fragment.x + fragment.width - container.x);
+                extent.1 = extent.1.max(fragment.y + fragment.height - container.y);
+            }
         }
-        if self.clips_content(style) {
+        if style.is_some_and(|style| self.clips_content(style)) {
             return;
+        }
+        if let (Some(container), Some(lines)) = (
+            layout.fragments.get(container),
+            layout.fragments.inline_scroll_bounds(id),
+        ) {
+            extent.0 = extent.0.max(lines.x + lines.width - container.x);
+            extent.1 = extent.1.max(lines.y + lines.height - container.y);
         }
         for child in self.dom.dom_children(id) {
             self.extend_nested_extent(child, container, layout, extent);

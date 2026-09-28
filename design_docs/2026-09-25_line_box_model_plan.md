@@ -943,3 +943,14 @@ are released. The pre-existing embedded target remains untouched, with marker,
 reparse and historical executable inventory in the CPU receipt. No current gate
 uses it; retirement remains the coordinator's responsibility after integration.
 The new source and documentation are held for the requested pre-commit review.
+
+### 2026-09-27 text fix integrated
+
+Independent review accepted both sealed manifests (124 files), source hashes,
+the 876/200 passing CPU suites, the 187-row consumer pair and the recompiled
+fault controls. Commit `7b48f94d7a742840b527205d82a37da958240d73` contains the
+reviewed fixture and documentation. Clean primary main was fast-forwarded from
+`f2e2850` to that exact commit and pushed. This closes the source integration
+wait above. Portable Mere/Isometry repinning remains separate; their published
+Genet dependency still lacks this fix. The existing lane is retained temporarily
+while its historical embedded build output is checked for safe retirement.

@@ -19,6 +19,14 @@ resources and viewport; context establishment changes and active animations
 keep the normal layout path. It does not cache raster output or bypass CSS
 clipping and stacking order.
 
+Incremental restyle batches share immutable HTML hints and shadow-scope facts,
+and enumerate each relevant sibling group once for root ordinals and selector
+identity storage. Root coalescing uses ancestor membership rather than comparing
+every pair of hints. Existing conservative invalidation rules and per-element
+cascades are unchanged. The [counted-work regression](tests/invalidation_work.rs)
+checks sibling-batch scaling alongside full-cascade equivalence, mixed mutations,
+scoped styles, and HTML hints; it makes no browser timing claim.
+
 The retained `LiveryDocument` owns Parley's font database, shaping scratch
 space, stable font resources, and a cached paint frame. Consecutive text and
 inline-element children shape together, sharing line breaks, baselines, style

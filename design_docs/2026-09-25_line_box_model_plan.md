@@ -954,3 +954,12 @@ reviewed fixture and documentation. Clean primary main was fast-forwarded from
 wait above. Portable Mere/Isometry repinning remains separate; their published
 Genet dependency still lacks this fix. The existing lane is retained temporarily
 while its historical embedded build output is checked for safe retirement.
+
+**Retirement annotation, 2026-09-27:** 17 historical files (39,968,553 bytes),
+including both fixture executables, their three fingerprint directories and
+the ignored lock, were preserved and hash-checked under
+`Code/testing/genet/receipts/2026-09-27/text-fragment-retirement`.
+Automatic approval review rejected the cleanup command before execution,
+returning only "blocked by policy". The clean integrated worktree and embedded
+target therefore remain intact. No current build owns them or requires them;
+consumer publication uses the exact published source `7b48f94d`.

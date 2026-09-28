@@ -1,5 +1,11 @@
 # Line box model: CSS 2.1 §10.8 in Livery's line pass
 
+**Current follow-up, 2026-09-28:** the accepted font-content bounds exposed a
+scroll-range omission in both Genet's nested clamp and Mere rootstock. Genet's
+bounded repair is in progress on primary `94fc3950`; consumer edits and
+publication await review. The dated integration records below retain their
+original source and evidence scope.
+
 **Status:** in progress, 2026-09-27. Mark ruled the home on 2026-09-25:
 genet-livery's line pass, with Parley kept upstream-shaped rather than
 patched. Slice A (the model with nested alignment, the line height quirk,
@@ -963,3 +969,77 @@ Automatic approval review rejected the cleanup command before execution,
 returning only "blocked by policy". The clean integrated worktree and embedded
 target therefore remain intact. No current build owns them or requires them;
 consumer publication uses the exact published source `7b48f94d`.
+
+## Formatting lines in scroll extent, 2026-09-28
+
+The Mere equal-hover retention fixture reproduced on both pre.4 reconciliation
+and primary Mere `5ce144ff`: the requested 12px element offset was clamped to zero
+before hover. This is a current-main layout regression, not evidence against the
+pre.4 migration or permission to weaken the retention assertion.
+
+The bounded Genet probe at `94fc3950` measured two 200px lines in a 180px-high,
+220px-wide block. Retained font fragments are y=91/291, each 17px high; the
+retained tree has no anonymous 400px line holder and its container overflow is
+180px. An auto-height twin measures 400px. Font fragments alone supply only
+128px of range, whereas the formatting lines require 220px. A single short line
+requires 20px; fitting normal text requires zero. CSS Overflow 3 section 2.2
+includes directly contained line boxes in scrollable overflow:
+https://www.w3.org/TR/css-overflow-3/#scrollable-overflow .
+
+The repair keeps font-content rectangles unchanged. `InlineLayout` retains its
+already-computed formatting-line union, including forced-break extents;
+`TextFrame` stores it by inline-context owner and copies/translates it with
+retained geometry. `LiveryLayout::inline_scroll_bounds(node)` exposes that union
+in physical layout coordinates, without promising a complete descendant scroll
+area. Genet's nested clamp combines the container's line bounds, every relevant
+retained fragment and unclipped descendant line bounds. Unstyled text nodes
+still contribute geometry; styled display-none/clipping boundaries retain their
+existing policy. Mere will consume this owner API in a separately reviewed step.
+
+Six Windows/recorded-Arial fixtures currently pass: 220px range with 12px
+retained; normal/single/empty-break cases; later font content beyond negative
+leading (8px required versus 4px from lines alone); clipped descendants; retained
+move/scale and reformat-to-normal shrink; explicit retained-frame translation
+and replacement. The first test-only attempt needed an explicit PhysicalRect
+return type and f32 accumulator. Subsequent fixture setup corrected explicit
+z-index eligibility and reused actual DOM identities for subtree replacement;
+a production correction allowed unstyled text geometry through the clamp.
+All attempts remain in the raw receipt. Fault controls and the existing text and
+retained-motion suites are pending at this annotation.
+
+Evidence home: `Code/testing/genet/receipts/2026-09-28/line-scroll-extent`.
+The probe runs from `Code`, avoiding Genet's ignored sibling-path overrides,
+with Rust/Cargo 1.98.1, four jobs and `C:/t/cargo-targets/genet`. Its external
+lock is the unchanged, previously sealed published-9607 lock (SHA256
+`6206e72891345c6d5baf6884a6e876175f6e341c4760eb614c57aa7e08c5201e`).
+The primary ignored lock refused `--locked` and remains untouched. These are
+CPU layout measurements, not new WPT, pixels, browser reference or consumer-pin
+acceptance. Done requires meaningful missing-line and first-fragment controls,
+restored focused/text/retention gates, review, then the original Mere 12px gate.
+
+**Review correction and controls, 2026-09-28:** inline measurement's optional
+`owner` identifies an intrinsic-cache entry and is deliberately absent for
+partial inline groups. A separate `formatting_owner` now survives those splits;
+intrinsic-cache policy is unchanged. The seventh fixture, text before and after
+an absolutely positioned span, measures a 400px union and 220px range. The
+first final-source control removes only line contributions from the clamp:
+three tests fail and four controls pass. The first-fragment-only control fails
+exactly the negative-leading later-fragment test; six controls pass. Restoring
+the exact source bytes recompiles and all seven pass. A separate intrinsic-owner
+substitution control and the existing Livery/Buckram suites are running; results
+will be appended before review/publication.
+
+**Restored suite completion, 2026-09-28:** the intrinsic-owner substitution
+fails only the split-group fixture (six controls pass). Restored Livery/Buckram
+passes **883 tests, zero failed, six existing ignored**, across 46 result blocks.
+This includes all seven new scroll fixtures, the six prior text-bound fixtures,
+and the retained-motion cases. The wrapped-motion case still reports four edges,
+layout reuse under move/scale and fresh equivalence after line-height changes.
+Historical Chromium numbers printed by old fixtures remain historical references;
+this run did not acquire a browser reference. Changed-source rustfmt and
+`git diff --check` pass. No Mere/Isometry code, pins, or lock changed in this
+repair. Source is uncommitted on `94fc3950`, pending independent review and the
+coordinator's commit release; its nine owned paths are seven Rust source/test
+files plus this plan and the index. The final raw manifest and source inventory
+live in the evidence home above. Primary ignored lock/config bytes are unchanged;
+all CPU work used the stable Genet target and all owned processes have exited.

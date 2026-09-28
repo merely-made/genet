@@ -452,6 +452,9 @@ fn measure_text_algorithm_node(
 
 struct InlineMeasure {
     owner: Option<BoxId>,
+    /// Formatting ownership survives splitting into partial inline groups;
+    /// `owner` above is only the optional intrinsic-cache identity.
+    formatting_owner: BoxId,
     roots: Vec<BoxId>,
     style: ComputedValues,
     width: f32,
@@ -2035,6 +2038,7 @@ where
         Some(layout.place(
             text_frame,
             styles,
+            boxes.origin_node(context.formatting_owner),
             |box_id| boxes.origin_node(box_id),
             (origin.x, origin.y),
             computed.width,

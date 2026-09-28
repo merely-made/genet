@@ -612,6 +612,15 @@ where
         self.buckram.get(node)
     }
 
+    /// Union of formatting-line bounds directly owned by this node's inline
+    /// contexts, in physical layout coordinates (the same space as fragments).
+    /// Includes forced-break lines, independently of font-content rectangles.
+    /// This is neither glyph/selection geometry nor the complete descendant
+    /// scroll area; callers must still include fragments and respect clipping.
+    pub fn inline_scroll_bounds(&self, node: Id) -> Option<Fragment> {
+        self.text_frame.as_ref()?.line_bounds(node)
+    }
+
     /// Compatibility name for callers that only need a node's outermost
     /// retained fragment.
     pub fn rect_of(&self, node: Id) -> Option<&TreeFragment> {

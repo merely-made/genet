@@ -578,6 +578,12 @@ impl TextSystem {
             Some(InlineLayout {
                 width: right.max(0.0),
                 height: (bottom - top).max(0.0),
+                line_bounds: Some(Fragment {
+                    x: 0.0,
+                    y: top,
+                    width: right.max(0.0),
+                    height: (bottom - top).max(0.0),
+                }),
                 baselines,
                 items,
                 text,
@@ -587,6 +593,7 @@ impl TextSystem {
             Some(InlineLayout {
                 width: 0.0,
                 height: 0.0,
+                line_bounds: None,
                 baselines: None,
                 items,
                 text,
@@ -740,6 +747,7 @@ impl TextSystem {
                 layout.place(
                     frame,
                     styles,
+                    Some(parent),
                     |box_id| fragments.boxes().origin_node(box_id),
                     (origin_x, anchor_fragment.y),
                     width,
@@ -800,6 +808,7 @@ impl TextSystem {
                 layout.place(
                     frame,
                     styles,
+                    Some(parent),
                     |box_id| fragments.boxes().origin_node(box_id),
                     origin,
                     width,
@@ -1010,20 +1019,35 @@ impl TextSystem {
             .filter_map(|span| Some((span.source?, text.get(span.range.clone())?.to_owned())))
             .collect();
         frame.record_text_group(text_sources);
-        for item in self
-            .shape(
-                &text,
-                &mut spans,
-                &inline_boxes,
-                &inline_styles,
-                line_height_quirk(dom.quirks_mode(), parent_style),
-                available_width,
-                parent_style,
-                None,
-                None,
-            )
-            .items
-        {
+        let shaped = self.shape(
+            &text,
+            &mut spans,
+            &inline_boxes,
+            &inline_styles,
+            line_height_quirk(dom.quirks_mode(), parent_style),
+            available_width,
+            parent_style,
+            None,
+            None,
+        );
+        if let Some((top, bottom)) = shaped.break_lines {
+            frame.record_line_bounds(
+                owner,
+                Fragment {
+                    x: origin.0,
+                    y: origin.1 + top,
+                    width: 0.0,
+                    height: bottom - top,
+                },
+            );
+        }
+        for item in shaped.items {
+            let mut line = match &item {
+                ShapedItem::Text(run) => run.line_fragment,
+                ShapedItem::InlineBox { line_fragment, .. } => *line_fragment,
+            };
+            translate_fragment(&mut line, origin);
+            frame.record_line_bounds(owner, line);
             match item {
                 ShapedItem::Text(mut run) => {
                     let Some(source) = run.source else {
@@ -1679,6 +1703,7 @@ pub(crate) struct InlineRequest<'a> {
 pub(crate) struct InlineLayout<Source> {
     width: f32,
     height: f32,
+    line_bounds: Option<Fragment>,
     baselines: Option<(f32, f32)>,
     items: Vec<ShapedItem<Source>>,
     text: String,
@@ -1747,6 +1772,7 @@ where
         &self,
         frame: &mut TextFrame<Id>,
         styles: &StylePlane<Id>,
+        owner: Option<Id>,
         mut node_for: Resolve,
         origin: (f32, f32),
         percentage_basis: f32,
@@ -1755,6 +1781,10 @@ where
         Id: Copy + Eq + Hash,
         Resolve: FnMut(Source) -> Option<Id>,
     {
+        if let (Some(owner), Some(mut bounds)) = (owner, self.line_bounds) {
+            translate_fragment(&mut bounds, origin);
+            frame.record_line_bounds(owner, bounds);
+        }
         let container = Fragment {
             x: origin.0,
             y: origin.1,
@@ -1910,6 +1940,9 @@ pub(crate) struct TextFrame<Id> {
     prepared_sources: HashSet<Id>,
     inline_fragments: HashMap<Id, Vec<Fragment>>,
     inline_line_keys: HashMap<Id, Vec<f32>>,
+    /// Formatting-line bounds directly owned by each inline context, in
+    /// physical layout coordinates. Separate from font-content fragments.
+    line_bounds: HashMap<Id, Fragment>,
     painted_decorations: HashSet<Id>,
     used_fonts: HashSet<FontInstanceKey>,
     text_order: Vec<Id>,
@@ -1931,6 +1964,7 @@ impl<Id> Default for TextFrame<Id> {
             prepared_sources: HashSet::new(),
             inline_fragments: HashMap::new(),
             inline_line_keys: HashMap::new(),
+            line_bounds: HashMap::new(),
             painted_decorations: HashSet::new(),
             used_fonts: HashSet::new(),
             text_order: Vec::new(),
@@ -2046,6 +2080,11 @@ where
     }
 
     fn copy_geometry_from(&mut self, source_frame: &Self, mut includes: impl FnMut(Id) -> bool) {
+        for (owner, bounds) in &source_frame.line_bounds {
+            if includes(*owner) {
+                self.line_bounds.insert(*owner, *bounds);
+            }
+        }
         for (source, fragments) in &source_frame.inline_fragments {
             if includes(*source) {
                 self.inline_fragments.insert(*source, fragments.clone());
@@ -2117,6 +2156,7 @@ where
                 || self.cluster_sources.contains(node)
                 || self.inline_fragments.contains_key(node)
                 || self.inline_line_keys.contains_key(node)
+                || self.line_bounds.contains_key(node)
         });
         if !owns_text {
             return;
@@ -2130,6 +2170,9 @@ where
         }
         // The keyed planes are walked by subtree node, not by corpus entry.
         for node in &nodes {
+            if let Some(bounds) = self.line_bounds.get_mut(node) {
+                translate_fragment(bounds, offset);
+            }
             if let Some(fragments) = self.inline_fragments.get_mut(node) {
                 for fragment in fragments {
                     translate_fragment(fragment, offset);
@@ -2173,6 +2216,24 @@ where
 
     pub(crate) fn inline_fragments(&self, source: Id) -> Option<&[Fragment]> {
         self.inline_fragments.get(&source).map(Vec::as_slice)
+    }
+
+    pub(crate) fn line_bounds(&self, owner: Id) -> Option<Fragment> {
+        self.line_bounds.get(&owner).copied()
+    }
+
+    fn record_line_bounds(&mut self, owner: Id, bounds: Fragment) {
+        self.line_bounds
+            .entry(owner)
+            .and_modify(|previous| {
+                let right = (previous.x + previous.width).max(bounds.x + bounds.width);
+                let bottom = (previous.y + previous.height).max(bounds.y + bounds.height);
+                previous.x = previous.x.min(bounds.x);
+                previous.y = previous.y.min(bounds.y);
+                previous.width = right - previous.x;
+                previous.height = bottom - previous.y;
+            })
+            .or_insert(bounds);
     }
 
     /// `source`'s recorded inline boxes, to put back with

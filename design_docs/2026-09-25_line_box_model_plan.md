@@ -787,3 +787,70 @@ The 16-file dry-run receipt is
 `Code/testing/genet/receipts/2026-09-27/text-fragment-consumer-resolution/SHA256SUMS`,
 SHA-256 `7a92f9869a8e07d48dd8922305def5b66889bace78f7651f1598a3ba05ea5109`.
 The CPU implementation receipt and its source qualifications remain unchanged.
+
+### 2026-09-27 bounded local consumer diagnostic
+
+The coordinator authorized a diagnostic combination holding the consumer's
+existing Netrender `c8c09f16` family while replacing all 19 Genet packages with
+Lane L. Installed Cargo 1.98.1 demonstrably reads a separate external lock:
+a malformed external `Cargo.lock` fails at that path despite the valid primary
+lock. The diagnostic uses only an external config and external lock; primary
+Isometry manifests, pins, lock and configs remain unchanged.
+
+The complete default-feature graph has 798 packages in both arms. All 19 Genet
+packages resolve uniquely to Lane L, all four Netrender packages uniquely to
+the same cached `c8c09f16` checkout, and wgpu 30.0.1 / Vello 0.10.0 each retain
+one identity. Every other Git and registry package identity is unchanged.
+The first audit caught the old `genet-taffy` registry alias; correcting that
+external alias produced the fully coherent graph before compilation.
+
+The existing ignored `every_side_panel_text_row_holds_its_text` was explicitly
+run with `--ignored`, using the stable Isometry target, four build jobs and
+one test thread. It freshly measures 187 rows: expanded 61, composing 64,
+picking 62. The local combination passes with zero short rows. The same test
+against the unchanged published dependency closure fails with 39 short rows,
+13 in each state. The paired control is fresh evidence that the receipt can
+detect the original fault, rather than an inference from the historical row
+count. These remain retained text-fragment measurements, not glyph ink or pixels.
+
+The initial primary head was `ec43e606`; the local test command ran at
+`c040e698`, and the published control at `61def6a9`. Intervening changes are
+only Isometry coordination docs. Lane L was `b18b67d0`, with production text
+source unchanged from `9b730e7b`. Exact primary/diagnostic locks, configs,
+source and Arial family hashes compare unchanged after the pair; both binary
+hashes and the source-traced font-selection qualification are preserved.
+
+The 58-file receipt is
+`Code/testing/genet/receipts/2026-09-27/text-fragment-consumer-local-c8/SHA256SUMS`,
+SHA-256 `e7d5579880fe628ee978c6f92c0e86571812eb60296ea797b8d8afa00e09996f`.
+This qualifies only the named local combination. It does not establish a
+portable Isometry repin to Genet's `9607d16` rendering closure. The original
+ignored gate remains ignored on Isometry's unchanged published pins. Separate
+CPU boundary suites for genet-render, genet-documents, genet-scripted and
+taproot on Lane L's own published `9607d16` lock are running before the
+coordinator assesses Genet integration. Independent source/control review
+has passed; no WPT or pixel gate is inferred.
+
+**Boundary gate completion, 2026-09-27:** all 200 requested boundary tests pass
+on Lane L's own published `9607d16` / Vello 0.10.1 / wgpu 30.0.1 lock:
+genet-documents 54, genet-render 38, genet-scripted 85 plus worker-service 2,
+and taproot 21. No failures or ignored cases; four doctest targets contain no
+cases. `genet-documents/scripted` enables the Livery/Boa path; optional Vano is
+not part of this run. The previous 867-test Livery/Buckram suite was not repeated.
+No source or lock changed during the run. A focused existing capture test also
+passed during an output-buffering check and is excluded from the 200 count.
+
+The 17-file receipt is
+`Code/testing/genet/receipts/2026-09-27/text-fragment-boundary-suites/SHA256SUMS`,
+SHA-256 `042b4296ce48469e638b5262783fb862ba15545cae6504625e05799405dbd18f`.
+Its exact external `Cargo.lock` copy preserves the lane's ignored lock bytes
+(SHA-256 `6206e72891345c6d5baf6884a6e876175f6e341c4760eb614c57aa7e08c5201e`).
+Command-time lane head was `b18b67d0`; the production fix remains exactly
+`9b730e7b`. Together with independent source/control review and the qualified
+local consumer pair, these complete the source fix's bounded checks. Portable
+Isometry repinning remains a separate task, as do WPT and pixel acceptance.
+
+Integration remains with the coordinator. A fresh primary Genet inspection
+found concurrent retained-motion work at main `c858738`; this lane must not
+merge underneath that owner. Its clean-lane code/lock receipts remain valid,
+and the existing worktree stays available until a safe integration window.

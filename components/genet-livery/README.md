@@ -11,6 +11,14 @@ of this path.
 Fullweb documents run on this path as well; the `genet-layout` and Stylo route
 was deleted on 2026-08-21.
 
+Retained motion frames can reuse laid-out boxes and shaped text when only
+2D transforms and numeric z-index change on already transformed absolute or
+fixed boxes. Paint and hit testing read the updated styles. This admission
+requires style-only mutation batches and stable geometry, generated content,
+resources and viewport; context establishment changes and active animations
+keep the normal layout path. It does not cache raster output or bypass CSS
+clipping and stacking order.
+
 The retained `LiveryDocument` owns Parley's font database, shaping scratch
 space, stable font resources, and a cached paint frame. Consecutive text and
 inline-element children shape together, sharing line breaks, baselines, style

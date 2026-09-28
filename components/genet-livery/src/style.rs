@@ -744,6 +744,50 @@ where
         only_background && changed
     }
 
+    /// Repaint already transformed positioned boxes without reformatting.
+    ///
+    /// Changing `none` to a transform changes containing-block establishment;
+    /// changing an automatic stacking level changes context establishment.
+    /// Both stay on the layout path, as do all non-motion computed values.
+    /// The caller must separately exclude text/structural/resource mutations.
+    pub(crate) fn differs_only_in_positioned_motion(&self, previous: &Self) -> bool {
+        use livery::values::{Transform, TransformStyle, ZIndex};
+
+        let two_dimensional = |transform: &Transform| {
+            matches!(transform, Transform::Functions(functions)
+                if !functions.is_empty() && functions.iter().all(|function| !function.is_3d()))
+        };
+        let mut changed = false;
+        let only_motion = self.values.len() == previous.values.len()
+            && self.generated == previous.generated
+            && self.custom == previous.custom
+            && self.inline_diagnostics == previous.inline_diagnostics
+            && self.color_context == previous.color_context
+            && self.values.iter().all(|(id, current)| {
+                let Some(previous) = previous.values.get(id) else {
+                    return false;
+                };
+                if current == previous {
+                    return true;
+                }
+                changed = true;
+                if !matches!(current.position, Position::Absolute | Position::Fixed)
+                    || current.transform_style != TransformStyle::Flat
+                    || !two_dimensional(&current.transform)
+                    || !two_dimensional(&previous.transform)
+                    || !matches!(current.z_index, ZIndex::Integer(_))
+                    || !matches!(previous.z_index, ZIndex::Integer(_))
+                {
+                    return false;
+                }
+                let mut normalized = previous.clone();
+                normalized.transform = current.transform.clone();
+                normalized.z_index = current.z_index;
+                normalized == *current
+            });
+        only_motion && changed
+    }
+
     /// Return the sole absolute/fixed element whose computed insets changed.
     ///
     /// This is a deliberately narrow K5h admission: every other computed

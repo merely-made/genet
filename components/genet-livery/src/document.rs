@@ -41,6 +41,8 @@ use crate::{
 mod animation;
 mod frame;
 mod resources;
+#[cfg(test)]
+mod retained_motion_tests;
 mod scrolling;
 mod selection;
 #[cfg(test)]
@@ -196,6 +198,9 @@ where
     identity_source: Option<LayoutState<D::NodeId>>,
     last_layout_damage: Option<LayoutDamage<D::NodeId>>,
     layout_dirty: bool,
+    // Cumulative across mutation batches until a frame completes. A final
+    // style comparison cannot detect intervening text or structural changes.
+    style_only_damage: bool,
     viewport: (u32, u32),
     scroll: (f32, f32),
     focused_chain: Vec<D::NodeId>,
@@ -235,6 +240,7 @@ where
             identity_source: None,
             last_layout_damage: None,
             layout_dirty: true,
+            style_only_damage: false,
             viewport,
             scroll: (0.0, 0.0),
             focused_chain: Vec::new(),
@@ -278,12 +284,11 @@ where
     /// A retained frame is otherwise eligible for paint-list reuse. A table
     /// mutation must not reuse its old candidates, winner grid, metrics, or
     /// collapsed-border paint, so any nonempty batch discards every derived
-    /// frame artifact and updates the retained style plane first. The next
-    /// [`Self::frame`] then rebuilds layout and paint from that same style
-    /// generation. The current correctness path deliberately rebuilds
-    /// geometry; K5g reconciles only compatible identities from the retained
-    /// prior generation, and callers must not infer incremental table geometry
-    /// from `RestyleStats`.
+    /// paint artifact and updates the retained style plane first. The next
+    /// [`Self::frame`] checks bounded style-delta admissions before deciding
+    /// whether geometry can be reused. Stable positioned motion can repaint
+    /// retained boxes; geometry, text and structure changes still reformat.
+    /// Callers must not infer incremental table geometry from `RestyleStats`.
     pub fn apply_dom_mutations(&mut self, mutations: &[DomMutation<D::NodeId>]) -> RestyleStats {
         if mutations.is_empty() {
             return self.style_session.last_stats();

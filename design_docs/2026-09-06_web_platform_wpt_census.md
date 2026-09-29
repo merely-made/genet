@@ -17,6 +17,19 @@ retained `--engine nova` name. No census was rerun for this documentation update
 and [`docs/2026-07-28_absolute_css_conformance_ledger.md`](../docs/2026-07-28_absolute_css_conformance_ledger.md),
 whose method this census extends to the rest of the web platform.
 
+## Vano rerun, 2026-09-29
+
+A full-scope rerun is in progress against Genet `19c206873ab` plus the isolated
+worker reporting repair published in `0c4aa9f60b8`, and
+Vano `8ad0841255c2cbb679f7c704417d427b3cb3e961`, using the retained CLI
+`--engine nova`. The [dated receipt](receipts/2026-09-29_vano_wpt_census/receipt.md)
+records source isolation, exact commands, harness differences and evidence.
+The archived maps contain **82**, not 86, result files, covering
+21,672 unique file/variant records. The manifest SHA-256 is unchanged, but the
+current runner additionally discovers dedicated-worker variants. The rerun
+separates exact historical membership from newly discovered records. Historical
+Boa rows below remain unchanged; the new measurement is not yet complete.
+
 ## Purpose
 
 Until this run, `genet-wpt` had exact result maps only for the CSS manifest
@@ -36,7 +49,7 @@ conformance claim. No percentage is reported.
 | `MANIFEST.json` SHA-256 prefix | `d5ec5be9bf1a75ed` |
 | Runner | `genet-wpt` release, `--features netfetch`, SHA-256 `a362fa85878ec3c211a1301a205b9777d3e70cd6f026bb76614e15449dbd3477` |
 | Lane | `testharness`, engine Boa, renderer Livery, disk mode |
-| Directories | 41 top-level WPT directories, `html` split by subdirectory (86 result files) |
+| Directories | 41 top-level WPT directories, `html` split by subdirectory (82 result files; archived-map count verified 2026-09-29) |
 | Raw results | `Code/testing/genet/wpt-ledger/2026-09-06_platform_census/` (outside Git, per the ledger README) |
 
 Directories chosen: every top-level WPT directory a web engine owns that is not
@@ -177,7 +190,7 @@ non-window file the lane cannot host.
 | xhr | 348 | 5 | 277 | 61 | 2 | 3 | 53 / 1013 |
 | **Total** | 21672 | 676 | 13845 | 2392 | 985 | 3774 | 61448 / 1579098 |
 
-The `Total` row spans 86 result files. `html` on its own is 8,938 files.
+The `Total` row spans 82 result files. `html` on its own is 8,938 files.
 Subtest totals are dominated by `encoding` (1.33 million, mostly the legacy
 multibyte slices) and `editing` (97,687); treat file counts as the comparable
 column.

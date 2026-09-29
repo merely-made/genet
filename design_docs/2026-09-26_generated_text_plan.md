@@ -208,5 +208,10 @@ integration, reversed counters, custom or additional built-in counter styles,
 style containment, counter animation, integer calculations, unsupported pseudo
 box shapes, full WPT and headed visual/assistive-technology acceptance remain
 open. The existing list-marker renderer is not replaced or claimed covered.
-All builds use the shared `C:/t/cargo-targets/genet` target; no isolated target,
-Cargo home or worktree is required by this lane.
+Counter-lane builds use the shared `C:/t/cargo-targets/genet` target; parent
+integration reuses the existing repository target as noted above. No isolated
+target, Cargo home or worktree was created by this lane.
+
+The named decimal implementation and shared retained provider are committed and
+pushed as `c5470fcbc12805f0369c70f34a18178158fbe2d5`. This source publication
+does not establish the open WPT, marker or headed acceptance gates.

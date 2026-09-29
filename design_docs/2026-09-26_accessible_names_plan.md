@@ -199,3 +199,8 @@ precedence. All 39 `genet-render` library tests pass using
 `cargo +1.97.1 test --manifest-path repos/genet/Cargo.toml -p genet-render --lib
 --offline --target-dir C:/Users/mark_/Code/repos/genet/target -j 2` from the
 Code root. This validates native tree data, not a physical screen-reader run.
+
+The shared provider and scripted consumers are published in Genet
+`c5470fcbc12805f0369c70f34a18178158fbe2d5`. The preserved downstream patch
+is [mere-adoption.patch](receipts/2026-09-29_generated_names/mere-adoption.patch);
+it contains only the Rootstock/provider/native projection and scenario fixture.

@@ -1,0 +1,132 @@
+diff --git a/crates/cambium/cambium-genet-winit-host/tests/scenario.rs b/crates/cambium/cambium-genet-winit-host/tests/scenario.rs
+index 2edfe1cb..b6c782a1 100644
+--- a/crates/cambium/cambium-genet-winit-host/tests/scenario.rs
++++ b/crates/cambium/cambium-genet-winit-host/tests/scenario.rs
+@@ -33,6 +33,7 @@ struct App {
+     target_point: Cell<Option<(f32, f32)>>,
+     semantic_hidden: bool,
+     semantic_name: Option<&'static str>,
++    generated_prefix: Option<&'static str>,
+ }
+ 
+ type Child = Box<dyn AnyView<App, (), GenetCtx, GenetElement>>;
+@@ -43,7 +44,9 @@ fn root(state: &App) -> Child {
+         "main",
+         (
+             focusable(clickable(
+-                el("button", text(format!("Count {}", state.count))).attr("class", "count"),
++                el("button", text(format!("Count {}", state.count)))
++                    .attr("class", "count")
++                    .attr("data-prefix", state.generated_prefix.unwrap_or("[")),
+                 |s: &mut App, _| {
+                     s.count += 1;
+                     let n = s.count;
+@@ -765,3 +768,50 @@ fn scenario_keys_use_retained_focus_and_button_activation() {
+     assert!(receipt.starts_with("RESULT ok"), "{receipt}");
+     assert_eq!(h.state().count, 3);
+ }
++
++#[test]
++fn generated_names_agree_for_mesquite_native_accessibility_and_attribute_updates() {
++    const GENERATED_SHEET: &str = "button { display: block; width: 180px; height: 32px; }
++        .count::before { content: attr(data-prefix); } .count::after { content: ']'; }";
++    let (receipt, mut h) = run_lane(
++        &scratch("generated-name"),
++        "click role:button [Count 0]\nassert snap count == 1\n",
++        GENERATED_SHEET,
++        true,
++    );
++    assert!(receipt.contains("\"ok\": true"), "{receipt}");
++    h.layout_at(300.0, 200.0);
++    let projection = h.a11y_projection();
++    let button = projection
++        .nodes()
++        .iter()
++        .find(|node| node.name.as_deref() == Some("[Count 1]"))
++        .expect("generated name");
++    let id = button.id;
++    let (tree, _) = h.a11y_tree();
++    assert!(
++        tree.nodes
++            .iter()
++            .any(|(_, node)| node.label() == Some("[Count 1]")),
++        "native tree uses the same generated name"
++    );
++    h.update(|state| state.generated_prefix = Some("<"));
++    h.layout_at(300.0, 200.0);
++    let projection = h.a11y_projection();
++    assert_eq!(
++        projection
++            .nodes()
++            .iter()
++            .find(|node| node.id == id)
++            .unwrap()
++            .name
++            .as_deref(),
++        Some("<Count 1]")
++    );
++    let (tree, _) = h.a11y_tree();
++    assert!(
++        tree.nodes
++            .iter()
++            .any(|(_, node)| node.label() == Some("<Count 1]"))
++    );
++}
+diff --git a/crates/cambium/cambium-rootstock/src/lib.rs b/crates/cambium/cambium-rootstock/src/lib.rs
+index 78ede436..193e0369 100644
+--- a/crates/cambium/cambium-rootstock/src/lib.rs
++++ b/crates/cambium/cambium-rootstock/src/lib.rs
+@@ -276,7 +276,14 @@ pub fn document_projection(
+ ) -> DocumentA11yProjection {
+     use layout_dom_api::LayoutDom as _;
+     let focus = focus.and_then(|opaque| find_opaque(dom, dom.document(), opaque));
+-    genet_render::document_a11y_projection(dom, layout.fragments(), focus, 0)
++    genet_render::document_a11y_projection_with_generated_text(
++        dom,
++        layout.fragments(),
++        focus,
++        0,
++        None,
++        &|node| layout.generated_text(dom, node),
++    )
+ }
+ 
+ fn find_opaque(dom: &ScriptedDom, node: NodeId, opaque: u64) -> Option<NodeId> {
+diff --git a/crates/cambium/cambium-rootstock/src/owned_layout.rs b/crates/cambium/cambium-rootstock/src/owned_layout.rs
+index b3630f6c..c5710588 100644
+--- a/crates/cambium/cambium-rootstock/src/owned_layout.rs
++++ b/crates/cambium/cambium-rootstock/src/owned_layout.rs
+@@ -183,6 +183,15 @@ impl OwnedLayout {
+         &self.fragments
+     }
+ 
++    /// Inline generated name text resolved by this retained layout's style owner.
++    pub fn generated_text<D: LayoutDom<NodeId = NodeId>>(
++        &self,
++        dom: &D,
++        node: NodeId,
++    ) -> (String, String) {
++        genet_livery::rendered_generated_text(dom, &self.styles, node)
++    }
++
+     /// Font instances this session's text system has materialised. The
+     /// observable end of the host font seam.
+     pub fn retained_font_count(&self) -> usize {
+diff --git a/crates/cambium/cambium-winit-a11y/src/lib.rs b/crates/cambium/cambium-winit-a11y/src/lib.rs
+index 242baa0d..b84b6a52 100644
+--- a/crates/cambium/cambium-winit-a11y/src/lib.rs
++++ b/crates/cambium/cambium-winit-a11y/src/lib.rs
+@@ -208,7 +208,12 @@ pub fn project_tree(
+     let root = dom.document();
+     let id_of = |d: &ScriptedDom, n: NodeId| A11yNodeId(d.opaque_id(n));
+     let focused = focus.and_then(|opaque| find_opaque(dom, root, opaque));
+-    let mut tree = genet_render::accesskit_tree(dom, layout.fragments(), focused);
++    let mut tree = genet_render::accesskit_tree_with_generated_text(
++        dom,
++        layout.fragments(),
++        focused,
++        &|node| layout.generated_text(dom, node),
++    );
+     let mut action_map = HashMap::new();
+     walk(dom, root, &mut |node| {
+         let id = id_of(dom, node);

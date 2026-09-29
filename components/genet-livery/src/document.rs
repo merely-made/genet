@@ -216,6 +216,48 @@ where
     selection_range: Option<TextRange<D::NodeId>>,
 }
 
+/// Rendered inline before/after text from an owner's retained style plane.
+/// Consumers supply the style plane used for their published layout. Suppressed,
+/// replaced and invisible pseudo content contributes no name text. This creates
+/// no DOM nodes or source-text offsets.
+pub fn rendered_generated_text<D: LayoutDom>(
+    dom: &D,
+    styles: &StylePlane<D::NodeId>,
+    node: D::NodeId,
+) -> (String, String) {
+    // A suppressed/replaced owner has no generated text in the box tree.
+    if crate::box_tree::is_replaced_element(dom, node) {
+        return (String::new(), String::new());
+    }
+    let mut ancestor = Some(node);
+    while let Some(id) = ancestor {
+        if styles
+            .get(id)
+            .is_some_and(|style| style.display == livery::values::Display::None)
+        {
+            return (String::new(), String::new());
+        }
+        ancestor = dom.parent(id);
+    }
+    let visible_text = |pseudo| {
+        if styles
+            .generated_style(node, pseudo)
+            .is_some_and(|style| style.visibility == livery::values::Visibility::Visible)
+        {
+            styles
+                .generated_text(node, pseudo)
+                .unwrap_or_default()
+                .to_owned()
+        } else {
+            String::new()
+        }
+    };
+    (
+        visible_text(buckram::PseudoElement::Before),
+        visible_text(buckram::PseudoElement::After),
+    )
+}
+
 impl<D> LiveryDocument<D>
 where
     D: LayoutDom,
@@ -439,40 +481,7 @@ where
         let Some(layout) = &self.layout else {
             return (String::new(), String::new());
         };
-        // A suppressed/replaced owner has no generated text in the box tree.
-        if crate::box_tree::is_replaced_element(&self.dom, node) {
-            return (String::new(), String::new());
-        }
-        let mut ancestor = Some(node);
-        while let Some(id) = ancestor {
-            if layout
-                .styles
-                .get(id)
-                .is_some_and(|style| style.display == livery::values::Display::None)
-            {
-                return (String::new(), String::new());
-            }
-            ancestor = self.dom.parent(id);
-        }
-        let visible_text = |pseudo| {
-            if layout
-                .styles
-                .generated_style(node, pseudo)
-                .is_some_and(|style| style.visibility == livery::values::Visibility::Visible)
-            {
-                layout
-                    .styles
-                    .generated_text(node, pseudo)
-                    .unwrap_or_default()
-                    .to_owned()
-            } else {
-                String::new()
-            }
-        };
-        (
-            visible_text(buckram::PseudoElement::Before),
-            visible_text(buckram::PseudoElement::After),
-        )
+        rendered_generated_text(&self.dom, &layout.styles, node)
     }
 
     pub fn hit_test(&self, x: f32, y: f32) -> Option<D::NodeId> {

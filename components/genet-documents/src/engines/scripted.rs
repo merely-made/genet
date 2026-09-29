@@ -208,51 +208,52 @@ impl<E: script_engine_api::ScriptEngine + 'static> ScriptedDocumentSession<E> {
     ) -> Option<document_session_api::DocumentA11yProjection> {
         use document_session_api::{DocumentA11yAction, DocumentA11yProjection};
 
-        let projection =
-            self.doc
-                .with_retained_frame_and_dom(|dom, fragments, scroll, viewport| {
-                    let projection = genet_render::document_a11y_projection_with_scroll(
-                        dom,
-                        fragments,
-                        None,
-                        0,
-                        &std::collections::HashMap::new(),
-                    );
-                    let (scroll_x, scroll_y) = scroll;
-                    let (view_w, view_h) = (viewport.0 as f32, viewport.1 as f32);
-                    let nodes = projection
-                        .nodes()
-                        .iter()
-                        .cloned()
-                        .map(|mut node| {
-                            let on_screen = node.bounds.as_ref().is_some_and(|bounds| {
-                                let x = bounds.x - scroll_x;
-                                let y = bounds.y - scroll_y;
-                                bounds.width > 0.0
-                                    && bounds.height > 0.0
-                                    && x < view_w
-                                    && y < view_h
-                                    && x + bounds.width > 0.0
-                                    && y + bounds.height > 0.0
-                            });
-                            if node.state.disabled || node.state.hidden || !on_screen {
-                                node.actions
-                                    .retain(|action| *action != DocumentA11yAction::Click);
-                            }
-                            if let Some(bounds) = node.bounds.as_mut() {
-                                bounds.x -= scroll_x;
-                                bounds.y -= scroll_y;
-                            }
-                            node
-                        })
-                        .collect();
-                    DocumentA11yProjection::new(
-                        0,
-                        projection.support().clone(),
-                        projection.root(),
-                        nodes,
-                    )
-                })?;
+        let projection = self.doc.with_retained_styled_frame_and_dom(
+            |dom, styles, fragments, scroll, viewport| {
+                let projection = genet_render::document_a11y_projection_with_generated_text(
+                    dom,
+                    fragments,
+                    None,
+                    0,
+                    Some(&std::collections::HashMap::new()),
+                    &|node| genet_livery::rendered_generated_text(dom, styles, node),
+                );
+                let (scroll_x, scroll_y) = scroll;
+                let (view_w, view_h) = (viewport.0 as f32, viewport.1 as f32);
+                let nodes = projection
+                    .nodes()
+                    .iter()
+                    .cloned()
+                    .map(|mut node| {
+                        let on_screen = node.bounds.as_ref().is_some_and(|bounds| {
+                            let x = bounds.x - scroll_x;
+                            let y = bounds.y - scroll_y;
+                            bounds.width > 0.0
+                                && bounds.height > 0.0
+                                && x < view_w
+                                && y < view_h
+                                && x + bounds.width > 0.0
+                                && y + bounds.height > 0.0
+                        });
+                        if node.state.disabled || node.state.hidden || !on_screen {
+                            node.actions
+                                .retain(|action| *action != DocumentA11yAction::Click);
+                        }
+                        if let Some(bounds) = node.bounds.as_mut() {
+                            bounds.x -= scroll_x;
+                            bounds.y -= scroll_y;
+                        }
+                        node
+                    })
+                    .collect();
+                DocumentA11yProjection::new(
+                    0,
+                    projection.support().clone(),
+                    projection.root(),
+                    nodes,
+                )
+            },
+        )?;
         Some(projection)
     }
 

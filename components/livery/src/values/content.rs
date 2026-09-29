@@ -16,10 +16,29 @@ pub enum Content {
 pub enum ContentItem {
     Text(String),
     Attribute(String),
+    /// Decimal `counter()` or `counters()`; the latter carries its separator.
+    Counter {
+        name: String,
+        separator: Option<String>,
+    },
 }
 
 impl Content {
-    pub fn resolve(&self, mut attribute: impl FnMut(&str) -> Option<String>) -> Option<String> {
+    /// Resolve without a counter environment (every absent counter starts at
+    /// zero). A document with counter state uses `resolve_with_counters`.
+    pub fn resolve(&self, attribute: impl FnMut(&str) -> Option<String>) -> Option<String> {
+        self.resolve_with_counters(attribute, |_, _| "0".into())
+    }
+
+    pub fn has_counters(&self) -> bool {
+        matches!(self, Self::Items(items) if items.iter().any(|item| matches!(item, ContentItem::Counter { .. })))
+    }
+
+    pub fn resolve_with_counters(
+        &self,
+        mut attribute: impl FnMut(&str) -> Option<String>,
+        mut counter: impl FnMut(&str, Option<&str>) -> String,
+    ) -> Option<String> {
         let Self::Items(items) = self else {
             return None;
         };
@@ -29,6 +48,7 @@ impl Content {
                 .map(|item| match item {
                     ContentItem::Text(text) => text.clone(),
                     ContentItem::Attribute(name) => attribute(name).unwrap_or_default(),
+                    ContentItem::Counter { name, separator } => counter(name, separator.as_deref()),
                 })
                 .collect(),
         )
@@ -70,6 +90,36 @@ impl FromStr for Content {
                         .map_err(|_| ParseError::expected("attr(identifier)"))?;
                     items.push(ContentItem::Attribute(name));
                 },
+                Token::Function(function)
+                    if function.eq_ignore_ascii_case("counter")
+                        || function.eq_ignore_ascii_case("counters") =>
+                {
+                    let nested = function.eq_ignore_ascii_case("counters");
+                    let item = parser
+                        .parse_nested_block(|p| {
+                            let name = p.expect_ident_cloned()?;
+                            if !super::counters::counter_name(&name) {
+                                return Err(p.new_custom_error(()));
+                            }
+                            let separator = if nested {
+                                p.expect_comma()?;
+                                Some(p.expect_string_cloned()?.to_string())
+                            } else {
+                                None
+                            };
+                            if !p.is_exhausted() {
+                                p.expect_comma()?;
+                                p.expect_ident_matching("decimal")?;
+                            }
+                            p.expect_exhausted()?;
+                            Ok::<_, cssparser::ParseError<'_, ()>>(ContentItem::Counter {
+                                name: name.to_string(),
+                                separator,
+                            })
+                        })
+                        .map_err(|_| ParseError::expected("decimal counter() or counters()"))?;
+                    items.push(item);
+                },
                 _ => return Err(ParseError::expected("string or attr(identifier)")),
             }
         }
@@ -100,6 +150,19 @@ impl fmt::Display for Content {
                             cssparser::serialize_identifier(name, f)?;
                             f.write_str(")")?;
                         },
+                        ContentItem::Counter { name, separator } => {
+                            f.write_str(if separator.is_some() {
+                                "counters("
+                            } else {
+                                "counter("
+                            })?;
+                            cssparser::serialize_identifier(name, f)?;
+                            if let Some(separator) = separator {
+                                f.write_str(", ")?;
+                                Token::QuotedString(separator.as_str().into()).to_css(f)?;
+                            }
+                            f.write_str(")")?;
+                        },
                     }
                 }
                 Ok(())
@@ -126,7 +189,44 @@ mod tests {
                 .resolve(|_| None),
             Some(String::new())
         );
-        for invalid in ["", "none 'x'", "counter(foo)", "'x' url(a)", "attr(x, y)"] {
+        for invalid in [
+            "",
+            "none 'x'",
+            "counter(foo, upper-roman)",
+            "'x' url(a)",
+            "attr(x, y)",
+        ] {
+            assert!(invalid.parse::<Content>().is_err(), "{invalid}");
+        }
+    }
+
+    #[test]
+    fn decimal_counter_functions_parse_and_resolve_through_owner() {
+        let content: Content = r#"counter(chapter, decimal) "." counters(section, ".", decimal)"#
+            .parse()
+            .unwrap();
+        assert_eq!(content.to_string().parse::<Content>().unwrap(), content);
+        assert_eq!(
+            content
+                .resolve_with_counters(
+                    |_| None,
+                    |name, separator| match (name, separator) {
+                        ("chapter", None) => "2".into(),
+                        ("section", Some(".")) => "3.4".into(),
+                        _ => panic!("unexpected counter request"),
+                    }
+                )
+                .as_deref(),
+            Some("2.3.4")
+        );
+        for invalid in [
+            "counter(none)",
+            "counter(initial)",
+            "counter(x,)",
+            "counters(x)",
+            "counters(x, '.') extra",
+            "counter(x, lower-alpha)",
+        ] {
             assert!(invalid.parse::<Content>().is_err(), "{invalid}");
         }
     }

@@ -10,6 +10,9 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+mod counters;
+pub(crate) use counters::resolve as resolve_counters;
+
 use genet_document_resources::{
     ResolvedImportRule, ResolvedStylesheet, StylesheetImportParent, StylesheetOwner, resolve_url,
 };
@@ -1236,6 +1239,7 @@ where
         None,
         &tree_scopes(dom, style_set),
     );
+    resolve_counters(dom, &mut plane);
     plane
 }
 
@@ -1284,6 +1288,7 @@ where
         Some(containers),
         &tree_scopes(dom, style_set),
     );
+    resolve_counters(dom, &mut plane);
     plane
 }
 
@@ -1541,6 +1546,21 @@ where
     }
 }
 
+/// HTML attribute names are ASCII-insensitive for generated `attr()` text.
+/// Both initial pseudo admission and counter refresh use this single lookup.
+fn generated_content_attribute<D: LayoutDom>(dom: &D, id: D::NodeId, name: &str) -> Option<String> {
+    let name = if dom
+        .element_name(id)
+        .is_some_and(|element| element.ns.as_ref() == "http://www.w3.org/1999/xhtml")
+    {
+        name.to_ascii_lowercase()
+    } else {
+        name.to_owned()
+    };
+    dom.attribute(id, &Namespace::default(), &LocalName::from(name))
+        .map(str::to_owned)
+}
+
 #[allow(clippy::too_many_arguments)]
 fn resolve_subtree_on_this_stack<D, P>(
     selector_tree: &SelectorTree<'_, D>,
@@ -1749,19 +1769,9 @@ where
                 && pseudo_style.display == livery::values::Display::Inline
                 && pseudo_style.position == Position::Static
                 && pseudo_style.float == livery::values::Float::None
-                && let Some(text) = pseudo_style.content.resolve(|name| {
-                    let name = if selector_tree.dom().element_name(id).is_some_and(|element| {
-                        element.ns.as_ref() == "http://www.w3.org/1999/xhtml"
-                    }) {
-                        name.to_ascii_lowercase()
-                    } else {
-                        name.to_owned()
-                    };
-                    selector_tree
-                        .dom()
-                        .attribute(id, &Namespace::default(), &LocalName::from(name))
-                        .map(str::to_owned)
-                })
+                && let Some(text) = pseudo_style
+                    .content
+                    .resolve(|name| generated_content_attribute(selector_tree.dom(), id, name))
             {
                 plane
                     .generated

@@ -1,9 +1,10 @@
 # Accessible names and descriptions
 
-**Status (2026-09-26):** implemented bounded DOM slice and retained inline
-generated-text integration; focused, joint semantic and Ortet host-lowering
-gates pass. Full AccName/HTML-AAM conformance and headed
-assistive-technology acceptance remain open.
+**Status (2026-09-29):** bounded DOM names/descriptions and retained generated
+text implemented, including scripted sessions on Boa and Vano. Focused joint
+semantic and native lowering gates pass. Cambium's exact-pin adoption receipt
+is recorded below after promotion. Full AccName/HTML-AAM conformance and
+headed assistive-technology acceptance remain open.
 
 ## Sources and ownership
 
@@ -114,9 +115,9 @@ local path overrides are not an adoption receipt.
 Complete role rules, computed visibility, shadow scope and flat-tree traversal,
 embedded controls, generated block spacing, WPT coverage and a headed physical
 screen-reader receipt remain explicit future work. Static Livery session wiring
-uses the retained provider; the scripted session currently exposes retained
-fragments without the style plane, so generated text in that projection needs
-an additional CSSOM-owner query before adoption. No new worktree, isolated
+uses the retained provider. At this September 26 receipt the scripted session
+exposed fragments without styles; the September 29 provider closes that gap.
+No new worktree, isolated
 Cargo home or isolated target was created.
 
 
@@ -132,7 +133,8 @@ Downstream Taproot can consume `DocumentA11yProjection::nodes()` from the public
 `genet_render::document_a11y_projection` family. Each node's `id.get()` matches
 `LayoutDom::opaque_id`; `role`, `name` and `description` are owner-computed.
 Explicit class/text selector policy remains downstream. This does not expose
-private name traversal or make the scripted generated-text gap disappear.
+private name traversal. The scripted generated-text consumer was added later,
+as recorded in the September 29 section below.
 
 Focused integration gates on `04c44e90397` passed: genet-render 38, genet-documents
 with livery 52, document-session-api 16, genet-livery library 279 and generated
@@ -170,3 +172,30 @@ isolated target, Cargo home or worktree was created. Native host adoption and
 physical assistive-technology acceptance remain separate gates. HTML `hidden`
 and computed CSS visibility coverage are still owned by the projection, not
 reconstructed by this matcher.
+
+
+## Retained generated-name consumers (2026-09-29)
+
+This increment connects scripted sessions and Cambium to the same retained
+inline generated text already used by static Livery. `rendered_generated_text`
+is a public Genet helper over a DOM and the exact retained style plane, factoring
+the existing suppression/replaced-owner/visibility checks. The scripted CSSOM
+and document expose additive style-bearing frame callbacks; the old geometry-only
+callbacks remain available. `accesskit_tree_with_generated_text` lowers the same
+provider through Genet's existing native projection.
+
+Scripted Boa/Vano fixtures pass: names track rendered attribute changes, author
+names retain precedence, semantic revisions advance and generated strings remain
+outside source DOM selection. All 56 `genet-documents` library tests pass with
+`scripted-nova` enabled. The command ran from the Code root using Rust 1.97.1,
+`--offline`, and the existing `repos/genet/target`, without sibling overrides.
+Cambium must select the same name through Mesquite and native AccessKit using a
+published containing revision; its exact-pin receipt follows below. A physical
+screen-reader run remains open.
+
+The native bridge also has a joint decimal-counter fixture: retained CSS
+`counter(action)` yields `1. Save` on a button, while an author's label keeps
+precedence. All 39 `genet-render` library tests pass using
+`cargo +1.97.1 test --manifest-path repos/genet/Cargo.toml -p genet-render --lib
+--offline --target-dir C:/Users/mark_/Code/repos/genet/target -j 2` from the
+Code root. This validates native tree data, not a physical screen-reader run.

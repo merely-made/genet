@@ -500,7 +500,8 @@ impl LiveryCssom {
             let (url, viewport) = {
                 let h = host.borrow();
                 (
-                    h.document_base_url().unwrap_or_else(|| "about:blank".to_owned()),
+                    h.document_base_url()
+                        .unwrap_or_else(|| "about:blank".to_owned()),
                     h.viewport_size,
                 )
             };
@@ -800,6 +801,21 @@ impl LiveryCssom {
         let state = self.state.borrow();
         let frame = state.frame.as_ref()?;
         Some(read(&frame.fragments, state.scroll, frame.viewport))
+    }
+
+    /// Read retained styles and geometry together. None before rendering.
+    pub fn with_retained_styled_frame<R>(
+        &self,
+        read: impl FnOnce(&StylePlane<NodeId>, &LiveryLayout<NodeId>, (f32, f32), (u32, u32)) -> R,
+    ) -> Option<R> {
+        let state = self.state.borrow();
+        let frame = state.frame.as_ref()?;
+        Some(read(
+            &frame.styles,
+            &frame.fragments,
+            state.scroll,
+            frame.viewport,
+        ))
     }
 
     /// The most recently rendered viewport. It is `(0, 0)` before the first

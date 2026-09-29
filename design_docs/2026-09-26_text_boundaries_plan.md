@@ -1,6 +1,6 @@
 # Shared Unicode text boundaries
 
-**Status (2026-09-26):** in progress; primitive and editor adapter implemented and verified; tested search adapter retained as a patch pending source-pin promotion.
+**Status (2026-09-29):** Genet primitive/editor and pinned Mere search/Cambium editor adoption implemented and verified; headed caret and broader consumers remain open.
 
 ## Ownership and scope
 
@@ -32,11 +32,10 @@ profile remains an index compatibility decision owned by Mere.
 2. Consumer adoption: Genet editor caret/deletion uses full-string grapheme
    context; Mere lexical search uses the shared word seam while retaining its
    normalization. Done when focused consumer checks pass and source dependency
-   publication is resolved. The new Genet crate is not yet available in any
-   committed remote pin. The prepared Mere change is retained in
-   `receipts/2026-09-26_text_boundaries/mere-adoption.patch`, not applied to the
-   workspace. Replace its provisional git main source with the containing Genet
-   revision before applying it and claiming clean-clone adoption complete.
+   publication is resolved. The Genet source is available at revision
+   `19c206873ab08ae227217892d9e74d0df18b349a`; Mere adoption now uses that pin.
+   The September 26 pending patch is historical; current implementation and
+   validation are recorded in the September 29 section below.
 3. Deferred consumers: DOM selection movement, find-in-page and Intl.Segmenter
    can adopt the contract after their own acceptance fixtures. This slice changes
    editor movement/deletion, not the DOM Selection API or locale negotiation.
@@ -63,7 +62,7 @@ profile remains an index compatibility decision owned by Mere.
 
 ## Open gates
 
-Remote containing-revision adoption, locale dictionaries,
+Headed Cambium caret verification, locale dictionaries,
 DOM Selection/find/Intl consumers and persistent profile migration remain open.
 
 ## Consumer verification (2026-09-26)
@@ -94,3 +93,51 @@ Strict Clippy for genet-text passed with all targets and warnings denied.
   livery_editor_uses_shared_grapheme_boundaries_for_keys. Existing feature-gated
   unused-import warnings remain. This is an actual editor consumer receipt;
   the DOM Selection API, headed interaction and full Mere integration remain open.
+
+## Mere adoption (2026-09-29)
+
+**Status:** implemented and verified against the published Genet source pin.
+
+The containing Genet revision is now available:
+`19c206873ab08ae227217892d9e74d0df18b349a`. Mere's workspace dependency names
+`genet-text` at that same revision as its other Genet dependencies. This removes
+the earlier unpublished-source blocker; the retained adoption patch is historical.
+
+The bounded consumers are Mere `crates/intel/eidetic-search/src/tokenize.rs` and
+Cambium `crates/cambium/cambium/src/controls/text_input/{core,word_motion,multiline}.rs`.
+Search uses Genet's word filter before its existing URL connector splitting,
+lowercasing and optional caller-supplied stemmer. Cambium uses Genet's segment
+positions while keeping its grapheme-index caret model, whitespace-skipping word
+commands and hard-newline navigation. Byte-to-grapheme conversion inspects the
+complete string instead of slicing arbitrary byte offsets.
+
+Done-conditions: existing Cambium editor/undo/IME tests and lexical-index tests
+pass against the pinned source; added fixtures preserve byte snapping inside flag
+and combining sequences and the search token stream for apostrophes, decimals,
+underscores and non-ASCII words. Headed caret behavior remains a separate gate.
+
+Index compatibility: the pre-adoption Mere lock already resolves
+unicode-segmentation 1.13.3 / Unicode 17, exactly the Genet primitive's pinned
+engine. `TOKENIZER_NAME`, normalization and stored index schema remain unchanged.
+The new public `SEGMENTATION_PROFILE` describes the boundary engine; a future
+Unicode or tailoring change still requires an explicit index migration decision,
+not merely changing that constant. Locale dictionaries remain deferred.
+
+- 2026-09-29: `cargo +1.98.1 test --manifest-path repos/mere/Cargo.toml -p
+  cambium --lib --offline --target-dir C:/t/cargo-targets/mere` passed 232/232
+  tests from the Code workspace root. Build output confirms the Genet dependency
+  source is the published `19c20687` revision. This includes grapheme byte snapping,
+  word motion, multiline movement, IME and exhaustive edit/undo regressions.
+  The existing stable Mere target was reused; no isolated home or worktree exists.
+
+- 2026-09-29: `cargo +1.98.1 test --manifest-path repos/mere/Cargo.toml -p
+  eidetic-search --lib --offline --target-dir C:/t/cargo-targets/mere` passed
+  38 tests, with the existing corpus-scale timing test explicitly ignored.
+  Passed coverage includes the new token-stream compatibility fixture, existing
+  normalization/stemmer tests, candidate matching, index rebuild/search and
+  persisted-spec rejection/recovery. Unrelated dependency warnings remain;
+  no extra test target, Cargo home, or worktree was created.
+- 2026-09-29: Mere consumer adoption committed and pushed as
+  `ada6f265856cbf16b5813452a714e9ea4c55dc56`, retaining the published Genet
+  `19c20687` pin used by both test receipts. Only the two consumer lock edges
+  were staged; concurrent workspace lock/source changes were preserved.

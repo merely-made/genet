@@ -240,6 +240,7 @@ where
             );
         }
 
+        crate::style::resolve_counters(dom, &mut self.plane);
         self.stylesheet_generation = generation;
         self.interaction_generation = states.generation();
         self.device = Some(*device);

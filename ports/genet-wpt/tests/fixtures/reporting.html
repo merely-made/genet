@@ -1,0 +1,8 @@
+<!doctype html>
+<meta charset="utf-8">
+<script src="/resources/testharness.js"></script>
+<script>
+test(() => assert_true(true), "synchronous reporting sentinel");
+promise_test(() => Promise.resolve().then(() => assert_equals(2 + 2, 4)),
+             "microtask reporting sentinel");
+</script>

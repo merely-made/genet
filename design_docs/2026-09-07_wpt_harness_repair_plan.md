@@ -337,6 +337,23 @@ belong to the engine's residual rather than the harness's.
 ## Progress
 
 - **2026-09-07** — H1, H2 and H3 landed; H4 re-run recorded. Gates below.
+- **2026-09-29** — Isolated Vano workers now create a fresh runtime instead of
+  cloning a harness snapshot. The snapshot path refused ordinary `test()` calls
+  with `realm operation refused: the context has no window proxy`; its native
+  result callback still worked, so no-results was a runner failure rather than
+  evidence that the tested features failed. Each isolated worker runs one file,
+  making a template unnecessary there. The in-process template route remains
+  unqualified and unchanged.
+  A real CLI fixture using vendored `testharness.js` reports both its synchronous
+  and microtask assertions on Boa and Vano, with GC enabled and disabled.
+  `cargo +1.97.1 test --manifest-path worktrees/genet-vano-census/Cargo.toml
+  --locked -p genet-wpt --features netfetch --test vano_reporting -j 2` passed
+  all four combinations on `19c206873ab` plus the exact worker/test patch,
+  using `GENET_WPT_TESTS_ROOT` for the primary corpus and the reusable
+  `C:/t/cargo-targets/genet` target. The collision-isolated source and archived
+  patch are identified in the [census receipt](receipts/2026-09-29_vano_wpt_census/receipt.md).
+  This reporting qualification establishes neither a completed census nor
+  browser-hosted conformance.
 - **2026-09-07 (residual)** — F6 closes the `css/support/*-testcommon.js`
   residual F1 left open: `ports/genet-wpt/src/harness.rs` now parses
   XML-namespaced testharness documents (the `svg/` corpus's `<h:script>`

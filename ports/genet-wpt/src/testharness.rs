@@ -471,12 +471,14 @@ pub(crate) fn testharness_one(args: &Args) {
     #[cfg(feature = "netfetch")]
     let server = setup_server(args);
     let test = TestCase::single(PathBuf::from(path), args.subset.clone());
-    let mut template = nova_template(args, &testharness_js);
     let mut ctx = RunCtx {
         testharness_js: &testharness_js,
         #[cfg(feature = "netfetch")]
         server: &server,
-        nova_template: template.as_mut(),
+        // A worker runs exactly one test. A fresh runtime keeps the harness's
+        // realm/window-proxy state together; the snapshot route currently
+        // refuses ordinary test() calls after replacing the Rust host state.
+        nova_template: None,
     };
     let outcome = run_one(&test, args, &mut ctx);
     let mut out = std::io::stdout();

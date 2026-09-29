@@ -2500,3 +2500,77 @@ fn livery_editor_uses_shared_grapheme_boundaries_for_keys() {
     );
     assert_eq!(session.editor.as_ref().unwrap().caret, 8);
 }
+
+#[cfg(feature = "scripted")]
+fn check_scripted_generated_names<E: script_engine_api::ScriptEngine + 'static>() {
+    let document = genet_scripted::LiveryScriptedDocument::<E>::parse(
+        r#"<style>button::before, p::before { content: attr(data-prefix); }
+        button::after, p::after { content: "]"; }</style>
+        <button id="save" data-prefix="[">Save</button><p id="select" data-prefix="[">Selectable</p>"#,
+    )
+    .expect("scripted document");
+    let mut session = ScriptedDocumentSession::new(document);
+    assert!(
+        session.accessibility_projection().is_none(),
+        "no pre-frame semantics"
+    );
+    session.frame(320, 160);
+    let first = session.accessibility_projection().expect("retained names");
+    let button = |projection: &document_session_api::DocumentA11yProjection| {
+        projection
+            .nodes()
+            .iter()
+            .find(|node| node.role == document_session_api::DocumentA11yRole::Button)
+            .expect("button projected")
+            .name
+            .clone()
+    };
+    assert_eq!(button(&first).as_deref(), Some("[Save]"));
+    session
+        .document_mut()
+        .evaluate("document.getElementById('save').setAttribute('data-prefix', '<'); document.getElementById('select').setAttribute('data-prefix', '<')")
+        .unwrap();
+    session.frame(320, 160);
+    let changed = session.accessibility_projection().unwrap();
+    assert_eq!(button(&changed).as_deref(), Some("<Save]"));
+    assert!(
+        changed.revision() > first.revision(),
+        "names change the semantic revision"
+    );
+    assert!(session.document_mut().text_target("Selectable").is_some());
+    assert!(
+        session.document_mut().text_target("<Selectable]").is_none(),
+        "generated text stays outside DOM selection"
+    );
+    session
+        .document_mut()
+        .evaluate("document.getElementById('save').setAttribute('aria-label', 'Author name')")
+        .unwrap();
+    session.frame(320, 160);
+    assert_eq!(
+        button(&session.accessibility_projection().unwrap()).as_deref(),
+        Some("Author name")
+    );
+    session.document_mut().with_dom(|dom| {
+        fn source<D: LayoutDom>(dom: &D, node: D::NodeId) -> String {
+            dom.text(node).unwrap_or_default().to_owned()
+                + &dom
+                    .dom_children(node)
+                    .map(|child| source(dom, child))
+                    .collect::<String>()
+        }
+        assert!(source(dom, dom.document()).ends_with("SaveSelectable"));
+    });
+}
+
+#[cfg(feature = "scripted")]
+#[test]
+fn scripted_generated_names_follow_retained_styles_on_boa() {
+    check_scripted_generated_names::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(feature = "scripted-nova")]
+#[test]
+fn scripted_generated_names_follow_retained_styles_on_vano() {
+    check_scripted_generated_names::<script_engine_nova::NovaEngine>();
+}

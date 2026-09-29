@@ -245,6 +245,9 @@ fn value_type_path(value_type: &str) -> &'static str {
         "line-height" => "crate::values::LineHeight",
         "list-style-type" => "crate::values::ListStyleType",
         "content" => "crate::values::Content",
+        "counter-reset" => "crate::values::CounterReset",
+        "counter-increment" => "crate::values::CounterIncrement",
+        "counter-set" => "crate::values::CounterSet",
         "list-style-position" => "crate::values::ListStylePosition",
         "margin" => "crate::values::Margin",
         "opacity" => "crate::values::Opacity",
@@ -305,6 +308,9 @@ fn value_type_is_copy(value_type: &str) -> bool {
             | "grid-template"
             | "list-style-type"
             | "content"
+            | "counter-reset"
+            | "counter-increment"
+            | "counter-set"
             | "transform"
     )
 }
@@ -377,6 +383,9 @@ fn initial_expression(property: &Property) -> &'static str {
         ("line-height", "normal") => "crate::values::LineHeight::Normal",
         ("list-style-type", "disc") => "crate::values::ListStyleType::Disc",
         ("content", "normal") => "crate::values::Content::Normal",
+        ("counter-reset", "none") => "crate::values::CounterReset(Vec::new())",
+        ("counter-increment", "none") => "crate::values::CounterIncrement(Vec::new())",
+        ("counter-set", "none") => "crate::values::CounterSet(Vec::new())",
         ("list-style-position", "outside") => "crate::values::ListStylePosition::Outside",
         ("margin", "0") => "crate::values::Margin::Value(crate::values::LengthPercentage::ZERO)",
         ("opacity", "1") => "crate::values::Opacity::ONE",

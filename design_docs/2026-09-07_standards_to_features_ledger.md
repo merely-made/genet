@@ -77,23 +77,29 @@ evidence from these WPT counts.
 | 11, Workers | [Dedicated Worker](2026-09-07_worker_plan.md) landed 2026-09-07: **321/967**, 74 all-pass files. Separate-runtime thread, cross-agent messaging, both-backend automated tests and bounded native headed delivery are recorded. | Shared/module workers, nested-relay ordering, real buffer/view detachment, cooperative termination and browser-hosted scripting acceptance remain open. Native application indexing need not wait for full web Worker conformance. |
 | 14, component model | [Shadow DOM](2026-09-07_shadow_dom_plan.md) landed 2026-09-07/08: shadow-dom **1,512/8,804**, 45 all-pass files; custom-elements **2,149/3,837** in that lane. Slots, flat-tree rendering, style scoping and retargeting exist. Parser/script interleaving subsequently closed declarative registry attachment regressions. | Named gaps include constructable/adopted stylesheets, focus delegation and `:host-context()`. Qualify a concrete Cambium-in-document consumer; these counts do not mean the model is a measured fraction complete. |
 
-### Bounded standards implementations — 2026-09-26
+### Bounded standards implementations — updated 2026-09-29
 
 - Row 1: [shared text boundaries](2026-09-26_text_boundaries_plan.md) wraps the
   existing Unicode 17 engine with explicit offset domains. Official break
-  fixtures and the Genet editor consumer pass. Mere's tested tokenizer adapter
-  remains a receipt patch pending a containing Genet dependency pin.
+  fixtures and the Genet editor consumer pass. Mere search and Cambium editing
+  adoption is published as `ada6f265`, selecting Genet `19c206873ab`.
+  Consumer gates passed 232 Cambium and 38 search tests (one existing timing
+  test ignored); normalization and index policy remain with Mere.
 - Row 3: [accessible names](2026-09-26_accessible_names_plan.md) implements the
   bounded DOM name/description algorithm and native projection plumbing, with a
-  joint generated-text fixture. Full conformance and physical AT remain open.
+  joint generated-text fixture. Scripted sessions now read the retained style
+  plane; both Boa and Vano attribute-update/name fixtures and all 56 document
+  tests pass. Cambium adoption follows publication. Full conformance and
+  physical AT remain open.
 - [Generated text](2026-09-26_generated_text_plan.md) now implements bounded
-  inline before/after strings and `attr()` with source DOM preserved. This does
+  inline before/after strings, `attr()` and named decimal `counter()`/`counters()`
+  with reset/increment/set and source DOM preserved. This does
   not close the broader rendering Row 17 or establish a new WPT count.
 
 Generated content is tracked as **Row 17 of the separate
 [Buckram/Livery rendering program](../docs/2026-08-21_buckram_livery_lane_program_plan.md)**,
-not Row 17 of this ledger. Counter scope, broader list and marker behavior, and
-general pseudo-box layout remain open beyond the bounded generated-text slice.
+not Row 17 of this ledger. Implicit list counters, reversed/additional styles,
+broader list and marker behavior, and general pseudo-box layout remain open.
 
 ### Measurement next step
 
@@ -101,9 +107,13 @@ Refresh comparable Boa and **Vano** result maps with recorded source/dependency
 revisions, WPT manifest, runner options and named outcomes. First classify the
 Vano no-results cases recorded in the [realms plan](2026-09-08_realms_plan.md):
 focused tests passing does not establish that the WPT harness reports results.
-Keep skips, timeouts, no-results and harness failures visible. This is a proposed
-measurement gate, not a newly completed census. The September 6 census is
-Boa-only; later focused and headed receipts already exercise both backends.
+Keep skips, timeouts, no-results and harness failures visible. This gate is now
+in progress: the isolated worker's snapshot/window-proxy reporting defect was
+fixed and published as `0c4aa9f60b8`, with a real harness sentinel passing on
+both engines and both GC modes. The [census receipt](receipts/2026-09-29_vano_wpt_census/receipt.md)
+keeps the broken pristine run separate from the patched runner. Final census
+totals are pending. The September 6 census is Boa-only; later focused and
+headed receipts already exercise both backends.
 
 Candidates a lane should add when it opens: `editing` (contenteditable for
 a writing product), `streams` (extraction starts before the page finishes),

@@ -343,6 +343,24 @@ where
     accesskit_tree_with_optional_scroll(dom, fragments, focus, Some(scroll_offsets))
 }
 
+/// Lower the same style-aware names used by neutral document consumers.
+#[cfg(feature = "accesskit")]
+pub fn accesskit_tree_with_generated_text<D>(
+    dom: &D,
+    fragments: &LiveryLayout<D::NodeId>,
+    focus: Option<D::NodeId>,
+    generated: &dyn Fn(D::NodeId) -> (String, String),
+) -> TreeUpdate
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    lower_accesskit_tree(
+        dom,
+        document_a11y_projection_with_generated_text(dom, fragments, focus, 0, None, generated),
+    )
+}
+
 #[cfg(feature = "accesskit")]
 fn accesskit_tree_with_optional_scroll<D>(
     dom: &D,
@@ -966,6 +984,35 @@ mod tests {
                 .collect()
         }
         assert_eq!(collect(document.dom(), document.dom().document()), "Save");
+    }
+
+    #[test]
+    fn decimal_counter_names_reach_native_accessibility() {
+        use genet_livery::{Device, LiveryDocument, StyleSet};
+        let dom = ScriptedDom::from_serialized_document(
+            "<html><body><button>Save</button><button aria-label='Author'>Other</button></body></html>",
+        );
+        let mut document = LiveryDocument::new(
+            dom,
+            StyleSet::cambium(&[
+                "body { counter-reset: action; } button::before { counter-increment: action; content: counter(action) '. '; }",
+            ]),
+            Device::screen(400.0, 300.0),
+        );
+        document.frame(400, 300).expect("counter frame");
+        let tree = super::accesskit_tree_with_generated_text(
+            document.dom(),
+            document.retained_layout().expect("layout"),
+            None,
+            &|node| document.generated_text(node),
+        );
+        let names: Vec<_> = tree
+            .nodes
+            .iter()
+            .filter(|(_, node)| node.role() == Role::Button)
+            .map(|(_, node)| node.label())
+            .collect();
+        assert_eq!(names, vec![Some("1. Save"), Some("Author")]);
     }
 
     /// A retained document can carry a field's text as the input's children

@@ -1145,6 +1145,25 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             })
     }
 
+    /// Inspect top-context DOM, styles and geometry from the last rendered frame.
+    /// This read neither resolves styles nor computes a frame.
+    pub fn with_retained_styled_frame_and_dom<R>(
+        &self,
+        read: impl FnOnce(
+            &ScriptedDom,
+            &genet_livery::StylePlane<NodeId>,
+            &genet_livery::LiveryLayout<NodeId>,
+            (f32, f32),
+            (u32, u32),
+        ) -> R,
+    ) -> Option<R> {
+        let host = self.rt.host().borrow();
+        self.cssom
+            .with_retained_styled_frame(|styles, fragments, scroll, viewport| {
+                read(&host.dom, styles, fragments, scroll, viewport)
+            })
+    }
+
     pub fn pump(&mut self, now_ms: f64) -> (usize, usize) {
         if self.frozen {
             return (0, 0);

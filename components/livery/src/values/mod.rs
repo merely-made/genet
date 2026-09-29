@@ -12,6 +12,7 @@ mod calc;
 mod color;
 mod color_scheme;
 mod content;
+mod counters;
 mod length;
 mod logical;
 mod property;
@@ -23,6 +24,7 @@ pub use color::{
 };
 pub use color_scheme::{ColorScheme, ColorSchemeList};
 pub use content::{Content, ContentItem};
+pub use counters::{CounterIncrement, CounterOperation, CounterReset, CounterSet};
 pub use length::{
     CalcLengthPercentage, ContainerAxisSize, Length, LengthPercentage, LengthUnit,
     MathLengthPercentage, RelativeLengthEnvironment, TreeCounts,
@@ -162,6 +164,9 @@ unchanged_viewport_resolution!(
     ListStylePosition,
     ListStyleType,
     Content,
+    CounterReset,
+    CounterIncrement,
+    CounterSet,
     Opacity,
     Order,
     Overflow,
@@ -627,6 +632,9 @@ discrete_interpolation!(
     ListStylePosition,
     ListStyleType,
     Content,
+    CounterReset,
+    CounterIncrement,
+    CounterSet,
     Margin,
     Order,
     Overflow,

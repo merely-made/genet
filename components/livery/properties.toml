@@ -2308,24 +2308,45 @@ name = "content"
 value_type = "content"
 inherited = false
 initial = "normal"
-grammar = "normal | none | [ <string> | attr(<ident>) ]+"
+grammar = "normal | none | [ <string> | attr(<ident>) | counter(<counter-name> [, decimal]?) | counters(<counter-name>, <string> [, decimal]?) ]+"
 seed_values = ["normal", "none"]
 animation = "discrete"
 source = "css_content_3"
 
-[[unimplemented]]
+[[property]]
 name = "counter-increment"
+value_type = "counter-increment"
 group = "counters"
 inherited = false
+initial = "none"
+grammar = "none | [ <custom-ident> <integer>? ]+"
+seed_values = ["none", "chapter", "chapter -1"]
 animation = "discrete"
-spec = "https://drafts.csswg.org/css-lists/#propdef-counter-increment"
+source = "css_lists_3"
+partial = "Named non-reversed i32 counters; implicit list-item and custom counter styles remain open"
 
-[[unimplemented]]
+[[property]]
 name = "counter-reset"
+value_type = "counter-reset"
 group = "counters"
 inherited = false
+initial = "none"
+grammar = "none | [ <custom-ident> <integer>? ]+"
+seed_values = ["none", "chapter", "chapter 2 section"]
 animation = "discrete"
-spec = "https://drafts.csswg.org/css-lists-3/#propdef-counter-reset"
+source = "css_lists_3"
+partial = "Named non-reversed i32 counters; reversed() and automatic initial values remain open"
+
+[[property]]
+name = "counter-set"
+value_type = "counter-set"
+group = "counters"
+inherited = false
+initial = "none"
+grammar = "none | [ <custom-ident> <integer>? ]+"
+seed_values = ["none", "chapter", "chapter -2"]
+animation = "discrete"
+source = "css_lists_3"
 
 # group: effects
 [[unimplemented]]

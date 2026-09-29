@@ -2,8 +2,8 @@
 
 **Status (2026-09-29):** bounded DOM names/descriptions and retained generated
 text implemented, including scripted sessions on Boa and Vano. Focused joint
-semantic and native lowering gates pass. Cambium's exact-pin adoption receipt
-is recorded below after promotion. Full AccName/HTML-AAM conformance and
+semantic and native lowering gates pass. Cambium's exact-pin adoption is
+published and recorded below. Full AccName/HTML-AAM conformance and
 headed assistive-technology acceptance remain open.
 
 ## Sources and ownership
@@ -204,3 +204,16 @@ The shared provider and scripted consumers are published in Genet
 `c5470fcbc12805f0369c70f34a18178158fbe2d5`. The preserved downstream patch
 is [mere-adoption.patch](receipts/2026-09-29_generated_names/mere-adoption.patch);
 it contains only the Rootstock/provider/native projection and scenario fixture.
+
+Mere adoption is committed and pushed as
+`4120607076574ce9b6b6b9a9bccb4c67ec2b6ba7`, selecting that containing Genet pin
+in its current root and standalone web manifests. All 207 Rootstock/native
+host/accessibility/Mesquite tests and the standalone Graphshell Wasm check pass.
+The scenario clicks `[Count 0]`, observes `[Count 1]` through both neutral and
+native projections, then changes an attribute and observes `<Count 1]` with the
+same DOM identity. Published sources and stable input hashes are verified;
+separately qualified legacy Genet identities remain unchanged. Exact commands
+and the tested ignored web lock are recorded in
+`mere/design_docs/cambium_docs/testing/local-genet-development.md` under
+the September 29 generated-name receipt. These are automated consumer/compile
+gates; physical AT and browser-hosted interaction remain open.

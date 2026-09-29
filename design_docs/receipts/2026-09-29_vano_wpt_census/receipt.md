@@ -63,7 +63,7 @@ SHA256 `2cabe730f762f0138201f0e1b1d29ecd23bfbe007ced4632deafeae96a29a91f`,
 which reads original sibling baseline maps. It was not restarted mid-shard.
 The archived reproduction/resume driver reads the equivalent compact
 membership and has SHA256
-`d77b51eec96a6687f5c5957e30686cb7460836cbeb0d6fbcd51270b69bf9a15a`;
+`ccac6b861bbeee132f17da8bfbd20176dfad4b43d881b85f3bbcd882de05738a`;
 aggregator SHA256 is
 `4849ea396b6662f627e06046040dd13459569748fd50ad476453a55673830c30`;
 validator SHA256 is
@@ -163,8 +163,99 @@ The seven newly discovered dedicated-worker variants produce 1 all-pass,
 5 failing and 1 no-results file, with 5/23 subtests passing. These additional
 records are not included in the historical-membership comparison.
 
-Only this checkpoint is complete at this receipt stage. The full 82-directory
-run continues into content-security-policy (846 currently discovered records).
+The full 82-directory run remains active. The checkpoint below supersedes
+this initial console-only progress count without replacing its detailed
+comparison.
 The census lane retains `Code/worktrees/genet-vano-census` and the named
 runner copy while that process uses their source, working directory and
 resources. The stable Genet target remains available for normal reuse.
+
+## Qualified progress at 20:29 UTC
+
+Five of 82 shards are complete and pass strict checkpoint validation:
+
+| Directory | Files | Pass | Fail | Error | No results | Skip | External timeouts | Subtests pass / total |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| console | 21 | 2 | 15 | 1 | 1 | 2 | 1 | 10 / 51 |
+| content-security-policy | 846 | 64 | 646 | 1 | 134 | 1 | 1 | 175 / 3748 |
+| cookies | 82 | 1 | 63 | 0 | 18 | 0 | 0 | 3 / 968 |
+| cors | 27 | 1 | 20 | 0 | 6 | 0 | 0 | 3 / 207 |
+| custom-elements | 187 | 12 | 149 | 8 | 8 | 10 | 4 | 265 / 1456 |
+| Checkpoint total | 1163 | 80 | 893 | 10 | 167 | 13 | 6 | 456 / 6430 |
+
+External timeouts are a subset of errors. Errors contain 6 external timeouts
+and 4 caught panics; no worker process crashed in these shards.
+The 1163 records contain 1147 exact historical members (451/6398 subtests pass)
+and 16 added variants (5/32 subtests pass). Subtest statuses across this
+checkpoint are 456 pass, 2926 fail, 498 timeout, 2548 not-run and 2 precondition
+failures; file errors, subtest timeouts and unreported tests are distinct
+categories. DOM is the next active shard. The custom-elements subtest result
+differs substantially from historical Boa; counts depend on runtime and
+harness reporting, and the old denominator must not be reused for Vano.
+**Final census totals and cleanup remain pending.**
+
+## Custom-elements denominator diagnosis
+
+Read-only comparison by exact file key confirms the same 187 members in both
+maps, with no added or missing records. The denominator change is completely
+accounted for: **3674 - 2406 - 40 + 228 = 1456**. Four externally timed-out
+files previously reported 2406 subtests; two newly panicking files previously
+reported 40. Twenty other files now report 228 additional subtests. This is
+largely timeout/reporting censoring, not evidence by itself of broad feature
+regression.
+
+| Current external timeout | Historical subtests | Historical passes |
+|---|---:|---:|
+| `registries/valid-custom-element-names.html` | 1975 | 1859 |
+| `builtin-coverage.html` | 327 | 72 |
+| `ElementInternals-role.html` | 68 | 0 |
+| `registries/adoption.window.html` | 36 | 0 |
+
+All paths in this section are under `custom-elements/`. Each timeout is an
+external kill at 30 seconds and contributes no current reported subtests.
+The four caught panics are distinct from process crashes: `Document-createElement.html`
+and `Document-createElement-customized-builtins.html` report
+`registered realm GC policy: Engine("[object Object]")`; `upgrading/Node-cloneNode.html`
+and `upgrading/upgrading-parser-created-element.html` report a maximum-call-stack
+`RangeError` at that same GC-policy boundary. The latter two already had no
+historical subtest results, so they do not decrease the denominator.
+
+Current reported subtest statuses are 265 pass, 1186 fail, 2 precondition-failed,
+2 not-run and 1 timeout. A reported fail may be an assertion failure or an
+exception caught by testharness; these result maps do not retain enough detail
+to label every failure an assertion. Ten skips are 6 non-testharness files and
+4 XHTML files.
+
+Eight files report no subtests. Seven previously had Boa `evaluation-threw`:
+three form-associated ElementInternals accessibility/submit cases and four
+scoped-registry upgrade/createElement/createElementNS/importNode cases.
+`pseudo-class-defined-customized-builtins.html` already reported no subtests.
+The current no-results records do not expose an exception, so their specific
+script/setup versus completion/reporting causes remain unresolved. They are
+not counted as either passing or ordinary assertion failures. No implementation
+change or diagnostic rerun was used for this keyed comparison.
+
+### Separate dominant-timeout diagnostic
+
+One additional diagnostic raised only the external timeout to 180 seconds
+for the exact `registries/valid-custom-element-names.html` record, using the
+same frozen binary, GC enabled and 15-second drive deadline. It completed
+normally with **1861/1975 pass and 114 fail**, compared with historical Boa's
+1859/1975. There was no error, no-results outcome or reported subtest timeout.
+This establishes that the dominant missing denominator in the fixed 30-second
+census was timeout censoring. It does not replace that census record, establish
+other timeout causes, or attribute the two-pass difference solely to Vano.
+
+From the isolated census worktree:
+
+```powershell
+& C:/t/cargo-targets/genet/debug/genet-wpt-vano-census.exe testharness custom-elements/registries/valid-custom-element-names.html --tests-root C:/Users/mark_/Code/repos/genet/tests/wpt/tests --engine nova --renderer livery --jobs 1 --timeout 180 --drive-deadline 15 --write-expectations C:/Users/mark_/Code/testing/genet/wpt-ledger/2026-09-29_vano_platform_census/diagnostic_valid_names_180s_vano.json
+```
+
+Exit 0. Separate raw JSON SHA256:
+`adeecb73e1031dbbcfd27e31ec96e4973e85d01fcc3bcead90e75013dcad038d`.
+The [compressed exact JSON](diagnostic_valid_names_180s_vano.json.gz) and
+[output log](diagnostic_valid_names_180s_vano.log) are archived with this receipt.
+The hash above applies to the decompressed JSON bytes. Both files remain
+outside `disk-fixed/`; the full census remains unchanged at a 30-second
+external cap.

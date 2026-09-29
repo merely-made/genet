@@ -47,10 +47,38 @@ Vano or to implementation changes.
 
 Raw evidence and execution scripts live under the existing ledger convention:
 `Code/testing/genet/wpt-ledger/2026-09-29_vano_platform_census/`.
-The [driver](run_census.py), [aggregator](aggregate.py), and exact
-[82-shard scope](scope.json) are also archived here. To reproduce, place these
-three files in that raw ledger directory; their paths deliberately refer to
-the stable workspace locations above and archived September 6 sibling maps.
+The [driver](run_census.py), [aggregator](aggregate.py), exact
+[82-shard scope](scope.json), and compact
+[historical membership](historical-membership.json.gz) and shared
+[checkpoint validator](checkpoint.py) are archived here.
+To reproduce, place these five files in that raw ledger directory; their
+paths deliberately refer to the stable workspace locations above. The
+membership archive contains exact historical keys/statuses and the SHA256 of
+each original map, so historical-versus-new aggregation needs no bulky old
+result maps. It contains 82 shards / 21,672 unique records and is 160,493 bytes,
+SHA256 `dbe04effd6cb57ae5ee779adad7200258da56e18e963a2cf0bd7d639b708a0c6`.
+
+The live process started with [run_census.started.py](run_census.started.py),
+SHA256 `2cabe730f762f0138201f0e1b1d29ecd23bfbe007ced4632deafeae96a29a91f`,
+which reads original sibling baseline maps. It was not restarted mid-shard.
+The archived reproduction/resume driver reads the equivalent compact
+membership and has SHA256
+`d77b51eec96a6687f5c5957e30686cb7460836cbeb0d6fbcd51270b69bf9a15a`;
+aggregator SHA256 is
+`4849ea396b6662f627e06046040dd13459569748fd50ad476453a55673830c30`;
+validator SHA256 is
+`023ba73f7c8b2330b2ac5983309dac01fb2b08027c1d4e8e3b36f273e1d78b20`.
+Console aggregation before/after this input substitution is identical as
+parsed JSON. Both scripts parse, and the console checkpoint's runner SHA256
+matches provenance and the still-frozen executable. CLI invocation and
+test execution are unchanged. The reproduction/resume driver additionally
+validates runner SHA, manifest SHA, engine, renderer, command, subset and exact
+policy against provenance. Aggregation and resume fail on mismatches;
+progress omits mismatched maps from qualified counts. In-memory deliberately
+altered console records for each of those seven fields were rejected, while
+the real console summary stayed identical. The live started driver retains
+its earlier runner-only resume check; final aggregation uses the stricter
+validator regardless of which driver produced the checkpoints.
 `progress.json` records completed checkpointed files/shards, external timeouts
 and the current subset. Within-shard tests are not counted as complete until
 the result map is written. `runs-fixed.jsonl` preserves exact invocation/exit

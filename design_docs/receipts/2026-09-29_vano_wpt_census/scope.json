@@ -1,0 +1,412 @@
+[
+  {
+    "subset": "console",
+    "baseline_file": "console_boa.json",
+    "baseline_files": 14
+  },
+  {
+    "subset": "content-security-policy",
+    "baseline_file": "content-security-policy_boa.json",
+    "baseline_files": 838
+  },
+  {
+    "subset": "cookies",
+    "baseline_file": "cookies_boa.json",
+    "baseline_files": 82
+  },
+  {
+    "subset": "cors",
+    "baseline_file": "cors_boa.json",
+    "baseline_files": 26
+  },
+  {
+    "subset": "custom-elements",
+    "baseline_file": "custom-elements_boa.json",
+    "baseline_files": 187
+  },
+  {
+    "subset": "dom",
+    "baseline_file": "dom_boa.json",
+    "baseline_files": 660
+  },
+  {
+    "subset": "editing",
+    "baseline_file": "editing_boa.json",
+    "baseline_files": 843
+  },
+  {
+    "subset": "encoding",
+    "baseline_file": "encoding_boa.json",
+    "baseline_files": 1267
+  },
+  {
+    "subset": "eventsource",
+    "baseline_file": "eventsource_boa.json",
+    "baseline_files": 61
+  },
+  {
+    "subset": "fetch",
+    "baseline_file": "fetch_boa.json",
+    "baseline_files": 473
+  },
+  {
+    "subset": "FileAPI",
+    "baseline_file": "FileAPI_boa.json",
+    "baseline_files": 76
+  },
+  {
+    "subset": "hr-time",
+    "baseline_file": "hr-time_boa.json",
+    "baseline_files": 14
+  },
+  {
+    "subset": "html/anonymous-iframe",
+    "baseline_file": "html_anonymous-iframe_boa.json",
+    "baseline_files": 35
+  },
+  {
+    "subset": "html/browsers",
+    "baseline_file": "html_browsers_boa.json",
+    "baseline_files": 782
+  },
+  {
+    "subset": "html/canvas",
+    "baseline_file": "html_canvas_boa.json",
+    "baseline_files": 2673
+  },
+  {
+    "subset": "html/capability-delegation",
+    "baseline_file": "html_capability-delegation_boa.json",
+    "baseline_files": 6
+  },
+  {
+    "subset": "html/cross-origin-embedder-policy",
+    "baseline_file": "html_cross-origin-embedder-policy_boa.json",
+    "baseline_files": 94
+  },
+  {
+    "subset": "html/cross-origin-opener-policy",
+    "baseline_file": "html_cross-origin-opener-policy_boa.json",
+    "baseline_files": 160
+  },
+  {
+    "subset": "html/document-isolation-policy",
+    "baseline_file": "html_document-isolation-policy_boa.json",
+    "baseline_files": 38
+  },
+  {
+    "subset": "html/dom",
+    "baseline_file": "html_dom_boa.json",
+    "baseline_files": 385
+  },
+  {
+    "subset": "html/editing",
+    "baseline_file": "html_editing_boa.json",
+    "baseline_files": 424
+  },
+  {
+    "subset": "html/embedded-content",
+    "baseline_file": "html_embedded-content_boa.json",
+    "baseline_files": 1
+  },
+  {
+    "subset": "html/infrastructure",
+    "baseline_file": "html_infrastructure_boa.json",
+    "baseline_files": 144
+  },
+  {
+    "subset": "html/interaction",
+    "baseline_file": "html_interaction_boa.json",
+    "baseline_files": 180
+  },
+  {
+    "subset": "html/links",
+    "baseline_file": "html_links_boa.json",
+    "baseline_files": 16
+  },
+  {
+    "subset": "html/meta",
+    "baseline_file": "html_meta_boa.json",
+    "baseline_files": 1
+  },
+  {
+    "subset": "html/obsolete",
+    "baseline_file": "html_obsolete_boa.json",
+    "baseline_files": 26
+  },
+  {
+    "subset": "html/rendering",
+    "baseline_file": "html_rendering_boa.json",
+    "baseline_files": 462
+  },
+  {
+    "subset": "html/scripting",
+    "baseline_file": "html_scripting_boa.json",
+    "baseline_files": 2
+  },
+  {
+    "subset": "html/select",
+    "baseline_file": "html_select_boa.json",
+    "baseline_files": 2
+  },
+  {
+    "subset": "html/semantics/disabled-elements",
+    "baseline_file": "html_semantics_disabled-elements_boa.json",
+    "baseline_files": 7
+  },
+  {
+    "subset": "html/semantics/document-metadata",
+    "baseline_file": "html_semantics_document-metadata_boa.json",
+    "baseline_files": 116
+  },
+  {
+    "subset": "html/semantics/edits",
+    "baseline_file": "html_semantics_edits_boa.json",
+    "baseline_files": 2
+  },
+  {
+    "subset": "html/semantics/embedded-content",
+    "baseline_file": "html_semantics_embedded-content_boa.json",
+    "baseline_files": 798
+  },
+  {
+    "subset": "html/semantics/forms",
+    "baseline_file": "html_semantics_forms_boa.json",
+    "baseline_files": 648
+  },
+  {
+    "subset": "html/semantics/grouping-content",
+    "baseline_file": "html_semantics_grouping-content_boa.json",
+    "baseline_files": 45
+  },
+  {
+    "subset": "html/semantics/interactive-elements",
+    "baseline_file": "html_semantics_interactive-elements_boa.json",
+    "baseline_files": 175
+  },
+  {
+    "subset": "html/semantics/interestfor",
+    "baseline_file": "html_semantics_interestfor_boa.json",
+    "baseline_files": 36
+  },
+  {
+    "subset": "html/semantics/interfaces.html",
+    "baseline_file": "html_semantics_interfaces_boa.json",
+    "baseline_files": 1
+  },
+  {
+    "subset": "html/semantics/links",
+    "baseline_file": "html_semantics_links_boa.json",
+    "baseline_files": 36
+  },
+  {
+    "subset": "html/semantics/menu",
+    "baseline_file": "html_semantics_menu_boa.json",
+    "baseline_files": 15
+  },
+  {
+    "subset": "html/semantics/permission-element",
+    "baseline_file": "html_semantics_permission-element_boa.json",
+    "baseline_files": 114
+  },
+  {
+    "subset": "html/semantics/popovers",
+    "baseline_file": "html_semantics_popovers_boa.json",
+    "baseline_files": 110
+  },
+  {
+    "subset": "html/semantics/rellist-feature-detection.html",
+    "baseline_file": "html_semantics_rellist-feature-detection_boa.json",
+    "baseline_files": 1
+  },
+  {
+    "subset": "html/semantics/scripting-1",
+    "baseline_file": "html_semantics_scripting-1_boa.json",
+    "baseline_files": 498
+  },
+  {
+    "subset": "html/semantics/sections",
+    "baseline_file": "html_semantics_sections_boa.json",
+    "baseline_files": 1
+  },
+  {
+    "subset": "html/semantics/selectors",
+    "baseline_file": "html_semantics_selectors_boa.json",
+    "baseline_files": 33
+  },
+  {
+    "subset": "html/semantics/tabular-data",
+    "baseline_file": "html_semantics_tabular-data_boa.json",
+    "baseline_files": 29
+  },
+  {
+    "subset": "html/semantics/text-level-semantics",
+    "baseline_file": "html_semantics_text-level-semantics_boa.json",
+    "baseline_files": 36
+  },
+  {
+    "subset": "html/semantics/the-button-element",
+    "baseline_file": "html_semantics_the-button-element_boa.json",
+    "baseline_files": 32
+  },
+  {
+    "subset": "html/syntax",
+    "baseline_file": "html_syntax_boa.json",
+    "baseline_files": 402
+  },
+  {
+    "subset": "html/the-xhtml-syntax",
+    "baseline_file": "html_the-xhtml-syntax_boa.json",
+    "baseline_files": 15
+  },
+  {
+    "subset": "html/user-activation",
+    "baseline_file": "html_user-activation_boa.json",
+    "baseline_files": 20
+  },
+  {
+    "subset": "html/webappapis",
+    "baseline_file": "html_webappapis_boa.json",
+    "baseline_files": 337
+  },
+  {
+    "subset": "IndexedDB",
+    "baseline_file": "IndexedDB_boa.json",
+    "baseline_files": 231
+  },
+  {
+    "subset": "intersection-observer",
+    "baseline_file": "intersection-observer_boa.json",
+    "baseline_files": 119
+  },
+  {
+    "subset": "mathml",
+    "baseline_file": "mathml_boa.json",
+    "baseline_files": 579
+  },
+  {
+    "subset": "mixed-content",
+    "baseline_file": "mixed-content_boa.json",
+    "baseline_files": 388
+  },
+  {
+    "subset": "navigation-timing",
+    "baseline_file": "navigation-timing_boa.json",
+    "baseline_files": 56
+  },
+  {
+    "subset": "performance-timeline",
+    "baseline_file": "performance-timeline_boa.json",
+    "baseline_files": 51
+  },
+  {
+    "subset": "pointerevents",
+    "baseline_file": "pointerevents_boa.json",
+    "baseline_files": 265
+  },
+  {
+    "subset": "referrer-policy",
+    "baseline_file": "referrer-policy_boa.json",
+    "baseline_files": 1390
+  },
+  {
+    "subset": "resize-observer",
+    "baseline_file": "resize-observer_boa.json",
+    "baseline_files": 20
+  },
+  {
+    "subset": "resource-timing",
+    "baseline_file": "resource-timing_boa.json",
+    "baseline_files": 132
+  },
+  {
+    "subset": "scroll-animations",
+    "baseline_file": "scroll-animations_boa.json",
+    "baseline_files": 242
+  },
+  {
+    "subset": "selection",
+    "baseline_file": "selection_boa.json",
+    "baseline_files": 161
+  },
+  {
+    "subset": "service-workers",
+    "baseline_file": "service-workers_boa.json",
+    "baseline_files": 292
+  },
+  {
+    "subset": "shadow-dom",
+    "baseline_file": "shadow-dom_boa.json",
+    "baseline_files": 314
+  },
+  {
+    "subset": "storage",
+    "baseline_file": "storage_boa.json",
+    "baseline_files": 27
+  },
+  {
+    "subset": "streams",
+    "baseline_file": "streams_boa.json",
+    "baseline_files": 95
+  },
+  {
+    "subset": "svg",
+    "baseline_file": "svg_boa.json",
+    "baseline_files": 1640
+  },
+  {
+    "subset": "uievents",
+    "baseline_file": "uievents_boa.json",
+    "baseline_files": 76
+  },
+  {
+    "subset": "upgrade-insecure-requests",
+    "baseline_file": "upgrade-insecure-requests_boa.json",
+    "baseline_files": 197
+  },
+  {
+    "subset": "url",
+    "baseline_file": "url_boa.json",
+    "baseline_files": 49
+  },
+  {
+    "subset": "user-timing",
+    "baseline_file": "user-timing_boa.json",
+    "baseline_files": 36
+  },
+  {
+    "subset": "web-animations",
+    "baseline_file": "web-animations_boa.json",
+    "baseline_files": 174
+  },
+  {
+    "subset": "webaudio",
+    "baseline_file": "webaudio_boa.json",
+    "baseline_files": 276
+  },
+  {
+    "subset": "WebCryptoAPI",
+    "baseline_file": "WebCryptoAPI_boa.json",
+    "baseline_files": 138
+  },
+  {
+    "subset": "webmessaging",
+    "baseline_file": "webmessaging_boa.json",
+    "baseline_files": 135
+  },
+  {
+    "subset": "websockets",
+    "baseline_file": "websockets_boa.json",
+    "baseline_files": 515
+  },
+  {
+    "subset": "workers",
+    "baseline_file": "workers_boa.json",
+    "baseline_files": 247
+  },
+  {
+    "subset": "xhr",
+    "baseline_file": "xhr_boa.json",
+    "baseline_files": 348
+  }
+]

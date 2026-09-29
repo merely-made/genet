@@ -1,0 +1,81 @@
+diff --git a/ports/genet-wpt/src/testharness.rs b/ports/genet-wpt/src/testharness.rs
+index b59d9beccfd..690277fc7fd 100644
+--- a/ports/genet-wpt/src/testharness.rs
++++ b/ports/genet-wpt/src/testharness.rs
+@@ -471,12 +471,14 @@ pub(crate) fn testharness_one(args: &Args) {
+     #[cfg(feature = "netfetch")]
+     let server = setup_server(args);
+     let test = TestCase::single(PathBuf::from(path), args.subset.clone());
+-    let mut template = nova_template(args, &testharness_js);
+     let mut ctx = RunCtx {
+         testharness_js: &testharness_js,
+         #[cfg(feature = "netfetch")]
+         server: &server,
+-        nova_template: template.as_mut(),
++        // A worker runs exactly one test. A fresh runtime keeps the harness's
++        // realm/window-proxy state together; the snapshot route currently
++        // refuses ordinary test() calls after replacing the Rust host state.
++        nova_template: None,
+     };
+     let outcome = run_one(&test, args, &mut ctx);
+     let mut out = std::io::stdout();
+diff --git a/ports/genet-wpt/tests/fixtures/reporting.html b/ports/genet-wpt/tests/fixtures/reporting.html
+new file mode 100644
+index 00000000000..3b5c5fef69c
+--- /dev/null
++++ b/ports/genet-wpt/tests/fixtures/reporting.html
+@@ -0,0 +1,8 @@
++<!doctype html>
++<meta charset="utf-8">
++<script src="/resources/testharness.js"></script>
++<script>
++test(() => assert_true(true), "synchronous reporting sentinel");
++promise_test(() => Promise.resolve().then(() => assert_equals(2 + 2, 4)),
++             "microtask reporting sentinel");
++</script>
+diff --git a/ports/genet-wpt/tests/vano_reporting.rs b/ports/genet-wpt/tests/vano_reporting.rs
+new file mode 100644
+index 00000000000..e4ad21589e3
+--- /dev/null
++++ b/ports/genet-wpt/tests/vano_reporting.rs
+@@ -0,0 +1,40 @@
++//! Real CLI reporting regression: a passing JavaScript body must produce
++//! subtests through the standard WPT completion callback, on either engine.
++use std::{path::PathBuf, process::Command};
++
++#[test]
++fn isolated_workers_report_real_harness_results_on_both_engines() {
++    let root = std::env::var_os("GENET_WPT_TESTS_ROOT")
++        .map(PathBuf::from)
++        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/wpt/tests"));
++    assert!(
++        root.join("resources/testharness.js").is_file(),
++        "set GENET_WPT_TESTS_ROOT to the vendored WPT corpus"
++    );
++    let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/reporting.html");
++    for engine in ["boa", "nova"] {
++        for gc in [true, false] {
++            let mut command = Command::new(env!("CARGO_BIN_EXE_genet-wpt"));
++            command
++                .args(["testharness-one", "reporting.html", "--engine", engine])
++                .arg("--test-path")
++                .arg(&fixture)
++                .arg("--tests-root")
++                .arg(&root);
++            if !gc {
++                command.arg("--no-harness-gc");
++            }
++            let output = command.output().expect("spawn WPT worker");
++            assert!(output.status.success(), "worker failed: {engine}, GC={gc}");
++            let stdout = String::from_utf8(output.stdout).expect("worker output UTF-8");
++            let result = stdout
++                .lines()
++                .find_map(|line| line.strip_prefix("__thresult "))
++                .unwrap_or_else(|| panic!("missing worker result: {stdout}"));
++            let result: serde_json::Value = serde_json::from_str(result).unwrap();
++            assert_eq!(result["status"], "pass", "{engine}, GC={gc}: {result}");
++            assert_eq!(result["subtests_passed"], 2, "{engine}, GC={gc}: {result}");
++            assert_eq!(result["subtests_total"], 2, "{engine}, GC={gc}: {result}");
++        }
++    }
++}

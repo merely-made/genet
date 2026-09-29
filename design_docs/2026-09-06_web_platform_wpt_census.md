@@ -30,6 +30,13 @@ current runner additionally discovers dedicated-worker variants. The rerun
 separates exact historical membership from newly discovered records. Historical
 Boa rows below remain unchanged; the new measurement is not yet complete.
 
+At 20:29 UTC, five validated shards (console, content-security-policy,
+cookies, CORS and custom-elements) contain 1163 current records: 1147 exact
+historical members and 16 added variants. They report 456/6430 passing subtests,
+6 external timeouts, 4 caught panics and no worker-process crashes. These are
+partial checkpoint counts; the full 82-shard
+run remains active and final totals are pending.
+
 ## Purpose
 
 Until this run, `genet-wpt` had exact result maps only for the CSS manifest

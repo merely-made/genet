@@ -1,0 +1,5 @@
+testharness [nova]: 1 files on 1 worker proc(s) (timeout 180s, drive deadline 15s)…
+FAIL  custom-elements/registries/valid-custom-element-names.html  (1861/1975 subtests)
+
+testharness [nova]: 0 all-pass, 1 with-failures, 0 errored, 0 no-results, 0 skipped (of 1 files); subtests 1861/1975 passed
+expectations written to C:/Users/mark_/Code/testing/genet/wpt-ledger/2026-09-29_vano_platform_census/diagnostic_valid_names_180s_vano.json (1 tests)

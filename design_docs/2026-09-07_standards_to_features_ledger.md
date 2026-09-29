@@ -89,8 +89,9 @@ evidence from these WPT counts.
   bounded DOM name/description algorithm and native projection plumbing, with a
   joint generated-text fixture. Scripted sessions now read the retained style
   plane; both Boa and Vano attribute-update/name fixtures and all 56 document
-  tests pass. Cambium adoption follows publication. Full conformance and
-  physical AT remain open.
+  tests pass. Cambium adoption is published as Mere `41206070`, with 207 native
+  tests and a standalone Wasm compile gate passing against Genet `c5470fcbc12`.
+  Full conformance and physical AT remain open.
 - [Generated text](2026-09-26_generated_text_plan.md) now implements bounded
   inline before/after strings, `attr()` and named decimal `counter()`/`counters()`
   with reset/increment/set and source DOM preserved. This does

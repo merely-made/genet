@@ -101,4 +101,3 @@ metadata["runner_sha256_after"] = digest(BIN)
 (ROOT / "provenance.json").write_text(json.dumps(metadata, indent=2)+"\n", encoding="utf-8")
 
 print("ALLDONE", flush=True)
-

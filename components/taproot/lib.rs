@@ -27,12 +27,20 @@
 //! shares code.
 //!
 //! [`ScriptedDom`]: genet_scripted_dom::ScriptedDom
+//!
+//! Hosts with retained accessibility semantics should use
+//! [`matching_with_projection`] for role/name targets, then pair its results
+//! with their own live geometry. [`matching`] and [`resolve`] retain the legacy
+//! DOM policy for callers that have not adopted an owner projection.
 
 use std::collections::BTreeMap;
 
 use genet_livery::{Device, InteractionStates, StyleSet, layout, resolve_styles};
 use genet_scripted_dom::{NodeId, ScriptedDom};
 use layout_dom_api::{LayoutDom, LocalName, Namespace};
+
+mod projection;
+pub use projection::matching_with_projection;
 
 /// One retained cambium surface the driver can search and hit-test: its DOM,
 /// where it sits in the window (`[x, y, w, h]`, window-space), and the sheet it
@@ -82,7 +90,8 @@ impl Selector {
         }
     }
 
-    /// Select by the `role` attribute.
+    /// Select by role. [`matching_with_projection`] uses the owner-computed
+    /// role; [`matching`] retains explicit/native DOM compatibility rules.
     pub fn role(role: impl Into<String>) -> Self {
         Self {
             matcher: Match::Role(role.into()),
@@ -92,6 +101,8 @@ impl Selector {
     }
 
     /// Narrow to elements whose child text or `aria-label` contains `text`.
+    /// With [`matching_with_projection`], role selectors instead search the
+    /// owner-computed accessible name; class selectors retain this DOM meaning.
     pub fn containing(mut self, text: impl Into<String>) -> Self {
         self.text = Some(text.into());
         self
@@ -197,6 +208,8 @@ fn matches(dom: &ScriptedDom, node: NodeId, sel: &Selector) -> bool {
 /// own live layout (the winit-host harness) can pair this DOM match with the
 /// laid-out rectangle it already owns, instead of re-deriving a second layout
 /// whose font metrics may disagree with the shipping one.
+/// This is the legacy DOM matcher. Hosts with semantic projections should use
+/// [`matching_with_projection`] for shared accessibility role/name truth.
 pub fn matching(dom: &ScriptedDom, sel: &Selector) -> Vec<NodeId> {
     fn walk(dom: &ScriptedDom, node: NodeId, sel: &Selector, out: &mut Vec<NodeId>) {
         if matches(dom, node, sel) {

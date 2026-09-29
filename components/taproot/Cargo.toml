@@ -13,6 +13,10 @@ name = "taproot"
 path = "lib.rs"
 
 [dependencies]
+document-session-api = { version = "0.1.0", path = "../shared/document-session-api" }
 genet-livery = { version = ">=0.0.1, <0.1", path = "../genet-livery" }
 genet-scripted-dom = { version = "0.1.1", path = "../genet-scripted-dom" }
 layout-dom-api = { version = "0.1.1", path = "../shared/layout-dom" }
+
+[dev-dependencies]
+genet-render = { path = "../genet-render", default-features = false }

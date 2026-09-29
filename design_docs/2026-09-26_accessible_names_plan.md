@@ -140,3 +140,33 @@ text integration 6, genet-text 2 unit and 3 official-corpus tests, Ortet a11y 5.
 Commands used `CARGO_TARGET_DIR=C:/Users/mark_/Code/repos/genet/target` and
 `--offline`. Existing repository sibling path patches were active; this is
 local integration evidence, not a clean-clone or physical AT receipt.
+
+## Taproot projection matching (2026-09-29)
+
+`taproot::matching_with_projection(dom, selector, projection)` is the additive
+consumer entry for retained semantic targets. For role selectors, it uses only
+the supplied projection's role and computed accessible name, then applies any
+DOM attribute filter. IDs must belong to this retained DOM and equal its opaque
+IDs. Missing, hidden and unknown semantic roles do not fall back to raw DOM
+labels or role attributes. Returned nodes retain DOM order; the host owns fresh
+geometry and pointer delivery.
+
+Class selectors retain shallow child-text/ARIA-label matching, and `assert text`
+retains its existing DOM-text meaning. Legacy `matching`/`resolve` remain for
+compatibility. Adopting hosts must opt into the new matcher and make a missing
+projection authoritative for semantic selectors. This does not extend the
+owner's bounded role or accessible-name coverage.
+
+Integration tests exercise Genet's real projection for referenced, native,
+wrapping and nested labels; computed-role overrides; native links/headings;
+missing/hidden semantic nodes; DOM compatibility; attribute disambiguation;
+and owner-supplied generated names. `cargo test --manifest-path
+repos/genet/Cargo.toml -p taproot --lib --target-dir C:/t/cargo-targets/genet -j 2`
+passed all 25 tests (21 existing, four new) on 2026-09-29, using Rust 1.97.1.
+The command ran from the Code workspace root, outside Genet's ignored sibling
+path overrides, and resolved the committed sibling dependency declarations
+(including netrender `9607d16f`). The standard Genet target was reused; no
+isolated target, Cargo home or worktree was created. Native host adoption and
+physical assistive-technology acceptance remain separate gates. HTML `hidden`
+and computed CSS visibility coverage are still owned by the projection, not
+reconstructed by this matcher.

@@ -1036,11 +1036,28 @@ where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
+    resolve_container_relative_styles_with_text(dom, styles, viewport, image_sources, None)
+}
+
+fn resolve_container_relative_styles_with_text<D>(
+    dom: &D,
+    styles: &StylePlane<D::NodeId>,
+    viewport: ViewportSizes,
+    image_sources: &ImageSources,
+    mut text: Option<&mut TextSystem>,
+) -> Result<StylePlane<D::NodeId>, LayoutError>
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
     // The descent reports whether it moved anything, so the common document —
     // one with no container-relative length anywhere — costs a single clone
     // instead of a clone, a whole-plane structural comparison, and a second
     // clone (T2).
     let mut fallback = styles.clone();
+    if let Some(text) = text.as_deref_mut() {
+        fallback.resolve_ch_lengths(text, viewport);
+    }
     let changed = resolve_relative_subtree(
         dom,
         dom.document(),
@@ -1059,6 +1076,9 @@ where
     )?;
 
     let mut resolved = styles.clone();
+    if let Some(text) = text {
+        resolved.resolve_ch_lengths(text, viewport);
+    }
     resolve_container_subtree(
         dom,
         dom.document(),

@@ -217,3 +217,32 @@ and the tested ignored web lock are recorded in
 `mere/design_docs/cambium_docs/testing/local-genet-development.md` under
 the September 29 generated-name receipt. These are automated consumer/compile
 gates; physical AT and browser-hosted interaction remain open.
+
+## Scoped contributed consumers (2026-09-30)
+
+Taproot selectors can explicitly name a host surface family with
+`surface:contributed role:button Calculate` or `Selector::on_surface`.
+Unscoped ordering and class/text/attribute meanings remain unchanged. An
+unknown family, or a host-computed Hit naming a different family, is refused
+before the mutating click hook. Miss/Unsupported may still reach a host's
+deferred click hook; that host owns target identity, scrolling and refusal.
+
+Genet-render publicly exposes `accesskit_tree_from_projection`, lowering the
+owner's supplied neutral projection without recomputing labels or geometry.
+Turnstone can attach its retained pane bounds once, then share that projection
+between native AccessKit and semantic automation. This extends neither the
+projection's role coverage nor full live-document semantics.
+
+The exact four source files pass 28 Taproot tests and 40 Genet-render tests,
+with zero ignores, using Rust 1.97.1 from the Code root, committed sibling
+declarations, `--locked --offline -j 2`, zero dev/test debug info and the reused
+`C:/t/cargo-targets/genet`. Commands select `--manifest-path repos/genet/Cargo.toml`
+and the respective package. Zero doctests are not an additional gate.
+Restoring the scope preflight fault makes the hook-call regression fail
+with exit 101; the corrected source is restored and the full Taproot gate
+passes. Logs and exact source hashes live in
+`Code/testing/turnstone/contributed-semantics/genet-context.json`,
+`genet-taproot.log`, `genet-render.log` and
+`genet-taproot-preflight-negative.log`.
+Turnstone's exact-pin retained/native consumer and human AT receipts remain
+separate gates.

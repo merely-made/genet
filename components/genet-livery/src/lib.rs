@@ -102,7 +102,7 @@ pub use livery::{
     is_implemented_shorthand, reconstruct_specified_shorthand, specified_shorthand_longhands,
 };
 pub use paint::{
-    LiveryPaintList, TransformGap, TransformGapKind, emit_paint_list,
+    LiveryPaintList, TextPaintPhase, TransformGap, TransformGapKind, emit_paint_list,
     emit_paint_list_with_text_system, emit_paint_list_with_text_system_scrolled_with_images,
     emit_paint_list_with_text_system_scrolled_with_images_and_external_textures,
 };

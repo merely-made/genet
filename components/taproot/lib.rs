@@ -74,6 +74,9 @@ pub enum Match {
 /// principle — a target is only findable through identity the DOM carries.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Selector {
+    /// Optional host surface family, matched exactly against [`ProbeSurface::name`].
+    /// This scopes attribution, not pane instance identity or accessible labels.
+    pub surface: Option<String>,
     pub matcher: Match,
     pub text: Option<String>,
     /// `(name, value-substring)`: the element's `name` attribute must contain it.
@@ -84,6 +87,7 @@ impl Selector {
     /// Select by a class token.
     pub fn class(class: impl Into<String>) -> Self {
         Self {
+            surface: None,
             matcher: Match::Class(class.into()),
             text: None,
             attr: None,
@@ -94,10 +98,22 @@ impl Selector {
     /// role; [`matching`] retains explicit/native DOM compatibility rules.
     pub fn role(role: impl Into<String>) -> Self {
         Self {
+            surface: None,
             matcher: Match::Role(role.into()),
             text: None,
             attr: None,
         }
+    }
+
+    /// Restrict this request to one host surface family.
+    pub fn on_surface(mut self, surface: impl Into<String>) -> Self {
+        self.surface = Some(surface.into());
+        self
+    }
+
+    /// Whether a host surface belongs to this request's scope.
+    pub fn matches_surface(&self, name: &str) -> bool {
+        self.surface.as_deref().is_none_or(|wanted| wanted == name)
     }
 
     /// Narrow to elements whose child text or `aria-label` contains `text`.
@@ -230,6 +246,9 @@ pub fn matching(dom: &ScriptedDom, sel: &Selector) -> Vec<NodeId> {
 /// that as a miss — the target is not on screen).
 pub fn resolve(surfaces: &[ProbeSurface], sel: &Selector) -> Option<Hit> {
     for surface in surfaces {
+        if !sel.matches_surface(surface.name) {
+            continue;
+        }
         let device = Device::screen(surface.rect[2], surface.rect[3]);
         let styles = resolve_styles(
             surface.dom,
@@ -395,16 +414,45 @@ pub trait Automatable {
 pub trait AutomatableExt: Automatable {
     /// Resolve `sel` to a window point across this app's surfaces.
     fn resolve(&self, sel: &Selector) -> Option<Hit> {
+        // Older single-surface hooks do not inspect scope. A missing family is
+        // still authoritative, and a host answer cannot escape the named family.
+        if sel.surface.is_some()
+            && !self.with_surfaces(|surfaces| {
+                surfaces
+                    .iter()
+                    .any(|surface| sel.matches_surface(surface.name))
+            })
+        {
+            return None;
+        }
         match self.selector_target(sel) {
             SelectorTarget::Unsupported => self.with_surfaces(|surfaces| resolve(surfaces, sel)),
             SelectorTarget::Miss => None,
-            SelectorTarget::Hit(hit) => Some(hit),
+            SelectorTarget::Hit(hit) => sel.matches_surface(hit.surface).then_some(hit),
         }
     }
 
     /// Resolve `sel` and click it (press+release at its centre). `true` if it
     /// hit; `false` is the driver's attributable miss.
     fn click(&mut self, sel: &Selector) -> bool {
+        if sel.surface.is_some()
+            && !self.with_surfaces(|surfaces| {
+                surfaces
+                    .iter()
+                    .any(|surface| sel.matches_surface(surface.name))
+            })
+        {
+            return false;
+        }
+        // A host Hit identifies the family before a hook can mutate it.
+        // Miss may describe an offscreen target which the hook will reveal;
+        // Unsupported preserves hooks whose host does not provide geometry.
+        if sel.surface.is_some()
+            && matches!(self.selector_target(sel),
+                SelectorTarget::Hit(hit) if !sel.matches_surface(hit.surface))
+        {
+            return false;
+        }
         if let Some(handled) = self.click_target(sel) {
             return handled;
         }
@@ -677,6 +725,7 @@ mod tests {
         dom: ScriptedDom,
         target: SelectorTarget,
         click_result: Option<bool>,
+        click_calls: usize,
         pressed: Option<(f32, f32)>,
         released: Option<(f32, f32)>,
     }
@@ -696,6 +745,7 @@ mod tests {
         }
 
         fn click_target(&mut self, _sel: &Selector) -> Option<bool> {
+            self.click_calls += 1;
             self.click_result
         }
 
@@ -723,6 +773,67 @@ mod tests {
     }
 
     #[test]
+    fn surface_scope_filters_legacy_resolution_without_changing_unscoped_order() {
+        let dom = strip_dom();
+        let other = ProbeSurface {
+            name: "other",
+            dom: &dom,
+            rect: [0.0, 0.0, 300.0, 200.0],
+            sheet: "",
+        };
+        let mut surfaces = surfaces(&dom);
+        surfaces.insert(0, other);
+        let selector = Selector::class("tab").containing("Links");
+        assert_eq!(resolve(&surfaces, &selector).unwrap().surface, "other");
+        let scoped = selector.clone().on_surface("strip");
+        assert_eq!(resolve(&surfaces, &scoped).unwrap().point, (620.0, 22.0));
+        assert!(resolve(&surfaces, &selector.on_surface("absent")).is_none());
+    }
+
+    #[test]
+    fn scope_blocks_unknown_hook_delivery_and_wrong_surface_host_answers() {
+        let mut app = HostSelectorApp {
+            dom: strip_dom(),
+            target: SelectorTarget::Hit(Hit {
+                surface: "different",
+                point: (37.0, 91.0),
+            }),
+            click_result: Some(true),
+            click_calls: 0,
+            pressed: None,
+            released: None,
+        };
+        let selector = Selector::role("button").on_surface("absent");
+        assert!(
+            !app.click(&selector),
+            "an older hook cannot accept unknown scope"
+        );
+        assert!(app.resolve(&selector).is_none());
+        assert_eq!(app.click_calls, 0);
+        assert!(!app.click(&Selector::role("button").on_surface("strip")));
+        assert_eq!(
+            app.click_calls, 0,
+            "wrong-surface Hit must not enter the mutation hook"
+        );
+        assert_eq!(app.pressed, None);
+        app.target = SelectorTarget::Hit(Hit {
+            surface: "strip",
+            point: (37.0, 91.0),
+        });
+        assert!(app.click(&Selector::role("button").on_surface("strip")));
+        assert_eq!(app.click_calls, 1);
+        app.target = SelectorTarget::Miss;
+        assert!(app.click(&Selector::role("button").on_surface("strip")));
+        assert_eq!(
+            app.click_calls, 2,
+            "a deferred hook may reveal an offscreen target"
+        );
+        app.target = SelectorTarget::Unsupported;
+        assert!(app.click(&Selector::role("button").on_surface("strip")));
+        assert_eq!(app.click_calls, 3);
+    }
+
+    #[test]
     fn a_host_selector_target_supplies_the_click_point() {
         let mut app = HostSelectorApp {
             dom: strip_dom(),
@@ -731,6 +842,7 @@ mod tests {
                 point: (37.0, 91.0),
             }),
             click_result: None,
+            click_calls: 0,
             pressed: None,
             released: None,
         };
@@ -749,6 +861,7 @@ mod tests {
             dom: strip_dom(),
             target: SelectorTarget::Miss,
             click_result: None,
+            click_calls: 0,
             pressed: None,
             released: None,
         };
@@ -767,6 +880,7 @@ mod tests {
                 dom: strip_dom(),
                 target: SelectorTarget::Unsupported,
                 click_result: Some(accepted),
+                click_calls: 0,
                 pressed: None,
                 released: None,
             };

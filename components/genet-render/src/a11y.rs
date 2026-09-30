@@ -19,7 +19,7 @@ use layout_dom_api::{LayoutDom, LocalName, Namespace, NodeKind};
 
 use crate::render::ScrollOffsets;
 
-#[cfg(feature = "accesskit")]
+#[cfg(all(test, feature = "accesskit"))]
 fn access_id<D: LayoutDom>(dom: &D, node: D::NodeId) -> AccessNodeId {
     AccessNodeId(dom.opaque_id(node))
 }
@@ -355,10 +355,9 @@ where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
-    lower_accesskit_tree(
-        dom,
-        document_a11y_projection_with_generated_text(dom, fragments, focus, 0, None, generated),
-    )
+    accesskit_tree_from_projection(document_a11y_projection_with_generated_text(
+        dom, fragments, focus, 0, None, generated,
+    ))
 }
 
 #[cfg(feature = "accesskit")]
@@ -374,7 +373,7 @@ where
 {
     let projection =
         document_a11y_projection_with_optional_scroll(dom, fragments, focus, 0, scroll_offsets);
-    lower_accesskit_tree(dom, projection)
+    accesskit_tree_from_projection(projection)
 }
 
 #[cfg(feature = "accesskit")]
@@ -432,13 +431,12 @@ fn accesskit_role(role: DocumentA11yRole) -> Role {
     }
 }
 
+/// Lower an owner-computed neutral projection without recomputing DOM semantics
+/// or geometry. Hosts may attach retained paint bounds before this conversion;
+/// the platform tree and automation then consume the same observation.
 #[cfg(feature = "accesskit")]
-fn lower_accesskit_tree<D: LayoutDom>(dom: &D, projection: DocumentA11yProjection) -> TreeUpdate
-where
-    D::NodeId: Copy + Eq + Hash,
-{
-    let root = dom.document();
-    let root_id = access_id(dom, root);
+pub fn accesskit_tree_from_projection(projection: DocumentA11yProjection) -> TreeUpdate {
+    let root_id = AccessNodeId(projection.root().get());
     let nodes = projection
         .nodes()
         .iter()
@@ -888,6 +886,44 @@ mod tests {
         dom.set_inner_html(root, html);
         let fragments = fragments_from_scripted_dom(&dom, SHEET, 400, 300).expect("layout");
         document_a11y_projection(&dom, &fragments, None, 7)
+    }
+
+    #[test]
+    fn platform_lowering_preserves_owner_attached_semantics_and_bounds() {
+        let projection = projection_for("<button>Raw DOM label</button>");
+        let mut nodes = projection.nodes().to_vec();
+        let button = nodes
+            .iter_mut()
+            .find(|node| node.role == DocumentA11yRole::Button)
+            .unwrap();
+        button.name = Some("Owner-computed name".into());
+        button.bounds = Some(document_session_api::DocumentA11yBounds {
+            x: 20.0,
+            y: 35.0,
+            width: 80.0,
+            height: 30.0,
+        });
+        button.state.disabled = true;
+        button.actions.clear();
+        let attached = document_session_api::DocumentA11yProjection::new(
+            projection.revision(),
+            projection.support().clone(),
+            projection.root(),
+            nodes,
+        );
+        let tree = super::accesskit_tree_from_projection(attached);
+        let button = tree
+            .nodes
+            .iter()
+            .find(|(_, node)| node.role() == Role::Button)
+            .unwrap();
+        assert_eq!(button.1.label(), Some("Owner-computed name"));
+        assert_eq!(
+            button.1.bounds(),
+            Some(accesskit::Rect::new(20.0, 35.0, 100.0, 65.0))
+        );
+        assert!(button.1.is_disabled());
+        assert!(!button.1.supports_action(Action::Click));
     }
 
     #[test]

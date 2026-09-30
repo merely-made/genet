@@ -377,6 +377,15 @@ fn parse_cmp(op: &str) -> Result<Cmp, String> {
 /// `@attr=value` or free text.
 fn parse_selector(rest: &str) -> Result<Selector, String> {
     let (head, tail) = split_first(rest.trim());
+    let (scope, head, tail) = if let Some(surface) = head.strip_prefix("surface:") {
+        if surface.is_empty() {
+            return Err("click surface wants a nonempty name".into());
+        }
+        let (head, tail) = split_first(tail);
+        (Some(surface), head, tail)
+    } else {
+        (None, head, tail)
+    };
     let mut sel = if let Some(class) = head.strip_prefix('.') {
         Selector::class(class)
     } else if let Some(role) = head.strip_prefix("role:") {
@@ -384,6 +393,9 @@ fn parse_selector(rest: &str) -> Result<Selector, String> {
     } else {
         return Err(format!("click wants '.class' or 'role:name', got '{head}'"));
     };
+    if let Some(scope) = scope {
+        sel = sel.on_surface(scope);
+    }
     let tail = tail.trim();
     if let Some(attr) = tail.strip_prefix('@') {
         let (name, value) = attr
@@ -524,6 +536,28 @@ mod tests {
             }
         }
         sc.finish()
+    }
+
+    #[test]
+    fn surface_selector_token_keeps_role_class_text_and_attribute_meanings() {
+        assert_eq!(
+            parse_selector("surface:contributed role:button Reset all controls").unwrap(),
+            Selector::role("button")
+                .containing("Reset all controls")
+                .on_surface("contributed")
+        );
+        assert_eq!(
+            parse_selector("surface:contributed .control @data-key=stable").unwrap(),
+            Selector::class("control")
+                .with_attr("data-key", "stable")
+                .on_surface("contributed")
+        );
+        assert!(parse_selector("surface: role:button").is_err());
+        assert!(parse_selector("surface:contributed").is_err());
+        assert_eq!(
+            parse_selector("role:button surface:literal").unwrap(),
+            Selector::role("button").containing("surface:literal")
+        );
     }
 
     #[test]

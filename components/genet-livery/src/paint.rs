@@ -63,6 +63,10 @@ pub struct LiveryPaintList {
     host_leaf_slots: Vec<HostLeafSlot>,
     #[serde(skip)]
     frame_slots: Vec<FrameSlot>,
+    #[serde(skip)]
+    text_paint_slots: Vec<TextPaintSlot>,
+    #[serde(skip)]
+    next_slot_order: u64,
     /// T1's named lowering gaps. The renderer is affine, so a perspective
     /// divide is reported here and approximated, never silently dropped.
     #[serde(skip)]
@@ -125,6 +129,7 @@ pub struct FrameSlot {
     /// and its size is what the child lays out at.
     pub content_rect: LayoutRect,
     command_index: usize,
+    order: u64,
 }
 
 /// A custom leaf's content position in the CSS paint order.
@@ -137,6 +142,25 @@ struct HostLeafSlot {
     key: u64,
     command_index: usize,
     content_rect: LayoutRect,
+    order: u64,
+}
+
+/// The two paint phases available inside an element's CSS paint context.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TextPaintPhase {
+    /// Host paint after the element's own decoration and before normal content.
+    BeforeContent,
+    /// Host paint after normal content and before positioned foreground items.
+    /// It remains inside the element's clip, scroll, transform and layer scopes.
+    AfterContent,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct TextPaintSlot {
+    owner_node: u64,
+    phase: TextPaintPhase,
+    command_index: usize,
+    order: u64,
 }
 
 impl LiveryPaintList {
@@ -144,16 +168,15 @@ impl LiveryPaintList {
         Self::with_image_sources(viewport, generation, &HashMap::new())
     }
 
-    /// Append a host-owned overlay rectangle after document content.
-    ///
-    /// Focus, caret, selection, and inspection overlays belong to the render
-    /// driver rather than CSS paint emission, but they still travel through the
-    /// same engine-neutral paint-list boundary.
     /// The named transform-lowering gaps this paint list carries.
     pub fn transform_gaps(&self) -> &[TransformGap] {
         &self.transform_gaps
     }
 
+    /// Append a viewport-level inspection overlay after document content.
+    ///
+    /// Field selection and carets use [`Self::splice_text_paint_slots`] so they
+    /// retain the field's CSS clipping, transforms, scroll and paint order.
     pub fn push_overlay_rect(&mut self, rect: LayoutRect, color: ColorF) {
         self.commands.push(PaintCmd::DrawRect(RectItem {
             placement: CommonPlacement::new(rect),
@@ -201,7 +224,34 @@ impl LiveryPaintList {
             inserted += replacement.len();
             let added = replacement.len();
             self.commands.splice(index..index, replacement);
-            self.shift_slots_after(index, added);
+            self.shift_slots_after(index, added, Some(slot.order));
+        }
+    }
+
+    /// Insert selection and caret commands in an element's CSS paint context.
+    ///
+    /// The caller supplies rectangles in unscrolled document layout coordinates.
+    /// The recorded slots inherit the element's ancestor transforms, clips,
+    /// scroll and stacking order; callers must not subtract viewport scroll.
+    /// `owner_node` is [`LayoutDom::opaque_id`] of the field element.
+    pub fn splice_text_paint_slots<F>(&mut self, mut commands: F)
+    where
+        F: FnMut(u64, TextPaintPhase) -> Option<Vec<PaintCmd>>,
+    {
+        let slots = std::mem::take(&mut self.text_paint_slots);
+        let mut inserted = 0usize;
+        for slot in slots {
+            let Some(replacement) = commands(slot.owner_node, slot.phase) else {
+                continue;
+            };
+            if replacement.is_empty() {
+                continue;
+            }
+            let index = slot.command_index + inserted;
+            inserted += replacement.len();
+            let added = replacement.len();
+            self.commands.splice(index..index, replacement);
+            self.shift_slots_after(index, added, Some(slot.order));
         }
     }
 
@@ -291,24 +341,33 @@ impl LiveryPaintList {
             inserted += replacement.len();
             let added = replacement.len();
             self.commands.splice(index..index, replacement);
-            self.shift_slots_after(index, added);
+            self.shift_slots_after(index, added, Some(slot.order));
         }
     }
 
     /// Shift recorded slot positions after a command insertion at `index`.
     ///
     /// Every recorded position is an index into `commands`, so any insertion
-    /// before it invalidates it. The two splice methods and the two whole-list
+    /// before it invalidates it. The three splice methods and the two whole-list
     /// wrappers ([`Self::translated`], [`Self::scaled_to`]) are the only
     /// insertions that can happen while a slot is still outstanding.
-    fn shift_slots_after(&mut self, index: usize, by: usize) {
+    fn shift_slots_after(&mut self, index: usize, by: usize, inserted_after: Option<u64>) {
+        let should_shift = |slot_index: usize, order: u64| {
+            slot_index > index
+                || (slot_index == index && inserted_after.is_none_or(|anchor| order > anchor))
+        };
         for slot in &mut self.frame_slots {
-            if slot.command_index >= index {
+            if should_shift(slot.command_index, slot.order) {
                 slot.command_index += by;
             }
         }
         for slot in &mut self.host_leaf_slots {
-            if slot.command_index >= index {
+            if should_shift(slot.command_index, slot.order) {
+                slot.command_index += by;
+            }
+        }
+        for slot in &mut self.text_paint_slots {
+            if should_shift(slot.command_index, slot.order) {
                 slot.command_index += by;
             }
         }
@@ -354,6 +413,8 @@ impl LiveryPaintList {
             image_sources: image_sources.clone(),
             host_leaf_slots: Vec::new(),
             frame_slots: Vec::new(),
+            text_paint_slots: Vec::new(),
+            next_slot_order: 0,
             transform_gaps: Vec::new(),
         }
     }
@@ -400,7 +461,7 @@ impl LiveryPaintList {
         };
         self.commands.insert(0, PaintCmd::PushTransform(transform));
         self.commands.push(PaintCmd::PopTransform);
-        self.shift_slots_after(0, 1);
+        self.shift_slots_after(0, 1, None);
         self
     }
 
@@ -425,7 +486,7 @@ impl LiveryPaintList {
         };
         self.commands.insert(0, PaintCmd::PushTransform(transform));
         self.commands.push(PaintCmd::PopTransform);
-        self.shift_slots_after(0, 1);
+        self.shift_slots_after(0, 1, None);
         self
     }
 }
@@ -693,6 +754,7 @@ fn emit_node<D>(
         list.commands
             .push(PaintCmd::PushTransform(transform.clone()));
     }
+    record_text_paint_slot(dom, id, TextPaintPhase::BeforeContent, list);
     let table = fragments.table_paint_for_node(id);
     if let Some(table) = table {
         emit_table_backgrounds(dom, styles, fragments, table, list);
@@ -779,7 +841,28 @@ fn record_host_leaf_slot<D>(
                 LayoutPoint::new(x, y),
                 LayoutPoint::new(x + width, y + height),
             ),
+            order: list.next_slot_order,
         });
+        list.next_slot_order += 1;
+    }
+}
+
+fn record_text_paint_slot<D>(
+    dom: &D,
+    id: D::NodeId,
+    phase: TextPaintPhase,
+    list: &mut LiveryPaintList,
+) where
+    D: LayoutDom,
+{
+    if dom.kind(id) == NodeKind::Element {
+        list.text_paint_slots.push(TextPaintSlot {
+            owner_node: dom.opaque_id(id),
+            phase,
+            command_index: list.commands.len(),
+            order: list.next_slot_order,
+        });
+        list.next_slot_order += 1;
     }
 }
 
@@ -853,7 +936,9 @@ fn record_frame_slot<D>(
             LayoutPoint::new(x + width, y + height),
         ),
         command_index: list.commands.len(),
+        order: list.next_slot_order,
     });
+    list.next_slot_order += 1;
 }
 
 /// Flex and grid items are blockified for layout and paint even when their
@@ -2470,6 +2555,8 @@ fn emit_children_in_stacking_order<D>(
         deferred_collapsed,
     );
 
+    record_text_paint_slot(dom, parent, TextPaintPhase::AfterContent, list);
+
     emit_stacking_items(
         dom,
         styles,
@@ -2666,6 +2753,7 @@ fn emit_normal_node<'a, D>(
         list.commands
             .push(PaintCmd::PushTransform(transform.clone()));
     }
+    record_text_paint_slot(dom, id, TextPaintPhase::BeforeContent, list);
     record_frame_slot(dom, styles, fragments, id, list);
     if let Some(table) = fragments.table_paint_for_node(id) {
         if let Some(deferred) = deferred_collapsed.as_deref_mut() {
@@ -2702,6 +2790,7 @@ fn emit_normal_node<'a, D>(
             deferred_collapsed,
         );
     }
+    record_text_paint_slot(dom, id, TextPaintPhase::AfterContent, list);
     if scroll_transform.is_some() {
         list.commands.push(PaintCmd::PopTransform);
     }

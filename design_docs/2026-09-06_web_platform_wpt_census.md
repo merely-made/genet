@@ -2,15 +2,17 @@
 
 **Date:** 2026-09-06
 
-**Status:** complete. Measurement only; no renderer or runtime source changed.
+**Status:** historical September 6 baseline complete. The Vano refresh below
+completed 2026-09-30 02:48 UTC after a scoped runner reporting repair.
 
-**Historical baseline notice — 2026-09-26:** this is the September 6 Boa
-disk-mode snapshot, not current implementation status or a Vano census.
+**Historical baseline notice — 2026-09-26:** the historical table preserves
+the September 6 Boa disk-mode snapshot, not current implementation status.
 Selection/Range, MutationObserver, Dedicated Worker and substantial Shadow DOM
 support landed afterward. See the
 [dated ledger reconciliation](2026-09-07_standards_to_features_ledger.md#implementation-reconciliation--2026-09-26)
 for their scoped receipts and open gates. Vano is the current backend behind the
-retained `--engine nova` name. No census was rerun for this documentation update.
+retained `--engine nova` name. No census was rerun for that documentation update;
+the later complete Vano refresh is recorded next.
 
 **Parent:** the CSS ledgers under
 [`docs/2026-08-24_wpt_harness_ledger_execution_plan.md`](../docs/2026-08-24_wpt_harness_ledger_execution_plan.md)
@@ -19,23 +21,36 @@ whose method this census extends to the rest of the web platform.
 
 ## Vano rerun, 2026-09-29
 
-A full-scope rerun is in progress against Genet `19c206873ab` plus the isolated
-worker reporting repair published in `0c4aa9f60b8`, and
-Vano `8ad0841255c2cbb679f7c704417d427b3cb3e961`, using the retained CLI
+**Complete at 2026-09-30 02:48 UTC:** all 82 archived shards were measured on
+Genet `19c206873ab` plus the isolated-worker reporting repair published in
+`0c4aa9f60b8`, with Vano `8ad0841255c2cbb679f7c704417d427b3cb3e961` behind
 `--engine nova`. The [dated receipt](receipts/2026-09-29_vano_wpt_census/receipt.md)
-records source isolation, exact commands, harness differences and evidence.
-The archived maps contain **82**, not 86, result files, covering
-21,672 unique file/variant records. The manifest SHA-256 is unchanged, but the
-current runner additionally discovers dedicated-worker variants. The rerun
-separates exact historical membership from newly discovered records. Historical
-Boa rows below remain unchanged; the new measurement is not yet complete.
+records source isolation, exact commands, validated identities and limitations;
+the [complete table](receipts/2026-09-29_vano_wpt_census/results.md) gives every
+shard.
 
-At 20:29 UTC, five validated shards (console, content-security-policy,
-cookies, CORS and custom-elements) contain 1163 current records: 1147 exact
-historical members and 16 added variants. They report 456/6430 passing subtests,
-6 external timeouts, 4 caught panics and no worker-process crashes. These are
-partial checkpoint counts; the full 82-shard
-run remains active and final totals are pending.
+The current runner reports **23,999 unique records**: all **21,671 genuine
+historical members** plus **2328 newly discovered worker-related records**.
+The unchanged historical maps contain 82, not 86, shards and 21,672 keys:
+one `test` key is a fallback bookkeeping artifact accidentally parsed from a
+list footer and mislabelled as a timeout. The receipt preserves its diagnosis
+and evidence. The WPT manifest and vendored content remain unchanged.
+
+Current file outcomes are **1743 all-pass, 15230 with failures, 1105 errors,
+2136 no-results and 3785 skips**. Reported subtests are **33824/144238 pass**;
+that denominator includes 38979 not-run subtests. Errors comprise 1090 external
+timeouts, 10 caught panics and 5 evaluation exceptions; no worker process
+crashed. Exact historical membership contributes 31104/131781 passing
+subtests; additional records contribute 2720/12457.
+
+This dev-profile, GC-enabled, subprocess-isolated disk run uses a fixed
+30-second external cap. It is not directly interchangeable with the historical
+release Boa measurement or a full browser/network/rendering conformance run.
+A separate 180-second Vano diagnostic recovered 1861/1975 subtests in one
+custom-element-name file killed by the census cap (historical Boa: 1859/1975).
+That diagnostic remains outside census totals. Historical Boa rows below
+retain their original numbers; their archived total includes the one diagnosed
+bookkeeping artifact.
 
 ## Purpose
 
@@ -86,7 +101,7 @@ below is copied from it.
 moved four subtests. The server-mode drive loop is wall-clock, so every test
 that awaits an event that never settles costs the full 15-second deadline;
 the disk-mode loop uses virtual clocks and quiesces immediately. At that
-rate the 21,672-file set is days, not hours. The probe pair is kept as
+rate the archived-record set is days, not hours. The probe pair is kept as
 `dom_events_probe.json` and `dom_events_disk_probe.json`. Consequence: the
 network-dependent families (`fetch` beyond `fetch/api`, `websockets`, `xhr`,
 `cors`, `cookies`, `referrer-policy`, `content-security-policy`,

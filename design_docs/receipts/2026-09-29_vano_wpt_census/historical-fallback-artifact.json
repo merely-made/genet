@@ -1,0 +1,40 @@
+{
+  "historical_key": "test",
+  "archived_record": {
+    "status": "error",
+    "reason": "hang-killed-90s"
+  },
+  "classification": "fallback list-footer parsing artifact; not a runnable manifest record",
+  "source_files": {
+    "run_perfile.sh": {
+      "sha256": "27cbbd416f7338eafb8066af2c89acc9c074a19901a5cfa536a666c3b02a93e8",
+      "contents": "#!/bin/bash\n# Per-file fallback for a directory whose whole-dir run was killed: each test under\n# its own 90s external timeout, merged into one expectation JSON by merge.py.\ncd /c/Users/mark_/Code/repos/genet || exit 1\nP=/c/Users/mark_/Code/testing/genet/wpt-ledger/2026-09-06_platform_census\nBIN=/c/t/genet-platform-ledger-target/release/genet-wpt.exe\nd=$1; tag=$(echo $d | tr '/' '_' | sed 's/\\.html$//'); out=$P/perfile/$tag; mkdir -p $out\n\"$BIN\" list \"$d\" 2>/dev/null | awk '{print $2}' | sed 's/?.*//' | sort -u > $out/files.txt\ni=0\nwhile read t; do\n  i=$((i+1)); n=$(echo $t | tr '/?' '__')\n  timeout -k 5 90 \"$BIN\" testharness \"$t\" --engine boa --renderer livery --write-expectations \"$out/$n.json\" > \"$out/$n.log\" 2>&1\n  rc=$?; [ $rc -ne 0 ] && echo \"$t rc=$rc\" >> $out/failed.txt\ndone < $out/files.txt\npython $P/merge.py \"$out\" \"$P/disk/${tag}_boa.json\" \"$P/disk/${tag}_boa.log\"\necho \"PERFILE DONE $d ($i files)\"\n"
+    },
+    "merge.py": {
+      "sha256": "bea8db74963cb02a3ed348ff4949f4501fb3f5489143a77c28605d8fc3a8417d",
+      "contents": "import json, glob, os, sys\nout, dst, dstlog = sys.argv[1:4]\ntests = {}; log = []\nfor f in sorted(glob.glob(os.path.join(out, '*.json'))):\n    try: tests.update(json.load(open(f, encoding='utf-8'))['tests'])\n    except Exception as e: pass\n    lf = f[:-5] + '.log'\n    if os.path.exists(lf): log += [l for l in open(lf, encoding='utf-8', errors='replace') if l.startswith(('ERROR ','FAIL ','TIMEOUT '))]\n# tests the runner never wrote a record for (killed by the external timeout)\nfor line in open(os.path.join(out, 'files.txt'), encoding='utf-8'):\n    t = line.strip()\n    if t and not any(k == t or k.startswith(t + '?') for k in tests):\n        tests[t] = {'status': 'error', 'reason': 'hang-killed-90s'}\n        log.append('ERROR %s  (hang-killed-90s)\\n' % t)\njson.dump({'command': 'testharness', 'engine': 'boa', 'renderer': 'livery', 'version': 1, 'note': 'per-file fallback; see perfile/', 'tests': dict(sorted(tests.items()))}, open(dst, 'w', encoding='utf-8'), indent=1)\nopen(dstlog, 'w', encoding='utf-8').writelines(log)\nprint('merged', len(tests), 'records ->', dst)\n"
+    },
+    "perfile/html_webappapis/test.log": {
+      "sha256": "921ca524def1bb6011dd49db2335d23d4edea2709ae50fb8311f56b0a9c9c89b",
+      "contents": "no runnable tests found for 'test' under tests/wpt/tests\n"
+    },
+    "perfile/html_webappapis/files.txt": {
+      "sha256": "ca76fe59928558253390eacea5c05bcf8f66503f5af027628e9d87cbda6eedef",
+      "matching_lines": [
+        {
+          "line": 338,
+          "text": "test"
+        }
+      ]
+    },
+    "perfile/html_webappapis/failed.txt": {
+      "sha256": "7fbfbf03b59074376d70c3484a78662134c0a96ca00ebd1de21c46c013f3bdce",
+      "matching_lines": [
+        {
+          "line": 3,
+          "text": "test rc=1"
+        }
+      ]
+    }
+  }
+}

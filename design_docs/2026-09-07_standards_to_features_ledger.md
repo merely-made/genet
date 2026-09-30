@@ -102,19 +102,29 @@ Generated content is tracked as **Row 17 of the separate
 not Row 17 of this ledger. Implicit list counters, reversed/additional styles,
 broader list and marker behavior, and general pseudo-box layout remain open.
 
-### Measurement next step
+### Measurement reconciliation, 2026-09-30 UTC
 
-Refresh comparable Boa and **Vano** result maps with recorded source/dependency
-revisions, WPT manifest, runner options and named outcomes. First classify the
-Vano no-results cases recorded in the [realms plan](2026-09-08_realms_plan.md):
-focused tests passing does not establish that the WPT harness reports results.
-Keep skips, timeouts, no-results and harness failures visible. This gate is now
-in progress: the isolated worker's snapshot/window-proxy reporting defect was
-fixed and published as `0c4aa9f60b8`, with a real harness sentinel passing on
-both engines and both GC modes. The [census receipt](receipts/2026-09-29_vano_wpt_census/receipt.md)
-keeps the broken pristine run separate from the patched runner. Final census
-totals are pending. The September 6 census is Boa-only; later focused and
-headed receipts already exercise both backends.
+The full **Vano** refresh completed all 82 archived shards with recorded
+source/dependency revisions, unchanged WPT content/manifest and a frozen
+runner. The isolated worker's snapshot/window-proxy reporting defect was
+fixed and published as `0c4aa9f60b8`; real synchronous/microtask sentinels pass
+on both engines and both GC modes. The [census receipt](receipts/2026-09-29_vano_wpt_census/receipt.md)
+keeps the broken pristine evidence separate from the repaired run.
+
+It reports 23,999 current records and 33824/144238 passing reported subtests,
+with 1090 external timeouts, 10 caught panics, 5 evaluation exceptions and no
+worker-process crashes. All 21,671 genuine historical records are present;
+one extra historical `test` key was a diagnosed fallback bookkeeping artifact,
+and 2328 current records are newly discovered worker-related variants. Skips,
+no-results, subtest timeouts and not-run outcomes remain separately visible.
+
+The September 6 baseline rows remain Boa-only historical numbers. The new
+dev profile, GC, isolation and timeout policy differ, so this is not a controlled
+engine-only delta or a universal conformance percentage. A longer-budget
+custom-element diagnostic recovered 1861/1975 passes from a census-timeout
+file; it is excluded from the fixed-budget totals. A fully paired run with
+identical profiles/budgets, the optional in-process snapshot route, server-mode
+families and full-browser rendering acceptance remain separate open gates.
 
 Candidates a lane should add when it opens: `editing` (contenteditable for
 a writing product), `streams` (extraction starts before the page finishes),

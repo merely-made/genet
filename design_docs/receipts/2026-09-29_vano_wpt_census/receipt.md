@@ -1,7 +1,8 @@
 # Vano platform WPT census receipt
 
-**Status: in progress, 2026-09-29.** Pristine reporting defect diagnosed;
-worker fix verified; full directory census running with rebuilt runner.
+**Status: complete.** All 82 shards finished at **2026-09-30 02:48:32 UTC**
+(started 2026-09-29 20:13:01 UTC). Pristine reporting defect diagnosed and
+worker repair verified before this full run.
 This is a runner-specific measurement, not full-browser conformance.
 
 - Genet base: `19c206873ab08ae227217892d9e74d0df18b349a`, plus the archived
@@ -17,16 +18,17 @@ This is a runner-specific measurement, not full-browser conformance.
   `db8ff719fbd101c4a909ce76441dad4aacc2b2f66af5b1184c65673bcc72a4e6`.
 
 The full scope is derived from the archived September 6 result maps: **82
-shards and 21,672 unique files**. The historical document's 86-shard statement
+shards and 21,672 unique archived records** (21,671 genuine named records
+plus the fallback artifact explained below). The historical document's 86-shard statement
 is a counting error. No overlap exists between the archived maps. The current
 manifest is byte-identical to that baseline.
 
-The shared source checkout has concurrent Livery work. Compilation therefore
-uses a detached sparse worktree at `Code/worktrees/genet-vano-census`; WPT
+The shared source checkout had concurrent Livery work. Compilation therefore
+used a detached sparse worktree at `Code/worktrees/genet-vano-census`; WPT
 inputs use the unchanged primary `tests/wpt/tests` directory. Both source
 checkout cleanliness and primary WPT dirty state are checked. Build uses the
 stable `C:/t/cargo-targets/genet` target, no isolated Cargo home, no local
-repository dependency overrides. A named executable copy keeps concurrent
+repository dependency overrides. A named executable copy kept concurrent
 Cargo builds from replacing the census runner.
 
 From `C:/Users/mark_/Code`:
@@ -58,7 +60,7 @@ each original map, so historical-versus-new aggregation needs no bulky old
 result maps. It contains 82 shards / 21,672 unique records and is 160,493 bytes,
 SHA256 `dbe04effd6cb57ae5ee779adad7200258da56e18e963a2cf0bd7d639b708a0c6`.
 
-The live process started with [run_census.started.py](run_census.started.py),
+The process started with [run_census.started.py](run_census.started.py),
 SHA256 `2cabe730f762f0138201f0e1b1d29ecd23bfbe007ced4632deafeae96a29a91f`,
 which reads original sibling baseline maps. It was not restarted mid-shard.
 The archived reproduction/resume driver reads the equivalent compact
@@ -70,13 +72,13 @@ validator SHA256 is
 `023ba73f7c8b2330b2ac5983309dac01fb2b08027c1d4e8e3b36f273e1d78b20`.
 Console aggregation before/after this input substitution is identical as
 parsed JSON. Both scripts parse, and the console checkpoint's runner SHA256
-matches provenance and the still-frozen executable. CLI invocation and
+matches provenance and the then-frozen executable. CLI invocation and
 test execution are unchanged. The reproduction/resume driver additionally
 validates runner SHA, manifest SHA, engine, renderer, command, subset and exact
 policy against provenance. Aggregation and resume fail on mismatches;
 progress omits mismatched maps from qualified counts. In-memory deliberately
 altered console records for each of those seven fields were rejected, while
-the real console summary stayed identical. The live started driver retains
+the real console summary stayed identical. The started driver retained
 its earlier runner-only resume check; final aggregation uses the stricter
 validator regardless of which driver produced the checkpoints.
 `progress.json` records completed checkpointed files/shards, external timeouts
@@ -89,7 +91,7 @@ No server is supplied: network-dependent failures and skipped server handlers
 remain limitations of this disk measurement. Files skipped by the runner,
 script evaluation errors, worker crashes, external timeouts, no-result files
 and ordinary failing subtests are kept separately. No universal percentage is
-reported. Final totals and cleanup are pending.
+reported. Final counts and validation are below; cleanup is recorded separately.
 
 ## Reporting prerequisite and bounded worker repair
 
@@ -135,8 +137,8 @@ new variants and checks for missing archived records. Shared manifest identity
 alone does not establish identical runner discovery.
 
 The worker repair and integration sentinel are published in Genet
-`0c4aa9f60b8`. The isolated patch's three code files are byte-equivalent under
-Git diff to that revision; the commit adds documentation beyond the patch.
+`0c4aa9f60b8`. The three patched code files have no Git diff against that
+revision; the commit adds documentation beyond the patch.
 The counter and accessible-name lanes are not included in this measurement.
 
 The standard (non-test) dev build completed successfully. Its frozen runner
@@ -163,36 +165,77 @@ The seven newly discovered dedicated-worker variants produce 1 all-pass,
 5 failing and 1 no-results file, with 5/23 subtests passing. These additional
 records are not included in the historical-membership comparison.
 
-The full 82-directory run remains active. The checkpoint below supersedes
-this initial console-only progress count without replacing its detailed
-comparison.
-The census lane retains `Code/worktrees/genet-vano-census` and the named
-runner copy while that process uses their source, working directory and
-resources. The stable Genet target remains available for normal reuse.
+The complete results below supersede this initial console-only checkpoint
+without replacing its diagnostic comparison. The isolated source and frozen
+runner were retained throughout execution; their cleanup is recorded below.
 
-## Qualified progress at 20:29 UTC
+## Historical fallback artifact
 
-Five of 82 shards are complete and pass strict checkpoint validation:
+Exact membership comparison found one non-runnable historical key: `test` in
+the old `html/webappapis` map. The archived fallback script pipes `list` output
+through `awk '{print $2}'`, capturing the word `test` from its summary footer.
+`perfile/html_webappapis/files.txt` therefore contains `test` at line 338.
+Its own `test.log` says no runnable tests were found; `failed.txt` records
+`test rc=1`. The merge script labels every missing result `hang-killed-90s`,
+so this ordinary failed lookup became a fabricated timeout record.
 
-| Directory | Files | Pass | Fail | Error | No results | Skip | External timeouts | Subtests pass / total |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| console | 21 | 2 | 15 | 1 | 1 | 2 | 1 | 10 / 51 |
-| content-security-policy | 846 | 64 | 646 | 1 | 134 | 1 | 1 | 175 / 3748 |
-| cookies | 82 | 1 | 63 | 0 | 18 | 0 | 0 | 3 / 968 |
-| cors | 27 | 1 | 20 | 0 | 6 | 0 | 0 | 3 / 207 |
-| custom-elements | 187 | 12 | 149 | 8 | 8 | 10 | 4 | 265 / 1456 |
-| Checkpoint total | 1163 | 80 | 893 | 10 | 167 | 13 | 6 | 456 / 6430 |
+[Archived diagnostic evidence](historical-fallback-artifact.json) preserves
+the two fallback scripts, lookup output, matching line evidence and source
+hashes. Historical raw maps and the compact membership archive are unchanged.
+The aggregate reports this missing key explicitly rather than pretending it
+ran. The 21,672 historical keys therefore represent **21,671 genuine named
+records plus one bookkeeping artifact**. Current discovery should not invent
+a runnable case to match that artifact.
 
-External timeouts are a subset of errors. Errors contain 6 external timeouts
-and 4 caught panics; no worker process crashed in these shards.
-The 1163 records contain 1147 exact historical members (451/6398 subtests pass)
-and 16 added variants (5/32 subtests pass). Subtest statuses across this
-checkpoint are 456 pass, 2926 fail, 498 timeout, 2548 not-run and 2 precondition
-failures; file errors, subtest timeouts and unreported tests are distinct
-categories. DOM is the next active shard. The custom-elements subtest result
-differs substantially from historical Boa; counts depend on runtime and
-harness reporting, and the old denominator must not be reused for Vano.
-**Final census totals and cleanup remain pending.**
+## Complete fixed-budget results
+
+All **82/82** archived directory shards completed. The current runner discovered
+**23,999 unique records**: all **21,671 genuine historical members** plus
+**2328 added records**. The only missing historical key is the diagnosed `test`
+bookkeeping artifact. There are no duplicate current keys across shards.
+The additional records comprise 2317 `.worker.html` variants and 11 other
+worker-related records skipped as non-testharness; this is discovery expansion
+against an unchanged manifest, not newly added WPT source.
+
+| Membership | Records | All-pass | With failures | Error | No results | Skip | Subtests pass / reported |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Exact genuine historical members | 21671 | 1540 | 13367 | 1105 | 1885 | 3774 | 31104 / 131781 |
+| Added records | 2328 | 203 | 1863 | 0 | 251 | 11 | 2720 / 12457 |
+| Total | 23999 | 1743 | 15230 | 1105 | 2136 | 3785 | 33824 / 144238 |
+
+The 1105 file errors contain **1090 external timeouts, 10 caught panics and
+5 evaluation exceptions**. There were **0 worker-process crashes**. Skips
+contain 3681 non-testharness records, 86 XHTML records and 18 unsupported
+non-window-global records. No-results contains 2117 generic no-subtests
+outcomes and 19 outcomes attributed to unavailable server-side handlers.
+Generic no-results alone does not identify a specific implementation defect.
+
+Reported subtest statuses are 33824 pass, 66086 fail, 5339 timeout, 38979
+not-run and 10 precondition-failed. Reported totals therefore include not-run
+subtests; externally killed files report no subtests. These categories must
+not be collapsed into a single conformance percentage. The dev build, GC and
+isolation changes, external cap and discovery expansion prevent attributing
+historical Boa deltas solely to the engine. The separate 180-second diagnostic
+below demonstrates why the fixed-budget denominator can shrink dramatically.
+
+See the [full 82-shard table](results.md), [machine summary](summary.json.gz),
+[completed provenance](provenance.json) and [exact commands/exits](runs.jsonl).
+The [compact per-record outcomes](outcomes.json.gz) preserve each file status,
+reason, pass/total count, subtest-status histogram and original map SHA256;
+only individual subtest names are omitted. Raw full maps/logs remain at the
+ledger path above. Compact outcomes are 213187 bytes, SHA256
+`c9721748d6eb79a617fedc7c09e26a758825ccd901df61a7a59ffd65e442c8da`;
+summary archive SHA256 is
+`cd48c8eff8e6a501dff0caa9095c81ff6869ae69c9f4c2db27fe01e4b1d5376f`.
+
+[Final validation](validation.json) confirms all 82 qualified headers and map
+hashes, all per-record subtest counts, aggregate sums, exact historical
+membership, unchanged binary/manifest identities, unchanged vendored WPT
+content against the source base, and equivalence of the three patched source
+files to published `0c4aa9f60b8`. Compact outcomes independently reproduce all
+file/subtest status totals and membership splits. All 82 runner invocations
+exited 0 with result maps; that means measurement completed, not that tests
+passed.
 
 ## Custom-elements denominator diagnosis
 
@@ -259,3 +302,25 @@ The [compressed exact JSON](diagnostic_valid_names_180s_vano.json.gz) and
 The hash above applies to the decompressed JSON bytes. Both files remain
 outside `disk-fixed/`; the full census remains unchanged at a 30-second
 external cap.
+
+## Cleanup and reproduction
+
+After all results and identities were verified, the three owned worker-patch
+files were staged only in the isolated checkout and confirmed identical to
+published `0c4aa9f60b8`. A normal checkout of that revision left the worktree
+clean. Its stale initialization lock was unlocked, and Git removed the clean
+worktree without force. The named frozen executable was removed after a live
+process check confirmed no census/compiler owner. Both paths are absent.
+No source, raw results, diagnostics or receipts were discarded.
+
+`C:/t/cargo-targets/genet` remains the ordinary reusable Genet target. No
+isolated Cargo home was created. Exact ignored lockfile bytes are preserved
+in `cargo-lock.txt`.
+
+For reproduction, prepare the recorded source base with the archived patch,
+restore `cargo-lock.txt` as its ignored `Cargo.lock`, and use the recorded
+build command without repository-local dependency overrides. Point the
+archived scripts at that exact-source checkout and a newly frozen executable
+copy. The historic worktree path in the recorded commands intentionally no
+longer exists. New runs must retain their own binary identity and outcomes;
+they must not be mixed into this completed receipt.

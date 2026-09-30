@@ -1,0 +1,36 @@
+{
+  "validated_utc": "2026-09-30T02:50:21.901216+00:00",
+  "shards": 82,
+  "unique_current_records": 23999,
+  "genuine_historical_records_matched": 21671,
+  "added_records": 2328,
+  "unmatched_historical_records": [
+    {
+      "subset": "html/webappapis",
+      "key": "test",
+      "classification": "archived fallback bookkeeping artifact"
+    }
+  ],
+  "checks": [
+    "all82runner exits0 with result maps",
+    "all82headers match frozen runner, manifest, engine, renderer, command, subset and exact policy",
+    "all82source-result hashes match summary",
+    "no duplicate current record keys across shards",
+    "every subtest total and pass count matches recorded subtest list",
+    "file and subtest outcome sums reconcile",
+    "compact archived outcomes independently reproduce aggregate statuses and membership counts",
+    "frozen runner SHA matches start and completion provenance",
+    "manifest SHA unchanged",
+    "vendored WPT tree unchanged against19c206 and clean",
+    "isolated source HEAD19c206 with only three owned worker-patch files",
+    "owned worker patch files match published0c4aa9f60b8"
+  ],
+  "runner_sha256": "dcc1e8ee404b852979f51b9c917f73b6e2aee63f9ddef0e1d91bfa5300428abc",
+  "cleanup": {
+    "isolated_worktree": "removed after staging only the three owned files and safely checking out their published0c4aa9f60b8 revision, with clean status",
+    "frozen_runner_copy": "removed after verifying no live census owner",
+    "stable_target": "C:/t/cargo-targets/genet retained for ordinary Genet reuse",
+    "isolated_cargo_home": "none created",
+    "lockfile": "exact bytes preserved in cargo-lock.txt"
+  }
+}

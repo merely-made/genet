@@ -83,7 +83,9 @@ where
 
 /// Lay out a retained live document through the caller-owned text system and
 /// image ledger. `LiveryDocument` uses this internally; scripted hosts use the
-/// same entry when their runtime owns the DOM.
+/// same entry when their runtime owns the DOM. Deferred `ch` lengths resolve
+/// against that text system's font ledger before container boxes are measured;
+/// the caller's cascade plane remains available for later resource changes.
 pub fn layout_with_text_system<D>(
     dom: &D,
     styles: &StylePlane<D::NodeId>,
@@ -98,8 +100,13 @@ where
     D::NodeId: Copy + Eq + Hash,
 {
     taffy_style::reset_calc_scratch();
-    let styles =
-        resolve_container_relative_styles_with_images(dom, styles, viewport, image_sources)?;
+    let styles = resolve_container_relative_styles_with_text(
+        dom,
+        styles,
+        viewport,
+        image_sources,
+        Some(text),
+    )?;
     let viewport_size = (viewport_width, viewport_height);
     let boxes = GeneratedBoxTree::from_dom(dom, &styles);
     let atomic = layout_atomic_subtrees(

@@ -579,3 +579,43 @@ fn nowrap_inline_inside_a_wrapping_block() {
         "the following text wraps to the next line"
     );
 }
+
+/// `css/css-text/text-align/text-align-center-*` under `white-space: nowrap`
+/// and `pre`: a non-wrapping line is still placed by `text-align` within its
+/// containing block. The wrapping block beside it is the positive control,
+/// and an inline-block in an overflowing `nowrap` line must not wrap it.
+#[test]
+fn text_align_places_non_wrapping_lines() {
+    let rendered = Rendered::new(
+        "<div style=\"font:16px/20px sans-serif; width:200px; text-align:center; color:#f00\">AB</div>\
+         <div style=\"font:16px/20px sans-serif; width:200px; text-align:center; white-space:nowrap; color:#00f\">AB</div>\
+         <div style=\"font:16px/20px sans-serif; width:200px; text-align:right; white-space:pre; color:#0f0\">AB</div>\
+         <div style=\"font:16px/20px sans-serif; width:40px; text-align:center; white-space:nowrap; color:#ff0\">aaa <span style=\"display:inline-block\">bbb</span> ccc</div>",
+    );
+    let green = ColorF::new(0.0, 1.0, 0.0, 1.0);
+    let yellow = ColorF::new(1.0, 1.0, 0.0, 1.0);
+    let first_x = |color| rendered.glyphs(color)[0].1;
+
+    let wrapped = first_x(RED);
+    assert!(wrapped > 80.0, "control: wrapping text centres: {wrapped}");
+    assert_eq!(
+        first_x(BLUE),
+        wrapped,
+        "nowrap text centres like wrapping text"
+    );
+    assert!(
+        first_x(green) > 170.0,
+        "pre text aligns right: {}",
+        first_x(green)
+    );
+    let overflow = rendered.glyphs(yellow);
+    assert_eq!(
+        distinct_line_ys(&overflow).len(),
+        1,
+        "an overflowing nowrap line stays one line: {overflow:?}"
+    );
+    assert_eq!(
+        overflow[0].1, 0.0,
+        "an overflowing line starts at the start edge"
+    );
+}

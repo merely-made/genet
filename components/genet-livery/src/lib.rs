@@ -239,6 +239,13 @@ head, title, meta, link, style, script, template {
     display: none;
 }
 
+/* HTML's rendering section, "Hidden elements": a hidden element generates no
+   box. `until-found` asks for `content-visibility: hidden` instead, which
+   Livery does not carry, so it keeps its box. */
+[hidden]:not([hidden=until-found i]):not(embed) {
+    display: none;
+}
+
 /* HTML's rendering section: a slot is a transparent box in the flat tree. Its
    flat children are its assigned nodes, or its own children as fallback; the
    slot element itself never generates a box of its own. */

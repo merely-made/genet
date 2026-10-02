@@ -1335,10 +1335,50 @@ impl TextSystem {
         // How far the model's line boxes have moved lines from where
         // Parley's float-aware breaking started them.
         let mut drift = 0.0_f32;
+        // A non-wrapping paragraph is one unbounded Parley line per forced
+        // break, which Parley aligns within its longest line; Livery places
+        // each within the containing block (or float band) instead.
+        let places_lines =
+            root_style.text_wrap_mode != TextWrapMode::Wrap && width.is_finite() && width > 0.0;
+        let mut previous_break = None;
         let mut span_cursor = 0;
         let mut baselines: Option<(f32, f32)> = None;
         for line in layout.lines() {
             let source_metrics = *line.metrics();
+            let shift = if places_lines {
+                let available = line_constraints.map_or(width, |constraints| {
+                    constraints
+                        .horizontal_physical_space(
+                            parley_line_top(&source_metrics),
+                            source_metrics.line_height.max(0.0),
+                        )
+                        .inline_size
+                });
+                let scope_line = previous_break.is_none()
+                    || (root_style.text_indent.each_line
+                        && previous_break == Some(BreakReason::Explicit));
+                let indent = if scope_line ^ root_style.text_indent.hanging {
+                    text_indent
+                } else {
+                    0.0
+                };
+                let line_alignment = match line.break_reason() {
+                    BreakReason::None | BreakReason::Explicit => {
+                        last_line_alignment(root_style, alignment).unwrap_or(alignment)
+                    },
+                    _ => alignment,
+                };
+                non_wrapping_line_shift(
+                    &source_metrics,
+                    indent,
+                    available,
+                    line_alignment,
+                    root_style.direction == Direction::Rtl,
+                )
+            } else {
+                0.0
+            };
+            previous_break = Some(line.break_reason());
             let line_top = parley_line_top(&source_metrics) + drift;
             let mut extents = LineExtents::new();
             if !quirks {
@@ -1499,7 +1539,7 @@ impl TextSystem {
                             .positioned_glyphs()
                             .map(|glyph| GlyphInstance {
                                 index: glyph.id,
-                                point: LayoutPoint::new(glyph.x, glyph.y),
+                                point: LayoutPoint::new(glyph.x + shift, glyph.y),
                             })
                             .collect::<Vec<_>>();
                         if glyphs.is_empty() {
@@ -1519,7 +1559,7 @@ impl TextSystem {
                         let ascent = metrics.ascent.round();
                         let fragment_y = own_baseline - ascent;
                         let fragment_height = ascent + metrics.descent.round();
-                        let mut cluster_x = run.offset();
+                        let mut cluster_x = run.offset() + shift;
                         let mut clusters = Vec::new();
                         for cluster in parley_run.visual_clusters() {
                             let advance = cluster.advance().max(0.0);
@@ -1568,13 +1608,13 @@ impl TextSystem {
                             trailing_content_end,
                             line_y: line_top,
                             fragment: Fragment {
-                                x: run.offset(),
+                                x: run.offset() + shift,
                                 y: fragment_y,
                                 width: run.advance().max(0.0),
                                 height: fragment_height.max(0.0),
                             },
                             line_fragment: Fragment {
-                                x: run.offset(),
+                                x: run.offset() + shift,
                                 y: line_top,
                                 width: run.advance().max(0.0),
                                 height: line_height.max(0.0),
@@ -1615,21 +1655,21 @@ impl TextSystem {
                                     extents.baseline_at(anchor, baseline, line_top, line_height);
                                 let ascent = metrics.ascent.round();
                                 Fragment {
-                                    x: positioned.x,
+                                    x: positioned.x + shift,
                                     y: edge_baseline - ascent,
                                     width: positioned.width,
                                     height: ascent + metrics.descent.round(),
                                 }
                             } else {
                                 Fragment {
-                                    x: positioned.x + inline_box.margin_left,
+                                    x: positioned.x + shift + inline_box.margin_left,
                                     y: top + inline_box.margin_top,
                                     width: inline_box.fragment.width,
                                     height: inline_box.fragment.height,
                                 }
                             },
                             line_fragment: Fragment {
-                                x: positioned.x,
+                                x: positioned.x + shift,
                                 y: line_top,
                                 width: positioned.width,
                                 height: line_height.max(0.0),
@@ -4180,6 +4220,40 @@ fn text_alignment(style: TextAlign, direction: Direction, justify: TextJustify) 
         TextAlign::Justify => Alignment::Justify,
         TextAlign::JustifyAll => Alignment::Justify,
     }
+}
+
+/// How far a non-wrapping line moves from where Parley aligned it, within its
+/// longest line, to where `text-align` places it within `available`. Mirrors
+/// Parley's own alignment: an overflowing line sits at its start edge, and
+/// justification (which spreads spaces rather than moving the line) is left
+/// as Parley set it.
+fn non_wrapping_line_shift(
+    metrics: &parley::LineMetrics,
+    indent: f32,
+    available: f32,
+    alignment: Alignment,
+    rtl: bool,
+) -> f32 {
+    let content = indent + metrics.advance - metrics.trailing_whitespace;
+    let placed = |inline_size: f32| {
+        let free = inline_size - content;
+        if free <= 0.0 {
+            return if rtl { free } else { 0.0 };
+        }
+        match (alignment, rtl) {
+            (Alignment::Left, _) | (Alignment::Start, false) | (Alignment::End, true) => 0.0,
+            (Alignment::Right, _) | (Alignment::Start, true) | (Alignment::End, false) => free,
+            (Alignment::Center, _) => free * 0.5,
+            (Alignment::Justify, _) => {
+                if rtl {
+                    free
+                } else {
+                    0.0
+                }
+            },
+        }
+    };
+    placed(available) - placed(metrics.inline_max_coord - metrics.inline_min_coord)
 }
 
 fn directional_alignment(style: TextAlign, direction: Direction) -> Alignment {

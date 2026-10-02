@@ -590,3 +590,41 @@ fn grid_tracks_and_placements_reach_taffy() {
     assert!((second_fragment.x - (first_fragment.x + 50.0)).abs() <= 0.5);
     assert!((second_fragment.y - (first_fragment.y + 35.0)).abs() <= 0.5);
 }
+
+/// HTML's rendering section gives `[hidden]` `display: none`. A Cambium
+/// disclosure, accordion panel or tree group closes by setting `hidden`, so
+/// a closed panel must generate no box and take no space; the open panel
+/// beside it is the positive control.
+#[test]
+fn hidden_attribute_generates_no_box() {
+    let document = StaticDocument::parse(
+        r#"<html><body style="margin: 0">
+            <div class="open" style="height: 30px"></div>
+            <div class="closed" hidden="true" style="height: 40px"></div>
+            <div class="after" style="height: 10px"></div>
+        </body></html>"#,
+    );
+    let plane = resolve_styles(
+        &document,
+        &StyleSet::cambium(&[]),
+        &Device::screen(800.0, 600.0),
+        &InteractionStates::default(),
+    );
+    let fragments = layout(&document, &plane, 800.0, 600.0).unwrap();
+    let by_class = |class| {
+        document
+            .first_with_class(document.document(), class)
+            .unwrap()
+    };
+
+    let open = fragments
+        .get(by_class("open"))
+        .expect("open panel has a box");
+    assert_eq!(open.height, 30.0);
+    assert!(
+        fragments.get(by_class("closed")).is_none(),
+        "a [hidden] element generates no box"
+    );
+    let after = fragments.get(by_class("after")).unwrap();
+    assert_eq!(after.y, open.y + 30.0, "a [hidden] element takes no space");
+}

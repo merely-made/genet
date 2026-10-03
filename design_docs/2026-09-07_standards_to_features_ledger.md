@@ -184,6 +184,31 @@ submission, which Genet does not have (`form-submission-0` 0/159). C1's words
 stand as given. The Encoding lane's scope goes back to Mark with this
 evidence.
 
+Rulings on the corrected picture:
+
+- **C4.** Asked how the Encoding lane is scoped. The options were:
+  `TextDecoder`/`TextEncoder` only; Encoding across the platform (adding URL
+  query encoding and legacy-charset frame documents); or drop Encoding for
+  now. Mark: "TextDecoder/TextEncoder only (Recommended)". So the lane covers
+  labels, `fatal`, `ignoreBOM`, streaming decode and `encodeInto` through
+  `encoding_rs`. URL query and form encoding in a legacy charset come with
+  form submission (C5). Legacy-charset frame documents remain unassigned.
+- **C5.** Asked where form submission goes, given that 20,951 encoding
+  subtests sit behind it. The options were: a later phase of the forms lane,
+  its own lane later, or not now. Mark: "Later phase of the forms lane
+  (Recommended)". So the forms lane runs the value model, then constraint
+  validation, then form submission: the form data set, the urlencoded,
+  multipart and text/plain encoders in the form's charset through
+  `encoding_rs`, then navigation of the target.
+- **C6.** Asked where a form control's current value (dirty value,
+  checkedness, selection) lives. The options were: node state in the DOM
+  arena; script-side state only; or let the lane bring options. Mark: "Node
+  state in the DOM arena (Recommended)". So there is one per-control record in
+  `genet-scripted-dom`, read through `LayoutDom`. Script's `.value`, the
+  native editor (`genet-documents/src/engines/livery.rs:1154`), Livery paint
+  and accessibility (`genet-render/src/a11y.rs:116`) all share it, and the
+  `value` attribute becomes `defaultValue`.
+
 *Reading, not ruled:* constraint validation cannot be built correctly without
 the form-control value model. Where the current value lives is shared by
 script, the native editor, paint and accessibility, so that brief's first

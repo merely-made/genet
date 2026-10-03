@@ -98,7 +98,10 @@ Two later rulings the same day are recorded in the
 [line-breaking plan](2026-10-02_livery_line_breaking_plan.md#rulings):
 
 - Ruling 7: the seven Genet panics and five evaluation errors above are
-  briefed to a separate agent as well.
+  briefed to a separate agent as well. *Amended 2026-10-02* by the
+  [standards ledger](2026-09-07_standards_to_features_ledger.md#conformance-targets-2026-10-02)'s
+  ruling C3: the two stream getter traps (`stream-safe-creation` and
+  `patched-global`) move to the Streams lane.
 - Ruling 9: the Vano lane may fetch Vano's unfetched `tests/test262`
   submodule at its pinned commit `e0d8f66a`, and run Vano's test262 gate.
   Mark: "Allow, pinned commit only (Recommended)".

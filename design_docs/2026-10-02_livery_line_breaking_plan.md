@@ -2,7 +2,9 @@
 
 **Status:** plan, 2026-10-02. Mark ruled "Plan Stage 1 now". Stage 0 (non-wrapping
 lines follow `text-align`) landed on main as `6fca091dc26`. Stage 1 has not
-started, and its bidi-level question is open (see [Open for Mark](#open-for-mark)).
+started; S1.0 and S1.1 are briefed to a separate implementing agent (ruling 6),
+which stops before S1.2. The bidi-level source is ruled: Livery runs its own
+UAX#9 pass (ruling 5).
 
 ## Why
 
@@ -66,6 +68,22 @@ Mark's words, verbatim, as recorded in
 *Reading, not ruled:* Stage 1 keeps genet-parley unpatched unless Mark rules the
 bidi seam (Open, below), following ruling 2 and the line box model plan's
 "upstream-shaped rather than patched".
+
+Recorded in this repo on 2026-10-02, in the round that followed the plan:
+
+5. **Bidi levels for S1.4.** Asked where Livery gets embedding levels, given
+   that Parley exposes only parity. The options were: an own UAX#9 pass with
+   `unicode-bidi`, a one-accessor genet-parley seam, or deciding at S1.4.
+   Mark: "Own UAX#9 pass (Recommended)". It follows that Stage 1 needs no
+   genet-parley patch at all, and S1.4 must carry the levels-agreement
+   fixture named under [Open for Mark](#open-for-mark).
+6. **The next Genet lane.** Asked which Genet lane goes next. The options
+   were: line breaking S1.0–S1.1, census panic triage, the realms next slice,
+   or generated text Row 17. Mark: "1, but prepare a brief for me to paste to
+   another agent. then let's keep identifying good targets to make briefs for
+   the agent on deck to orchestrate implementation for." So S1.0 and S1.1 run
+   in another agent from a pasted brief, and stop before S1.2. *Reading, not
+   ruled:* S1.2 onward waits for Mark to review S1.1's result.
 
 ## The taffy precedent
 
@@ -311,6 +329,11 @@ reorder nested embeddings correctly.
 plan's "upstream-shaped rather than patched"; option 2 follows the taffy
 precedent of small seams.
 
+*Ruled 2026-10-02 (ruling 5):* option 1. S1.4 runs `unicode-bidi` over the
+paragraph text with Parley's base level. Its done-conditions gain one more:
+a fixture that compares each run's computed level parity with `Run::is_rtl`
+and fails on any disagreement.
+
 ## Findings
 
 All dated 2026-10-02, verified at Genet `4ac56bbbe0b` and `6fca091dc26`.
@@ -352,3 +375,9 @@ All dated 2026-10-02, verified at Genet `4ac56bbbe0b` and `6fca091dc26`.
   passing. The B and C prototypes stay on throwaway branches
   (`proto/nowrap-parley-b` `7c85004ebd8`, `proto/nowrap-text-align`
   `84701e00dd3`). Plan written.
+- 2026-10-02: rulings 5 and 6 recorded: an own UAX#9 pass for S1.4, and
+  S1.0–S1.1 briefed to a separate agent. While writing the brief, it was
+  found that the prototype runner `testing/genet-gaps/wpt/run_wpt.sh`
+  hard-codes `REPO=C:/Users/mark_/Code/worktrees/genet-gaps`. That worktree
+  was retired the same day, so a rerun must point `REPO` at its own checkout.
+  The maps and binaries under `testing/genet-gaps/wpt/` are unaffected.

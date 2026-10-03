@@ -1,0 +1,219 @@
+{
+  "command": "reftest",
+  "engine": "none",
+  "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
+  "policy": "exact",
+  "renderer": "livery",
+  "runner_sha256": "7345f0705cf23264e76dd664d1206211a86df5dda7e993129fe5adec3f06095e",
+  "subset": "css/css-text/word-break",
+  "tests": {
+    "css/css-text/word-break/auto-phrase/word-break-auto-phrase-001.html": "pass",
+    "css/css-text/word-break/auto-phrase/word-break-auto-phrase-002.html": "pass",
+    "css/css-text/word-break/auto-phrase/word-break-auto-phrase-003.html": "pass",
+    "css/css-text/word-break/auto-phrase/word-break-auto-phrase-004.html": "pass",
+    "css/css-text/word-break/auto-phrase/word-break-auto-phrase-005.html": "pass",
+    "css/css-text/word-break/auto-phrase/word-break-auto-phrase-006.html": "pass",
+    "css/css-text/word-break/auto-phrase/word-break-auto-phrase-007.html": "pass",
+    "css/css-text/word-break/auto-phrase/word-break-auto-phrase-008.html": "pass",
+    "css/css-text/word-break/auto-phrase/word-break-auto-phrase-009.html": "pass",
+    "css/css-text/word-break/auto-phrase/word-break-auto-phrase-fallback-001.html": "pass",
+    "css/css-text/word-break/auto-phrase/word-break-auto-phrase-fallback-002.html": "pass",
+    "css/css-text/word-break/auto-phrase/word-break-auto-phrase-fallback-003.html": "pass",
+    "css/css-text/word-break/auto-phrase/word-break-auto-phrase-intrinsic-001.html": "fail",
+    "css/css-text/word-break/auto-phrase/word-break-auto-phrase-overflow-001.html": "fail",
+    "css/css-text/word-break/auto-phrase/word-break-auto-phrase-wbr-nobr-001.html": "fail",
+    "css/css-text/word-break/auto-phrase/word-break-auto-phrase-wbr-nobr-002.html": "fail",
+    "css/css-text/word-break/break-boundary-2-chars-001.html": "fail",
+    "css/css-text/word-break/break-boundary-2-chars-002.html": "pass",
+    "css/css-text/word-break/word-break-break-all-000.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-break-all-001.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-break-all-002.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-break-all-003.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-break-all-004.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-break-all-005.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-break-all-006.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-break-all-007.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-break-all-008.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-break-all-010.html": "pass",
+    "css/css-text/word-break/word-break-break-all-011.html": "pass",
+    "css/css-text/word-break/word-break-break-all-012.html": "fail",
+    "css/css-text/word-break/word-break-break-all-013.html": "fail",
+    "css/css-text/word-break/word-break-break-all-014.html": "fail",
+    "css/css-text/word-break/word-break-break-all-015.html": "pass",
+    "css/css-text/word-break/word-break-break-all-016.html": "pass",
+    "css/css-text/word-break/word-break-break-all-017.html": "fail",
+    "css/css-text/word-break/word-break-break-all-018.html": "pass",
+    "css/css-text/word-break/word-break-break-all-019.html": "pass",
+    "css/css-text/word-break/word-break-break-all-020.html": "pass",
+    "css/css-text/word-break/word-break-break-all-021.html": "pass",
+    "css/css-text/word-break/word-break-break-all-022.html": "fail",
+    "css/css-text/word-break/word-break-break-all-023.html": "fail",
+    "css/css-text/word-break/word-break-break-all-024.html": "pass",
+    "css/css-text/word-break/word-break-break-all-025.html": "pass",
+    "css/css-text/word-break/word-break-break-all-026.html": "pass",
+    "css/css-text/word-break/word-break-break-all-027.html": "pass",
+    "css/css-text/word-break/word-break-break-all-028.html": "pass",
+    "css/css-text/word-break/word-break-break-all-029.html": "pass",
+    "css/css-text/word-break/word-break-break-all-030.html": "pass",
+    "css/css-text/word-break/word-break-break-all-031.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-break-all-032.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-break-all-062.html": "pass",
+    "css/css-text/word-break/word-break-break-all-ethiopic.html": "fail",
+    "css/css-text/word-break/word-break-break-all-inline-001.html": "pass",
+    "css/css-text/word-break/word-break-break-all-inline-002.html": "pass",
+    "css/css-text/word-break/word-break-break-all-inline-003.html": "pass",
+    "css/css-text/word-break/word-break-break-all-inline-004.tentative.html": "pass",
+    "css/css-text/word-break/word-break-break-all-inline-005.html": "pass",
+    "css/css-text/word-break/word-break-break-all-inline-006.html": "fail",
+    "css/css-text/word-break/word-break-break-all-inline-007.tentative.html": "pass",
+    "css/css-text/word-break/word-break-break-all-inline-008.html": "pass",
+    "css/css-text/word-break/word-break-break-all-inline-009.html": "fail",
+    "css/css-text/word-break/word-break-break-all-inline-010.tentative.html": "pass",
+    "css/css-text/word-break/word-break-break-word-crash-001.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-break-word-overflow-wrap-interactions.html": "pass",
+    "css/css-text/word-break/word-break-keep-all-000.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-keep-all-001.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-keep-all-002.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-keep-all-003.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-keep-all-005.html": "pass",
+    "css/css-text/word-break/word-break-keep-all-006.html": "pass",
+    "css/css-text/word-break/word-break-keep-all-007.html": "pass",
+    "css/css-text/word-break/word-break-keep-all-008.html": "pass",
+    "css/css-text/word-break/word-break-keep-all-009.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-keep-all-010.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-keep-all-011.html": "fail",
+    "css/css-text/word-break/word-break-keep-all-063.html": "pass",
+    "css/css-text/word-break/word-break-keep-all-u002d.html": "fail",
+    "css/css-text/word-break/word-break-manual-001.html": "pass",
+    "css/css-text/word-break/word-break-min-content-001.html": "pass",
+    "css/css-text/word-break/word-break-min-content-002.html": "pass",
+    "css/css-text/word-break/word-break-min-content-003.html": "pass",
+    "css/css-text/word-break/word-break-min-content-004.html": "fail",
+    "css/css-text/word-break/word-break-min-content-005.html": "pass",
+    "css/css-text/word-break/word-break-min-content-006.html": "pass",
+    "css/css-text/word-break/word-break-min-content-007.html": "fail",
+    "css/css-text/word-break/word-break-normal-001.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-normal-002.html": "fail",
+    "css/css-text/word-break/word-break-normal-003.html": "fail",
+    "css/css-text/word-break/word-break-normal-ar-000.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-normal-bo-000.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-normal-en-000.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-normal-ethiopic.html": "fail",
+    "css/css-text/word-break/word-break-normal-hi-000.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-normal-ja-000.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-normal-ja-001.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-normal-ja-002.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-normal-ja-004.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-normal-km-000.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-normal-ko-000.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-normal-lo-000.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-normal-my-000.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-normal-tdd-000.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-normal-th-000.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/word-break/word-break-normal-th-001.html": "fail",
+    "css/css-text/word-break/word-break-normal-zh-000.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    }
+  },
+  "version": 1
+}

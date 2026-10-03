@@ -1,0 +1,1132 @@
+{
+  "command": "reftest",
+  "engine": "none",
+  "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
+  "policy": "exact",
+  "renderer": "livery",
+  "runner_sha256": "7345f0705cf23264e76dd664d1206211a86df5dda7e993129fe5adec3f06095e",
+  "subset": "css/CSS2/text",
+  "tests": {
+    "css/CSS2/text/bidi-flag-emoji-02.html": "pass",
+    "css/CSS2/text/bidi-flag-emoji.html": "pass",
+    "css/CSS2/text/bidi-span-001.html": "pass",
+    "css/CSS2/text/bidi-span-002.html": "fail",
+    "css/CSS2/text/bidi-span-003.html": "fail",
+    "css/CSS2/text/bidi-text-decoration-underline-001.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/combining-characters-002.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/control-characters-002.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/crashtests/bidi-inline-fragment-oof-crash.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/letter-spacing-004.xht": "pass",
+    "css/CSS2/text/letter-spacing-005.xht": "pass",
+    "css/CSS2/text/letter-spacing-006.xht": "pass",
+    "css/CSS2/text/letter-spacing-007.xht": "pass",
+    "css/CSS2/text/letter-spacing-008.xht": "pass",
+    "css/CSS2/text/letter-spacing-016.xht": "pass",
+    "css/CSS2/text/letter-spacing-017.xht": "pass",
+    "css/CSS2/text/letter-spacing-018.xht": "pass",
+    "css/CSS2/text/letter-spacing-019.xht": "pass",
+    "css/CSS2/text/letter-spacing-020.xht": "pass",
+    "css/CSS2/text/letter-spacing-028.xht": "pass",
+    "css/CSS2/text/letter-spacing-029.xht": "pass",
+    "css/CSS2/text/letter-spacing-030.xht": "pass",
+    "css/CSS2/text/letter-spacing-031.xht": "pass",
+    "css/CSS2/text/letter-spacing-032.xht": "pass",
+    "css/CSS2/text/letter-spacing-040.xht": "pass",
+    "css/CSS2/text/letter-spacing-041.xht": "pass",
+    "css/CSS2/text/letter-spacing-042.xht": "pass",
+    "css/CSS2/text/letter-spacing-043.xht": "pass",
+    "css/CSS2/text/letter-spacing-044.xht": "pass",
+    "css/CSS2/text/letter-spacing-052.xht": "pass",
+    "css/CSS2/text/letter-spacing-053.xht": "pass",
+    "css/CSS2/text/letter-spacing-054.xht": "pass",
+    "css/CSS2/text/letter-spacing-055.xht": "pass",
+    "css/CSS2/text/letter-spacing-056.xht": "pass",
+    "css/CSS2/text/letter-spacing-064.xht": "pass",
+    "css/CSS2/text/letter-spacing-065.xht": "pass",
+    "css/CSS2/text/letter-spacing-066.xht": "pass",
+    "css/CSS2/text/letter-spacing-067.xht": "pass",
+    "css/CSS2/text/letter-spacing-068.xht": "pass",
+    "css/CSS2/text/letter-spacing-076.xht": "pass",
+    "css/CSS2/text/letter-spacing-077.xht": "pass",
+    "css/CSS2/text/letter-spacing-078.xht": "pass",
+    "css/CSS2/text/letter-spacing-079.xht": "pass",
+    "css/CSS2/text/letter-spacing-080.xht": "fail",
+    "css/CSS2/text/letter-spacing-088.xht": "pass",
+    "css/CSS2/text/letter-spacing-089.xht": "pass",
+    "css/CSS2/text/letter-spacing-090.xht": "pass",
+    "css/CSS2/text/letter-spacing-091.xht": "pass",
+    "css/CSS2/text/letter-spacing-092.xht": "pass",
+    "css/CSS2/text/letter-spacing-097.xht": "pass",
+    "css/CSS2/text/letter-spacing-098.xht": "pass",
+    "css/CSS2/text/letter-spacing-099.xht": "pass",
+    "css/CSS2/text/letter-spacing-100.xht": "pass",
+    "css/CSS2/text/letter-spacing-101.xht": "pass",
+    "css/CSS2/text/letter-spacing-102.xht": "fail",
+    "css/CSS2/text/letter-spacing-applies-to-001.xht": "pass",
+    "css/CSS2/text/letter-spacing-applies-to-002.xht": "pass",
+    "css/CSS2/text/letter-spacing-applies-to-003.xht": "pass",
+    "css/CSS2/text/letter-spacing-applies-to-005.xht": "pass",
+    "css/CSS2/text/letter-spacing-applies-to-006.xht": "pass",
+    "css/CSS2/text/letter-spacing-applies-to-007.xht": "pass",
+    "css/CSS2/text/letter-spacing-applies-to-008.xht": "pass",
+    "css/CSS2/text/letter-spacing-applies-to-009.xht": "pass",
+    "css/CSS2/text/letter-spacing-applies-to-010.xht": "pass",
+    "css/CSS2/text/letter-spacing-applies-to-011.xht": "pass",
+    "css/CSS2/text/letter-spacing-applies-to-012.xht": "pass",
+    "css/CSS2/text/letter-spacing-applies-to-013.xht": "pass",
+    "css/CSS2/text/letter-spacing-applies-to-014.xht": "pass",
+    "css/CSS2/text/letter-spacing-applies-to-015.xht": "pass",
+    "css/CSS2/text/letter-spacing-justify-001.xht": "pass",
+    "css/CSS2/text/painting-order-underline-001.xht": "pass",
+    "css/CSS2/text/text-align-001.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-002.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-003.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-004.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-005.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-applies-to-001.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-applies-to-002.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-applies-to-003.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-applies-to-005.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-applies-to-006.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-applies-to-007.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-applies-to-008.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-applies-to-009.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-applies-to-010.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-applies-to-011.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-applies-to-012.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-applies-to-013.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-applies-to-014.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-applies-to-015.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-bidi-001.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-bidi-002.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-bidi-003.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-bidi-004.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-bidi-005.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-bidi-006.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-bidi-007.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-bidi-008.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-bidi-009.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-bidi-010.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-bidi-011.xht": "fail",
+    "css/CSS2/text/text-align-bidi-012.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-bidi-013.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-inherit-001.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-align-justify-with-overflow.html": "pass",
+    "css/CSS2/text/text-align-white-space-001.xht": "pass",
+    "css/CSS2/text/text-align-white-space-002.xht": "fail",
+    "css/CSS2/text/text-align-white-space-004.xht": "fail",
+    "css/CSS2/text/text-align-white-space-005.xht": "fail",
+    "css/CSS2/text/text-align-white-space-006.xht": "fail",
+    "css/CSS2/text/text-align-white-space-008.xht": "fail",
+    "css/CSS2/text/text-decoration-001.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-002.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-003.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-004.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-005.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-006.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-007.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-008.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-009.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-010.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-011.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-012.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-013.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-014.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-015.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-016.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-017.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-018.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-019.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-020.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-021.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-022.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-023.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-024.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-025.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-026.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-027.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-028.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-029.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-030.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-031.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-032.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-033.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-034.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-035.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-036.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-037.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-038.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-039.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-040.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-041.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-042.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-043.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-044.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-045.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-046.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-047.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-048.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-049.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-050.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-051.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-052.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-053.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-054.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-055.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-056.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-057.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-058.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-059.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-060.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-061.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-062.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-063.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-064.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-065.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-066.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-067.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-068.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-069.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-070.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-071.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-072.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-073.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-074.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-081.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-082.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-083.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-084.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-085.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-086.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-087.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-088.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-089.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-a-element-001.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-applies-to-001.xht": "pass",
+    "css/CSS2/text/text-decoration-applies-to-002.xht": "pass",
+    "css/CSS2/text/text-decoration-applies-to-003.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-applies-to-005.xht": "pass",
+    "css/CSS2/text/text-decoration-applies-to-006.xht": "pass",
+    "css/CSS2/text/text-decoration-applies-to-007.xht": "pass",
+    "css/CSS2/text/text-decoration-applies-to-008.xht": "pass",
+    "css/CSS2/text/text-decoration-applies-to-009.xht": "pass",
+    "css/CSS2/text/text-decoration-applies-to-010.xht": "pass",
+    "css/CSS2/text/text-decoration-applies-to-011.xht": "pass",
+    "css/CSS2/text/text-decoration-applies-to-012.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-applies-to-013.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-applies-to-014.xht": "pass",
+    "css/CSS2/text/text-decoration-applies-to-015.xht": "pass",
+    "css/CSS2/text/text-decoration-border-001.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-border-002.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-border-003.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-color-001.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-color-002.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-image-001.xht": "pass",
+    "css/CSS2/text/text-decoration-margin-001.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-margin-002.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-margin-003.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-padding-001.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-padding-002.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-padding-003.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-parent-child-001.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-position-001.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-propagation-001.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-propagation-002.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-propagation-003.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-propagation-004.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-propagation-005.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-propagation-006.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-propagation-007.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-relative-001.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-space-001.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-space-002.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-space-003.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-space-004.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-space-005.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-space-006.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-space-007.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-space-008.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-space-009.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-thickness-001.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-va-length-001.xht": "pass",
+    "css/CSS2/text/text-decoration-va-length-002.xht": "pass",
+    "css/CSS2/text/text-decoration-va-sub-super-001.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-va-sub-super-002.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-va-sub-super-003.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-decoration-va-sub-super-004.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-indent-004.xht": "pass",
+    "css/CSS2/text/text-indent-005.xht": "pass",
+    "css/CSS2/text/text-indent-006.xht": "pass",
+    "css/CSS2/text/text-indent-007.xht": "pass",
+    "css/CSS2/text/text-indent-008.xht": "pass",
+    "css/CSS2/text/text-indent-010.xht": "pass",
+    "css/CSS2/text/text-indent-011.xht": "pass",
+    "css/CSS2/text/text-indent-012.xht": "fail",
+    "css/CSS2/text/text-indent-013.xht": "pass",
+    "css/CSS2/text/text-indent-014.xht": "fail",
+    "css/CSS2/text/text-indent-016.xht": "pass",
+    "css/CSS2/text/text-indent-017.xht": "pass",
+    "css/CSS2/text/text-indent-018.xht": "pass",
+    "css/CSS2/text/text-indent-019.xht": "pass",
+    "css/CSS2/text/text-indent-020.xht": "pass",
+    "css/CSS2/text/text-indent-028.xht": "pass",
+    "css/CSS2/text/text-indent-029.xht": "pass",
+    "css/CSS2/text/text-indent-030.xht": "pass",
+    "css/CSS2/text/text-indent-031.xht": "pass",
+    "css/CSS2/text/text-indent-032.xht": "pass",
+    "css/CSS2/text/text-indent-040.xht": "pass",
+    "css/CSS2/text/text-indent-041.xht": "pass",
+    "css/CSS2/text/text-indent-042.xht": "pass",
+    "css/CSS2/text/text-indent-043.xht": "pass",
+    "css/CSS2/text/text-indent-044.xht": "pass",
+    "css/CSS2/text/text-indent-052.xht": "pass",
+    "css/CSS2/text/text-indent-053.xht": "pass",
+    "css/CSS2/text/text-indent-054.xht": "pass",
+    "css/CSS2/text/text-indent-055.xht": "pass",
+    "css/CSS2/text/text-indent-056.xht": "pass",
+    "css/CSS2/text/text-indent-064.xht": "pass",
+    "css/CSS2/text/text-indent-065.xht": "pass",
+    "css/CSS2/text/text-indent-066.xht": "pass",
+    "css/CSS2/text/text-indent-067.xht": "pass",
+    "css/CSS2/text/text-indent-068.xht": "pass",
+    "css/CSS2/text/text-indent-076.xht": "pass",
+    "css/CSS2/text/text-indent-077.xht": "pass",
+    "css/CSS2/text/text-indent-078.xht": "pass",
+    "css/CSS2/text/text-indent-079.xht": "pass",
+    "css/CSS2/text/text-indent-080.xht": "pass",
+    "css/CSS2/text/text-indent-088.xht": "pass",
+    "css/CSS2/text/text-indent-089.xht": "pass",
+    "css/CSS2/text/text-indent-090.xht": "pass",
+    "css/CSS2/text/text-indent-091.xht": "pass",
+    "css/CSS2/text/text-indent-092.xht": "pass",
+    "css/CSS2/text/text-indent-100.xht": "pass",
+    "css/CSS2/text/text-indent-101.xht": "pass",
+    "css/CSS2/text/text-indent-102.xht": "pass",
+    "css/CSS2/text/text-indent-103.xht": "fail",
+    "css/CSS2/text/text-indent-104.xht": "fail",
+    "css/CSS2/text/text-indent-109.xht": "pass",
+    "css/CSS2/text/text-indent-110.xht": "pass",
+    "css/CSS2/text/text-indent-111.xht": "pass",
+    "css/CSS2/text/text-indent-112.xht": "pass",
+    "css/CSS2/text/text-indent-113-ref-margin.xht": "pass",
+    "css/CSS2/text/text-indent-113.xht": "pass",
+    "css/CSS2/text/text-indent-114-ref.xht": "pass",
+    "css/CSS2/text/text-indent-114.xht": "pass",
+    "css/CSS2/text/text-indent-115-ref-block-margin.xht": "pass",
+    "css/CSS2/text/text-indent-115-ref-inline-margin.xht": "pass",
+    "css/CSS2/text/text-indent-115.xht": "pass",
+    "css/CSS2/text/text-indent-applies-to-001.xht": "pass",
+    "css/CSS2/text/text-indent-applies-to-002.xht": "pass",
+    "css/CSS2/text/text-indent-applies-to-003.xht": "pass",
+    "css/CSS2/text/text-indent-applies-to-005.xht": "pass",
+    "css/CSS2/text/text-indent-applies-to-006.xht": "pass",
+    "css/CSS2/text/text-indent-applies-to-007.xht": "pass",
+    "css/CSS2/text/text-indent-applies-to-008.xht": "pass",
+    "css/CSS2/text/text-indent-applies-to-009.xht": "pass",
+    "css/CSS2/text/text-indent-applies-to-010.xht": "pass",
+    "css/CSS2/text/text-indent-applies-to-011.xht": "pass",
+    "css/CSS2/text/text-indent-applies-to-012.xht": "pass",
+    "css/CSS2/text/text-indent-applies-to-013.xht": "pass",
+    "css/CSS2/text/text-indent-applies-to-014.xht": "pass",
+    "css/CSS2/text/text-indent-applies-to-015.xht": "pass",
+    "css/CSS2/text/text-indent-inherited-001.xht": "pass",
+    "css/CSS2/text/text-indent-intrinsic-001.xht": "pass",
+    "css/CSS2/text/text-indent-intrinsic-002.xht": "pass",
+    "css/CSS2/text/text-indent-intrinsic-003.xht": "fail",
+    "css/CSS2/text/text-indent-intrinsic-004.xht": "fail",
+    "css/CSS2/text/text-indent-on-blank-line-rtl-left-align.html": "pass",
+    "css/CSS2/text/text-indent-overflow-001.xht": "pass",
+    "css/CSS2/text/text-indent-overflow-002.xht": "pass",
+    "css/CSS2/text/text-indent-overflow-003.xht": "pass",
+    "css/CSS2/text/text-indent-overflow-004.xht": "pass",
+    "css/CSS2/text/text-indent-percent-001.xht": "pass",
+    "css/CSS2/text/text-indent-rtl-001.xht": "pass",
+    "css/CSS2/text/text-indent-rtl-002.xht": "pass",
+    "css/CSS2/text/text-indent-wrap-001-notref-block-margin.xht": "pass",
+    "css/CSS2/text/text-indent-wrap-001-ref-float.xht": "pass",
+    "css/CSS2/text/text-indent-wrap-001-ref-inline-margin.xht": "pass",
+    "css/CSS2/text/text-indent-wrap-001.xht": "pass",
+    "css/CSS2/text/text-indent-wrap-002.html": "pass",
+    "css/CSS2/text/text-transform-001.xht": "pass",
+    "css/CSS2/text/text-transform-002.xht": "pass",
+    "css/CSS2/text/text-transform-003.xht": "pass",
+    "css/CSS2/text/text-transform-004.xht": "pass",
+    "css/CSS2/text/text-transform-005.xht": "pass",
+    "css/CSS2/text/text-transform-applies-to-001.xht": "pass",
+    "css/CSS2/text/text-transform-applies-to-002.xht": "pass",
+    "css/CSS2/text/text-transform-applies-to-003.xht": "pass",
+    "css/CSS2/text/text-transform-applies-to-005.xht": "pass",
+    "css/CSS2/text/text-transform-applies-to-006.xht": "pass",
+    "css/CSS2/text/text-transform-applies-to-007.xht": "pass",
+    "css/CSS2/text/text-transform-applies-to-008.xht": "pass",
+    "css/CSS2/text/text-transform-applies-to-009.xht": "pass",
+    "css/CSS2/text/text-transform-applies-to-010.xht": "pass",
+    "css/CSS2/text/text-transform-applies-to-011.xht": "pass",
+    "css/CSS2/text/text-transform-applies-to-012.xht": "pass",
+    "css/CSS2/text/text-transform-applies-to-013.xht": "pass",
+    "css/CSS2/text/text-transform-applies-to-014.xht": "pass",
+    "css/CSS2/text/text-transform-applies-to-015.xht": "pass",
+    "css/CSS2/text/text-transform-bicameral-001.xht": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-transform-bicameral-002.xht": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-transform-bicameral-003.xht": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-transform-bicameral-004.xht": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-transform-bicameral-005.xht": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-transform-bicameral-006.xht": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-transform-bicameral-007.xht": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-transform-bicameral-008.xht": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-transform-bicameral-009.xht": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-transform-bicameral-010.xht": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-transform-bicameral-011.xht": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-transform-bicameral-012.xht": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-transform-bicameral-013.xht": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-transform-bicameral-014.xht": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-transform-bicameral-015.xht": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-transform-bicameral-016.xht": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-transform-bicameral-017.xht": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-transform-bicameral-018.xht": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-transform-bicameral-019.xht": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-transform-bicameral-020.xht": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-transform-bicameral-021.xht": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-transform-bicameral-022.xht": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/text/text-transform-cap-001.xht": "pass",
+    "css/CSS2/text/text-transform-cap-002.xht": "fail",
+    "css/CSS2/text/text-transform-cap-003.xht": "fail",
+    "css/CSS2/text/text-transform-lowercase-001.xht": "pass",
+    "css/CSS2/text/text-transform-unicase-001.xht": "fail",
+    "css/CSS2/text/text-transform-uppercase-001.xht": "pass",
+    "css/CSS2/text/text-transform-uppercase-002.xht": "pass",
+    "css/CSS2/text/white-space-001.xht": "fail",
+    "css/CSS2/text/white-space-002.xht": "fail",
+    "css/CSS2/text/white-space-003.xht": "fail",
+    "css/CSS2/text/white-space-004.xht": "pass",
+    "css/CSS2/text/white-space-005.xht": "fail",
+    "css/CSS2/text/white-space-006.xht": "fail",
+    "css/CSS2/text/white-space-007.xht": "fail",
+    "css/CSS2/text/white-space-008.xht": "pass",
+    "css/CSS2/text/white-space-applies-to-001.xht": "fail",
+    "css/CSS2/text/white-space-applies-to-002.xht": "fail",
+    "css/CSS2/text/white-space-applies-to-003.xht": "pass",
+    "css/CSS2/text/white-space-applies-to-005.xht": "fail",
+    "css/CSS2/text/white-space-applies-to-006.xht": "fail",
+    "css/CSS2/text/white-space-applies-to-007.xht": "fail",
+    "css/CSS2/text/white-space-applies-to-008.xht": "fail",
+    "css/CSS2/text/white-space-applies-to-009.xht": "fail",
+    "css/CSS2/text/white-space-applies-to-010.xht": "fail",
+    "css/CSS2/text/white-space-applies-to-011.xht": "fail",
+    "css/CSS2/text/white-space-applies-to-012.xht": "fail",
+    "css/CSS2/text/white-space-applies-to-013.xht": "fail",
+    "css/CSS2/text/white-space-applies-to-014.xht": "fail",
+    "css/CSS2/text/white-space-applies-to-015.xht": "fail",
+    "css/CSS2/text/white-space-bidirectionality-001.xht": "fail",
+    "css/CSS2/text/white-space-collapsing-001.xht": "pass",
+    "css/CSS2/text/white-space-collapsing-002.xht": "pass",
+    "css/CSS2/text/white-space-collapsing-003.xht": "pass",
+    "css/CSS2/text/white-space-collapsing-004.xht": "pass",
+    "css/CSS2/text/white-space-collapsing-005.xht": "pass",
+    "css/CSS2/text/white-space-collapsing-bidi-001.xht": "fail",
+    "css/CSS2/text/white-space-collapsing-bidi-002.xht": "fail",
+    "css/CSS2/text/white-space-collapsing-bidi-003.xht": "fail",
+    "css/CSS2/text/white-space-collapsing-breaks-001.xht": "fail",
+    "css/CSS2/text/white-space-control-characters-001.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/white-space-generated-content-before-001.xht": "pass",
+    "css/CSS2/text/white-space-mixed-001.xht": "fail",
+    "css/CSS2/text/white-space-mixed-002.xht": "fail",
+    "css/CSS2/text/white-space-mixed-003.xht": "fail",
+    "css/CSS2/text/white-space-mixed-004.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/white-space-normal-001.xht": "fail",
+    "css/CSS2/text/white-space-normal-002.xht": "fail",
+    "css/CSS2/text/white-space-normal-003.xht": "fail",
+    "css/CSS2/text/white-space-normal-004.xht": "fail",
+    "css/CSS2/text/white-space-normal-005.xht": "pass",
+    "css/CSS2/text/white-space-normal-006.xht": "pass",
+    "css/CSS2/text/white-space-normal-007.xht": "fail",
+    "css/CSS2/text/white-space-normal-008.xht": "fail",
+    "css/CSS2/text/white-space-normal-009.xht": "fail",
+    "css/CSS2/text/white-space-nowrap-001.xht": "pass",
+    "css/CSS2/text/white-space-nowrap-005.xht": "pass",
+    "css/CSS2/text/white-space-nowrap-006.xht": "pass",
+    "css/CSS2/text/white-space-nowrap-attribute-001.xht": "pass",
+    "css/CSS2/text/white-space-p-element-001.xht": "pass",
+    "css/CSS2/text/white-space-pre-001.xht": "fail",
+    "css/CSS2/text/white-space-pre-002.xht": "fail",
+    "css/CSS2/text/white-space-pre-005.xht": "pass",
+    "css/CSS2/text/white-space-pre-006.xht": "pass",
+    "css/CSS2/text/white-space-pre-007.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/text/white-space-pre-element-001.xht": "pass",
+    "css/CSS2/text/white-space-processing-001.xht": "fail",
+    "css/CSS2/text/white-space-processing-002.xht": "fail",
+    "css/CSS2/text/white-space-processing-003.xht": "fail",
+    "css/CSS2/text/white-space-processing-004.xht": "fail",
+    "css/CSS2/text/white-space-processing-005.xht": "pass",
+    "css/CSS2/text/white-space-processing-006.xht": "pass",
+    "css/CSS2/text/white-space-processing-007.xht": "pass",
+    "css/CSS2/text/white-space-processing-008.xht": "fail",
+    "css/CSS2/text/white-space-processing-009.xht": "fail",
+    "css/CSS2/text/white-space-processing-010.xht": "fail",
+    "css/CSS2/text/white-space-processing-011.xht": "fail",
+    "css/CSS2/text/white-space-processing-012.xht": "fail",
+    "css/CSS2/text/white-space-processing-013.xht": "pass",
+    "css/CSS2/text/white-space-processing-014.xht": "pass",
+    "css/CSS2/text/white-space-processing-015.xht": "pass",
+    "css/CSS2/text/white-space-processing-016.xht": "pass",
+    "css/CSS2/text/white-space-processing-017.xht": "pass",
+    "css/CSS2/text/white-space-processing-018.xht": "pass",
+    "css/CSS2/text/white-space-processing-019.xht": "fail",
+    "css/CSS2/text/white-space-processing-020.xht": "fail",
+    "css/CSS2/text/white-space-processing-021.xht": "fail",
+    "css/CSS2/text/white-space-processing-022.xht": "fail",
+    "css/CSS2/text/white-space-processing-023.xht": "fail",
+    "css/CSS2/text/white-space-processing-024.xht": "fail",
+    "css/CSS2/text/white-space-processing-025.xht": "fail",
+    "css/CSS2/text/white-space-processing-026.xht": "fail",
+    "css/CSS2/text/white-space-processing-027.xht": "fail",
+    "css/CSS2/text/white-space-processing-028.xht": "fail",
+    "css/CSS2/text/white-space-processing-029.xht": "fail",
+    "css/CSS2/text/white-space-processing-030.xht": "fail",
+    "css/CSS2/text/white-space-processing-031.xht": "fail",
+    "css/CSS2/text/white-space-processing-032.xht": "fail",
+    "css/CSS2/text/white-space-processing-033.xht": "fail",
+    "css/CSS2/text/white-space-processing-034.xht": "fail",
+    "css/CSS2/text/white-space-processing-035.xht": "fail",
+    "css/CSS2/text/white-space-processing-036.xht": "fail",
+    "css/CSS2/text/white-space-processing-037.xht": "fail",
+    "css/CSS2/text/white-space-processing-038.xht": "fail",
+    "css/CSS2/text/white-space-processing-039.xht": "fail",
+    "css/CSS2/text/white-space-processing-040.xht": "fail",
+    "css/CSS2/text/white-space-processing-041.xht": "fail",
+    "css/CSS2/text/white-space-processing-042.xht": "fail",
+    "css/CSS2/text/white-space-processing-043.xht": "fail",
+    "css/CSS2/text/white-space-processing-044.xht": "fail",
+    "css/CSS2/text/white-space-processing-045.xht": "fail",
+    "css/CSS2/text/white-space-processing-046.xht": "pass",
+    "css/CSS2/text/white-space-processing-047.xht": "pass",
+    "css/CSS2/text/white-space-processing-048.xht": "fail",
+    "css/CSS2/text/white-space-processing-049.xht": "pass",
+    "css/CSS2/text/white-space-processing-050.xht": "fail",
+    "css/CSS2/text/white-space-processing-051.xht": "fail",
+    "css/CSS2/text/white-space-processing-052.xht": "pass",
+    "css/CSS2/text/white-space-processing-053.xht": "pass",
+    "css/CSS2/text/white-space-processing-054.xht": "fail",
+    "css/CSS2/text/white-space-processing-055.xht": "fail",
+    "css/CSS2/text/white-space-processing-056.xht": "pass",
+    "css/CSS2/text/word-spacing-004.xht": "pass",
+    "css/CSS2/text/word-spacing-005.xht": "pass",
+    "css/CSS2/text/word-spacing-006.xht": "pass",
+    "css/CSS2/text/word-spacing-007.xht": "pass",
+    "css/CSS2/text/word-spacing-008.xht": "pass",
+    "css/CSS2/text/word-spacing-016.xht": "pass",
+    "css/CSS2/text/word-spacing-017.xht": "pass",
+    "css/CSS2/text/word-spacing-018.xht": "pass",
+    "css/CSS2/text/word-spacing-019.xht": "pass",
+    "css/CSS2/text/word-spacing-020.xht": "pass",
+    "css/CSS2/text/word-spacing-028.xht": "pass",
+    "css/CSS2/text/word-spacing-029.xht": "pass",
+    "css/CSS2/text/word-spacing-030.xht": "pass",
+    "css/CSS2/text/word-spacing-031.xht": "pass",
+    "css/CSS2/text/word-spacing-032.xht": "pass",
+    "css/CSS2/text/word-spacing-040.xht": "pass",
+    "css/CSS2/text/word-spacing-041.xht": "pass",
+    "css/CSS2/text/word-spacing-042.xht": "pass",
+    "css/CSS2/text/word-spacing-043.xht": "pass",
+    "css/CSS2/text/word-spacing-044.xht": "pass",
+    "css/CSS2/text/word-spacing-052.xht": "pass",
+    "css/CSS2/text/word-spacing-053.xht": "pass",
+    "css/CSS2/text/word-spacing-054.xht": "pass",
+    "css/CSS2/text/word-spacing-055.xht": "pass",
+    "css/CSS2/text/word-spacing-056.xht": "pass",
+    "css/CSS2/text/word-spacing-064.xht": "pass",
+    "css/CSS2/text/word-spacing-065.xht": "pass",
+    "css/CSS2/text/word-spacing-066.xht": "pass",
+    "css/CSS2/text/word-spacing-067.xht": "pass",
+    "css/CSS2/text/word-spacing-068.xht": "pass",
+    "css/CSS2/text/word-spacing-076.xht": "pass",
+    "css/CSS2/text/word-spacing-077.xht": "pass",
+    "css/CSS2/text/word-spacing-078.xht": "pass",
+    "css/CSS2/text/word-spacing-079.xht": "pass",
+    "css/CSS2/text/word-spacing-080.xht": "pass",
+    "css/CSS2/text/word-spacing-088.xht": "pass",
+    "css/CSS2/text/word-spacing-089.xht": "pass",
+    "css/CSS2/text/word-spacing-090.xht": "pass",
+    "css/CSS2/text/word-spacing-091.xht": "pass",
+    "css/CSS2/text/word-spacing-092.xht": "pass",
+    "css/CSS2/text/word-spacing-097.xht": "pass",
+    "css/CSS2/text/word-spacing-098.xht": "pass",
+    "css/CSS2/text/word-spacing-099.xht": "pass",
+    "css/CSS2/text/word-spacing-100.xht": "pass",
+    "css/CSS2/text/word-spacing-101.xht": "pass",
+    "css/CSS2/text/word-spacing-applies-to-001.xht": "pass",
+    "css/CSS2/text/word-spacing-applies-to-002.xht": "pass",
+    "css/CSS2/text/word-spacing-applies-to-003.xht": "pass",
+    "css/CSS2/text/word-spacing-applies-to-005.xht": "pass",
+    "css/CSS2/text/word-spacing-applies-to-006.xht": "pass",
+    "css/CSS2/text/word-spacing-applies-to-007.xht": "pass",
+    "css/CSS2/text/word-spacing-applies-to-008.xht": "pass",
+    "css/CSS2/text/word-spacing-applies-to-009.xht": "pass",
+    "css/CSS2/text/word-spacing-applies-to-010.xht": "pass",
+    "css/CSS2/text/word-spacing-applies-to-011.xht": "pass",
+    "css/CSS2/text/word-spacing-applies-to-012.xht": "pass",
+    "css/CSS2/text/word-spacing-applies-to-013.xht": "pass",
+    "css/CSS2/text/word-spacing-applies-to-014.xht": "pass",
+    "css/CSS2/text/word-spacing-applies-to-015.xht": "pass",
+    "css/CSS2/text/word-spacing-characters-001.xht": "fail",
+    "css/CSS2/text/word-spacing-characters-002.xht": "pass",
+    "css/CSS2/text/word-spacing-characters-003.xht": "pass",
+    "css/CSS2/text/word-spacing-justify-001.xht": "pass",
+    "css/CSS2/text/word-spacing-remove-space-001.xht": "pass",
+    "css/CSS2/text/word-spacing-remove-space-002.xht": "pass",
+    "css/CSS2/text/word-spacing-remove-space-003.xht": "pass",
+    "css/CSS2/text/word-spacing-remove-space-004.xht": "pass",
+    "css/CSS2/text/word-spacing-remove-space-005.xht": "pass",
+    "css/CSS2/text/word-spacing-remove-space-006.xht": "pass"
+  },
+  "version": 1
+}

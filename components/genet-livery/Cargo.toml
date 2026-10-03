@@ -15,6 +15,8 @@ data-url = { workspace = true }
 genet-document-resources = { workspace = true }
 euclid.workspace = true
 image = { workspace = true }
+icu_properties.workspace = true
+icu_segmenter.workspace = true
 layout-dom-api = { version = "0.1.1", path = "../shared/layout-dom" }
 livery = { version = "0.0.5", path = "../livery" }
 paint_list_api.workspace = true

@@ -52,6 +52,48 @@ That diagnostic remains outside census totals. Historical Boa rows below
 retain their original numbers; their archived total includes the one diagnosed
 bookkeeping artifact.
 
+**Panic attribution and ruling, 2026-10-02.** Panic messages were read from the
+raw logs (`Code/testing/genet/wpt-ledger/2026-09-29_vano_platform_census/disk-fixed/*_vano.log`).
+The result maps record only `panic`. No backtraces were captured.
+
+- **Three in Vano.**
+  - `IndexedDB/file_support.sub.html`: `assertion failed:
+    self.get_mut(agent).object_index.replace(backing_object.unbind()).is_none()`.
+    This is Vano's backing-object setter, the pattern repeated in
+    `nova_vm/src/ecmascript/builtins/` (`array.rs:316`, `array_buffer.rs:253`,
+    `bound_function.rs:157`, …). The builtin that set its backing object twice
+    is not yet identified.
+  - `module/imports.html`: `entered unreachable code`.
+  - `module/dynamic-import/string-compilation-of-promise-result.html`:
+    `called Option::unwrap() on a None value`.
+
+  The two module panics are Vano's by elimination. Genet's adapter
+  (`components/script-engine-nova/lib.rs`) has no `unreachable!`, and its
+  `load_imported_module` (:121) has no bare `unwrap`. Vano's
+  `scripts_and_modules/` has eight `unreachable!` sites.
+- **Seven in Genet.**
+  - Four come from `.expect("registered realm GC policy")` at
+    `components/script-runtime-api/lib.rs:1501`. It turns an engine error into
+    a panic: `Engine("[object Object]")` twice in `custom-elements/`, and
+    `Engine("RangeError: Maximum call stack size exceeded")` twice in
+    `custom-elements/upgrading/`.
+  - Two are "live frame" panics, in `the-autofocus-attribute/skip-not-fully-active.html`
+    and `opening-the-input-stream/bailout-exception-vs-return-xml.window.html`.
+  - One is the Livery paint invariant "C3 resolves every paint color before
+    emission", in `dom/nodes/Node-textContent.html`.
+- **The 1,090 external timeouts are censoring, not lost passes.** 816 are in
+  `encoding`, 108 in `editing` and 48 in `html/syntax`. Historical Boa finished
+  these same files as 1,027 `fail`, 35 `error`, 26 `no-results` and only 2
+  `pass`. Engine speed has not been separated from the dev profile; that
+  needs the paired run named in the standards ledger.
+
+Asked what Vano gets next, with the options: fix its 3 panics, a paired speed
+run first, both with the panics first, or leave Vano for now. Mark: "Fix its 3
+panics (Recommended)". It follows that each panic is fixed in Vano with a Vano
+test, then pushed, and Genet is repinned before any Genet commit that depends
+on it, per the fork policy. *Reading, not ruled:* the work runs from a pasted
+brief, like the line-breaking lane (that plan's ruling 6).
+
 ## Purpose
 
 Until this run, `genet-wpt` had exact result maps only for the CSS manifest

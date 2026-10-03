@@ -85,6 +85,30 @@ Recorded in this repo on 2026-10-02, in the round that followed the plan:
    in another agent from a pasted brief, and stop before S1.2. *Reading, not
    ruled:* S1.2 onward waits for Mark to review S1.1's result.
 
+The briefing program that ruling 6 started continued in a second round the
+same day. Its rulings are recorded here because they extend ruling 6; each
+target's own document points back to them.
+
+7. **Further briefs.** Asked "Which of these should I turn into briefs next?",
+   with four options, any number selectable:
+   - Genet's 7 census panics and 5 evaluation errors;
+   - Knot's 3 reported test failures;
+   - `text-overflow: ellipsis`;
+   - the realms metadata slice.
+
+   Mark selected all four. It follows that the panics, Knot's failures and
+   the realms slice are briefed now. Ellipsis is governed by ruling 8.
+8. **Where ellipsis belongs.** The options were: this plan, after S1.3; its
+   own plan, built now over Parley-placed lines; or record only. Mark:
+   "Line-breaking plan, after S1.3 (Recommended)". It is now named target T4
+   below. *Reading, not ruled:* its brief is written once S1.3 lands, since
+   the placement code it builds on does not exist before then.
+9. **Vano's test262.** Asked whether the Vano panic lane may fetch the
+   unfetched `tests/test262` submodule (tc39/test262 at `e0d8f66a`). The
+   options were: allow, pinned commit only; or don't fetch. Mark: "Allow,
+   pinned commit only (Recommended)". The census doc records this beside
+   the Vano ruling.
+
 ## The taffy precedent
 
 Genet uses Taffy as a library under Buckram:
@@ -167,6 +191,22 @@ loses no shaping quality.
   stays at its natural width.
 - **T3, common-ancestor `white-space`:** `line-breaking-031` and `-032` stay
   passing. They are the cases B broke.
+- **T4, `text-overflow: ellipsis`** (added 2026-10-02, ruling 8; it follows
+  S1.3).
+  - **The gap.** A line that overflows its block under `overflow: hidden` and
+    `text-overflow: ellipsis` ends in an ellipsis glyph rather than being
+    clipped mid-glyph. Livery has no `text-overflow` code (no match in
+    `components/livery/src` or `components/genet-livery/src`, 2026-10-02).
+  - **Consumer.** Knot's Navigator status message, where Mark ruled the gap
+    be reported to Genet's roadmap
+    (`knot-editor/design_docs/2026-09-23_knot_workspace_slice1_plan.md`,
+    the 2026-09-26 chip-squeeze entry). Cambium's doc says the ellipsis
+    waits on Genet (mere `518ca1dc`).
+  - **Why it waits for S1.3.** The ellipsis is placed at the line end, which
+    Livery owns only once S1.3 does placement itself. Its WPT files are
+    outside the 14-directory gate set: 51 `text-overflow*` files in
+    `css/css-ui` and 19 in `css/css-overflow` (counted 2026-10-02). They are
+    measured when T4's brief is written.
 
 **WPT gate set.** Reftests, release build, `--renderer livery`, these 14
 directories:

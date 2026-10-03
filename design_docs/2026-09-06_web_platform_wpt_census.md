@@ -94,6 +94,15 @@ test, then pushed, and Genet is repinned before any Genet commit that depends
 on it, per the fork policy. *Reading, not ruled:* the work runs from a pasted
 brief, like the line-breaking lane (that plan's ruling 6).
 
+Two later rulings the same day are recorded in the
+[line-breaking plan](2026-10-02_livery_line_breaking_plan.md#rulings):
+
+- Ruling 7: the seven Genet panics and five evaluation errors above are
+  briefed to a separate agent as well.
+- Ruling 9: the Vano lane may fetch Vano's unfetched `tests/test262`
+  submodule at its pinned commit `e0d8f66a`, and run Vano's test262 gate.
+  Mark: "Allow, pinned commit only (Recommended)".
+
 ## Purpose
 
 Until this run, `genet-wpt` had exact result maps only for the CSS manifest

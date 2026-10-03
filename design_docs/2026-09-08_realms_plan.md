@@ -25,6 +25,12 @@ cover creation, adoption and retained reads after teardown, a matched WPT
 comparison attributes every movement, and existing base/identity gates stay
 green. This slice is proposed, not started or accepted by the existing receipts.
 
+*2026-10-02:* Mark selected this slice for a brief to a separate
+implementing agent. That is ruling 7 in the
+[line-breaking plan](2026-10-02_livery_line_breaking_plan.md#rulings), which
+records the briefing round. The slice's scope and done-condition above are
+unchanged.
+
 This review checked the current runtime/adoption/capture sources and their
 commit history. The runtime's latest change remains `84ff6969e9d`; capture still
 provides identity translation rather than a complete replayer. It did not rerun

@@ -1,0 +1,60 @@
+{
+  "command": "reftest",
+  "engine": "none",
+  "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
+  "policy": "exact",
+  "renderer": "livery",
+  "runner_sha256": "7345f0705cf23264e76dd664d1206211a86df5dda7e993129fe5adec3f06095e",
+  "subset": "css/css-text/text-indent",
+  "tests": {
+    "css/css-text/text-indent/anonymous-flex-item-001.html": "pass",
+    "css/css-text/text-indent/anonymous-grid-item-001.html": "pass",
+    "css/css-text/text-indent/below-float.html": "fail",
+    "css/css-text/text-indent/below-float2.html": "pass",
+    "css/css-text/text-indent/below-float3.html": "fail",
+    "css/css-text/text-indent/percentage-value-intrinsic-size.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-indent/text-indent-abspos-hanging-001.html": "fail",
+    "css/css-text/text-indent/text-indent-caret-001.html": "pass",
+    "css/css-text/text-indent/text-indent-caret-hanging-001.html": "pass",
+    "css/css-text/text-indent/text-indent-dynamic-each-line-001.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/text-indent/text-indent-dynamic-each-line-002.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/text-indent/text-indent-dynamic-hanging-001.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/text-indent/text-indent-dynamic-hanging-002.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/text-indent/text-indent-each-line-hanging.html": "pass",
+    "css/css-text/text-indent/text-indent-length-001.html": "pass",
+    "css/css-text/text-indent/text-indent-length-002.html": "fail",
+    "css/css-text/text-indent/text-indent-long-line-crash.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-indent/text-indent-min-max-content-001.html": "fail",
+    "css/css-text/text-indent/text-indent-overflow.html": "fail",
+    "css/css-text/text-indent/text-indent-percentage-001.xht": "fail",
+    "css/css-text/text-indent/text-indent-percentage-002.html": "pass",
+    "css/css-text/text-indent/text-indent-percentage-003.html": "pass",
+    "css/css-text/text-indent/text-indent-percentage-004.html": "pass",
+    "css/css-text/text-indent/text-indent-ruby-crash.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-indent/text-indent-tab-positions-001.html": "fail",
+    "css/css-text/text-indent/text-indent-text-align-end.html": "pass",
+    "css/css-text/text-indent/text-indent-with-absolute-pos-child.html": "fail"
+  },
+  "version": 1
+}

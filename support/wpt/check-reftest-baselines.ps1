@@ -45,6 +45,76 @@ $baselines = @(
         Engine = "boa"
         Expectations = "ports/genet-wpt/expectations/reftest/css_position_boa.json"
     }
+    @{
+        Subset = "css/css-text/text-align"
+        Engine = "boa"
+        Expectations = "ports/genet-wpt/expectations/reftest/css_css-text_text-align_boa.json"
+    }
+    @{
+        Subset = "css/css-text/white-space"
+        Engine = "boa"
+        Expectations = "ports/genet-wpt/expectations/reftest/css_css-text_white-space_boa.json"
+    }
+    @{
+        Subset = "css/css-text/text-indent"
+        Engine = "boa"
+        Expectations = "ports/genet-wpt/expectations/reftest/css_css-text_text-indent_boa.json"
+    }
+    @{
+        Subset = "css/css-text/text-justify"
+        Engine = "boa"
+        Expectations = "ports/genet-wpt/expectations/reftest/css_css-text_text-justify_boa.json"
+    }
+    @{
+        Subset = "css/css-text/line-breaking"
+        Engine = "boa"
+        Expectations = "ports/genet-wpt/expectations/reftest/css_css-text_line-breaking_boa.json"
+    }
+    @{
+        Subset = "css/css-text/overflow-wrap"
+        Engine = "boa"
+        Expectations = "ports/genet-wpt/expectations/reftest/css_css-text_overflow-wrap_boa.json"
+    }
+    @{
+        Subset = "css/css-text/word-break"
+        Engine = "boa"
+        Expectations = "ports/genet-wpt/expectations/reftest/css_css-text_word-break_boa.json"
+    }
+    @{
+        Subset = "css/css-text/letter-spacing"
+        Engine = "boa"
+        Expectations = "ports/genet-wpt/expectations/reftest/css_css-text_letter-spacing_boa.json"
+    }
+    @{
+        Subset = "css/css-text/hanging-punctuation"
+        Engine = "boa"
+        Expectations = "ports/genet-wpt/expectations/reftest/css_css-text_hanging-punctuation_boa.json"
+    }
+    @{
+        Subset = "css/css-inline"
+        Engine = "boa"
+        Expectations = "ports/genet-wpt/expectations/reftest/css_css-inline_boa.json"
+    }
+    @{
+        Subset = "css/CSS2/linebox"
+        Engine = "boa"
+        Expectations = "ports/genet-wpt/expectations/reftest/css_CSS2_linebox_boa.json"
+    }
+    @{
+        Subset = "css/CSS2/text"
+        Engine = "boa"
+        Expectations = "ports/genet-wpt/expectations/reftest/css_CSS2_text_boa.json"
+    }
+    @{
+        Subset = "css/CSS2/floats"
+        Engine = "boa"
+        Expectations = "ports/genet-wpt/expectations/reftest/css_CSS2_floats_boa.json"
+    }
+    @{
+        Subset = "css/CSS2/bidi-text"
+        Engine = "boa"
+        Expectations = "ports/genet-wpt/expectations/reftest/css_CSS2_bidi-text_boa.json"
+    }
 )
 
 foreach ($baseline in $baselines) {

@@ -130,6 +130,47 @@ Candidates a lane should add when it opens: `editing` (contenteditable for
 a writing product), `streams` (extraction starts before the page finishes),
 `service-workers` (offline products).
 
+## Conformance targets, 2026-10-02
+
+Mark asked for the next lanes to come from WPT and specification
+conformance. These targets were chosen from the 2026-09-29 Vano census
+(`receipts/2026-09-29_vano_wpt_census/outcomes.json.gz`), broken down by
+subdirectory, and from the code. Shards that need server mode to pass were
+set aside; disk mode cannot measure them: `referrer-policy` 2/8,448,
+`mixed-content` 2/2,281, `upgrade-insecure-requests` 0/1,000 and `cookies`
+3/968 subtests.
+
+| Target | WPT, 2026-09-29 (Vano, dev, 30 s cap) | What the code shows (2026-10-02) |
+|---|---|---|
+| WHATWG Encoding | `encoding` 7,561/35,303 subtests; `legacy-mb-japanese` 0/21,813; 814 legacy-CJK files killed at the cap; `encoding/streams` 0/225 | `TextDecoder` ignores its label and decodes UTF-8 only (`components/script-runtime-api/fetch.rs:859`). `encoding_rs` 0.8, which implements the Encoding Standard, is a workspace dependency used by `genet-scripted` (`document.rs:1573`). |
+| HTML constraint validation | `html/semantics/forms/constraints` 0/877; `form-control-infrastructure` 0/120; `the-input-element` 218/1,853; `form-submission-0` 0/159 | There is no `ValidityState`, `checkValidity` or `setCustomValidity` in `components/`, and no value model for form controls: no dirty-value flag, value modes or sanitization. The native editor writes typed text into the `value` attribute (`genet-documents/src/engines/livery.rs:1154`), and accessibility reads it from there (`genet-render/src/a11y.rs:116`). |
+| WHATWG Streams | `streams` 547/2,389. By subdirectory: readable 186/722, piping 58/458, byte streams 68/464, writable 101/392, transform 117/267 | A "buffered model" of Readable, Writable and Transform streams in the fetch bootstrap (`fetch.rs:872-1078`). Async streaming, BYOB readers and `pipeTo`/`pipeThrough` are marked deferred there. |
+| CSS-wide WPT | Last full CSS map 2026-08-24 (`Code/testing/genet/wpt-ledger/2026-08-24_k6_census_v3/`, 36,311 records). Reftest pass/fail then: CSS2 3,304/2,645, writing-modes 186/927, grid 285/858, break 83/832, text 562/824, counter-styles 14/196 | Since then the transforms, line box, K7, form-control, out-of-flow and selector lanes have landed, so the map is stale. `genet-wpt conformance css` already joins full result maps to the manifest (`docs/2026-07-28_absolute_css_conformance_ledger.md`, §Workflow). |
+
+Rulings, in Mark's words:
+
+- **C1.** Asked "Which conformance targets should I brief next?", with the
+  four targets above as options, any number selectable. Mark selected all
+  four: "Encoding via encoding_rs (Recommended), HTML constraint validation,
+  WHATWG Streams, CSS-wide WPT census refresh". Each is briefed to a separate
+  implementing agent.
+- **C2.** Asked whether the Encoding lane may add `encoding_rs` as a
+  dependency of `script-runtime-api`. The options were: allow the workspace
+  edge, or checkpoint it. Mark: "Allow the workspace edge (Recommended)". So
+  it is added as `encoding_rs = { workspace = true }`; no new crate and no
+  version change.
+- **C3.** Asked where the two census evaluation errors that are stream
+  getter traps go (`fetch/api/basic/stream-safe-creation.any.html`,
+  `streams/readable-streams/patched-global.any.html`). The options were:
+  move them to the Streams lane, or keep them in the census-panic lane.
+  Mark: "Move them to Streams (Recommended)". The census-panic brief drops
+  them (its E2 and E3), and the Streams brief carries them.
+
+*Reading, not ruled:* constraint validation cannot be built correctly without
+the form-control value model. Where the current value lives is shared by
+script, the native editor, paint and accessibility, so that brief's first
+checkpoint brings the representation back to Mark.
+
 ## Consumers on record
 
 | Row | Consumer | Where it is named |

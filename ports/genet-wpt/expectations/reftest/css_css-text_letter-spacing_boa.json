@@ -1,0 +1,54 @@
+{
+  "command": "reftest",
+  "engine": "none",
+  "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
+  "policy": "exact",
+  "renderer": "livery",
+  "runner_sha256": "7345f0705cf23264e76dd664d1206211a86df5dda7e993129fe5adec3f06095e",
+  "subset": "css/css-text/letter-spacing",
+  "tests": {
+    "css/css-text/letter-spacing/letter-spacing-200.html": "fail",
+    "css/css-text/letter-spacing/letter-spacing-201.html": "fail",
+    "css/css-text/letter-spacing/letter-spacing-202.html": "fail",
+    "css/css-text/letter-spacing/letter-spacing-203.html": "fail",
+    "css/css-text/letter-spacing/letter-spacing-204.html": "fail",
+    "css/css-text/letter-spacing/letter-spacing-205.html": "fail",
+    "css/css-text/letter-spacing/letter-spacing-206.html": "fail",
+    "css/css-text/letter-spacing/letter-spacing-211.html": "pass",
+    "css/css-text/letter-spacing/letter-spacing-212.html": "fail",
+    "css/css-text/letter-spacing/letter-spacing-animating-font-size.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/letter-spacing/letter-spacing-animating-letter-spacing.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/letter-spacing/letter-spacing-bengali-yaphala-001.html": "pass",
+    "css/css-text/letter-spacing/letter-spacing-bidi-001.html": "fail",
+    "css/css-text/letter-spacing/letter-spacing-bidi-002.html": "fail",
+    "css/css-text/letter-spacing/letter-spacing-bidi-003.xht": "fail",
+    "css/css-text/letter-spacing/letter-spacing-bidi-004.xht": "fail",
+    "css/css-text/letter-spacing/letter-spacing-bidi-005.xht": "fail",
+    "css/css-text/letter-spacing/letter-spacing-control-chars-001.html": "fail",
+    "css/css-text/letter-spacing/letter-spacing-cursive-001.html": "fail",
+    "css/css-text/letter-spacing/letter-spacing-cursive-002.html": "fail",
+    "css/css-text/letter-spacing/letter-spacing-end-of-line-001.html": "fail",
+    "css/css-text/letter-spacing/letter-spacing-end-of-line-002.html": "fail",
+    "css/css-text/letter-spacing/letter-spacing-ligatures-001.html": "pass",
+    "css/css-text/letter-spacing/letter-spacing-ligatures-002.html": "pass",
+    "css/css-text/letter-spacing/letter-spacing-ligatures-003.html": "fail",
+    "css/css-text/letter-spacing/letter-spacing-ligatures-004.html": "pass",
+    "css/css-text/letter-spacing/letter-spacing-ligatures-005.html": "fail",
+    "css/css-text/letter-spacing/letter-spacing-nesting-001.html": "fail",
+    "css/css-text/letter-spacing/letter-spacing-nesting-002.html": "fail",
+    "css/css-text/letter-spacing/letter-spacing-nesting-003.xht": "fail",
+    "css/css-text/letter-spacing/letter-spacing-percent-001.html": "pass",
+    "css/css-text/letter-spacing/letter-spacing-trim-start-001.html": "pass",
+    "css/css-text/letter-spacing/letter-spacing-trim-start-002.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    }
+  },
+  "version": 1
+}

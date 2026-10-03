@@ -1,0 +1,210 @@
+{
+  "command": "reftest",
+  "engine": "none",
+  "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
+  "policy": "exact",
+  "renderer": "livery",
+  "runner_sha256": "7345f0705cf23264e76dd664d1206211a86df5dda7e993129fe5adec3f06095e",
+  "subset": "css/css-text/text-align",
+  "tests": {
+    "css/css-text/text-align/text-align-006.html": "pass",
+    "css/css-text/text-align/text-align-007.html": "pass",
+    "css/css-text/text-align/text-align-center-last-center.html": "pass",
+    "css/css-text/text-align/text-align-center-last-default.html": "pass",
+    "css/css-text/text-align/text-align-center-last-end.html": "pass",
+    "css/css-text/text-align/text-align-center-last-justify.html": "pass",
+    "css/css-text/text-align/text-align-center-last-start.html": "pass",
+    "css/css-text/text-align/text-align-default-last-default.html": "pass",
+    "css/css-text/text-align/text-align-end-001.html": "pass",
+    "css/css-text/text-align/text-align-end-002.html": "pass",
+    "css/css-text/text-align/text-align-end-003.html": "pass",
+    "css/css-text/text-align/text-align-end-004.html": "pass",
+    "css/css-text/text-align/text-align-end-005.html": "fail",
+    "css/css-text/text-align/text-align-end-006.html": "fail",
+    "css/css-text/text-align/text-align-end-007.html": "fail",
+    "css/css-text/text-align/text-align-end-008.html": "fail",
+    "css/css-text/text-align/text-align-end-009.html": "fail",
+    "css/css-text/text-align/text-align-end-010.html": "fail",
+    "css/css-text/text-align/text-align-end-014.html": "pass",
+    "css/css-text/text-align/text-align-end-015.html": "pass",
+    "css/css-text/text-align/text-align-end-016.html": "fail",
+    "css/css-text/text-align/text-align-end-017.html": "pass",
+    "css/css-text/text-align/text-align-end-018.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-end-019.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-end-020.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-end-021.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-end-last-center.html": "pass",
+    "css/css-text/text-align/text-align-end-last-default.html": "pass",
+    "css/css-text/text-align/text-align-end-last-end.html": "pass",
+    "css/css-text/text-align/text-align-end-last-justify.html": "pass",
+    "css/css-text/text-align/text-align-end-last-start.html": "pass",
+    "css/css-text/text-align/text-align-inline-end-crash.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-justify-001.html": "fail",
+    "css/css-text/text-align/text-align-justify-002.html": "pass",
+    "css/css-text/text-align/text-align-justify-003.html": "fail",
+    "css/css-text/text-align/text-align-justify-004.html": "pass",
+    "css/css-text/text-align/text-align-justify-005.html": "fail",
+    "css/css-text/text-align/text-align-justify-006.html": "fail",
+    "css/css-text/text-align/text-align-justify-bidi-control.html": "pass",
+    "css/css-text/text-align/text-align-justify-last-center.html": "pass",
+    "css/css-text/text-align/text-align-justify-last-default.html": "pass",
+    "css/css-text/text-align/text-align-justify-last-end.html": "pass",
+    "css/css-text/text-align/text-align-justify-last-justify.html": "pass",
+    "css/css-text/text-align/text-align-justify-last-start.html": "pass",
+    "css/css-text/text-align/text-align-justify-shy-001.html": "pass",
+    "css/css-text/text-align/text-align-justify-tabs-001.html": "fail",
+    "css/css-text/text-align/text-align-justify-tabs-002.html": "fail",
+    "css/css-text/text-align/text-align-justify-tabs-003.html": "fail",
+    "css/css-text/text-align/text-align-justify-tabs-004.html": "fail",
+    "css/css-text/text-align/text-align-justifyall-001.html": "fail",
+    "css/css-text/text-align/text-align-justifyall-002.html": "fail",
+    "css/css-text/text-align/text-align-justifyall-003.html": "fail",
+    "css/css-text/text-align/text-align-justifyall-004.html": "fail",
+    "css/css-text/text-align/text-align-justifyall-005.html": "pass",
+    "css/css-text/text-align/text-align-justifyall-006.html": "fail",
+    "css/css-text/text-align/text-align-last-001.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-last-002.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-last-003.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-last-004.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-last-005.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-last-006.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-last-007.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-last-008.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-last-009.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-last-010.html": "pass",
+    "css/css-text/text-align/text-align-last-011.html": "pass",
+    "css/css-text/text-align/text-align-last-012.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-last-013.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-last-014.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-last-015.html": "fail",
+    "css/css-text/text-align/text-align-last-center.html": "pass",
+    "css/css-text/text-align/text-align-last-empty-inline.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-last-end.html": "pass",
+    "css/css-text/text-align/text-align-last-interpolation.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-last-justify-br.html": "fail",
+    "css/css-text/text-align/text-align-last-justify-rtl.html": "fail",
+    "css/css-text/text-align/text-align-last-justify.html": "fail",
+    "css/css-text/text-align/text-align-last-simple.html": "pass",
+    "css/css-text/text-align/text-align-last-start.html": "pass",
+    "css/css-text/text-align/text-align-last-wins-001.html": "pass",
+    "css/css-text/text-align/text-align-match-parent-001.html": "pass",
+    "css/css-text/text-align/text-align-match-parent-002.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-match-parent-01.html": "fail",
+    "css/css-text/text-align/text-align-match-parent-02.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-match-parent-03.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-match-parent-04.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-match-parent-05.html": "fail",
+    "css/css-text/text-align/text-align-match-parent-root-logical.html": "pass",
+    "css/css-text/text-align/text-align-match-parent-root-ltr.html": "pass",
+    "css/css-text/text-align/text-align-match-parent-root-rtl.html": "pass",
+    "css/css-text/text-align/text-align-start-001.html": "pass",
+    "css/css-text/text-align/text-align-start-002.html": "pass",
+    "css/css-text/text-align/text-align-start-003.html": "pass",
+    "css/css-text/text-align/text-align-start-004.html": "pass",
+    "css/css-text/text-align/text-align-start-005.html": "fail",
+    "css/css-text/text-align/text-align-start-006.html": "fail",
+    "css/css-text/text-align/text-align-start-007.html": "fail",
+    "css/css-text/text-align/text-align-start-008.html": "fail",
+    "css/css-text/text-align/text-align-start-009.html": "fail",
+    "css/css-text/text-align/text-align-start-010.html": "fail",
+    "css/css-text/text-align/text-align-start-014.html": "pass",
+    "css/css-text/text-align/text-align-start-015.html": "pass",
+    "css/css-text/text-align/text-align-start-016.html": "fail",
+    "css/css-text/text-align/text-align-start-017.html": "pass",
+    "css/css-text/text-align/text-align-start-018.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-start-019.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-start-020.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-start-021.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-align/text-align-start-last-center.html": "pass",
+    "css/css-text/text-align/text-align-start-last-default.html": "pass",
+    "css/css-text/text-align/text-align-start-last-end.html": "pass",
+    "css/css-text/text-align/text-align-start-last-justify.html": "pass",
+    "css/css-text/text-align/text-align-start-last-start.html": "pass",
+    "css/css-text/text-align/text-align-webkit-match-parent.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    }
+  },
+  "version": 1
+}

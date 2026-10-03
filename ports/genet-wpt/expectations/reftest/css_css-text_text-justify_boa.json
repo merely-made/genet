@@ -1,0 +1,51 @@
+{
+  "command": "reftest",
+  "engine": "none",
+  "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
+  "policy": "exact",
+  "renderer": "livery",
+  "runner_sha256": "7345f0705cf23264e76dd664d1206211a86df5dda7e993129fe5adec3f06095e",
+  "subset": "css/css-text/text-justify",
+  "tests": {
+    "css/css-text/text-justify/distribute-alias.tentative.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-justify/text-justify-001.html": "fail",
+    "css/css-text/text-justify/text-justify-002.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-justify/text-justify-003.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-justify/text-justify-004.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-justify/text-justify-005.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-justify/text-justify-006.html": "fail",
+    "css/css-text/text-justify/text-justify-and-trailing-spaces-001.html": "fail",
+    "css/css-text/text-justify/text-justify-and-trailing-spaces-002.html": "pass",
+    "css/css-text/text-justify/text-justify-and-trailing-spaces-003.html": "fail",
+    "css/css-text/text-justify/text-justify-and-trailing-spaces-004.html": "pass",
+    "css/css-text/text-justify/text-justify-and-trailing-spaces-005.html": "fail",
+    "css/css-text/text-justify/text-justify-and-trailing-spaces-006.html": "fail",
+    "css/css-text/text-justify/text-justify-distribute-001.html": "fail",
+    "css/css-text/text-justify/text-justify-inter-character-001.html": "fail",
+    "css/css-text/text-justify/text-justify-inter-character-atomic-inline.html": "fail",
+    "css/css-text/text-justify/text-justify-inter-character-cursive.html": "pass",
+    "css/css-text/text-justify/text-justify-inter-word-001.html": "fail",
+    "css/css-text/text-justify/text-justify-interpolation.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/text-justify/text-justify-none-001.html": "pass",
+    "css/css-text/text-justify/text-justify-word-separators.html": "fail"
+  },
+  "version": 1
+}

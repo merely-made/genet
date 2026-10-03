@@ -1,10 +1,9 @@
 # Livery line breaking: Parley as a library
 
-**Status:** plan, 2026-10-02. Mark ruled "Plan Stage 1 now". Stage 0 (non-wrapping
-lines follow `text-align`) landed on main as `6fca091dc26`. Stage 1 has not
-started; S1.0 and S1.1 are briefed to a separate implementing agent (ruling 6),
-which stops before S1.2. The bidi-level source is ruled: Livery runs its own
-UAX#9 pass (ruling 5).
+**Status:** S1.0 landed; S1.1 in progress, 2026-10-03. Mark ruled "Plan Stage 1
+now". Stage 0 (non-wrapping lines follow `text-align`) landed on main as
+`6fca091dc26`. This lane stops after S1.1, before S1.2. The bidi-level source
+is ruled: Livery runs its own UAX#9 pass (ruling 5).
 
 ## Why
 
@@ -108,6 +107,19 @@ target's own document points back to them.
    options were: allow, pinned commit only; or don't fetch. Mark: "Allow,
    pinned commit only (Recommended)". The census doc records this beside
    the Vano ruling.
+10. **Implementation models.** For this lane Mark authorized GPT-6 Luna,
+    Terra, or GPT-6.1 Sol, with the cheaper suitable model preferred.
+11. **S1.1 boundary source.** Parley reports selected line breaks, not every
+    candidate opportunity, and its unbounded `break_all_lines(None)` does not
+    expose those opportunities. Mark ruled: "Use existing ICU4X for S1.1
+    candidate boundaries". The implementation may add the existing workspace
+    `icu_segmenter` 2.2.0 as a direct `genet-livery` dependency edge; versions
+    remain unchanged, and this does not expand the lane into S1.2.
+12. **Network for required gates.** Mark authorized normal network access:
+    "ok, authorized" and "you needn't stay offline, eh, that's a bit of
+    overzealousness". This supersedes an offline-only constraint for required
+    build and test gates; it does not authorize version changes, extra
+    dependencies, or scope beyond S1.0–S1.1 and the approved ICU4X edge.
 
 ## The taffy precedent
 
@@ -249,6 +261,20 @@ justify variants 4, `-match-parent` 2.
 - Add them to `support/wpt/check-reftest-baselines.ps1`, a local GPU guard
   (not CI).
 
+**Landed 2026-10-03:** baseline expectations and the 14 guard entries are
+committed at the S1.0 starting source. The locked release runner was built
+with `cargo build --manifest-path Cargo.toml --release --locked -p genet-wpt
+-j 2`; binary SHA-256 is
+`7345f0705cf23264e76dd664d1206211a86df5dda7e993129fe5adec3f06095e` and the
+WPT manifest SHA-256 is
+`d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422`. Two
+same-binary runs used Livery, jobs=1 and timeout=30 defaults. Each measured
+989 pass, 754 fail, 551 skip, 0 timeout, 0 other across 2,294 tests; per-file
+status differences were 0. All 14 directory counts match the table above.
+The full baseline guard ended with `unexpected=0`. Detailed maps, native logs,
+hashes and the comparison receipt are under
+`C:/Users/mark_/Code/testing/genet-line-breaking/`.
+
 **Done when:** the check script reports `unexpected=0` for all 14 at that
 commit, and its counts are recorded here against the table above.
 
@@ -265,11 +291,21 @@ commit, and its counts are recorded here against the table above.
   - opportunities around atomic inlines;
   - `overflow-wrap` and `word-break` emergency opportunities;
   - preserved and hanging spaces, and tabs.
+- **Candidate source.** Use the existing workspace ICU4X line segmenter
+  (`icu_segmenter` 2.2.0) to enumerate candidate byte boundaries over the exact
+  transformed and collapsed paragraph text Parley shaped. Keep UTF-8 byte
+  offsets and source mapping explicit, then intersect candidates with shaped
+  cluster and atomic-inline constraints. Parley's `is_space_or_nbsp` is not a
+  generic breakable-whitespace test: NBSP is not a normal whitespace
+  opportunity.
+- **Comparison meaning.** Check that Parley's selected finite-width breaks
+  remain permitted by the candidate opportunity model where today's output is
+  correct. The full candidate set is not expected to equal selected breaks.
 
 **Done when:** a unit fixture per rule passes, including T1's and T3's
 boundaries. On the existing `css_text_lane` and `line_box_model` fixtures,
-the opportunity set matches the breaks Parley produces today, wherever
-today's output is correct.
+Parley's selected breaks are permitted by the candidate opportunity model
+wherever today's output is correct, with a fault-sensitive control.
 
 #### Phase S1.2: the Livery breaker
 
@@ -421,3 +457,8 @@ All dated 2026-10-02, verified at Genet `4ac56bbbe0b` and `6fca091dc26`.
   hard-codes `REPO=C:/Users/mark_/Code/worktrees/genet-gaps`. That worktree
   was retired the same day, so a rerun must point `REPO` at its own checkout.
   The maps and binaries under `testing/genet-gaps/wpt/` are unaffected.
+- 2026-10-03: rulings 10–12 record model preference, the approved existing
+  ICU4X 2.2.0 candidate-boundary source, and network access for required gates.
+  S1.0 baseline expectations and guard entries are committed; two runs of the
+  same release binary reproduced all 14 directory counts with no per-file
+  status changes, and the full guard passed with `unexpected=0` (receipt above).

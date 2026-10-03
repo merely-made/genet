@@ -166,6 +166,24 @@ Rulings, in Mark's words:
   Mark: "Move them to Streams (Recommended)". The census-panic brief drops
   them (its E2 and E3), and the Streams brief carries them.
 
+**Correction, 2026-10-02 (later the same day).** The Encoding row above
+overstated what `TextDecoder` can reach, and Mark was told "The biggest
+subtest gap for the smallest change". Classifying the 2026-09-29 `encoding`
+records by file name splits the shard as follows:
+
+| Mechanism | Records | Subtests pass / total | Killed at cap |
+|---|---:|---:|---:|
+| Form submission in a legacy charset (`*-encode-form-*`) | 584 | 0 / 20,951 | 570 |
+| `TextDecoder`/`TextEncoder` API | 101 | 7,548 / 13,111 | 2 |
+| URL query encoding in the document's charset (`*-encode-href-*`) | 230 | 0 / 862 | 228 |
+| Legacy-charset documents decoded through an iframe | 385 | none reported (369 no results) | 16 |
+
+So `TextDecoder` through `encoding_rs` can recover at most about 5,600
+subtests. The `legacy-mb-japanese` 0/21,813 lies almost entirely behind form
+submission, which Genet does not have (`form-submission-0` 0/159). C1's words
+stand as given. The Encoding lane's scope goes back to Mark with this
+evidence.
+
 *Reading, not ruled:* constraint validation cannot be built correctly without
 the form-control value model. Where the current value lives is shared by
 script, the native editor, paint and accessibility, so that brief's first

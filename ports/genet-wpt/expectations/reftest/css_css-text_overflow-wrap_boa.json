@@ -1,0 +1,93 @@
+{
+  "command": "reftest",
+  "engine": "none",
+  "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
+  "policy": "exact",
+  "renderer": "livery",
+  "runner_sha256": "7345f0705cf23264e76dd664d1206211a86df5dda7e993129fe5adec3f06095e",
+  "subset": "css/css-text/overflow-wrap",
+  "tests": {
+    "css/css-text/overflow-wrap/crashtests/overflow-wrap-leading-floats-crash.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/overflow-wrap/overflow-wrap-001.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-002.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-004.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-anywhere-001.html": "fail",
+    "css/css-text/overflow-wrap/overflow-wrap-anywhere-002.html": "fail",
+    "css/css-text/overflow-wrap/overflow-wrap-anywhere-003.html": "fail",
+    "css/css-text/overflow-wrap/overflow-wrap-anywhere-004.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-anywhere-005.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-anywhere-006.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-anywhere-007.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-anywhere-008.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-anywhere-009.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-anywhere-010.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-anywhere-011.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-anywhere-fit-content-001.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-anywhere-inline-001.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-anywhere-inline-002.tentative.html": "fail",
+    "css/css-text/overflow-wrap/overflow-wrap-anywhere-inline-003.tentative.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-anywhere-inline-004.tentative.html": "fail",
+    "css/css-text/overflow-wrap/overflow-wrap-anywhere-span-001.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-anywhere-span-002.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/overflow-wrap/overflow-wrap-break-word-001.html": "fail",
+    "css/css-text/overflow-wrap/overflow-wrap-break-word-002.html": "fail",
+    "css/css-text/overflow-wrap/overflow-wrap-break-word-003.html": "fail",
+    "css/css-text/overflow-wrap/overflow-wrap-break-word-004.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-break-word-005.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-break-word-006.html": "fail",
+    "css/css-text/overflow-wrap/overflow-wrap-break-word-007.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-break-word-008.html": "fail",
+    "css/css-text/overflow-wrap/overflow-wrap-break-word-009.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-break-word-010.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-break-word-fit-content-001.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-break-word-keep-all-001.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/overflow-wrap/overflow-wrap-break-word-long-crash.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/overflow-wrap/overflow-wrap-break-word-span-001.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-break-word-span-002.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/overflow-wrap/overflow-wrap-break-word-white-space-crash-002.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/overflow-wrap/overflow-wrap-break-word-white-space-crash.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/css-text/overflow-wrap/overflow-wrap-cluster-001.html": "fail",
+    "css/css-text/overflow-wrap/overflow-wrap-cluster-002.html": "fail",
+    "css/css-text/overflow-wrap/overflow-wrap-min-content-size-001.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-min-content-size-002.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-min-content-size-003.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-min-content-size-004.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-min-content-size-005.html": "fail",
+    "css/css-text/overflow-wrap/overflow-wrap-min-content-size-006.html": "fail",
+    "css/css-text/overflow-wrap/overflow-wrap-min-content-size-007.html": "fail",
+    "css/css-text/overflow-wrap/overflow-wrap-min-content-size-008.html": "pass",
+    "css/css-text/overflow-wrap/overflow-wrap-min-content-size-009.html": "fail",
+    "css/css-text/overflow-wrap/overflow-wrap-normal-keep-all-001.html": "fail",
+    "css/css-text/overflow-wrap/overflow-wrap-shaping-001.html": "fail",
+    "css/css-text/overflow-wrap/overflow-wrap-shaping-002.html": "fail",
+    "css/css-text/overflow-wrap/word-wrap-001.html": "pass",
+    "css/css-text/overflow-wrap/word-wrap-002.html": "pass",
+    "css/css-text/overflow-wrap/word-wrap-004.html": "pass",
+    "css/css-text/overflow-wrap/word-wrap-alias.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    }
+  },
+  "version": 1
+}

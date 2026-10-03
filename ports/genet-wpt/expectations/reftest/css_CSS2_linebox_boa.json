@@ -1,0 +1,438 @@
+{
+  "command": "reftest",
+  "engine": "none",
+  "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
+  "policy": "exact",
+  "renderer": "livery",
+  "runner_sha256": "7345f0705cf23264e76dd664d1206211a86df5dda7e993129fe5adec3f06095e",
+  "subset": "css/CSS2/linebox",
+  "tests": {
+    "css/CSS2/linebox/animations/line-height-interpolation.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/anonymous-inline-inherit-001.html": "pass",
+    "css/CSS2/linebox/baseline-block-with-overflow-001.html": "pass",
+    "css/CSS2/linebox/border-padding-bleed-001.xht": "pass",
+    "css/CSS2/linebox/border-padding-bleed-002.xht": "pass",
+    "css/CSS2/linebox/border-padding-bleed-003.xht": "pass",
+    "css/CSS2/linebox/crashtests/dir-change-simplifed-crash.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/crashtests/inline-block-baseline-crash.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/empty-inline-001.xht": "pass",
+    "css/CSS2/linebox/empty-inline-002.xht": "pass",
+    "css/CSS2/linebox/empty-inline-003.xht": "pass",
+    "css/CSS2/linebox/fractional-line-height.html": "pass",
+    "css/CSS2/linebox/iframe-in-block-in-inline.html": "pass",
+    "css/CSS2/linebox/iframe-in-wrapped-span.html": "pass",
+    "css/CSS2/linebox/inline-box-001.xht": "fail",
+    "css/CSS2/linebox/inline-box-002.xht": "fail",
+    "css/CSS2/linebox/inline-children-root-linebox-crash-001.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/inline-formatting-context-001.xht": "pass",
+    "css/CSS2/linebox/inline-formatting-context-002.xht": "fail",
+    "css/CSS2/linebox/inline-formatting-context-003.xht": "fail",
+    "css/CSS2/linebox/inline-formatting-context-004.xht": "fail",
+    "css/CSS2/linebox/inline-formatting-context-005.xht": "fail",
+    "css/CSS2/linebox/inline-formatting-context-006.xht": "fail",
+    "css/CSS2/linebox/inline-formatting-context-007.xht": "fail",
+    "css/CSS2/linebox/inline-formatting-context-008.xht": "pass",
+    "css/CSS2/linebox/inline-formatting-context-009.xht": "pass",
+    "css/CSS2/linebox/inline-formatting-context-010.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/inline-formatting-context-010b.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/inline-formatting-context-010c.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/inline-formatting-context-010d.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/inline-formatting-context-011.xht": "pass",
+    "css/CSS2/linebox/inline-formatting-context-012.xht": "fail",
+    "css/CSS2/linebox/inline-formatting-context-013.xht": "pass",
+    "css/CSS2/linebox/inline-formatting-context-014.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/inline-formatting-context-015.xht": "fail",
+    "css/CSS2/linebox/inline-formatting-context-016.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/inline-formatting-context-017.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/inline-formatting-context-018.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/inline-formatting-context-019.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/inline-formatting-context-020.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/inline-formatting-context-021.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/inline-formatting-context-022.xht": "fail",
+    "css/CSS2/linebox/inline-formatting-context-023.xht": "fail",
+    "css/CSS2/linebox/inline-negative-margin-001.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/inline-negative-margin-minmax-crash-001.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/leading-001.xht": "fail",
+    "css/CSS2/linebox/line-box-height-001.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/line-box-height-002.xht": "pass",
+    "css/CSS2/linebox/line-breaking-font-size-zero-001.html": "fail",
+    "css/CSS2/linebox/line-height-001.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/line-height-002.xht": "pass",
+    "css/CSS2/linebox/line-height-003.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/line-height-004.xht": "pass",
+    "css/CSS2/linebox/line-height-005.xht": "pass",
+    "css/CSS2/linebox/line-height-006.xht": "pass",
+    "css/CSS2/linebox/line-height-007.xht": "pass",
+    "css/CSS2/linebox/line-height-012.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/line-height-013.xht": "pass",
+    "css/CSS2/linebox/line-height-014.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/line-height-015.xht": "pass",
+    "css/CSS2/linebox/line-height-016.xht": "pass",
+    "css/CSS2/linebox/line-height-017.xht": "pass",
+    "css/CSS2/linebox/line-height-018.xht": "pass",
+    "css/CSS2/linebox/line-height-023.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/line-height-024.xht": "pass",
+    "css/CSS2/linebox/line-height-025.xht": "pass",
+    "css/CSS2/linebox/line-height-026.xht": "pass",
+    "css/CSS2/linebox/line-height-027.xht": "pass",
+    "css/CSS2/linebox/line-height-028.xht": "pass",
+    "css/CSS2/linebox/line-height-029.xht": "pass",
+    "css/CSS2/linebox/line-height-034.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/line-height-035.xht": "pass",
+    "css/CSS2/linebox/line-height-036.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/line-height-037.xht": "pass",
+    "css/CSS2/linebox/line-height-038.xht": "pass",
+    "css/CSS2/linebox/line-height-039.xht": "pass",
+    "css/CSS2/linebox/line-height-040.xht": "pass",
+    "css/CSS2/linebox/line-height-045.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/line-height-046.xht": "pass",
+    "css/CSS2/linebox/line-height-047.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/line-height-048.xht": "pass",
+    "css/CSS2/linebox/line-height-049.xht": "pass",
+    "css/CSS2/linebox/line-height-050.xht": "pass",
+    "css/CSS2/linebox/line-height-051.xht": "pass",
+    "css/CSS2/linebox/line-height-056.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/line-height-057.xht": "pass",
+    "css/CSS2/linebox/line-height-058.xht": "pass",
+    "css/CSS2/linebox/line-height-059.xht": "pass",
+    "css/CSS2/linebox/line-height-060.xht": "pass",
+    "css/CSS2/linebox/line-height-061.xht": "pass",
+    "css/CSS2/linebox/line-height-062.xht": "pass",
+    "css/CSS2/linebox/line-height-067.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/line-height-068.xht": "pass",
+    "css/CSS2/linebox/line-height-069.xht": "pass",
+    "css/CSS2/linebox/line-height-070.xht": "pass",
+    "css/CSS2/linebox/line-height-071.xht": "pass",
+    "css/CSS2/linebox/line-height-072.xht": "pass",
+    "css/CSS2/linebox/line-height-073.xht": "pass",
+    "css/CSS2/linebox/line-height-078.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/line-height-079.xht": "fail",
+    "css/CSS2/linebox/line-height-080.xht": "fail",
+    "css/CSS2/linebox/line-height-081.xht": "fail",
+    "css/CSS2/linebox/line-height-082.xht": "fail",
+    "css/CSS2/linebox/line-height-083.xht": "fail",
+    "css/CSS2/linebox/line-height-084.xht": "fail",
+    "css/CSS2/linebox/line-height-089.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/line-height-090.xht": "pass",
+    "css/CSS2/linebox/line-height-091.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/line-height-092.xht": "pass",
+    "css/CSS2/linebox/line-height-093.xht": "pass",
+    "css/CSS2/linebox/line-height-094.xht": "pass",
+    "css/CSS2/linebox/line-height-095.xht": "pass",
+    "css/CSS2/linebox/line-height-100.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/line-height-101.xht": "pass",
+    "css/CSS2/linebox/line-height-102.xht": "pass",
+    "css/CSS2/linebox/line-height-103.xht": "pass",
+    "css/CSS2/linebox/line-height-104.xht": "pass",
+    "css/CSS2/linebox/line-height-105.xht": "pass",
+    "css/CSS2/linebox/line-height-106.xht": "pass",
+    "css/CSS2/linebox/line-height-111.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/line-height-112.xht": "pass",
+    "css/CSS2/linebox/line-height-121.xht": "pass",
+    "css/CSS2/linebox/line-height-122.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/line-height-123.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/line-height-124.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/line-height-125.xht": "fail",
+    "css/CSS2/linebox/line-height-126.xht": "pass",
+    "css/CSS2/linebox/line-height-127.xht": "pass",
+    "css/CSS2/linebox/line-height-128.xht": "pass",
+    "css/CSS2/linebox/line-height-129.xht": "pass",
+    "css/CSS2/linebox/line-height-applies-to-001.xht": "pass",
+    "css/CSS2/linebox/line-height-applies-to-002.xht": "pass",
+    "css/CSS2/linebox/line-height-applies-to-003.xht": "pass",
+    "css/CSS2/linebox/line-height-applies-to-004.xht": "pass",
+    "css/CSS2/linebox/line-height-applies-to-005.xht": "pass",
+    "css/CSS2/linebox/line-height-applies-to-006.xht": "pass",
+    "css/CSS2/linebox/line-height-applies-to-007.xht": "pass",
+    "css/CSS2/linebox/line-height-applies-to-008.xht": "pass",
+    "css/CSS2/linebox/line-height-applies-to-009.xht": "pass",
+    "css/CSS2/linebox/line-height-applies-to-010.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/line-height-applies-to-012.xht": "pass",
+    "css/CSS2/linebox/line-height-applies-to-013.xht": "pass",
+    "css/CSS2/linebox/line-height-applies-to-014.xht": "pass",
+    "css/CSS2/linebox/line-height-applies-to-015.xht": "pass",
+    "css/CSS2/linebox/line-height-applies-to-016.xht": "pass",
+    "css/CSS2/linebox/line-height-bleed-001.xht": "pass",
+    "css/CSS2/linebox/line-height-bleed-002.xht": "pass",
+    "css/CSS2/linebox/line-height-bleed-003.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/line-height-largest-001.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/line-height-normal-recommendation-001.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/line-height-oof-descendants-001.html": "pass",
+    "css/CSS2/linebox/needs-layout-transform.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/soft-wrap-opportunity-after-replaced-content-crash.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/vertical-align-004.xht": "pass",
+    "css/CSS2/linebox/vertical-align-005.xht": "pass",
+    "css/CSS2/linebox/vertical-align-006.xht": "pass",
+    "css/CSS2/linebox/vertical-align-007.xht": "pass",
+    "css/CSS2/linebox/vertical-align-008.xht": "pass",
+    "css/CSS2/linebox/vertical-align-016.xht": "pass",
+    "css/CSS2/linebox/vertical-align-017.xht": "pass",
+    "css/CSS2/linebox/vertical-align-018.xht": "pass",
+    "css/CSS2/linebox/vertical-align-019.xht": "pass",
+    "css/CSS2/linebox/vertical-align-020.xht": "pass",
+    "css/CSS2/linebox/vertical-align-028.xht": "pass",
+    "css/CSS2/linebox/vertical-align-029.xht": "pass",
+    "css/CSS2/linebox/vertical-align-030.xht": "pass",
+    "css/CSS2/linebox/vertical-align-031.xht": "pass",
+    "css/CSS2/linebox/vertical-align-032.xht": "pass",
+    "css/CSS2/linebox/vertical-align-040.xht": "pass",
+    "css/CSS2/linebox/vertical-align-041.xht": "pass",
+    "css/CSS2/linebox/vertical-align-042.xht": "pass",
+    "css/CSS2/linebox/vertical-align-043.xht": "pass",
+    "css/CSS2/linebox/vertical-align-044.xht": "pass",
+    "css/CSS2/linebox/vertical-align-052.xht": "pass",
+    "css/CSS2/linebox/vertical-align-053.xht": "pass",
+    "css/CSS2/linebox/vertical-align-054.xht": "pass",
+    "css/CSS2/linebox/vertical-align-055.xht": "pass",
+    "css/CSS2/linebox/vertical-align-056.xht": "pass",
+    "css/CSS2/linebox/vertical-align-064.xht": "pass",
+    "css/CSS2/linebox/vertical-align-065.xht": "pass",
+    "css/CSS2/linebox/vertical-align-066.xht": "pass",
+    "css/CSS2/linebox/vertical-align-067.xht": "pass",
+    "css/CSS2/linebox/vertical-align-068.xht": "pass",
+    "css/CSS2/linebox/vertical-align-076.xht": "pass",
+    "css/CSS2/linebox/vertical-align-077.xht": "pass",
+    "css/CSS2/linebox/vertical-align-078.xht": "pass",
+    "css/CSS2/linebox/vertical-align-079.xht": "pass",
+    "css/CSS2/linebox/vertical-align-080.xht": "pass",
+    "css/CSS2/linebox/vertical-align-088.xht": "pass",
+    "css/CSS2/linebox/vertical-align-089.xht": "pass",
+    "css/CSS2/linebox/vertical-align-090.xht": "pass",
+    "css/CSS2/linebox/vertical-align-091.xht": "fail",
+    "css/CSS2/linebox/vertical-align-092.xht": "fail",
+    "css/CSS2/linebox/vertical-align-100.xht": "pass",
+    "css/CSS2/linebox/vertical-align-101.xht": "pass",
+    "css/CSS2/linebox/vertical-align-102.xht": "pass",
+    "css/CSS2/linebox/vertical-align-103.xht": "pass",
+    "css/CSS2/linebox/vertical-align-104.xht": "pass",
+    "css/CSS2/linebox/vertical-align-109.xht": "pass",
+    "css/CSS2/linebox/vertical-align-110.xht": "pass",
+    "css/CSS2/linebox/vertical-align-111.xht": "pass",
+    "css/CSS2/linebox/vertical-align-112.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/vertical-align-113.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/vertical-align-114.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/vertical-align-115.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/vertical-align-116.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/vertical-align-117.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/vertical-align-117a.xht": "pass",
+    "css/CSS2/linebox/vertical-align-118.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/vertical-align-118a.xht": "pass",
+    "css/CSS2/linebox/vertical-align-119.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/vertical-align-120.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/vertical-align-121.xht": "fail",
+    "css/CSS2/linebox/vertical-align-122.xht": "fail",
+    "css/CSS2/linebox/vertical-align-applies-to-001.xht": "pass",
+    "css/CSS2/linebox/vertical-align-applies-to-002.xht": "pass",
+    "css/CSS2/linebox/vertical-align-applies-to-003.xht": "pass",
+    "css/CSS2/linebox/vertical-align-applies-to-004.xht": "pass",
+    "css/CSS2/linebox/vertical-align-applies-to-005.xht": "pass",
+    "css/CSS2/linebox/vertical-align-applies-to-006.xht": "pass",
+    "css/CSS2/linebox/vertical-align-applies-to-007.xht": "pass",
+    "css/CSS2/linebox/vertical-align-applies-to-008.xht": "pass",
+    "css/CSS2/linebox/vertical-align-applies-to-009.xht": "pass",
+    "css/CSS2/linebox/vertical-align-applies-to-010.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/vertical-align-applies-to-012.xht": "pass",
+    "css/CSS2/linebox/vertical-align-applies-to-013.xht": "pass",
+    "css/CSS2/linebox/vertical-align-applies-to-014.xht": "pass",
+    "css/CSS2/linebox/vertical-align-applies-to-015.xht": "pass",
+    "css/CSS2/linebox/vertical-align-baseline-001.xht": "pass",
+    "css/CSS2/linebox/vertical-align-baseline-002.xht": "pass",
+    "css/CSS2/linebox/vertical-align-baseline-003.xht": "fail",
+    "css/CSS2/linebox/vertical-align-baseline-004.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/vertical-align-baseline-004a.xht": "fail",
+    "css/CSS2/linebox/vertical-align-baseline-005.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/vertical-align-baseline-005a.xht": "fail",
+    "css/CSS2/linebox/vertical-align-baseline-006.xht": "pass",
+    "css/CSS2/linebox/vertical-align-baseline-006a.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/vertical-align-baseline-007.xht": "pass",
+    "css/CSS2/linebox/vertical-align-baseline-008.xht": "pass",
+    "css/CSS2/linebox/vertical-align-baseline-009.xht": "pass",
+    "css/CSS2/linebox/vertical-align-baseline-010.xht": "pass",
+    "css/CSS2/linebox/vertical-align-boxes-001.xht": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/vertical-align-negative-leading-001.html": "pass",
+    "css/CSS2/linebox/vertical-align-nested-top-001.html": "pass",
+    "css/CSS2/linebox/vertical-align-sub-001.xht": "pass",
+    "css/CSS2/linebox/vertical-align-super-001.xht": "pass",
+    "css/CSS2/linebox/vertical-align-top-bottom-001.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/linebox/vertical-align-top-bottom-padding.html": "pass",
+    "css/CSS2/linebox/video-needs-layout-crash.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    }
+  },
+  "version": 1
+}

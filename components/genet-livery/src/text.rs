@@ -18,6 +18,11 @@ use buckram::{
     BoxId, BoxOrigin, CssBoxTree, DisplayInside, DisplayOutside, FloatLineConstraints,
     FormattingContextKind, InternalTableRole, IntrinsicSizeKind, IntrinsicSizes,
 };
+use icu_properties::{
+    CodePointMapData,
+    props::{GeneralCategory, GeneralCategoryGroup, LineBreak},
+};
+use icu_segmenter::LineSegmenter;
 use layout_dom_api::{LayoutDom, LocalName, Namespace, NodeKind, QuirksMode};
 use livery::{
     ComputedValues,
@@ -27,7 +32,8 @@ use livery::{
         FontWeight as CssFontWeight, Hyphens, LineBreak as CssLineBreak,
         LineHeight as CssLineHeight, ListStylePosition, ListStyleType, Margin,
         OverflowWrap as CssOverflowWrap, Position, Spacing, TabSize, TextAlign, TextAlignLast,
-        TextJustify, TextTransformCase, TextWrapMode, VerticalAlign, WordBreak as CssWordBreak,
+        TextJustify, TextTransformCase, TextWrapMode, VerticalAlign, WhiteSpaceCollapse,
+        WordBreak as CssWordBreak,
     },
 };
 use paint_list_api::{
@@ -535,8 +541,10 @@ impl TextSystem {
 
         let Shaped {
             items,
+            break_stream,
             break_lines,
             baselines,
+            ..
         } = self.shape(
             &text,
             &mut spans,
@@ -586,6 +594,7 @@ impl TextSystem {
                 }),
                 baselines,
                 items,
+                _break_stream: break_stream,
                 text,
                 text_sources,
             })
@@ -596,6 +605,7 @@ impl TextSystem {
                 line_bounds: None,
                 baselines: None,
                 items,
+                _break_stream: break_stream,
                 text,
                 text_sources,
             })
@@ -1228,6 +1238,19 @@ impl TextSystem {
             });
         }
         let mut layout = builder.build(text);
+        // Keep the shaped logical sequence and its CSS candidate boundaries
+        // alongside the existing Parley path. S1.1 records this model only;
+        // the line loop remains owned by Parley until S1.2.
+        let mut unbounded_projection = layout.clone();
+        unbounded_projection.break_all_lines(None);
+        let mut break_stream = logical_break_stream(
+            text,
+            &unbounded_projection,
+            spans,
+            inline_boxes,
+            inline_styles,
+            root_style,
+        );
         let font_size = super::paint::used_font_size(root_style);
         let text_indent = root_style
             .text_indent
@@ -1247,6 +1270,51 @@ impl TextSystem {
             root_style.text_wrap_mode == TextWrapMode::Wrap,
             line_constraints,
         );
+        // The unbounded clone supplies the full logical clusters before the
+        // finite breaker chooses lines. Refresh only the break flags from
+        // the matching finite-layout clusters; retain the original glyph,
+        // source, font, and coordinate metadata.
+        for line in layout.lines() {
+            for run in line.runs() {
+                for cluster in run.clusters() {
+                    let text_range = cluster.text_range();
+                    if let Some(LogicalBreakItem::Cluster {
+                        soft_break,
+                        hard_break,
+                        ..
+                    }) = break_stream.items.iter_mut().find(|item| {
+                        matches!(
+                            item,
+                            LogicalBreakItem::Cluster {
+                                text_range: item_range,
+                                ..
+                            } if *item_range == text_range
+                        )
+                    }) {
+                        *soft_break = cluster.is_soft_line_break();
+                        *hard_break = cluster.is_hard_line_break();
+                    }
+                }
+            }
+        }
+        for (line_index, line) in layout.lines().enumerate() {
+            let kind = match line.break_reason() {
+                parley::BreakReason::Regular => SelectedBreakKind::Regular,
+                parley::BreakReason::Emergency => SelectedBreakKind::Emergency,
+                parley::BreakReason::None | parley::BreakReason::Explicit => continue,
+            };
+            let range = line.text_range();
+            let line_atoms = positioned_atom_orders(line.clone());
+            let next_atoms = layout
+                .get(line_index + 1)
+                .map(positioned_atom_orders)
+                .unwrap_or_default();
+            if let Some(selected) =
+                selected_break_position(range, kind, &line_atoms, &next_atoms, &break_stream.items)
+            {
+                break_stream.selected_breaks.push(selected);
+            }
+        }
         let alignment = text_alignment(
             root_style.text_align,
             root_style.direction,
@@ -1259,6 +1327,22 @@ impl TextSystem {
                 ..AlignmentOptions::default()
             },
         );
+        #[cfg(test)]
+        let finite_break_flags = {
+            let mut flags = Vec::new();
+            for line in layout.lines() {
+                for run in line.runs() {
+                    for cluster in run.clusters() {
+                        flags.push((
+                            cluster.text_range(),
+                            cluster.is_soft_line_break(),
+                            cluster.is_hard_line_break(),
+                        ));
+                    }
+                }
+            }
+            flags
+        };
 
         let mut result = Vec::new();
         let mut break_lines: Option<(f32, f32)> = None;
@@ -1691,6 +1775,9 @@ impl TextSystem {
         append_positioned_inline_start_markers(&mut result, inline_boxes);
         Shaped {
             items: result,
+            break_stream,
+            #[cfg(test)]
+            finite_break_flags,
             break_lines,
             baselines,
         }
@@ -1746,6 +1833,7 @@ pub(crate) struct InlineLayout<Source> {
     line_bounds: Option<Fragment>,
     baselines: Option<(f32, f32)>,
     items: Vec<ShapedItem<Source>>,
+    _break_stream: LogicalBreakStream<Source>,
     text: String,
     text_sources: Vec<TextSource<Source>>,
 }
@@ -2807,6 +2895,9 @@ struct InlineAtom<Id> {
 /// What shaping one inline formatting context produced.
 struct Shaped<Id> {
     items: Vec<ShapedItem<Id>>,
+    break_stream: LogicalBreakStream<Id>,
+    #[cfg(test)]
+    finite_break_flags: Vec<(Range<usize>, bool, bool)>,
     /// The block extent of the line boxes that end in a preserved newline or
     /// forced break. Such a line box may hold no item, yet CSS 2.1 section
     /// 9.4.2 gives it height; an empty line after a trailing break has none.
@@ -2814,6 +2905,889 @@ struct Shaped<Id> {
     /// The first and last baselines of the line boxes that hold anything,
     /// a line of atoms alone or of a forced break alone included.
     baselines: Option<(f32, f32)>,
+}
+
+/// The dormant S1.1 view of a paragraph before Parley's finite-width breaker
+/// selects lines. Byte ranges refer to the exact transformed/collapsed input
+/// passed to Parley; `span_range` is local to its transformed source span.
+#[derive(Clone, Debug)]
+#[allow(
+    dead_code,
+    reason = "dormant S1.1 stream; the S1.2 breaker consumes this model"
+)]
+struct LogicalBreakStream<Id> {
+    paragraph_text: String,
+    items: Vec<LogicalBreakItem<Id>>,
+    candidate_offsets: Vec<usize>,
+    emergency_candidate_offsets: Vec<usize>,
+    atomic_opportunities: Vec<AtomicOpportunity>,
+    emergency_atomic_opportunities: Vec<AtomicOpportunity>,
+    selected_breaks: Vec<SelectedBreak>,
+}
+
+impl<Id> LogicalBreakStream<Id> {
+    #[cfg(test)]
+    fn selected_breaks_are_permitted(&self) -> bool {
+        self.selected_breaks
+            .iter()
+            .all(|selected| match selected.location {
+                SelectedBreakLocation::Text => match selected.kind {
+                    SelectedBreakKind::Regular => {
+                        self.candidate_offsets.contains(&selected.byte_index)
+                    },
+                    SelectedBreakKind::Emergency => self
+                        .emergency_candidate_offsets
+                        .contains(&selected.byte_index),
+                },
+                SelectedBreakLocation::BeforeInline(insertion_order) => {
+                    let opportunity = AtomicOpportunity {
+                        byte_index: selected.byte_index,
+                        insertion_order,
+                        side: AtomicOpportunitySide::Before,
+                        kind: selected.kind,
+                    };
+                    self.atomic_opportunities.contains(&opportunity)
+                        || (selected.kind == SelectedBreakKind::Emergency
+                            && self.emergency_atomic_opportunities.contains(&opportunity))
+                },
+                SelectedBreakLocation::AfterInline(insertion_order) => {
+                    let opportunity = AtomicOpportunity {
+                        byte_index: selected.byte_index,
+                        insertion_order,
+                        side: AtomicOpportunitySide::After,
+                        kind: selected.kind,
+                    };
+                    self.atomic_opportunities.contains(&opportunity)
+                        || (selected.kind == SelectedBreakKind::Emergency
+                            && self.emergency_atomic_opportunities.contains(&opportunity))
+                },
+                SelectedBreakLocation::BetweenInlines { after, before } => {
+                    after.is_some_and(|insertion_order| {
+                        let opportunity = AtomicOpportunity {
+                            byte_index: selected.byte_index,
+                            insertion_order,
+                            side: AtomicOpportunitySide::After,
+                            kind: selected.kind,
+                        };
+                        self.atomic_opportunities.contains(&opportunity)
+                            || (selected.kind == SelectedBreakKind::Emergency
+                                && self.emergency_atomic_opportunities.contains(&opportunity))
+                    }) || before.is_some_and(|insertion_order| {
+                        let opportunity = AtomicOpportunity {
+                            byte_index: selected.byte_index,
+                            insertion_order,
+                            side: AtomicOpportunitySide::Before,
+                            kind: selected.kind,
+                        };
+                        self.atomic_opportunities.contains(&opportunity)
+                            || (selected.kind == SelectedBreakKind::Emergency
+                                && self.emergency_atomic_opportunities.contains(&opportunity))
+                    })
+                },
+            })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct SelectedBreak {
+    byte_index: usize,
+    kind: SelectedBreakKind,
+    location: SelectedBreakLocation,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SelectedBreakKind {
+    Regular,
+    Emergency,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SelectedBreakLocation {
+    Text,
+    BeforeInline(usize),
+    AfterInline(usize),
+    BetweenInlines {
+        after: Option<usize>,
+        before: Option<usize>,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[allow(
+    dead_code,
+    reason = "dormant S1.1 stream; the S1.2 breaker consumes this model"
+)]
+struct AtomicOpportunity {
+    byte_index: usize,
+    insertion_order: usize,
+    side: AtomicOpportunitySide,
+    kind: SelectedBreakKind,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[allow(
+    dead_code,
+    reason = "dormant S1.1 stream; the S1.2 breaker consumes this model"
+)]
+enum AtomicOpportunitySide {
+    Before,
+    After,
+}
+
+#[derive(Clone, Debug)]
+#[allow(
+    dead_code,
+    reason = "dormant S1.1 stream; the S1.2 breaker consumes this model"
+)]
+enum LogicalBreakItem<Id> {
+    Cluster {
+        text_range: Range<usize>,
+        contains_tab: bool,
+        contains_preserved_space: bool,
+        hangs_trailing_space: bool,
+        font: Option<parley::FontData>,
+        font_size: f32,
+        normalized_coords: Vec<i16>,
+        source_mappings: Vec<SourceSlice<Id>>,
+        start_owners: Vec<Id>,
+        end_owners: Vec<Id>,
+        advance: f32,
+        glyphs: Vec<parley::Glyph>,
+        soft_break: bool,
+        hard_break: bool,
+        rtl: bool,
+    },
+    InlineBox {
+        byte_index: usize,
+        source: Id,
+        owners: Vec<Id>,
+        insertion_order: usize,
+        advance: f32,
+        atomic: bool,
+    },
+}
+
+#[derive(Clone, Debug)]
+#[allow(
+    dead_code,
+    reason = "dormant S1.1 stream; the S1.2 breaker consumes this model"
+)]
+struct SourceSlice<Id> {
+    text_range: Range<usize>,
+    source: Option<Id>,
+    span_range: Range<usize>,
+    owners: Vec<Id>,
+    break_style: BreakStyle,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct BreakStyle {
+    white_space_collapse: WhiteSpaceCollapse,
+    text_wrap_mode: TextWrapMode,
+    line_break: CssLineBreak,
+    word_break: CssWordBreak,
+    overflow_wrap: CssOverflowWrap,
+}
+
+impl From<&ComputedValues> for BreakStyle {
+    fn from(style: &ComputedValues) -> Self {
+        Self {
+            white_space_collapse: style.white_space_collapse,
+            text_wrap_mode: style.text_wrap_mode,
+            line_break: style.line_break,
+            word_break: style.word_break,
+            overflow_wrap: style.overflow_wrap,
+        }
+    }
+}
+
+fn logical_break_stream<Id>(
+    text: &str,
+    layout: &parley::Layout<Brush>,
+    spans: &[SourceSpan<Id>],
+    inline_boxes: &[InlineAtom<Id>],
+    inline_styles: &HashMap<Id, ComputedValues>,
+    root_style: &ComputedValues,
+) -> LogicalBreakStream<Id>
+where
+    Id: Copy + Eq + Hash,
+{
+    use std::collections::BTreeSet;
+
+    let mut items = Vec::new();
+    for line in layout.lines() {
+        for run in line.runs() {
+            // `Run::clusters()` is logical order. Do not use positioned
+            // GlyphRuns here: visual runs may split a logical run by style.
+            for cluster in run.clusters() {
+                let text_range = cluster.text_range();
+                let source_mappings = spans
+                    .iter()
+                    .filter_map(|span| {
+                        let start = text_range.start.max(span.range.start);
+                        let end = text_range.end.min(span.range.end);
+                        (start < end).then(|| SourceSlice {
+                            text_range: start..end,
+                            source: span.source,
+                            span_range: (start - span.range.start)..(end - span.range.start),
+                            owners: span.owners.clone(),
+                            break_style: BreakStyle::from(&span.style),
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                let cluster_text = text.get(text_range.clone()).unwrap_or_default();
+                let contains_preserved_space = cluster_text.contains(' ')
+                    && (source_mappings.iter().any(|mapping| {
+                        matches!(
+                            mapping.break_style.white_space_collapse,
+                            WhiteSpaceCollapse::Preserve
+                                | WhiteSpaceCollapse::PreserveSpaces
+                                | WhiteSpaceCollapse::BreakSpaces
+                        )
+                    }) || (source_mappings.is_empty()
+                        && matches!(
+                            root_style.white_space_collapse,
+                            WhiteSpaceCollapse::Preserve
+                                | WhiteSpaceCollapse::PreserveSpaces
+                                | WhiteSpaceCollapse::BreakSpaces
+                        )));
+                let hangs_trailing_space = cluster_text.ends_with(' ')
+                    && (source_mappings.iter().any(|mapping| {
+                        mapping.break_style.white_space_collapse == WhiteSpaceCollapse::Preserve
+                            && mapping.break_style.text_wrap_mode == TextWrapMode::Wrap
+                    }) || (source_mappings.is_empty()
+                        && root_style.white_space_collapse == WhiteSpaceCollapse::Preserve
+                        && root_style.text_wrap_mode == TextWrapMode::Wrap));
+                let start_owners = source_mappings
+                    .iter()
+                    .find(|mapping| mapping.text_range.contains(&text_range.start))
+                    .map_or_else(Vec::new, |mapping| mapping.owners.clone());
+                let end_owners = source_mappings
+                    .iter()
+                    .rev()
+                    .find(|mapping| {
+                        mapping
+                            .text_range
+                            .contains(&text_range.end.saturating_sub(1))
+                    })
+                    .map_or_else(Vec::new, |mapping| mapping.owners.clone());
+                items.push(LogicalBreakItem::Cluster {
+                    text_range,
+                    contains_tab: cluster_text.contains('\t'),
+                    contains_preserved_space,
+                    hangs_trailing_space,
+                    font: Some(run.font().clone()),
+                    font_size: run.font_size(),
+                    normalized_coords: run.normalized_coords().to_vec(),
+                    source_mappings,
+                    start_owners,
+                    end_owners,
+                    advance: cluster.advance(),
+                    glyphs: cluster.glyphs().collect(),
+                    soft_break: cluster.is_soft_line_break(),
+                    hard_break: cluster.is_hard_line_break(),
+                    rtl: cluster.is_rtl(),
+                });
+            }
+        }
+    }
+    for (insertion_order, atom) in inline_boxes.iter().enumerate() {
+        if atom.marker {
+            continue;
+        }
+        items.push(LogicalBreakItem::InlineBox {
+            byte_index: atom.index,
+            source: atom.source,
+            owners: atom.owners.clone(),
+            insertion_order,
+            advance: atom.line_width,
+            atomic: !atom.edge && !atom.empty_line,
+        });
+    }
+    items.sort_by_key(|item| match item {
+        // An atom inserted at this byte offset precedes the following text
+        // cluster. Text ending at the offset already sorts before the atom.
+        LogicalBreakItem::Cluster { text_range, .. } => (text_range.start, usize::MAX),
+        LogicalBreakItem::InlineBox {
+            byte_index,
+            insertion_order,
+            ..
+        } => (*byte_index, insertion_order.saturating_add(1)),
+    });
+
+    // ICU4X returns UTF-8 byte offsets. Keep ordinary and emergency
+    // opportunities distinct so a later breaker can exhaust ordinary
+    // opportunities before considering overflow-wrap opportunities.
+    let atomic_text = inline_marker_text(text, inline_boxes);
+    let mut style_pairs = vec![(
+        root_style.line_break,
+        root_style.word_break,
+        root_style.overflow_wrap,
+    )];
+    for style in spans
+        .iter()
+        .map(|span| &span.style)
+        .chain(inline_styles.values())
+    {
+        let options = (style.line_break, style.word_break, style.overflow_wrap);
+        if !style_pairs.contains(&options) {
+            style_pairs.push(options);
+        }
+    }
+    let styled_candidates = style_pairs
+        .iter()
+        .map(|(line_break, word_break, overflow_wrap)| {
+            (
+                *line_break,
+                *word_break,
+                *overflow_wrap,
+                icu_line_candidates(&atomic_text, *line_break, *word_break, *overflow_wrap),
+            )
+        })
+        .collect::<Vec<_>>();
+    let cluster_edges = items
+        .iter()
+        .filter_map(|item| match item {
+            LogicalBreakItem::Cluster { text_range, .. } => {
+                Some([text_range.start, text_range.end])
+            },
+            LogicalBreakItem::InlineBox { .. } => None,
+        })
+        .flatten()
+        .collect::<BTreeSet<_>>();
+    let atomic_indices = inline_boxes
+        .iter()
+        .filter(|atom| !atom.marker && !atom.edge && !atom.empty_line)
+        .map(|atom| atom.index)
+        .collect::<BTreeSet<_>>();
+    let mut candidate_offsets = Vec::new();
+    let mut emergency_candidate_offsets = Vec::new();
+    for offset in cluster_edges.iter().copied() {
+        if atomic_indices.contains(&offset) {
+            continue;
+        }
+        if !is_hard_break_boundary(text, offset)
+            && !boundary_allows_wrap(text, offset, &items, inline_styles, root_style)
+        {
+            continue;
+        }
+        let style = boundary_style(text, offset, &items, inline_styles, root_style);
+        if is_hard_break_boundary(text, offset) {
+            candidate_offsets.push(offset);
+            continue;
+        }
+        for (line_break, word_break, overflow_wrap, (normal, emergency)) in &styled_candidates {
+            if *line_break != style.line_break
+                || *word_break != style.word_break
+                || *overflow_wrap != style.overflow_wrap
+            {
+                continue;
+            }
+            let marker_shift = inline_boxes
+                .iter()
+                .filter(|atom| {
+                    !atom.marker && !atom.edge && !atom.empty_line && atom.index < offset
+                })
+                .count()
+                * '\u{fffc}'.len_utf8();
+            let marked_offset = offset + marker_shift;
+            if normal.contains(&marked_offset) || preserved_space_opportunity(text, offset, style) {
+                candidate_offsets.push(offset);
+            }
+            if emergency.contains(&marked_offset) {
+                emergency_candidate_offsets.push(offset);
+            }
+        }
+    }
+    candidate_offsets.sort_unstable();
+    candidate_offsets.dedup();
+    emergency_candidate_offsets.sort_unstable();
+    emergency_candidate_offsets.dedup();
+    let mut atomic_opportunities = Vec::new();
+    let mut emergency_atomic_opportunities = Vec::new();
+    for (insertion_order, atom) in inline_boxes
+        .iter()
+        .enumerate()
+        .filter(|(_, atom)| !atom.marker && !atom.edge && !atom.empty_line)
+    {
+        for (side, before) in [
+            (AtomicOpportunitySide::Before, true),
+            (AtomicOpportunitySide::After, false),
+        ] {
+            if let Some(kind) = atomic_side_opportunity(
+                text,
+                atom,
+                insertion_order,
+                before,
+                &items,
+                inline_styles,
+                root_style,
+            ) {
+                let opportunity = AtomicOpportunity {
+                    byte_index: atom.index,
+                    insertion_order,
+                    side,
+                    kind,
+                };
+                match kind {
+                    SelectedBreakKind::Regular => atomic_opportunities.push(opportunity),
+                    SelectedBreakKind::Emergency => {
+                        emergency_atomic_opportunities.push(opportunity)
+                    },
+                }
+            }
+        }
+    }
+    LogicalBreakStream {
+        paragraph_text: text.to_owned(),
+        items,
+        candidate_offsets,
+        emergency_candidate_offsets,
+        atomic_opportunities,
+        emergency_atomic_opportunities,
+        selected_breaks: Vec::new(),
+    }
+}
+
+fn positioned_atom_orders(line: parley::Line<'_, Brush>) -> Vec<usize> {
+    line.items()
+        .filter_map(|item| match item {
+            parley::PositionedLayoutItem::InlineBox(inline_box) => {
+                usize::try_from(inline_box.id).ok()
+            },
+            parley::PositionedLayoutItem::GlyphRun(_) => None,
+        })
+        .collect()
+}
+
+fn selected_break_position<Id>(
+    range: Range<usize>,
+    kind: SelectedBreakKind,
+    line_atoms: &[usize],
+    next_atoms: &[usize],
+    items: &[LogicalBreakItem<Id>],
+) -> Option<SelectedBreak> {
+    let offset = range.end;
+    let mut atoms_at_offset = items
+        .iter()
+        .filter_map(|item| match item {
+            LogicalBreakItem::InlineBox {
+                byte_index,
+                insertion_order,
+                atomic: true,
+                ..
+            } if *byte_index == offset => Some(*insertion_order),
+            LogicalBreakItem::Cluster { .. } | LogicalBreakItem::InlineBox { .. } => None,
+        })
+        .collect::<Vec<_>>();
+    atoms_at_offset.sort_unstable();
+    let after = atoms_at_offset
+        .iter()
+        .rev()
+        .find(|order| line_atoms.contains(order))
+        .copied();
+    let before = atoms_at_offset
+        .iter()
+        .find(|order| next_atoms.contains(order))
+        .copied();
+    let location = match (after, before) {
+        (Some(after), Some(before)) => SelectedBreakLocation::BetweenInlines {
+            after: Some(after),
+            before: Some(before),
+        },
+        (Some(after), None) => SelectedBreakLocation::AfterInline(after),
+        (None, Some(before)) => SelectedBreakLocation::BeforeInline(before),
+        (None, None) => SelectedBreakLocation::Text,
+    };
+    Some(SelectedBreak {
+        byte_index: offset,
+        kind,
+        location,
+    })
+}
+
+fn adjacent_character(text: &str, offset: usize, before: bool) -> Option<char> {
+    let adjacent = if before {
+        text.get(..offset)
+            .and_then(|prefix| prefix.chars().next_back())
+    } else {
+        text.get(offset..).and_then(|suffix| suffix.chars().next())
+    };
+    adjacent
+}
+
+fn atomic_side_opportunity<Id: Copy + Eq + Hash>(
+    text: &str,
+    atom: &InlineAtom<Id>,
+    insertion_order: usize,
+    before: bool,
+    items: &[LogicalBreakItem<Id>],
+    inline_styles: &HashMap<Id, ComputedValues>,
+    root_style: &ComputedValues,
+) -> Option<SelectedBreakKind> {
+    let style = atom_side_style(
+        atom,
+        insertion_order,
+        items,
+        inline_styles,
+        root_style,
+        before,
+    );
+    if style.text_wrap_mode != TextWrapMode::Wrap {
+        return None;
+    }
+    // `line-break: anywhere` explicitly overrides the GL/WJ/ZWJ blockers for
+    // atomic-inline opportunities, after the owning style and nowrap gate.
+    if style.line_break == CssLineBreak::Anywhere {
+        return Some(SelectedBreakKind::Regular);
+    }
+    let adjacent = atom_side_text_neighbor(text, atom, insertion_order, items, before);
+    // CSS Text's atomic-inline rule creates both sides even where the normal
+    // UAX #14 pair would suppress a break. Glue, WJ, and ZWJ remain blockers;
+    // NBSP keeps the explicitly required CSS compatibility exception.
+    let blocked = adjacent.is_some_and(|character| {
+        if character == '\u{00a0}' {
+            return false;
+        }
+        matches!(
+            CodePointMapData::<LineBreak>::new().get(character),
+            LineBreak::Glue | LineBreak::WordJoiner | LineBreak::ZWJ
+        )
+    });
+    if !blocked {
+        Some(SelectedBreakKind::Regular)
+    } else if style.overflow_wrap != CssOverflowWrap::Normal
+        || style.word_break == CssWordBreak::BreakWord
+    {
+        Some(SelectedBreakKind::Emergency)
+    } else {
+        None
+    }
+}
+
+fn atom_side_text_neighbor<Id>(
+    text: &str,
+    atom: &InlineAtom<Id>,
+    insertion_order: usize,
+    items: &[LogicalBreakItem<Id>],
+    before: bool,
+) -> Option<char> {
+    let position = items.iter().position(|item| {
+        matches!(
+            item,
+            LogicalBreakItem::InlineBox {
+                insertion_order: order,
+                ..
+            } if *order == insertion_order
+        )
+    })?;
+    let neighbor = if before {
+        items[..position]
+            .iter()
+            .rev()
+            .find(|item| is_logical_neighbor(item))
+    } else {
+        items[position + 1..]
+            .iter()
+            .find(|item| is_logical_neighbor(item))
+    }?;
+    match neighbor {
+        LogicalBreakItem::Cluster { .. } => adjacent_character(text, atom.index, before),
+        LogicalBreakItem::InlineBox { .. } => None,
+    }
+}
+
+fn inline_marker_text<Id>(text: &str, inline_boxes: &[InlineAtom<Id>]) -> String {
+    let mut atoms = inline_boxes
+        .iter()
+        .enumerate()
+        .filter(|(_, atom)| !atom.marker && !atom.edge && !atom.empty_line)
+        .collect::<Vec<_>>();
+    atoms.sort_by_key(|(order, atom)| (atom.index, *order));
+
+    let mut marked = String::with_capacity(text.len() + atoms.len() * '\u{fffc}'.len_utf8());
+    let mut text_offset = 0;
+    for (_insertion_order, atom) in atoms {
+        if atom.index > text_offset {
+            if let Some(slice) = text.get(text_offset..atom.index) {
+                marked.push_str(slice);
+            }
+            text_offset = atom.index;
+        }
+        marked.push('\u{fffc}');
+    }
+    if let Some(tail) = text.get(text_offset..) {
+        marked.push_str(tail);
+    }
+    marked
+}
+
+fn is_hard_break_boundary(text: &str, offset: usize) -> bool {
+    text.get(..offset)
+        .and_then(|prefix| prefix.chars().next_back())
+        .is_some_and(|character| {
+            matches!(
+                character,
+                '\n' | '\r' | '\u{0085}' | '\u{2028}' | '\u{2029}'
+            )
+        })
+}
+
+fn preserved_space_opportunity(text: &str, offset: usize, style: BreakStyle) -> bool {
+    if style.white_space_collapse != WhiteSpaceCollapse::BreakSpaces || offset == 0 {
+        return false;
+    }
+    text.get(..offset)
+        .and_then(|prefix| prefix.chars().next_back())
+        .is_some_and(|character| matches!(character, ' ' | '\t' | '\u{000c}'))
+}
+
+fn icu_line_candidates(
+    text: &str,
+    line_break: CssLineBreak,
+    word_break: CssWordBreak,
+    overflow_wrap: CssOverflowWrap,
+) -> (
+    std::collections::BTreeSet<usize>,
+    std::collections::BTreeSet<usize>,
+) {
+    use icu_segmenter::options::{LineBreakOptions, LineBreakStrictness, LineBreakWordOption};
+    use std::collections::BTreeSet;
+
+    let mut options = LineBreakOptions::default();
+    options.strictness = Some(match line_break {
+        CssLineBreak::Loose => LineBreakStrictness::Loose,
+        CssLineBreak::Strict => LineBreakStrictness::Strict,
+        CssLineBreak::Anywhere => LineBreakStrictness::Anywhere,
+        CssLineBreak::Auto | CssLineBreak::Normal => LineBreakStrictness::Normal,
+    });
+    options.word_option = Some(match word_break {
+        CssWordBreak::BreakAll => LineBreakWordOption::BreakAll,
+        CssWordBreak::KeepAll => LineBreakWordOption::KeepAll,
+        CssWordBreak::Normal | CssWordBreak::BreakWord => LineBreakWordOption::Normal,
+    });
+    let segmenter = LineSegmenter::new_for_non_complex_scripts(options);
+    let mut candidates = segmenter.segment_str(text).collect::<BTreeSet<_>>();
+    let mut emergency = BTreeSet::new();
+    // CSS Text requires a soft opportunity between typographic letter units
+    // when the UA cannot perform the lexical analysis needed by the writing
+    // system. ICU's non-complex segmenter has no dictionary path for SA runs,
+    // so use extended grapheme boundaries between adjacent SA units as that
+    // normal (non-emergency) fallback.
+    candidates.extend(complex_context_fallback_boundaries(text));
+    if line_break == CssLineBreak::Anywhere {
+        candidates.extend(icu_segmenter::GraphemeClusterSegmenter::new().segment_str(text));
+    }
+    if overflow_wrap != CssOverflowWrap::Normal || word_break == CssWordBreak::BreakWord {
+        emergency.extend(icu_segmenter::GraphemeClusterSegmenter::new().segment_str(text));
+    }
+    (candidates, emergency)
+}
+
+fn complex_context_fallback_boundaries(text: &str) -> impl Iterator<Item = usize> + '_ {
+    let graphemes = icu_segmenter::GraphemeClusterSegmenter::new()
+        .segment_str(text)
+        .collect::<Vec<_>>();
+    let line_break = CodePointMapData::<LineBreak>::new();
+    let general_category = CodePointMapData::<GeneralCategory>::new();
+    graphemes
+        .windows(3)
+        .filter_map(|triple| {
+            let (left_start, boundary, right_end) = (triple[0], triple[1], triple[2]);
+            let is_sa_letter_unit = |unit: &str| {
+                unit.chars()
+                    .find(|character| {
+                        GeneralCategoryGroup::Letter.contains(general_category.get(*character))
+                            || GeneralCategoryGroup::Number
+                                .contains(general_category.get(*character))
+                    })
+                    .is_some_and(|base| line_break.get(base) == LineBreak::ComplexContext)
+            };
+            (is_sa_letter_unit(&text[left_start..boundary])
+                && is_sa_letter_unit(&text[boundary..right_end]))
+            .then_some(boundary)
+        })
+        .collect::<Vec<_>>()
+        .into_iter()
+}
+
+fn common_style<'a, Id: Copy + Eq + Hash>(
+    left: &[Id],
+    right: &[Id],
+    inline_styles: &'a HashMap<Id, ComputedValues>,
+    root_style: &'a ComputedValues,
+) -> &'a ComputedValues {
+    left.iter()
+        .zip(right)
+        .take_while(|(left, right)| left == right)
+        .filter_map(|(id, _)| inline_styles.get(id))
+        .last()
+        .unwrap_or(root_style)
+}
+
+fn adjacent_cluster_owners<Id: Copy>(
+    offset: usize,
+    items: &[LogicalBreakItem<Id>],
+    before: bool,
+) -> Option<&[Id]> {
+    let candidate = items.iter().filter_map(|item| match item {
+        LogicalBreakItem::Cluster {
+            text_range,
+            start_owners,
+            end_owners,
+            ..
+        } if if before {
+            text_range.end <= offset
+        } else {
+            text_range.start >= offset
+        } =>
+        {
+            Some((
+                text_range.clone(),
+                if before {
+                    end_owners.as_slice()
+                } else {
+                    start_owners.as_slice()
+                },
+            ))
+        },
+        _ => None,
+    });
+    if before {
+        candidate
+            .max_by_key(|(range, _)| range.end)
+            .map(|(_, owners)| owners)
+    } else {
+        candidate
+            .min_by_key(|(range, _)| range.start)
+            .map(|(_, owners)| owners)
+    }
+}
+
+fn logical_item_owners<Id>(item: &LogicalBreakItem<Id>, preceding: bool) -> &[Id] {
+    match item {
+        LogicalBreakItem::Cluster {
+            start_owners,
+            end_owners,
+            ..
+        } => {
+            if preceding {
+                end_owners
+            } else {
+                start_owners
+            }
+        },
+        LogicalBreakItem::InlineBox { owners, .. } => owners,
+    }
+}
+
+fn is_logical_neighbor<Id>(item: &LogicalBreakItem<Id>) -> bool {
+    match item {
+        LogicalBreakItem::Cluster { .. } => true,
+        LogicalBreakItem::InlineBox { atomic, .. } => *atomic,
+    }
+}
+
+fn boundary_allows_wrap<Id: Copy + Eq + Hash>(
+    text: &str,
+    offset: usize,
+    items: &[LogicalBreakItem<Id>],
+    inline_styles: &HashMap<Id, ComputedValues>,
+    root_style: &ComputedValues,
+) -> bool {
+    boundary_style(text, offset, items, inline_styles, root_style).text_wrap_mode
+        == TextWrapMode::Wrap
+}
+
+fn boundary_style<Id: Copy + Eq + Hash>(
+    text: &str,
+    offset: usize,
+    items: &[LogicalBreakItem<Id>],
+    inline_styles: &HashMap<Id, ComputedValues>,
+    root_style: &ComputedValues,
+) -> BreakStyle {
+    if let Some(style) = disappearing_space_owner_style(text, offset, items) {
+        return style;
+    }
+    match (
+        adjacent_cluster_owners(offset, items, true),
+        adjacent_cluster_owners(offset, items, false),
+    ) {
+        (Some(left), Some(right)) => {
+            BreakStyle::from(common_style(left, right, inline_styles, root_style))
+        },
+        _ => BreakStyle::from(root_style),
+    }
+}
+
+fn disappearing_space_owner_style<Id>(
+    text: &str,
+    offset: usize,
+    items: &[LogicalBreakItem<Id>],
+) -> Option<BreakStyle> {
+    let preceding_byte = offset.checked_sub(1)?;
+    if text
+        .get(..offset)
+        .and_then(|prefix| prefix.chars().next_back())
+        != Some(' ')
+    {
+        return None;
+    }
+    items.iter().find_map(|item| match item {
+        LogicalBreakItem::Cluster {
+            source_mappings, ..
+        } => source_mappings.iter().find_map(|mapping| {
+            (mapping.text_range.start <= preceding_byte
+                && preceding_byte < mapping.text_range.end
+                && matches!(
+                    mapping.break_style.white_space_collapse,
+                    WhiteSpaceCollapse::Collapse | WhiteSpaceCollapse::PreserveBreaks
+                ))
+            .then_some(mapping.break_style)
+        }),
+        LogicalBreakItem::InlineBox { .. } => None,
+    })
+}
+
+fn atom_side_style<'a, Id: Copy + Eq + Hash>(
+    atom: &InlineAtom<Id>,
+    insertion_order: usize,
+    items: &[LogicalBreakItem<Id>],
+    inline_styles: &'a HashMap<Id, ComputedValues>,
+    root_style: &'a ComputedValues,
+    before: bool,
+) -> &'a ComputedValues {
+    let atom_position = items.iter().position(|item| {
+        matches!(
+            item,
+            LogicalBreakItem::InlineBox {
+                insertion_order: order,
+                ..
+            } if *order == insertion_order
+        )
+    });
+    let left = atom_position
+        .and_then(|position| {
+            items[..position]
+                .iter()
+                .rev()
+                .find(|item| is_logical_neighbor(item))
+        })
+        .map(|item| logical_item_owners(item, true))
+        .unwrap_or(&[]);
+    let right = atom_position
+        .and_then(|position| {
+            items[position + 1..]
+                .iter()
+                .find(|item| is_logical_neighbor(item))
+        })
+        .map(|item| logical_item_owners(item, false))
+        .unwrap_or(&[]);
+    if before {
+        common_style(left, &atom.owners, inline_styles, root_style)
+    } else {
+        common_style(&atom.owners, right, inline_styles, root_style)
+    }
 }
 
 enum ShapedItem<Id> {
@@ -4656,6 +5630,2211 @@ fn content_key(bytes: &[u8], index: u32) -> FontInstanceKey {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use livery::values::FontSize as CssFontSize;
+
+    fn shape_fixture_stream(
+        text: &str,
+        spans: &mut [SourceSpan<u8>],
+        inline_boxes: &[InlineAtom<u8>],
+        inline_styles: &HashMap<u8, ComputedValues>,
+        root_style: &ComputedValues,
+        width: f32,
+        font_bytes: Option<&[u8]>,
+    ) -> LogicalBreakStream<u8> {
+        let mut text_system = TextSystem::new();
+        if let Some(font_bytes) = font_bytes {
+            text_system.register_font_bytes(font_bytes.to_vec());
+        }
+        let Shaped {
+            break_stream,
+            finite_break_flags,
+            ..
+        } = text_system.shape(
+            text,
+            spans,
+            inline_boxes,
+            inline_styles,
+            false,
+            width,
+            root_style,
+            None,
+            None,
+        );
+        for (text_range, soft_break, hard_break) in &finite_break_flags {
+            let retained = break_stream.items.iter().find_map(|item| match item {
+                LogicalBreakItem::Cluster {
+                    text_range: retained_range,
+                    soft_break,
+                    hard_break,
+                    ..
+                } if retained_range == text_range => Some((*soft_break, *hard_break)),
+                LogicalBreakItem::Cluster { .. } | LogicalBreakItem::InlineBox { .. } => None,
+            });
+            assert_eq!(
+                retained,
+                Some((*soft_break, *hard_break)),
+                "retained flags for finite Parley cluster {text_range:?}"
+            );
+        }
+        assert_eq!(
+            finite_break_flags.len(),
+            break_stream
+                .items
+                .iter()
+                .filter(|item| matches!(item, LogicalBreakItem::Cluster { .. }))
+                .count(),
+            "finite and retained shaped clusters have the same ranges"
+        );
+        break_stream
+    }
+
+    fn atomic_fixture_side_allowed<Id: Copy + Eq + Hash>(
+        text: &str,
+        atom: &InlineAtom<Id>,
+        before: bool,
+        items: &[LogicalBreakItem<Id>],
+        inline_styles: &HashMap<Id, ComputedValues>,
+        root_style: &ComputedValues,
+    ) -> bool {
+        atomic_fixture_side_kind(text, atom, before, items, inline_styles, root_style)
+            == Some(SelectedBreakKind::Regular)
+    }
+
+    fn atomic_fixture_side_kind<Id: Copy + Eq + Hash>(
+        text: &str,
+        atom: &InlineAtom<Id>,
+        before: bool,
+        items: &[LogicalBreakItem<Id>],
+        inline_styles: &HashMap<Id, ComputedValues>,
+        root_style: &ComputedValues,
+    ) -> Option<SelectedBreakKind> {
+        let mut fixture_items = items.to_vec();
+        if !fixture_items.iter().any(|item| {
+            matches!(
+                item,
+                LogicalBreakItem::InlineBox {
+                    insertion_order: 0,
+                    ..
+                }
+            )
+        }) {
+            fixture_items.push(LogicalBreakItem::InlineBox {
+                byte_index: atom.index,
+                source: atom.source,
+                owners: atom.owners.clone(),
+                insertion_order: 0,
+                advance: atom.line_width,
+                atomic: true,
+            });
+        }
+        if !fixture_items
+            .iter()
+            .any(|item| matches!(item, LogicalBreakItem::Cluster { .. }))
+        {
+            for range in [0..atom.index, atom.index..text.len()] {
+                if range.start < range.end {
+                    fixture_items.push(LogicalBreakItem::Cluster {
+                        text_range: range,
+                        contains_tab: false,
+                        contains_preserved_space: false,
+                        hangs_trailing_space: false,
+                        font: None,
+                        font_size: 0.0,
+                        normalized_coords: Vec::new(),
+                        source_mappings: Vec::new(),
+                        start_owners: Vec::new(),
+                        end_owners: Vec::new(),
+                        advance: 0.0,
+                        glyphs: Vec::new(),
+                        soft_break: false,
+                        hard_break: false,
+                        rtl: false,
+                    });
+                }
+            }
+        }
+        if !fixture_items.is_empty() {}
+        fixture_items.sort_by_key(|item| match item {
+            LogicalBreakItem::Cluster { text_range, .. } => (text_range.start, usize::MAX),
+            LogicalBreakItem::InlineBox {
+                byte_index,
+                insertion_order,
+                ..
+            } => (*byte_index, insertion_order.saturating_add(1)),
+        });
+        atomic_side_opportunity(
+            text,
+            atom,
+            0,
+            before,
+            &fixture_items,
+            inline_styles,
+            root_style,
+        )
+    }
+
+    #[test]
+    fn icu_candidate_boundaries_are_utf8_aligned_and_emergency_rules_are_observable() {
+        let (normal, normal_emergency) = icu_line_candidates(
+            "é x",
+            CssLineBreak::Normal,
+            CssWordBreak::Normal,
+            CssOverflowWrap::Normal,
+        );
+        assert!(normal.contains(&3), "space break is a UTF-8 byte offset");
+        assert!(!normal.contains(&1), "never split a multibyte character");
+        assert!(
+            icu_line_candidates(
+                "a\tb",
+                CssLineBreak::Normal,
+                CssWordBreak::Normal,
+                CssOverflowWrap::Normal,
+            )
+            .0
+            .contains(&2)
+        );
+
+        let (anywhere_normal, emergency) = icu_line_candidates(
+            "abc",
+            CssLineBreak::Normal,
+            CssWordBreak::Normal,
+            CssOverflowWrap::Anywhere,
+        );
+        assert!(emergency.contains(&1) && emergency.contains(&2));
+        assert!(!normal.contains(&1));
+        assert!(!normal_emergency.contains(&1));
+        assert!(!anywhere_normal.contains(&1));
+
+        let (break_all, _) = icu_line_candidates(
+            "word",
+            CssLineBreak::Normal,
+            CssWordBreak::BreakAll,
+            CssOverflowWrap::Normal,
+        );
+        assert!(break_all.contains(&1) && break_all.contains(&2));
+
+        let glue = "a\u{00a0}b";
+        let (normal_glue, _) = icu_line_candidates(
+            glue,
+            CssLineBreak::Normal,
+            CssWordBreak::Normal,
+            CssOverflowWrap::Normal,
+        );
+        let (line_anywhere, _) = icu_line_candidates(
+            glue,
+            CssLineBreak::Anywhere,
+            CssWordBreak::Normal,
+            CssOverflowWrap::Normal,
+        );
+        let (_, wrap_anywhere) = icu_line_candidates(
+            glue,
+            CssLineBreak::Normal,
+            CssWordBreak::Normal,
+            CssOverflowWrap::Anywhere,
+        );
+        assert!(!normal_glue.contains(&1) && !normal_glue.contains(&3));
+        assert!(line_anywhere.contains(&1) && line_anywhere.contains(&3));
+        assert!(wrap_anywhere.contains(&1) && wrap_anywhere.contains(&3));
+    }
+
+    #[test]
+    fn css_complex_script_fallback_adds_regular_grapheme_boundaries() {
+        let khmer = "\u{1780}\u{1781}";
+        let (normal, emergency) = icu_line_candidates(
+            khmer,
+            CssLineBreak::Normal,
+            CssWordBreak::Normal,
+            CssOverflowWrap::Normal,
+        );
+        assert!(
+            normal.contains(&3),
+            "Khmer EGC boundary is a regular fallback"
+        );
+        assert!(
+            !emergency.contains(&3),
+            "CSS fallback is not emergency wrapping"
+        );
+
+        let (thai, thai_emergency) = icu_line_candidates(
+            "\u{0e01}\u{0e02}",
+            CssLineBreak::Normal,
+            CssWordBreak::Normal,
+            CssOverflowWrap::Normal,
+        );
+        assert!(thai.contains(&3), "Thai EGC boundary is a regular fallback");
+        assert!(!thai_emergency.contains(&3));
+
+        let khmer_with_mark = "\u{1780}\u{0301}\u{1781}";
+        let (marked, _) = icu_line_candidates(
+            khmer_with_mark,
+            CssLineBreak::Normal,
+            CssWordBreak::Normal,
+            CssOverflowWrap::Normal,
+        );
+        assert!(
+            marked.contains(&5),
+            "fallback follows a marked Khmer letter unit"
+        );
+        assert!(!marked.contains(&3), "fallback never splits inside an EGC");
+
+        let mut style = ComputedValues::default();
+        style.color = "black".parse().expect("test text color");
+        style.text_wrap_mode = TextWrapMode::Wrap;
+        let mut spans = [SourceSpan {
+            selectable: true,
+            source: Some(1_u8),
+            owners: Vec::new(),
+            style: style.clone(),
+            range: 0..khmer.len(),
+        }];
+        let stream =
+            shape_fixture_stream(khmer, &mut spans, &[], &HashMap::new(), &style, 1.0, None);
+        assert!(stream.candidate_offsets.contains(&3));
+        assert!(!stream.emergency_candidate_offsets.contains(&3));
+
+        let mut marked_spans = [SourceSpan {
+            selectable: true,
+            source: Some(1_u8),
+            owners: Vec::new(),
+            style: style.clone(),
+            range: 0..khmer_with_mark.len(),
+        }];
+        let marked_stream = shape_fixture_stream(
+            khmer_with_mark,
+            &mut marked_spans,
+            &[],
+            &HashMap::new(),
+            &style,
+            1.0,
+            None,
+        );
+        assert!(marked_stream.candidate_offsets.contains(&5));
+        assert!(!marked_stream.candidate_offsets.contains(&3));
+        assert!(!marked_stream.emergency_candidate_offsets.contains(&5));
+    }
+
+    #[test]
+    fn glue_and_joiner_boundaries_are_not_generic_whitespace_candidates() {
+        let (nbsp, _) = icu_line_candidates(
+            "a\u{00a0}b",
+            CssLineBreak::Normal,
+            CssWordBreak::Normal,
+            CssOverflowWrap::Normal,
+        );
+        assert!(!nbsp.contains(&1) && !nbsp.contains(&3));
+        let (after_space, _) = icu_line_candidates(
+            "a \u{00a0}b",
+            CssLineBreak::Normal,
+            CssWordBreak::Normal,
+            CssOverflowWrap::Normal,
+        );
+        assert!(
+            after_space.contains(&2),
+            "LB12a permits a break after space before GL"
+        );
+        let (word_joiner, _) = icu_line_candidates(
+            "a\u{2060}b",
+            CssLineBreak::Normal,
+            CssWordBreak::Normal,
+            CssOverflowWrap::Normal,
+        );
+        assert!(!word_joiner.contains(&1) && !word_joiner.contains(&4));
+        let (zero_width_joiner, _) = icu_line_candidates(
+            "a\u{200d}b",
+            CssLineBreak::Normal,
+            CssWordBreak::Normal,
+            CssOverflowWrap::Normal,
+        );
+        assert!(!zero_width_joiner.contains(&1) && !zero_width_joiner.contains(&4));
+    }
+
+    #[test]
+    fn break_spaces_adds_an_opportunity_after_each_preserved_space() {
+        let mut style = ComputedValues::default();
+        style.white_space_collapse = WhiteSpaceCollapse::BreakSpaces;
+        assert!(preserved_space_opportunity(
+            "a  b",
+            2,
+            BreakStyle::from(&style)
+        ));
+        assert!(preserved_space_opportunity(
+            "a  b",
+            3,
+            BreakStyle::from(&style)
+        ));
+        style.white_space_collapse = WhiteSpaceCollapse::Preserve;
+        assert!(!preserved_space_opportunity(
+            "a  b",
+            2,
+            BreakStyle::from(&style)
+        ));
+    }
+
+    #[test]
+    fn boundary_style_uses_deepest_common_inline_owner() {
+        let mut root = ComputedValues::default();
+        root.text_wrap_mode = TextWrapMode::Wrap;
+        let mut common = ComputedValues::default();
+        common.text_wrap_mode = TextWrapMode::Nowrap;
+        let mut styles = HashMap::new();
+        styles.insert(1_u8, common);
+        styles.insert(2_u8, ComputedValues::default());
+        styles.insert(3_u8, ComputedValues::default());
+
+        let actual = common_style(&[1, 2], &[1, 3], &styles, &root);
+        assert_eq!(actual.text_wrap_mode, TextWrapMode::Nowrap);
+        let (normal, _) = icu_line_candidates(
+            "a\u{00a0}b",
+            CssLineBreak::Normal,
+            CssWordBreak::Normal,
+            CssOverflowWrap::Normal,
+        );
+        assert!(!normal.contains(&1));
+    }
+
+    #[test]
+    fn atomic_line_break_anywhere_uses_the_common_owner_after_nowrap_gate() {
+        let mut root = ComputedValues::default();
+        root.text_wrap_mode = TextWrapMode::Wrap;
+        let mut common = ComputedValues::default();
+        common.text_wrap_mode = TextWrapMode::Wrap;
+        common.line_break = CssLineBreak::Anywhere;
+        let mut leaf = ComputedValues::default();
+        leaf.text_wrap_mode = TextWrapMode::Wrap;
+        let styles = HashMap::from([
+            (10_u8, common.clone()),
+            (20, leaf.clone()),
+            (21, leaf.clone()),
+            (22, leaf),
+        ]);
+        let atom = |index| InlineAtom {
+            source: 30_u8,
+            owners: vec![10, 21],
+            index,
+            fragment: Fragment::default(),
+            line_width: 1.0,
+            line_box_height: 1.0,
+            baseline: 0.0,
+            margin_left: 0.0,
+            margin_top: 0.0,
+            edge: false,
+            paint: true,
+            marker: false,
+            empty_line: false,
+            vertical_align: VerticalAlign::Baseline,
+            font_size: 16.0,
+            line_height: 20.0,
+        };
+        let cluster =
+            |range: std::ops::Range<usize>, start_owners, end_owners| LogicalBreakItem::Cluster {
+                text_range: range,
+                contains_tab: false,
+                contains_preserved_space: false,
+                hangs_trailing_space: false,
+                font: None,
+                font_size: 16.0,
+                normalized_coords: Vec::new(),
+                source_mappings: Vec::new(),
+                start_owners,
+                end_owners,
+                advance: 1.0,
+                glyphs: Vec::new(),
+                soft_break: false,
+                hard_break: false,
+                rtl: false,
+            };
+        let before_text = "a\u{2007}";
+        let before_atom = atom(before_text.len());
+        let before_items = [
+            cluster(0..before_text.len(), vec![10, 20], vec![10, 20]),
+            LogicalBreakItem::InlineBox {
+                byte_index: before_text.len(),
+                source: 30_u8,
+                owners: before_atom.owners.clone(),
+                insertion_order: 0,
+                advance: 1.0,
+                atomic: true,
+            },
+        ];
+        assert_eq!(
+            atomic_side_opportunity(
+                before_text,
+                &before_atom,
+                0,
+                true,
+                &before_items,
+                &styles,
+                &root,
+            ),
+            Some(SelectedBreakKind::Regular),
+            "the common owner supplies anywhere before an atom next to GL"
+        );
+
+        let after_text = "a\u{2007}";
+        let after_atom = atom(1);
+        let after_items = [
+            cluster(0..1, vec![10, 20], vec![10, 20]),
+            LogicalBreakItem::InlineBox {
+                byte_index: 1,
+                source: 30_u8,
+                owners: after_atom.owners.clone(),
+                insertion_order: 0,
+                advance: 1.0,
+                atomic: true,
+            },
+            cluster(1..after_text.len(), vec![10, 22], vec![10, 22]),
+        ];
+        assert_eq!(
+            atomic_side_opportunity(
+                after_text,
+                &after_atom,
+                0,
+                false,
+                &after_items,
+                &styles,
+                &root,
+            ),
+            Some(SelectedBreakKind::Regular),
+            "the common owner supplies anywhere after an atom next to GL"
+        );
+
+        common.text_wrap_mode = TextWrapMode::Nowrap;
+        let nowrap_styles = HashMap::from([
+            (10_u8, common),
+            (20, styles[&20].clone()),
+            (21, styles[&21].clone()),
+            (22, styles[&22].clone()),
+        ]);
+        assert_eq!(
+            atomic_side_opportunity(
+                before_text,
+                &before_atom,
+                0,
+                true,
+                &before_items,
+                &nowrap_styles,
+                &root,
+            ),
+            None,
+            "the common-owner nowrap gate precedes the anywhere override"
+        );
+        assert_eq!(
+            atomic_side_opportunity(
+                after_text,
+                &after_atom,
+                0,
+                false,
+                &after_items,
+                &nowrap_styles,
+                &root,
+            ),
+            None,
+            "the common-owner nowrap gate precedes the anywhere override"
+        );
+    }
+    #[test]
+    fn atomic_marker_uses_icu_gl_wj_zwj_rules_with_nbsp_compatibility() {
+        let mut root = ComputedValues::default();
+        root.text_wrap_mode = TextWrapMode::Wrap;
+        let atom = |index| InlineAtom {
+            source: 1_u8,
+            owners: Vec::new(),
+            index,
+            fragment: Fragment::default(),
+            line_width: 60.0,
+            line_box_height: 60.0,
+            baseline: 0.0,
+            margin_left: 0.0,
+            margin_top: 0.0,
+            edge: false,
+            paint: true,
+            marker: false,
+            empty_line: false,
+            vertical_align: VerticalAlign::Baseline,
+            font_size: 60.0,
+            line_height: 60.0,
+        };
+        for blocker in ['\u{2007}', '\u{2060}', '\u{200d}'] {
+            let before_text = format!("a{blocker}");
+            let before_index = before_text.len();
+            let marked = inline_marker_text(&before_text, &[atom(before_index)]);
+            let before_atom = atom(before_index);
+            let (normal, _) = icu_line_candidates(
+                &marked,
+                root.line_break,
+                root.word_break,
+                root.overflow_wrap,
+            );
+            assert!(!normal.contains(&marked.find('\u{fffc}').unwrap()));
+            assert!(!atomic_fixture_side_allowed(
+                &before_text,
+                &before_atom,
+                true,
+                &[],
+                &HashMap::new(),
+                &root,
+            ));
+
+            let after_text = format!("a{blocker}");
+            let after_atom = atom(1);
+            assert!(!atomic_fixture_side_allowed(
+                &after_text,
+                &after_atom,
+                false,
+                &[],
+                &HashMap::new(),
+                &root,
+            ));
+
+            let mut anywhere_style = root.clone();
+            anywhere_style.line_break = CssLineBreak::Anywhere;
+            assert_eq!(
+                atomic_fixture_side_kind(
+                    &before_text,
+                    &before_atom,
+                    true,
+                    &[],
+                    &HashMap::new(),
+                    &anywhere_style,
+                ),
+                Some(SelectedBreakKind::Regular),
+                "line-break:anywhere overrides {blocker:?} before an atom"
+            );
+            assert_eq!(
+                atomic_fixture_side_kind(
+                    &after_text,
+                    &after_atom,
+                    false,
+                    &[],
+                    &HashMap::new(),
+                    &anywhere_style,
+                ),
+                Some(SelectedBreakKind::Regular),
+                "line-break:anywhere overrides {blocker:?} after an atom"
+            );
+            let mut nowrap_anywhere_style = anywhere_style.clone();
+            nowrap_anywhere_style.text_wrap_mode = TextWrapMode::Nowrap;
+            assert_eq!(
+                atomic_fixture_side_kind(
+                    &before_text,
+                    &before_atom,
+                    true,
+                    &[],
+                    &HashMap::new(),
+                    &nowrap_anywhere_style,
+                ),
+                None,
+                "the NCA nowrap gate still suppresses anywhere before the atom"
+            );
+            assert_eq!(
+                atomic_fixture_side_kind(
+                    &after_text,
+                    &after_atom,
+                    false,
+                    &[],
+                    &HashMap::new(),
+                    &nowrap_anywhere_style,
+                ),
+                None,
+                "the NCA nowrap gate still suppresses anywhere after the atom"
+            );
+
+            let mut emergency_style = root.clone();
+            emergency_style.overflow_wrap = CssOverflowWrap::Anywhere;
+            assert_eq!(
+                atomic_fixture_side_kind(
+                    &before_text,
+                    &before_atom,
+                    true,
+                    &[],
+                    &HashMap::new(),
+                    &emergency_style,
+                ),
+                Some(SelectedBreakKind::Emergency),
+                "overflow-wrap:anywhere keeps its emergency classification"
+            );
+        }
+
+        let nbsp = "a\u{00a0}";
+        let inline = [atom(nbsp.len())];
+        let marked = inline_marker_text(nbsp, &inline);
+        let (normal, _) = icu_line_candidates(
+            &marked,
+            root.line_break,
+            root.word_break,
+            root.overflow_wrap,
+        );
+        assert!(!normal.contains(&marked.find('\u{fffc}').expect("atomic marker offset")));
+        assert!(atomic_fixture_side_allowed(
+            nbsp,
+            &inline[0],
+            true,
+            &[],
+            &HashMap::new(),
+            &root,
+        ));
+    }
+    #[test]
+    fn atomic_inline_adds_regular_breaks_by_punctuation_and_nbsp_exception() {
+        let mut root = ComputedValues::default();
+        root.text_wrap_mode = TextWrapMode::Wrap;
+        let atom = |index| InlineAtom {
+            source: 1_u8,
+            owners: Vec::new(),
+            index,
+            fragment: Fragment::default(),
+            line_width: 1.0,
+            line_box_height: 1.0,
+            baseline: 0.0,
+            margin_left: 0.0,
+            margin_top: 0.0,
+            edge: false,
+            paint: true,
+            marker: false,
+            empty_line: false,
+            vertical_align: VerticalAlign::Baseline,
+            font_size: 16.0,
+            line_height: 20.0,
+        };
+        let no_styles = HashMap::new();
+        let before_close = atom("a)".len());
+        assert_eq!(
+            atomic_fixture_side_kind("a)", &before_close, true, &[], &no_styles, &root),
+            Some(SelectedBreakKind::Regular)
+        );
+        let after_open = atom(0);
+        assert_eq!(
+            atomic_fixture_side_kind("(a", &after_open, false, &[], &no_styles, &root),
+            Some(SelectedBreakKind::Regular)
+        );
+        let before_gl = atom("a\u{2007}".len());
+        assert_eq!(
+            atomic_fixture_side_kind("a\u{2007}", &before_gl, true, &[], &no_styles, &root),
+            None
+        );
+        let nbsp = "a\u{00a0}";
+        let before_nbsp = atom(nbsp.len());
+        assert_eq!(
+            atomic_fixture_side_kind(nbsp, &before_nbsp, true, &[], &no_styles, &root),
+            Some(SelectedBreakKind::Regular)
+        );
+    }
+
+    #[test]
+    fn atomic_boundaries_use_the_common_ancestor_white_space() {
+        let mut root = ComputedValues::default();
+        root.text_wrap_mode = TextWrapMode::Wrap;
+        let mut styles = HashMap::new();
+        let mut common = ComputedValues::default();
+        common.text_wrap_mode = TextWrapMode::Wrap;
+        styles.insert(10_u8, common);
+        let mut child = ComputedValues::default();
+        child.text_wrap_mode = TextWrapMode::Nowrap;
+        styles.insert(11_u8, child.clone());
+        styles.insert(12_u8, child);
+        let mut items = vec![
+            LogicalBreakItem::Cluster {
+                text_range: 0..1,
+                contains_tab: false,
+                contains_preserved_space: false,
+                hangs_trailing_space: false,
+                font: None,
+                font_size: 0.0,
+                normalized_coords: Vec::new(),
+                source_mappings: Vec::new(),
+                start_owners: vec![10, 11],
+                end_owners: vec![10, 11],
+                advance: 1.0,
+                glyphs: Vec::new(),
+                soft_break: false,
+                hard_break: false,
+                rtl: false,
+            },
+            LogicalBreakItem::Cluster {
+                text_range: 1..2,
+                contains_tab: false,
+                contains_preserved_space: false,
+                hangs_trailing_space: false,
+                font: None,
+                font_size: 0.0,
+                normalized_coords: Vec::new(),
+                source_mappings: Vec::new(),
+                start_owners: vec![10, 12],
+                end_owners: vec![10, 12],
+                advance: 1.0,
+                glyphs: Vec::new(),
+                soft_break: false,
+                hard_break: false,
+                rtl: false,
+            },
+        ];
+        items.sort_by_key(|item| match item {
+            LogicalBreakItem::Cluster { text_range, .. } => (text_range.start, 0),
+            LogicalBreakItem::InlineBox { byte_index, .. } => (*byte_index, 1),
+        });
+        let atom = InlineAtom {
+            source: 13,
+            owners: vec![10],
+            index: 1,
+            fragment: Fragment::default(),
+            line_width: 1.0,
+            line_box_height: 1.0,
+            baseline: 0.0,
+            margin_left: 0.0,
+            margin_top: 0.0,
+            edge: false,
+            paint: true,
+            marker: false,
+            empty_line: false,
+            vertical_align: VerticalAlign::Baseline,
+            font_size: 10.0,
+            line_height: 10.0,
+        };
+        items.push(LogicalBreakItem::InlineBox {
+            byte_index: 1,
+            source: 13_u8,
+            owners: vec![10],
+            insertion_order: 0,
+            advance: 1.0,
+            atomic: true,
+        });
+        items.sort_by_key(|item| match item {
+            LogicalBreakItem::Cluster { text_range, .. } => (text_range.start, usize::MAX),
+            LogicalBreakItem::InlineBox {
+                byte_index,
+                insertion_order,
+                ..
+            } => (*byte_index, insertion_order.saturating_add(1)),
+        });
+
+        assert!(atomic_fixture_side_allowed(
+            "ab", &atom, true, &items, &styles, &root
+        ));
+        assert!(atomic_fixture_side_allowed(
+            "ab", &atom, false, &items, &styles, &root
+        ));
+        styles.get_mut(&10).unwrap().text_wrap_mode = TextWrapMode::Nowrap;
+        assert!(!atomic_fixture_side_allowed(
+            "ab", &atom, true, &items, &styles, &root
+        ));
+        assert!(!atomic_fixture_side_allowed(
+            "ab", &atom, false, &items, &styles, &root
+        ));
+    }
+
+    #[test]
+    fn adjacent_atoms_use_each_others_owner_chain_in_logical_order() {
+        let mut root = ComputedValues::default();
+        root.text_wrap_mode = TextWrapMode::Wrap;
+        let mut common = ComputedValues::default();
+        common.text_wrap_mode = TextWrapMode::Nowrap;
+        let mut styles = HashMap::from([(10_u8, common)]);
+        let atom = |source, insertion_order| InlineAtom {
+            source,
+            owners: vec![10],
+            index: 0,
+            fragment: Fragment::default(),
+            line_width: 1.0,
+            line_box_height: 1.0,
+            baseline: 0.0,
+            margin_left: 0.0,
+            margin_top: 0.0,
+            edge: false,
+            paint: true,
+            marker: false,
+            empty_line: false,
+            vertical_align: VerticalAlign::Baseline,
+            font_size: insertion_order as f32,
+            line_height: 1.0,
+        };
+        let atoms = [atom(11_u8, 1), atom(12_u8, 2)];
+        let items = [
+            LogicalBreakItem::InlineBox {
+                byte_index: 0,
+                source: 11_u8,
+                owners: vec![10],
+                insertion_order: 0,
+                advance: 1.0,
+                atomic: true,
+            },
+            LogicalBreakItem::InlineBox {
+                byte_index: 0,
+                source: 12_u8,
+                owners: vec![10],
+                insertion_order: 1,
+                advance: 1.0,
+                atomic: true,
+            },
+        ];
+        assert_eq!(
+            atomic_side_opportunity("", &atoms[0], 0, false, &items, &styles, &root),
+            None
+        );
+        assert_eq!(
+            atomic_side_opportunity("", &atoms[1], 1, true, &items, &styles, &root),
+            None
+        );
+
+        styles.get_mut(&10).unwrap().text_wrap_mode = TextWrapMode::Wrap;
+        assert_eq!(
+            atomic_side_opportunity("", &atoms[0], 0, false, &items, &styles, &root),
+            Some(SelectedBreakKind::Regular)
+        );
+        assert_eq!(
+            atomic_side_opportunity("", &atoms[1], 1, true, &items, &styles, &root),
+            Some(SelectedBreakKind::Regular)
+        );
+    }
+
+    #[test]
+    fn adjacent_atoms_break_the_middle_edge_despite_outer_glue() {
+        let text = "a\u{2007}b";
+        let mut root = ComputedValues::default();
+        root.text_wrap_mode = TextWrapMode::Wrap;
+        let styles = HashMap::new();
+        let atom = |source, index| InlineAtom {
+            source,
+            owners: Vec::new(),
+            index,
+            fragment: Fragment::default(),
+            line_width: 1.0,
+            line_box_height: 1.0,
+            baseline: 0.0,
+            margin_left: 0.0,
+            margin_top: 0.0,
+            edge: false,
+            paint: true,
+            marker: false,
+            empty_line: false,
+            vertical_align: VerticalAlign::Baseline,
+            font_size: 16.0,
+            line_height: 20.0,
+        };
+        let offset = "a\u{2007}".len();
+        let atoms = [atom(1_u8, offset), atom(2_u8, offset)];
+        let items = [
+            LogicalBreakItem::Cluster {
+                text_range: 0..offset,
+                contains_tab: false,
+                contains_preserved_space: false,
+                hangs_trailing_space: false,
+                font: None,
+                font_size: 16.0,
+                normalized_coords: Vec::new(),
+                source_mappings: Vec::new(),
+                start_owners: Vec::new(),
+                end_owners: Vec::new(),
+                advance: 1.0,
+                glyphs: Vec::new(),
+                soft_break: false,
+                hard_break: false,
+                rtl: false,
+            },
+            LogicalBreakItem::InlineBox {
+                byte_index: offset,
+                source: 1_u8,
+                owners: Vec::new(),
+                insertion_order: 0,
+                advance: 1.0,
+                atomic: true,
+            },
+            LogicalBreakItem::InlineBox {
+                byte_index: offset,
+                source: 2_u8,
+                owners: Vec::new(),
+                insertion_order: 1,
+                advance: 1.0,
+                atomic: true,
+            },
+            LogicalBreakItem::Cluster {
+                text_range: offset..text.len(),
+                contains_tab: false,
+                contains_preserved_space: false,
+                hangs_trailing_space: false,
+                font: None,
+                font_size: 16.0,
+                normalized_coords: Vec::new(),
+                source_mappings: Vec::new(),
+                start_owners: Vec::new(),
+                end_owners: Vec::new(),
+                advance: 1.0,
+                glyphs: Vec::new(),
+                soft_break: false,
+                hard_break: false,
+                rtl: false,
+            },
+        ];
+        assert_eq!(
+            atomic_side_opportunity(text, &atoms[0], 0, true, &items, &styles, &root),
+            None,
+            "the first atom remains adjacent to the GL character"
+        );
+        assert_eq!(
+            atomic_side_opportunity(text, &atoms[0], 0, false, &items, &styles, &root),
+            Some(SelectedBreakKind::Regular)
+        );
+        assert_eq!(
+            atomic_side_opportunity(text, &atoms[1], 1, true, &items, &styles, &root),
+            Some(SelectedBreakKind::Regular),
+            "the middle edge is bounded by the first atom, not the earlier GL"
+        );
+        assert_eq!(
+            atomic_side_opportunity(text, &atoms[1], 1, false, &items, &styles, &root),
+            Some(SelectedBreakKind::Regular)
+        );
+    }
+
+    #[test]
+    fn synthetic_inline_edges_do_not_hide_text_or_replace_the_nca_owner() {
+        let mut root = ComputedValues::default();
+        root.text_wrap_mode = TextWrapMode::Wrap;
+        let mut common = ComputedValues::default();
+        common.text_wrap_mode = TextWrapMode::Wrap;
+        let mut child = ComputedValues::default();
+        child.text_wrap_mode = TextWrapMode::Nowrap;
+        let mut sibling = ComputedValues::default();
+        sibling.text_wrap_mode = TextWrapMode::Wrap;
+        let styles = HashMap::from([(10_u8, common), (11_u8, sibling), (12_u8, child)]);
+        let atom = |index| InlineAtom {
+            source: 13_u8,
+            owners: vec![10, 12],
+            index,
+            fragment: Fragment::default(),
+            line_width: 1.0,
+            line_box_height: 1.0,
+            baseline: 0.0,
+            margin_left: 0.0,
+            margin_top: 0.0,
+            edge: false,
+            paint: true,
+            marker: false,
+            empty_line: false,
+            vertical_align: VerticalAlign::Baseline,
+            font_size: 16.0,
+            line_height: 20.0,
+        };
+
+        let glue = "a\u{2007}";
+        let glue_items = [
+            LogicalBreakItem::Cluster {
+                text_range: 0..glue.len(),
+                contains_tab: false,
+                contains_preserved_space: false,
+                hangs_trailing_space: false,
+                font: None,
+                font_size: 16.0,
+                normalized_coords: Vec::new(),
+                source_mappings: Vec::new(),
+                start_owners: vec![10, 12],
+                end_owners: vec![10, 12],
+                advance: 1.0,
+                glyphs: Vec::new(),
+                soft_break: false,
+                hard_break: false,
+                rtl: false,
+            },
+            LogicalBreakItem::InlineBox {
+                byte_index: glue.len(),
+                source: 11_u8,
+                owners: vec![10, 11],
+                insertion_order: 0,
+                advance: 0.0,
+                atomic: false,
+            },
+            LogicalBreakItem::InlineBox {
+                byte_index: glue.len(),
+                source: 13_u8,
+                owners: vec![10, 12],
+                insertion_order: 1,
+                advance: 1.0,
+                atomic: true,
+            },
+        ];
+        assert_eq!(
+            atomic_side_opportunity(
+                glue,
+                &atom(glue.len()),
+                1,
+                true,
+                &glue_items,
+                &styles,
+                &root,
+            ),
+            None,
+            "the synthetic edge must not hide the actual GL text neighbor"
+        );
+
+        let punctuation = "a)";
+        let styled_items = [
+            LogicalBreakItem::Cluster {
+                text_range: 0..punctuation.len(),
+                contains_tab: false,
+                contains_preserved_space: false,
+                hangs_trailing_space: false,
+                font: None,
+                font_size: 16.0,
+                normalized_coords: Vec::new(),
+                source_mappings: Vec::new(),
+                start_owners: vec![10, 12],
+                end_owners: vec![10, 12],
+                advance: 1.0,
+                glyphs: Vec::new(),
+                soft_break: false,
+                hard_break: false,
+                rtl: false,
+            },
+            LogicalBreakItem::InlineBox {
+                byte_index: punctuation.len(),
+                source: 11_u8,
+                owners: vec![10, 11],
+                insertion_order: 0,
+                advance: 0.0,
+                atomic: false,
+            },
+            LogicalBreakItem::InlineBox {
+                byte_index: punctuation.len(),
+                source: 13_u8,
+                owners: vec![10, 12],
+                insertion_order: 1,
+                advance: 1.0,
+                atomic: true,
+            },
+        ];
+        assert_eq!(
+            atomic_side_opportunity(
+                punctuation,
+                &atom(punctuation.len()),
+                1,
+                true,
+                &styled_items,
+                &styles,
+                &root,
+            ),
+            None,
+            "the text span's nowrap owner is the NCA; the synthetic sibling is not"
+        );
+    }
+
+    #[test]
+    fn t1_shaped_60px_nowrap_inline_box_edges_have_a_failing_control() {
+        let text = "aa cc  dd ee";
+        let mut root = ComputedValues::default();
+        root.color = "black".parse().expect("test text color");
+        root.text_wrap_mode = TextWrapMode::Wrap;
+        let mut nowrap_span = ComputedValues::default();
+        nowrap_span.color = "black".parse().expect("test text color");
+        nowrap_span.text_wrap_mode = TextWrapMode::Nowrap;
+        let mut styles = HashMap::new();
+        styles.insert(1_u8, nowrap_span.clone());
+        let mut spans = vec![
+            SourceSpan {
+                selectable: true,
+                source: Some(1),
+                owners: Vec::new(),
+                style: root.clone(),
+                range: 0..3,
+            },
+            SourceSpan {
+                selectable: true,
+                source: Some(1),
+                owners: vec![1],
+                style: nowrap_span.clone(),
+                range: 3..6,
+            },
+            SourceSpan {
+                selectable: true,
+                source: Some(1),
+                owners: vec![1],
+                style: nowrap_span.clone(),
+                range: 6..9,
+            },
+            SourceSpan {
+                selectable: true,
+                source: Some(1),
+                owners: Vec::new(),
+                style: root.clone(),
+                range: 9..text.len(),
+            },
+        ];
+        let atom = InlineAtom {
+            source: 2,
+            owners: vec![1],
+            index: 6,
+            fragment: Fragment {
+                x: 0.0,
+                y: 0.0,
+                width: 60.0,
+                height: 16.0,
+            },
+            line_width: 60.0,
+            line_box_height: 16.0,
+            baseline: 0.0,
+            margin_left: 0.0,
+            margin_top: 0.0,
+            edge: false,
+            paint: true,
+            marker: false,
+            empty_line: false,
+            vertical_align: VerticalAlign::Baseline,
+            font_size: 16.0,
+            line_height: 16.0,
+        };
+
+        assert_eq!(text.len(), 12);
+        let mut text_system = TextSystem::new();
+        let shaped = text_system.shape(
+            text,
+            &mut spans,
+            std::slice::from_ref(&atom),
+            &styles,
+            false,
+            60.0,
+            &root,
+            None,
+            None,
+        );
+        assert_eq!(shaped.break_stream.paragraph_text, text);
+        assert!(shaped.break_stream.items.iter().any(|item| matches!(
+            item,
+            LogicalBreakItem::InlineBox {
+                byte_index: 6,
+                owners,
+                atomic: true,
+                ..
+            } if owners == &[1]
+        )));
+        assert!(
+            !shaped
+                .break_stream
+                .atomic_opportunities
+                .iter()
+                .any(|edge| { edge.byte_index == 6 })
+        );
+
+        styles.get_mut(&1).unwrap().text_wrap_mode = TextWrapMode::Wrap;
+        for span in &mut spans {
+            if span.owners.as_slice() == [1_u8] {
+                span.style.text_wrap_mode = TextWrapMode::Wrap;
+            }
+        }
+        let control = text_system.shape(
+            text,
+            &mut spans,
+            std::slice::from_ref(&atom),
+            &styles,
+            false,
+            60.0,
+            &root,
+            None,
+            None,
+        );
+        assert!(
+            control
+                .break_stream
+                .atomic_opportunities
+                .iter()
+                .any(|edge| edge.byte_index == 6 && edge.side == AtomicOpportunitySide::Before)
+        );
+        assert!(
+            control
+                .break_stream
+                .atomic_opportunities
+                .iter()
+                .any(|edge| edge.byte_index == 6 && edge.side == AtomicOpportunitySide::After)
+        );
+    }
+
+    #[test]
+    fn wpt_031_text_before_atomic_inline_uses_common_ancestor_white_space() {
+        let mut root = ComputedValues::default();
+        root.text_wrap_mode = TextWrapMode::Wrap;
+        let mut styles = HashMap::new();
+        styles.insert(10_u8, root.clone());
+        let mut pre = ComputedValues::default();
+        pre.white_space_collapse = WhiteSpaceCollapse::Preserve;
+        pre.text_wrap_mode = TextWrapMode::Nowrap;
+        styles.insert(11_u8, pre.clone());
+        styles.insert(12_u8, pre);
+        let items = vec![LogicalBreakItem::Cluster {
+            text_range: 0..1,
+            contains_tab: false,
+            contains_preserved_space: false,
+            hangs_trailing_space: false,
+            font: None,
+            font_size: 0.0,
+            normalized_coords: Vec::new(),
+            source_mappings: Vec::new(),
+            start_owners: vec![10, 11],
+            end_owners: vec![10, 11],
+            advance: 60.0,
+            glyphs: Vec::new(),
+            soft_break: false,
+            hard_break: false,
+            rtl: false,
+        }];
+        let atom = InlineAtom {
+            source: 13,
+            owners: vec![10, 12],
+            index: 1,
+            fragment: Fragment::default(),
+            line_width: 60.0,
+            line_box_height: 60.0,
+            baseline: 0.0,
+            margin_left: 0.0,
+            margin_top: 0.0,
+            edge: false,
+            paint: true,
+            marker: false,
+            empty_line: false,
+            vertical_align: VerticalAlign::Baseline,
+            font_size: 60.0,
+            line_height: 60.0,
+        };
+        let mut items = items;
+        items.push(LogicalBreakItem::InlineBox {
+            byte_index: 1,
+            source: 13_u8,
+            owners: vec![10, 12],
+            insertion_order: 0,
+            advance: 60.0,
+            atomic: true,
+        });
+
+        assert!(atomic_fixture_side_allowed(
+            "X", &atom, true, &items, &styles, &root
+        ));
+        styles.get_mut(&10).unwrap().text_wrap_mode = TextWrapMode::Nowrap;
+        assert!(!atomic_fixture_side_allowed(
+            "X", &atom, true, &items, &styles, &root
+        ));
+    }
+
+    #[test]
+    fn wpt_032_atomic_inline_before_text_uses_common_ancestor_white_space() {
+        let mut root = ComputedValues::default();
+        root.text_wrap_mode = TextWrapMode::Wrap;
+        let mut styles = HashMap::new();
+        styles.insert(10_u8, root.clone());
+        let mut pre = ComputedValues::default();
+        pre.white_space_collapse = WhiteSpaceCollapse::Preserve;
+        pre.text_wrap_mode = TextWrapMode::Nowrap;
+        styles.insert(11_u8, pre.clone());
+        styles.insert(12_u8, pre);
+        let mut items = vec![LogicalBreakItem::Cluster {
+            text_range: 0..1,
+            contains_tab: false,
+            contains_preserved_space: false,
+            hangs_trailing_space: false,
+            font: None,
+            font_size: 0.0,
+            normalized_coords: Vec::new(),
+            source_mappings: Vec::new(),
+            start_owners: vec![10, 12],
+            end_owners: vec![10, 12],
+            advance: 60.0,
+            glyphs: Vec::new(),
+            soft_break: false,
+            hard_break: false,
+            rtl: false,
+        }];
+        let atom = InlineAtom {
+            source: 13,
+            owners: vec![10, 11],
+            index: 0,
+            fragment: Fragment::default(),
+            line_width: 60.0,
+            line_box_height: 60.0,
+            baseline: 0.0,
+            margin_left: 0.0,
+            margin_top: 0.0,
+            edge: false,
+            paint: true,
+            marker: false,
+            empty_line: false,
+            vertical_align: VerticalAlign::Baseline,
+            font_size: 60.0,
+            line_height: 60.0,
+        };
+        items.push(LogicalBreakItem::InlineBox {
+            byte_index: 0,
+            source: 13_u8,
+            owners: vec![10, 11],
+            insertion_order: 0,
+            advance: 60.0,
+            atomic: true,
+        });
+
+        assert!(atomic_fixture_side_allowed(
+            "X", &atom, false, &items, &styles, &root
+        ));
+        styles.get_mut(&10).unwrap().text_wrap_mode = TextWrapMode::Nowrap;
+        assert!(!atomic_fixture_side_allowed(
+            "X", &atom, false, &items, &styles, &root
+        ));
+    }
+
+    #[test]
+    fn selected_break_mapping_uses_logical_ranges_and_atom_insertion_order() {
+        let rtl = selected_break_position(
+            0..2,
+            SelectedBreakKind::Regular,
+            &[],
+            &[],
+            &[LogicalBreakItem::<u8>::Cluster {
+                text_range: 0..2,
+                contains_tab: false,
+                contains_preserved_space: false,
+                hangs_trailing_space: false,
+                font: None,
+                font_size: 0.0,
+                normalized_coords: Vec::new(),
+                source_mappings: Vec::new(),
+                start_owners: Vec::new(),
+                end_owners: Vec::new(),
+                advance: 10.0,
+                glyphs: Vec::new(),
+                soft_break: true,
+                hard_break: false,
+                rtl: true,
+            }],
+        )
+        .unwrap();
+        assert_eq!(rtl.byte_index, 2);
+        assert_eq!(rtl.kind, SelectedBreakKind::Regular);
+        assert_eq!(rtl.location, SelectedBreakLocation::Text);
+
+        let adjacent_atoms = [
+            LogicalBreakItem::InlineBox {
+                byte_index: 1,
+                source: 1_u8,
+                owners: Vec::new(),
+                insertion_order: 2,
+                advance: 1.0,
+                atomic: true,
+            },
+            LogicalBreakItem::InlineBox {
+                byte_index: 1,
+                source: 2_u8,
+                owners: Vec::new(),
+                insertion_order: 3,
+                advance: 1.0,
+                atomic: true,
+            },
+        ];
+        let between = selected_break_position(
+            1..1,
+            SelectedBreakKind::Emergency,
+            &[2],
+            &[3],
+            &adjacent_atoms,
+        )
+        .unwrap();
+        assert_eq!(
+            between.location,
+            SelectedBreakLocation::BetweenInlines {
+                after: Some(2),
+                before: Some(3),
+            }
+        );
+
+        let synthetic_edge = [LogicalBreakItem::InlineBox {
+            byte_index: 1,
+            source: 4_u8,
+            owners: Vec::new(),
+            insertion_order: 4,
+            advance: 0.0,
+            atomic: false,
+        }];
+        let text_break =
+            selected_break_position(0..1, SelectedBreakKind::Regular, &[4], &[], &synthetic_edge)
+                .unwrap();
+        assert_eq!(text_break.location, SelectedBreakLocation::Text);
+    }
+
+    #[test]
+    fn disappearing_space_uses_its_direct_white_space_owner() {
+        let text = "a b";
+        let mut root = ComputedValues::default();
+        root.text_wrap_mode = TextWrapMode::Wrap;
+        let mut direct_space_owner = ComputedValues::default();
+        direct_space_owner.text_wrap_mode = TextWrapMode::Nowrap;
+        direct_space_owner.line_break = CssLineBreak::Loose;
+        direct_space_owner.word_break = CssWordBreak::BreakAll;
+        direct_space_owner.overflow_wrap = CssOverflowWrap::Anywhere;
+        let mut styles = HashMap::new();
+        styles.insert(1_u8, direct_space_owner.clone());
+        let items = vec![
+            LogicalBreakItem::Cluster {
+                text_range: 0..2,
+                contains_tab: false,
+                contains_preserved_space: false,
+                hangs_trailing_space: false,
+                font: None,
+                font_size: 0.0,
+                normalized_coords: Vec::new(),
+                source_mappings: vec![SourceSlice {
+                    text_range: 1..2,
+                    source: Some(1),
+                    span_range: 1..2,
+                    owners: vec![1],
+                    break_style: BreakStyle::from(&direct_space_owner),
+                }],
+                start_owners: vec![1],
+                end_owners: vec![1],
+                advance: 2.0,
+                glyphs: Vec::new(),
+                soft_break: false,
+                hard_break: false,
+                rtl: false,
+            },
+            LogicalBreakItem::Cluster {
+                text_range: 2..3,
+                contains_tab: false,
+                contains_preserved_space: false,
+                hangs_trailing_space: false,
+                font: None,
+                font_size: 0.0,
+                normalized_coords: Vec::new(),
+                source_mappings: Vec::new(),
+                start_owners: Vec::new(),
+                end_owners: Vec::new(),
+                advance: 1.0,
+                glyphs: Vec::new(),
+                soft_break: false,
+                hard_break: false,
+                rtl: false,
+            },
+        ];
+
+        assert!(!boundary_allows_wrap(text, 2, &items, &styles, &root));
+        let effective = boundary_style(text, 2, &items, &styles, &root);
+        assert_eq!(effective.text_wrap_mode, TextWrapMode::Nowrap);
+        assert_eq!(effective.line_break, CssLineBreak::Loose);
+        assert_eq!(effective.word_break, CssWordBreak::BreakAll);
+        assert_eq!(effective.overflow_wrap, CssOverflowWrap::Anywhere);
+        let mut control = items.clone();
+        if let LogicalBreakItem::Cluster {
+            source_mappings, ..
+        } = &mut control[0]
+        {
+            source_mappings[0].break_style.text_wrap_mode = TextWrapMode::Wrap;
+            source_mappings[0].break_style.line_break = CssLineBreak::Strict;
+            source_mappings[0].break_style.word_break = CssWordBreak::KeepAll;
+            source_mappings[0].break_style.overflow_wrap = CssOverflowWrap::Normal;
+        }
+        assert!(boundary_allows_wrap(text, 2, &control, &styles, &root));
+        let effective = boundary_style(text, 2, &control, &styles, &root);
+        assert_eq!(effective.line_break, CssLineBreak::Strict);
+        assert_eq!(effective.word_break, CssWordBreak::KeepAll);
+        assert_eq!(effective.overflow_wrap, CssOverflowWrap::Normal);
+    }
+
+    #[test]
+    fn shaped_stream_keeps_utf8_source_ranges_and_permits_selected_breaks() {
+        let mut text_system = TextSystem::new();
+        let mut style = ComputedValues::default();
+        style.color = "black".parse().expect("test text color");
+        let text = "é a";
+        let mut spans = vec![SourceSpan {
+            selectable: true,
+            source: Some(7_u8),
+            owners: Vec::new(),
+            style: style.clone(),
+            range: 0..text.len(),
+        }];
+        let shaped = text_system.shape(
+            text,
+            &mut spans,
+            &[],
+            &HashMap::new(),
+            false,
+            1.0,
+            &style,
+            None,
+            None,
+        );
+
+        let clusters = shaped
+            .break_stream
+            .items
+            .iter()
+            .filter_map(|item| match item {
+                LogicalBreakItem::Cluster {
+                    text_range,
+                    source_mappings,
+                    ..
+                } => Some((text_range, source_mappings)),
+                LogicalBreakItem::InlineBox { .. } => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(shaped.break_stream.paragraph_text, text);
+        assert!(shaped.break_stream.items.iter().any(|item| matches!(
+            item,
+            LogicalBreakItem::Cluster {
+                font: Some(_),
+                font_size,
+                ..
+            } if *font_size > 0.0
+        )));
+        assert!(clusters.iter().any(|(range, mappings)| {
+            **range == (0..2)
+                && mappings.iter().any(|mapping| {
+                    mapping.source == Some(7)
+                        && mapping.text_range == (0..2)
+                        && mapping.span_range == (0..2)
+                })
+        }));
+        assert!(!shaped.break_stream.selected_breaks.is_empty());
+        assert!(shaped.break_stream.selected_breaks_are_permitted());
+        assert!(!shaped.break_stream.candidate_offsets.contains(&1));
+        let mut control = shaped.break_stream.clone();
+        control.candidate_offsets.clear();
+        control.emergency_candidate_offsets.clear();
+        control.atomic_opportunities.clear();
+        assert!(!control.selected_breaks_are_permitted());
+    }
+
+    #[test]
+    fn correct_today_css_text_and_line_box_breaks_are_candidates() {
+        // Mirrors every property arm in
+        // css_text_lane::overflow_wrap_and_word_break_wrap_unbreakable_words,
+        // using its exact word, font, size, and width. The normal case has no
+        // interior candidate; each current wrapping case must expose the
+        // selected logical breaks through its correct opportunity class.
+        let word = "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM";
+        let cases = [
+            (
+                "normal",
+                CssOverflowWrap::Normal,
+                CssWordBreak::Normal,
+                false,
+                None,
+            ),
+            (
+                "overflow-wrap:break-word",
+                CssOverflowWrap::BreakWord,
+                CssWordBreak::Normal,
+                false,
+                Some(SelectedBreakKind::Emergency),
+            ),
+            (
+                "overflow-wrap:anywhere",
+                CssOverflowWrap::Anywhere,
+                CssWordBreak::Normal,
+                false,
+                Some(SelectedBreakKind::Emergency),
+            ),
+            (
+                "word-wrap:break-word alias",
+                CssOverflowWrap::BreakWord,
+                CssWordBreak::Normal,
+                false,
+                Some(SelectedBreakKind::Emergency),
+            ),
+            (
+                "word-break:break-all",
+                CssOverflowWrap::Normal,
+                CssWordBreak::BreakAll,
+                false,
+                Some(SelectedBreakKind::Regular),
+            ),
+            (
+                "legacy word-break:break-word",
+                CssOverflowWrap::Normal,
+                CssWordBreak::BreakWord,
+                false,
+                Some(SelectedBreakKind::Emergency),
+            ),
+            (
+                "nested overflow-wrap:anywhere",
+                CssOverflowWrap::Normal,
+                CssWordBreak::Normal,
+                true,
+                Some(SelectedBreakKind::Emergency),
+            ),
+        ];
+        for (label, overflow_wrap, word_break, nested, expected_kind) in cases {
+            let mut root_style = ComputedValues::default();
+            root_style.color = "black".parse().expect("test text color");
+            root_style.font_family = CssFontFamily::Named("sans-serif".into());
+            root_style.font_size = CssFontSize::Value("16px".parse().expect("16px font size"));
+            root_style.line_height =
+                CssLineHeight::Value("20px".parse().expect("20px line height"));
+            let mut span_style = root_style.clone();
+            span_style.overflow_wrap = overflow_wrap;
+            span_style.word_break = word_break;
+            let owners = if nested { vec![9_u8] } else { Vec::new() };
+            let mut inline_styles = HashMap::new();
+            if nested {
+                span_style.overflow_wrap = CssOverflowWrap::Anywhere;
+                root_style.overflow_wrap = CssOverflowWrap::Normal;
+                root_style.word_break = CssWordBreak::Normal;
+                inline_styles.insert(9_u8, span_style.clone());
+            } else {
+                root_style.overflow_wrap = overflow_wrap;
+                root_style.word_break = word_break;
+            }
+            let mut spans = vec![SourceSpan {
+                selectable: true,
+                source: Some(1_u8),
+                owners,
+                style: span_style,
+                range: 0..word.len(),
+            }];
+            let stream = shape_fixture_stream(
+                word,
+                &mut spans,
+                &[],
+                &inline_styles,
+                &root_style,
+                100.0,
+                None,
+            );
+            if let Some(expected_kind) = expected_kind {
+                assert!(!stream.selected_breaks.is_empty(), "{label} must wrap");
+                assert!(
+                    stream.items.iter().any(|item| matches!(
+                        item,
+                        LogicalBreakItem::Cluster {
+                            soft_break: true,
+                            ..
+                        }
+                    )),
+                    "{label} retains the finite Parley soft-break flag"
+                );
+                assert!(
+                    stream
+                        .selected_breaks
+                        .iter()
+                        .all(|selected| selected.kind == expected_kind),
+                    "{label} selected ordinary/emergency kinds: {:?}",
+                    stream.selected_breaks
+                );
+            } else {
+                assert!(
+                    stream.selected_breaks.is_empty(),
+                    "{label} overflows intact"
+                );
+                assert!(
+                    !stream
+                        .candidate_offsets
+                        .iter()
+                        .any(|offset| 0 < *offset && *offset < word.len()),
+                    "{label} must not gain ordinary internal opportunities"
+                );
+                assert!(
+                    !stream
+                        .emergency_candidate_offsets
+                        .iter()
+                        .any(|offset| 0 < *offset && *offset < word.len()),
+                    "{label} must not gain emergency internal opportunities"
+                );
+            }
+            assert!(
+                stream.selected_breaks_are_permitted(),
+                "{label} selected breaks must match their exact ordinary/emergency candidates"
+            );
+        }
+        // Mirrors the `wrapped-atom` line-box fixture in
+        // tests/line_box_model.rs: ordinary word spaces and an 80px inline
+        // atom compete for line endings in a 160px block.
+        let text = "aaaa bbbb cccc  dddd eeee ffff";
+        let mut style = ComputedValues::default();
+        style.color = "black".parse().expect("test text color");
+        style.font_family = CssFontFamily::Named("Ahem".into());
+        style.font_size = CssFontSize::Value("16px".parse().expect("16px font size"));
+        style.line_height = CssLineHeight::Value("20px".parse().expect("20px line height"));
+        let mut spans = vec![SourceSpan {
+            selectable: true,
+            source: Some(1_u8),
+            owners: Vec::new(),
+            style: style.clone(),
+            range: 0..text.len(),
+        }];
+        let atom = InlineAtom {
+            source: 2_u8,
+            owners: Vec::new(),
+            index: 15,
+            fragment: Fragment {
+                x: 0.0,
+                y: 0.0,
+                width: 80.0,
+                height: 40.0,
+            },
+            line_width: 80.0,
+            line_box_height: 40.0,
+            baseline: 0.0,
+            margin_left: 0.0,
+            margin_top: 0.0,
+            edge: false,
+            paint: true,
+            marker: false,
+            empty_line: false,
+            vertical_align: VerticalAlign::Baseline,
+            font_size: 16.0,
+            line_height: 20.0,
+        };
+        let ahem = include_bytes!("../../../tests/wpt/tests/fonts/Ahem.ttf");
+        let line_box = shape_fixture_stream(
+            text,
+            &mut spans,
+            std::slice::from_ref(&atom),
+            &HashMap::new(),
+            &style,
+            160.0,
+            Some(ahem),
+        );
+        assert!(!line_box.selected_breaks.is_empty());
+        assert!(line_box.selected_breaks_are_permitted());
+    }
+
+    #[test]
+    fn correct_today_css_text_contexts_keep_current_breaks_and_prohibitions() {
+        let mut base = ComputedValues::default();
+        base.color = "black".parse().expect("test text color");
+        base.font_family = CssFontFamily::Named("sans-serif".into());
+        base.font_size = CssFontSize::Value("16px".parse().expect("16px font size"));
+        base.line_height = CssLineHeight::Value("20px".parse().expect("20px line height"));
+
+        // Exact text and child/block widths from
+        // css_text_lane::word_break_keep_all_keeps_cjk_runs_together.
+        let cjk = "\u{4e2d}\u{6587}\u{4e2d}\u{6587}\u{4e2d}\u{6587}\u{4e2d}\u{6587}";
+        let mut normal = base.clone();
+        let normal_spans = &mut [SourceSpan {
+            selectable: true,
+            source: Some(1),
+            owners: Vec::new(),
+            style: normal.clone(),
+            range: 0..cjk.len(),
+        }];
+        let normal_stream =
+            shape_fixture_stream(cjk, normal_spans, &[], &HashMap::new(), &normal, 60.0, None);
+        assert!(!normal_stream.selected_breaks.is_empty());
+        assert!(normal_stream.selected_breaks_are_permitted());
+        normal.word_break = CssWordBreak::KeepAll;
+        let keep_spans = &mut [SourceSpan {
+            selectable: true,
+            source: Some(1),
+            owners: Vec::new(),
+            style: normal.clone(),
+            range: 0..cjk.len(),
+        }];
+        let keep_stream =
+            shape_fixture_stream(cjk, keep_spans, &[], &HashMap::new(), &normal, 60.0, None);
+        assert!(keep_stream.selected_breaks.is_empty());
+        assert!(
+            !keep_stream
+                .candidate_offsets
+                .iter()
+                .any(|offset| 0 < *offset && *offset < cjk.len())
+        );
+        assert!(
+            !keep_stream
+                .emergency_candidate_offsets
+                .iter()
+                .any(|offset| 0 < *offset && *offset < cjk.len())
+        );
+
+        // Exact two-span text, white-space ownership, sans-serif font, and
+        // 120px block from css_text_lane::nowrap_inline_inside_a_wrapping_block.
+        let nowrap_text = "aaaa bbbb cccc dddd eeee";
+        let nowrap_root = base.clone();
+        let mut nowrap_span = base.clone();
+        nowrap_span.text_wrap_mode = TextWrapMode::Nowrap;
+        let mut following_span = base.clone();
+        following_span.text_wrap_mode = TextWrapMode::Wrap;
+        let styles = HashMap::from([(1_u8, nowrap_span.clone()), (2_u8, following_span.clone())]);
+        let first_end = "aaaa bbbb cccc dddd".len();
+        let separator_end = first_end + 1;
+        let mut nowrap_spans = vec![
+            SourceSpan {
+                selectable: true,
+                source: Some(1),
+                owners: vec![1],
+                style: nowrap_span,
+                range: 0..first_end,
+            },
+            SourceSpan {
+                selectable: true,
+                source: Some(2),
+                owners: Vec::new(),
+                style: nowrap_root.clone(),
+                range: first_end..separator_end,
+            },
+            SourceSpan {
+                selectable: true,
+                source: Some(3),
+                owners: vec![2],
+                style: following_span,
+                range: separator_end..nowrap_text.len(),
+            },
+        ];
+        let nowrap_stream = shape_fixture_stream(
+            nowrap_text,
+            &mut nowrap_spans,
+            &[],
+            &styles,
+            &nowrap_root,
+            120.0,
+            None,
+        );
+        for offset in [5, 10, 15] {
+            assert!(!nowrap_stream.candidate_offsets.contains(&offset));
+            assert!(!nowrap_stream.emergency_candidate_offsets.contains(&offset));
+        }
+        assert!(nowrap_stream.candidate_offsets.contains(&separator_end));
+        assert!(
+            nowrap_stream
+                .selected_breaks
+                .iter()
+                .any(|selected| selected.byte_index == separator_end)
+        );
+        assert!(nowrap_stream.selected_breaks_are_permitted());
+
+        // The pre-line fixture's effective text has collapsed spaces but
+        // retains the segment break; the exact block is 300px wide.
+        let pre_line_text = "ab\ncd";
+        let mut pre_line = base.clone();
+        pre_line.white_space_collapse = WhiteSpaceCollapse::PreserveBreaks;
+        let mut pre_spans = [SourceSpan {
+            selectable: true,
+            source: Some(1),
+            owners: Vec::new(),
+            style: pre_line.clone(),
+            range: 0..pre_line_text.len(),
+        }];
+        let pre_stream = shape_fixture_stream(
+            pre_line_text,
+            &mut pre_spans,
+            &[],
+            &HashMap::new(),
+            &pre_line,
+            300.0,
+            None,
+        );
+        assert!(pre_stream.candidate_offsets.contains(&3));
+        assert!(pre_stream.items.iter().any(|item| matches!(
+            item,
+            LogicalBreakItem::Cluster {
+                hard_break: true,
+                ..
+            }
+        )));
+        assert!(pre_stream.selected_breaks_are_permitted());
+
+        // Exact preserved-tab content from preserved_tabs_advance_to_tab_stops.
+        let tab_text = "ab\tx\n\tx";
+        let mut preserved = base.clone();
+        preserved.font_family = CssFontFamily::Named("monospace".into());
+        preserved.white_space_collapse = WhiteSpaceCollapse::Preserve;
+        let mut tab_spans = [SourceSpan {
+            selectable: true,
+            source: Some(1),
+            owners: Vec::new(),
+            style: preserved.clone(),
+            range: 0..tab_text.len(),
+        }];
+        let tab_stream = shape_fixture_stream(
+            tab_text,
+            &mut tab_spans,
+            &[],
+            &HashMap::new(),
+            &preserved,
+            800.0,
+            None,
+        );
+        assert!(tab_stream.items.iter().any(|item| matches!(
+            item,
+            LogicalBreakItem::Cluster {
+                contains_tab: true,
+                ..
+            }
+        )));
+        assert!(tab_stream.selected_breaks_are_permitted());
+
+        // `<br>` is represented by the forced segment break in the shaped
+        // stream. It is not treated as a regular/emergency word opportunity.
+        let forced_text = "one\ntwo";
+        let mut forced_spans = [SourceSpan {
+            selectable: true,
+            source: Some(1),
+            owners: Vec::new(),
+            style: base.clone(),
+            range: 0..forced_text.len(),
+        }];
+        let forced_stream = shape_fixture_stream(
+            forced_text,
+            &mut forced_spans,
+            &[],
+            &HashMap::new(),
+            &base,
+            300.0,
+            None,
+        );
+        assert!(forced_stream.candidate_offsets.contains(&4));
+        assert!(forced_stream.items.iter().any(|item| matches!(
+            item,
+            LogicalBreakItem::Cluster {
+                hard_break: true,
+                ..
+            }
+        )));
+        assert!(forced_stream.selected_breaks.is_empty());
+
+        // Exact ideographic-space fixture text, monospace 25px/25px, 2ch
+        // (50px) block and overflow-wrap:anywhere.
+        let ideographic_text = "XX\u{3000}XX";
+        let mut ideographic = ComputedValues::default();
+        ideographic.color = "black".parse().expect("test text color");
+        ideographic.font_family = CssFontFamily::Named("monospace".into());
+        ideographic.font_size = CssFontSize::Value("25px".parse().expect("25px font size"));
+        ideographic.line_height = CssLineHeight::Value("25px".parse().expect("25px line height"));
+        ideographic.overflow_wrap = CssOverflowWrap::Anywhere;
+        let mut ideographic_spans = [SourceSpan {
+            selectable: true,
+            source: Some(1),
+            owners: Vec::new(),
+            style: ideographic.clone(),
+            range: 0..ideographic_text.len(),
+        }];
+        let ideographic_stream = shape_fixture_stream(
+            ideographic_text,
+            &mut ideographic_spans,
+            &[],
+            &HashMap::new(),
+            &ideographic,
+            50.0,
+            None,
+        );
+        assert!(!ideographic_stream.selected_breaks.is_empty());
+        assert!(ideographic_stream.selected_breaks_are_permitted());
+
+        // The existing manual-vs-none fixture compares the same SHY word,
+        // sans-serif 16px/20px and 40px block after its actual text transform.
+        let shy_word = "ab\u{00ad}cd\u{00ad}ef\u{00ad}gh\u{00ad}ij\u{00ad}kl\u{00ad}mn\u{00ad}op";
+        let mut manual = base.clone();
+        manual.hyphens = Hyphens::Manual;
+        let manual_text = transform_text(shy_word, &manual);
+        let mut manual_spans = [SourceSpan {
+            selectable: true,
+            source: Some(1),
+            owners: Vec::new(),
+            style: manual.clone(),
+            range: 0..manual_text.len(),
+        }];
+        let manual_stream = shape_fixture_stream(
+            &manual_text,
+            &mut manual_spans,
+            &[],
+            &HashMap::new(),
+            &manual,
+            40.0,
+            None,
+        );
+        assert!(!manual_stream.selected_breaks.is_empty());
+        assert!(manual_stream.selected_breaks_are_permitted());
+        let mut no_hyphens = manual.clone();
+        no_hyphens.hyphens = Hyphens::None;
+        let no_hyphens_text = transform_text(shy_word, &no_hyphens);
+        let mut no_hyphens_spans = [SourceSpan {
+            selectable: true,
+            source: Some(1),
+            owners: Vec::new(),
+            style: no_hyphens.clone(),
+            range: 0..no_hyphens_text.len(),
+        }];
+        let no_hyphens_stream = shape_fixture_stream(
+            &no_hyphens_text,
+            &mut no_hyphens_spans,
+            &[],
+            &HashMap::new(),
+            &no_hyphens,
+            40.0,
+            None,
+        );
+        assert!(no_hyphens_stream.selected_breaks.is_empty());
+        assert!(
+            !no_hyphens_stream
+                .candidate_offsets
+                .iter()
+                .any(|offset| 0 < *offset && *offset < no_hyphens_text.len())
+        );
+        assert!(no_hyphens_stream.selected_breaks_are_permitted());
+    }
+
+    #[test]
+    fn shaped_stream_retains_tabs_and_trailing_hanging_space_metadata() {
+        let mut text_system = TextSystem::new();
+        let mut style = ComputedValues::default();
+        style.color = "black".parse().expect("test text color");
+        style.white_space_collapse = WhiteSpaceCollapse::Preserve;
+        style.text_wrap_mode = TextWrapMode::Wrap;
+        let text = "a \tb ";
+        let mut spans = vec![SourceSpan {
+            selectable: true,
+            source: Some(1_u8),
+            owners: Vec::new(),
+            style: style.clone(),
+            range: 0..text.len(),
+        }];
+        let shaped = text_system.shape(
+            text,
+            &mut spans,
+            &[],
+            &HashMap::new(),
+            false,
+            60.0,
+            &style,
+            None,
+            None,
+        );
+
+        assert_eq!(shaped.break_stream.paragraph_text, text);
+        assert!(shaped.break_stream.items.iter().any(|item| matches!(
+            item,
+            LogicalBreakItem::Cluster {
+                contains_tab: true,
+                ..
+            }
+        )));
+        assert!(shaped.break_stream.items.iter().any(|item| matches!(
+            item,
+            LogicalBreakItem::Cluster {
+                contains_preserved_space: true,
+                hangs_trailing_space: true,
+                ..
+            }
+        )));
+    }
+
+    #[test]
+    fn retained_forced_break_cluster_keeps_finite_hard_flag() {
+        let text = "one\ntwo";
+        let mut style = ComputedValues::default();
+        style.color = "black".parse().expect("test text color");
+        style.white_space_collapse = WhiteSpaceCollapse::PreserveBreaks;
+        style.text_wrap_mode = TextWrapMode::Nowrap;
+        let mut spans = [SourceSpan {
+            selectable: true,
+            source: Some(1_u8),
+            owners: Vec::new(),
+            style: style.clone(),
+            range: 0..text.len(),
+        }];
+        let stream =
+            shape_fixture_stream(text, &mut spans, &[], &HashMap::new(), &style, 300.0, None);
+        assert!(stream.items.iter().any(|item| matches!(
+            item,
+            LogicalBreakItem::Cluster {
+                hard_break: true,
+                ..
+            }
+        )));
+    }
+
+    #[test]
+    fn forced_break_boundary_is_a_regular_candidate() {
+        let text = "one\ntwo";
+        let mut style = ComputedValues::default();
+        style.color = "black".parse().expect("test text color");
+        style.white_space_collapse = WhiteSpaceCollapse::PreserveBreaks;
+        style.text_wrap_mode = TextWrapMode::Nowrap;
+        let mut spans = [SourceSpan {
+            selectable: true,
+            source: Some(1_u8),
+            owners: Vec::new(),
+            style: style.clone(),
+            range: 0..text.len(),
+        }];
+        let stream =
+            shape_fixture_stream(text, &mut spans, &[], &HashMap::new(), &style, 300.0, None);
+        assert!(stream.candidate_offsets.contains(&4));
+        assert!(stream.selected_breaks.is_empty());
+    }
+
+    #[test]
+    fn ideographic_space_fixture_keeps_its_opportunity_class() {
+        let text = "XX\u{3000}XX";
+        let mut style = ComputedValues::default();
+        style.color = "black".parse().expect("test text color");
+        style.font_family = CssFontFamily::Named("monospace".into());
+        style.font_size = CssFontSize::Value("25px".parse().expect("25px font size"));
+        style.line_height = CssLineHeight::Value("25px".parse().expect("25px line height"));
+        style.overflow_wrap = CssOverflowWrap::Anywhere;
+        let mut spans = [SourceSpan {
+            selectable: true,
+            source: Some(1_u8),
+            owners: Vec::new(),
+            style: style.clone(),
+            range: 0..text.len(),
+        }];
+        let stream =
+            shape_fixture_stream(text, &mut spans, &[], &HashMap::new(), &style, 50.0, None);
+        assert!(stream.candidate_offsets.contains(&5));
+        assert!(
+            stream
+                .selected_breaks
+                .iter()
+                .any(|selected| selected.byte_index == 5)
+        );
+        assert!(stream.selected_breaks_are_permitted());
+    }
+
+    #[test]
+    fn manual_soft_hyphen_breaks_survive_while_hyphens_none_removes_them() {
+        let source = "ab\u{00ad}cd\u{00ad}ef\u{00ad}gh\u{00ad}ij\u{00ad}kl\u{00ad}mn\u{00ad}op";
+        let mut style = ComputedValues::default();
+        style.color = "black".parse().expect("test text color");
+        style.font_family = CssFontFamily::Named("sans-serif".into());
+        style.font_size = CssFontSize::Value("16px".parse().expect("16px font size"));
+        style.line_height = CssLineHeight::Value("20px".parse().expect("20px line height"));
+        style.hyphens = Hyphens::Manual;
+        let manual_text = transform_text(source, &style);
+        let mut manual_spans = [SourceSpan {
+            selectable: true,
+            source: Some(1_u8),
+            owners: Vec::new(),
+            style: style.clone(),
+            range: 0..manual_text.len(),
+        }];
+        let manual = shape_fixture_stream(
+            &manual_text,
+            &mut manual_spans,
+            &[],
+            &HashMap::new(),
+            &style,
+            40.0,
+            None,
+        );
+        assert!(!manual.selected_breaks.is_empty());
+        assert!(manual.selected_breaks_are_permitted());
+
+        style.hyphens = Hyphens::None;
+        let no_hyphens_text = transform_text(source, &style);
+        let mut no_hyphens_spans = [SourceSpan {
+            selectable: true,
+            source: Some(1_u8),
+            owners: Vec::new(),
+            style: style.clone(),
+            range: 0..no_hyphens_text.len(),
+        }];
+        let no_hyphens = shape_fixture_stream(
+            &no_hyphens_text,
+            &mut no_hyphens_spans,
+            &[],
+            &HashMap::new(),
+            &style,
+            40.0,
+            None,
+        );
+        assert!(no_hyphens.selected_breaks.is_empty());
+        assert!(
+            !no_hyphens
+                .candidate_offsets
+                .iter()
+                .any(|offset| { 0 < *offset && *offset < no_hyphens_text.len() })
+        );
+    }
 
     #[test]
     fn malformed_woff2_is_rejected_before_font_registration() {

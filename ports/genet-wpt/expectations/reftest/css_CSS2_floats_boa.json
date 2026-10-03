@@ -1,0 +1,285 @@
+{
+  "command": "reftest",
+  "engine": "none",
+  "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
+  "policy": "exact",
+  "renderer": "livery",
+  "runner_sha256": "7345f0705cf23264e76dd664d1206211a86df5dda7e993129fe5adec3f06095e",
+  "subset": "css/CSS2/floats",
+  "tests": {
+    "css/CSS2/floats/adjoining-floats-dynamic.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/floats/block-in-inline-become-float.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/floats/computed-float-position-absolute.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/crashtests/firefox-bug-1904409.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/crashtests/firefox-bug-1904419.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/crashtests/firefox-bug-1904421.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/crashtests/firefox-bug-1904428.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/crashtests/firefox-bug-1906768.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/crashtests/float-dynamic-change-1.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/crashtests/float-dynamic-change-2.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/crashtests/float-dynamic-change-3.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/crashtests/float-dynamic-change-4.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/crashtests/float-dynamic-change-5.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/crashtests/float-dynamic-change-6.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/crashtests/float-dynamic-change-7.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/crashtests/float-dynamic-change-8.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/crashtests/float-rewind-parallel-flow-1-crash.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/crashtests/float-rewind-parallel-flow-2-crash.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/crashtests/float-rewind-parallel-flow-3-crash.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/crashtests/huge-width-after-float.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/float-after-block-with-collapsed-margin-inside-inline.html": "fail",
+    "css/CSS2/floats/float-in-inline-anonymous-block-with-overflow-hidden.html": "fail",
+    "css/CSS2/floats/float-in-nested-multicol-001.html": "pass",
+    "css/CSS2/floats/float-in-self-painting-inline.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/float-no-content-beside-001.html": "fail",
+    "css/CSS2/floats/float-no-interpolation.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/float-nowrap-1.html": "pass",
+    "css/CSS2/floats/float-nowrap-2.html": "fail",
+    "css/CSS2/floats/float-nowrap-3-ref.html": "fail",
+    "css/CSS2/floats/float-nowrap-3.html": "pass",
+    "css/CSS2/floats/float-nowrap-4.html": "fail",
+    "css/CSS2/floats/float-nowrap-5.html": "fail",
+    "css/CSS2/floats/float-nowrap-6.html": "pass",
+    "css/CSS2/floats/float-nowrap-7.html": "pass",
+    "css/CSS2/floats/float-nowrap-8.html": "fail",
+    "css/CSS2/floats/float-nowrap-9.html": "pass",
+    "css/CSS2/floats/float-nowrap-hyphen-rewind-1.html": "fail",
+    "css/CSS2/floats/float-paint-relayout.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/floats/float-root.html": "fail",
+    "css/CSS2/floats/float-table-align-left-quirk.html": "pass",
+    "css/CSS2/floats/float-under-flatten-under-preserve-3d.html": "pass",
+    "css/CSS2/floats/float-with-absolutely-positioned-child-with-static-inset.html": "pass",
+    "css/CSS2/floats/floated-table-wider-than-specified.html": "pass",
+    "css/CSS2/floats/floats-in-table-caption-001.html": "pass",
+    "css/CSS2/floats/floats-line-wrap-shifted-001.html": "fail",
+    "css/CSS2/floats/floats-placement-001.html": "pass",
+    "css/CSS2/floats/floats-placement-002.html": "pass",
+    "css/CSS2/floats/floats-placement-003.html": "pass",
+    "css/CSS2/floats/floats-placement-004.html": "pass",
+    "css/CSS2/floats/floats-placement-005.html": "pass",
+    "css/CSS2/floats/floats-placement-006.html": "fail",
+    "css/CSS2/floats/floats-placement-007.html": "fail",
+    "css/CSS2/floats/floats-placement-008.html": "fail",
+    "css/CSS2/floats/floats-placement-vertical-001a.xht": "fail",
+    "css/CSS2/floats/floats-placement-vertical-001b.xht": "fail",
+    "css/CSS2/floats/floats-placement-vertical-001c.xht": "fail",
+    "css/CSS2/floats/floats-placement-vertical-003.xht": "pass",
+    "css/CSS2/floats/floats-placement-vertical-004-ref.xht": "pass",
+    "css/CSS2/floats/floats-placement-vertical-004-ref2.xht": "pass",
+    "css/CSS2/floats/floats-placement-vertical-004.xht": "pass",
+    "css/CSS2/floats/floats-rule3-outside-left-001.xht": "fail",
+    "css/CSS2/floats/floats-rule3-outside-left-002.xht": "pass",
+    "css/CSS2/floats/floats-rule3-outside-right-001.xht": "fail",
+    "css/CSS2/floats/floats-rule3-outside-right-002.xht": "pass",
+    "css/CSS2/floats/floats-rule7-outside-left-001.xht": "pass",
+    "css/CSS2/floats/floats-rule7-outside-right-001.xht": "pass",
+    "css/CSS2/floats/floats-saturated-position-crash.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/floats-wrap-bfc-001-left-overflow.xht": "pass",
+    "css/CSS2/floats/floats-wrap-bfc-001-left-table.xht": "fail",
+    "css/CSS2/floats/floats-wrap-bfc-001-right-overflow.xht": "pass",
+    "css/CSS2/floats/floats-wrap-bfc-001-right-table.xht": "pass",
+    "css/CSS2/floats/floats-wrap-bfc-002-left-overflow.xht": "pass",
+    "css/CSS2/floats/floats-wrap-bfc-002-left-table.xht": "fail",
+    "css/CSS2/floats/floats-wrap-bfc-002-right-overflow.xht": "pass",
+    "css/CSS2/floats/floats-wrap-bfc-002-right-table.xht": "fail",
+    "css/CSS2/floats/floats-wrap-bfc-003-left-overflow.xht": "pass",
+    "css/CSS2/floats/floats-wrap-bfc-003-left-table.xht": "fail",
+    "css/CSS2/floats/floats-wrap-bfc-003-right-overflow.xht": "pass",
+    "css/CSS2/floats/floats-wrap-bfc-003-right-table.xht": "fail",
+    "css/CSS2/floats/floats-wrap-bfc-004.xht": "fail",
+    "css/CSS2/floats/floats-wrap-bfc-005.xht": "fail",
+    "css/CSS2/floats/floats-wrap-bfc-006.xht": "fail",
+    "css/CSS2/floats/floats-wrap-bfc-007.xht": "pass",
+    "css/CSS2/floats/floats-wrap-bfc-008.html": "pass",
+    "css/CSS2/floats/floats-wrap-bfc-outside-001.xht": "pass",
+    "css/CSS2/floats/floats-wrap-bfc-with-margin-001.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/floats/floats-wrap-bfc-with-margin-001a.tentative.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/floats/floats-wrap-bfc-with-margin-002.tentative.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/floats/floats-wrap-bfc-with-margin-003.tentative.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/floats/floats-wrap-bfc-with-margin-004.html": "pass",
+    "css/CSS2/floats/floats-wrap-bfc-with-margin-005.html": "pass",
+    "css/CSS2/floats/floats-wrap-bfc-with-margin-006.tentative.html": "fail",
+    "css/CSS2/floats/floats-wrap-bfc-with-margin-007.tentative.html": "fail",
+    "css/CSS2/floats/floats-wrap-bfc-with-margin-008.tentative.html": "pass",
+    "css/CSS2/floats/floats-wrap-bfc-with-margin-009.tentative.html": "pass",
+    "css/CSS2/floats/floats-wrap-bfc-with-margin-010.html": "pass",
+    "css/CSS2/floats/floats-wrap-top-below-bfc-001l.xht": "pass",
+    "css/CSS2/floats/floats-wrap-top-below-bfc-001r.xht": "pass",
+    "css/CSS2/floats/floats-wrap-top-below-bfc-002l.xht": "pass",
+    "css/CSS2/floats/floats-wrap-top-below-bfc-002r.xht": "pass",
+    "css/CSS2/floats/floats-wrap-top-below-bfc-003l.xht": "pass",
+    "css/CSS2/floats/floats-wrap-top-below-bfc-003r.xht": "pass",
+    "css/CSS2/floats/floats-wrap-top-below-inline-001l.xht": "pass",
+    "css/CSS2/floats/floats-wrap-top-below-inline-001r.xht": "pass",
+    "css/CSS2/floats/floats-wrap-top-below-inline-002l.xht": "pass",
+    "css/CSS2/floats/floats-wrap-top-below-inline-002r.xht": "pass",
+    "css/CSS2/floats/floats-wrap-top-below-inline-003l.xht": "pass",
+    "css/CSS2/floats/floats-wrap-top-below-inline-003r.xht": "pass",
+    "css/CSS2/floats/floats-zero-height-wrap-001.xht": "pass",
+    "css/CSS2/floats/floats-zero-height-wrap-002.xht": "pass",
+    "css/CSS2/floats/hit-test-floats-001.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/hit-test-floats-002.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/hit-test-floats-003.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/hit-test-floats-004.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/hit-test-floats-005.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/inheritance.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/intrinsic-size-float-and-line.html": "fail",
+    "css/CSS2/floats/line-pushed-by-floats-crash.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/list-item-taller-than-opportunity-001.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/negative-block-margin-pushing-float-out-of-block-formatting-context.html": "pass",
+    "css/CSS2/floats/negative-margin-float-positioning.html": "pass",
+    "css/CSS2/floats/new-fc-beside-adjoining-float-2.html": "fail",
+    "css/CSS2/floats/new-fc-beside-adjoining-float.html": "fail",
+    "css/CSS2/floats/new-fc-beside-float-with-margin-rtl.html": "pass",
+    "css/CSS2/floats/new-fc-beside-float-with-margin.html": "pass",
+    "css/CSS2/floats/new-fc-beside-float-with-min-width.html": "pass",
+    "css/CSS2/floats/new-fc-relayout.html": "pass",
+    "css/CSS2/floats/new-fc-separates-from-float-2.html": "fail",
+    "css/CSS2/floats/new-fc-separates-from-float-3.html": "pass",
+    "css/CSS2/floats/new-fc-separates-from-float-4.html": "pass",
+    "css/CSS2/floats/new-fc-separates-from-float.html": "pass",
+    "css/CSS2/floats/overflow-scroll-float-paint-order.html": "pass",
+    "css/CSS2/floats/overhanging-float-paint-order.html": "fail",
+    "css/CSS2/floats/remove-block-between-inline-and-float.html": {
+      "reason": "needs-script",
+      "status": "skip"
+    },
+    "css/CSS2/floats/remove-float-in-first-line.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/remove-float-then-abspos-in-inline.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/table-sizing-with-adjacent-floats.html": "fail",
+    "css/CSS2/floats/zero-available-space-float-positioning.html": "pass",
+    "css/CSS2/floats/zero-space-between-floats-001.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/zero-space-between-floats-002.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/zero-space-between-floats-003.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/zero-space-between-floats-004.html": {
+      "reason": "non-reftest",
+      "status": "skip"
+    },
+    "css/CSS2/floats/zero-width-floats-positioning.tentative.html": "fail",
+    "css/CSS2/floats/zero-width-floats.html": "pass"
+  },
+  "version": 1
+}

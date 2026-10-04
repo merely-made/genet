@@ -91,12 +91,25 @@ without rooting (piccolo, the epoch-pin fallback) compiles unchanged.
 
 | Method | Surface | What it does |
 |---|---|---|
-| `minted_reflectors()` | `ScriptEngine` | every `ReflectorData` the canonical cache has an entry for — the set the policy iterates |
+| `minted_reflectors()` | `ScriptEngine` | every `ReflectorData` with a live canonical weak target; dead entries remain for `drain_dead_reflectors` |
 | `root_reflectors(&[…])` | `ScriptEngine` | take a strong engine root on each, minting through the canonical cache if the weak has died |
 | `unroot_reflectors(&[…])` | `ScriptEngine` | release those roots |
 | `rooted_reflector_count()` | `ScriptEngine` | diagnostic readout; the soak's bound |
 | `root_reflector(data) -> bool` | `CallCx` | the in-callback single-id form, for the mint path |
 | `unroot_reflector(data)` | `CallCx` | its release |
+
+**2026-10-04 census correction, validated locally; integration pending:**
+Mark ruled that GC bookkeeping must use live canonical wrappers and invoke no author code. The
+inventory contract above now excludes weak-dead targets without sweeping their
+entries. Generic rooting may still remint; the policy's inventory-to-root
+handoff uses existing live targets before any JavaScript allocation. Its private
+hook looks up existing wrappers instead of calling `wrapNode`, and uses captured
+intrinsics and null-prototype property descriptors for ephemeron groups. See the
+[census plan](2026-10-03_census_panics_plan.md) and its qualified controls. The
+complete runtime gate passes 672 tests, including identity/reclamation soaks,
+and the four-directory WPT comparison loses zero passing files or subtests.
+The [final receipt](receipts/2026-10-04_genet_census_panics/receipt.md) qualifies
+the captured-split parser, poisoning controls and remaining singleton costs.
 
 `drain_dead_reflectors` is unchanged and remains the liveness signal for
 *unrooted* reflectors; a rooted id can never appear in it, because its strong

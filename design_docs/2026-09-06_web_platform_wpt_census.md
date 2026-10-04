@@ -56,6 +56,18 @@ bookkeeping artifact.
 raw logs (`Code/testing/genet/wpt-ledger/2026-09-29_vano_platform_census/disk-fixed/*_vano.log`).
 The result maps record only `panic`. No backtraces were captured.
 
+**Defect lane validated locally, 2026-10-04:** the
+[Genet census-panic plan](2026-10-03_census_panics_plan.md) reproduces all ten
+records from `bcf1b08dbe6` with backtraces on both engines. Local production
+commit `876c7a2cba4` removes P1-P7 Rust panics and E1's undeclared Event failure;
+ordinary WPT failures and the missing SVG focus/ResizeObserver features remain.
+Six crate gates pass 936 tests. Eight directory maps preserve every passing
+file and subtest, with all 33 movements qualified in the
+[final receipt](receipts/2026-10-04_genet_census_panics/receipt.md).
+Vano's fixes are separately published at `47f8d4f9`; this measurement retains
+`8ad08412`, and its repin follows census integration. Earlier full-platform
+census counts remain dated evidence. This lane stops at its local checkpoint.
+
 - **Three in Vano.**
   - `IndexedDB/file_support.sub.html`: `assertion failed:
     self.get_mut(agent).object_index.replace(backing_object.unbind()).is_none()`.

@@ -377,11 +377,13 @@ pub trait ScriptEngine: Sized {
     /// frame-cadence contract).
     fn force_gc(&mut self) {}
 
-    /// Every [`ReflectorData`] the canonical-reflector cache currently holds an
-    /// entry for — the set of nodes script has been handed an object for. The
-    /// opaque-root policy iterates this at the GC tick to decide which reflectors
-    /// the host roots (see [`root_reflectors`]). Order is unspecified. Default
-    /// empty: a backend with no cache has nothing to police.
+    /// Every [`ReflectorData`] whose canonical-reflector cache entry currently
+    /// has a live target — the set of reflector objects that can be rooted without
+    /// minting a replacement. Dead weak entries remain cached until
+    /// [`drain_dead_reflectors`] reports and removes them. The opaque-root policy
+    /// iterates this live inventory at the GC tick to decide which reflectors the
+    /// host roots (see [`root_reflectors`]). Order is unspecified. Default empty:
+    /// a backend with no cache has nothing to police.
     ///
     /// [`root_reflectors`]: ScriptEngine::root_reflectors
     fn minted_reflectors(&mut self) -> Vec<ReflectorData> {
@@ -420,7 +422,10 @@ pub trait ScriptEngine: Sized {
         0
     }
 
-    /// Realm-scoped counterpart of [`Self::minted_reflectors`]. IDs identify that realm's canonical reflectors, independently of current storage ownership.
+    /// Realm-scoped counterpart of [`Self::minted_reflectors`]. Only live
+    /// canonical reflector targets are returned; dead weak entries remain for
+    /// [`Self::drain_dead_reflectors_in_realm`]. IDs identify that realm's
+    /// canonical reflectors, independently of current storage ownership.
     fn minted_reflectors_in_realm(
         &mut self,
         realm: RealmId,

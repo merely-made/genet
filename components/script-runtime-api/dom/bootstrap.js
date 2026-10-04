@@ -10,6 +10,9 @@
   var domAgentDispatch = globalThis.__domAgentDispatch;
   var domRegisterHooks = globalThis.__domRegisterHooks;
   var domRealmHooks;
+  // Captured before authored code runs: parser lifecycle events cannot depend
+  // on the page-deletable public Event global at dispatch time.
+  var userAgentEventConstructor = globalThis.Event;
   delete globalThis.__domAgentDispatch;
   delete globalThis.__domRegisterHooks;
 
@@ -49,9 +52,24 @@
   // the ephemeron linking a still-reachable reflector to its canonical wrapper.
   // Keys are native objects, never raw IDs; prototypes are chosen only at mint.
   var wrappers = globalThis.__agentTimers.domWrappers;
+  // GC policy is host bookkeeping. Keep the exact operations it needs before
+  // authored code can replace public prototypes or install indexed setters.
+  var gcWeakMapGet = WeakMap.prototype.get;
+  var gcWeakMapSet = WeakMap.prototype.set;
+  var gcWeakMapDelete = WeakMap.prototype.delete;
+  var gcStringSplit = String.prototype.split;
+  var gcStringIndexOf = String.prototype.indexOf;
+  var gcStringSlice = String.prototype.slice;
+  var gcDefineProperty = Object.defineProperty;
+  var gcReflectNode = globalThis.__reflectNode;
   // Agent-private identity branding survives public property/prototype changes.
   var domNodes = globalThis.__agentTimers.domNodes;
   var addDOMNode = WeakSet.prototype.add, applyDOMBrand = Reflect.apply;
+  // String#split checks an object separator's @@split before coercing it. These
+  // private, null-prototype separators skip that author-controlled lookup; their
+  // own coercions return only the fixed ASCII delimiter.
+  var gcCommaSeparator = { __proto__: null, toString: function() { return ','; } };
+  var gcSemicolonSeparator = { __proto__: null, toString: function() { return ';'; } };
 
   // Opaque-root groups for **detached** subtrees (the reflector-identity policy).
   //
@@ -3652,6 +3670,8 @@
   function moSetAttributeNS(e, ns, q, v) { __setAttributeNS(e, ns, q, v); moAfterMutation(); }
   function moRemoveAttributeNS(e, ns, l) { __removeAttributeNS(e, ns, l); moAfterMutation(); }
   function moSetTextContent(n, t) {
+    var nodeType = +__nodeType(n);
+    if (nodeType === 9 || nodeType === 10) return;
     rangeWillReplaceAll(wrapNode(n)); discardFrameSubtree(wrapNode(n), false);
     __setTextContent(n, t); moAfterMutation(); refreshFramesAfterRemoval();
   }
@@ -5414,30 +5434,63 @@
   // are empty in the steady state, so a frame that moves nothing costs one call
   // and two empty-string tests.
   function gcPolicy(clear, spec) {
-    var i, ref, w;
-    if (clear) {
-      var cleared = String(clear).split(',');
-      for (i = 0; i < cleared.length; i++) {
-        if (!cleared[i]) continue;
-        ref = domAgentDispatch ? domAgentDispatch('recordNode', cleared[i]) : __reflectNode(cleared[i]);
-        if (ref === undefined || ref === null) continue;
-        wrapperGroups.delete(wrapNode(ref));
+    // Only wrappers that already exist in the canonical cache participate.
+    // Calling wrapNode here could run a custom-element constructor while the
+    // collector is rebuilding private ephemeron bookkeeping.
+    function existingWrapper(id) {
+      var ref = domAgentDispatch
+        ? domAgentDispatch('recordNode', id)
+        : gcReflectNode(id);
+      if (ref === undefined || ref === null) return null;
+      return applyDOMBrand(gcWeakMapGet, wrappers, [ref]) || null;
+    }
+    function split(text, separator) {
+      return applyDOMBrand(gcStringSplit, text, [separator]);
+    }
+    function indexOf(text, needle) {
+      return applyDOMBrand(gcStringIndexOf, text, [needle]);
+    }
+    function slice(text, start) {
+      return applyDOMBrand(gcStringSlice, text, [start]);
+    }
+    function clearWrapper(id) {
+      if (!id) return;
+      var w = existingWrapper(id);
+      if (w) applyDOMBrand(gcWeakMapDelete, wrapperGroups, [w]);
+    }
+    function addGroupMember(arr, id) {
+      if (!id) return;
+      var w = existingWrapper(id);
+      if (!w) return;
+      var index = arr.length;
+      applyDOMBrand(gcDefineProperty, undefined, [arr, '' + index, {
+        __proto__: null,
+        value: w, writable: true, enumerable: true, configurable: true
+      }]);
+      applyDOMBrand(gcWeakMapSet, wrapperGroups, [w, arr]);
+    }
+
+    // These are private Rust-generated primitive strings. Split them with the
+    // captured builtin and null-prototype separators, so separator lookup and
+    // delimiter coercion cannot reach author code.
+    var parts, i;
+    if (typeof clear === 'string' && clear.length) {
+      parts = split(clear, gcCommaSeparator);
+      for (i = 0; i < parts.length; i++) {
+        clearWrapper(parts[i]);
       }
     }
-    if (!spec) return;
-    var groups = String(spec).split(';');
+    if (typeof spec !== 'string' || !spec.length) return;
+    var groups = split(spec, gcSemicolonSeparator);
     for (var g = 0; g < groups.length; g++) {
-      var eq = groups[g].indexOf('=');
-      if (eq < 0) continue;
-      var members = groups[g].slice(eq + 1).split(',');
-      var arr = [];
-      for (i = 0; i < members.length; i++) {
-        if (!members[i]) continue;
-        ref = domAgentDispatch ? domAgentDispatch('recordNode', members[i]) : __reflectNode(members[i]);
-        if (ref === undefined || ref === null) continue;
-        w = wrapNode(ref);
-        arr.push(w);
-        wrapperGroups.set(w, arr);
+      var group = groups[g];
+      var eq = indexOf(group, '=');
+      if (eq >= 0) {
+        var arr = [];
+        parts = split(slice(group, eq + 1), gcCommaSeparator);
+        for (i = 0; i < parts.length; i++) {
+          addGroupMember(arr, parts[i]);
+        }
       }
     }
   }
@@ -6435,8 +6488,15 @@
 
   globalThis.XMLSerializer = XMLSerializer;
 
+  function dispatchUserAgentEvent(target, type, bubbles) {
+    var event = new userAgentEventConstructor(type, { bubbles: !!bubbles });
+    // Keep dispatch lookup dynamic to preserve the target's current override.
+    return target.dispatchEvent(event);
+  }
+
   domRealmHooks = function(op, a, b, c, d) {
       switch (op) {
+        case 'uaEvent': return dispatchUserAgentEvent(a, b, c);
         case 'wrap': return wrapNodeLocal(a);
         case 'owners': return setOwnerDocumentSnapshotLocal(a, b);
         case 'adopted': return enqueueAdoptedTreeLocal(a, b, c);

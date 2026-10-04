@@ -345,8 +345,7 @@ impl<E: ScriptEngine> Runtime<E> {
             self.run_parser_script_deferred(facts, loader);
             report.deferred_run += 1;
         }
-        let _ = self
-            .eval_top("document.dispatchEvent(new Event('DOMContentLoaded', { bubbles: true }));");
+        let _ = self.dispatch_user_agent_event("document", "DOMContentLoaded", true);
         self.run_microtasks();
         if dispatch_load && self.agent.borrow_mut().frames.defer_main_load() {
             // The final child completion performs Complete/readystatechange/load.
@@ -354,7 +353,7 @@ impl<E: ScriptEngine> Runtime<E> {
         }
         self.set_ready_state(ReadyState::Complete);
         if dispatch_load {
-            let _ = self.eval_top("window.dispatchEvent(new Event('load'));");
+            let _ = self.dispatch_user_agent_event("window", "load", false);
             self.run_microtasks();
         }
         report
@@ -463,7 +462,26 @@ impl<E: ScriptEngine> Runtime<E> {
 
     fn set_ready_state(&mut self, state: ReadyState) {
         self.host.borrow_mut().markup.ready_state = state;
-        let _ = self.eval_top("document.dispatchEvent(new Event('readystatechange'));");
+        let _ = self.dispatch_user_agent_event("document", "readystatechange", false);
+    }
+
+    pub(crate) fn dispatch_user_agent_event(
+        &mut self,
+        target: &str,
+        event_type: &str,
+        bubbles: bool,
+    ) -> Result<(), E::Error> {
+        let realm = self.top_realm();
+        let target = self.eval_top(target)?;
+        crate::dom::adoption::dispatch_user_agent_event(
+            &mut self.engine,
+            &self.agent,
+            realm,
+            target,
+            event_type,
+            bubbles,
+        )
+        .map_err(|error| self.engine_error(&error.to_string()))
     }
 
     /// Read the `<script>` element's attributes and text out of the arena.

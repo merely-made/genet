@@ -863,7 +863,13 @@ impl ScriptEngine for BoaEngine {
                 .realm()
                 .host_defined()
                 .get::<RealmSlot>()
-                .map(|cell| cell.reflectors.borrow().keys().copied().collect())
+                .map(|cell| {
+                    cell.reflectors
+                        .borrow()
+                        .iter()
+                        .filter_map(|(&data, reflector)| reflector.upgrade().map(|_| data))
+                        .collect()
+                })
                 .unwrap_or_default()
         })();
         self.ctx.enter_realm(previous);
@@ -1592,6 +1598,10 @@ mod tests {
         // Drop the last JS reference and collect: the weak cache reports the death.
         engine.eval("globalThis.x = null;").unwrap();
         boa_gc::force_collect();
+        assert!(
+            engine.minted_reflectors().is_empty(),
+            "policy inventory must omit a weak-dead reflector without sweeping it"
+        );
         assert_eq!(engine.drain_dead_reflectors(), vec![0x42]);
 
         // The dead entry was swept, so a second drain is empty.

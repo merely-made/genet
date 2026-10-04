@@ -1556,11 +1556,32 @@ mod native {
                         .expect("checked realm")
                         .get(agent, gc.nogc())
                         .unbind();
-                    if let Some(hd) = target.bind(gc.nogc()).host_defined(agent) {
-                        if let Some(slot) = hd.downcast_ref::<NovaHostSlot>() {
-                            out = slot.reflectors.borrow().keys().copied().collect();
-                        }
-                    }
+                    // Snapshot weak cache entries first, then test their targets
+                    // outside the host-slot borrow. Dead IDs stay in the cache so
+                    // `drain_dead_reflectors` can still retire their native pins.
+                    let entries: Vec<(u64, Value)> = {
+                        let Some(hd) = target.bind(gc.nogc()).host_defined(agent) else {
+                            return;
+                        };
+                        let Some(slot) = hd.downcast_ref::<NovaHostSlot>() else {
+                            return;
+                        };
+                        let reflectors = slot.reflectors.borrow();
+                        let collected = reflectors
+                            .iter()
+                            .map(|(&data, weak)| (data, weak.get(agent, gc.nogc()).unbind()))
+                            .collect();
+                        drop(reflectors);
+                        collected
+                    };
+                    out = entries
+                        .into_iter()
+                        .filter_map(|(data, value)| {
+                            matches!(value, Value::WeakRef(weak_ref)
+                                if EmbedderObject::from_weak_ref(agent, weak_ref).is_some())
+                            .then_some(data)
+                        })
+                        .collect();
                 });
                 out
             })();
@@ -2718,6 +2739,10 @@ mod native {
             engine.pump_microtasks();
             engine.agent.gc();
             engine.agent.gc();
+            assert!(
+                engine.minted_reflectors().is_empty(),
+                "policy inventory must omit a weak-dead reflector without sweeping it"
+            );
             assert_eq!(engine.drain_dead_reflectors(), vec![0x42]);
 
             // The dead entry was swept, so a second drain is empty.

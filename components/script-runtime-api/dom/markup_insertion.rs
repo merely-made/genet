@@ -264,6 +264,21 @@ pub(crate) fn open_stream_close(host: &mut HostState) {
     host.markup.current_script = None;
 }
 
+/// Abandon a post-parse open stream after its browsing context has been
+/// detached. Unlike close, abort drops the tokenizer without feeding EOF, so
+/// no later parser scripts or source-driven tree mutations run.
+pub(crate) fn open_stream_abort(host: &mut HostState) {
+    let Some(OpenStream { cell, parser }) = host.markup.open_stream.take() else {
+        return;
+    };
+    *cell.borrow_mut() = std::mem::replace(&mut host.dom, ScriptedDom::new());
+    drop(parser);
+    host.dom = std::mem::replace(&mut *cell.borrow_mut(), ScriptedDom::new());
+    host.dom.set_parsing(false);
+    host.markup.stalled = None;
+    host.markup.current_script = None;
+}
+
 /// Steps 5, 6 and 8 of HTML's "prepare the script element": the script's own
 /// text, its `src`, and the script kind its `type`/`language` name. `None` when
 /// the element is not a script, has neither a `src` nor any text, or names a
@@ -575,8 +590,17 @@ impl<E: ScriptEngine> NativeFn<E> for DocPumpStream {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
         let a0 = cx.arg(0);
         let target = stream_target::<E>(cx, &a0)?;
+        let realm = cx.current_realm();
         let pumped = with_host::<E, _>(cx, |host| {
             if host.markup.parser_active || !write_target(host, target).1 {
+                return None;
+            }
+            let detached = host
+                .agent
+                .upgrade()
+                .is_some_and(|agent| agent.borrow().frames.document_is_detached(realm));
+            if detached {
+                open_stream_abort(host);
                 return None;
             }
             open_stream_pump(host)

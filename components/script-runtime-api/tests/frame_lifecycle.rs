@@ -13,7 +13,20 @@
 //! host table, a reused realm id, or an arena that never returns to baseline.
 
 use script_engine_api::{RealmId, ScriptEngine};
-use script_runtime_api::{NoScriptLoader, Runtime};
+use script_runtime_api::{NoScriptLoader, Runtime, ScriptResourceLoader};
+
+struct XhtmlRemovalDocument;
+
+impl ScriptResourceLoader for XhtmlRemovalDocument {
+    fn load(&self, url: &str) -> Option<String> {
+        (url == "https://parent.test/remove-child.xhtml").then(|| {
+            "<?xml version=\"1.0\"?><html xmlns=\"http://www.w3.org/1999/xhtml\"><body>\
+             <script>parent.removeXmlChild(); parent.xmlScriptFinished = true;</script>\
+             </body></html>"
+                .to_owned()
+        })
+    }
+}
 
 fn runtime<E: ScriptEngine>() -> Runtime<E> {
     let mut runtime = Runtime::<E>::new().expect("runtime");
@@ -33,7 +46,7 @@ fn read<E: ScriptEngine>(runtime: &mut Runtime<E>, expression: &str) -> String {
     runtime.value_to_string(&value).expect("stringify")
 }
 
-/// A child holding one nested grandchild, both recording their unload sequence
+/// A child holding one nested grandchild, both recording page lifecycle events
 /// into the parent's log. `srcdoc` keeps them same-origin, which is what lets a
 /// child reach `parent.log` at all.
 const ATTACH: &str = concat!(
@@ -118,12 +131,12 @@ fn removing_a_frame_destroys_its_context_and_releases_every_registration<E: Scri
 
         runtime.run_event_loop(100).expect("drain");
 
-        // 2. Unload order: each document reports `pagehide` then `unload`, and an
-        //    ancestor is unloaded before its descendant.
+        // 2. Removing an iframe destroys its child navigable without dispatching
+        //    `pagehide` or `unload`.
         assert_eq!(
             read(&mut runtime, "log.join(',')"),
-            "child:pagehide,child:unload,inner:pagehide,inner:unload",
-            "cycle {cycle}: unload sequence"
+            "",
+            "cycle {cycle}: iframe removal must not dispatch unload events"
         );
 
         // 3. Nothing the destroyed contexts had scheduled runs at all.
@@ -207,6 +220,198 @@ fn move_before_preserves_the_nested_context<E: ScriptEngine>() {
     );
 }
 
+/// A child parser script is run to completion when it removes its own iframe.
+/// Destruction then wins over the child's remaining load work: the detached
+/// owner receives no `load`, while the completed script does not panic.
+fn self_removal_during_child_parse_finishes_script_without_owner_load<E: ScriptEngine>() {
+    let mut runtime = runtime::<E>();
+    runtime
+        .eval(
+            "globalThis.childScriptFinished = false; globalThis.afterRemovedParserScript = false; \
+             globalThis.detachedLoads = 0; \
+             var frame = document.createElement('iframe'); \
+             frame.addEventListener('load', function() { detachedLoads++; }); \
+             frame.srcdoc = '<script>window.frameElement.remove(); parent.childScriptFinished = true;<\\/script><script>parent.afterRemovedParserScript = true;<\\/script>'; \
+             document.body.appendChild(frame);",
+        )
+        .expect("insert self-removing frame");
+
+    runtime
+        .run_event_loop(100)
+        .expect("finish child parser and drain teardown");
+    assert_eq!(read(&mut runtime, "String(childScriptFinished)"), "true");
+    assert_eq!(
+        read(&mut runtime, "String(afterRemovedParserScript)"),
+        "false",
+        "removal stops the open-stream parser after its current script"
+    );
+    assert_eq!(read(&mut runtime, "String(detachedLoads)"), "0");
+    assert_eq!(read(&mut runtime, "String(frame.contentWindow)"), "null");
+    assert!(realms(&runtime).is_empty());
+}
+
+/// A synchronously running child parser script calls into its parent, which
+/// removes the XML-named iframe before that child's load function returns.
+/// The containing document must finish after the removed child releases its
+/// load barrier, and the current script must run to completion.
+fn parser_callback_removal_releases_parent_load_barrier<E: ScriptEngine>() {
+    let mut runtime = Runtime::<E>::new().expect("runtime");
+    runtime
+        .set_base_url("https://parent.test/page.html")
+        .expect("base URL");
+    runtime.set_script_resource_loader(Box::new(XhtmlRemovalDocument));
+    runtime.parse_document_interleaved(
+        "<html><head></head><body><iframe id='xml-child' src='/remove-child.xhtml'></iframe></body></html>",
+        &NoScriptLoader,
+    );
+    runtime
+        .eval(
+            "globalThis.xmlScriptFinished = false; globalThis.detachedChildLoad = false; \
+             globalThis.removeXmlChild = function() { document.getElementById('xml-child').remove(); }; \
+             document.getElementById('xml-child').addEventListener('load', function() { detachedChildLoad = true; }); \
+             globalThis.topLoad = false; window.addEventListener('load', function() { topLoad = true; });",
+        )
+        .expect("install parent callbacks before child loading");
+
+    runtime
+        .run_event_loop(100)
+        .expect("finish parser callback, teardown, and top-level load");
+    assert_eq!(read(&mut runtime, "String(xmlScriptFinished)"), "true");
+    assert_eq!(read(&mut runtime, "String(detachedChildLoad)"), "false");
+    assert_eq!(read(&mut runtime, "String(topLoad)"), "true");
+    assert_eq!(
+        read(&mut runtime, "String(document.getElementById('xml-child'))"),
+        "null"
+    );
+}
+
+/// A child Window `load` handler can remove the owner after the child event has
+/// started. The owner-element load stays suppressed, and the parent's load
+/// event follows destruction rather than racing ahead of it.
+fn removal_during_window_load_defers_parent_load_until_destroyed<E: ScriptEngine>() {
+    let mut runtime = Runtime::<E>::new().expect("runtime");
+    runtime
+        .set_base_url("https://parent.test/page.html")
+        .expect("base URL");
+    runtime.parse_document_interleaved(
+        r#"<html><head></head><body><script>
+          globalThis.childLoadHandlerFinished = false;
+          globalThis.ownerLoads = 0;
+          globalThis.topLoad = false;
+          globalThis.topLoadSawClosed = false;
+          var frame = document.createElement('iframe');
+          frame.addEventListener('load', function() { ownerLoads++; });
+          frame.srcdoc = '<script>window.addEventListener("load", function() { window.frameElement.remove(); parent.childLoadHandlerFinished = true; });<\/script>';
+          document.body.appendChild(frame);
+          globalThis.heldChildWindow = frame.contentWindow;
+          window.addEventListener('load', function() {
+            topLoadSawClosed = heldChildWindow.closed;
+            topLoad = true;
+          });
+        </script></body></html>"#,
+        &NoScriptLoader,
+    );
+    runtime
+        .run_event_loop(100)
+        .expect("remove during child Window load and release top load");
+
+    assert_eq!(
+        read(&mut runtime, "String(childLoadHandlerFinished)"),
+        "true"
+    );
+    assert_eq!(read(&mut runtime, "String(ownerLoads)"), "0");
+    assert_eq!(read(&mut runtime, "String(topLoad)"), "true");
+    assert_eq!(
+        read(&mut runtime, "String(topLoadSawClosed)"),
+        "true",
+        "top-level load waits until the removed child is destroyed"
+    );
+    assert_eq!(read(&mut runtime, "String(heldChildWindow.closed)"), "true");
+}
+
+/// If the child load handler removes its parent frame, completion must resume
+/// at the nearest surviving ancestor rather than skipping to the top and
+/// leaving the surviving outer frame's load barrier pending.
+fn ancestor_removal_during_window_load_releases_surviving_ancestor<E: ScriptEngine>() {
+    let mut runtime = Runtime::<E>::new().expect("runtime");
+    runtime
+        .set_base_url("https://parent.test/page.html")
+        .expect("base URL");
+    runtime.parse_document_interleaved(
+        r#"<html><head></head><body><script>
+          globalThis.middleHandlerDone = false;
+          globalThis.middleOwnerLoads = 0;
+          globalThis.outerOwnerLoads = 0;
+          globalThis.topLoad = false;
+          globalThis.topLoadSawClosed = false;
+          const closeScript = '</' + 'script>';
+          const jsLiteral = source => JSON.stringify(source).replace(/</g, '\\u003c');
+          const innerSource = '<html><body><script>globalThis.innerScriptRan=true;window.addEventListener("load",function(){globalThis.innerHandlerStarted=true;try{var owner=parent.frameElement;globalThis.ownerElementFound=!!owner;owner.remove();globalThis.afterOwnerRemoval=true;globalThis.frameElementCleared=parent.frameElement===null;parent.parent.parent.middleHandlerDone=true;globalThis.afterParentTraversal=true;}catch(error){globalThis.innerHandlerError=String(error);}});' + closeScript + '</body></html>';
+          const middleSource = '<html><body><script>globalThis.middleScriptRan=true;var inner=document.createElement("iframe");inner.srcdoc=' + jsLiteral(innerSource) + ';document.body.appendChild(inner);parent.parent.heldInnerWindow=inner.contentWindow;' + closeScript + '</body></html>';
+          const outerSource = '<html><body><script>globalThis.outerScriptRan=true;var middle=document.createElement("iframe");middle.addEventListener("load",function(){parent.middleOwnerLoads++;});middle.srcdoc=' + jsLiteral(middleSource) + ';document.body.appendChild(middle);parent.heldMiddleWindow=middle.contentWindow;' + closeScript + '</body></html>';
+          var outer = document.createElement('iframe');
+          outer.addEventListener('load', function() { outerOwnerLoads++; });
+          outer.srcdoc = outerSource;
+          document.body.appendChild(outer);
+          globalThis.heldOuterWindow = outer.contentWindow;
+          window.addEventListener('load', function() {
+            topLoad = true;
+            topLoadSawClosed = heldMiddleWindow.closed;
+          });
+        </script></body></html>"#,
+        &NoScriptLoader,
+    );
+    runtime
+        .run_event_loop(100)
+        .expect("remove a nested parent during child Window load");
+
+    assert_eq!(
+        read(&mut runtime, "String(heldOuterWindow.outerScriptRan)"),
+        "true"
+    );
+    assert_eq!(
+        read(&mut runtime, "String(heldMiddleWindow.middleScriptRan)"),
+        "true"
+    );
+    assert_eq!(
+        read(&mut runtime, "String(heldInnerWindow.innerScriptRan)"),
+        "true"
+    );
+    assert_eq!(
+        read(&mut runtime, "String(heldInnerWindow.innerHandlerStarted)"),
+        "true"
+    );
+    assert_eq!(
+        read(&mut runtime, "String(heldInnerWindow.ownerElementFound)"),
+        "true"
+    );
+    assert_eq!(
+        read(&mut runtime, "String(heldInnerWindow.afterOwnerRemoval)"),
+        "true"
+    );
+    assert_eq!(
+        read(&mut runtime, "String(heldInnerWindow.frameElementCleared)"),
+        "true"
+    );
+    assert_eq!(
+        read(&mut runtime, "String(heldInnerWindow.afterParentTraversal)"),
+        "true"
+    );
+    assert_eq!(
+        read(&mut runtime, "String(heldInnerWindow.innerHandlerError)"),
+        "undefined"
+    );
+    assert_eq!(read(&mut runtime, "String(middleHandlerDone)"), "true");
+    assert_eq!(read(&mut runtime, "String(middleOwnerLoads)"), "0");
+    assert_eq!(read(&mut runtime, "String(outerOwnerLoads)"), "1");
+    assert_eq!(read(&mut runtime, "String(topLoad)"), "true");
+    assert_eq!(
+        read(&mut runtime, "String(topLoadSawClosed)"),
+        "true",
+        "the top load follows destruction while the surviving outer load completes"
+    );
+}
+
 macro_rules! both_engines {
     ($($body:ident => ($boa:ident, $nova:ident)),* $(,)?) => {
         $(
@@ -225,4 +430,12 @@ both_engines! {
         (teardown_releases_everything_on_boa, teardown_releases_everything_on_nova),
     move_before_preserves_the_nested_context =>
         (move_before_preserves_context_on_boa, move_before_preserves_context_on_nova),
+    self_removal_during_child_parse_finishes_script_without_owner_load =>
+        (self_removal_finishes_without_load_on_boa, self_removal_finishes_without_load_on_nova),
+    parser_callback_removal_releases_parent_load_barrier =>
+        (parser_callback_releases_barrier_on_boa, parser_callback_releases_barrier_on_nova),
+    removal_during_window_load_defers_parent_load_until_destroyed =>
+        (window_load_removal_defers_parent_on_boa, window_load_removal_defers_parent_on_nova),
+    ancestor_removal_during_window_load_releases_surviving_ancestor =>
+        (ancestor_removal_releases_outer_on_boa, ancestor_removal_releases_outer_on_nova),
 }

@@ -175,6 +175,61 @@ fn readiness_transitions_fire_in_order<E: ScriptEngine>() {
     );
 }
 
+/// User-agent readiness events must not depend on the page keeping the public
+/// Event constructor installed. Page code can delete that global, while event
+/// listeners and ordinary author-created events continue to work.
+fn readiness_events_survive_deleting_the_event_global<E: ScriptEngine>() {
+    let mut rt = parse::<E>(
+        "<body><script>\
+           window.log = [];\
+           document.addEventListener('readystatechange', function() { \
+             log.push('rs:' + document.readyState); });\
+           document.addEventListener('DOMContentLoaded', function() { \
+             log.push('dcl:' + document.readyState); });\
+           window.addEventListener('load', function() { \
+             log.push('load:' + document.readyState); });\
+           var authorEvent = new Event('author');\
+           document.addEventListener('author', function(e) { \
+             if (e === authorEvent) log.push('author'); });\
+           document.dispatchEvent(authorEvent);\
+           window.eventDeleted = delete window.Event && typeof Event === 'undefined';\
+         </script></body>",
+    );
+    assert_eq!(read(&mut rt, "String(window.eventDeleted)"), "true");
+    assert_eq!(
+        read(&mut rt, "log.join('|')"),
+        "author|rs:interactive|dcl:interactive|rs:complete|load:complete"
+    );
+}
+
+/// A private user-agent Event constructor must survive later host parses in the
+/// same realm after the page deleted the public global during an earlier parse.
+fn readiness_events_survive_a_repeat_parse_after_event_deletion<E: ScriptEngine>() {
+    let mut rt =
+        parse::<E>("<body><script>window.eventDeleted = delete window.Event;</script></body>");
+    assert_eq!(read(&mut rt, "String(window.eventDeleted)"), "true");
+
+    rt.parse_document_interleaved(
+        "<body><script>\
+           window.log = [];\
+           document.addEventListener('readystatechange', function() { \
+             log.push('rs:' + document.readyState); });\
+           document.addEventListener('DOMContentLoaded', function() { \
+             log.push('dcl:' + document.readyState); });\
+           window.addEventListener('load', function() { \
+             log.push('load:' + document.readyState); });\
+           window.eventStillDeleted = typeof Event === 'undefined';\
+         </script></body>",
+        &NoScriptLoader,
+    );
+
+    assert_eq!(read(&mut rt, "String(window.eventStillDeleted)"), "true");
+    assert_eq!(
+        read(&mut rt, "log.join('|')"),
+        "rs:interactive|dcl:interactive|rs:complete|load:complete"
+    );
+}
+
 /// A custom element defined by one script is upgraded for a tag parsed after
 /// it, before the next script sees the tree.
 fn a_definition_upgrades_elements_parsed_after_it<E: ScriptEngine>() {
@@ -563,6 +618,10 @@ both_engines! {
     document_write_lands_at_the_insertion_point => (write_point_on_boa, write_point_on_nova),
     current_script_names_the_running_script => (current_script_on_boa, current_script_on_nova),
     readiness_transitions_fire_in_order => (readiness_on_boa, readiness_on_nova),
+    readiness_events_survive_deleting_the_event_global
+        => (readiness_events_survive_deleting_event_on_boa, readiness_events_survive_deleting_event_on_nova),
+    readiness_events_survive_a_repeat_parse_after_event_deletion
+        => (repeat_parse_after_event_deletion_on_boa, repeat_parse_after_event_deletion_on_nova),
     a_definition_upgrades_elements_parsed_after_it => (parse_upgrade_on_boa, parse_upgrade_on_nova),
     a_disabled_definition_refuses_a_declarative_root
         => (disabled_shadow_on_boa, disabled_shadow_on_nova),

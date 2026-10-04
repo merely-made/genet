@@ -106,6 +106,17 @@ Two later rulings the same day are recorded in the
   submodule at its pinned commit `e0d8f66a`, and run Vano's test262 gate.
   Mark: "Allow, pinned commit only (Recommended)".
 
+**Vano repin, ruled 2026-10-04.** Vano's three fixes landed on Vano `main`
+as `47f8d4f9` (2026-10-03), but Genet still pins `8ad08412` in
+`components/script-engine-nova/Cargo.toml` (:25 and :31). Asked when Genet
+repins, Mark was given two options: after the census-panic lane closes,
+since its attribution is anchored on `8ad08412`; or now, with that lane
+rebasing. Mark: "i accept your recommendations". The recommendation was
+"After the census lane closes". It follows that the repin is its own commit,
+made once the census-panic lane lands. Until then, primary-checkout builds
+compile `crates/vano` (`47f8d4f9`) through the gitignored `[patch]` table,
+not the pinned revision.
+
 ## Purpose
 
 Until this run, `genet-wpt` had exact result maps only for the CSS manifest

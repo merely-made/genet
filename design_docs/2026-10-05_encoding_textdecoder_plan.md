@@ -200,3 +200,44 @@ unchanged. Locked metadata now succeeds. Accepted lock SHA-256:
 `9B7C50EA33A181C424E871129A0CFB071CC8B65EE5BCECCD42CCD656118423D9`.
 The original/proposed/accepted locks, metadata and graph-delta receipt remain in
 external evidence. Phase 2 is open under E1 and C2; remaining checkpoints persist.
+
+- 2026-10-05: Phase 2 implementation is assembled. The new native module owns
+  per-realm decoder metadata and streaming state; process-wide checked IDs
+  prevent stale cleanup aliasing after HostState resets. The JS block captures
+  intrinsics and native callables, shares weak receiver brands across agent
+  realms, and registers ID-only finalizers. Vano cleanup jobs now enter its
+  existing queue. Native state holds no JS wrappers, and the R1 GC-policy code
+  is unchanged. No source is imported or translated from another engine.
+- 2026-10-05: root review corrected draft astral UTF-8 conversion, primitive
+  dictionary conversion, required-argument ordering, nonconstructible getters,
+  decoder reset borrowing and fatal-read accounting before runtime acceptance.
+  The first compile caught an undefined-value API-name error; it was fixed
+  using the existing CallCx::undefined contract. The failed log and original
+  source are retained. A second focused gate is compiling.
+- 2026-10-05: independent read-only review found no actionable issues. An exact
+  outer-bootstrap comparison confirms unchanged code outside the assigned
+  Encoding block plus the authorized registration/helper-visibility edits.
+  Shared Blob/Response/XHR UTF-8 helpers are byte-for-byte unchanged. This is
+  review evidence, not a passing implementation or WPT receipt.
+
+- 2026-10-05: the focused gate passes all 164 runtime unit tests, including
+  existing census R1 controls, decoder collection/flush/teardown, and snapshot
+  stale-handle protection. It passes 30/32 Encoding integration controls. Both
+  Worker failures were traced to the fixture's relative loader key while
+  Worker resolves an absolute URL. The loader key is corrected and an explicit
+  script-error assertion added; the next gate is running. The original Worker
+  before failures are unqualified as Encoding behavior controls, because the
+  script did not load. Window behavior controls and full WPT baseline remain
+  qualified. All failed runs remain in evidence.
+
+- 2026-10-05: a bounded read-only check found no specification/library mismatch
+  in the GB18030-2022 cases. encoding_rs 0.8.35 records 2022 support; the relevant
+  two-byte tables and four-byte range mappings match all listed updated WPT
+  examples inspected. This qualifies those examples only; full API acceptance
+  still requires the actual matched WPT run.
+
+- 2026-10-05: all 32 Encoding integration controls now pass, including actual
+  Boa/Vano worker scripts with corrected absolute fixture routing. The prior
+  164-unit run also passed. Root is committing the reviewed implementation
+  before broad crate gates and frozen post-change WPT acceptance. This is a
+  candidate commit, not the lane's final acceptance or publication.

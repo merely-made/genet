@@ -1422,11 +1422,11 @@ relocation item and the teardown item are the same edit seen from two ends.
 `FrameState` gains `detach_subtree` and a `pending_teardown` queue, and the two
 halves are split exactly where HTML splits "destroy a child navigable":
 
-**2026-10-04 correction, validated locally; integration pending:**
+**2026-10-04 correction, landed 2026-10-05:**
 Iframe removing steps call document destruction, which aborts the parser and releases the document; they
 do not call the unload procedure. The historical queued `pagehide`/`unload`
 behavior described below is superseded by the validated local
-[census lane](2026-10-03_census_panics_plan.md), pending integration. Mark ruled
+[census lane](2026-10-03_census_panics_plan.md). Mark ruled
 that the currently executing script finishes, then queued destruction precedes
 remaining child load work. Removed containers lose their content navigables synchronously;
 pending parent/top relations let the active script finish. Detached owners do

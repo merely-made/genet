@@ -1,8 +1,8 @@
 # Genet census panic lane receipt
 
-**Status:** Implementation and automated validation complete, 2026-10-04.
-Committed locally on `fix/census-panics`; final checkpoint before integration.
-No lane push or main merge has been made.
+**Status:** Implementation and automated validation complete, 2026-10-04;
+integrated on 2026-10-05 after Mark authorized push and merge. The validation
+inputs and maps below retain their original frozen Vano pin.
 
 Plan: [census execution](../../2026-10-03_census_panics_plan.md).
 Evidence root: `C:/Users/mark_/Code/testing/genet-census-panics`.
@@ -337,3 +337,14 @@ production patch now committed; documentation edits do not alter that source.
 The lane worktree, stable target `C:/t/cargo-targets/genet-census-panics`, frozen
 runners/symbols and raw evidence are retained for verification and review.
 No isolated Cargo home was created.
+
+## Integration addendum, 2026-10-05
+
+Mark authorized push, merge and continuation. The two lane commits were pushed
+and merged on main as `24bec750334dd4024738ea860610aef90a5f2c56`. The merged components/ports
+patch from the original base has SHA-256
+`DBFA2C1568A5131A0E17DB4F7CD33452B873EE122DCA367C0BBE1D79DB7C6AAE`,
+identical to the acceptance runner. Main's independent Vano repin ruling is
+preserved. `integration.receipt.json` records publication and the subsequent
+worktree retirement; the target is temporarily reused for the separate exact-pin
+repin gate. No old result map is relabelled as a new-pin result.

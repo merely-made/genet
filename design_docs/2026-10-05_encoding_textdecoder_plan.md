@@ -1,11 +1,12 @@
 # WHATWG Encoding: TextDecoder and TextEncoder
 
-**Status:** E1 and C2 answered; native-backed candidate committed on
-conformance/encoding, 2026-10-05. The frozen baseline and assigned failing
-controls are recorded. All 164 runtime unit tests and 32 Encoding integration
-controls have passed; a new author-array-hook regression, full crate gates and
-matched post-change WPT acceptance remain open. Vano is pinned to 47f8d4f9 at
-the d7f08fecdc7 baseline. This lane is not published or integrated.
+**Status:** E1 and C2 answered; native-backed candidate e23f2db1b14 committed
+on conformance/encoding, 2026-10-05. Broad crate gates pass 949 tests with
+three existing WPT tests ignored. Both frozen post-change Encoding runs show
+API gains, but old passing subtests are lost in incomplete Worker results;
+acceptance is withheld. E2 is pending for a confirmed encoding_rs 0.8.35
+empty-streaming-input defect. Vano is pinned to 47f8d4f9 at the d7f08fecdc7
+baseline. This lane is not published or integrated.
 
 Authority: the [standards ledger](2026-09-07_standards_to_features_ledger.md#conformance-targets-2026-10-02)
 rulings C1, C2 and C4; the execution brief
@@ -267,3 +268,104 @@ external evidence. Phase 2 is open under E1 and C2; remaining checkpoints persis
   to zero, with two build jobs and two test threads. This limits the cost of the
   45 runtime integration binaries; it is ordinary test evidence, not a timing
   comparison. The frozen WPT runner keeps the original release settings.
+
+- 2026-10-05: final corrected production source is e23f2db1b14. Its default
+  release/netfetch runner builds successfully and is frozen with SHA-256
+  A045054AF9DEE8791A86152E3B9FE08E39BE587E9E47C529DD32D0096BF8298B.
+  Corpus manifest and accepted C2 lock are unchanged. Full matched Encoding
+  runs on Boa and Vano and the broad crate gates have started. This is not yet
+  acceptance. Final outer-bootstrap comparison still matches the baseline
+  after normalizing only the authorized registration/helper-visibility hunks.
+
+## Candidate measurements and E2 checkpoint, 2026-10-05
+
+The complete gate against e23f2db1b14 passes script-runtime-api 735,
+genet-scripted 120, genet-wpt 72 and script-engine-nova 22 tests. Three existing
+WPT tests are ignored. The frozen WPT executable uses the default optimized
+release profile; the broad crate gate uses the recorded per-package test
+optimization overrides. The accepted C2 lock and corpus manifest are unchanged.
+Evidence is under `Code/testing/genet/encoding-textdecoder`, including
+`final-crates.receipt.json`, `final-crates-counts.json`, both `after-*.json`
+maps, their frozen-run receipts, and `compare-*.json` individual movements.
+
+These are unaccepted first post-change measurements. Each full map contains
+1,313 records; the controlled API selector contains 67 records. Historical
+brief totals use a different selector and are not substituted for this one.
+
+| Engine | Scope | Passing files before / candidate | Passing subtests before / candidate |
+| --- | --- | --- | --- |
+| Boa | API | 4 / 42 | 10,576 / 15,117 |
+| Vano | API | 5 / 43 | 10,900 / 14,846 |
+| Boa | Whole encoding | 5 / 43 | 10,577 / 15,118 |
+| Vano | Whole encoding | 6 / 43 | 10,901 / 14,846 |
+
+Boa's comparator reports 422 losses of previously passing file/subtest
+identities: 415 subtests absent, two not-run, four timeout and one file failing.
+Vano reports 1,282 such losses: 1,278 subtests absent, one fail, one timeout,
+one not-run and one lost passing file. These are actual unaccepted movements;
+missing names are not inferred to pass. There are also 16 Boa and 18 Vano new
+error records outside the API selector. Their full attribution remains open.
+The two full runs overlapped the broad build, and foreign compilers were also
+active. Contention is a hypothesis rather than a demonstrated explanation.
+Root started sequential frozen-before/frozen-after runs of
+`textdecoder-fatal-single-byte.any.js`, with the same jobs, timeout, drive
+deadline and corpus. They have no concurrent root gate; foreign compiler
+owners at each start are recorded. These diagnostic pairs will be retained
+separately rather than replacing the initial full maps.
+
+**Confirmed library defect.** Local WPT `textdecoder-mistakes.any.js:614-624`
+inserts an empty streaming chunk between a lead byte and its trail. A standalone
+probe linked to the exact existing 0.8.35 rlib reproduces wrong output for
+Big5 (`@` instead of U+9442), Shift_JIS (U+FFFD instead of U+221E) and EUC-KR
+(`A` instead of U+AC02). Skipping only that empty non-final library call yields
+all three expected results. Source inspection shows the two-byte decoder
+prolog clears its lead before checking whether source input is available.
+The probe source, output and SHA are `library-empty-stream-probe.rs` and its
+log. This is independent of the native wrapper and confirms the brief's
+specification/library checkpoint. Upstream [issue 126](https://github.com/hsivonen/encoding_rs/issues/126)
+and [merged fix 128](https://github.com/hsivonen/encoding_rs/pull/128) concern
+this defect; no upstream code was copied.
+
+E2 asks Mark whether to add a narrow adapter guard: if both new input and
+pending input are empty and `stream` is true, return an empty string without
+calling the library, preserving existing decoder/BOM state. A final empty
+call still flushes normally; nonempty pending bytes still run. Keep 0.8.35,
+the accepted lock and dependency graph. The alternative is a separately
+scoped library upgrade. Production has not been changed past this checkpoint.
+
+**Fatal UTF-8 conflict, reading rather than a new ruling.** WPT lines 652-658
+expect an empty successful flush after fatal streaming input `[FD, EF]` throws.
+The [current TextDecoder algorithm](https://encoding.spec.whatwg.org/#dom-textdecoder-decode)
+sets do-not-flush before processing and does not clear its I/O queue when a
+fatal error throws. The UTF-8 handler rejects FD immediately, leaving EF
+queued. The next flush must therefore reject incomplete EF. Both root and a
+read-only agent checked the queue, decode and UTF-8 steps against the existing
+library's consumed-byte accounting. Current pending-byte behavior is consistent
+with that reading, including preserving a valid tail after `[FF, 41]`. Clearing
+all remaining input to satisfy this assertion would drop specified queued
+bytes. Preserve the frozen WPT and report the mismatch separately; it is not
+attributed to a decoder implementation improvement.
+
+The Vano `sharedarraybuffer.https.html` case is a concrete regression: its
+previously passing file and `decoding SharedArrayBuffer` subtest now fail with
+`TextDecoder input is not an ArrayBuffer or view`. This differs from the
+existing Boa SAB-constructor limitations. Root delegated a read-only trace of
+the wrapper's captured `ArrayBuffer.isView` classification and existing host
+surface before proposing a correction.
+
+Other remaining API failures include existing Boa SAB support, ArrayBuffer
+transfer, Worker helper-loading and IDL-fetch limitations. Those are not
+assigned new implementation scope by this measurement. Candidate acceptance still requires
+the narrow streaming correction after E2, qualified pass-loss repair, and a
+new frozen final runner and matched full maps with every movement attributed.
+
+- 2026-10-05: all four sequential fatal-single-byte diagnostic runs finish.
+  The paired comparator still reports 54 lost passing subtests on Boa and 160
+  on Vano, all in Worker variants with incomplete results. Window variants
+  finish all 1,000 subtests (168 in the final range). Removing root's broad
+  compilation/other-engine overlap reduces losses but does not eliminate
+  them. Six to eleven foreign cargo/rustc processes were recorded at each
+  start. The pair does not establish a contention-only cause or satisfy the
+  zero-pass-loss condition. Production e23f2db1b14 remains unchanged while E2
+  is pending; an independent read-only review is examining private native
+  call overhead and the Worker reporting deadline.

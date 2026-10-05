@@ -263,7 +263,7 @@ They can be retired after the new-pin receipt is recorded and published.
 
 ## Vano repin follow-up, 2026-10-05
 
-**Status:** exact-pin validation in progress after census integration. Mark
+**Status:** exact-pin validation accepted and repin published, 2026-10-05. Mark
 accepted repinning only after this lane lands, then authorized push, merge and
 continuation. The two native/wasm64 `nova_vm` manifest rows move from
 `8ad0841255c2cbb679f7c704417d427b3cb3e961` to the published Vano main
@@ -286,3 +286,19 @@ would not establish the portable published pin. The existing clean census
 worktree has no local overrides and is temporarily reused for that actual
 configuration collision, with its stable target. Evidence is stored under
 `Code/testing/genet/vano-repin/`; no Cargo home or extra worktree is created.
+
+- 2026-10-05: the separate portable repin `d7f08fecdc7` is published. Locked
+  resolution changes only three Vano git-source revisions: all 867 package
+  versions and dependency edges are unchanged. New portable lock SHA-256:
+  `070C2ABCC1F2C326BE560D4CCA053D5F526E65F872EC8ADF541818EAAC460907`.
+  All affected gates pass: Vano 43, runtime 672, scripted 120, reporting 1,
+  836 total with zero failed/ignored. The three former backend panic files
+  reach FAIL 0/3, PASS 5/5 and FAIL 2/4. P1/P2 initially timed out; preserved
+  paired old/new immutable-runner measurements recover identical 11/36 and
+  0/4 with no lost passes. Recovery does not prove contention as the cause.
+  The other eight Genet records preserve their former results. Evidence and
+  exact commands are in `Code/testing/genet/vano-repin/acceptance.receipt.json`.
+  The receipt branch excludes concurrent image-feature commit `37cf5d82db8`;
+  validation applies to the named repin source, not that foreign slice.
+  The reused census checkout/cache can now retire after receipt publication;
+  its final disposition is recorded in the external integration receipt.

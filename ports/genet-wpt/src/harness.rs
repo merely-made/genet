@@ -1641,8 +1641,10 @@ mod tests {
 
     const MINI_TESTHARNESS: &str = r#"
 var __tests = [];
+var __result_callbacks = [];
 var __completion_callbacks = [];
 function setup() {}
+function add_result_callback(cb) { __result_callbacks.push(cb); }
 function add_completion_callback(cb) { __completion_callbacks.push(cb); }
 function assert_true(value, message) {
   if (!value) throw new Error(message || "assert_true failed");
@@ -1654,11 +1656,15 @@ function test(fn, name) {
   } catch (e) {
     __tests.push({ name: name, status: 1, message: String((e && e.message) || e) });
   }
+  var result = __tests[__tests.length - 1];
+  for (var i = 0; i < __result_callbacks.length; i++) {
+    __result_callbacks[i](result);
+  }
 }
 window.addEventListener("load", function() {
   var snapshot = __tests.slice();
   for (var i = 0; i < __completion_callbacks.length; i++) {
-    __completion_callbacks[i](snapshot);
+    __completion_callbacks[i](snapshot, { status: 0, message: null });
   }
 });
 "#;
@@ -1698,7 +1704,7 @@ test(function() {
 
     /// End to end through the H7a rendering session: the real WPT
     /// `animationevent-types.html` (negative delay, iteration-count 2, animates
-    /// `left`) runs to completion without panicking. This test found the stylo
+    /// `left`) returns reported results without panicking. This test found the stylo
     /// f32 boundary hole (fork fix `56e70cacdb`) — the harness's silent panic
     /// hook had reduced it to an opaque `ERROR panic` in the corpus run, so it
     /// stays here where a panic gets a backtrace.
@@ -1729,6 +1735,17 @@ test(function() {
                     !results.is_empty(),
                     "the animation events should reach testharness"
                 );
+            },
+            HarnessOutcome::Stopped {
+                results,
+                reason: "harness-timeout",
+                ..
+            } => {
+                // These three animation subtests already time out on the
+                // pre-E3 runner. Keep the smoke guard's original non-panic
+                // scope while the runner accurately reports overall TIMEOUT.
+                assert_eq!(results.len(), 3, "expected animation results: {results:?}");
+                assert!(results.iter().all(|result| result.status == 2));
             },
             HarnessOutcome::Threw(m) => panic!("threw instead of reporting: {m}"),
             HarnessOutcome::Stopped {

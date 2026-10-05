@@ -487,6 +487,18 @@ duplicate reports. Both runtime and port source reviews are complete with no
 actionable findings, including the incremental-reporting gap and its correction.
 Broad crate and optimized runner gates remain open.
 
+The first clean E3 broad gate, `e3-crates.*`, passed genet-scripted 120 and
+genet-wpt 70 tests but failed three existing WPT harness guards. Two miniature
+harness fixtures omitted the new result callback and overall status argument;
+their fixtures now implement those public WPT callback contracts. The animation
+smoke guard only pins non-panic reporting, but its match rejected the newly
+explicit harness TIMEOUT. The frozen pre-E3 runner already reports the same
+three timed-out subtests (`e3-animation-before-classification.*`); the guard now
+accepts that exact known timeout outcome while preserving failure on thrown,
+incomplete or other stopped outcomes. No animation behavior or expectations
+were changed. The separate invalid-return controls qualify false PASS on both
+pre-E3 engines (`harness-controls-pre-harness-*-error.*`).
+
 Mark selected "Approve harness correction and matched 60-second runs
 (Recommended)". E3 authorizes correct long-timeout selection before authored
 scripts, separate overall completion/status reporting, explicit incomplete

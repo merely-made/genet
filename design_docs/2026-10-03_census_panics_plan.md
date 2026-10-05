@@ -1,8 +1,9 @@
 # Genet census panics and evaluation errors
 
 **Status:** Implementation and automated validation complete under R1/R2,
-2026-10-04. Committed locally on `fix/census-panics`; awaiting integration
-after the brief's final checkpoint. Starting published Genet commit
+2026-10-04; integrated on 2026-10-05 in `24bec750334` after Mark
+authorized push, merge and continuation. Validation remains qualified to the
+frozen Vano pin used for attribution. Starting published Genet commit
 `bcf1b08dbe663ecfad1ed6c7b2ebe75e600aa39e`; Vano remains at the brief's
 `8ad0841255c2cbb679f7c704417d427b3cb3e961` for starting attribution.
 
@@ -248,3 +249,14 @@ so movements are attributed to the correct change.
 The [lane receipt](receipts/2026-10-04_genet_census_panics/receipt.md) distinguishes
 qualified controls from exploratory passes, completed final gates and open
 feature forks.
+
+## Main integration, 2026-10-05
+
+Mark authorized push, merge and continuation. Both lane commits were pushed,
+then merged on main; merge commit `24bec750334dd4024738ea860610aef90a5f2c56`. The production
+patch SHA-256 matches the frozen acceptance runner exactly. Main's independent
+Vano timing ruling `f4ae933c873` is preserved. The next step is a separate Vano
+repin with exact-pin runtime and census regressions; the original maps stay at
+`8ad08412`. The existing worktree and target are temporarily reused for that
+portable-pin gate, since the primary checkout has local Cargo patch overrides.
+They can be retired after the new-pin receipt is recorded and published.

@@ -108,11 +108,11 @@ completed corpus census or bounded slice does not close its enclosing feature.
 ## WPT census — the web platform beyond CSS
 
 - [census_panics_plan](2026-10-03_census_panics_plan.md)
-  (**Validated locally, 2026-10-04; integration pending**: `876c7a2cba4`
+  (**Landed 2026-10-05**: `876c7a2cba4`
   implements R1 live canonical wrappers without author calls during GC and R2
   queued destruction after the current script. P1-P7 no longer panic on either
   engine. Six crate gates pass 936 tests; eight directory maps lose zero file
-  or subtest passes. Vano remains frozen at `8ad08412` until integration.
+  or subtest passes. The frozen-pin receipt remains historical; Vano repin follows separately.
   The [census lane receipt](receipts/2026-10-04_genet_census_panics/receipt.md)
   records all controls, 33 attributed movements and remaining feature forks.)
 

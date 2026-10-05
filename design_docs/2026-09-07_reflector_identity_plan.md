@@ -98,7 +98,7 @@ without rooting (piccolo, the epoch-pin fallback) compiles unchanged.
 | `root_reflector(data) -> bool` | `CallCx` | the in-callback single-id form, for the mint path |
 | `unroot_reflector(data)` | `CallCx` | its release |
 
-**2026-10-04 census correction, validated locally; integration pending:**
+**2026-10-04 census correction, landed 2026-10-05:**
 Mark ruled that GC bookkeeping must use live canonical wrappers and invoke no author code. The
 inventory contract above now excludes weak-dead targets without sweeping their
 entries. Generic rooting may still remint; the policy's inventory-to-root

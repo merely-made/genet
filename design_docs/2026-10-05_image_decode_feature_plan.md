@@ -1,7 +1,7 @@
 # genet-livery image decoding behind a default-on feature
 
-**Status:** landed on local `main`, 2026-10-05; not pushed (pushing waits on
-Mark). Progress below records the receipts.
+**Status:** landed and pushed, 2026-10-05 (`37cf5d82db8`, on origin through
+`f9c8b0a7186`). Progress below records the receipts.
 
 ## Why
 
@@ -166,3 +166,35 @@ long as one path in their graph asks for it.
     taproot`: 68 passed, 0 failed.
   - **Formatting:** `rustfmt --check` is clean for `src/image_decode.rs`. The
     one diff it reports in `tests/paint.rs` (line 555) is already in `HEAD`.
+- 2026-10-05, two further rulings:
+  - **Ruling 4, pushing.** Asked whether to push `main`'s two unpushed commits,
+    the Vano repin `d7f08fecdc7` and this feature `37cf5d82db8`. The options
+    were: push both now; the repin only; or not yet. Mark: "Push both now
+    (Recommended)".
+    - **The push.** It moved origin from `2312c800c0c` to `f9c8b0a7186`. By
+      then another agent had already pushed the repin with two doc commits
+      (`609585eeafe`, `2312c800c0c`, recording the repin's acceptance) and
+      had merged them locally with this feature as `f9c8b0a7186`. So the push
+      carried this feature plus that merge commit, which the ruling's "both"
+      did not name.
+    - **The merge commit is clean.** `git show --cc` shows no conflict
+      resolution, and its only content beyond `37cf5d82db8` is those
+      already-pushed doc changes.
+    - **The check was stale.** It had shown `main` at `37cf5d82db8` minutes
+      before the push.
+  - **Ruling 5, the lock.** Asked how to repair the primary checkout's stale
+    ignored lock. The options were: regenerate with one fetch; point lanes at
+    the local Vano; or leave it. Mark: "Regenerate with one fetch
+    (Recommended)".
+    - **Done.** With `.cargo/config.toml` parked, `cargo metadata` re-resolved
+      online, and the config was restored byte-identical.
+    - **The lock diff is exactly 8 lines:** the Vano source moved
+      `8ad08412` to `47f8d4f9` in three places, and `genet-livery` gained
+      `icu_properties` and `icu_segmenter 2.2.0`. No version changed.
+    - **`--locked --offline` now resolves.**
+    - **It downloaded more than one git revision.** Besides the Vano git
+      fetch and a crates.io index update, `cargo metadata` downloaded 60
+      registry crates at their locked versions, mostly other platforms'
+      dependencies (gstreamer, glib, macOS AccessKit). Without
+      `--filter-platform`, it fetches every platform's sources.
+    - **A backup of the old lock** is in this session's scratchpad.

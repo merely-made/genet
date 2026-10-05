@@ -510,14 +510,20 @@ workaround also scales authored `step_timeout(11000)` to 66000ms, beyond the
 fixture is unchanged.
 
 The correction loads minimal real long-timeout META into the host DOM before
-WPT initializes, and keeps separate normal/long Vano snapshots selected by the
-actual wrapper's first timeout META. Authored HTML parsing clears the seed
+WPT initializes, selected by the actual wrapper's first timeout META. Authored HTML parsing clears the seed
 children before scripts run; the XML route retains its actual preloaded DOM.
-Authored timer delays keep WPT's default multiplier of one. Two real-harness
-guards check the eleven-second timer, absence of leaked seed metadata, and
-alternating normal/long Vano snapshots. Independent read-only review confirms
-this stays within E3 and needs no new runtime API or dependency. Fresh gates
-for this correction remain open. The matched corpus byte snapshot covers 952
+Authored timer delays keep WPT's default multiplier of one. The first metadata
+gate, `e3-metadata-crates.*` from 111b9a9a150, passes the real Boa eleven-second
+guard but fails the real Vano snapshot guard with `harness-incomplete` and zero
+results (genet-scripted 120 passed; genet-wpt 74 passed, one failed, three
+ignored; later crate gates did not run). The isolated worker already bypasses
+this documented snapshot/host-state limitation, so the bounded remedy sends
+long-timeout template calls through the same fresh-runtime path. Normal
+snapshot behavior is unchanged and remains guarded by the miniature harness;
+real normal/long deadline checks use the matched fresh path. Snapshot/realm
+repair is outside E3. Two real-harness guards check the eleven-second timer,
+absence of leaked seed metadata, and preservation of the normal deadline.
+Fresh gates for this correction remain open. The matched corpus byte snapshot covers 952
 Encoding/shared resource/interface/common files and will be verified at both
 ends of each paired run.
 

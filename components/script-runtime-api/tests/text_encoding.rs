@@ -160,6 +160,39 @@ fn streaming_decode_flushes_and_resets<E: ScriptEngine>() {
     );
 }
 
+fn empty_stream_chunks_preserve_legacy_multibyte_leads<E: ScriptEngine>() {
+    let mut runtime = runtime::<E>();
+    assert_eq!(
+        read(
+            &mut runtime,
+            r#"(function(){var cases=[['big5',0xfe,0x40],['shift_jis',0x81,0x87],['euc-kr',0x81,0x41]];for(var i=0;i<cases.length;i++){var c=cases[i];var decoder=new TextDecoder(c[0]);var lead=decoder.decode(new Uint8Array([c[1]]),{stream:true});var empty=decoder.decode(new Uint8Array(0),{stream:true});var tail=decoder.decode(new Uint8Array([c[2]]));var whole=new TextDecoder(c[0]).decode(new Uint8Array([c[1],c[2]]));if(lead!==''||empty!==''||tail!==whole)return c[0]+':'+JSON.stringify([lead,empty,tail,whole]);}return 'true';})()"#
+        ),
+        "true"
+    );
+}
+
+fn shared_views_cover_sab_buffers_offsets_and_encode_into<E: ScriptEngine>() {
+    let mut runtime = runtime::<E>();
+    assert_eq!(
+        read(
+            &mut runtime,
+            r#"(function(){var decoder=new TextDecoder();var direct=decoder.decode(new SharedArrayBuffer(3));var directCodes=[direct.charCodeAt(0),direct.charCodeAt(1),direct.charCodeAt(2)].join(',');var shared=new SharedArrayBuffer(8);new Uint8Array(shared).set([0,65,66,67,68,0,0,0]);var typed=decoder.decode(new Uint8Array(shared,2,2));var data=decoder.decode(new DataView(shared,1,4));var ordinary=decoder.decode(new Uint8Array([88,89]));var destBuffer=new SharedArrayBuffer(10);var dest=new Uint8Array(destBuffer,2,6);var result=new TextEncoder().encodeInto('A😀B',dest);var written=[dest[0],dest[1],dest[2],dest[3],dest[4],dest[5]].join(',');return directCodes+'|'+typed+'|'+data+'|'+ordinary+'|'+result.read+'|'+result.written+'|'+written;})()"#
+        ),
+        "0,0,0|BC|ABCD|XY|4|6|65,240,159,152,128,66"
+    );
+}
+
+fn text_encoding_raw_protocol_survives_delimiters_and_intrinsic_poison<E: ScriptEngine>() {
+    let mut runtime = runtime::<E>();
+    assert_eq!(
+        read(
+            &mut runtime,
+            r#"(function(){var slice=Object.getOwnPropertyDescriptor(String.prototype,'slice');var indexOf=Object.getOwnPropertyDescriptor(String.prototype,'indexOf');var parse=Object.getOwnPropertyDescriptor(JSON,'parse');var fail=function(){throw new Error('author replacement observed');};var payload='\0: "quoted" \\ 😀 \uFEFF';var result='';try{Object.defineProperty(String.prototype,'slice',{value:fail,writable:true,enumerable:false,configurable:true});Object.defineProperty(String.prototype,'indexOf',{value:fail,writable:true,enumerable:false,configurable:true});Object.defineProperty(JSON,'parse',{value:fail,writable:true,enumerable:false,configurable:true});var bytes=new TextEncoder().encode(payload);var decoded=new TextDecoder('utf-8',{ignoreBOM:true}).decode(bytes);result=String(decoded===payload);}catch(error){result='error:'+error.message;}finally{Object.defineProperty(String.prototype,'slice',slice);Object.defineProperty(String.prototype,'indexOf',indexOf);Object.defineProperty(JSON,'parse',parse);}return result;})()"#
+        ),
+        "true"
+    );
+}
+
 fn encode_into_counts_utf16_and_keeps_character_boundaries<E: ScriptEngine>() {
     let mut runtime = runtime::<E>();
     assert_eq!(
@@ -419,6 +452,7 @@ both_engines! {
     iso_2022_jp_fatal_stream_replays_escape_tail => (iso_2022_fatal_tail_on_boa, iso_2022_fatal_tail_on_vano),
     bom_modes_follow_ignore_bom => (bom_modes_on_boa, bom_modes_on_vano),
     streaming_decode_flushes_and_resets => (streaming_decode_on_boa, streaming_decode_on_vano),
+    empty_stream_chunks_preserve_legacy_multibyte_leads => (empty_stream_legacy_on_boa, empty_stream_legacy_on_vano),
     encode_into_counts_utf16_and_keeps_character_boundaries => (encode_into_on_boa, encode_into_on_vano),
     encoder_replaces_lone_surrogates => (lone_surrogate_on_boa, lone_surrogate_on_vano),
     encoding_interfaces_enforce_brands_and_constructor_calls => (encoding_brands_on_boa, encoding_brands_on_vano),
@@ -427,6 +461,13 @@ both_engines! {
     retained_iframe_decoder_keeps_stream_state_after_removal => (retained_frame_decoder_on_boa, retained_frame_decoder_on_vano),
     captured_encoding_internals_survive_author_intrinsic_replacement => (captured_encoding_internals_on_boa, captured_encoding_internals_on_vano),
     encoder_and_decoder_private_arrays_do_not_use_author_array_hooks => (private_array_hooks_on_boa, private_array_hooks_on_vano),
+    text_encoding_raw_protocol_survives_delimiters_and_intrinsic_poison => (raw_encoding_protocol_on_boa, raw_encoding_protocol_on_vano),
     worker_has_encoding_surfaces => (worker_encoding_on_boa, worker_encoding_on_vano),
     dropped_decoder_finalizer_is_delivered_by_normal_pump => (decoder_finalizer_on_boa, decoder_finalizer_on_vano),
+}
+
+#[cfg(target_pointer_width = "64")]
+#[test]
+fn shared_views_sab_buffers_offsets_and_encode_into_on_vano() {
+    shared_views_cover_sab_buffers_offsets_and_encode_into::<script_engine_nova::NovaEngine>();
 }

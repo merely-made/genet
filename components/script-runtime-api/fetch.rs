@@ -475,7 +475,7 @@ pub(crate) fn encode_outcome(o: &FetchOutcome) -> String {
 }
 
 /// Append `s` as a JSON string literal (quotes + minimal escaping).
-pub(crate) fn push_json_str(out: &mut String, s: &str) {
+fn push_json_str(out: &mut String, s: &str) {
     out.push('"');
     for c in s.chars() {
         match c {
@@ -854,11 +854,11 @@ const FETCH_BOOTSTRAP: &str = r#"
   // same-agent realm accept an instance created in another realm.
   var encObject = Object, encDefine = encObject.defineProperty;
   var encGetDesc = encObject.getOwnPropertyDescriptor, encGetProto = encObject.getPrototypeOf;
-  var encApply = Reflect.apply, encJSONParse = JSON.parse;
+  var encApply = Reflect.apply;
   var encWeakMap = WeakMap, encWeakMapGet = WeakMap.prototype.get, encWeakMapSet = WeakMap.prototype.set;
   var encWeakSet = WeakSet, encWeakSetHas = WeakSet.prototype.has, encWeakSetAdd = WeakSet.prototype.add;
   var encString = String, encStringFromCharCode = String.fromCharCode;
-  var encStringToLowerCase = String.prototype.toLowerCase;
+  var encStringSlice = String.prototype.slice, encStringIndexOf = String.prototype.indexOf;
   var encCreate = encObject.create, encTypeErrorCtor = TypeError, encRangeErrorCtor = RangeError;
   var encCharCodeAt = String.prototype.charCodeAt, encArrayBuffer = ArrayBuffer;
   var encIsView = ArrayBuffer.isView, encUint8Array = Uint8Array;
@@ -914,12 +914,9 @@ const FETCH_BOOTSTRAP: &str = r#"
       throw encTypeError('Dictionary options must be an object');
     return !!options[key];
   }
-  function encParseNative(json) {
-    return encApply(encJSONParse, undefined, [json]);
-  }
-  function encNativeError(result) {
-    if (result.error === 'label') throw new encRangeErrorCtor('The encoding label is invalid');
-    if (result.error === 'fatal') throw encTypeError('The encoded data was not valid');
+  function encNativeError(error) {
+    if (error === 'L') throw new encRangeErrorCtor('The encoding label is invalid');
+    if (error === 'F') throw encTypeError('The encoded data was not valid');
     throw encTypeError('TextDecoder host operation failed');
   }
   function encAsciiTrim(label) {
@@ -934,6 +931,10 @@ const FETCH_BOOTSTRAP: &str = r#"
   function encByteSource(input, omitted) {
     if (omitted || input === undefined) return { kind: 'empty' };
     if (encIsView(input)) return { kind: 'view', value: input };
+    // Vano has distinct shared-view variants which its isView currently omits.
+    // These captured getters test intrinsic brands without author properties.
+    if (encApply(encTypedArrayTag, input, []) !== undefined) return { kind: 'view', value: input };
+    try { encApply(encDataBuffer, input, []); return { kind: 'view', value: input }; } catch (encNotDataView) {}
     try { encApply(encArrayBufferLength, input, []); return { kind: 'buffer', value: input }; } catch (encArrayBufferError) {}
     if (encSharedBufferLength) {
       try { encApply(encSharedBufferLength, input, []); return { kind: 'buffer', value: input }; } catch (encSharedBufferError) {}
@@ -966,7 +967,9 @@ const FETCH_BOOTSTRAP: &str = r#"
       }
     } catch (encDetachedView) { return ''; }
     if (!length) return '';
-    var bytes = new encUint8Array(buffer, offset, length);
+    var bytes = source.kind === 'view' && tag === 'Uint8Array'
+      ? view : new encUint8Array(buffer, offset, length);
+    if (length === 1) return encApply(encStringFromCharCode, undefined, [bytes[0]]);
     var result = '', codes = encCreate(null), cap = 8192;
     for (var i = 0; i < length; i++) {
       codes[i % cap] = bytes[i];
@@ -1037,7 +1040,7 @@ const FETCH_BOOTSTRAP: &str = r#"
       if (!encHas(encoderBrands, this)) throw encTypeError('Illegal invocation');
       if (arguments.length < 2) throw encTypeError("Failed to execute 'encodeInto': 2 arguments required");
       var source = encUSVString(input, false);
-      if (!encIsView(destination) || encApply(encTypedArrayTag, destination, []) !== 'Uint8Array')
+      if (encApply(encTypedArrayTag, destination, []) !== 'Uint8Array')
         throw encTypeError('encodeInto destination must be a Uint8Array');
       var destLength = 0;
       try { destLength = encApply(encTypedLength, destination, []); } catch (encDetachedDestination) {}
@@ -1077,23 +1080,26 @@ const FETCH_BOOTSTRAP: &str = r#"
     var convertedLabel = encAsciiTrim(arguments.length && label !== undefined ? encToString(label) : 'utf-8');
     var fatal = encOptions(options, 'fatal');
     var ignoreBOM = encOptions(options, 'ignoreBOM');
-    var created = encParseNative(encApply(nativeDecoderCreate, undefined, [convertedLabel, fatal ? '1' : '0', ignoreBOM ? '1' : '0']));
-    if (!created.ok) encNativeError(created);
+    var created = encApply(nativeDecoderCreate, undefined, [convertedLabel, fatal ? '1' : '0', ignoreBOM ? '1' : '0']);
+    if (created[0] !== '+') encNativeError(created === '!L' ? 'L' : 'H');
+    var separator = encApply(encStringIndexOf, created, [':', 1]);
+    if (separator < 2 || separator === created.length - 1) encNativeError('H');
+    var id = encApply(encStringSlice, created, [1, separator]);
     var metadata = {
-      id: created.id,
-      encoding: encApply(encStringToLowerCase, created.encoding, []),
+      id: id,
+      encoding: encApply(encStringSlice, created, [separator + 1]),
       fatal: fatal,
       ignoreBOM: ignoreBOM,
       decode: nativeDecoderDecode
     };
     encSet(decoderBrands, this, metadata);
     if (!encRegistry) {
-      encApply(nativeDecoderRelease, undefined, [created.id]);
+      encApply(nativeDecoderRelease, undefined, [id]);
       throw encTypeError('FinalizationRegistry is unavailable');
     }
-    try { encApply(encRegister, encRegistry, [this, created.id]); }
+    try { encApply(encRegister, encRegistry, [this, id]); }
     catch (encRegistrationError) {
-      encApply(nativeDecoderRelease, undefined, [created.id]);
+      encApply(nativeDecoderRelease, undefined, [id]);
       throw encRegistrationError;
     }
   }
@@ -1112,9 +1118,9 @@ const FETCH_BOOTSTRAP: &str = r#"
       if (!metadata) throw encTypeError('Illegal invocation');
       var source = encByteSource(input, arguments.length === 0);
       var stream = encOptions(options, 'stream');
-      var result = encParseNative(encApply(metadata.decode, undefined, [metadata.id, encByteString(source), stream ? '1' : '0']));
-      if (!result.ok) encNativeError(result);
-      return result.text;
+      var result = encApply(metadata.decode, undefined, [metadata.id, encByteString(source), stream ? '1' : '0']);
+      if (result[0] !== 'S') encNativeError(result === 'F' ? 'F' : 'H');
+      return encApply(encStringSlice, result, [1]);
     }
   };
   encDefine(decoderOps.decode, 'length', { value: 0, configurable: true });

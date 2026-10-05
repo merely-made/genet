@@ -428,14 +428,13 @@ impl LiveryPaintList {
         } else {
             self.image_sources.get(url)?.clone()
         };
-        let rgba = image::load_from_memory(&bytes).ok()?.to_rgba8();
-        let (width, height) = rgba.dimensions();
+        let (width, height, data) = crate::image_decode::decode(&bytes)?.into_rgba8();
         let key = ImageKey::new(IdNamespace(0), self.images.len() as u32 + 1);
         self.images.push(ImageResource {
             key,
             width,
             height,
-            data: rgba.into_raw(),
+            data,
         });
         self.image_keys.insert(url.to_owned(), key);
         Some(key)

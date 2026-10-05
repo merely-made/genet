@@ -36,7 +36,7 @@ document-session-api = { workspace = true }
 genet-host-api = { workspace = true }
 # The Livery lane as a session engine. Ortet needs the engine half only; no
 # reader lane, no smolweb, no controller.
-genet-documents = { workspace = true, features = ["livery"] }
+genet-documents = { workspace = true, features = ["livery", "image-decode"] }
 genet-document-resources = { workspace = true }
 # The target-neutral present core. Native and web hosts own their distinct
 # target/input adapters below.

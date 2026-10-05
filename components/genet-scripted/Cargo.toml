@@ -18,7 +18,10 @@ name = "genet_scripted"
 path = "lib.rs"
 
 [features]
-default = ["livery"]
+default = ["livery", "image-decode"]
+# Forwards genet-livery's image decoding to the Livery crates `livery` enables;
+# see genet-livery's `image-decode` feature.
+image-decode = ["genet-livery?/image-decode", "genet-render?/image-decode"]
 # Optional local conformance fixtures that exercise the same document tests on
 # Nova. The default suite keeps Boa as the baseline worker-compatible backend.
 # Gates the `dep:script-engine-nova` below too, so a Boa-only consumer never
@@ -34,8 +37,8 @@ genet-scripted-dom = { path = "../genet-scripted-dom" }
 genet-document-resources = { workspace = true }
 genet-host-api = { workspace = true }
 layout-dom-api = { path = "../shared/layout-dom", features = ["capture"] }
-genet-livery = { path = "../genet-livery", optional = true }
-genet-render = { path = "../genet-render", optional = true }
+genet-livery = { path = "../genet-livery", optional = true, default-features = false }
+genet-render = { path = "../genet-render", optional = true, default-features = false, features = ["livery", "accesskit"] }
 # The style engine itself, for `livery::media::MediaQueryList`: genet-livery
 # re-exports `Device` but not the query parser `matchMedia` needs.
 livery = { path = "../livery", optional = true }

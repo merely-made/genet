@@ -8,13 +8,19 @@ description = "Genet integration for the clean-room Livery CSS engine."
 readme = "README.md"
 publish = true
 
+[features]
+default = ["image-decode"]
+# Decodes image bytes (`src/image_decode.rs`). Without it images get no natural
+# size and are not painted, as for a failed decode.
+image-decode = ["dep:image"]
+
 [dependencies]
 buckram = { version = "0.0.3", path = "../buckram" }
 cssparser.workspace = true
 data-url = { workspace = true }
 genet-document-resources = { workspace = true }
 euclid.workspace = true
-image = { workspace = true }
+image = { workspace = true, optional = true }
 icu_properties.workspace = true
 icu_segmenter.workspace = true
 layout-dom-api = { version = "0.1.1", path = "../shared/layout-dom" }
@@ -33,8 +39,14 @@ fontsan.workspace = true
 base64.workspace = true
 genet-scripted-dom = { version = "0.1.1", path = "../genet-scripted-dom" }
 genet-static-dom = { version = "0.1.1", path = "../genet-static-dom" }
+# Tests encode their PNG fixtures with it, with or without `image-decode`.
+image = { workspace = true }
 parley = { workspace = true, features = ["font-diagnostic"] }
 read-fonts.workspace = true
 # examples/capture_paint_corpus.rs — same encoding netrender's paint-list
 # corpus stores fixtures in. Already in the lock via other members.
 postcard = { version = "1", features = ["alloc"] }
+
+[[test]]
+name = "replaced_image"
+required-features = ["image-decode"]

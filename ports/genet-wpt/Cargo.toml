@@ -17,7 +17,7 @@ path = "src/main.rs"
 # Phase 1 (crash-smoke): parse + owned layout, no GPU.
 genet-static-dom = { path = "../../components/genet-static-dom" }
 genet-document-resources = { path = "../../components/genet-document-resources" }
-genet-livery = { path = "../../components/genet-livery" }
+genet-livery = { path = "../../components/genet-livery", default-features = false }
 livery = { path = "../../components/livery" }
 genet-scripted = { path = "../../components/genet-scripted", default-features = false, features = ["livery"] }
 # H7a rendering session: the testharness lane's IncrementalLayout runs over the
@@ -69,7 +69,10 @@ bytes = { version = "1", optional = true }
 url = { workspace = true, optional = true }
 
 [features]
+default = ["image-decode"]
 netfetch = ["dep:netfetcher", "dep:tokio", "dep:bytes", "dep:url"]
+# Forwards genet-livery's image decoding; see its `image-decode` feature.
+image-decode = ["genet-livery/image-decode", "genet-scripted/image-decode"]
 
 [dev-dependencies]
 # Offline mock server for the fetch()->netfetcher integration test.

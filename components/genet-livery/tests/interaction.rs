@@ -761,6 +761,7 @@ fn css_transition_transform_resolves_percentage_translation_at_paint() {
     assert!((middle.1 - 10.0).abs() < 0.01);
 }
 
+#[cfg(feature = "image-decode")]
 #[test]
 fn css_transition_background_position_uses_the_retained_clock() {
     use base64::Engine as _;
@@ -822,6 +823,7 @@ fn css_transition_background_position_uses_the_retained_clock() {
     );
 }
 
+#[cfg(feature = "image-decode")]
 #[test]
 fn css_transition_background_repeat_switches_at_the_retained_midpoint() {
     use base64::Engine as _;

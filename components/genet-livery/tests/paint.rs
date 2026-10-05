@@ -703,6 +703,7 @@ fn root_text_background_clip_is_ignored_for_canvas_propagation() {
     )));
 }
 
+#[cfg(feature = "image-decode")]
 #[test]
 fn data_uri_background_image_reaches_neutral_image_side_table() {
     use base64::Engine as _;
@@ -747,6 +748,7 @@ fn data_uri_background_image_reaches_neutral_image_side_table() {
     );
 }
 
+#[cfg(feature = "image-decode")]
 #[test]
 fn background_position_and_no_repeat_place_the_intrinsic_image() {
     use base64::Engine as _;
@@ -793,6 +795,7 @@ fn background_position_and_no_repeat_place_the_intrinsic_image() {
     );
 }
 
+#[cfg(feature = "image-decode")]
 #[test]
 fn background_size_preserves_ratio_and_cover_uses_the_positioning_area() {
     use base64::Engine as _;
@@ -833,6 +836,7 @@ fn background_size_preserves_ratio_and_cover_uses_the_positioning_area() {
     );
 }
 
+#[cfg(feature = "image-decode")]
 #[test]
 fn background_origin_and_clip_use_the_requested_css_boxes() {
     use base64::Engine as _;
@@ -877,6 +881,7 @@ fn background_origin_and_clip_use_the_requested_css_boxes() {
     assert_eq!(image.min, paint_list_api::LayoutPoint::new(93.0, 52.0));
 }
 
+#[cfg(feature = "image-decode")]
 #[test]
 fn background_round_and_space_have_distinct_axis_tiling() {
     use base64::Engine as _;
@@ -915,6 +920,7 @@ fn background_round_and_space_have_distinct_axis_tiling() {
     assert_eq!((space[0].min.x, space[1].min.x), (0.0, 50.0));
 }
 
+#[cfg(feature = "image-decode")]
 #[test]
 fn host_image_resource_resolves_a_non_data_background_url() {
     let blue = image::RgbaImage::from_pixel(2, 3, image::Rgba([0, 0, 255, 255]));
@@ -947,6 +953,7 @@ fn host_image_resource_resolves_a_non_data_background_url() {
     assert_eq!((resource.width, resource.height), (2, 3));
 }
 
+#[cfg(feature = "image-decode")]
 #[test]
 fn host_image_resource_resolves_a_remote_url_without_engine_fetching() {
     let blue = image::RgbaImage::from_pixel(2, 3, image::Rgba([0, 0, 255, 255]));
@@ -1040,6 +1047,7 @@ fn blockified_flex_item_does_not_reenter_inline_paint_layout() {
     assert_eq!((item.max.x, item.max.y), (96.0, 112.0));
 }
 
+#[cfg(feature = "image-decode")]
 #[test]
 fn replaced_img_uses_intrinsic_size_and_paints_a_neutral_image() {
     use base64::Engine as _;
@@ -1077,6 +1085,7 @@ fn replaced_img_uses_intrinsic_size_and_paints_a_neutral_image() {
     assert_eq!((resource.width, resource.height), (2, 3));
 }
 
+#[cfg(feature = "image-decode")]
 #[test]
 fn replaced_img_width_preserves_intrinsic_ratio() {
     use base64::Engine as _;
@@ -1108,6 +1117,7 @@ fn replaced_img_width_preserves_intrinsic_ratio() {
     );
 }
 
+#[cfg(feature = "image-decode")]
 #[test]
 fn inline_replaced_image_uses_the_shaped_line_fragment() {
     use base64::Engine as _;
@@ -1154,6 +1164,7 @@ fn inline_replaced_image_uses_the_shaped_line_fragment() {
     );
 }
 
+#[cfg(feature = "image-decode")]
 #[test]
 fn inline_host_resolved_image_uses_intrinsic_size() {
     let blue = image::RgbaImage::from_pixel(96, 96, image::Rgba([0, 0, 255, 255]));
@@ -1183,6 +1194,7 @@ fn inline_host_resolved_image_uses_intrinsic_size() {
     );
 }
 
+#[cfg(feature = "image-decode")]
 #[test]
 fn inline_replaced_image_negative_margin_collapses_the_line_box() {
     use base64::Engine as _;
@@ -1235,6 +1247,7 @@ fn inline_replaced_image_negative_margin_collapses_the_line_box() {
     );
 }
 
+#[cfg(feature = "image-decode")]
 #[test]
 fn retained_replaced_img_uses_host_resolved_bytes_for_intrinsic_size() {
     let blue = image::RgbaImage::from_pixel(2, 3, image::Rgba([0, 0, 255, 255]));

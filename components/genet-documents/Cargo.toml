@@ -11,7 +11,10 @@ readme = "README.md"
 path = "src/lib.rs"
 
 [features]
-default = []
+default = ["image-decode"]
+# Forwards genet-livery's image decoding to whichever Livery crates `livery`
+# enables; see genet-livery's `image-decode` feature.
+image-decode = ["genet-livery?/image-decode", "genet-render?/image-decode"]
 # Clean-room Livery implementation of the static HTML session lane.
 livery = [
     "dep:genet-livery", "dep:genet-scripted-dom", "dep:paint_list_render",
@@ -40,7 +43,7 @@ fleece = { path = "../fleece" }
 genet-static-dom = { path = "../genet-static-dom" }
 layout_dom_api = { workspace = true }
 serde_json = { workspace = true }
-genet-livery = { path = "../genet-livery", optional = true }
+genet-livery = { path = "../genet-livery", optional = true, default-features = false }
 genet-render = { path = "../genet-render", optional = true, default-features = false, features = ["livery"] }
 genet-scripted-dom = { path = "../genet-scripted-dom", optional = true }
 paint_list_render = { workspace = true, optional = true }

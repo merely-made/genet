@@ -12,9 +12,14 @@ publish = true
 name = "taproot"
 path = "lib.rs"
 
+[features]
+default = ["image-decode"]
+# Forwards genet-livery's image decoding; see its `image-decode` feature.
+image-decode = ["genet-livery/image-decode"]
+
 [dependencies]
 document-session-api = { version = "0.1.0", path = "../shared/document-session-api" }
-genet-livery = { version = ">=0.0.1, <0.1", path = "../genet-livery" }
+genet-livery = { version = ">=0.0.1, <0.1", path = "../genet-livery", default-features = false }
 genet-scripted-dom = { version = "0.1.1", path = "../genet-scripted-dom" }
 layout-dom-api = { version = "0.1.1", path = "../shared/layout-dom" }
 

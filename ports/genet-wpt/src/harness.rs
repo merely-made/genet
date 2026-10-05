@@ -568,6 +568,7 @@ impl ParserScriptLoader for HarnessParserLoader<'_> {
 /// test's DOM, and runs only the test body.
 pub struct NovaHarnessTemplate {
     rt: Runtime<script_engine_nova::NovaEngine>,
+    long_rt: Runtime<script_engine_nova::NovaEngine>,
 }
 
 // Nova is selectable as `--engine nova`, but the subcommands reach it
@@ -579,7 +580,13 @@ impl NovaHarnessTemplate {
             .map_err(|e| format!("runtime init: {e:?}"))?;
         rt.load_testharness(testharness_js)
             .map_err(|e| format!("testharness load: {e:?}"))?;
-        Ok(Self { rt })
+        let mut long_rt = Runtime::<script_engine_nova::NovaEngine>::new()
+            .map_err(|e| format!("long-timeout runtime init: {e:?}"))?;
+        load_long_timeout_metadata(&mut long_rt);
+        long_rt
+            .load_testharness(testharness_js)
+            .map_err(|e| format!("long-timeout testharness load: {e:?}"))?;
+        Ok(Self { rt, long_rt })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -616,7 +623,12 @@ impl NovaHarnessTemplate {
         webgl: Option<WebGlFactory>,
         style: StyleRoute,
     ) -> HarnessOutcome {
-        let mut rt = match self.rt.snapshot_clone() {
+        let template = if html_requests_long_timeout(html) {
+            &mut self.long_rt
+        } else {
+            &mut self.rt
+        };
+        let mut rt = match template.snapshot_clone() {
             Ok(rt) => rt,
             Err(e) => return HarnessOutcome::Threw(format!("runtime snapshot clone: {e:?}")),
         };
@@ -715,6 +727,9 @@ fn run_with<E: ScriptEngine>(
             return HarnessOutcome::Threw(format!("testharness load: {e:?}"));
         }
         return run_loaded_with(&mut rt, &test_src, completion, style);
+    }
+    if html_requests_long_timeout(html) {
+        load_long_timeout_metadata(&mut rt);
     }
     prepare_runtime(&mut rt, base_url, handler, websocket, webgl, route);
     // The prelude: `testharness.js` and the results bridge are installed
@@ -1031,14 +1046,6 @@ fn run_parsed_with<E: ScriptEngine>(
     completion: Option<&dyn CompletionSource>,
     style: StyleRoute,
 ) -> HarnessOutcome {
-    if html_requests_long_timeout(html) {
-        // `load_testharness` runs before HTML parsing, so testharness.js has
-        // already cached its normal timeout. Reapply WPT's 60s/10s multiplier
-        // now, before the parsed document can register tests or workers.
-        if let Err(e) = rt.eval("setup({timeout_multiplier:6})") {
-            return HarnessOutcome::Threw(truncate(&format!("timeout setup: {e:?}"), 200));
-        }
-    }
     let render = RenderSession::new(rt, style);
     let parser_loader = HarnessParserLoader { inner: loader };
     if let Err(e) = rt.begin_parsed_testharness(html, &parser_loader) {
@@ -1301,6 +1308,14 @@ fn finish_drive<E: ScriptEngine>(rt: &Runtime<E>, stop_reason: &'static str) -> 
             message: None,
         },
     }
+}
+
+/// Give the harness real long-timeout metadata before it caches its deadline.
+/// The authored parser replaces these children before running any test script.
+fn load_long_timeout_metadata<E: ScriptEngine>(rt: &mut Runtime<E>) {
+    rt.load_dom(&parse_doc(
+        "<!doctype html><meta name=\"timeout\" content=\"long\">",
+    ));
 }
 
 /// Read timeout metadata from a detached parse of the supplied HTML. The live
@@ -1668,6 +1683,79 @@ window.addEventListener("load", function() {
   }
 });
 "#;
+
+    const LONG_TIMEOUT_PAGE: &str = r#"<!doctype html>
+<meta name="timeout" content="long">
+<script>
+var late = async_test('long metadata preserves authored timer delay');
+late.step_timeout(function() {
+  assert_equals(document.querySelectorAll('meta[name=timeout]').length, 1,
+                'the seed metadata must not survive authored parsing');
+  late.done();
+}, 11000);
+</script>"#;
+
+    fn real_testharness_source() -> String {
+        let root = std::env::var_os("GENET_WPT_TESTS_ROOT")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/wpt/tests")
+            });
+        fs::read_to_string(root.join("resources/testharness.js")).expect("real WPT harness")
+    }
+
+    #[test]
+    fn long_metadata_preserves_authored_timer_delay_on_boa() {
+        let results = unwrap_ran(run_test(
+            &real_testharness_source(),
+            LONG_TIMEOUT_PAGE,
+            &EmptyLoader,
+            None,
+            None,
+            None,
+            Engine::Boa,
+        ));
+        assert_eq!(results.len(), 1, "one completed assertion: {results:?}");
+        assert!(
+            results[0].passed(),
+            "unscaled eleven-second timer: {results:?}"
+        );
+    }
+
+    #[test]
+    fn nova_templates_select_timeout_before_authored_scripts() {
+        let mut template = NovaHarnessTemplate::new(&real_testharness_source()).expect("templates");
+        let normal = LONG_TIMEOUT_PAGE.replace("<meta name=\"timeout\" content=\"long\">", "");
+        for long in [true, false, true, false] {
+            let outcome = template.run_test(
+                if long { LONG_TIMEOUT_PAGE } else { &normal },
+                &EmptyLoader,
+                None,
+                None,
+                None,
+            );
+            if long {
+                let results = unwrap_ran(outcome);
+                assert_eq!(results.len(), 1, "one completed assertion: {results:?}");
+                assert!(
+                    results[0].passed(),
+                    "unscaled eleven-second timer: {results:?}"
+                );
+            } else {
+                match outcome {
+                    HarnessOutcome::Stopped {
+                        results,
+                        reason: "harness-timeout",
+                        ..
+                    } => {
+                        assert_eq!(results.len(), 1);
+                        assert!(!results[0].passed());
+                    },
+                    _ => panic!("normal metadata must not inherit the long template timeout"),
+                }
+            }
+        }
+    }
 
     #[test]
     fn livery_style_route_exposes_cssom_to_testharness() {

@@ -499,6 +499,28 @@ incomplete or other stopped outcomes. No animation behavior or expectations
 were changed. The separate invalid-return controls qualify false PASS on both
 pre-E3 engines (`harness-controls-pre-harness-*-error.*`).
 
+`e3-fixture-crates.*` completes the first E3 broad gate from 5dd234d3143:
+script-runtime-api 752, genet-scripted 120, genet-wpt 75 and script-engine-nova
+22, total 969 passed, zero failed, three existing WPT ignores. Its default
+release runner is frozen with SHA256
+`312216537328A8CEF2D477B887F2EF3F26AED296BF1CF55317451EF348D6D2C3`.
+The first optimized long-timeout control rejects this runner: the multiplier
+workaround also scales authored `step_timeout(11000)` to 66000ms, beyond the
+60000ms harness timeout. That failed receipt and executable are retained; the
+fixture is unchanged.
+
+The correction loads minimal real long-timeout META into the host DOM before
+WPT initializes, and keeps separate normal/long Vano snapshots selected by the
+actual wrapper's first timeout META. Authored HTML parsing clears the seed
+children before scripts run; the XML route retains its actual preloaded DOM.
+Authored timer delays keep WPT's default multiplier of one. Two real-harness
+guards check the eleven-second timer, absence of leaked seed metadata, and
+alternating normal/long Vano snapshots. Independent read-only review confirms
+this stays within E3 and needs no new runtime API or dependency. Fresh gates
+for this correction remain open. The matched corpus byte snapshot covers 952
+Encoding/shared resource/interface/common files and will be verified at both
+ends of each paired run.
+
 Mark selected "Approve harness correction and matched 60-second runs
 (Recommended)". E3 authorizes correct long-timeout selection before authored
 scripts, separate overall completion/status reporting, explicit incomplete

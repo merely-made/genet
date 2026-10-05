@@ -859,7 +859,7 @@ const FETCH_BOOTSTRAP: &str = r#"
   var encWeakSet = WeakSet, encWeakSetHas = WeakSet.prototype.has, encWeakSetAdd = WeakSet.prototype.add;
   var encString = String, encStringFromCharCode = String.fromCharCode;
   var encStringToLowerCase = String.prototype.toLowerCase;
-  var encSlice = Array.prototype.slice, encTypeErrorCtor = TypeError, encRangeErrorCtor = RangeError;
+  var encCreate = encObject.create, encTypeErrorCtor = TypeError, encRangeErrorCtor = RangeError;
   var encCharCodeAt = String.prototype.charCodeAt, encArrayBuffer = ArrayBuffer;
   var encIsView = ArrayBuffer.isView, encUint8Array = Uint8Array;
   var encTypedArrayProto = encGetProto(Uint8Array.prototype);
@@ -967,13 +967,14 @@ const FETCH_BOOTSTRAP: &str = r#"
     } catch (encDetachedView) { return ''; }
     if (!length) return '';
     var bytes = new encUint8Array(buffer, offset, length);
-    var result = '', codes = [], cap = 8192;
+    var result = '', codes = encCreate(null), cap = 8192;
     for (var i = 0; i < length; i++) {
       codes[i % cap] = bytes[i];
       if (i % cap === cap - 1 || i === length - 1) {
         var count = i % cap + 1;
-        result += encApply(encStringFromCharCode, undefined, encApply(encSlice, codes, [0, count]));
-        codes = [];
+        codes.length = count;
+        result += encApply(encStringFromCharCode, undefined, codes);
+        codes = encCreate(null);
       }
     }
     return result;
@@ -995,7 +996,7 @@ const FETCH_BOOTSTRAP: &str = r#"
     return output;
   }
   function encUtf8Bytes(input) {
-    var codes = [], length = 0;
+    var codes = encCreate(null), length = 0;
     function put(a, b, c, d) {
       codes[length++] = a;
       if (b !== undefined) codes[length++] = b;
@@ -1016,6 +1017,7 @@ const FETCH_BOOTSTRAP: &str = r#"
       else if (c < 0x10000) put(0xE0 | (c >> 12), 0x80 | ((c >> 6) & 0x3F), 0x80 | (c & 0x3F));
       else put(0xF0 | (c >> 18), 0x80 | ((c >> 12) & 0x3F), 0x80 | ((c >> 6) & 0x3F), 0x80 | (c & 0x3F));
     }
+    codes.length = length;
     var bytes = new encUint8Array(length);
     for (var j = 0; j < length; j++) bytes[j] = codes[j];
     return bytes;

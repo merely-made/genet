@@ -1,11 +1,11 @@
 # WHATWG Encoding: TextDecoder and TextEncoder
 
-**Status:** native-lifetime checkpoint E1 answered; baseline preparation,
-2026-10-05.
-Census fixes are integrated; a separate Vano repin is being verified at
-`d7f08fecdc7`. No Encoding implementation, dependency edge or baseline has
-been changed. Mark authorized the private finalizer and Vano job queue path;
-production changes wait for the frozen baseline and qualified failing controls.
+**Status:** E1 and C2 answered; native-backed candidate committed on
+conformance/encoding, 2026-10-05. The frozen baseline and assigned failing
+controls are recorded. All 164 runtime unit tests and 32 Encoding integration
+controls have passed; a new author-array-hook regression, full crate gates and
+matched post-change WPT acceptance remain open. Vano is pinned to 47f8d4f9 at
+the d7f08fecdc7 baseline. This lane is not published or integrated.
 
 Authority: the [standards ledger](2026-09-07_standards_to_features_ledger.md#conformance-targets-2026-10-02)
 rulings C1, C2 and C4; the execution brief
@@ -241,3 +241,29 @@ external evidence. Phase 2 is open under E1 and C2; remaining checkpoints persis
   164-unit run also passed. Root is committing the reviewed implementation
   before broad crate gates and frozen post-change WPT acceptance. This is a
   candidate commit, not the lane's final acceptance or publication.
+
+- 2026-10-05: a further capture audit confirmed that private ordinary-array
+  writes can call an inherited numeric setter, and captured slice still invokes
+  Array species. The correction uses captured Object.create with null-prototype
+  array-like byte containers, own numeric entries and own length. It stays in
+  the owned Encoding block. The initial run named array-hook-control-before
+  accidentally includes the applied fix, as its immutable source.patch shows;
+  both engine regressions pass, but that run is positive evidence only. Root
+  restored the exact 9f9d22 production source for a separately recorded negative
+  control. Every original artifact is retained.
+- 2026-10-05: root interrupted the runtime-crate gate during compilation after
+  this defect was confirmed. Its receipt records exit -1 and no test acceptance;
+  the broad gate will run against the final corrected source. No foreign
+  compiler or task was interrupted.
+
+- 2026-10-05: the qualified array-hook negative control fails on both engines
+  against exact 9f9d22 production: encode('A') emits byte 0, two inherited setter
+  calls occur, and Array species is accessed once and throws during decode.
+  The identical corrected source previously passes both controls with byte 65,
+  text A and zero hook calls. The fix is reapplied without additional changes.
+- 2026-10-05: the post-change corpus runner uses the brief's default optimized
+  release build. Broad crate tests will reuse release dependencies while setting
+  only script-runtime-api, genet-scripted and genet-wpt test-package optimization
+  to zero, with two build jobs and two test threads. This limits the cost of the
+  45 runtime integration binaries; it is ordinary test evidence, not a timing
+  comparison. The frozen WPT runner keeps the original release settings.

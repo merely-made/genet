@@ -6,6 +6,31 @@
 
 use super::*;
 
+#[test]
+fn walked_long_timeout_metadata_reaches_both_any_parent_wrappers() {
+    let tests_root = std::env::var_os("GENET_WPT_TESTS_ROOT")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/wpt/tests"));
+    let path = tests_root.join("encoding/textdecoder-fatal-single-byte.any.js");
+    assert!(
+        path.is_file(),
+        "the focused WPT encoding fixture is present"
+    );
+
+    let test = TestCase::from_walk(path, &tests_root.to_string_lossy());
+    assert!(
+        test.long_timeout,
+        "the source META header selects long timeout"
+    );
+
+    let worker = synthesize_worker_wrapper(&test).expect("worker wrapper");
+    assert!(worker.contains("<meta name=\"timeout\" content=\"long\">"));
+
+    let window = synthesize_any_js(&test.path, Some(test.name()), test.long_timeout)
+        .expect("window wrapper");
+    assert!(window.contains("<meta name=\"timeout\" content=\"long\">"));
+}
+
 fn solid_image(width: u32, height: u32, value: u8) -> render::Image {
     image::RgbaImage::from_pixel(width, height, image::Rgba([value, value, value, 255]))
 }

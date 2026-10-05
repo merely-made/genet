@@ -97,7 +97,7 @@ pub use dom::{
     StyleSheetImportRule, StyleSheetMutationError, StyleSheetRule, StyleSheetRuleKind,
 };
 pub use fetch::{FetchHandler, FetchOutcome, FetchRequest};
-pub use harness::TestResult;
+pub use harness::{HarnessCompletion, TestResult};
 pub use parse::{NoScriptLoader, ParseReport, ParserScriptLoader};
 pub use platform::StorageProvider;
 pub use webgl::{WebGlFactory, WebGlHandler};
@@ -207,6 +207,8 @@ pub struct HostState {
     /// Per-subtest results collected from `testharness.js` via the completion
     /// callback (the results bridge). Populated by [`Runtime::run_testharness`].
     pub results: Vec<TestResult>,
+    /// The completion callback's overall status, separate from subtest results.
+    pub harness_completion: Option<HarnessCompletion>,
     /// The host's network seam for `fetch()`. `None` = no network (every fetch is
     /// a network error). Installed by [`Runtime::set_fetch_handler`]; an `Rc` so the
     /// native `__fetch_start` sink clones it out from under the `HostState` borrow
@@ -1645,6 +1647,7 @@ impl<E: ScriptEngine> Runtime<E> {
     /// test yet. A snapshot-capable engine can clone after this point so each
     /// test gets a fresh harness heap without re-evaluating the harness source.
     pub fn load_testharness(&mut self, harness_src: &str) -> Result<(), E::Error> {
+        self.reset_testharness_state();
         self.eval_top(harness_src)?;
         self.flush_host_trace_events();
         self.eval_top(harness::bridge_source()).map(|_| ())
@@ -1653,7 +1656,7 @@ impl<E: ScriptEngine> Runtime<E> {
     /// Run `test_src` against an already-loaded `testharness.js`, dispatch
     /// `load`, drain the event loop, and return the reported subtests.
     pub fn run_loaded_testharness(&mut self, test_src: &str) -> Result<Vec<TestResult>, E::Error> {
-        self.host.borrow_mut().results.clear();
+        self.reset_testharness_state();
         self.eval_top(test_src)?;
         self.flush_host_trace_events();
         self.dispatch_user_agent_event("window", "load", false)?;
@@ -1678,7 +1681,7 @@ impl<E: ScriptEngine> Runtime<E> {
     /// draining to completion. The caller drives timers/fetch completions and
     /// reads [`results`](Self::results).
     pub fn begin_loaded_testharness(&mut self, test_src: &str) -> Result<(), E::Error> {
-        self.host.borrow_mut().results.clear();
+        self.reset_testharness_state();
         self.eval_top(test_src)?;
         self.flush_host_trace_events();
         self.dispatch_user_agent_event("window", "load", false)?;
@@ -1704,7 +1707,7 @@ impl<E: ScriptEngine> Runtime<E> {
         html: &str,
         loader: &dyn parse::ParserScriptLoader,
     ) -> Result<parse::ParseReport, E::Error> {
-        self.host.borrow_mut().results.clear();
+        self.reset_testharness_state();
         let report = self.parse_document_interleaved_with(html, loader, false);
         self.dispatch_user_agent_event("window", "load", false)?;
         self.flush_host_trace_events();
@@ -1847,6 +1850,18 @@ impl<E: ScriptEngine> Runtime<E> {
     /// quiesces or its deadline elapses).
     pub fn results(&self) -> Vec<TestResult> {
         self.host.borrow().results.clone()
+    }
+
+    /// Whether testharness fired its completion callback, and its overall status.
+    /// This must be checked separately from passing individual assertions.
+    pub fn harness_completion(&self) -> Option<HarnessCompletion> {
+        self.host.borrow().harness_completion.clone()
+    }
+
+    fn reset_testharness_state(&mut self) {
+        let mut host = self.host.borrow_mut();
+        host.results.clear();
+        host.harness_completion = None;
     }
 
     /// Install the host's `fetch()` network seam (e.g. a netfetcher-backed

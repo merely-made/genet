@@ -1,12 +1,13 @@
 # WHATWG Encoding: TextDecoder and TextEncoder
 
-**Status:** E1 and C2 answered; native-backed candidate e23f2db1b14 committed
-on conformance/encoding, 2026-10-05. Broad crate gates pass 949 tests with
-three existing WPT tests ignored. Both frozen post-change Encoding runs show
-API gains, but old passing subtests are lost in incomplete Worker results;
-acceptance is withheld. E2 is answered for the confirmed encoding_rs 0.8.35
-empty-streaming-input defect. The corrected candidate passes 166 runtime unit
-tests and 39 Encoding controls; fresh WPT and broad verification remain open.
+**Status:** E1, C2, E2 and E3 answered, 2026-10-05. Corrected Encoding candidate
+22cc7e17b92 passes 956 crate tests with three existing WPT tests ignored,
+including 166 runtime unit tests and 39 Encoding controls. Its optimized
+pilot still loses old passing identities in incomplete Worker reporting.
+Acceptance is withheld. E3 authorizes a bounded WPT timeout/completion
+correction and matched before/after remeasurement with a 60-second drive
+deadline. The harness correction passes ten completion controls on both
+engines; broad crate, optimized runner and matched corpus gates remain open.
 Vano is pinned to 47f8d4f9 at the d7f08fecdc7
 baseline. This lane is not published or integrated.
 
@@ -427,3 +428,72 @@ then require a full comparison with every old pass retained before acceptance.
   module no longer needs fetch's JSON helper, so its authorized visibility
   expansion is reverted to the baseline private function. The corrected code
   is a candidate; WPT pass-loss and broad crate acceptance remain open.
+
+## E3 harness ruling and matched remeasurement, 2026-10-05
+
+The corrected default-profile runner is frozen from 22cc7e17b92 with SHA256
+`9180CB07251526FB0CEF5ADE39064AD2203FFC0ABD2E7A71771462EE2B26AB13`.
+Its accepted C2 lock and frozen corpus manifest are unchanged. The complete
+corrected crate gate passes script-runtime-api 742, genet-scripted 120,
+genet-wpt 72 and script-engine-nova 22 tests, total 956, with three existing WPT
+ignores. `corrected-crates.receipt.json` and its counts preserve this completed
+source gate before any E3 source edits.
+
+The corrected pilot selects 25 distinct records per engine. Shared-buffer,
+ISO-2022-JP and surrogate cases retain every old pass; mistakes cases improve
+13 to 86 passing of 87 in both globals, leaving the documented fatal-tail
+specification/WPT mismatch. Fatal single-byte Window shards all finish their
+1,000 assertions (168 final shard). Worker shards are incomplete: the selected
+comparison loses 574 old passing identities on Boa and 3,673 on Vano, all in
+those Worker records. A lowercase `encodeinto` selector accidentally matched
+no tests; its failed log and receipt remain, and the exact `encodeInto` selector
+was run separately. `corrected-pilot-analysis.json` matches selected IDs and
+duplicate-safe subtest names; it is diagnostic, not whole-directory acceptance.
+
+Paired one-shard probes use both frozen source runners and the same corpus,
+jobs 4, outer 120 seconds and drive 15/60, with no concurrent root gate. Boa
+before reports 358/1,000 at 15 and 385/1,000 at 60; corrected reports 420/1,000
+and 542/1,000. Vano finishes all 1,000 at either drive setting, improving
+988 passing to 1,000. Boa's 60-second runs finish after about 30 seconds, so a
+driver-deadline-only explanation is insufficient. Eleven to twenty foreign
+compilers are recorded at probe starts; contention is not proven as the sole
+cause. All raw `worker-deadline-*` maps and receipts are retained.
+
+Root and independent read-only review find the parent harness timer seam:
+`ports/genet-wpt/src/main.rs` synthesizes a Worker host without timeout metadata;
+`harness.rs` evaluates testharness before parsing document metadata. Vendored
+WPT caches a Window timeout of 10 seconds unless long metadata is visible.
+WorkerTestEnvironment itself has no default timeout. The completion bridge in
+`components/script-runtime-api/harness.rs` drops the callback's overall status,
+and the port labels a nonempty collected array passing if all its assertions
+passed. A parent TIMEOUT can therefore produce a false passing partial file.
+
+Frozen-runner controls on both engines show long metadata failing an
+eleven-second virtual timer, a timeout after one passing assertion reporting
+false PASS, and explicit-done quiescence reporting no-results without a
+completion signal. The retained uncaught-timer fixture also reports PASS, but
+the driver swallows that timer exception without notifying WPT; it does not
+qualify an overall harness ERROR. A separate invalid-return fixture uses WPT's
+own ERROR path after a passing assertion. The fixtures and receipts are retained.
+
+The initial E3 runtime control gate passed six tests and failed two because its
+uncaught-timer fixture used an API that propagates the exception immediately.
+The corrected fixture exercises WPT's invalid-return ERROR status without
+changing runtime exception handling. `e3-native-controls.*` retains that failed
+gate. `e3-observed-controls.*` passes ten checks: completion and reset, retained
+assertions without completion, TIMEOUT and ERROR despite a passing assertion,
+captured native sinks, and restoration of final harness array order without
+duplicate reports. Both runtime and port source reviews are complete with no
+actionable findings, including the incremental-reporting gap and its correction.
+Broad crate and optimized runner gates remain open.
+
+Mark selected "Approve harness correction and matched 60-second runs
+(Recommended)". E3 authorizes correct long-timeout selection before authored
+scripts, separate overall completion/status reporting, explicit incomplete
+outcomes retaining observed named subtests, and matching before/corrected
+Encoding sources with exactly the same harness correction. The driver default
+stays unchanged; the matched gate explicitly uses 60 seconds. Jobs 4, outer
+120 seconds, Livery, collection, frozen corpus and dependency limits remain.
+Freeze new runners and raw maps instead of replacing any previous artifact.
+Zero old passing identities lost and complete movement attribution remain the
+acceptance requirement. Commit locally only; the final push checkpoint remains.

@@ -34,7 +34,7 @@ use layout_dom_api::{LayoutDom, LocalName, Namespace};
 use livery::media::{Device as MediaDevice, MediaQueryList};
 use script_engine_api::ScriptEngine;
 use script_runtime_api::{
-    FetchHandler, FetchOutcome, MediaQueryHandler, ParserScriptLoader, Runtime,
+    FetchHandler, FetchOutcome, HarnessCompletion, MediaQueryHandler, ParserScriptLoader, Runtime,
     ScriptResourceLoader, TestResult, WebGlFactory, WebSocketHandler,
 };
 
@@ -195,9 +195,16 @@ impl Engine {
 
 /// Outcome of running one testharness test.
 pub enum HarnessOutcome {
-    /// The harness ran to completion; the per-subtest results (may be empty if the
-    /// test reported none, e.g. an async test that never completed).
+    /// The harness reported successful overall completion; the per-subtest list
+    /// can be empty when the page explicitly completed without subtests.
     Ran(Vec<TestResult>),
+    /// The run stopped without a successful overall testharness completion.
+    /// Any subtests already reported remain available for the ledger.
+    Stopped {
+        results: Vec<TestResult>,
+        reason: &'static str,
+        message: Option<String>,
+    },
     /// The harness or the test threw before reporting — usually an unimplemented
     /// DOM/JS feature. Carries a concise message.
     Threw(String),
@@ -279,7 +286,8 @@ impl ScriptResourceLoader for DiskResources {
         // Workers resolve their script URL against the document environment.
         // Disk mode owns this synthetic origin; other remote URLs still fail
         // `resolve` and require the server route.
-        let local = bare.strip_prefix("http://web-platform.test/")
+        let local = bare
+            .strip_prefix("http://web-platform.test/")
             .map(|path| format!("/{path}"));
         let bare = local.as_deref().unwrap_or(bare);
         if let Some(stem) = bare.strip_suffix(".any.worker.js") {
@@ -1023,6 +1031,14 @@ fn run_parsed_with<E: ScriptEngine>(
     completion: Option<&dyn CompletionSource>,
     style: StyleRoute,
 ) -> HarnessOutcome {
+    if html_requests_long_timeout(html) {
+        // `load_testharness` runs before HTML parsing, so testharness.js has
+        // already cached its normal timeout. Reapply WPT's 60s/10s multiplier
+        // now, before the parsed document can register tests or workers.
+        if let Err(e) = rt.eval("setup({timeout_multiplier:6})") {
+            return HarnessOutcome::Threw(truncate(&format!("timeout setup: {e:?}"), 200));
+        }
+    }
     let render = RenderSession::new(rt, style);
     let parser_loader = HarnessParserLoader { inner: loader };
     if let Err(e) = rt.begin_parsed_testharness(html, &parser_loader) {
@@ -1052,9 +1068,13 @@ fn drive_virtual<E: ScriptEngine>(rt: &mut Runtime<E>, render: &RenderSession) -
     // test out before the worker had started.
     let mut skipped_ms = 0.0f64;
     let mut turns = 0u64;
+    let mut stop_reason = "harness-incomplete";
     loop {
         if start.elapsed() >= drive_deadline() {
             rt.fail_all_pending("test timed out");
+            rt.run_microtasks();
+            let _ = rt.pump_workers();
+            stop_reason = "drive-deadline";
             break;
         }
         turns += 1;
@@ -1071,6 +1091,9 @@ fn drive_virtual<E: ScriptEngine>(rt: &mut Runtime<E>, render: &RenderSession) -
         let has_raf = rt.has_animation_frame_callbacks();
         let animating = render.animating();
         let next_timer = rt.next_timer_delay();
+        if rt.harness_completion().is_some() {
+            break;
+        }
         if fired == 0
             && rendered == 0
             && acted == 0
@@ -1106,7 +1129,7 @@ fn drive_virtual<E: ScriptEngine>(rt: &mut Runtime<E>, render: &RenderSession) -
         now_ms += step;
         skipped_ms += step;
     }
-    HarnessOutcome::Ran(rt.results())
+    finish_drive(rt, stop_reason)
 }
 
 /// Server-mode drive: timers fire on a clock that tracks elapsed wall ms while
@@ -1132,6 +1155,7 @@ fn drive_wall<E: ScriptEngine>(
     let elapsed_ms =
         |start: Instant| (Instant::now().saturating_duration_since(start)).as_millis() as f64;
     let mut turns = 0u64;
+    let mut stop_reason = "harness-incomplete";
     loop {
         turns += 1;
         harness_gc_turn(rt, turns);
@@ -1140,6 +1164,9 @@ fn drive_wall<E: ScriptEngine>(
             // A socket the peer never answered on fails the same way an
             // unsettled fetch does, rather than hanging the runner.
             rt.fail_all_websockets();
+            rt.run_microtasks();
+            let _ = rt.pump_workers();
+            stop_reason = "drive-deadline";
             break;
         }
         rt.run_microtasks();
@@ -1172,6 +1199,9 @@ fn drive_wall<E: ScriptEngine>(
         // the loop applies the completion.
         let pending = rt.pending_fetches() + rt.pending_websockets();
         let next_timer = rt.next_timer_delay();
+        if rt.harness_completion().is_some() {
+            break;
+        }
         if pending == 0
             && next_timer.is_none()
             && fired == 0
@@ -1236,7 +1266,87 @@ fn drive_wall<E: ScriptEngine>(
             }
         }
     }
-    HarnessOutcome::Ran(rt.results())
+    finish_drive(rt, stop_reason)
+}
+
+fn finish_drive<E: ScriptEngine>(rt: &Runtime<E>, stop_reason: &'static str) -> HarnessOutcome {
+    let results = rt.results();
+    if stop_reason == "drive-deadline" {
+        // Cleanup at the cap may settle a final callback. Keep the cap as the
+        // stopping cause so post-deadline work cannot turn a timed-out run into
+        // a passing completion.
+        return HarnessOutcome::Stopped {
+            results,
+            reason: stop_reason,
+            message: rt
+                .harness_completion()
+                .and_then(|completion| completion.message),
+        };
+    }
+    match rt.harness_completion() {
+        Some(HarnessCompletion { status: 0, .. }) => HarnessOutcome::Ran(results),
+        Some(HarnessCompletion { status: 2, message }) => HarnessOutcome::Stopped {
+            results,
+            reason: "harness-timeout",
+            message,
+        },
+        Some(HarnessCompletion { message, .. }) => HarnessOutcome::Stopped {
+            results,
+            reason: "harness-error",
+            message,
+        },
+        None => HarnessOutcome::Stopped {
+            results,
+            reason: stop_reason,
+            message: None,
+        },
+    }
+}
+
+/// Read timeout metadata from a detached parse of the supplied HTML. The live
+/// document remains untouched, and the first `name=timeout` meta controls the
+/// value just as `WindowTestEnvironment.test_timeout()` does.
+fn html_requests_long_timeout(html: &str) -> bool {
+    let document = parse_doc(html);
+    let mut pending = vec![document.document()];
+    while let Some(node) = pending.pop() {
+        if document
+            .element_name(node)
+            .is_some_and(|name| name.local.as_ref() == "meta")
+            && document.attribute(node, &Namespace::default(), &LocalName::from("name"))
+                == Some("timeout")
+        {
+            return document.attribute(node, &Namespace::default(), &LocalName::from("content"))
+                == Some("long");
+        }
+        let children: Vec<_> = document.dom_children(node).collect();
+        pending.extend(children.into_iter().rev());
+    }
+    false
+}
+
+#[cfg(test)]
+mod timeout_metadata_tests {
+    use super::html_requests_long_timeout;
+
+    #[test]
+    fn timeout_metadata_uses_first_real_meta_element() {
+        assert!(html_requests_long_timeout(
+            "<!doctype html><meta content='long' name='timeout'>"
+        ));
+        assert!(!html_requests_long_timeout(
+            "<meta name='timeout' content='normal'><meta name='timeout' content='long'>"
+        ));
+        assert!(!html_requests_long_timeout(
+            "<script>const s = '<meta name=timeout content=long>';</script>"
+        ));
+        assert!(!html_requests_long_timeout(
+            "<!-- <meta name=timeout content=long> -->"
+        ));
+        assert!(!html_requests_long_timeout(
+            "<meta name='timeout' content='Long'>"
+        ));
+    }
 }
 
 /// Walk the document collecting test scripts in document order: inline `<script>`
@@ -1621,6 +1731,11 @@ test(function() {
                 );
             },
             HarnessOutcome::Threw(m) => panic!("threw instead of reporting: {m}"),
+            HarnessOutcome::Stopped {
+                results,
+                reason,
+                message,
+            } => panic!("stopped as {reason} ({message:?}) with {results:?}"),
         }
     }
 
@@ -1749,6 +1864,11 @@ async_test(function(t) {{
         match outcome {
             HarnessOutcome::Ran(results) => results,
             HarnessOutcome::Threw(message) => panic!("harness threw: {message}"),
+            HarnessOutcome::Stopped {
+                results,
+                reason,
+                message,
+            } => panic!("stopped as {reason} ({message:?}) with {results:?}"),
         }
     }
 

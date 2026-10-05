@@ -348,3 +348,43 @@ identical to the acceptance runner. Main's independent Vano repin ruling is
 preserved. `integration.receipt.json` records publication and the subsequent
 worktree retirement; the target is temporarily reused for the separate exact-pin
 repin gate. No old result map is relabelled as a new-pin result.
+
+
+## Separate Vano repin accepted, 2026-10-05
+
+Published repin `d7f08fecdc7bfc45d6b2b3a611513caeee925d4c` updates the two
+native/wasm64 manifest rows to Vano `47f8d4f9d6fca884e3472e405872ce9556ff9db0`.
+The portable ignored lock changes only the three Vano git source revisions;
+all 867 package versions and dependency edges are unchanged. Primary's local
+patch resolution was not used. Runner SHA-256:
+`EBB204DFA6EB471E5A8BCA3B4E1745C16AC048458BD04E3442BD30AF47728D30`.
+
+| Affected gate | Passed | Failed / ignored |
+|---|---:|---:|
+| script-engine-nova | 43 | 0 / 0 |
+| script-runtime-api | 672 | 0 / 0 |
+| genet-scripted with scripted-nova | 120 | 0 / 0 |
+| genet-wpt vano_reporting | 1 | 0 / 0 |
+
+The old/new Vano comparison uses immutable dev/netfetch runners and the same
+WPT manifest, isolated workers, collection on, jobs 1, timeout 30, drive 15,
+Livery. IndexedDB file support changes from panic to FAIL 0/3; module imports
+from panic to PASS 5/5; dynamic-import promise-result compilation from panic
+to FAIL 2/4. All ten named Genet records retain their existing assertion
+results after qualified reruns, without observed Rust panic. E4/E5 keep their
+missing-feature evaluation errors.
+
+P1/P2 initially timed out under the new runner, losing 11 visible P1 passes.
+Those raw maps remain. Subsequent paired old/new runs recover exactly the same
+11 pass / 25 fail and 0 pass / 4 fail subtest identities respectively; zero
+previously passing files or subtests are lost in the accepted comparison.
+Initial compilation and checkout copying had finished before the pair, while
+remaining crate gates continued. Encoding compilation began after the pair.
+This qualifies recovery without proving the timing cause. All other named
+Genet results match the previous frozen census map.
+
+Raw logs/maps, lock/source audits, gate counts and paired comparison are in
+`Code/testing/genet/vano-repin/`; `acceptance.receipt.json` names the exact
+source. Original census directory measurements remain at `8ad08412`.
+Concurrent image-feature work is outside this receipt. Checkout/cache retirement
+is recorded in `Code/testing/genet-census-panics/integration.receipt.json`.

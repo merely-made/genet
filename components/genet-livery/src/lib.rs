@@ -15,6 +15,7 @@
 mod box_tree;
 mod document;
 mod dom;
+mod image_decode;
 mod invalidation;
 mod layout;
 mod legacy_color;

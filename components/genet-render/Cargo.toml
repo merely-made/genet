@@ -14,8 +14,10 @@ name = "genet_render"
 path = "src/lib.rs"
 
 [features]
-default = ["livery", "accesskit"]
+default = ["livery", "accesskit", "image-decode"]
 livery = []
+# Forwards genet-livery's image decoding; see its `image-decode` feature.
+image-decode = ["genet-livery/image-decode"]
 # The native bridge lowers the engine projection to AccessKit. Browser hosts
 # retain that projection without linking a platform accessibility tree.
 accesskit = ["dep:accesskit"]
@@ -23,7 +25,7 @@ accesskit = ["dep:accesskit"]
 [dependencies]
 # The genet DOM + the engine pipeline this drives.
 genet-scripted-dom = { path = "../genet-scripted-dom" }
-genet-livery = { path = "../genet-livery" }
+genet-livery = { path = "../genet-livery", default-features = false }
 layout_dom_api = { workspace = true }
 # Paint-list -> netrender::Scene lowering (aliased `paint`), the Scene type, and
 # the paint/query value types.

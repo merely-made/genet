@@ -132,6 +132,12 @@ a writing product), `streams` (extraction starts before the page finishes),
 
 ## Conformance targets, 2026-10-02
 
+**Encoding execution, 2026-10-05:** the
+[API plan](2026-10-05_encoding_textdecoder_plan.md) retains C1/C2/C4 and the
+corrected API-only scope. E1 authorizes per-realm native storage, a private
+finalizer and Vano job delivery. Baseline and failing controls precede production
+changes; no new API measurements are claimed yet.
+
 Mark asked for the next lanes to come from WPT and specification
 conformance. These targets were chosen from the 2026-09-29 Vano census
 (`receipts/2026-09-29_vano_wpt_census/outcomes.json.gz`), broken down by

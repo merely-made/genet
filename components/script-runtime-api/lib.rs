@@ -83,6 +83,7 @@ pub mod parse;
 mod platform;
 mod selector;
 mod structured_clone;
+mod text_encoding;
 mod timing;
 mod webgl;
 mod websocket;
@@ -299,6 +300,10 @@ pub struct HostState {
     /// [`Runtime::set_random_source`]; an `Rc` so the native sink clones it out
     /// before calling (no live `HostState` borrow during the call).
     pub random: Option<std::rc::Rc<dyn RandomSource>>,
+    /// Native decoder state keyed by monotonically allocated wrapper ids.
+    /// Entries hold no script references. Flush releases active buffers;
+    /// finalization or runtime teardown removes the remaining metadata.
+    pub(crate) text_decoders: text_encoding::DecoderRegistry,
     /// The page's resource route for worker scripts, `importScripts` and a
     /// worker `fetch()`. `None` = fall through to [`Self::fetch`]. Installed by
     /// [`Runtime::set_script_resource_loader`]; disk-mode WPT uses it, a hosted

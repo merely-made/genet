@@ -240,6 +240,35 @@ fn borrowed_decoder_methods_and_getters_share_agent_brands<E: ScriptEngine>() {
     );
 }
 
+fn borrowed_encoder_methods_accept_foreign_instances_and_views<E: ScriptEngine>() {
+    let mut runtime = runtime::<E>();
+    runtime
+        .eval("globalThis.frame=document.createElement('iframe');frame.srcdoc='<body></body>';document.body.appendChild(frame);")
+        .expect("insert same-origin iframe");
+    runtime
+        .run_event_loop(100)
+        .expect("initialize iframe realm");
+    let child = runtime
+        .frame_realms(runtime.top_realm())
+        .first()
+        .map(|(_, realm)| *realm)
+        .expect("child realm");
+    runtime
+        .eval_in_realm(
+            child,
+            "globalThis.encoder=new TextEncoder();globalThis.destination=new Uint8Array(4);",
+        )
+        .expect("create child encoder and view");
+
+    assert_eq!(
+        read(
+            &mut runtime,
+            "(function(){var child=frame.contentWindow;var parentEncoder=new TextEncoder();var childEncoder=child.encoder;var childGetter=Object.getOwnPropertyDescriptor(child.TextEncoder.prototype,'encoding').get;var parentGetter=Object.getOwnPropertyDescriptor(TextEncoder.prototype,'encoding').get;var astral=child.TextEncoder.prototype.encode.call(parentEncoder,'😀');var childDestination=child.destination;var viaParent=TextEncoder.prototype.encodeInto.call(childEncoder,'A😀B',childDestination);var parentDestination=new Uint8Array(4);var viaChild=child.TextEncoder.prototype.encodeInto.call(parentEncoder,'Z😀',parentDestination);return [childGetter.call(parentEncoder),parentGetter.call(childEncoder),Array.from(astral).join(','),viaParent.read,viaParent.written,Array.from(childDestination).join(','),viaChild.read,viaChild.written,Array.from(parentDestination).join(',')].join('|');})()"
+        ),
+        "utf-8|utf-8|240,159,152,128|1|1|65,0,0,0|1|1|90,0,0,0"
+    );
+}
+
 fn retained_iframe_decoder_keeps_stream_state_after_removal<E: ScriptEngine>() {
     let mut runtime = runtime::<E>();
     runtime
@@ -278,7 +307,7 @@ fn captured_encoding_internals_survive_author_intrinsic_replacement<E: ScriptEng
     assert_eq!(
         read(
             &mut runtime,
-            "(function(){var decode=TextDecoder.prototype.decode;var encode=TextEncoder.prototype.encode;var encodeInto=TextEncoder.prototype.encodeInto;var originalRegistry=FinalizationRegistry;var originalDecode=TextDecoder.prototype.decode;var originalEncode=TextEncoder.prototype.encode;var originalEncodeInto=TextEncoder.prototype.encodeInto;var result='';try{globalThis.FinalizationRegistry=function(){throw new Error('replaced registry');};TextDecoder.prototype.decode=function(){throw new Error('replaced decode');};TextEncoder.prototype.encode=function(){throw new Error('replaced encode');};TextEncoder.prototype.encodeInto=function(){throw new Error('replaced encodeInto');};var decoder=new TextDecoder('utf-8');var encoder=new TextEncoder();var destination=new Uint8Array(1);var written=encodeInto.call(encoder,'C',destination);result=decode.call(decoder,new Uint8Array([65]))+':'+Array.from(encode.call(encoder,'B')).join(',')+':'+written.read+':'+written.written+':'+destination[0];}catch(error){result=error.message;}finally{globalThis.FinalizationRegistry=originalRegistry;TextDecoder.prototype.decode=originalDecode;TextEncoder.prototype.encode=originalEncode;TextEncoder.prototype.encodeInto=originalEncodeInto;}return result;})()"
+            "(function(){var decode=TextDecoder.prototype.decode;var encode=TextEncoder.prototype.encode;var encodeInto=TextEncoder.prototype.encodeInto;var originals={registry:FinalizationRegistry,uint8:Uint8Array,dataView:DataView,parse:JSON.parse,wmGet:WeakMap.prototype.get,wmSet:WeakMap.prototype.set,wsHas:WeakSet.prototype.has,wsAdd:WeakSet.prototype.add,decode:TextDecoder.prototype.decode,encode:TextEncoder.prototype.encode,encodeInto:TextEncoder.prototype.encodeInto};var nativeNames=Object.getOwnPropertyNames(globalThis).filter(function(name){return /^__(?:text|encoding)/i.test(name);});var nativeDescriptors=[];for(var i=0;i<nativeNames.length;i++){var name=nativeNames[i];var descriptor=Object.getOwnPropertyDescriptor(globalThis,name);if(descriptor&&'value'in descriptor&&(descriptor.writable||descriptor.configurable)){nativeDescriptors.push([name,descriptor]);}}var input=new Uint8Array([65]);var destination=new Uint8Array(1);var poison=function(){throw new Error('author replaced intrinsic');};var result='';try{globalThis.FinalizationRegistry=poison;globalThis.Uint8Array=poison;globalThis.DataView=poison;JSON.parse=poison;WeakMap.prototype.get=poison;WeakMap.prototype.set=poison;WeakSet.prototype.has=poison;WeakSet.prototype.add=poison;for(var j=0;j<nativeDescriptors.length;j++){var native=nativeDescriptors[j];Object.defineProperty(globalThis,native[0],{value:poison,writable:native[1].writable,enumerable:native[1].enumerable,configurable:native[1].configurable});}var decoder=new TextDecoder('utf-8');var encoder=new TextEncoder();var written=encodeInto.call(encoder,'C',destination);var encoded=encode.call(encoder,'B');result=decode.call(decoder,input)+':'+encoded[0]+':'+written.read+':'+written.written+':'+destination[0];}catch(error){result='error:'+error.message;}finally{globalThis.FinalizationRegistry=originals.registry;globalThis.Uint8Array=originals.uint8;globalThis.DataView=originals.dataView;JSON.parse=originals.parse;WeakMap.prototype.get=originals.wmGet;WeakMap.prototype.set=originals.wmSet;WeakSet.prototype.has=originals.wsHas;WeakSet.prototype.add=originals.wsAdd;TextDecoder.prototype.decode=originals.decode;TextEncoder.prototype.encode=originals.encode;TextEncoder.prototype.encodeInto=originals.encodeInto;for(var k=0;k<nativeDescriptors.length;k++){Object.defineProperty(globalThis,nativeDescriptors[k][0],nativeDescriptors[k][1]);}}return result;})()"
         ),
         "A:66:1:1:67"
     );
@@ -310,13 +339,19 @@ fn drive_until<E: ScriptEngine>(runtime: &mut Runtime<E>, done: &str) -> bool {
 fn worker_has_encoding_surfaces<E: ScriptEngine>() {
     let mut runtime = runtime::<E>();
     runtime.set_script_resource_loader(scripts(&[(
-        "encoding-worker.js",
+        "https://encoding.test/encoding-worker.js",
         "var decoder=new TextDecoder('latin1');var bytes=new Uint8Array([0,128,0]);var view=new Uint8Array(bytes.buffer,1,1);var dest=new Uint8Array(4);var encoded=new TextEncoder().encodeInto('A😀B',dest);postMessage({encoding:decoder.encoding,text:decoder.decode(view),read:encoded.read,written:encoded.written});",
     )]));
     runtime
         .eval("globalThis.encodingResult=null;var worker=new Worker('encoding-worker.js');worker.onmessage=function(event){encodingResult=event.data;};worker.onerror=function(event){encodingResult={error:event.message};};")
         .expect("start worker");
     assert!(drive_until(&mut runtime, "String(encodingResult !== null)"));
+    let result = read(&mut runtime, "JSON.stringify(encodingResult)");
+    assert_eq!(
+        read(&mut runtime, "typeof encodingResult.error"),
+        "undefined",
+        "worker must load and execute the Encoding fixture: {result}"
+    );
     assert_eq!(
         read(&mut runtime, "encodingResult.encoding"),
         "windows-1252"
@@ -377,6 +412,7 @@ both_engines! {
     encoder_replaces_lone_surrogates => (lone_surrogate_on_boa, lone_surrogate_on_vano),
     encoding_interfaces_enforce_brands_and_constructor_calls => (encoding_brands_on_boa, encoding_brands_on_vano),
     borrowed_decoder_methods_and_getters_share_agent_brands => (cross_realm_encoding_on_boa, cross_realm_encoding_on_vano),
+    borrowed_encoder_methods_accept_foreign_instances_and_views => (cross_realm_encoder_on_boa, cross_realm_encoder_on_vano),
     retained_iframe_decoder_keeps_stream_state_after_removal => (retained_frame_decoder_on_boa, retained_frame_decoder_on_vano),
     captured_encoding_internals_survive_author_intrinsic_replacement => (captured_encoding_internals_on_boa, captured_encoding_internals_on_vano),
     worker_has_encoding_surfaces => (worker_encoding_on_boa, worker_encoding_on_vano),

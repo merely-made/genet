@@ -112,6 +112,9 @@ mod native {
         fn enqueue_timeout_job(&self, job: Job, _milliseconds: u64) {
             self.jobs.borrow_mut().push_back(job);
         }
+        fn enqueue_finalization_registry_cleanup_job(&self, job: Job) {
+            self.jobs.borrow_mut().push_back(job);
+        }
         fn get_host_data(&self) -> &dyn Any {
             // Unused: genet reaches host state through the realm `[[HostDefined]]`
             // slot, not this hook.

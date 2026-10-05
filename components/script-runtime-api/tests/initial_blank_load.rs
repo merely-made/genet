@@ -84,7 +84,8 @@ fn initial_callback_can_remove_or_navigate<E: ScriptEngine>() {
     .unwrap();
     check(&mut rt, "log.join(',') === 'load,detached,returned'");
     rt.run_event_loop(100).unwrap();
-    check(&mut rt, "log.join(',') === 'load,detached,returned,unload'");
+    // Removing an iframe destroys its document without invoking unload.
+    check(&mut rt, "log.join(',') === 'load,detached,returned'");
     assert!(rt.frame_realms(rt.top_realm()).is_empty());
 
     let mut rt = runtime::<E>();

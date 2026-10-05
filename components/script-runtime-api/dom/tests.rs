@@ -6,7 +6,7 @@
 //! per backend (`*_on_boa` / `*_on_nova`); kept in one file for auditability.
 
 use super::*;
-use crate::Runtime;
+use crate::{NoScriptLoader, Runtime};
 
 /// JS builds and mutates a tree through `document`, exercised against any backend:
 /// `createElement`/`createTextNode` mint nodes, `appendChild` parents them,
@@ -2357,6 +2357,211 @@ fn user_weakmap_key_survives_gc<E: ScriptEngine>() {
     assert_eq!(rt.host().borrow().console[0], "wm:kept");
 }
 
+/// Force the raw reflector's weak cache entry to become stale between turns,
+/// then make the next policy tick observe a registered autonomous custom
+/// element. The constructor is armed only after the legitimate createElement
+/// call: any invocation from GC bookkeeping is author code escaping the policy.
+fn census_p1_create_element_policy_does_not_reenter_constructor<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.eval(
+        "globalThis.calls = 0; globalThis.armed = false;\
+         class CensusP1 extends HTMLElement {\
+           constructor() { super(); calls++; if (armed) throw { from: 'gc-policy' }; }\
+         }\
+         customElements.define('census-p1-element', CensusP1);\
+         var node = document.createElement('census-p1-element');\
+         if (calls !== 1) throw new Error('unexpected createElement count: ' + calls);",
+    )
+    .expect("create detached autonomous custom element");
+    rt.eval("node = null; armed = true;")
+        .expect("release autonomous custom element");
+    rt.engine.force_gc();
+    let _ = rt.collect_garbage();
+    rt.eval("console.log(String(calls));")
+        .expect("read autonomous custom element constructor count");
+    assert_eq!(
+        rt.host().borrow().console.last().map(String::as_str),
+        Some("1")
+    );
+}
+
+/// Customized built-ins follow the same policy constraint through the
+/// createElement(options) branch used by P2.
+fn census_p2_customized_builtin_policy_does_not_reenter_constructor<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.eval(
+        "globalThis.calls = 0; globalThis.armed = false;\
+         class CensusP2 extends HTMLDivElement {\
+           constructor() { super(); calls++; if (armed) throw { from: 'gc-policy' }; }\
+         }\
+         customElements.define('census-p2-element', CensusP2, { extends: 'div' });\
+         var node = document.createElement('div', { is: 'census-p2-element' });\
+         if (calls !== 1) throw new Error('unexpected createElement count: ' + calls);",
+    )
+    .expect("create detached customized built-in");
+    rt.eval("node = null; armed = true;")
+        .expect("release customized built-in");
+    rt.engine.force_gc();
+    let _ = rt.collect_garbage();
+    rt.eval("console.log(String(calls));")
+        .expect("read customized built-in constructor count");
+    assert_eq!(
+        rt.host().borrow().console.last().map(String::as_str),
+        Some("1")
+    );
+}
+
+/// Cloning a custom element legitimately invokes its constructor once. A later
+/// policy pass over a stale clone reflector must not try to upgrade it again.
+fn census_p3_clone_node_policy_does_not_reenter_constructor<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.eval(
+        "globalThis.calls = 0; globalThis.armed = false;\
+         class CensusP3 extends HTMLElement {\
+           constructor() { super(); calls++; if (armed) throw { from: 'gc-policy' }; }\
+         }\
+         customElements.define('census-p3-element', CensusP3);\
+         globalThis.original = document.createElement('census-p3-element');\
+         globalThis.clone = original.cloneNode(false);\
+         if (calls !== 2) throw new Error('unexpected cloneNode count: ' + calls);",
+    )
+    .expect("create and clone autonomous custom element");
+    rt.eval("original = null; clone = null; armed = true;")
+        .expect("release cloned custom elements");
+    rt.engine.force_gc();
+    let _ = rt.collect_garbage();
+    rt.eval("console.log(String(calls));")
+        .expect("read clone constructor count");
+    assert_eq!(
+        rt.host().borrow().console.last().map(String::as_str),
+        Some("2")
+    );
+}
+
+/// A parser-created candidate whose first upgrade throws is still an author
+/// callback boundary. Rebuilding its released raw wrapper during GC must not
+/// invoke that constructor a second time.
+fn census_p4_parser_upgrade_policy_does_not_reenter_constructor<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.parse_document_interleaved(
+        "<!doctype html><body><census-p4-element></census-p4-element></body>",
+        &NoScriptLoader,
+    );
+    rt.eval(
+        "globalThis.calls = 0; globalThis.armed = false; globalThis.initialCaught = false;\
+         class CensusP4 extends HTMLElement {\
+           constructor() { super(); calls++;\
+             if (calls === 1) throw new TypeError('expected initial parser upgrade failure');\
+             if (armed) throw { from: 'gc-policy' };\
+           }\
+         }\
+         var node = document.querySelector('census-p4-element');\
+         try { customElements.define('census-p4-element', CensusP4); }\
+         catch (e) { if (e && e.message === 'expected initial parser upgrade failure') initialCaught = true; else throw e; }\
+         if (!initialCaught || calls !== 1) throw new Error('unexpected initial parser upgrade: ' + calls);",
+    )
+    .expect("capture expected initial parser-upgrade failure");
+    rt.eval("document.body.removeChild(node);")
+        .expect("detach parser-created custom element");
+    // Retire the connected-root policy while its legitimate wrapper is still
+    // alive, then make the detached component's next policy description dirty.
+    rt.apply_opaque_root_policy();
+    rt.eval("node.appendChild(document.createElement('span')); node = null; armed = true;")
+        .expect("dirty detached candidate group and release wrapper");
+    // The first engine collection may only clear targets kept alive by recent
+    // WeakRef observations; a second pass ensures the raw cache target is dead.
+    rt.engine.force_gc();
+    rt.engine.force_gc();
+    let _ = rt.collect_garbage();
+    rt.eval("console.log(String(calls));")
+        .expect("read parser-upgrade constructor count");
+    assert_eq!(
+        rt.host().borrow().console.last().map(String::as_str),
+        Some("1")
+    );
+}
+
+/// GC bookkeeping is private browser work and must not call mutable author
+/// intrinsics while rebuilding a detached component's wrapper ephemeron group.
+fn census_gc_policy_uses_captured_intrinsics<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.eval(
+        "globalThis.held = document.createElement('div');\
+         globalThis.child = document.createElement('span');\
+         held.appendChild(child);",
+    )
+    .expect("create detached component");
+    rt.apply_opaque_root_policy();
+    rt.eval(
+        "globalThis.newChild = document.createElement('em'); held.appendChild(newChild);\
+         globalThis.gcSaved = {\
+           get: WeakMap.prototype.get, set: WeakMap.prototype.set,\
+           del: WeakMap.prototype.delete, split: String.prototype.split,\
+           objectSplitSymbol: Object.getOwnPropertyDescriptor(Object.prototype, Symbol.split),\
+           stringSplitSymbol: Object.getOwnPropertyDescriptor(String.prototype, Symbol.split),\
+           push: Array.prototype.push, define: Object.defineProperty,\
+           apply: Reflect.apply\
+         };\
+         globalThis.poisonCalls = 0;\
+         globalThis.poisonGC = function() { poisonCalls++; throw new Error('author intrinsic called'); };\
+         Object.defineProperty(Object.prototype, Symbol.split, { configurable: true, get: poisonGC });\
+         Object.defineProperty(String.prototype, Symbol.split, { configurable: true, get: poisonGC });\
+         WeakMap.prototype.get = poisonGC; WeakMap.prototype.set = poisonGC;\
+         WeakMap.prototype.delete = poisonGC; String.prototype.split = poisonGC;\
+         Array.prototype.push = poisonGC; Object.defineProperty = poisonGC;\
+         Reflect.apply = poisonGC;",
+    )
+    .expect("poison author-visible intrinsics");
+    rt.apply_opaque_root_policy();
+    rt.eval(
+        "WeakMap.prototype.get = gcSaved.get; WeakMap.prototype.set = gcSaved.set;\
+         WeakMap.prototype.delete = gcSaved.del; String.prototype.split = gcSaved.split;\
+         Array.prototype.push = gcSaved.push; Object.defineProperty = gcSaved.define;\
+         if (gcSaved.objectSplitSymbol) Object.defineProperty(Object.prototype, Symbol.split, gcSaved.objectSplitSymbol);\
+         else delete Object.prototype[Symbol.split];\
+         if (gcSaved.stringSplitSymbol) Object.defineProperty(String.prototype, Symbol.split, gcSaved.stringSplitSymbol);\
+         else delete String.prototype[Symbol.split];\
+         Reflect.apply = gcSaved.apply;\
+         console.log(String(poisonCalls));",
+    )
+    .expect("restore poisoned intrinsics");
+    assert_eq!(
+        rt.host().borrow().console.last().map(String::as_str),
+        Some("0")
+    );
+}
+
+/// GC policy defines own array entries with a trusted descriptor. That
+/// descriptor must not inherit a user getter for `get` or hit an inherited
+/// numeric setter on Array.prototype.
+fn census_gc_policy_uses_inert_array_descriptors<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.eval(
+        "globalThis.held = document.createElement('div');\
+         held.appendChild(document.createElement('span'));",
+    )
+    .expect("create detached component");
+    rt.apply_opaque_root_policy();
+    rt.eval(
+        "held.appendChild(document.createElement('em'));\
+         globalThis.poisonCalls = 0;\
+         globalThis.poisonGC = function() { poisonCalls++; throw new Error('author descriptor called'); };\
+         Object.defineProperty(Array.prototype, '0', { configurable: true, get: poisonGC, set: poisonGC });\
+         Object.defineProperty(Object.prototype, 'get', { configurable: true, get: poisonGC });",
+    )
+    .expect("install descriptor and index traps");
+    rt.apply_opaque_root_policy();
+    rt.eval(
+        "delete Object.prototype.get; delete Array.prototype[0];\
+         console.log(String(poisonCalls));",
+    )
+    .expect("remove descriptor and index traps");
+    assert_eq!(
+        rt.host().borrow().console.last().map(String::as_str),
+        Some("0")
+    );
+}
+
 /// A detached subtree lives as long as script holds *any one* of its wrappers.
 /// The sibling and the child here are referenced by nothing but the group, and
 /// their identity and state must survive because the parent is held.
@@ -2685,6 +2890,77 @@ fn opaque_root_policy_cost_is_bounded<E: ScriptEngine>() {
         "per-tick policy cost over {touched} touched nodes: quiescent {quiet_us:.0}us, \
          after a re-parent {churny_us:.0}us"
     );
+}
+
+#[test]
+fn census_p1_create_element_policy_does_not_reenter_constructor_on_boa() {
+    census_p1_create_element_policy_does_not_reenter_constructor::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn census_p1_create_element_policy_does_not_reenter_constructor_on_nova() {
+    census_p1_create_element_policy_does_not_reenter_constructor::<script_engine_nova::NovaEngine>(
+    );
+}
+
+#[test]
+fn census_p2_customized_builtin_policy_does_not_reenter_constructor_on_boa() {
+    census_p2_customized_builtin_policy_does_not_reenter_constructor::<script_engine_boa::BoaEngine>(
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn census_p2_customized_builtin_policy_does_not_reenter_constructor_on_nova() {
+    census_p2_customized_builtin_policy_does_not_reenter_constructor::<
+        script_engine_nova::NovaEngine,
+    >();
+}
+
+#[test]
+fn census_p3_clone_node_policy_does_not_reenter_constructor_on_boa() {
+    census_p3_clone_node_policy_does_not_reenter_constructor::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn census_p3_clone_node_policy_does_not_reenter_constructor_on_nova() {
+    census_p3_clone_node_policy_does_not_reenter_constructor::<script_engine_nova::NovaEngine>();
+}
+
+#[test]
+fn census_p4_parser_upgrade_policy_does_not_reenter_constructor_on_boa() {
+    census_p4_parser_upgrade_policy_does_not_reenter_constructor::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn census_p4_parser_upgrade_policy_does_not_reenter_constructor_on_nova() {
+    census_p4_parser_upgrade_policy_does_not_reenter_constructor::<script_engine_nova::NovaEngine>(
+    );
+}
+
+#[test]
+fn census_gc_policy_uses_captured_intrinsics_on_boa() {
+    census_gc_policy_uses_captured_intrinsics::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn census_gc_policy_uses_captured_intrinsics_on_nova() {
+    census_gc_policy_uses_captured_intrinsics::<script_engine_nova::NovaEngine>();
+}
+
+#[test]
+fn census_gc_policy_uses_inert_array_descriptors_on_boa() {
+    census_gc_policy_uses_inert_array_descriptors::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn census_gc_policy_uses_inert_array_descriptors_on_nova() {
+    census_gc_policy_uses_inert_array_descriptors::<script_engine_nova::NovaEngine>();
 }
 
 #[test]

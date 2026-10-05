@@ -1422,6 +1422,20 @@ relocation item and the teardown item are the same edit seen from two ends.
 `FrameState` gains `detach_subtree` and a `pending_teardown` queue, and the two
 halves are split exactly where HTML splits "destroy a child navigable":
 
+**2026-10-04 correction, validated locally; integration pending:**
+Iframe removing steps call document destruction, which aborts the parser and releases the document; they
+do not call the unload procedure. The historical queued `pagehide`/`unload`
+behavior described below is superseded by the validated local
+[census lane](2026-10-03_census_panics_plan.md), pending integration. Mark ruled
+that the currently executing script finishes, then queued destruction precedes
+remaining child load work. Removed containers lose their content navigables synchronously;
+pending parent/top relations let the active script finish. Detached owners do
+not receive `load`, and surviving ancestors must have their load waits released
+after destruction. Navigation's unload path remains separate. The final frame
+suite passes 12 tests across both engines, the complete runtime passes 672,
+and the four-directory WPT comparison loses zero previously passing subtests.
+See the [final receipt](receipts/2026-10-04_genet_census_panics/receipt.md).
+
 - **Synchronously**, on removal, the container stops having a content navigable.
   The records and contexts for the realm and every realm nested beneath it are
   dropped, so `contentWindow`, `window.length`, the indexed `window[i]`

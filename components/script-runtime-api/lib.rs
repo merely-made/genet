@@ -1651,7 +1651,7 @@ impl<E: ScriptEngine> Runtime<E> {
         self.host.borrow_mut().results.clear();
         self.eval_top(test_src)?;
         self.flush_host_trace_events();
-        self.eval_top("window.dispatchEvent(new Event('load'));")?;
+        self.dispatch_user_agent_event("window", "load", false)?;
         self.flush_host_trace_events();
         self.run_event_loop(1000)?;
         Ok(self.host.borrow().results.clone())
@@ -1676,7 +1676,7 @@ impl<E: ScriptEngine> Runtime<E> {
         self.host.borrow_mut().results.clear();
         self.eval_top(test_src)?;
         self.flush_host_trace_events();
-        self.eval_top("window.dispatchEvent(new Event('load'));")?;
+        self.dispatch_user_agent_event("window", "load", false)?;
         self.flush_host_trace_events();
         Ok(())
     }
@@ -1701,7 +1701,7 @@ impl<E: ScriptEngine> Runtime<E> {
     ) -> Result<parse::ParseReport, E::Error> {
         self.host.borrow_mut().results.clear();
         let report = self.parse_document_interleaved_with(html, loader, false);
-        self.eval_top("window.dispatchEvent(new Event('load'));")?;
+        self.dispatch_user_agent_event("window", "load", false)?;
         self.flush_host_trace_events();
         Ok(report)
     }

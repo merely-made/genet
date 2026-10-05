@@ -808,10 +808,11 @@ impl ScriptedDom {
     /// children behind. Text and comment nodes change their own character data;
     /// container nodes replace their descendants with one new text node (or no
     /// child for the empty string), so every layout consumer observes the same
-    /// tree as script.
+    /// tree as script. Document and DocumentType setters do nothing.
     pub fn set_text_content(&mut self, node: NodeId, data: &str) {
+        let kind = self.node(node).kind;
         if matches!(
-            self.node(node).kind,
+            kind,
             NodeKind::Text
                 | NodeKind::Comment
                 | NodeKind::CdataSection
@@ -822,6 +823,10 @@ impl ScriptedDom {
             self.mutations
                 .push(DomMutation::CharacterDataChanged { node });
             self.record_character_data(node, old);
+            return;
+        }
+
+        if matches!(kind, NodeKind::Document | NodeKind::Doctype) {
             return;
         }
 
@@ -1890,6 +1895,39 @@ mod tests {
                 ancestors: vec![text, host, root],
             }
         );
+    }
+
+    #[test]
+    fn document_text_content_setter_preserves_its_children() {
+        let mut dom = ScriptedDom::new();
+        let document = dom.document();
+        let html = dom.create_element(qual("html"));
+        let marker = dom.create_comment("kept");
+        dom.append_child(document, marker);
+        dom.append_child(document, html);
+
+        // Discard setup mutations so the assertion covers only the setter.
+        let mut setup = Vec::new();
+        dom.drain_mutations(&mut setup);
+        dom.set_observing(true);
+        let before_children: Vec<_> = dom.dom_children(document).collect();
+        let before_epoch = dom.structure_epoch();
+        let (before_base, before_pending) = dom.pending_mutations();
+        assert!(before_pending.is_empty());
+
+        dom.set_text_content(document, "a");
+
+        assert_eq!(
+            dom.dom_children(document).collect::<Vec<_>>(),
+            before_children
+        );
+        assert_eq!(dom.kind(before_children[0]), NodeKind::Comment);
+        assert_eq!(dom.kind(before_children[1]), NodeKind::Element);
+        assert_eq!(dom.structure_epoch(), before_epoch);
+        let (after_base, after_pending) = dom.pending_mutations();
+        assert_eq!(after_base, before_base);
+        assert!(after_pending.is_empty());
+        assert!(dom.take_observed().is_empty());
     }
 
     #[test]

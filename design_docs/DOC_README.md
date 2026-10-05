@@ -592,6 +592,13 @@ same session; links out of it are rewritten for its new depth.
 
 ## Working principles
 
+- **WPT file acceptance requires successful harness completion.** Keep the
+  overall callback status separate from individual assertions. An incomplete
+  worker report can contain only passing assertions and still have timed out.
+  Honor long-timeout metadata before evaluating testharness, or configure the
+  cached timeout before tests start. Compare matched runner/settings pairs and
+  retain missing subtests explicitly. See E3 in the Encoding API plan.
+
 - **Content placement must not add an implicit compositing layer.** A scene
   image's draw rectangle already bounds its pixels. Adding an unconditional
   clip around the generic host-content slot sends existing planar retained

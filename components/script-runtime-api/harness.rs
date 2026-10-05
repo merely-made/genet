@@ -37,12 +37,23 @@ impl TestResult {
     }
 }
 
+/// Overall testharness completion, independent of individual assertions.
+/// A passing partial result array can accompany a TIMEOUT or ERROR status.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HarnessCompletion {
+    /// The harness's numeric status: 0 OK, 1 ERROR, 2 TIMEOUT.
+    pub status: i64,
+    pub message: Option<String>,
+}
+
 /// Install the `__reportResult` native sink. The completion-callback JS (installed
 /// by [`install_bridge`] after `testharness.js` loads) calls it per subtest.
 pub(crate) fn install_report_sink<E: ScriptEngine>(
     engine: &mut crate::Surface<'_, '_, E>,
 ) -> Result<(), crate::SurfaceError<E::Error>> {
-    engine.set_function::<ReportResult>("__reportResult", 3)
+    engine.set_function::<ReportResult>("__reportResult", 3)?;
+    engine.set_function::<ReportCompletion>("__reportHarnessCompletion", 2)?;
+    engine.set_function::<ClearResults>("__clearHarnessResults", 0)
 }
 
 /// Register the completion callback on a loaded `testharness.js`. Must run *after*
@@ -83,15 +94,55 @@ impl<E: ScriptEngine> NativeFn<E> for ReportResult {
     }
 }
 
+struct ClearResults;
+impl<E: ScriptEngine> NativeFn<E> for ClearResults {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        if let Some(data) = cx.host_data() {
+            if let Some(cell) = data.downcast_ref::<RefCell<HostState>>() {
+                cell.borrow_mut().results.clear();
+            }
+        }
+        Ok(cx.undefined())
+    }
+}
+
+struct ReportCompletion;
+impl<E: ScriptEngine> NativeFn<E> for ReportCompletion {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let status_v = cx.arg(0);
+        let status = cx.value_to_string(&status_v)?.parse::<i64>().unwrap_or(-1);
+        let message_v = cx.arg(1);
+        let message = match cx.value_to_string(&message_v)?.as_str() {
+            "null" | "undefined" | "" => None,
+            other => Some(other.to_string()),
+        };
+        if let Some(data) = cx.host_data() {
+            if let Some(cell) = data.downcast_ref::<RefCell<HostState>>() {
+                cell.borrow_mut().harness_completion = Some(HarnessCompletion { status, message });
+            }
+        }
+        Ok(cx.undefined())
+    }
+}
+
 /// Disables the harness's HTML output (a headless runner reads results
 /// programmatically; the output path renders a results table via DOM APIs we don't
 /// implement, e.g. `createElementNS`), then registers a completion callback that
 /// forwards each subtest to `__reportResult`.
 const BRIDGE_JS: &str = r#"
 setup({ output: false });
-add_completion_callback(function(tests) {
-  for (var i = 0; i < tests.length; i++) {
-    __reportResult(String(tests[i].name), String(tests[i].status), String(tests[i].message));
-  }
-});
+(function(report, clear, complete, stringify) {
+  add_result_callback(function(test) {
+    report(stringify(test.name), stringify(test.status), stringify(test.message));
+  });
+  add_completion_callback(function(tests, status) {
+    // Replace interim callback order with WPT's final test-array order. This
+    // also includes unfinished tests assigned their final timeout status.
+    clear();
+    for (var i = 0; i < tests.length; i++) {
+      report(stringify(tests[i].name), stringify(tests[i].status), stringify(tests[i].message));
+    }
+    complete(stringify(status.status), stringify(status.message));
+  });
+})(__reportResult, __clearHarnessResults, __reportHarnessCompletion, String);
 "#;

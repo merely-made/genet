@@ -135,8 +135,11 @@ a writing product), `streams` (extraction starts before the page finishes),
 **Encoding execution, 2026-10-05:** the
 [API plan](2026-10-05_encoding_textdecoder_plan.md) retains C1/C2/C4 and the
 corrected API-only scope. E1 authorizes per-realm native storage, a private
-finalizer and Vano job delivery. Baseline and failing controls precede production
-changes; no new API measurements are claimed yet.
+finalizer and Vano job delivery. The candidate passes 949 crate tests and shows
+API gains on both engines, but incomplete Worker results lose old passes, so
+acceptance is withheld. E2 is pending for a confirmed empty-streaming-input
+defect in the unchanged encoding_rs 0.8.35 dependency. The plan records the
+unaccepted measurements, frozen controls and specification/WPT conflict.
 
 Mark asked for the next lanes to come from WPT and specification
 conformance. These targets were chosen from the 2026-09-29 Vano census

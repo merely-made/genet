@@ -105,6 +105,10 @@ completed corpus census or bounded slice does not close its enclosing feature.
   requirements. Census counts stay historical. API lanes require dated plans;
   the shared scripted-host direction is planned in Ortet O5.)
 
+- [Encoding TextDecoder/TextEncoder](2026-10-05_encoding_textdecoder_plan.md)
+  (**Baseline preparation, 2026-10-05**): E1 authorizes per-realm native storage,
+  private finalizer cleanup and Vano job delivery; API implementation follows controls.
+
 ## WPT census — the web platform beyond CSS
 
 - [census_panics_plan](2026-10-03_census_panics_plan.md)

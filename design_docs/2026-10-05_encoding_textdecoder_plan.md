@@ -190,3 +190,13 @@ and no-download rule while retaining dependency limits.
 - 2026-10-05: comparison helper positive controls pass for unchanged records,
   pass loss, missing records and duplicate-name occurrence identity. Actual
   after-run attribution remains pending implementation and matched runs.
+
+## C2 lock checkpoint, 2026-10-05
+
+Mark approved the exact one-edge ignored-lock update with "Approved, continue".
+The patch adds encoding_rs to script-runtime-api's dependency row only. All 867
+packages, versions, source revisions, checksums and other dependency edges are
+unchanged. Locked metadata now succeeds. Accepted lock SHA-256:
+`9B7C50EA33A181C424E871129A0CFB071CC8B65EE5BCECCD42CCD656118423D9`.
+The original/proposed/accepted locks, metadata and graph-delta receipt remain in
+external evidence. Phase 2 is open under E1 and C2; remaining checkpoints persist.

@@ -355,6 +355,49 @@ fn call_hook<E: ScriptEngine>(
     E::call_from_call(cx, function, &this, &args)
 }
 
+/// Dispatch a parser-generated event through the constructor captured by this
+/// realm's trusted DOM bootstrap. The retained hook is rooted outside script
+/// reach and remains available after author code deletes `window.Event`.
+pub(crate) fn dispatch_user_agent_event<E: ScriptEngine>(
+    engine: &mut E,
+    agent: &Rc<std::cell::RefCell<crate::AgentState>>,
+    realm: RealmId,
+    target: E::Value,
+    event_type: &str,
+    bubbles: bool,
+) -> Result<(), crate::RealmError> {
+    let hook = agent.borrow().dom_adoption.hooks.get(&realm).cloned();
+    let Some(hook) = hook else { return Ok(()) };
+    let function = hook
+        .downcast_ref::<E::Value>()
+        .ok_or(crate::RealmError::Unsupported)?;
+    let op = engine.eval_in_realm(realm, "('uaEvent')")?;
+    let event_type = engine.eval_in_realm(realm, &format!("({})", crate::js_str(event_type)))?;
+    let bubbles = engine.eval_in_realm(realm, if bubbles { "true" } else { "false" })?;
+    let this = engine.eval_in_realm(realm, "void 0")?;
+    // The retained dispatcher belongs to `realm`; call_function enters its
+    // creation realm, so the constructor and target share the intended globals.
+    engine.call_function(function, &this, &[op, target, event_type, bubbles])?;
+    Ok(())
+}
+
+/// The callback-side counterpart used by frame lifecycle completion.
+pub(crate) fn dispatch_user_agent_event_from_call<E: ScriptEngine>(
+    cx: &mut E::CallCx<'_>,
+    realm: RealmId,
+    target: E::Value,
+    event_type: &str,
+    bubbles: bool,
+) -> Result<(), E::Error> {
+    let event_type = cx.make_string(event_type)?;
+    let bubbles = E::eval_from_call(cx, if bubbles { "true" } else { "false" })
+        .map_err(|error| cx.error(&error.to_string()))?;
+    // `call_hook` selects the target realm's registered dispatcher, and the
+    // engine enters that retained function's creation realm for the call.
+    call_hook::<E>(cx, realm, "uaEvent", vec![target, event_type, bubbles])?;
+    Ok(())
+}
+
 pub(crate) fn apply_gc_policy<E: ScriptEngine>(
     rt: &mut crate::Runtime<E>,
     realm: RealmId,

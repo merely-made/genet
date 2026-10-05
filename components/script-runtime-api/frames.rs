@@ -38,13 +38,17 @@ pub(crate) struct FrameState {
     top_realm: RealmId,
     contexts: BTreeMap<RealmId, BrowsingContextId>,
     /// Retained Location objects must observe removal synchronously, before
-    /// the queued unload removes the realm's host and execution registration.
+    /// the queued destruction removes the realm's host and execution registration.
     detached_documents: std::collections::BTreeSet<RealmId>,
     records: BTreeMap<RealmId, FrameRecord>,
-    /// Contexts detached from the tree but not yet unloaded. HTML's "destroy a
-    /// child navigable" splits exactly here: the container stops having a
-    /// content navigable synchronously, and the document is unloaded and the
-    /// context released in a later task, so no removal runs script.
+    /// Parent/owner relations remain readable by a parser script already
+    /// running in a detached document until its queued destruction task runs.
+    /// These entries are excluded from content-navigable enumeration and load
+    /// barriers, which use `records` only.
+    detached_relations: BTreeMap<RealmId, FrameRecord>,
+    /// Contexts detached from the tree but not yet destroyed. HTML's "destroy a
+    /// child navigable" splits here: the container stops having a content
+    /// navigable synchronously, then the context is released in a later task.
     pending_teardown: Vec<Vec<(RealmId, Option<BrowsingContextId>)>>,
     pending_main_load: bool,
     /// The source a top-level navigation fetched, waiting for the task that
@@ -233,14 +237,39 @@ impl FrameState {
             .find_map(|(&realm, record)| (record.owner == owner).then_some(realm))
     }
 
+    fn relation_record(&self, realm: RealmId) -> Option<&FrameRecord> {
+        self.records
+            .get(&realm)
+            .or_else(|| self.detached_relations.get(&realm))
+    }
+
+    /// Capture the parent chain while it is still connected. A load listener
+    /// can detach any ancestor, so rebuilding this chain after dispatch would
+    /// skip the removed intermediate contexts and strand a surviving barrier.
+    fn ancestor_chain(&self, realm: RealmId) -> Vec<RealmId> {
+        let top = self.top_realm();
+        let mut chain = Vec::new();
+        let mut current = realm;
+        while current != top && !chain.contains(&current) {
+            chain.push(current);
+            let Some(parent) = self.relation_record(current).map(|record| record.parent) else {
+                break;
+            };
+            current = parent;
+        }
+        if !chain.contains(&top) {
+            chain.push(top);
+        }
+        chain
+    }
+
     /// Whether `owner` still embeds a live nested browsing context.
     pub(crate) fn holds_context(&self, owner: NodeId) -> bool {
         self.realm_for_owner(owner).is_some()
     }
 
-    /// `root` and every realm nested beneath it, ancestor before descendant -
-    /// HTML's order for "unload a document and its descendants", and the
-    /// reverse of the order their state is released in.
+    /// `root` and every realm nested beneath it, ancestor before descendant;
+    /// state is released in the reverse order.
     fn realm_tree(&self, root: RealmId) -> Vec<RealmId> {
         let mut order = vec![root];
         let mut index = 0;
@@ -260,7 +289,7 @@ impl FrameState {
     /// realm beneath it stop being anyone's content navigable. `contentWindow`,
     /// `window.length` and the adoption preflight all answer from these maps, so
     /// after this the element is context-free even though its document has not
-    /// been unloaded yet. Returns whether anything was queued.
+    /// been destroyed yet. Returns whether anything was queued.
     fn detach_subtree(&mut self, root: RealmId) -> bool {
         let group = self.realm_tree(root);
         if group.is_empty() || !self.records.contains_key(&root) {
@@ -269,7 +298,9 @@ impl FrameState {
         let detached = group
             .into_iter()
             .map(|realm| {
-                self.records.remove(&realm);
+                if let Some(record) = self.records.remove(&realm) {
+                    self.detached_relations.insert(realm, record);
+                }
                 self.ancestor_origins.remove(&realm);
                 self.detached_documents.insert(realm);
                 (realm, self.contexts.remove(&realm))
@@ -329,7 +360,8 @@ impl FrameState {
     /// context still answers a parent that holds its `WindowProxy`, and there
     /// is nothing left in the tree to compare through.
     fn origin(&self, realm: RealmId) -> String {
-        self.environment_origin(realm).unwrap_or_else(|| "null".into())
+        self.environment_origin(realm)
+            .unwrap_or_else(|| "null".into())
     }
 
     pub(crate) fn environment_origin(&self, realm: RealmId) -> Option<String> {
@@ -371,6 +403,44 @@ fn realm_eval<E: ScriptEngine>(
     source: &str,
 ) -> Result<E::Value, E::Error> {
     E::eval_in_realm_from_call(cx, realm, source)
+}
+
+fn dispatch_user_agent_event_in_realm<E: ScriptEngine>(
+    cx: &mut E::CallCx<'_>,
+    realm: RealmId,
+    target_expression: &str,
+    event_type: &str,
+    bubbles: bool,
+) -> Result<(), E::Error> {
+    let target = realm_eval::<E>(cx, realm, target_expression)?;
+    crate::dom::adoption::dispatch_user_agent_event_from_call::<E>(
+        cx, realm, target, event_type, bubbles,
+    )
+}
+
+/// Queue load-walk continuation on the nearest context which survived the
+/// reentrant callback. Destruction and this continuation share that context's
+/// timer queue, preserving destruction-before-more-load-work ordering.
+fn schedule_detached_frame_completion<E: ScriptEngine>(
+    cx: &mut E::CallCx<'_>,
+    agent: &Rc<RefCell<crate::AgentState>>,
+    ancestors: &[RealmId],
+) -> Result<(), E::Error> {
+    let top = agent.borrow().frames.top_realm();
+    let completion_realm = {
+        let a = agent.borrow();
+        ancestors
+            .iter()
+            .copied()
+            .find(|ancestor| *ancestor == top || a.frames.records.contains_key(ancestor))
+            .unwrap_or(top)
+    };
+    realm_eval::<E>(
+        cx,
+        completion_realm,
+        "setTimeout(function(){ __completeDetachedFrameLoad(); },0)",
+    )?;
+    Ok(())
 }
 
 fn view<E: ScriptEngine>(cx: &mut E::CallCx<'_>, target: RealmId) -> Result<E::Value, E::Error> {
@@ -677,10 +747,10 @@ impl<E: ScriptEngine> crate::Runtime<E> {
     }
 }
 
-/// The deferred half of HTML's "destroy a child navigable": unload each already
-/// detached document and release its runtime state. Ancestor documents are
-/// unloaded before their descendants, and state is released child-first, so a
-/// parent's registrations outlive its children's.
+/// The deferred half of HTML's "destroy a child navigable": finish destroying
+/// each already detached document and release its runtime state. Iframe removal does not
+/// fire `pagehide` or `unload`; state is released child-first so a parent's
+/// registrations outlive its children's.
 ///
 /// Every step is best-effort past the first: a realm whose global already threw
 /// must not leave its siblings half-torn-down, and this runs from a task with
@@ -694,16 +764,10 @@ fn run_pending_teardown<E: ScriptEngine>(
         let Some(group) = agent.borrow_mut().frames.pending_teardown.pop() else {
             return Ok(());
         };
-        for (realm, _) in &group {
-            let _ = realm_eval::<E>(
-                cx,
-                *realm,
-                "window.dispatchEvent(new Event('pagehide'));                 window.dispatchEvent(new Event('unload'))",
-            );
-        }
         let retiring: Vec<_> = group.iter().map(|(realm, _)| *realm).collect();
         crate::dom::adoption::preserve_reflectors::<E>(cx, agent, &retiring)?;
         for (realm, context) in group.iter().rev() {
+            agent.borrow_mut().frames.detached_relations.remove(realm);
             // A parent may still hold this global. Leave it reporting what HTML
             // says a discarded context reports, before the realm goes.
             let _ = realm_eval::<E>(cx, *realm, "__discardBrowsingContext()");
@@ -734,8 +798,8 @@ fn run_pending_teardown<E: ScriptEngine>(
 
 /// The removal half of the frame surface: the bootstrap's mutation funnel hands
 /// each iframe leaving a connected tree to this, before the tree moves. The
-/// context is detached here and unloaded in the queued task, because HTML's
-/// removing steps must not run script.
+/// context is detached here and destroyed in the queued task. HTML's iframe
+/// removing steps sever the nested navigable without firing unload events.
 struct DiscardFrame;
 impl<E: ScriptEngine> NativeFn<E> for DiscardFrame {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
@@ -914,7 +978,9 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
             };
             let srcdoc = attr("srcdoc");
             let src = attr("src").unwrap_or_default();
-            let base = h.document_base_url().unwrap_or_else(|| "about:blank".to_owned());
+            let base = h
+                .document_base_url()
+                .unwrap_or_else(|| "about:blank".to_owned());
             let url = if srcdoc.is_some() {
                 "about:srcdoc".into()
             } else if src.is_empty() {
@@ -958,7 +1024,9 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
         });
         let Some((context, scripts)) = ({
             let mut a = agent.borrow_mut();
-            let document_url = a.hosts.get(&a.frames.top_realm())
+            let document_url = a
+                .hosts
+                .get(&a.frames.top_realm())
                 .and_then(|host| host.borrow().base_url.clone())
                 .unwrap_or_else(|| "about:blank".to_owned());
             a.frames.initialize(&document_url);
@@ -1194,7 +1262,8 @@ fn open_document_realm<E: ScriptEngine>(
             a.register(realm, child_for_install.clone());
             a.frames.contexts.insert(realm, context);
             if let Some((parent, _)) = container {
-                a.frames.snapshot_ancestor_origins(realm, parent, &referrer_policy);
+                a.frames
+                    .snapshot_ancestor_origins(realm, parent, &referrer_policy);
             }
             match container {
                 Some((parent, owner)) => {
@@ -1312,6 +1381,7 @@ impl<E: ScriptEngine> NativeFn<E> for LoadFrameDocument {
         let Some((parent, owner, source, scripts)) = facts else {
             return Ok(cx.undefined());
         };
+        let completion_ancestors = agent.borrow().frames.ancestor_chain(parent);
         let parent_host = agent.borrow().hosts.get(&parent).cloned();
         let connected = parent_host.is_some_and(|host| host.borrow_mut().is_connected_node(owner));
         if let Some(source) = source.filter(|_| connected) {
@@ -1339,71 +1409,140 @@ impl<E: ScriptEngine> NativeFn<E> for LoadFrameDocument {
                 }
             }
         }
-        {
+        let still_live = {
             let mut a = agent.borrow_mut();
-            let record = a.frames.records.get_mut(&realm).expect("live frame");
-            record.parsed = true;
-            // Cancel only this pending initial load. Retain its realm/identity,
-            // but release the parent's barrier without running source or events.
-            record.loaded = !connected;
+            if let Some(record) = a.frames.records.get_mut(&realm) {
+                record.parsed = true;
+                // Cancel only this pending initial load. Retain its realm/identity,
+                // but release the parent's barrier without running source or events.
+                record.loaded = !connected;
+                true
+            } else {
+                false
+            }
+        };
+        if !still_live {
+            // The parser script removed this iframe or an ancestor. Choose the
+            // nearest surviving container realm: removal queued destruction on
+            // that realm's timer queue, so this continuation is ordered after
+            // teardown even when other realms have pending timers.
+            schedule_detached_frame_completion::<E>(cx, &agent, &completion_ancestors)?;
+            return Ok(cx.undefined());
         }
         // Parsing creates descendants synchronously, but their document tasks
         // run later. A completed descendant releases its waiting ancestors only
         // after both of its load events have been delivered.
-        let top_realm = agent.borrow().frames.top_realm();
-        let mut completing = if connected { realm } else { parent };
-        loop {
-            if completing == top_realm {
-                let main_host = {
-                    let mut a = agent.borrow_mut();
-                    let waiting =
-                        a.frames.records.values().any(|record| {
-                            record.parent == top_realm && !record.lazy && !record.loaded
-                        });
-                    if a.frames.pending_main_load && !waiting {
-                        a.frames.pending_main_load = false;
-                        a.hosts.get(&top_realm).cloned()
-                    } else {
-                        None
-                    }
-                };
-                if let Some(main_host) = main_host {
-                    main_host.borrow_mut().markup.ready_state = crate::ReadyState::Complete;
-                    realm_eval::<E>(
-                        cx,
-                        top_realm,
-                        "document.dispatchEvent(new Event('readystatechange'));window.dispatchEvent(new Event('load'))",
-                    )?;
-                }
-                break;
-            }
-            let ready = {
+        complete_frame_load_chain::<E>(cx, &agent, if connected { realm } else { parent })?;
+        Ok(cx.undefined())
+    }
+}
+
+/// Continue a parsed document's load walk from a live child or from the parent
+/// of a child that was detached while its parser script was running.
+fn complete_frame_load_chain<E: ScriptEngine>(
+    cx: &mut E::CallCx<'_>,
+    agent: &Rc<RefCell<crate::AgentState>>,
+    mut completing: RealmId,
+) -> Result<(), E::Error> {
+    let top_realm = agent.borrow().frames.top_realm();
+    loop {
+        if completing == top_realm {
+            let main_host = {
                 let mut a = agent.borrow_mut();
-                let waiting =
-                    a.frames.records.values().any(|record| {
-                        record.parent == completing && !record.lazy && !record.loaded
-                    });
-                a.frames.records.get_mut(&completing).and_then(|record| {
-                    if !record.parsed || record.loaded || waiting {
-                        return None;
-                    }
-                    // Set before callbacks to make reentrant native calls inert.
-                    record.loaded = true;
-                    Some((record.parent, record.owner))
-                })
+                let waiting = a
+                    .frames
+                    .records
+                    .values()
+                    .any(|record| record.parent == top_realm && !record.lazy && !record.loaded);
+                if a.frames.pending_main_load && !waiting {
+                    a.frames.pending_main_load = false;
+                    a.hosts.get(&top_realm).cloned()
+                } else {
+                    None
+                }
             };
-            let Some((parent, owner)) = ready else { break };
-            realm_eval::<E>(cx, completing, "window.dispatchEvent(new Event('load'))")?;
-            realm_eval::<E>(
-                cx,
-                parent,
-                &format!(
-                    "__dispatchSynthetic({}, 'load', {{bubbles:false}})",
-                    crate::js_str(&owner.raw().to_string())
-                ),
-            )?;
-            completing = parent;
+            if let Some(main_host) = main_host {
+                main_host.borrow_mut().markup.ready_state = crate::ReadyState::Complete;
+                dispatch_user_agent_event_in_realm::<E>(
+                    cx,
+                    top_realm,
+                    "document",
+                    "readystatechange",
+                    false,
+                )?;
+                dispatch_user_agent_event_in_realm::<E>(cx, top_realm, "window", "load", false)?;
+            }
+            break;
         }
+        let ready = {
+            let mut a = agent.borrow_mut();
+            let waiting = a
+                .frames
+                .records
+                .values()
+                .any(|record| record.parent == completing && !record.lazy && !record.loaded);
+            a.frames.records.get_mut(&completing).and_then(|record| {
+                if !record.parsed || record.loaded || waiting {
+                    return None;
+                }
+                // Set before callbacks to make reentrant native calls inert.
+                record.loaded = true;
+                Some((record.parent, record.owner))
+            })
+        };
+        let Some((parent, owner)) = ready else { break };
+        // Capture before dispatch. The callback may remove this context's
+        // owner or any ancestor, but the current script still needs to finish
+        // and a surviving ancestor may still be waiting on this load walk.
+        let completion_ancestors = agent.borrow().frames.ancestor_chain(parent);
+        dispatch_user_agent_event_in_realm::<E>(cx, completing, "window", "load", false)?;
+        let still_live = agent.borrow().frames.records.contains_key(&completing);
+        if !still_live {
+            // A Window load listener can itself remove this iframe or an
+            // ancestor. Keep its script run-to-completion, then let the
+            // already queued destroy task run before continuing the ancestor
+            // load walk. Do not dispatch the detached owner element's load.
+            schedule_detached_frame_completion::<E>(cx, agent, &completion_ancestors)?;
+            return Ok(());
+        }
+        let owner_target = realm_eval::<E>(
+            cx,
+            parent,
+            &format!(
+                "__frameElementById({})",
+                crate::js_str(&owner.raw().to_string())
+            ),
+        )?;
+        crate::dom::adoption::dispatch_user_agent_event_from_call::<E>(
+            cx,
+            parent,
+            owner_target,
+            "load",
+            false,
+        )?;
+        if (parent != top_realm && !agent.borrow().frames.records.contains_key(&parent))
+            || !agent.borrow().frames.records.contains_key(&completing)
+        {
+            // An owner-element load handler can itself remove this document
+            // or one of its ancestors. Continue only after that destruction.
+            schedule_detached_frame_completion::<E>(cx, agent, &completion_ancestors)?;
+            return Ok(());
+        }
+        completing = parent;
+    }
+    Ok(())
+}
+
+/// Deferred after `DiscardFrame`'s already queued teardown task. It releases the
+/// detached child's parent barrier without dispatching the child's own load.
+struct CompleteDetachedFrameLoad;
+impl<E: ScriptEngine> NativeFn<E> for CompleteDetachedFrameLoad {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let Some(agent) = host::<E>(cx).and_then(|h| h.borrow().agent.upgrade()) else {
+            return Ok(cx.undefined());
+        };
+        let realm = cx.current_realm();
+        complete_frame_load_chain::<E>(cx, &agent, realm)?;
         Ok(cx.undefined())
     }
 }
@@ -1465,11 +1604,8 @@ impl<E: ScriptEngine> NativeFn<E> for LoadTopDocument {
             return Ok(cx.undefined());
         }
         h.borrow_mut().markup.ready_state = crate::ReadyState::Complete;
-        eval::<E>(
-            cx,
-            "document.dispatchEvent(new Event('readystatechange'));\
-             window.dispatchEvent(new Event('load'))",
-        )?;
+        dispatch_user_agent_event_in_realm::<E>(cx, realm, "document", "readystatechange", false)?;
+        dispatch_user_agent_event_in_realm::<E>(cx, realm, "window", "load", false)?;
         Ok(cx.undefined())
     }
 }
@@ -1485,13 +1621,16 @@ impl<E: ScriptEngine> NativeFn<E> for WindowRelation {
         let Some(agent) = h.borrow().agent.upgrade() else {
             return Ok(cx.make_null());
         };
-        let relation = agent
-            .borrow()
-            .frames
-            .records
-            .get(&realm)
-            .map(|r| (r.parent, r.owner));
         if key == "frameElement" {
+            // The container's content navigable is severed synchronously by
+            // removal, even while parent/top remain available to the current
+            // script until its queued destruction task runs.
+            let relation = agent
+                .borrow()
+                .frames
+                .records
+                .get(&realm)
+                .map(|r| (r.parent, r.owner));
             let Some((parent, owner)) = relation else {
                 return Ok(cx.make_null());
             };
@@ -1507,6 +1646,11 @@ impl<E: ScriptEngine> NativeFn<E> for WindowRelation {
                 ),
             );
         }
+        let relation = agent
+            .borrow()
+            .frames
+            .relation_record(realm)
+            .map(|r| (r.parent, r.owner));
         let parent = relation.map(|r| r.0).unwrap_or(realm);
         let top_realm = agent.borrow().frames.top_realm();
         view::<E>(cx, if key == "top" { top_realm } else { parent })
@@ -1540,7 +1684,10 @@ fn window_property<E: ScriptEngine>(
         // and it is the frame table's top realm, not the engine's root realm.
         let (parent, top) = {
             let a = agent.borrow();
-            (a.frames.records.get(&target).map(|r| r.parent), a.frames.top_realm())
+            (
+                a.frames.relation_record(target).map(|r| r.parent),
+                a.frames.top_realm(),
+            )
         };
         let Some(parent) = parent.or((target == top).then_some(top)) else {
             return Ok(cx.make_null());
@@ -1554,7 +1701,9 @@ fn window_property<E: ScriptEngine>(
     if key == "closed" {
         let live = {
             let a = agent.borrow();
-            a.frames.records.contains_key(&target) || target == a.frames.top_realm()
+            a.frames.records.contains_key(&target)
+                || a.frames.detached_relations.contains_key(&target)
+                || target == a.frames.top_realm()
         };
         return eval::<E>(cx, if live { "false" } else { "true" });
     }
@@ -1762,8 +1911,14 @@ fn navigate_context<E: ScriptEngine>(
     };
     let (source_base, target_base) = {
         let a = agent.borrow();
-        (a.hosts.get(&from).and_then(|host| host.borrow().document_base_url()),
-         a.hosts.get(&target).and_then(|host| host.borrow().base_url.clone()))
+        (
+            a.hosts
+                .get(&from)
+                .and_then(|host| host.borrow().document_base_url()),
+            a.hosts
+                .get(&target)
+                .and_then(|host| host.borrow().base_url.clone()),
+        )
     };
     // A realm has a browsing context when it carries a `FrameRecord` (a child)
     // or is the top-level context's own realm. Anything else - a removed
@@ -1812,7 +1967,9 @@ fn navigate_context<E: ScriptEngine>(
     };
     let referrer_policy = {
         let a = agent.borrow();
-        a.frames.records.get(&target)
+        a.frames
+            .records
+            .get(&target)
             .map(|record| iframe_referrer_policy(&a, record.parent, record.owner))
             .unwrap_or_default()
     };
@@ -2070,8 +2227,8 @@ fn perform_navigation<E: ScriptEngine>(
             host.script_loader.clone(),
         )
     };
-    let blank = url::Url::parse(&url)
-        .is_ok_and(|url| url.scheme() == "about" && url.path() == "blank");
+    let blank =
+        url::Url::parse(&url).is_ok_and(|url| url.scheme() == "about" && url.path() == "blank");
     let source = if blank {
         Some(String::new())
     } else {
@@ -2109,7 +2266,8 @@ fn perform_navigation<E: ScriptEngine>(
         reuse_host: top_level.then(|| outgoing.clone()),
         context,
         key: Some(key),
-        about_base_url: url::Url::parse(&url).ok()
+        about_base_url: url::Url::parse(&url)
+            .ok()
             .filter(|url| url.scheme() == "about" && matches!(url.path(), "blank" | "srcdoc"))
             .and(about_base_url),
         document_url: url,
@@ -2195,6 +2353,7 @@ pub(crate) fn install_frame_surface<E: ScriptEngine>(
 ) -> Result<(), SurfaceError<E::Error>> {
     surface.set_function::<FrameWindow>("__frameWindow", 1)?;
     surface.set_function::<LoadFrameDocument>("__loadFrameDocument", 0)?;
+    surface.set_function::<CompleteDetachedFrameLoad>("__completeDetachedFrameLoad", 0)?;
     surface.set_function::<LoadTopDocument>("__loadTopDocument", 0)?;
     surface.set_function::<DiscardFrame>("__discardFrame", 1)?;
     surface.set_function::<RunFrameTeardown>("__runFrameTeardown", 0)?;

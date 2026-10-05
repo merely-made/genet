@@ -260,3 +260,29 @@ repin with exact-pin runtime and census regressions; the original maps stay at
 `8ad08412`. The existing worktree and target are temporarily reused for that
 portable-pin gate, since the primary checkout has local Cargo patch overrides.
 They can be retired after the new-pin receipt is recorded and published.
+
+## Vano repin follow-up, 2026-10-05
+
+**Status:** exact-pin validation in progress after census integration. Mark
+accepted repinning only after this lane lands, then authorized push, merge and
+continuation. The two native/wasm64 `nova_vm` manifest rows move from
+`8ad0841255c2cbb679f7c704417d427b3cb3e961` to the published Vano main
+`47f8d4f9d6fca884e3472e405872ce9556ff9db0`. No Vano source changes are made.
+
+Phases and done-conditions:
+1. Resolve only the new Vano git source in the reused isolated worktree's
+   ignored lock; retain a package/version/edge comparison and prove the new
+   source in locked metadata. Keep primary local overrides and lock untouched.
+2. Test the new pin with `script-engine-nova`, complete `script-runtime-api`,
+   `genet-scripted` with `scripted-nova`, and WPT `vano_reporting`. Freeze a new
+   dev/netfetch runner and rerun the three Vano panic records plus the ten
+   Genet census records on Vano, retaining maps and comparing existing passes.
+3. Publish the separate manifest repin and its validation receipt on main;
+   retire the now-integrated census worktree after its gate is recorded. Old
+   census maps continue to describe `8ad08412`, without relabelling.
+
+Findings: the primary checkout uses a gitignored local Vano `[patch]` and
+would not establish the portable published pin. The existing clean census
+worktree has no local overrides and is temporarily reused for that actual
+configuration collision, with its stable target. Evidence is stored under
+`Code/testing/genet/vano-repin/`; no Cargo home or extra worktree is created.

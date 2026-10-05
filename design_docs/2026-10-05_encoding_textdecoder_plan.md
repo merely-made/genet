@@ -349,9 +349,17 @@ attributed to a decoder implementation improvement.
 The Vano `sharedarraybuffer.https.html` case is a concrete regression: its
 previously passing file and `decoding SharedArrayBuffer` subtest now fail with
 `TextDecoder input is not an ArrayBuffer or view`. This differs from the
-existing Boa SAB-constructor limitations. Root delegated a read-only trace of
-the wrapper's captured `ArrayBuffer.isView` classification and existing host
-surface before proposing a correction.
+existing Boa SAB-constructor limitations. Read-only source tracing confirms
+Vano's `array_buffer_constructor.rs:127-141` omits its separate SharedTypedArray
+variants from ArrayBuffer.isView, although its intrinsic typed-array tag getter
+recognizes them. The Encoding block relies on the captured isView at
+fetch.rs:936. A proposed correction classifies using the already captured
+intrinsic typed-array tag getter and DataView buffer getter, then uses the
+existing captured buffer/offset/length copy path. The separate encodeInto
+Uint8Array validation needs the same shared-view regression coverage; C4
+already includes SAB-backed views supported by the engine. No Vano source
+change is required for the Encoding-owned workaround. Production edits are
+held while the E2 library checkpoint is pending.
 
 Other remaining API failures include existing Boa SAB support, ArrayBuffer
 transfer, Worker helper-loading and IDL-fetch limitations. Those are not

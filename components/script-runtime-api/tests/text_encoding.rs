@@ -313,6 +313,17 @@ fn captured_encoding_internals_survive_author_intrinsic_replacement<E: ScriptEng
     );
 }
 
+fn encoder_and_decoder_private_arrays_do_not_use_author_array_hooks<E: ScriptEngine>() {
+    let mut runtime = runtime::<E>();
+    assert_eq!(
+        read(
+            &mut runtime,
+            "(function(){var arrayZero=Object.getOwnPropertyDescriptor(Array.prototype,'0');var species=Object.getOwnPropertyDescriptor(Array,Symbol.species);var setterCalls=0;var speciesCalls=0;var encoded=-1;var decoded='';var operationError='';try{Object.defineProperty(Array.prototype,'0',{configurable:true,set:function(){setterCalls++;}});Object.defineProperty(Array,Symbol.species,{configurable:true,get:function(){speciesCalls++;throw new Error('Array species observed');}});try{encoded=new TextEncoder().encode('A')[0];decoded=new TextDecoder().decode(new Uint8Array([65]));}catch(error){operationError=error.message;}}finally{if(arrayZero)Object.defineProperty(Array.prototype,'0',arrayZero);else delete Array.prototype[0];if(species)Object.defineProperty(Array,Symbol.species,species);else delete Array[Symbol.species];}return encoded+':'+decoded+':'+setterCalls+':'+speciesCalls+':'+operationError;})()"
+        ),
+        "65:A:0:0:"
+    );
+}
+
 fn drive_until<E: ScriptEngine>(runtime: &mut Runtime<E>, done: &str) -> bool {
     let deadline = Instant::now() + Duration::from_secs(10);
     let mut now_ms = 0.0f64;
@@ -415,6 +426,7 @@ both_engines! {
     borrowed_encoder_methods_accept_foreign_instances_and_views => (cross_realm_encoder_on_boa, cross_realm_encoder_on_vano),
     retained_iframe_decoder_keeps_stream_state_after_removal => (retained_frame_decoder_on_boa, retained_frame_decoder_on_vano),
     captured_encoding_internals_survive_author_intrinsic_replacement => (captured_encoding_internals_on_boa, captured_encoding_internals_on_vano),
+    encoder_and_decoder_private_arrays_do_not_use_author_array_hooks => (private_array_hooks_on_boa, private_array_hooks_on_vano),
     worker_has_encoding_surfaces => (worker_encoding_on_boa, worker_encoding_on_vano),
     dropped_decoder_finalizer_is_delivered_by_normal_pump => (decoder_finalizer_on_boa, decoder_finalizer_on_vano),
 }

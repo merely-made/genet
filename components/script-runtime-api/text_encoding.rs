@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use encoding_rs::{CoderResult, Decoder, DecoderResult, Encoding};
 use script_engine_api::{CallCx, NativeFn, ScriptEngine};
 
-use crate::{HostState, fetch::push_json_str};
+use crate::HostState;
 
 static NEXT_DECODER_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -69,6 +69,14 @@ impl DecoderEntry {
     }
 
     fn decode(&mut self, bytes: &[u8], stream: bool) -> Result<String, ()> {
+        // An empty streaming chunk cannot change decoder state when there is no
+        // caller-unconsumed input to retry. In particular, do not ask legacy
+        // decoders to revisit a lead byte buffered internally, or let an empty
+        // chunk disturb initial BOM detection.
+        if stream && bytes.is_empty() && self.pending.is_empty() {
+            return Ok(String::new());
+        }
+
         let mut input = std::mem::take(&mut self.pending);
         input.extend_from_slice(bytes);
         let fatal = self.fatal;
@@ -146,22 +154,6 @@ impl DecoderEntry {
     }
 }
 
-fn json_result(text: Result<String, &'static str>) -> String {
-    let mut json = String::from("{\"ok\":");
-    match text {
-        Ok(text) => {
-            json.push_str("true,\"text\":");
-            push_json_str(&mut json, &text);
-        },
-        Err(error) => {
-            json.push_str("false,\"error\":");
-            push_json_str(&mut json, error);
-        },
-    }
-    json.push('}');
-    json
-}
-
 fn arg_string<E: ScriptEngine>(cx: &mut E::CallCx<'_>, index: usize) -> Result<String, E::Error> {
     let arg = cx.arg(index);
     cx.value_to_string(&arg)
@@ -176,10 +168,10 @@ impl<E: ScriptEngine> NativeFn<E> for TextDecoderCreate {
         let encoding = Encoding::for_label(label.as_bytes())
             .filter(|encoding| *encoding != encoding_rs::REPLACEMENT);
         let Some(encoding) = encoding else {
-            return cx.make_string("{\"ok\":false,\"error\":\"label\"}");
+            return cx.make_string("!L");
         };
         let Some(id) = allocate_decoder_id() else {
-            return cx.make_string("{\"ok\":false,\"error\":\"handle\"}");
+            return cx.make_string("!H");
         };
         let state = cx.host_data().and_then(|data| {
             data.downcast_ref::<RefCell<HostState>>().map(|host| {
@@ -189,12 +181,9 @@ impl<E: ScriptEngine> NativeFn<E> for TextDecoderCreate {
             })
         });
         if state.is_none() {
-            return cx.make_string("{\"ok\":false,\"error\":\"handle\"}");
+            return cx.make_string("!H");
         }
-        let mut json = format!("{{\"ok\":true,\"id\":\"{id}\",\"encoding\":");
-        push_json_str(&mut json, &encoding.name().to_ascii_lowercase());
-        json.push('}');
-        cx.make_string(&json)
+        cx.make_string(&format!("+{id}:{}", encoding.name().to_ascii_lowercase()))
     }
 }
 
@@ -208,18 +197,19 @@ impl<E: ScriptEngine> NativeFn<E> for TextDecoderDecode {
         let result = cx.host_data().and_then(|data| {
             let host = data.downcast_ref::<RefCell<HostState>>()?;
             let mut host = host.borrow_mut();
-            Some(
-                host.text_decoders
-                    .decode(id?, &bytes, stream)?
-                    .map_err(|()| "fatal"),
-            )
+            host.text_decoders.decode(id?, &bytes, stream)
         });
-        let json = match result {
-            Some(Ok(text)) => json_result(Ok(text)),
-            Some(Err(error)) => json_result(Err(error)),
-            None => json_result(Err("handle")),
+        let response = match result {
+            Some(Ok(text)) => {
+                let mut response = String::with_capacity(text.len().saturating_add(1));
+                response.push('S');
+                response.push_str(&text);
+                response
+            },
+            Some(Err(())) => String::from("F"),
+            None => String::from("H"),
         };
-        cx.make_string(&json)
+        cx.make_string(&response)
     }
 }
 
@@ -401,9 +391,54 @@ mod tests {
     }
 
     #[test]
+    fn empty_stream_chunks_preserve_legacy_pending_leads() {
+        let cases = [
+            (encoding_rs::SHIFT_JIS, 0x81, 0x87, "∞"),
+            (encoding_rs::EUC_JP, 0xA4, 0xA2, "あ"),
+            (encoding_rs::BIG5, 0xFE, 0x40, "鑂"),
+            (encoding_rs::EUC_KR, 0x81, 0x41, "갂"),
+        ];
+
+        for (encoding, lead, trail, expected) in cases {
+            let mut entry = DecoderEntry::new(encoding, false, false);
+            assert_eq!(entry.decode(&[lead], true).unwrap(), "");
+            assert!(entry.decoder.is_some(), "lead byte initializes decoder");
+            assert!(entry.pending.is_empty());
+
+            assert_eq!(entry.decode(&[], true).unwrap(), "");
+            assert!(entry.decoder.is_some(), "empty chunk preserves decoder");
+            assert!(entry.pending.is_empty());
+            assert_eq!(entry.decode(&[trail], true).unwrap(), expected);
+            assert_eq!(entry.decode(&[], false).unwrap(), "");
+            assert!(entry.decoder.is_none(), "final flush releases decoder");
+        }
+    }
+
+    #[test]
+    fn empty_stream_chunk_preserves_initial_bom_state_and_final_flushes() {
+        let mut entry = DecoderEntry::new(encoding_rs::UTF_8, false, false);
+        assert_eq!(entry.decode(&[], true).unwrap(), "");
+        assert!(entry.decoder.is_none(), "initial empty chunk stays lazy");
+
+        assert_eq!(entry.decode(&[0xEF], true).unwrap(), "");
+        assert!(entry.decoder.is_some());
+        assert_eq!(entry.decode(&[], true).unwrap(), "");
+        assert!(entry.decoder.is_some(), "empty chunk preserves BOM prefix");
+        assert_eq!(entry.decode(&[0xBB, 0xBF, b'x'], true).unwrap(), "x");
+        assert_eq!(entry.decode(&[], false).unwrap(), "");
+        assert!(entry.decoder.is_none(), "stream=false empty chunk flushes");
+
+        let mut incomplete = DecoderEntry::new(encoding_rs::UTF_8, false, false);
+        assert_eq!(incomplete.decode(&[0xE2], true).unwrap(), "");
+        assert_eq!(incomplete.decode(&[], false).unwrap(), "\u{FFFD}");
+        assert!(incomplete.decoder.is_none());
+    }
+
+    #[test]
     fn fatal_stream_error_retains_the_valid_suffix_for_later_input() {
         let mut entry = DecoderEntry::new(encoding_rs::UTF_8, true, false);
         assert!(entry.decode(&[0xFF, b'A'], true).is_err());
+        assert_eq!(entry.pending, b"A", "unconsumed suffix remains queued");
         assert_eq!(entry.decode(&[], true).unwrap(), "A");
         assert!(entry.decoder.is_some());
         assert_eq!(entry.decode(&[], false).unwrap(), "");

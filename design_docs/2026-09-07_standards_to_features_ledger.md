@@ -137,8 +137,9 @@ a writing product), `streams` (extraction starts before the page finishes),
 corrected API-only scope. E1 authorizes per-realm native storage, a private
 finalizer and Vano job delivery. The candidate passes 949 crate tests and shows
 API gains on both engines, but incomplete Worker results lose old passes, so
-acceptance is withheld. E2 is pending for a confirmed empty-streaming-input
-defect in the unchanged encoding_rs 0.8.35 dependency. The plan records the
+acceptance is withheld. E2 authorizes a narrow empty-streaming-input workaround
+for the confirmed defect in unchanged encoding_rs 0.8.35. Corrections and fresh
+verification are underway. The plan records the
 unaccepted measurements, frozen controls and specification/WPT conflict.
 
 Mark asked for the next lanes to come from WPT and specification

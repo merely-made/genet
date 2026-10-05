@@ -4,8 +4,10 @@
 on conformance/encoding, 2026-10-05. Broad crate gates pass 949 tests with
 three existing WPT tests ignored. Both frozen post-change Encoding runs show
 API gains, but old passing subtests are lost in incomplete Worker results;
-acceptance is withheld. E2 is pending for a confirmed encoding_rs 0.8.35
-empty-streaming-input defect. Vano is pinned to 47f8d4f9 at the d7f08fecdc7
+acceptance is withheld. E2 is answered for the confirmed encoding_rs 0.8.35
+empty-streaming-input defect. The corrected candidate passes 166 runtime unit
+tests and 39 Encoding controls; fresh WPT and broad verification remain open.
+Vano is pinned to 47f8d4f9 at the d7f08fecdc7
 baseline. This lane is not published or integrated.
 
 Authority: the [standards ledger](2026-09-07_standards_to_features_ledger.md#conformance-targets-2026-10-02)
@@ -377,3 +379,51 @@ new frozen final runner and matched full maps with every movement attributed.
   zero-pass-loss condition. Production e23f2db1b14 remains unchanged while E2
   is pending; an independent read-only review is examining private native
   call overhead and the Worker reporting deadline.
+
+## E2 ruling and correction pass, 2026-10-05
+
+Mark answered "Ok" to the narrow empty-chunk adapter workaround while keeping
+encoding_rs 0.8.35. Add the guard described above, preserving pending input,
+existing stream state and final flush behavior. No library upgrade, new
+dependency or lock update is authorized by this answer.
+
+The same pass repairs shared-view detection through captured intrinsic brands
+inside the owned Encoding block. Capture remains before author execution.
+Reduce bridge allocation by using a private tagged-string result instead of
+JSON and a one-byte input-copy fast path. Native names/arities, handle identity,
+per-wrapper metadata, private finalizer delivery and teardown stay as ruled in
+E1. This protocol is private plumbing selected during implementation, not a
+new author-visible API or policy ruling. Preserve label/options coercion order,
+RangeError/TypeError distinctions, NUL/BOM/astral output and trusted intrinsic
+capture. Initial FinalizationRegistry allocation stays unchanged in this pass;
+deferring it is not evidence-qualified as a Worker pass-loss repair.
+
+Record new empty-chunk and shared-view fixture failures against e23 production
+before applying the correction. Output/intrinsic-poisoning controls may already
+pass the candidate and are regression controls, not claimed failing controls.
+Keep all original full maps and quiet diagnostic maps. After focused checks,
+freeze a separately named corrected runner, inspect the affected WPT files,
+then require a full comparison with every old pass retained before acceptance.
+
+- 2026-10-05: the new fixtures on unchanged e23 production give 36 passes and
+  exactly three expected failures: empty non-final chunks on Boa and Vano, and
+  Vano shared-view detection. The special-output and replaced-string-intrinsic
+  controls pass already and are regression controls. The immutable source patch
+  contains only fixtures and docs, preserving the candidate production source.
+- 2026-10-05: the first corrected native gate passes 165 unit tests but fails
+  one new fixture whose Big5 A440 expected character was mistakenly written as
+  U+4E2D instead of the correct U+4E00. Cargo stops before integration tests.
+  Root replaces that vector with the exact WPT FE40/U+9442 case and includes
+  Shift_JIS 8187/U+221E and EUC-KR 8141/U+AC02. The failed log and source patch
+  remain under e2-native-api-controls; they are not implementation acceptance.
+- 2026-10-05: e2-corrected-controls passes 166 runtime unit tests and all 39
+  Encoding integration controls. The empty guard retains native queued tails,
+  normal final flush and split BOM behavior. Vano direct SAB, shared Uint8Array
+  and DataView offsets, and shared encodeInto destinations now pass. Captured
+  String helpers preserve NUL, punctuation, astral and BOM output even when
+  author code replaces slice/indexOf/JSON.parse. Existing private-array hook,
+  lifecycle, stale-handle, iframe-retirement and actual Worker controls pass.
+  A read-only agent finds no actionable defect in the JS correction. The native
+  module no longer needs fetch's JSON helper, so its authorized visibility
+  expansion is reverted to the baseline private function. The corrected code
+  is a candidate; WPT pass-loss and broad crate acceptance remain open.

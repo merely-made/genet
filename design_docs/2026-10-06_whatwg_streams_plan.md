@@ -119,14 +119,37 @@ by inference from the user's earlier continuation.
 **Ruling S1, 2026-10-06:** after the recommendation was restated as completing
 Vano's methods and enabling only Boa's transfer family, Mark answered
 **"Ok, agreed. Proceed"**. This selects option one. Vano starts from its clean,
-already pinned main 47f8d4f9; Boa starts from its clean, already pinned main
-52cfb6ff. Qualify standard buffer transfer and actual baseline failures in each
+already pinned main 47f8d4f9; Boa starts from its clean, already pinned
+52cfb6ff. Boa's checkout was initially on its `genet` branch at that revision;
+its existing `main` was safely fast-forwarded to the same revision while
+preserving the lane edits. Qualify standard buffer transfer and actual baseline failures in each
 owner, preserve unrelated experimental APIs as disabled, then publish the
 required engine revisions and repin Genet without changing package versions.
 The engine prerequisite probe and Genet consumer gates must qualify those exact
 revisions before Streams implementation proceeds. This does not select the
 private adapter alternative or narrow the BYOB done-conditions. Any required
 fetch-body behavior change remains a separate checkpoint.
+
+### S2: fetch-body checkpoint, awaiting ruling
+
+The brief requires: **"Checkpoint: stop and report if ... fetch's body handling
+must change beyond wrapping the whole-body delivery in a real stream."**
+Source inspection found that Request accepts a ReadableStream with `duplex:
+"half"`, but the native call sends only `req.__bytes`; a stream body has no
+such bytes and reaches the current sink as an empty string (`fetch.rs:1809,
+1993-1994`). This is source evidence, not a new transport measurement. WPT's
+`fetch/api/basic/request-upload.any.js` requires consuming valid byte chunks
+and rejecting invalid chunk types. Replacing the bootstrap's direct `_chunks`
+drain with standard readers also changes Promise, pull, error and disturbance
+timing for Request and buffered Response bodies.
+
+Mark has been asked to approve reader-based consumption: validate and collect
+Request stream chunks before calling the existing whole-body upload sink,
+use reader-based Response consumption, and preserve the existing incremental
+response hooks. The alternative is to defer stream-backed uploads and retain
+current body behavior, which narrows the brief's done-conditions. No answer
+has yet been recorded; dependent body changes have not started. S1 engine
+qualification and frozen baseline accounting can continue independently.
 
 ## Progress, 2026-10-06
 
@@ -149,8 +172,7 @@ fetch-body behavior change remains a separate checkpoint.
   Each record reports zero observed subtests. Vano's logs retain the expected
   Object.prototype.type and type-getter trap messages. Boa's error formatter
   retains an opaque exception rather than the message string. Raw records and
-  logs are preserved. No after measurement exists and no full directory
-  baseline has run yet.
+  logs are preserved. No after measurement exists.
 - Evidence is under `Code/testing/genet/streams`: prerequisite fixtures,
   per-engine receipts and four C3 maps/receipts. Root ran probes sequentially
   after the completed Encoding gates. Luna preflight was read-only.
@@ -166,3 +188,44 @@ fetch-body behavior change remains a separate checkpoint.
   tests without compiling while root captures the frozen pre-change directory
   baselines. Root serializes qualification gates and owns Genet repins/docs;
   the read-only Streams preflight audits the private fetch seam separately.
+- Full pre-change directory gates are complete on both engines. The manifest,
+  runner and 1,924 relevant corpus files remain unchanged. All five selectors
+  have identical file-ID sets across engines. `published-before-summary.json`
+  is derived from the frozen maps by `account_maps.py`; missing subtest arrays
+  contribute zero rows, and repeated names use occurrence ordinals.
+
+  | Selector | Engine | Pass / fail / error / skip files | Completed subtest pass / total |
+  |---|---|---|---|
+  | streams, excluding transferable | Boa | 13 / 89 / 47 / 6 | 334 / 1,111 |
+  | streams, excluding transferable | Vano | 12 / 90 / 47 / 6 | 333 / 1,111 |
+  | fetch/api/basic | Both | 11 / 50 / 8 / 0 | 222 / 598 |
+  | fetch/api/response | Both | 24 / 28 / 3 / 1 | 391 / 515 |
+  | fetch/api/request | Boa | 14 / 44 / 1 / 0 | 603 / 952 |
+  | fetch/api/request | Vano | 14 / 42 / 3 / 0 | 604 / 872 |
+  | fetch/api/body | Both | 4 / 0 / 0 / 0 | 46 / 46 |
+
+  Completed totals above exclude errored files. On both engines, the errored
+  non-transferable Streams records contain 204 passing, 204 failing, 41
+  timed-out and 746 not-run subtest rows; fetch basic contains 14 passing,
+  6 failing, 31 timed-out and 60 not-run rows. Response has three timed-out
+  rows; Request error records have no subtest arrays. These remain errors,
+  rather than conformance credit. Transferable Streams retain their separate
+  13-file baseline (seven fail, five error, one skip).
+- A seven-case transfer fixture fails 0/7 on each published engine. It covers
+  fixed-buffer copying, shrinking, growth/zero-fill, resizable preservation,
+  fixed-length conversion, and ToIndex resize/detachment reentry. Its SHA-256
+  is `D885D618025D09917D03CE74373A6BC1047F1874736A66A816F95D19844DBE8D`;
+  the before receipts use the unchanged f97 merged runner.
+- Independent engine review found an unsafe optional `shrink_to_fit` in the
+  Boa transfer path exposed by S1: locked aligned-vec 0.6.4 does not handle a
+  null realloc result there. The candidate removes that unobservable shrink,
+  applies the existing host allocation cap, and reserves fallibly before
+  taking source bytes. It may retain excess capacity; it adds no cap/default
+  change. Feature-only, experimental-only and combined test modes must all
+  actually execute positive controls. Vano uses its existing allocation helper;
+  that helper's pre-existing abort-on-failed-realloc behavior remains an engine
+  limitation, not evidence of recoverable out-of-memory handling.
+- Engine builds and candidate tests are serialized after baseline completion.
+  Vano owns the first gate slot. Boa's source preparation is complete; it waits
+  for that slot. Exact candidate revisions and Genet consumer receipts remain
+  pending. S2 is awaiting the fetch-body ruling.

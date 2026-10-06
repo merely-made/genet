@@ -147,6 +147,17 @@ conflict is recorded in the plan. Mark authorized branch publication with
 "push" after the final report. The verified lane is published on
 conformance/encoding; main integration remains pending.
 
+**Encoding integration, 2026-10-06:** the qualified main merge f97f0df038c
+preserves intervening image and accessibility work and passes 1,100 tests
+across seven crates, with three existing ignores. All eight optimized merged
+reporting controls qualify on both engines. The plan records an accounting
+correction: the earlier 971-test gate contains Runtime 731 and Vano adapter
+43, rather than 752 and 22; shared `realms` target basenames had confused the
+old counter. Totals, outcomes and frozen WPT maps are unchanged. Per-crate
+counts now use exact executable depfile sources. Mark authorized continued
+integration and the Streams assessment; the plan records the source/config
+qualification and retained resources.
+
 Mark asked for the next lanes to come from WPT and specification
 conformance. These targets were chosen from the 2026-09-29 Vano census
 (`receipts/2026-09-29_vano_wpt_census/outcomes.json.gz`), broken down by

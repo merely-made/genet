@@ -143,8 +143,9 @@ identity: 5,054 assertions improve on Boa and 5,053 on Vano. The fixed 67-record
 API selection reaches 19,210/19,408 and 19,209/19,408 passing assertions,
 respectively. The fresh code gate passes 971 tests, with three existing ignores.
 Every movement, failing control and the unchanged fatal UTF-8 standard/WPT
-conflict is recorded in the plan. Local commits await the brief's final
-integration checkpoint; this lane is not published or merged.
+conflict is recorded in the plan. Mark authorized branch publication with
+"push" after the final report. The verified lane is published on
+conformance/encoding; main integration remains pending.
 
 Mark asked for the next lanes to come from WPT and specification
 conformance. These targets were chosen from the 2026-09-29 Vano census

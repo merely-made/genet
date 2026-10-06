@@ -138,8 +138,9 @@ Source inspection found that Request accepts a ReadableStream with `duplex:
 "half"`, but the native call sends only `req.__bytes`; a stream body has no
 such bytes and reaches the current sink as an empty string (`fetch.rs:1809,
 1993-1994`). This is source evidence, not a new transport measurement. WPT's
-`fetch/api/basic/request-upload.any.js` requires consuming valid byte chunks
-and rejecting invalid chunk types. Replacing the bootstrap's direct `_chunks`
+`fetch/api/basic/request-upload.h2.any.js` requires consuming valid byte chunks
+with `duplex: "half"`; the upload probes also reject invalid chunk types.
+This does not constitute a new HTTP/2 transport measurement. Replacing the bootstrap's direct `_chunks`
 drain with standard readers also changes Promise, pull, error and disturbance
 timing for Request and buffered Response bodies.
 
@@ -225,7 +226,32 @@ qualification and frozen baseline accounting can continue independently.
   actually execute positive controls. Vano uses its existing allocation helper;
   that helper's pre-existing abort-on-failed-realloc behavior remains an engine
   limitation, not evidence of recoverable out-of-memory handling.
-- Engine builds and candidate tests are serialized after baseline completion.
-  Vano owns the first gate slot. Boa's source preparation is complete; it waits
-  for that slot. Exact candidate revisions and Genet consumer receipts remain
-  pending. S2 is awaiting the fetch-body ruling.
+- Vano qualification is complete: 70 unit, 12 integration and seven doctests
+  passed, with 10 existing ignores. The exact pinned Test262 corpus has 24
+  files per transfer method. Both full directories ran with `--gc` and exit
+  zero after removing only 36 verified expected failures: 46 files pass, and
+  the two `transferToImmutable` prerequisite cases retain their expected
+  failures. Initial unexpected-pass logs and post-update confirmations remain
+  frozen; global metrics were preserved. A filtered metrics mismatch is
+  diagnostic and the runner explicitly suppresses its exit, so the initial
+  nonzero run is attributed to the 36 unexpected passes.
+- Vano commit `a4415da20864daf8ec0ec85b26aaec189f8d20ae`, **Implement standard
+  ArrayBuffer transfer methods**, is published on its main as authorized by
+  S1. `vano-transfer/publication.receipt.json` verifies the remote transition
+  from 47f8d4f9 and links the native gate receipt. That receipt explicitly
+  distinguishes formatting-only changes after native tests from exact byte
+  build provenance; Genet's published-pin qualification is still pending.
+- The four authored Streams algorithm controls fail on both frozen published
+  engines (0/4): writable desiredSize/backpressure, deferred cancellation,
+  source cancellation after pipeTo sink error, and actual BYOB fills. Boa's
+  BYOB negative initially reaches its missing transfer prerequisite; Vano's
+  reaches the missing byte-controller request. The unchanged fixture must
+  also run on the engine foundation before implementation, so BYOB's failure
+  is distinguished from the resolved engine prerequisite. Fixture SHA-256:
+  `B577F788EE18FA99156699FC30197266613FC8036C100B455A0745F95678674F`.
+- Boa owns the next serialized gate. Its current maintained `origin/genet`
+  is the accepted 52cfb6ff baseline. Its newer `origin/main` diverges and
+  contains unrelated dependency changes; publish this qualified patch by
+  fast-forwarding the maintained Genet ref without absorbing that drift.
+  Source work remains on local main. Candidate pin, consumer receipts and
+  Genet repin remain pending. S2 is awaiting the fetch-body ruling.

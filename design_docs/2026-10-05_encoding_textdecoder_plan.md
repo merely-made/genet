@@ -1,6 +1,7 @@
 # WHATWG Encoding: TextDecoder and TextEncoder
 
-**Status:** Verified locally, 2026-10-05; final integration checkpoint.
+**Status:** Verified and published on conformance/encoding, 2026-10-05;
+main integration pending.
 Encoding and the ruled E3 harness correction at d406ebe2ba1 pass 971 crate
 tests, with three existing WPT tests ignored. Matched optimized runs over
 all 1,313 Encoding records gain 5,054 assertions on Boa and 5,053 on Vano,
@@ -8,8 +9,9 @@ with zero existing passing identities lost on either engine. All movements
 are attributed below and in external evidence. E1, C2, E2 and E3 are answered;
 the accepted dependency edge, versions, lock and corpus remain fixed. The
 known fatal UTF-8 standard/WPT mismatch remains an existing failure. Vano is
-pinned to 47f8d4f9 at the d7f08fecdc7 baseline. Code is committed locally on
-conformance/encoding; this lane is not published or integrated.
+pinned to 47f8d4f9 at the d7f08fecdc7 baseline. Mark authorized publication
+with "push" after reviewing the final checkpoint. The verified lane is
+published on conformance/encoding and awaits main integration.
 
 Authority: the [standards ledger](2026-09-07_standards_to_features_ledger.md#conformance-targets-2026-10-02)
 rulings C1, C2 and C4; the execution brief
@@ -661,8 +663,11 @@ dropping queued bytes or altering the frozen corpus is not part of this
 acceptance. Encoding streams, network byte streaming, URL/form encoding,
 document charset and engine capability gaps remain separate work.
 
-The execution brief's final checkpoint says **"Do not push."** Report and
-stop with local commits on `conformance/encoding`. Keep the worktree
+The execution brief's final checkpoint says **"Do not push."** The lane
+reported and stopped with local commits on `conformance/encoding`. On
+2026-10-05 Mark answered **"push"**, authorizing branch publication. The
+verified checkpoint head 1d3fdf3f9f8 is now published on
+`origin/conformance/encoding`; main integration remains pending. Keep the worktree
 `Code/worktrees/genet-encoding` and stable target
 `C:/t/cargo-targets/genet-encoding` for the pending integration; no isolated
 Cargo home exists. The external frozen binaries, receipts and baseline tag
@@ -670,3 +675,15 @@ remain reproducibility evidence. Current main includes separate image work;
 integration must preserve that work and its ignored lock when carrying C2's
 runtime edge forward, then qualify the merged source. Streams is next in
 the approved queue after this integration checkpoint.
+
+### Publication progress, 2026-10-05
+
+Published the reviewed Encoding checkpoint 1d3fdf3f9f8 to
+`origin/conformance/encoding` under Mark's explicit push authorization.
+The follow-up status commit changes only the plan, standards ledger and
+canonical index. The tested code remains d406ebe2ba1, with 971 passing
+crate tests and zero existing WPT passes lost on both engines. No code
+gate is rerun for this documentation-only publication update. The original
+final-checkpoint report and frozen receipts remain historical evidence;
+the publication receipt is retained separately under
+`Code/testing/genet/encoding-textdecoder`.

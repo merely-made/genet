@@ -106,6 +106,15 @@ completed corpus census or bounded slice does not close its enclosing feature.
   requirements. Census counts stay historical. API lanes require dated plans;
   the shared scripted-host direction is planned in Ortet O5.)
 
+- [Encoding TextDecoder/TextEncoder](2026-10-05_encoding_textdecoder_plan.md)
+  (**Verified and branch published, 2026-10-05; main integration pending**): native-backed
+  Encoding under E1/C2/E2 and the ruled E3 harness correction pass 971 crate
+  tests. Matched whole-directory runs gain 5,054 Boa and 5,053 Vano assertions,
+  with zero existing passes lost and every movement attributed. The fixed API
+  selection reaches 19,210/19,408 and 19,209/19,408 passes. Mark authorized
+  publication on conformance/encoding; main integration and known residuals
+  remain recorded in the plan.
+
 ## WPT census — the web platform beyond CSS
 
 - [census_panics_plan](2026-10-03_census_panics_plan.md)
@@ -589,6 +598,13 @@ same session; links out of it are rewritten for its new depth.
   Finger, Spartan, Nex and Guppy; Titan stays excluded.)
 
 ## Working principles
+
+- **WPT file acceptance requires successful harness completion.** Keep the
+  overall callback status separate from individual assertions. An incomplete
+  worker report can contain only passing assertions and still have timed out.
+  Honor long-timeout metadata before evaluating testharness, or configure the
+  cached timeout before tests start. Compare matched runner/settings pairs and
+  retain missing subtests explicitly. See E3 in the Encoding API plan.
 
 - **Content placement must not add an implicit compositing layer.** A scene
   image's draw rectangle already bounds its pixels. Adding an unconditional

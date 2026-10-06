@@ -462,6 +462,16 @@ mod tests {
             HarnessOutcome::Threw(msg) => {
                 panic!("gl-clear threw before reporting: {msg}");
             },
+            HarnessOutcome::Stopped {
+                results,
+                reason,
+                message,
+            } => {
+                panic!(
+                    "gl-clear stopped as {reason} before successful completion ({message:?});\
+                     reported subtests: {results:#?}"
+                );
+            },
         }
     }
 

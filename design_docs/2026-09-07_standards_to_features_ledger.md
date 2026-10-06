@@ -132,6 +132,21 @@ a writing product), `streams` (extraction starts before the page finishes),
 
 ## Conformance targets, 2026-10-02
 
+**Encoding execution, 2026-10-05:** the
+[API plan](2026-10-05_encoding_textdecoder_plan.md) retains C1/C2/C4 and the
+corrected API-only scope. E1 authorizes per-realm native storage, a private
+finalizer and Vano job delivery. E2's adapter guard preserves empty streaming
+state in unchanged encoding_rs 0.8.35. E3's bounded timeout/completion correction
+is verified on matching optimized baseline/candidate runs with a 60-second
+drive deadline. All 1,313 Encoding records preserve every existing passing
+identity: 5,054 assertions improve on Boa and 5,053 on Vano. The fixed 67-record
+API selection reaches 19,210/19,408 and 19,209/19,408 passing assertions,
+respectively. The fresh code gate passes 971 tests, with three existing ignores.
+Every movement, failing control and the unchanged fatal UTF-8 standard/WPT
+conflict is recorded in the plan. Mark authorized branch publication with
+"push" after the final report. The verified lane is published on
+conformance/encoding; main integration remains pending.
+
 Mark asked for the next lanes to come from WPT and specification
 conformance. These targets were chosen from the 2026-09-29 Vano census
 (`receipts/2026-09-29_vano_wpt_census/outcomes.json.gz`), broken down by

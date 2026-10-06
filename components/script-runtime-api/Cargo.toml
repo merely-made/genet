@@ -35,6 +35,7 @@ url = { workspace = true }
 # XPath 1.0 evaluator used by Document.evaluate(); this crate supplies the live DOM
 # adapter and keeps the engine reusable.
 xpath = { workspace = true }
+encoding_rs = { workspace = true }
 
 [dev-dependencies]
 # Regenerates dom/html_interfaces_generated.rs from WPT's vendored WebIDL so the

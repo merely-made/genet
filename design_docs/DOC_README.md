@@ -118,12 +118,12 @@ completed corpus census or bounded slice does not close its enclosing feature.
   residuals remain recorded in the plan.
 
 - [WHATWG Streams](2026-10-06_whatwg_streams_plan.md)
-  (**Engine foundation approved, 2026-10-06**): separate per-realm
-  bootstrap is feasible; real buffer transfer fails on both locked engines,
-  while async generators and Promise ordering pass. Fresh C3 records still
-  throw on both engines. S1 selects standard Vano transfer and a transfer-only
-  Boa feature, followed by qualified engine repins. Streams implementation
-  and full directory measurements remain pending.
+  (**Engine foundation in progress, 2026-10-06**): standard Vano transfer and
+  Boa's narrow transfer feature are qualified and published. Genet's local
+  repin preserves package versions and dependency edges; exact-Git consumer
+  qualification is pending. Frozen full-directory baselines and four actual
+  failing algorithm controls are sealed. The separate bootstrap is feasible;
+  C3 and Streams implementation remain pending. S2 awaits the fetch-body ruling.
 
 ## WPT census — the web platform beyond CSS
 
@@ -608,6 +608,12 @@ same session; links out of it are rewritten for its new depth.
   Finger, Spartan, Nex and Guppy; Titan stays excluded.)
 
 ## Working principles
+
+- **Set the target for commands that can run Cargo indirectly.** Git hooks can
+  inherit a shared `CARGO_TARGET_DIR` even when the preceding native gates used
+  an explicit target. Set the approved reusable target and qualified toolchain
+  in the publication command's environment too. Preserve foreign build owners.
+  See the Streams engine-foundation publication receipt, 2026-10-06.
 
 - **WPT file acceptance requires successful harness completion.** Keep the
   overall callback status separate from individual assertions. An incomplete

@@ -343,7 +343,26 @@ where
     accesskit_tree_with_optional_scroll(dom, fragments, focus, Some(scroll_offsets))
 }
 
+/// Lower the full style-aware projection; see
+/// [`document_a11y_projection_with_style`].
+#[cfg(feature = "accesskit")]
+pub fn accesskit_tree_with_style<D>(
+    dom: &D,
+    fragments: &LiveryLayout<D::NodeId>,
+    focus: Option<D::NodeId>,
+    style: &A11yStyleQueries<'_, D::NodeId>,
+) -> TreeUpdate
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    accesskit_tree_from_projection(document_a11y_projection_with_style(
+        dom, fragments, focus, 0, None, style,
+    ))
+}
+
 /// Lower the same style-aware names used by neutral document consumers.
+/// CSS visibility is not filtered; see [`accesskit_tree_with_style`].
 #[cfg(feature = "accesskit")]
 pub fn accesskit_tree_with_generated_text<D>(
     dom: &D,
@@ -672,7 +691,10 @@ where
     if aria_true(dom, node, "aria-hidden") {
         return Vec::new();
     }
-    let projected = dom.kind(node) == NodeKind::Document || fragments.get(node).is_some();
+    // A CSS-hidden node is skipped like a box-less one, but its children are
+    // still walked: a `visibility: visible` child of a hidden parent renders.
+    let projected = dom.kind(node) == NodeKind::Document
+        || (fragments.get(node).is_some() && names.rendered(node));
     let id = projected.then(|| neutral_node_id(dom, node));
     let child_parent = id.or(parent);
     let children = dom
@@ -796,8 +818,49 @@ where
     )
 }
 
+/// What the projection asks the document's style owner. Both answers come from
+/// current styles, so a restyle that skips relayout cannot leave them stale.
+pub struct A11yStyleQueries<'a, Id> {
+    /// Rendered inline `::before`/`::after` text, as for
+    /// [`document_a11y_projection_with_generated_text`].
+    pub generated: &'a dyn Fn(Id) -> (String, String),
+    /// Whether a node is rendered and visible (`genet_livery::rendered_visible`).
+    /// A node that is not is left out of the projection and of names, while
+    /// its children are still walked.
+    pub rendered: &'a dyn Fn(Id) -> bool,
+}
+
+/// Project with everything the style owner supplies: generated text and CSS
+/// rendering, so `visibility: hidden` and `collapse` content is left out as
+/// HTML-AAM and AccName require. The other projection entry points do not
+/// filter CSS visibility.
+pub fn document_a11y_projection_with_style<D>(
+    dom: &D,
+    fragments: &LiveryLayout<D::NodeId>,
+    focus: Option<D::NodeId>,
+    revision: u64,
+    scroll_offsets: Option<&ScrollOffsets<D::NodeId>>,
+    style: &A11yStyleQueries<'_, D::NodeId>,
+) -> DocumentA11yProjection
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    projection_with_names(
+        dom,
+        fragments,
+        focus,
+        revision,
+        scroll_offsets,
+        &name::Names::new(dom)
+            .with_generated(style.generated)
+            .with_rendered(style.rendered),
+    )
+}
+
 /// Project names with rendered inline `::before`/`::after` text from the style
 /// owner. The provider must return only admitted rendered text, in that order.
+/// CSS visibility is not filtered; see [`document_a11y_projection_with_style`].
 pub fn document_a11y_projection_with_generated_text<D>(
     dom: &D,
     fragments: &LiveryLayout<D::NodeId>,
@@ -1020,6 +1083,57 @@ mod tests {
                 .collect()
         }
         assert_eq!(collect(document.dom(), document.dom().document()), "Save");
+    }
+
+    #[test]
+    fn css_hidden_content_leaves_the_styled_projection_and_names() {
+        use genet_livery::{Device, LiveryDocument, StyleSet};
+        let dom = ScriptedDom::from_serialized_document(
+            "<html><body>\
+             <button style='visibility:hidden'>Invisible</button>\
+             <div style='visibility:hidden'><button style='visibility:visible'>Shown</button></div>\
+             <button>Plain<span style='visibility:hidden'> Secret</span></button>\
+             </body></html>",
+        );
+        let mut document =
+            LiveryDocument::new(dom, StyleSet::cambium(&[""]), Device::screen(400.0, 300.0));
+        document.frame(400, 300).expect("frame");
+        fn button_names(projection: &document_session_api::DocumentA11yProjection) -> Vec<String> {
+            projection
+                .nodes()
+                .iter()
+                .filter(|node| node.role == DocumentA11yRole::Button)
+                .map(|node| node.name.clone().unwrap_or_default())
+                .collect()
+        }
+        let layout = document.retained_layout().expect("layout");
+        let styled = super::document_a11y_projection_with_style(
+            document.dom(),
+            layout,
+            None,
+            0,
+            None,
+            &super::A11yStyleQueries {
+                generated: &|node| document.generated_text(node),
+                rendered: &|node| document.rendered_visible(node),
+            },
+        );
+        // The hidden button is gone; a visible child of a hidden parent stays;
+        // hidden text no longer names its ancestor.
+        assert_eq!(button_names(&styled), vec!["Shown", "Plain"]);
+        // Control: the DOM-only entry point still exposes both.
+        let unstyled = super::document_a11y_projection_with_generated_text(
+            document.dom(),
+            layout,
+            None,
+            0,
+            None,
+            &|node| document.generated_text(node),
+        );
+        assert_eq!(
+            button_names(&unstyled),
+            vec!["Invisible", "Shown", "Plain Secret"]
+        );
     }
 
     #[test]

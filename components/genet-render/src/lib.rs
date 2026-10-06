@@ -17,11 +17,11 @@ pub mod render;
 #[cfg(feature = "accesskit")]
 pub use a11y::{
     accesskit_tree, accesskit_tree_from_projection, accesskit_tree_with_generated_text,
-    accesskit_tree_with_scroll,
+    accesskit_tree_with_scroll, accesskit_tree_with_style,
 };
 pub use a11y::{
-    document_a11y_projection, document_a11y_projection_with_generated_text,
-    document_a11y_projection_with_scroll,
+    A11yStyleQueries, document_a11y_projection, document_a11y_projection_with_generated_text,
+    document_a11y_projection_with_scroll, document_a11y_projection_with_style,
 };
 /// The retained text system a host hands to the `_with_text_system` entries,
 /// re-exported so a consumer that ships its own font need not depend on

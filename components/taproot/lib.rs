@@ -35,7 +35,9 @@
 
 use std::collections::BTreeMap;
 
-use genet_livery::{Device, InteractionStates, StyleSet, layout, resolve_styles};
+use genet_livery::{
+    Device, InteractionStates, StylePlane, StyleSet, layout, rendered_visible, resolve_styles,
+};
 use genet_scripted_dom::{NodeId, ScriptedDom};
 use layout_dom_api::{LayoutDom, LocalName, Namespace};
 
@@ -187,9 +189,23 @@ fn child_text(dom: &ScriptedDom, node: NodeId) -> String {
         .join("")
 }
 
+/// Whether `node` or an ancestor carries `aria-hidden="true"`: such a node has
+/// no exposed role, though it may still be drawn and clickable.
+fn aria_hidden(dom: &ScriptedDom, node: NodeId) -> bool {
+    let mut current = Some(node);
+    while let Some(id) = current {
+        if attr(dom, id, "aria-hidden").is_some_and(|v| v.eq_ignore_ascii_case("true")) {
+            return true;
+        }
+        current = dom.parent(id);
+    }
+    false
+}
+
 fn matches(dom: &ScriptedDom, node: NodeId, sel: &Selector) -> bool {
     let by_kind = match &sel.matcher {
         Match::Class(c) => dom.has_class(node, c),
+        Match::Role(_) if aria_hidden(dom, node) => false,
         Match::Role(r) => {
             attr(dom, node, "role").as_deref() == Some(r.as_str())
                 || (r == "button"
@@ -226,6 +242,8 @@ fn matches(dom: &ScriptedDom, node: NodeId, sel: &Selector) -> bool {
 /// whose font metrics may disagree with the shipping one.
 /// This is the legacy DOM matcher. Hosts with semantic projections should use
 /// [`matching_with_projection`] for shared accessibility role/name truth.
+/// Role selectors skip `aria-hidden` subtrees, which expose no role. This
+/// matcher reads no styles; [`resolve`] also requires a rendered, visible box.
 pub fn matching(dom: &ScriptedDom, sel: &Selector) -> Vec<NodeId> {
     fn walk(dom: &ScriptedDom, node: NodeId, sel: &Selector, out: &mut Vec<NodeId>) {
         if matches(dom, node, sel) {
@@ -240,26 +258,33 @@ pub fn matching(dom: &ScriptedDom, sel: &Selector) -> Vec<NodeId> {
     out
 }
 
-/// Resolve `sel` to the window-space centre of the first matching, laid-out
-/// element across `surfaces` (searched in the order given). `None` when nothing
-/// matches, or every match is present in the DOM but has no box (a driver treats
-/// that as a miss — the target is not on screen).
+/// The surface's computed styles, as its own sheet and size resolve them.
+fn surface_styles(surface: &ProbeSurface) -> StylePlane<NodeId> {
+    resolve_styles(
+        surface.dom,
+        &StyleSet::cambium(&[surface.sheet]),
+        &Device::screen(surface.rect[2], surface.rect[3]),
+        &InteractionStates::default(),
+    )
+}
+
+/// Resolve `sel` to the window-space centre of the first matching element
+/// across `surfaces` (searched in the order given) that a person could click:
+/// laid out and rendered visible (no `visibility: hidden`). `None` when nothing
+/// matches, or no match is on screen (a driver treats that as a miss).
 pub fn resolve(surfaces: &[ProbeSurface], sel: &Selector) -> Option<Hit> {
     for surface in surfaces {
         if !sel.matches_surface(surface.name) {
             continue;
         }
-        let device = Device::screen(surface.rect[2], surface.rect[3]);
-        let styles = resolve_styles(
-            surface.dom,
-            &StyleSet::cambium(&[surface.sheet]),
-            &device,
-            &InteractionStates::default(),
-        );
+        let styles = surface_styles(surface);
         let Ok(layout) = layout(surface.dom, &styles, surface.rect[2], surface.rect[3]) else {
             continue;
         };
         for node in matching(surface.dom, sel) {
+            if !rendered_visible(surface.dom, &styles, node) {
+                continue;
+            }
             if let Some(rect) = layout.get(node) {
                 return Some(Hit {
                     surface: surface.name,
@@ -274,18 +299,20 @@ pub fn resolve(surfaces: &[ProbeSurface], sel: &Selector) -> Option<Hit> {
     None
 }
 
-/// Whether `substr` appears in any text node across `surfaces` — the basis for
-/// an `assert text` verb, independent of a surface's own layout.
+/// Whether `substr` appears in rendered text across `surfaces`: the basis for
+/// an `assert text` verb. Text under `display: none` or `visibility: hidden`
+/// does not count; `aria-hidden` text does, since it is still on screen.
 pub fn text_present(surfaces: &[ProbeSurface], substr: &str) -> bool {
-    fn walk(dom: &ScriptedDom, node: NodeId, substr: &str) -> bool {
-        if dom.text(node).is_some_and(|t| t.contains(substr)) {
+    fn walk(dom: &ScriptedDom, styles: &StylePlane<NodeId>, node: NodeId, substr: &str) -> bool {
+        if dom.text(node).is_some_and(|t| t.contains(substr)) && rendered_visible(dom, styles, node)
+        {
             return true;
         }
-        dom.dom_children(node).any(|c| walk(dom, c, substr))
+        dom.dom_children(node).any(|c| walk(dom, styles, c, substr))
     }
     surfaces
         .iter()
-        .any(|s| walk(s.dom, s.dom.document(), substr))
+        .any(|s| walk(s.dom, &surface_styles(s), s.dom.document(), substr))
 }
 
 /// A typed read of app state the DOM cannot express — focus, counts, a mode.
@@ -658,6 +685,109 @@ mod tests {
         let s = surfaces(&dom);
         assert!(text_present(&s, "Links"));
         assert!(!text_present(&s, "Graphlets"));
+    }
+
+    /// Two `.go` buttons labelled "Go": a decoy first in document order at
+    /// left 0, the real one at left 100. Window centres: decoy (520, 20), real
+    /// (620, 20).
+    fn decoy_dom(decoy_style: &str, decoy_attr: Option<(&str, &str)>) -> ScriptedDom {
+        let mut dom = ScriptedDom::new();
+        let root = dom.document();
+        for (left, style, extra) in [(0, decoy_style, decoy_attr), (100, "", None)] {
+            let button = dom.create_element(qual("button"));
+            dom.set_attribute(button, qual("class"), "go");
+            dom.set_attribute(
+                button,
+                qual("style"),
+                &format!(
+                    "position:absolute;left:{left}px;top:0px;width:40px;height:20px;padding:0;border:0;{style}"
+                ),
+            );
+            if let Some((name, value)) = extra {
+                dom.set_attribute(button, qual(name), value);
+            }
+            let label = dom.create_text("Go");
+            dom.append_child(button, label);
+            dom.append_child(root, button);
+        }
+        dom
+    }
+
+    #[test]
+    fn a_visibility_hidden_decoy_never_takes_a_click() {
+        let dom = decoy_dom("visibility:hidden;", None);
+        let s = surfaces(&dom);
+        for sel in [
+            Selector::role("button").containing("Go"),
+            Selector::class("go"),
+        ] {
+            let hit = resolve(&s, &sel).expect("the visible button resolves");
+            assert_eq!(hit.point, (620.0, 20.0), "not the hidden decoy at x=520");
+        }
+    }
+
+    #[test]
+    fn an_aria_hidden_button_has_no_role_but_a_class_still_clicks_it() {
+        let dom = decoy_dom("", Some(("aria-hidden", "true")));
+        let s = surfaces(&dom);
+        let by_role = resolve(&s, &Selector::role("button").containing("Go")).expect("role hit");
+        assert_eq!(
+            by_role.point,
+            (620.0, 20.0),
+            "aria-hidden exposes no button role"
+        );
+        // It is still drawn and hit-testable, so a class selector reaches it.
+        let by_class = resolve(&s, &Selector::class("go")).expect("class hit");
+        assert_eq!(by_class.point, (520.0, 20.0));
+    }
+
+    #[test]
+    fn a_role_selector_skips_buttons_under_an_aria_hidden_ancestor() {
+        let mut dom = decoy_dom("", None);
+        let root = dom.document();
+        let wrapper = dom.create_element(qual("div"));
+        dom.set_attribute(wrapper, qual("aria-hidden"), "true");
+        let first = dom.dom_children(root).next().expect("decoy button");
+        dom.remove_child(first);
+        dom.append_child(wrapper, first);
+        let real = dom.dom_children(root).next().expect("real button");
+        dom.insert_before(root, wrapper, Some(real));
+        assert_eq!(matching(&dom, &Selector::role("button")), vec![real]);
+    }
+
+    #[test]
+    fn assert_text_counts_only_rendered_text() {
+        let mut dom = ScriptedDom::new();
+        let root = dom.document();
+        for (word, style, extra) in [
+            ("Here", "", None),
+            ("Gone", "display:none", None),
+            ("Ghost", "visibility:hidden", None),
+            ("Quiet", "", Some(("aria-hidden", "true"))),
+        ] {
+            let span = dom.create_element(qual("span"));
+            dom.set_attribute(span, qual("style"), style);
+            if let Some((name, value)) = extra {
+                dom.set_attribute(span, qual(name), value);
+            }
+            let text = dom.create_text(word);
+            dom.append_child(span, text);
+            dom.append_child(root, span);
+        }
+        let s = surfaces(&dom);
+        assert!(text_present(&s, "Here"));
+        assert!(
+            text_present(&s, "Quiet"),
+            "aria-hidden text is still on screen"
+        );
+        assert!(
+            !text_present(&s, "Gone"),
+            "display:none text is not rendered"
+        );
+        assert!(
+            !text_present(&s, "Ghost"),
+            "visibility:hidden text is not visible"
+        );
     }
 
     /// A minimal `Automatable`: it supplies only its surfaces and pointer

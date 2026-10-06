@@ -210,13 +210,16 @@ impl<E: script_engine_api::ScriptEngine + 'static> ScriptedDocumentSession<E> {
 
         let projection = self.doc.with_retained_styled_frame_and_dom(
             |dom, styles, fragments, scroll, viewport| {
-                let projection = genet_render::document_a11y_projection_with_generated_text(
+                let projection = genet_render::document_a11y_projection_with_style(
                     dom,
                     fragments,
                     None,
                     0,
                     Some(&std::collections::HashMap::new()),
-                    &|node| genet_livery::rendered_generated_text(dom, styles, node),
+                    &genet_render::A11yStyleQueries {
+                        generated: &|node| genet_livery::rendered_generated_text(dom, styles, node),
+                        rendered: &|node| genet_livery::rendered_visible(dom, styles, node),
+                    },
                 );
                 let (scroll_x, scroll_y) = scroll;
                 let (view_w, view_h) = (viewport.0 as f32, viewport.1 as f32);

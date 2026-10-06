@@ -216,6 +216,43 @@ where
     selection_range: Option<TextRange<D::NodeId>>,
 }
 
+/// Whether `node` is rendered and visible under an owner's style plane: no
+/// `display: none` on it or an ancestor, and computed `visibility: visible`.
+/// A text node answers for its parent element; the document is visible.
+pub fn rendered_visible<D: LayoutDom>(
+    dom: &D,
+    styles: &StylePlane<D::NodeId>,
+    node: D::NodeId,
+) -> bool {
+    let element = match dom.kind(node) {
+        NodeKind::Element => Some(node),
+        NodeKind::Document => None,
+        _ => dom
+            .parent(node)
+            .filter(|parent| dom.kind(*parent) == NodeKind::Element),
+    };
+    let Some(element) = element else {
+        return true;
+    };
+    if !styles
+        .get(element)
+        .is_some_and(|style| style.visibility == livery::values::Visibility::Visible)
+    {
+        return false;
+    }
+    let mut ancestor = Some(element);
+    while let Some(id) = ancestor {
+        if styles
+            .get(id)
+            .is_some_and(|style| style.display == livery::values::Display::None)
+        {
+            return false;
+        }
+        ancestor = dom.parent(id);
+    }
+    true
+}
+
 /// Rendered inline before/after text from an owner's retained style plane.
 /// Consumers supply the style plane used for their published layout. Suppressed,
 /// replaced and invisible pseudo content contributes no name text. This creates
@@ -482,6 +519,13 @@ where
             return (String::new(), String::new());
         };
         rendered_generated_text(&self.dom, &layout.styles, node)
+    }
+
+    /// See [`rendered_visible`]; false before the first layout.
+    pub fn rendered_visible(&self, node: D::NodeId) -> bool {
+        self.layout
+            .as_ref()
+            .is_some_and(|layout| rendered_visible(&self.dom, &layout.styles, node))
     }
 
     pub fn hit_test(&self, x: f32, y: f32) -> Option<D::NodeId> {

@@ -120,6 +120,9 @@ Two later rulings the same day are recorded in the
   zero observed subtests. Their original census attribution remains historical.
   Real ArrayBuffer transfer is missing on both current engine builds, so the
   Streams brief's engine checkpoint is open. No C3 repair is claimed yet.
+  **Later 2026-10-06, S1 answered:** Mark approved the narrow Vano/Boa transfer
+  foundation and qualified Genet repins. C3 repair and full Streams acceptance
+  remain unmeasured; the plan records the ruling and owner gates.
 - Ruling 9: the Vano lane may fetch Vano's unfetched `tests/test262`
   submodule at its pinned commit `e0d8f66a`, and run Vano's test262 gate.
   Mark: "Allow, pinned commit only (Recommended)".

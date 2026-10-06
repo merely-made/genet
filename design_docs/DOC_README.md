@@ -106,8 +106,12 @@ completed corpus census or bounded slice does not close its enclosing feature.
   the shared scripted-host direction is planned in Ortet O5.)
 
 - [Encoding TextDecoder/TextEncoder](2026-10-05_encoding_textdecoder_plan.md)
-  (**Baseline preparation, 2026-10-05**): E1 authorizes per-realm native storage,
-  private finalizer cleanup and Vano job delivery; API implementation follows controls.
+  (**Verified locally, 2026-10-05; integration checkpoint**): native-backed
+  Encoding under E1/C2/E2 and the ruled E3 harness correction pass 971 crate
+  tests. Matched whole-directory runs gain 5,054 Boa and 5,053 Vano assertions,
+  with zero existing passes lost and every movement attributed. The fixed API
+  selection reaches 19,210/19,408 and 19,209/19,408 passes. Local commits await
+  the brief's final push/integration checkpoint; known residuals remain recorded.
 
 ## WPT census — the web platform beyond CSS
 

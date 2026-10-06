@@ -1,15 +1,15 @@
 # WHATWG Encoding: TextDecoder and TextEncoder
 
-**Status:** E1, C2, E2 and E3 answered, 2026-10-05. Corrected Encoding candidate
-22cc7e17b92 passes 956 crate tests with three existing WPT tests ignored,
-including 166 runtime unit tests and 39 Encoding controls. Its optimized
-pilot still loses old passing identities in incomplete Worker reporting.
-Acceptance is withheld. E3 authorizes a bounded WPT timeout/completion
-correction and matched before/after remeasurement with a 60-second drive
-deadline. The harness correction passes ten completion controls on both
-engines; broad crate, optimized runner and matched corpus gates remain open.
-Vano is pinned to 47f8d4f9 at the d7f08fecdc7
-baseline. This lane is not published or integrated.
+**Status:** Verified locally, 2026-10-05; final integration checkpoint.
+Encoding and the ruled E3 harness correction at d406ebe2ba1 pass 971 crate
+tests, with three existing WPT tests ignored. Matched optimized runs over
+all 1,313 Encoding records gain 5,054 assertions on Boa and 5,053 on Vano,
+with zero existing passing identities lost on either engine. All movements
+are attributed below and in external evidence. E1, C2, E2 and E3 are answered;
+the accepted dependency edge, versions, lock and corpus remain fixed. The
+known fatal UTF-8 standard/WPT mismatch remains an existing failure. Vano is
+pinned to 47f8d4f9 at the d7f08fecdc7 baseline. Code is committed locally on
+conformance/encoding; this lane is not published or integrated.
 
 Authority: the [standards ledger](2026-09-07_standards_to_features_ledger.md#conformance-targets-2026-10-02)
 rulings C1, C2 and C4; the execution brief
@@ -537,3 +537,136 @@ stays unchanged; the matched gate explicitly uses 60 seconds. Jobs 4, outer
 Freeze new runners and raw maps instead of replacing any previous artifact.
 Zero old passing identities lost and complete movement attribution remain the
 acceptance requirement. Commit locally only; the final push checkpoint remains.
+
+## Matched E3 acceptance and final checkpoint, 2026-10-05
+
+All four full-directory runs finish with exit zero and unchanged bytes for
+the 952-file corpus snapshot. Each contains exactly the same 1,313 result
+IDs. Root ran the gates sequentially, with Livery, collection enabled, jobs
+4, a 120-second outer timeout and the ruled 60-second drive deadline. The
+default deadline remains unchanged. The before source is the unchanged
+Encoding baseline d7f08fecdc7 plus precisely the same E3 harness patch as
+the corrected source. It is preserved locally as c36eb9800b8 under the
+annotated tag `encoding-e3-baseline`. The candidate code source is
+d406ebe2ba1. Final documentation does not change either tested code tree.
+
+The fixed API selection contains 67 result IDs and 19,408 reported subtests
+in every run:
+
+| Engine | Stage | Passing files | Failed files | Error files | Passing assertions | Failed assertions |
+|---|---|---:|---:|---:|---:|---:|
+| Boa | Before | 4 | 54 | 9 | 14,156 | 5,252 |
+| Boa | Corrected | 47 | 11 | 9 | 19,210 | 198 |
+| Vano | Before | 4 | 54 | 9 | 14,156 | 5,252 |
+| Vano | Corrected | 47 | 11 | 9 | 19,209 | 199 |
+
+The whole-directory raw measurements remain separate from that API subset:
+
+| Engine | Stage | Passing files | Failed files | Error files | Skipped files | Passing assertions | Failed assertions | Reported subtests |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| Boa | Before | 5 | 322 | 981 | 5 | 14,157 | 222,792 | 787,170 |
+| Boa | Corrected | 48 | 279 | 981 | 5 | 19,211 | 217,738 | 787,170 |
+| Vano | Before | 5 | 320 | 983 | 5 | 14,157 | 222,466 | 786,844 |
+| Vano | Corrected | 48 | 278 | 982 | 5 | 19,210 | 217,571 | 787,002 |
+
+Each whole map additionally retains 550,053 NOTRUN and 168 TIMEOUT subtests;
+there are zero `no-results` file classifications. Error records remain
+errors even when they retain passing assertions. This is acceptance of the
+bounded Encoding change, not a claim that the whole directory passes.
+
+**Every movement.** The duplicate-aware comparison matches result ID,
+subtest name and duplicate occurrence. Boa has 58 changed records: 43 API
+files fail-to-pass, seven API files remain failed while gaining assertions,
+one GB18030 Worker remains a harness error while gaining 61 assertions, and
+seven non-API ISO-2022-JP records remain errors with no assertions and change
+only between `harness-timeout` and `drive-deadline`. Its sole assertion
+movement is 5,054 fail-to-pass; every prior pass remains a pass.
+
+Vano has 52 changed records: the same 51 API records, gaining 5,053 assertions,
+plus `unsupported-labels.window.html`, which changes from a killed run with
+no report to a failed file containing 158 failed assertions. Targeted runs
+of that exact record on both frozen binaries return **identical** records:
+the same 158 assertions fail because child Document charset metadata is
+undefined. The source creates iframes using a Python server resource and
+calls neither TextDecoder nor TextEncoder. The full baseline's timeout hid
+existing document-metadata failures; the recovered report is not a new
+Encoding dependency or a conformance improvement. Preserve the original
+full counts rather than substituting targeted outcomes.
+
+The single Boa/Vano API gain difference is `encodeInto.any.html`'s invalid
+Float16Array destination backed by ArrayBuffer. Vano fails while creating
+that unsupported constructor, before entering encodeInto; Boa reaches and
+passes the new destination validation. All other API movement identities
+agree. Per-record notes with source pointers are in
+`e3-metadata-boa-attribution.md` and `e3-metadata-nova-attribution.md` under
+`Code/testing/genet/encoding-textdecoder`. Raw maps and comparisons remain
+untouched. No old passing file or assertion is lost on either engine.
+
+**Fresh code gates.** `e3-qualified-metadata-crates.*` verifies exactly
+d406ebe2ba1 with the accepted lock and both engine features:
+
+| Crate | Passed | Failed | Ignored |
+|---|---:|---:|---:|
+| script-runtime-api | 752 | 0 | 0 |
+| genet-scripted | 120 | 0 | 0 |
+| genet-wpt | 77 | 0 | 3 |
+| script-engine-nova | 22 | 0 | 0 |
+| Total | 971 | 0 | 3 |
+
+The suite includes 166 native runtime unit tests, 39 Encoding integration
+controls and ten harness completion controls. Own test packages use the
+recorded release opt-level override; dependencies stay optimized. Both
+frozen production runners use the normal release configuration. All 16
+production harness fixtures pass their expected classifications across
+before/corrected and both engines: an unchanged eleven-second timer passes;
+TIMEOUT, incomplete and ERROR cases retain their one observed passing
+assertion and never become passing files. The matched fatal-single-byte
+Worker probe reports all 1,000 assertions on both engines: 988 pass/12 fail
+before, 1,000 pass corrected, with zero passing identities lost.
+
+An unnecessary supplementary default-optimized build without scripted-nova
+was stopped before tests. Its aborted receipt is preserved separately;
+it is neither a code failure nor the qualified 971-test gate.
+
+**Failing controls.** The original baseline is 1 pass/23 failures for the
+first 24 controls and 3 pass/27 failures for the expanded 30-control gate.
+The pre-fix array-hook probe is 0 pass/2 failures. Rolling back E2 produces
+36 pass/3 failures in integration controls (both empty legacy stream cases
+and Vano shared views), plus the native empty-stream test failure at
+165 pass/1 failure. Restoring E2 passes all 166 native tests and 39 Encoding
+controls. These receipts preserve actual failures rather than assuming
+every new test failed on the baseline.
+
+**Frozen inputs.** Before runner SHA-256:
+`9013CEF3C9A03707CDD949D7E3CEA560902CD0119775A03079F0D408D310BB8F`.
+Corrected runner SHA-256:
+`81557C1FEB2816C1FADEF7C77ED03A27B20A661D3F7A34351C7CD74794B29027`.
+Shared harness patch SHA-256:
+`C4407E9E73F134D148DFEA64A5E8EA4EFA09E081451A58935721FBD1B7E0C51B`.
+The manifest, corpus snapshot and original/accepted lock hashes are retained
+in the frozen receipts and `e3-matched-final-audit.receipt.json`. That audit
+checks source cleanliness, exact ID sets, serial gates, binary/source/lock
+tuples, settings and zero lost passes. The C2 lock change remains only the
+existing workspace dependency edge; package versions and sources are fixed.
+
+**Forks and integration limit.** E1 chooses per-realm native storage and
+captured private finalizer delivery through Vano's existing queue rather
+than a new engine weak-resource hook. C2 accepts only the existing
+encoding_rs workspace edge. E2 keeps 0.8.35 and chooses the empty nonfinal
+adapter guard rather than a library upgrade. E3 chooses actual early
+long-timeout metadata and separate completion reporting, with matching
+60-second runs rather than accepting partial reports. Those rulings are
+executed. The fatal UTF-8 queue/WPT conflict remains an existing failure;
+dropping queued bytes or altering the frozen corpus is not part of this
+acceptance. Encoding streams, network byte streaming, URL/form encoding,
+document charset and engine capability gaps remain separate work.
+
+The execution brief's final checkpoint says **"Do not push."** Report and
+stop with local commits on `conformance/encoding`. Keep the worktree
+`Code/worktrees/genet-encoding` and stable target
+`C:/t/cargo-targets/genet-encoding` for the pending integration; no isolated
+Cargo home exists. The external frozen binaries, receipts and baseline tag
+remain reproducibility evidence. Current main includes separate image work;
+integration must preserve that work and its ignored lock when carrying C2's
+runtime edge forward, then qualify the merged source. Streams is next in
+the approved queue after this integration checkpoint.

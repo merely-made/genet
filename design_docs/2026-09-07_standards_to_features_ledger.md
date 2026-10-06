@@ -169,6 +169,13 @@ or a narrowed first phase await Mark's ruling. No Streams implementation or
 full directory baseline is claimed. Existing host incremental response hooks
 are recorded separately from the brief's whole-body description.
 
+**Streams S1 ruling, 2026-10-06:** Mark answered "Ok, agreed. Proceed" to the
+recommended narrow engine route: complete Vano's standard transfer methods,
+expose only Boa's transfer family, qualify both, then repin Genet. The plan
+retains the original prerequisite failures and C3 baselines; broad Boa
+experimental enablement, private adapter expansion and BYOB deferral are not
+selected. The remaining fetch-body and final-integration checkpoints stand.
+
 Mark asked for the next lanes to come from WPT and specification
 conformance. These targets were chosen from the 2026-09-29 Vano census
 (`receipts/2026-09-29_vano_wpt_census/outcomes.json.gz`), broken down by

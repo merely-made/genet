@@ -1,9 +1,10 @@
 # WHATWG Streams
 
-**Status:** Assessment in progress, 2026-10-06. The required engine-capability
-checkpoint is open: neither locked engine currently exposes working
-ArrayBuffer transfer to the Streams bootstrap. No Streams implementation,
-engine change, feature enablement or dependency repin has been made.
+**Status:** Engine foundation in progress, 2026-10-06. Mark has answered S1:
+complete Vano's standard buffer-transfer methods and add transfer-only Boa
+support, qualify both, then repin Genet. The existing locked builds reproduce
+the prerequisite failure. Streams implementation and the Genet repin have not
+started; the remaining brief checkpoints still apply.
 
 Authority is the [standards ledger](2026-09-07_standards_to_features_ledger.md#conformance-targets-2026-10-02)
 rulings C1 and C3, the [census panic attribution](2026-09-06_web_platform_wpt_census.md),
@@ -92,7 +93,7 @@ checkpoint; the existing native contracts must first be measured and preserved.
   adds native incremental delivery. A body-seam change requires its own evidence
   and checkpoint if it exceeds the stated scope.
 
-### S1: engine-capability checkpoint, pending
+### S1: engine-capability checkpoint, ruled
 
 The brief requires: **"Checkpoint: stop and report if ... an engine feature
 Streams needs ... is missing in one engine. That is a Vano or Boa question."**
@@ -108,12 +109,24 @@ behind a broad experimental feature. Which route should I take?"
    resizable-buffer support.
 3. Defer byte/BYOB readers and narrow Streams to a first phase.
 
-No answer is recorded yet. Option one changes two engine forks and the exact
+At the original checkpoint no answer was recorded. Option one changes two engine forks and the exact
 Git revisions while keeping unrelated experimental features disabled. Option
 two expands Genet's adapter contract and still needs genuine resizable-buffer
 support. Option three narrows the currently ruled done-conditions; it cannot
 be reported as completion of the full Streams brief. No option is selected
 by inference from the user's earlier continuation.
+
+**Ruling S1, 2026-10-06:** after the recommendation was restated as completing
+Vano's methods and enabling only Boa's transfer family, Mark answered
+**"Ok, agreed. Proceed"**. This selects option one. Vano starts from its clean,
+already pinned main 47f8d4f9; Boa starts from its clean, already pinned main
+52cfb6ff. Qualify standard buffer transfer and actual baseline failures in each
+owner, preserve unrelated experimental APIs as disabled, then publish the
+required engine revisions and repin Genet without changing package versions.
+The engine prerequisite probe and Genet consumer gates must qualify those exact
+revisions before Streams implementation proceeds. This does not select the
+private adapter alternative or narrow the BYOB done-conditions. Any required
+fetch-body behavior change remains a separate checkpoint.
 
 ## Progress, 2026-10-06
 
@@ -148,3 +161,8 @@ by inference from the user's earlier continuation.
   sources. Reuse avoids another worktree or cache; the name reflects its
   previous owner. No isolated Cargo home exists. The checkpoint plan is local
   only; Streams is not published or merged.
+- S1 is answered. Two bounded Luna agents own Vano's transfer algorithm and
+  Boa's transfer-only feature respectively. They initially prepare source and
+  tests without compiling while root captures the frozen pre-change directory
+  baselines. Root serializes qualification gates and owns Genet repins/docs;
+  the read-only Streams preflight audits the private fetch seam separately.

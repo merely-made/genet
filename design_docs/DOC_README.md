@@ -118,12 +118,12 @@ completed corpus census or bounded slice does not close its enclosing feature.
   residuals remain recorded in the plan.
 
 - [WHATWG Streams](2026-10-06_whatwg_streams_plan.md)
-  (**Assessment, engine checkpoint open, 2026-10-06**): separate per-realm
+  (**Engine foundation approved, 2026-10-06**): separate per-realm
   bootstrap is feasible; real buffer transfer fails on both locked engines,
   while async generators and Promise ordering pass. Fresh C3 records still
-  throw on both engines. The proposed narrow engine fixes, private adapter
-  alternative and first-phase option await Mark's ruling. No implementation
-  or full directory measurement exists yet.
+  throw on both engines. S1 selects standard Vano transfer and a transfer-only
+  Boa feature, followed by qualified engine repins. Streams implementation
+  and full directory measurements remain pending.
 
 ## WPT census — the web platform beyond CSS
 

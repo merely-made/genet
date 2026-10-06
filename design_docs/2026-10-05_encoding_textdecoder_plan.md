@@ -1,17 +1,21 @@
 # WHATWG Encoding: TextDecoder and TextEncoder
 
-**Status:** Verified and published on conformance/encoding, 2026-10-05;
-main integration pending.
-Encoding and the ruled E3 harness correction at d406ebe2ba1 pass 971 crate
-tests, with three existing WPT tests ignored. Matched optimized runs over
+**Status:** Landed on main, 2026-10-06. The qualified merge f97f0df038c
+passes 1,100 tests across the four Encoding crates and three document/rendering
+consumers, with three existing WPT ignores. Its default optimized runner also
+passes all eight production reporting controls on Boa and Vano. Matched
+optimized runs of the Encoding candidate d406ebe2ba1 over
 all 1,313 Encoding records gain 5,054 assertions on Boa and 5,053 on Vano,
 with zero existing passing identities lost on either engine. All movements
 are attributed below and in external evidence. E1, C2, E2 and E3 are answered;
 the accepted dependency edge, versions, lock and corpus remain fixed. The
 known fatal UTF-8 standard/WPT mismatch remains an existing failure. Vano is
 pinned to 47f8d4f9 at the d7f08fecdc7 baseline. Mark authorized publication
-with "push" after reviewing the final checkpoint. The verified lane is
-published on conformance/encoding and awaits main integration.
+with "push" after reviewing the final checkpoint, then authorized continued
+integration with "Go ahead and". The merge preserves the intervening image
+and accessibility work. Earlier per-crate counts are historical and corrected
+by exact executable ownership in the 2026-10-06 annotation below; their total
+passes and all WPT measurements are unchanged.
 
 Authority: the [standards ledger](2026-09-07_standards_to_features_ledger.md#conformance-targets-2026-10-02)
 rulings C1, C2 and C4; the execution brief
@@ -615,6 +619,11 @@ d406ebe2ba1 with the accepted lock and both engine features:
 | script-engine-nova | 22 | 0 | 0 |
 | Total | 971 | 0 | 3 |
 
+**Accounting annotation, 2026-10-06:** this historical table used a
+basename-only target classifier. The actual owning-crate counts are Runtime
+731 and Vano adapter 43; the total remains 971. The correction and exact
+depfile evidence are recorded in the integration section below.
+
 The suite includes 166 native runtime unit tests, 39 Encoding integration
 controls and ten harness completion controls. Own test packages use the
 recorded release opt-level override; dependencies stay optimized. Both
@@ -687,3 +696,76 @@ gate is rerun for this documentation-only publication update. The original
 final-checkpoint report and frozen receipts remain historical evidence;
 the publication receipt is retained separately under
 `Code/testing/genet/encoding-textdecoder`.
+
+### Main integration and accounting correction, 2026-10-06
+
+Mark's continuation authorizes the already proposed main integration and
+progression to Streams. Main was clean at d851a9db0cd, carrying a separately
+qualified accessibility change after the Encoding baseline. Merge
+f97f0df038c has parents d851a9db0cd and the published Encoding branch
+cad4347b570. Independent review confirms that every path changed by d851
+is preserved, and the Encoding Runtime, adapter and WPT Rust code is identical
+to the qualified candidate. The WPT manifest retains main's image-decode
+feature changes. No Encoding or harness implementation changed in integration.
+
+The complete merged gate uses Rust 1.97.1, the unchanged accepted C2 lock,
+both engine features, `--locked`, dependencies optimized and the recorded
+per-package release overrides. It additionally exercises the document,
+rendering and accessibility consumers:
+
+| Crate | Passed | Failed | Ignored |
+|---|---:|---:|---:|
+| script-runtime-api | 731 | 0 | 0 |
+| genet-scripted | 120 | 0 | 0 |
+| genet-wpt | 77 | 0 | 3 |
+| script-engine-nova | 43 | 0 | 0 |
+| genet-documents | 56 | 0 | 0 |
+| genet-render | 41 | 0 | 0 |
+| taproot | 32 | 0 | 0 |
+| Total | 1,100 | 0 | 3 |
+
+`integration-crates.receipt.json` and
+`integration-crates-owner-corrected-counts.json` seal this result at f97f0df.
+The normal optimized merged runner is frozen as `integration-genet-wpt.exe`,
+SHA-256 `C0739B278E1FA6D422E9A658E7956587FA30763BB25538ABD2DB377CCE008EA8`.
+All eight production reporting controls preserve their expected results:
+the eleven-second long-metadata case passes on both engines; TIMEOUT,
+incomplete and ERROR retain their observed passing assertion and remain
+errors. These are merged-source controls; the full matched Encoding maps
+remain the unchanged qualified candidate measurements above.
+
+**Corrected historical crate ownership.** The previous count helper keyed
+targets by basename. Both crates have `tests/realms.rs`; the executable
+`realms-0161f93e73da5ac8.exe` belongs to script-engine-nova and passes 21 tests,
+while `realms-9482218dfed90409.exe` belongs to script-runtime-api and passes six.
+The former was incorrectly counted as Runtime. The replacement classifier
+maps the exact executable depfile source to its owning Cargo manifest.
+Independent review finds no other cross-crate collision among executed targets.
+
+| Completed gate | Corrected Runtime | Scripted | WPT | Corrected Vano adapter | Unchanged total |
+|---|---:|---:|---:|---:|---:|
+| final-crates, e23f2db1b14 | 714 | 120 | 72 | 43 | 949 |
+| corrected-crates, 22cc7e17b92 | 721 | 120 | 72 | 43 | 956 |
+| e3-fixture-crates, 5dd234d3143 | 731 | 120 | 75 | 43 | 969 |
+| e3-qualified-metadata-crates, d406ebe2ba1 | 731 | 120 | 77 | 43 | 971 |
+
+Each gate has zero failures and three existing WPT ignores. Original counts,
+logs, the final-checkpoint report and the paired audit remain frozen. New
+`*-owner-corrected-counts.json` files record their unchanged receipt/log
+hashes and the exact executable/depfile ownership. They supersede only the
+old per-crate breakdown, including the historical rows retained above.
+`test-count-accounting-correction.md` documents the correction separately.
+
+**Environment and retained resources.** Qualification uses the existing clean
+Encoding worktree and committed Git dependency pins. Primary's ignored local
+patch config is preserved; its netrender checkout differs from the locked
+Git source, so these gates are not receipts for that local patched graph.
+Both ignored lockfiles carry only the accepted C2 edge and retain SHA-256
+`9B7C50EA33A181C424E871129A0CFB071CC8B65EE5BCECCD42CCD656118423D9`.
+The existing worktree and stable target are being reused for Streams' exact-pin
+assessment; no additional worktree, target or Cargo home is created. Frozen
+binaries, receipts and the local annotated `encoding-e3-baseline` tag remain
+reproducibility evidence. The earlier census target remains retained after
+automatic approval review rejected its cleanup. Main publication verification
+is recorded separately in `encoding-main-integration-publication.receipt.json`
+under `Code/testing/genet/encoding-textdecoder`.

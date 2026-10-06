@@ -1,10 +1,11 @@
 # WHATWG Streams
 
-**Status:** Engine foundation in progress, 2026-10-06. Mark has answered S1:
+**Status:** Engine foundation in progress, 2026-10-06. Mark answered S1:
 complete Vano's standard buffer-transfer methods and add transfer-only Boa
-support, qualify both, then repin Genet. The existing locked builds reproduce
-the prerequisite failure. Streams implementation and the Genet repin have not
-started; the remaining brief checkpoints still apply.
+support, qualify both, then repin Genet. Both engine revisions are now qualified
+and published. The local Genet repin is prepared; published-Git consumer gates
+remain pending. The frozen baseline retains the actual prerequisite failures.
+Streams implementation has not started; S2 awaits the fetch-body ruling.
 
 Authority is the [standards ledger](2026-09-07_standards_to_features_ledger.md#conformance-targets-2026-10-02)
 rulings C1 and C3, the [census panic attribution](2026-09-06_web_platform_wpt_census.md),
@@ -253,5 +254,37 @@ qualification and frozen baseline accounting can continue independently.
   is the accepted 52cfb6ff baseline. Its newer `origin/main` diverges and
   contains unrelated dependency changes; publish this qualified patch by
   fast-forwarding the maintained Genet ref without absorbing that drift.
-  Source work remains on local main. Candidate pin, consumer receipts and
-  Genet repin remain pending. S2 is awaiting the fetch-body ruling.
+  Source work remains on local main. Consumer receipts and the Genet repin
+  remain pending. S2 is awaiting the fetch-body ruling.
+- Boa's native qualification passed: no-feature absence 1/1, transfer-only
+  6/6, experimental-only 5/5, combined 5/5, and default features plus the
+  narrow feature's owning ArrayBuffer module 19/19. The old allocation
+  algorithm actually fails the host-cap control (0/1, exit 101); the candidate
+  passes after a real rebuild. A restored source timestamp initially reused
+  the control binary; that stale run is preserved and explicitly excluded.
+  Root verified source, lock, patch and successful-binary hashes in
+  `boa-transfer/native-qualification.receipt.json`, then committed
+  `f9003484f6e83fb3d02024b82cd21a796fe8fb8d`, **Add narrow standard
+  ArrayBuffer transfer feature**.
+- The first Boa publication attempt ran its required pre-push hook with the
+  shell's inherited shared `C:/t/graphshell-target`. Root stopped only that
+  push's owned descendants before any remote movement; source and lock stayed
+  unchanged. Required workspace lint checks passed with Rust
+  1.97.1, locked dependencies, warnings denied and the approved reusable
+  `C:/t/cargo-targets/boa` target. Existing foreign cache ownership is
+  preserved. The Genet lock verifier permits exactly nine Boa and three Vano
+  Git-source substitutions and rejects any other parsed lock change.
+- Boa `f9003484` is published by fast-forwarding `origin/genet`; the normal
+  pre-push hook also passed with an explicit reusable target and qualified
+  toolchain. `boa-transfer/publication.receipt.json` seals the remote transition
+  and native/lint receipts. The local Genet repin enables only Boa's
+  `array-buffer-transfer` feature and updates both native and wasm64 Vano
+  revision entries. No package version or dependency edge changed. Accepted
+  lock SHA-256 `9B7C50EA...423D9` becomes `D73B7ADB...FAE89`; full hashes and
+  all twelve changed source rows are in `engine-foundation-lock.receipt.json`.
+  Locked metadata verifies all twelve packages resolve from Cargo's published
+  Git checkouts; Boa's resolved features include `array-buffer-transfer` and
+  exclude `experimental`. Metadata SHA-256 is `2BAE04D4...5F2840`; full source
+  paths/features are sealed in `engine-foundation-metadata.receipt.json`.
+  Consumer tests and the frozen optimized runner must still qualify the repin
+  before the foundation is accepted.

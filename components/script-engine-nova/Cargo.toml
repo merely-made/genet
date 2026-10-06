@@ -4,7 +4,8 @@
 # every 32-bit target (including wasm32) on the Boa backend.
 #
 # The published revision includes embedder ownership, caller provenance, realm
-# prototypes, and ephemeron marking. Local path overrides are development-only.
+# prototypes, ephemeron marking, and standard ArrayBuffer transfer. Local path
+# overrides are development-only.
 [package]
 name = "script-engine-nova"
 version = "0.0.0"
@@ -22,13 +23,13 @@ script-engine-api = { path = "../script-engine-api" }
 [target.'cfg(all(target_pointer_width = "64", not(target_family = "wasm")))'.dependencies]
 # The Vano fork, named by git so a bare clone resolves; the gitignored
 # `Code/.cargo/config.toml` `[patch]` table redirects it to `crates/vano`.
-nova_vm = { version = "1", git = "https://github.com/merely-made/vano", rev = "47f8d4f9d6fca884e3472e405872ce9556ff9db0" }
+nova_vm = { version = "1", git = "https://github.com/merely-made/vano", rev = "a4415da20864daf8ec0ec85b26aaec189f8d20ae" }
 
 [target.'cfg(all(target_pointer_width = "64", target_family = "wasm"))'.dependencies]
 # The first browser lane keeps ArrayBuffer/TypedArray but deliberately excludes
 # SharedArrayBuffer, Atomics, and Temporal. Shared JS memory is a later threaded
 # artifact; Temporal currently pulls a wasm32-only timezone provider.
-nova_vm = { version = "1", git = "https://github.com/merely-made/vano", rev = "47f8d4f9d6fca884e3472e405872ce9556ff9db0", default-features = false, features = [
+nova_vm = { version = "1", git = "https://github.com/merely-made/vano", rev = "a4415da20864daf8ec0ec85b26aaec189f8d20ae", default-features = false, features = [
     "math",
     "json",
     "date",

@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-//! Boa 0.21 backend for [`script_engine_api`]. Pure Rust → the wasm32 scripting
+//! Boa fork backend for [`script_engine_api`]. Pure Rust → the wasm32 scripting
 //! backend, and the native conformance oracle. Engine-native types (`JsValue`,
 //! `Context`, the reflector `Class`) stay confined to this crate.
 

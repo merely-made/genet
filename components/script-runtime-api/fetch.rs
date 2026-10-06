@@ -504,6 +504,7 @@ pub(crate) fn install_fetch_surface<E: ScriptEngine>(
     engine.set_function::<ResolveUrl>("__resolve_url", 1)?;
     engine.set_function::<UrlParse>("__url_parse", 2)?;
     engine.set_function::<UrlWith>("__url_with", 3)?;
+    crate::text_encoding::install_text_encoding_surface(engine)?;
     engine.eval(FETCH_BOOTSTRAP)?;
     Ok(())
 }
@@ -847,27 +848,289 @@ const FETCH_BOOTSTRAP: &str = r#"
     return b;
   }
 
-  // ---- TextEncoder / TextDecoder (UTF-8) ----
-  function TextEncoder() { this.encoding = 'utf-8'; }
-  TextEncoder.prototype.encode = function(s) { return utf8Encode(s === undefined ? '' : String(s)); };
-  TextEncoder.prototype.encodeInto = function(s, dest) {
-    var b = utf8Encode(String(s)), n = Math.min(b.length, dest.length);
-    for (var i = 0; i < n; i++) dest[i] = b[i];
-    return { read: n, written: n };
-  };
-  globalThis.TextEncoder = TextEncoder;
-  function TextDecoder(label, opts) {
-    this.encoding = 'utf-8'; this.fatal = !!(opts && opts.fatal); this.ignoreBOM = !!(opts && opts.ignoreBOM);
+  // ---- TextEncoder / TextDecoder ----
+  // The WPT-facing wrappers keep only opaque native IDs. Decoder state and
+  // encoding tables live in the host; shared weak brands let a method from one
+  // same-agent realm accept an instance created in another realm.
+  var encObject = Object, encDefine = encObject.defineProperty;
+  var encGetDesc = encObject.getOwnPropertyDescriptor, encGetProto = encObject.getPrototypeOf;
+  var encApply = Reflect.apply;
+  var encWeakMap = WeakMap, encWeakMapGet = WeakMap.prototype.get, encWeakMapSet = WeakMap.prototype.set;
+  var encWeakSet = WeakSet, encWeakSetHas = WeakSet.prototype.has, encWeakSetAdd = WeakSet.prototype.add;
+  var encString = String, encStringFromCharCode = String.fromCharCode;
+  var encStringSlice = String.prototype.slice, encStringIndexOf = String.prototype.indexOf;
+  var encCreate = encObject.create, encTypeErrorCtor = TypeError, encRangeErrorCtor = RangeError;
+  var encCharCodeAt = String.prototype.charCodeAt, encArrayBuffer = ArrayBuffer;
+  var encIsView = ArrayBuffer.isView, encUint8Array = Uint8Array;
+  var encTypedArrayProto = encGetProto(Uint8Array.prototype);
+  var encTypedArrayTag = encGetDesc(encTypedArrayProto, Symbol.toStringTag).get;
+  var encTypedBuffer = encGetDesc(encTypedArrayProto, 'buffer').get;
+  var encTypedOffset = encGetDesc(encTypedArrayProto, 'byteOffset').get;
+  var encTypedLength = encGetDesc(encTypedArrayProto, 'byteLength').get;
+  var encDataViewProto = DataView.prototype;
+  var encDataBuffer = encGetDesc(encDataViewProto, 'buffer').get;
+  var encDataOffset = encGetDesc(encDataViewProto, 'byteOffset').get;
+  var encDataLength = encGetDesc(encDataViewProto, 'byteLength').get;
+  var encArrayBufferLength = encGetDesc(ArrayBuffer.prototype, 'byteLength').get;
+  var encSharedBufferLength = typeof SharedArrayBuffer === 'function'
+    ? encGetDesc(SharedArrayBuffer.prototype, 'byteLength').get : null;
+  var encSharedState = globalThis.__agentTimers;
+  if (encSharedState && (typeof encSharedState === 'object' || typeof encSharedState === 'function')) {
+    var encSharedDesc = encGetDesc(encSharedState, '__encodingState');
+    if (!encSharedDesc) {
+      var encNewState = { decoders: new encWeakMap(), encoders: new encWeakSet() };
+      encDefine(encSharedState, '__encodingState', { value: encNewState });
+      encSharedDesc = { value: encNewState };
+    }
+    var encBrands = encSharedDesc.value;
+  } else {
+    var encBrands = { decoders: new encWeakMap(), encoders: new encWeakSet() };
   }
-  TextDecoder.prototype.decode = function(input) {
-    if (input == null) return '';
-    var bytes;
-    if (input instanceof ArrayBuffer) bytes = new Uint8Array(input);
-    else if (ArrayBuffer.isView(input)) bytes = new Uint8Array(input.buffer, input.byteOffset, input.byteLength);
-    else bytes = input;
-    return utf8Decode(bytes);
+  var decoderBrands = encBrands.decoders, encoderBrands = encBrands.encoders;
+  var nativeDecoderCreate = globalThis.__text_decoder_create;
+  var nativeDecoderDecode = globalThis.__text_decoder_decode;
+  var nativeDecoderRelease = globalThis.__text_decoder_release;
+  try { delete globalThis.__text_decoder_create; delete globalThis.__text_decoder_decode; delete globalThis.__text_decoder_release; } catch (encDeleteError) {}
+  if (typeof nativeDecoderCreate !== 'function' || typeof nativeDecoderDecode !== 'function' || typeof nativeDecoderRelease !== 'function')
+    throw new TypeError('TextDecoder host is unavailable');
+
+  // Capture the registry and registration operation before author scripts run.
+  var EncFinalizationRegistry = globalThis.FinalizationRegistry;
+  var encRegistry = typeof EncFinalizationRegistry === 'function'
+    ? new EncFinalizationRegistry(function(id) { encApply(nativeDecoderRelease, undefined, [id]); }) : null;
+  var encRegister = encRegistry ? EncFinalizationRegistry.prototype.register : null;
+  function encGet(map, key) { return encApply(encWeakMapGet, map, [key]); }
+  function encSet(map, key, value) { encApply(encWeakMapSet, map, [key, value]); }
+  function encHas(set, key) { return encApply(encWeakSetHas, set, [key]); }
+  function encAdd(set, key) { encApply(encWeakSetAdd, set, [key]); }
+  function encTypeError(message) { return new encTypeErrorCtor(message); }
+  function encToString(value) {
+    if (typeof value === 'symbol') throw encTypeError('Cannot convert a Symbol value to a string');
+    return encString(value);
+  }
+  function encOptions(options, key) {
+    if (options === undefined || options === null) return false;
+    if (typeof options !== 'object' && typeof options !== 'function')
+      throw encTypeError('Dictionary options must be an object');
+    return !!options[key];
+  }
+  function encNativeError(error) {
+    if (error === 'L') throw new encRangeErrorCtor('The encoding label is invalid');
+    if (error === 'F') throw encTypeError('The encoded data was not valid');
+    throw encTypeError('TextDecoder host operation failed');
+  }
+  function encAsciiTrim(label) {
+    var start = 0, end = label.length;
+    function ws(c) { return c === 9 || c === 10 || c === 12 || c === 13 || c === 32; }
+    while (start < end && ws(encApply(encCharCodeAt, label, [start]))) start++;
+    while (end > start && ws(encApply(encCharCodeAt, label, [end - 1]))) end--;
+    var out = '';
+    for (var i = start; i < end; i++) out += label[i];
+    return out;
+  }
+  function encByteSource(input, omitted) {
+    if (omitted || input === undefined) return { kind: 'empty' };
+    if (encIsView(input)) return { kind: 'view', value: input };
+    // Vano has distinct shared-view variants which its isView currently omits.
+    // These captured getters test intrinsic brands without author properties.
+    if (encApply(encTypedArrayTag, input, []) !== undefined) return { kind: 'view', value: input };
+    try { encApply(encDataBuffer, input, []); return { kind: 'view', value: input }; } catch (encNotDataView) {}
+    try { encApply(encArrayBufferLength, input, []); return { kind: 'buffer', value: input }; } catch (encArrayBufferError) {}
+    if (encSharedBufferLength) {
+      try { encApply(encSharedBufferLength, input, []); return { kind: 'buffer', value: input }; } catch (encSharedBufferError) {}
+    }
+    throw encTypeError('TextDecoder input is not an ArrayBuffer or view');
+  }
+  function encByteString(source) {
+    var buffer, offset, length;
+    try {
+      if (source.kind === 'empty') return '';
+      if (source.kind === 'buffer') {
+        buffer = source.value; offset = 0;
+        try { length = encApply(encArrayBufferLength, buffer, []); }
+        catch (encDetachedBuffer) { length = 0; }
+        if (encSharedBufferLength) {
+          try { length = encApply(encSharedBufferLength, buffer, []); } catch (encNotSharedBuffer) {}
+        }
+      } else {
+        var view = source.value;
+        var tag = encApply(encTypedArrayTag, view, []);
+        if (tag === undefined) {
+          buffer = encApply(encDataBuffer, view, []);
+          offset = encApply(encDataOffset, view, []);
+          length = encApply(encDataLength, view, []);
+        } else {
+          buffer = encApply(encTypedBuffer, view, []);
+          offset = encApply(encTypedOffset, view, []);
+          length = encApply(encTypedLength, view, []);
+        }
+      }
+    } catch (encDetachedView) { return ''; }
+    if (!length) return '';
+    var bytes = source.kind === 'view' && tag === 'Uint8Array'
+      ? view : new encUint8Array(buffer, offset, length);
+    if (length === 1) return encApply(encStringFromCharCode, undefined, [bytes[0]]);
+    var result = '', codes = encCreate(null), cap = 8192;
+    for (var i = 0; i < length; i++) {
+      codes[i % cap] = bytes[i];
+      if (i % cap === cap - 1 || i === length - 1) {
+        var count = i % cap + 1;
+        codes.length = count;
+        result += encApply(encStringFromCharCode, undefined, codes);
+        codes = encCreate(null);
+      }
+    }
+    return result;
+  }
+  function encUSVString(value, defaultEmpty) {
+    var input = defaultEmpty && value === undefined ? '' : encToString(value);
+    var output = '';
+    for (var i = 0; i < input.length; i++) {
+      var c = encApply(encCharCodeAt, input, [i]);
+      if (c >= 0xD800 && c <= 0xDBFF) {
+        if (i + 1 < input.length) {
+          var next = encApply(encCharCodeAt, input, [i + 1]);
+          if (next >= 0xDC00 && next <= 0xDFFF) { output += input[i] + input[++i]; continue; }
+        }
+        output += '\uFFFD';
+      } else if (c >= 0xDC00 && c <= 0xDFFF) output += '\uFFFD';
+      else output += input[i];
+    }
+    return output;
+  }
+  function encUtf8Bytes(input) {
+    var codes = encCreate(null), length = 0;
+    function put(a, b, c, d) {
+      codes[length++] = a;
+      if (b !== undefined) codes[length++] = b;
+      if (c !== undefined) codes[length++] = c;
+      if (d !== undefined) codes[length++] = d;
+    }
+    for (var i = 0; i < input.length; i++) {
+      var c = encApply(encCharCodeAt, input, [i]);
+      if (c >= 0xD800 && c <= 0xDBFF && i + 1 < input.length) {
+        var low = encApply(encCharCodeAt, input, [i + 1]);
+        if (low >= 0xDC00 && low <= 0xDFFF) {
+          c = 0x10000 + ((c - 0xD800) << 10) + (low - 0xDC00);
+          i++;
+        }
+      }
+      if (c < 0x80) put(c);
+      else if (c < 0x800) put(0xC0 | (c >> 6), 0x80 | (c & 0x3F));
+      else if (c < 0x10000) put(0xE0 | (c >> 12), 0x80 | ((c >> 6) & 0x3F), 0x80 | (c & 0x3F));
+      else put(0xF0 | (c >> 18), 0x80 | ((c >> 12) & 0x3F), 0x80 | ((c >> 6) & 0x3F), 0x80 | (c & 0x3F));
+    }
+    codes.length = length;
+    var bytes = new encUint8Array(length);
+    for (var j = 0; j < length; j++) bytes[j] = codes[j];
+    return bytes;
+  }
+  function TextEncoder() {
+    if (!new.target) throw encTypeError("Constructor TextEncoder requires 'new'");
+    encAdd(encoderBrands, this);
+  }
+  var encoderGetter = encGetDesc({ get encoding() {
+    if (!encHas(encoderBrands, this)) throw encTypeError('Illegal invocation');
+    return 'utf-8';
+  } }, 'encoding').get;
+  encDefine(encoderGetter, 'name', { value: 'get encoding', configurable: true });
+  var encoderOps = {
+    encode(input) { if (!encHas(encoderBrands, this)) throw encTypeError('Illegal invocation'); return encUtf8Bytes(encUSVString(input, true)); },
+    encodeInto(input, destination) {
+      if (!encHas(encoderBrands, this)) throw encTypeError('Illegal invocation');
+      if (arguments.length < 2) throw encTypeError("Failed to execute 'encodeInto': 2 arguments required");
+      var source = encUSVString(input, false);
+      if (encApply(encTypedArrayTag, destination, []) !== 'Uint8Array')
+        throw encTypeError('encodeInto destination must be a Uint8Array');
+      var destLength = 0;
+      try { destLength = encApply(encTypedLength, destination, []); } catch (encDetachedDestination) {}
+      var read = 0, written = 0;
+      for (var i = 0; i < source.length;) {
+        var first = encApply(encCharCodeAt, source, [i]);
+        var cp = first, units = 1;
+        if (first >= 0xD800 && first <= 0xDBFF && i + 1 < source.length) {
+          var second = encApply(encCharCodeAt, source, [i + 1]);
+          if (second >= 0xDC00 && second <= 0xDFFF) { cp = 0x10000 + ((first - 0xD800) << 10) + (second - 0xDC00); units = 2; }
+        }
+        var a, b, c, d, count;
+        if (cp < 0x80) { a = cp; count = 1; }
+        else if (cp < 0x800) { a = 0xC0 | (cp >> 6); b = 0x80 | (cp & 0x3F); count = 2; }
+        else if (cp < 0x10000) { a = 0xE0 | (cp >> 12); b = 0x80 | ((cp >> 6) & 0x3F); c = 0x80 | (cp & 0x3F); count = 3; }
+        else { a = 0xF0 | (cp >> 18); b = 0x80 | ((cp >> 12) & 0x3F); c = 0x80 | ((cp >> 6) & 0x3F); d = 0x80 | (cp & 0x3F); count = 4; }
+        if (written + count > destLength) break;
+        destination[written++] = a;
+        if (count > 1) destination[written++] = b;
+        if (count > 2) destination[written++] = c;
+        if (count > 3) destination[written++] = d;
+        read += units; i += units;
+      }
+      return { read: read, written: written };
+    }
   };
-  globalThis.TextDecoder = TextDecoder;
+  encDefine(encoderOps.encode, 'length', { value: 0, configurable: true });
+  encDefine(TextEncoder.prototype, 'encoding', { get: encoderGetter, enumerable: true, configurable: true });
+  encDefine(TextEncoder.prototype, 'encode', { value: encoderOps.encode, writable: true, enumerable: true, configurable: true });
+  encDefine(TextEncoder.prototype, 'encodeInto', { value: encoderOps.encodeInto, writable: true, enumerable: true, configurable: true });
+  encDefine(TextEncoder.prototype, 'constructor', { value: TextEncoder, writable: true, enumerable: false, configurable: true });
+  if (Symbol.toStringTag) encDefine(TextEncoder.prototype, Symbol.toStringTag, { value: 'TextEncoder', configurable: true });
+  defineInterface('TextEncoder', TextEncoder, 0);
+
+  function TextDecoder(label, options) {
+    if (!new.target) throw encTypeError("Constructor TextDecoder requires 'new'");
+    var convertedLabel = encAsciiTrim(arguments.length && label !== undefined ? encToString(label) : 'utf-8');
+    var fatal = encOptions(options, 'fatal');
+    var ignoreBOM = encOptions(options, 'ignoreBOM');
+    var created = encApply(nativeDecoderCreate, undefined, [convertedLabel, fatal ? '1' : '0', ignoreBOM ? '1' : '0']);
+    if (created[0] !== '+') encNativeError(created === '!L' ? 'L' : 'H');
+    var separator = encApply(encStringIndexOf, created, [':', 1]);
+    if (separator < 2 || separator === created.length - 1) encNativeError('H');
+    var id = encApply(encStringSlice, created, [1, separator]);
+    var metadata = {
+      id: id,
+      encoding: encApply(encStringSlice, created, [separator + 1]),
+      fatal: fatal,
+      ignoreBOM: ignoreBOM,
+      decode: nativeDecoderDecode
+    };
+    encSet(decoderBrands, this, metadata);
+    if (!encRegistry) {
+      encApply(nativeDecoderRelease, undefined, [id]);
+      throw encTypeError('FinalizationRegistry is unavailable');
+    }
+    try { encApply(encRegister, encRegistry, [this, id]); }
+    catch (encRegistrationError) {
+      encApply(nativeDecoderRelease, undefined, [id]);
+      throw encRegistrationError;
+    }
+  }
+  function decoderAttribute(name) {
+    var getter = encGetDesc({ get value() {
+      var metadata = encGet(decoderBrands, this);
+      if (!metadata) throw encTypeError('Illegal invocation');
+      return metadata[name];
+    } }, 'value').get;
+    encDefine(getter, 'name', { value: 'get ' + name, configurable: true });
+    return getter;
+  }
+  var decoderOps = {
+    decode(input, options) {
+      var metadata = encGet(decoderBrands, this);
+      if (!metadata) throw encTypeError('Illegal invocation');
+      var source = encByteSource(input, arguments.length === 0);
+      var stream = encOptions(options, 'stream');
+      var result = encApply(metadata.decode, undefined, [metadata.id, encByteString(source), stream ? '1' : '0']);
+      if (result[0] !== 'S') encNativeError(result === 'F' ? 'F' : 'H');
+      return encApply(encStringSlice, result, [1]);
+    }
+  };
+  encDefine(decoderOps.decode, 'length', { value: 0, configurable: true });
+  encDefine(TextDecoder.prototype, 'encoding', { get: decoderAttribute('encoding'), enumerable: true, configurable: true });
+  encDefine(TextDecoder.prototype, 'fatal', { get: decoderAttribute('fatal'), enumerable: true, configurable: true });
+  encDefine(TextDecoder.prototype, 'ignoreBOM', { get: decoderAttribute('ignoreBOM'), enumerable: true, configurable: true });
+  encDefine(TextDecoder.prototype, 'decode', { value: decoderOps.decode, writable: true, enumerable: true, configurable: true });
+  encDefine(TextDecoder.prototype, 'constructor', { value: TextDecoder, writable: true, enumerable: false, configurable: true });
+  if (Symbol.toStringTag) encDefine(TextDecoder.prototype, Symbol.toStringTag, { value: 'TextDecoder', configurable: true });
+  defineInterface('TextDecoder', TextDecoder, 0);
 
   // ---- ReadableStream (fully-buffered model) ----
   // Bodies are already buffered (the __fetch sink returns the whole body), so a

@@ -304,30 +304,104 @@ fn run_one(test: &TestCase, args: &Args, ctx: &mut RunCtx<'_>) -> OneOutcome {
             failures: Vec::new(),
         },
         Ok(harness::HarnessOutcome::Ran(results)) => {
-            let total = results.len();
-            let passed = results.iter().filter(|r| r.passed()).count();
-            if total == 0 {
-                OneOutcome {
-                    record: ActualRecord::with_reason(test, "no-results", reason("no-subtests")),
-                    detail: Some("(harness ran but reported no subtests)".to_string()),
-                    failures: Vec::new(),
-                }
-            } else {
-                let status = if passed == total { "pass" } else { "fail" };
-                OneOutcome {
-                    record: ActualRecord::with_subtests(test, status, &results),
-                    detail: None,
-                    failures: results
-                        .iter()
-                        .filter(|r| !r.passed())
-                        .map(|r| {
-                            let msg = r.message.as_deref().unwrap_or("");
-                            format!("        [{}] {} {msg}", r.status, r.name)
-                        })
-                        .collect(),
-                }
-            }
+            classify_results(test, results, None, reason("no-subtests"))
         },
+        Ok(harness::HarnessOutcome::Stopped {
+            results,
+            reason: stopped_reason,
+            message,
+        }) => classify_results(
+            test,
+            results,
+            Some((stopped_reason, message)),
+            stopped_reason,
+        ),
+    }
+}
+
+fn classify_results(
+    test: &TestCase,
+    results: Vec<script_runtime_api::TestResult>,
+    stopped: Option<(&'static str, Option<String>)>,
+    empty_reason: &'static str,
+) -> OneOutcome {
+    let total = results.len();
+    if let Some((reason, message)) = stopped {
+        let record = if total == 0 {
+            ActualRecord::with_reason(test, "error", reason)
+        } else {
+            let mut record = ActualRecord::with_subtests(test, "error", &results);
+            record.reason = Some(reason.to_string());
+            record
+        };
+        let detail = Some(match message {
+            Some(message) if !message.is_empty() => format!("({reason}: {message})"),
+            _ => format!("({reason})"),
+        });
+        return OneOutcome {
+            record,
+            detail,
+            failures: failed_subtests(&results),
+        };
+    }
+
+    let passed = results.iter().filter(|r| r.passed()).count();
+    if total == 0 {
+        OneOutcome {
+            record: ActualRecord::with_reason(test, "no-results", empty_reason),
+            detail: Some("(harness ran but reported no subtests)".to_string()),
+            failures: Vec::new(),
+        }
+    } else {
+        let status = if passed == total { "pass" } else { "fail" };
+        OneOutcome {
+            record: ActualRecord::with_subtests(test, status, &results),
+            detail: None,
+            failures: failed_subtests(&results),
+        }
+    }
+}
+
+fn failed_subtests(results: &[script_runtime_api::TestResult]) -> Vec<String> {
+    results
+        .iter()
+        .filter(|r| !r.passed())
+        .map(|r| {
+            let msg = r.message.as_deref().unwrap_or("");
+            format!("        [{}] {} {msg}", r.status, r.name)
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod outcome_tests {
+    use super::*;
+
+    #[test]
+    fn global_harness_error_keeps_passing_subtests_without_passing_the_file() {
+        let test = TestCase::single(
+            PathBuf::from("encoding/probe.any.js"),
+            "encoding/probe.any.js".into(),
+        );
+        let outcome = classify_results(
+            &test,
+            vec![script_runtime_api::TestResult {
+                name: "assertion passed".into(),
+                status: 0,
+                message: None,
+            }],
+            Some(("harness-error", Some("uncaught global error".into()))),
+            "harness-error",
+        );
+
+        assert_eq!(outcome.record.status, "error");
+        assert_eq!(outcome.record.reason.as_deref(), Some("harness-error"));
+        assert_eq!(outcome.record.subtests, Some((1, 1)));
+        assert_eq!(outcome.failures.len(), 0);
+        assert_eq!(
+            outcome.detail.as_deref(),
+            Some("(harness-error: uncaught global error)")
+        );
     }
 }
 

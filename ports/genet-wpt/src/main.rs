@@ -205,13 +205,14 @@ impl TestCase {
             .map(|b| String::from_utf8_lossy(&b).into_owned())
             .unwrap_or_default();
         let kind = classify(&path, &contents);
+        let long_timeout = source_has_long_timeout(&contents);
         TestCase {
             url: rel(&path, tests_root),
             path,
             kind,
             refs: Vec::new(),
             fuzzy: None,
-            long_timeout: false,
+            long_timeout,
             from_manifest: false,
         }
     }
@@ -224,8 +225,9 @@ impl TestCase {
         if source_path.is_empty() {
             return None;
         }
+        let path = tests_root.join(&source_path);
         Some(TestCase {
-            path: tests_root.join(source_path),
+            path,
             url: normalize_test_url(&test.url),
             kind: Kind::from_manifest(test.kind),
             refs: test.refs,
@@ -238,13 +240,14 @@ impl TestCase {
     /// The one test a `testharness-one` worker was handed: its backing file and
     /// its runnable URL, which the parent already resolved from the manifest.
     fn single(path: PathBuf, url: String) -> TestCase {
+        let long_timeout = source_has_long_timeout_file(&path);
         TestCase {
             path,
             url: normalize_test_url(&url),
             kind: Kind::Testharness,
             refs: Vec::new(),
             fuzzy: None,
-            long_timeout: false,
+            long_timeout,
             from_manifest: true,
         }
     }
@@ -256,6 +259,52 @@ impl TestCase {
     fn disk_doc_url(&self) -> String {
         format!("http://web-platform.test/{}", self.url)
     }
+}
+
+/// Source fallback for walked and single-test cases that do not carry a
+/// manifest-derived timeout bit.
+fn source_has_long_timeout_file(path: &Path) -> bool {
+    fs::read_to_string(path)
+        .ok()
+        .is_some_and(|source| source_has_long_timeout(&source))
+}
+
+fn source_has_long_timeout(source: &str) -> bool {
+    let mut in_block = false;
+    for line in source.lines() {
+        let t = line.trim();
+        if in_block {
+            if t.contains("*/") {
+                in_block = false;
+            }
+            continue;
+        }
+        if t.starts_with("/*") {
+            in_block = !t.contains("*/");
+            continue;
+        }
+        let meta = t
+            .strip_prefix("// META:")
+            .or_else(|| t.strip_prefix("<!-- META:"));
+        if let Some(meta) = meta {
+            if meta
+                .trim()
+                .trim_end_matches("-->")
+                .trim()
+                .eq("timeout=long")
+            {
+                return true;
+            }
+            continue;
+        }
+        // META directives are comment headers. Ignore unrelated comments and
+        // stop once source code begins, so a string/body occurrence is inert.
+        if t.is_empty() || t.starts_with("//") || t.starts_with("<!--") {
+            continue;
+        }
+        break;
+    }
+    false
 }
 
 fn normalize_test_url(url: &str) -> String {
@@ -378,7 +427,7 @@ fn collect(root: &Path, out: &mut Vec<PathBuf>) {
 /// `run_test` then resolves those `<script src>` the usual way. Returns `None`
 /// for worker-only tests (`.worker.js`, or `.any.js` whose `global=` excludes
 /// window), which this window-shaped runner can't host.
-fn synthesize_any_js(path: &Path, variant_url: Option<&str>) -> Option<String> {
+fn synthesize_any_js(path: &Path, variant_url: Option<&str>, long_timeout: bool) -> Option<String> {
     let name = path.file_name()?.to_str()?;
     if name.ends_with(".worker.js") {
         return None;
@@ -407,6 +456,12 @@ fn synthesize_any_js(path: &Path, variant_url: Option<&str>) -> Option<String> {
          <script src=\"/resources/testharnessreport.js\"></script>\n\
          <div id=log></div>\n",
     );
+    if long_timeout {
+        html.insert_str(
+            html.find('\n').map_or(html.len(), |i| i + 1),
+            "<meta name=\"timeout\" content=\"long\">\n",
+        );
+    }
     for s in scripts {
         html.push_str(&format!("<script src=\"{s}\"></script>\n"));
     }
@@ -969,8 +1024,13 @@ fn synthesize_worker_wrapper(test: &TestCase) -> Option<String> {
         Some(q) => format!("{script}?{q}"),
         None => script,
     };
+    let timeout_meta = if test.long_timeout {
+        "<meta name=\"timeout\" content=\"long\">\n"
+    } else {
+        ""
+    };
     Some(format!(
-        "<!doctype html><meta charset=utf-8>\n\
+        "<!doctype html><meta charset=utf-8>\n{timeout_meta}\
          <script src=\"/resources/testharness.js\"></script>\n\
          <script src=\"/resources/testharnessreport.js\"></script>\n\
          <div id=log></div>\n\
@@ -986,9 +1046,11 @@ fn load_test_document_disk(test: &TestCase) -> TestHtml {
                 Some(h) => TestHtml::Html(h),
                 None => TestHtml::Skip("dedicated-worker-unsupported"),
             },
-            VariantGlobal::Window => match synthesize_any_js(&test.path, Some(test.name())) {
-                Some(h) => TestHtml::Html(h),
-                None => TestHtml::Skip("non-window-global"),
+            VariantGlobal::Window => {
+                match synthesize_any_js(&test.path, Some(test.name()), test.long_timeout) {
+                    Some(h) => TestHtml::Html(h),
+                    None => TestHtml::Skip("non-window-global"),
+                }
             },
         };
     }

@@ -158,6 +158,17 @@ counts now use exact executable depfile sources. Mark authorized continued
 integration and the Streams assessment; the plan records the source/config
 qualification and retained resources.
 
+**Streams assessment, 2026-10-06:** the
+[Streams plan](2026-10-06_whatwg_streams_plan.md) carries C1/C3. Both C3 records
+still throw on both engines using the fresh merged runner. Prerequisite probes
+pass async-generator and Promise controls but fail real ArrayBuffer transfer
+on both locked engines. Vano has implementation TODOs; Boa's implementation
+is behind its broad, disabled experimental feature. The brief's engine
+checkpoint is open; narrow engine fixes/repins, a private adapter contract,
+or a narrowed first phase await Mark's ruling. No Streams implementation or
+full directory baseline is claimed. Existing host incremental response hooks
+are recorded separately from the brief's whole-body description.
+
 Mark asked for the next lanes to come from WPT and specification
 conformance. These targets were chosen from the 2026-09-29 Vano census
 (`receipts/2026-09-29_vano_wpt_census/outcomes.json.gz`), broken down by

@@ -117,6 +117,14 @@ completed corpus census or bounded slice does not close its enclosing feature.
   branch publication and continued main integration; qualifications and known
   residuals remain recorded in the plan.
 
+- [WHATWG Streams](2026-10-06_whatwg_streams_plan.md)
+  (**Assessment, engine checkpoint open, 2026-10-06**): separate per-realm
+  bootstrap is feasible; real buffer transfer fails on both locked engines,
+  while async generators and Promise ordering pass. Fresh C3 records still
+  throw on both engines. The proposed narrow engine fixes, private adapter
+  alternative and first-phase option await Mark's ruling. No implementation
+  or full directory measurement exists yet.
+
 ## WPT census — the web platform beyond CSS
 
 - [census_panics_plan](2026-10-03_census_panics_plan.md)

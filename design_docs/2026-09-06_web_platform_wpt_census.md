@@ -114,6 +114,12 @@ Two later rulings the same day are recorded in the
   [standards ledger](2026-09-07_standards_to_features_ledger.md#conformance-targets-2026-10-02)'s
   ruling C3: the two stream getter traps (`stream-safe-creation` and
   `patched-global`) move to the Streams lane.
+  **2026-10-06 assessment:** the
+  [Streams plan](2026-10-06_whatwg_streams_plan.md) records fresh merged-runner
+  subsets: both C3 files remain ERROR/evaluation-threw on both engines, with
+  zero observed subtests. Their original census attribution remains historical.
+  Real ArrayBuffer transfer is missing on both current engine builds, so the
+  Streams brief's engine checkpoint is open. No C3 repair is claimed yet.
 - Ruling 9: the Vano lane may fetch Vano's unfetched `tests/test262`
   submodule at its pinned commit `e0d8f66a`, and run Vano's test262 gate.
   Mark: "Allow, pinned commit only (Recommended)".

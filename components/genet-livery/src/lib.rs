@@ -84,7 +84,7 @@ pub use buckram::{
 };
 pub use document::{
     ClickOutcome, LayoutDamage, LayoutDamageKind, LinkTarget, LiveryDocument,
-    rendered_generated_text,
+    rendered_generated_text, rendered_visible,
 };
 pub use dom::{ElementRef, InteractionStates, SelectorTree};
 pub use invalidation::{AttributeSnapshot, ElementSnapshot, IncrementalStyle, RestyleStats};

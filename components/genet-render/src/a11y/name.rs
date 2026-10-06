@@ -3,7 +3,8 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 //! Bounded DOM text alternatives, following AccName 1.2 (2026-09-23).
-//! CSS visibility, flat-tree traversal and embedded control values remain open.
+//! CSS rendering counts as hidden only when the style owner supplies it
+//! (`with_rendered`). Flat-tree traversal and embedded control values remain open.
 
 use std::collections::{HashMap, HashSet};
 
@@ -14,6 +15,7 @@ pub(super) struct Names<'a, D: LayoutDom> {
     ids: HashMap<String, D::NodeId>,
     labels: Vec<D::NodeId>,
     generated: Option<&'a dyn Fn(D::NodeId) -> (String, String)>,
+    rendered: Option<&'a dyn Fn(D::NodeId) -> bool>,
 }
 
 fn attr<'a, D: LayoutDom>(dom: &'a D, node: D::NodeId, name: &str) -> Option<&'a str> {
@@ -31,6 +33,7 @@ impl<'a, D: LayoutDom> Names<'a, D> {
             ids: HashMap::new(),
             labels: Vec::new(),
             generated: None,
+            rendered: None,
         };
         let mut pending = vec![dom.document()];
         while let Some(node) = pending.pop() {
@@ -51,6 +54,13 @@ impl<'a, D: LayoutDom> Names<'a, D> {
         generated: &'a dyn Fn(D::NodeId) -> (String, String),
     ) -> Self {
         self.generated = Some(generated);
+        self
+    }
+
+    /// CSS rendering from the style owner: a node it reports not rendered
+    /// visible is hidden content, as `hidden` and `aria-hidden` are.
+    pub(super) fn with_rendered(mut self, rendered: &'a dyn Fn(D::NodeId) -> bool) -> Self {
+        self.rendered = Some(rendered);
         self
     }
 
@@ -130,9 +140,16 @@ impl<'a, D: LayoutDom> Names<'a, D> {
         None
     }
 
+    /// Whether the style owner reports `node` rendered and visible; true when
+    /// no owner was supplied, which keeps the DOM-only entry points as they were.
+    pub(super) fn rendered(&self, node: D::NodeId) -> bool {
+        self.rendered.is_none_or(|rendered| rendered(node))
+    }
+
     fn hidden(&self, node: D::NodeId) -> bool {
         attr(self.dom, node, "hidden").is_some()
             || attr(self.dom, node, "aria-hidden").is_some_and(|s| s.eq_ignore_ascii_case("true"))
+            || (self.dom.kind(node) == NodeKind::Element && !self.rendered(node))
     }
 
     fn compute(

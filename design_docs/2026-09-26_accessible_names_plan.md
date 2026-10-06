@@ -246,3 +246,137 @@ passes. Logs and exact source hashes live in
 `genet-taproot-preflight-negative.log`.
 Turnstone's exact-pin retained/native consumer and human AT receipts remain
 separate gates.
+
+## Hidden content in Taproot and the projection (2026-10-05)
+
+*Amends* the "Taproot projection matching (2026-09-29)" section above. That
+section kept `assert text` at its existing DOM-text meaning and left CSS
+visibility to the projection, which did not check it.
+
+### Report and findings
+
+A Knot-lane session (Conatus, physics, seiche status) reported on 2026-10-05,
+from `Code/testing/knot-editor/p1-adapt/` (logs 30–31), that scenario steps
+found `visibility:hidden` and `aria-hidden` measurement probes by
+`role:button`, and that their text satisfied `assert text`. Verified at
+`bf723d5d532`:
+
+- **`taproot::matching` checks nothing hidden.** The legacy DOM matcher
+  (`components/taproot/lib.rs:229`) has no hidden check.
+- **`resolve` only needs a box.** `resolve` (`:247`) needs a layout box, so it
+  skips `display:none`, but it still targets `visibility:hidden` and
+  `aria-hidden` elements.
+- **`text_present` counts every text node.** It does so (`:279`) even under
+  `display:none`.
+- **The projection misses only CSS visibility.** `projection_walk`
+  (`components/genet-render/src/a11y.rs:658`) drops `aria-hidden` subtrees
+  and nodes without a fragment, but not `visibility:hidden` or `collapse`.
+  Names (`a11y/name.rs`) treat only `hidden` and `aria-hidden` as hidden; their
+  module note says CSS visibility remains open. HTML-AAM and AccName exclude
+  CSS-hidden nodes.
+- **The projection has no computed styles.** It receives `LiveryLayout`
+  fragments only. Style-derived facts already come from the style owner as
+  providers (`rendered_generated_text`).
+- **Only some consumers use the legacy path.** In Mere,
+  `cambium-genet-winit-host`'s harness (`harness.rs:434`) and its tests use the
+  legacy `matching`. Mesquite already uses `matching_with_projection`. Mere
+  also calls `document_a11y_projection_with_generated_text`
+  (cambium-rootstock), `accesskit_tree_with_generated_text`
+  (cambium-winit-a11y) and `accesskit_tree` (pelt).
+
+### Rulings (2026-10-05)
+
+1. **What counts as hidden.** Asked what taproot's DOM path (`matching`,
+   `resolve`, `text_present`) treats as hidden. The options were: what a
+   person perceives; the projection's rule everywhere; retire the DOM path; or
+   leave it. Mark: "What a person perceives (Recommended)". It follows that:
+   - a click target needs a rendered, visible box;
+   - role selectors also skip `aria-hidden`;
+   - `assert text` counts rendered text only, and `aria-hidden` text still
+     counts because it is on screen.
+2. **The projection.** Asked whether genet-render's projection should stop
+   exposing `visibility:hidden` elements. The options were: fix it, or leave
+   it. Mark: "Fix it (Recommended)".
+3. **Who implements it.** Asked who implements this. The options were: a brief
+   to the agent, or this session. Mark first chose "Brief to the agent
+   (Recommended)", then amended it: "Eh. You can implement it if you wanna
+   orchestrate it". This session implements it.
+4. **Where visibility comes from.** Asked where the projection gets
+   visibility. The options were: a provider from the style owner; or the
+   layout records it. Mark: "Provider from the style owner (Recommended)". It
+   is read from current styles, so it cannot go stale on a visibility-only
+   restyle.
+5. **The API.** Asked how the projection's API changes. The options were: an
+   additive entry point; or changing the existing signatures. Mark: "Additive
+   entry point (Recommended)". It follows that:
+   - new `*_with_style` functions take the provider;
+   - genet's own callers move to them;
+   - the existing functions keep their signatures and behaviour, and Mere
+     opts in at its next repin.
+
+### Phase and done-conditions
+
+- **Livery.** `genet_livery::rendered_visible(dom, styles, node)` is false
+  when the node or an ancestor computes `display: none`, or when the node's
+  computed `visibility` is not `visible`. A text node answers for its parent.
+  It sits beside `rendered_generated_text`, with
+  `LiveryDocument::rendered_visible`.
+- **genet-render.** `A11yStyleQueries { generated, rendered }`, used by
+  `document_a11y_projection_with_style` and `accesskit_tree_with_style`.
+  - A node that is not rendered visible is not projected, but its children
+    are still walked: CSS lets a `visibility: visible` child of a hidden parent
+    show.
+  - Names treat it as hidden content, so it contributes only when directly
+  referenced.
+- **genet-documents.** The Livery and scripted engines use the new entry
+  point.
+- **taproot:**
+  - role selectors skip a node with an `aria-hidden="true"` ancestor or self;
+  - `resolve` needs a box and `rendered_visible`;
+  - `text_present` resolves styles per surface and counts text whose parent
+    is rendered visible.
+
+**Done when:**
+- fixtures pass on both paths. Each taproot fixture fails on `bf723d5d532`,
+  and the genet-render fixture shows the existing entry point still exposing
+  the hidden button;
+- `genet-livery`, `genet-render`, `taproot` and `genet-documents` tests pass;
+- the Knot lane is told the commit, and which Mere call sites to move at its
+  next repin.
+
+### Progress
+
+- 2026-10-05: rulings 1–5 recorded. Implementation is in
+  `worktrees/genet-hidden-automation`, using a copy of the primary checkout's
+  lock, `--locked --offline`.
+- 2026-10-05: implemented and verified. The target was
+  `C:/t/cargo-targets/genet-hidden`; logs are under
+  `Code/testing/genet-hidden-automation/`.
+  - **Control.** The four new taproot fixtures were run before taproot
+    changed (`genet-hidden-automation-control.log`). All four failed, and the
+    28 existing tests passed:
+    - a `visibility:hidden` decoy takes neither a role click nor a class
+      click;
+    - an `aria-hidden` button exposes no role, but a class selector still
+      clicks it;
+    - role matching skips an `aria-hidden` ancestor's buttons;
+    - `assert text` counts only rendered text: `aria-hidden` text counts,
+      `display:none` and `visibility:hidden` text does not.
+  - **After the change:**
+
+    | Crate | Passed / failed |
+    |---|---|
+    | taproot | 32 / 0 |
+    | genet-render | 41 / 0 |
+    | genet-livery library | 317 / 0 |
+    | genet-documents, livery and scripted | 55 / 0 |
+    | genet-documents, with scripted-nova | 56 / 0, the count recorded above |
+
+    genet-render's new fixture shows `visibility:hidden` content leaving the
+    styled projection and its names, while a visible child of a hidden parent
+    stays. Its control shows the existing entry point still exposing the
+    hidden button and its hidden name text.
+  - **Builds and formatting.** `genet-render` checks without `accesskit`.
+    `rustfmt --check` is clean for every hunk changed here. The two diffs it
+    still reports predate this change: `a11y/name.rs:248`, and the order of
+    `genet-render/src/lib.rs`'s `pub use` blocks.

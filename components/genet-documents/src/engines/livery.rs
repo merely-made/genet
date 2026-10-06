@@ -747,13 +747,16 @@ impl LiveryDocumentSession {
     /// scroll and page-zoom transforms at the session boundary.
     fn unrevisioned_accessibility_projection(&self) -> Option<DocumentA11yProjection> {
         let fragments = self.doc.retained_layout()?;
-        let projection = genet_render::document_a11y_projection_with_generated_text(
+        let projection = genet_render::document_a11y_projection_with_style(
             self.doc.dom(),
             fragments,
             self.focused_node,
             0,
             Some(self.doc.element_scroll()),
-            &|node| self.doc.generated_text(node),
+            &genet_render::A11yStyleQueries {
+                generated: &|node| self.doc.generated_text(node),
+                rendered: &|node| self.doc.rendered_visible(node),
+            },
         );
         let (scroll_x, scroll_y) = self.doc.scroll();
         let zoom = self.zoom();

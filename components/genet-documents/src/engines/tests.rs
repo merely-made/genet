@@ -1427,6 +1427,7 @@ fn livery_session_drag_selects_a_textarea_without_creating_a_page_clip() {
     );
     assert!(session.pointer_move(target.anchor[0], target.anchor[1]));
     assert_eq!(session.pointer_up(390.0, 150.0), SessionClick::Handled);
+    let note = livery_node_with_id(session, "note");
     let selection = session
         .document()
         .dom()
@@ -2574,7 +2575,7 @@ fn email_and_number_editing_keep_a_native_cursor_without_selection_idl() {
         ),
         SessionEffect::Handled
     );
-    assert_eq!(session.character_input("X"), SessionEffect::Handled);
+    assert!(session.text_input("X"));
     assert_eq!(
         session
             .document()
@@ -2606,7 +2607,7 @@ fn email_and_number_editing_keep_a_native_cursor_without_selection_idl() {
         ),
         SessionEffect::Handled
     );
-    assert_eq!(session.character_input("9"), SessionEffect::Handled);
+    assert!(session.text_input("9"));
     assert_eq!(
         session
             .document()

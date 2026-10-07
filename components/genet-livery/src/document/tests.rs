@@ -2489,6 +2489,69 @@ fn live_input_value_paints_without_replacing_its_default_attribute() {
 }
 
 #[test]
+fn live_input_text_is_clipped_to_its_content_box_and_uses_only_current_value() {
+    let current_value = "WWWWWWWWWWWWWWWWWWWW";
+    let mut dom = ScriptedDom::from_serialized_document(
+        "<html><body><input id=field value=author-default></body></html>",
+    );
+    let field = by_id(&dom, "field");
+    let mut state = dom.form_control_state(field).expect("input state");
+    state.value = current_value.to_owned();
+    state.dirty_value = true;
+    assert!(dom.set_form_control_state(field, state));
+
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&[
+            "html, body { margin: 0; } input { width:40px; height:24px; padding:0; border:0; }",
+        ]),
+        Device::screen(120.0, 80.0),
+    );
+    let list = document.frame(120, 80).expect("frame");
+    assert_eq!(
+        document
+            .dom()
+            .attribute(field, &Namespace::default(), &LocalName::from("value")),
+        Some("author-default")
+    );
+    let commands = list.commands();
+    let draw_index = commands
+        .iter()
+        .position(|command| matches!(command, paint_list_api::PaintCmd::DrawText(_)))
+        .expect("the current input value paints");
+    let paint_list_api::PaintCmd::DrawText(run) = &commands[draw_index] else {
+        unreachable!();
+    };
+    assert_eq!(run.glyphs.len(), current_value.chars().count());
+    let content_rect = run.placement.bounds;
+    let clip_index = commands[..draw_index]
+        .iter()
+        .rposition(|command| {
+            matches!(
+                command,
+                paint_list_api::PaintCmd::PushClip(paint_list_api::ClipSpec {
+                    kind: paint_list_api::ClipKind::Rect(rect),
+                }) if *rect == content_rect
+            )
+        })
+        .expect("control text is enclosed by its exact content-box clip");
+    assert!(clip_index < draw_index);
+    assert!(
+        matches!(
+            commands.get(draw_index + 1),
+            Some(paint_list_api::PaintCmd::PopClip)
+        ),
+        "the input clip closes immediately after its text run"
+    );
+    assert!(
+        run.glyphs
+            .last()
+            .is_some_and(|glyph| glyph.point.x > content_rect.max.x),
+        "the long live value overflows the control before the content clip: {content_rect:?}"
+    );
+}
+
+#[test]
 fn live_textarea_value_projects_multiline_text_and_preserves_author_children() {
     let mut dom = ScriptedDom::from_serialized_document(
         "<html><body><textarea id=field>author default</textarea></body></html>",

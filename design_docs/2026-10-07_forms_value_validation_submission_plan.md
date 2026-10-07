@@ -149,3 +149,12 @@ dependency or version change is authorized beyond the named workspace edge.
   tree scope. Focused fixtures also correct newline glyph accounting, retained
   hit-test setup and implicit checkbox/radio accessibility roles. These remain
   draft checks; password painting and the ID/tree radio rescan are still open.
+- 2026-10-07: `draft-owner-crates` compiles the library changes and stops in
+  document tests on an early `note` reference and two uses of a nonexistent
+  input method. These fixture errors are fixed. Transient pre/post radio
+  association snapshots now cover ID edits and tree replacement/removal,
+  including shadow connection, without expanding the retained control record.
+  Reconciliation follows form-owner change and becoming-connected triggers;
+  a detached generic-container insertion alone does not clear checked peers.
+  A focused paint fixture checks that overflowing live-value glyphs are
+  enclosed by the content-box clip. All changes await executable qualification.

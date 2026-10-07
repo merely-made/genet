@@ -489,7 +489,7 @@ impl ScriptedDom {
         if name.is_empty() {
             return;
         }
-        let root = self.tree_root(id);
+        let root = self.form_control_tree_root(id);
         let form_owner = self.input_form_owner(id, root);
         let mut descendants = Vec::new();
         collect_descendants(self, root, &mut descendants);
@@ -541,7 +541,7 @@ impl ScriptedDom {
         }
         None
     }
-    fn tree_root(&self, id: NodeId) -> NodeId {
+    fn form_control_tree_root(&self, id: NodeId) -> NodeId {
         let mut root = id;
         while let Some(parent) = self.parent(root) {
             root = parent;

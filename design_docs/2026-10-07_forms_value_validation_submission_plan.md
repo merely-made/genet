@@ -136,3 +136,9 @@ dependency or version change is authorized beyond the named workspace edge.
   apply HTML's type restrictions. Focused coverage includes retained repaint,
   UTF-16 editing, defaults, textarea lines, placeholder, checkedness and capture
   payload roundtrip. Password painting remains dependent on the pending answer.
+- 2026-10-07: The first draft crate gate (`draft-serial-crates.receipt.json`)
+  stops at compilation with a duplicate `tree_root` method. The Forms helper
+  is renamed `form_control_tree_root`: radio grouping follows ordinary DOM
+  parents, while the existing GC opaque-root helper also follows shadow hosts.
+  No tests executed in that failed gate. The original lock and local config
+  were restored; a fresh receipt will record the repaired draft gate.

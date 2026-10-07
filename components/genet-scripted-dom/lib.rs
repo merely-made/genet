@@ -22,7 +22,7 @@ use engine_observables_api::{DomArenaStats, DomNodeKindStats};
 use genet_static_dom::{StaticDocument, StaticNodeId};
 use layout_dom_api::{
     AttributeView, DoctypeView, DomMutation, FormControlState, LayoutDom, LayoutDomMut, LocalName,
-    Namespace, NodeKind, QualName, QuirksMode, SelectionDirection,
+    Namespace, NodeKind, QualName, QuirksMode,
 };
 
 mod adoption;

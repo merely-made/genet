@@ -74,6 +74,23 @@ validation then submission, C6 node state in the DOM arena read through
 LayoutDom. Luna agents substitute for the brief's unavailable models under
 Mark's explicit authorization to favor cheap agents.
 
+### F4: bounded app textbox layout repair, 2026-10-07
+
+Question as put: "May Forms include a bounded Genet layout repair for unsized
+app textboxes? The live host correctly resolves both the 10em default and 12em
+override, but paints child-dependent widths of 87px and 400px. This crosses
+into the CSS layout owner; I would add a failing layout fixture, fix the
+measured handoff, and rerun the consumer tests and existing CSS reftest guard."
+
+Options: repair the Genet layout path (recommended); defer this repair and
+leave the width regression open. Mark's answer, verbatim: "Repair the Genet
+layout path (Recommended)".
+
+Consequence: add the reproducing CSS fixture before changing the positioned
+sizing handoff, qualify the repaired candidate, refresh Mere consumer evidence
+and rerun the existing CSS guard. This does not authorize broader containment
+work. Sibling scope and accessible-leaf policy retain their pending questions.
+
 ## Phases and done-conditions
 
 ### A: one live control value
@@ -577,3 +594,5 @@ dependency cache. Original primary overrides and locks remain preserved.
   a failing fixture and fresh consumer/reftest gates. That decision, sibling
   scope and accessible-leaf projection are all pending without response timers.
   Independent native-state routing/forwarding controls can proceed meanwhile.
+- 2026-10-07: Mark approves the bounded Genet layout repair as F4 above.
+  Reproduction, a measured handoff repair and fresh qualification follow.

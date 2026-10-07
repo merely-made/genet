@@ -383,3 +383,8 @@ incremental network delivery or copying a reference implementation.
   Matched runs on the unchanged foundation still fail all four controls on
   both engines. `algorithm-controls-byte-eof-correction.receipt.json` records
   the precise correction and both fixture hashes.
+- The first frozen candidate gate, `candidate-focused-controls`, failed during
+  Runtime compilation before any tests ran. Its two Streams installers accepted
+  the full engine instead of Runtime's realm-aware `Surface`. Both signatures
+  now follow the existing installers, preserving Window, Worker and child-realm
+  installation. The failed gate and its source/lock receipt remain intact.

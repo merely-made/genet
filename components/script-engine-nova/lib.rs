@@ -731,7 +731,7 @@ mod native {
             };
             let on_fulfilled = on_fulfilled.get(self.agent, self.gc.nogc());
             let on_rejected = on_rejected.get(self.agent, self.gc.nogc());
-            nova_vm::ecmascript::builtins::perform_promise_then_without_capability(
+            nova_vm::ecmascript::perform_promise_then_without_capability(
                 self.agent,
                 promise,
                 on_fulfilled,

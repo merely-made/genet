@@ -173,6 +173,33 @@ fn discarded_stream_cycles_are_collected_by_normal_pump<E: ScriptEngine>() {
     );
 }
 
+#[test]
+fn boa_plain_and_ephemeron_cycles_are_collected() {
+    let mut rt = runtime::<script_engine_boa::BoaEngine>();
+    rt.eval(
+        r#"var finalized=[];var registry=new FinalizationRegistry(value=>finalized.push(value));
+      var firstMap=new WeakMap(),secondMap=new WeakMap();
+      (()=>{const plain={};plain.self=plain;registry.register(plain,'plain');
+        const selfKey={};firstMap.set(selfKey,{key:selfKey});registry.register(selfKey,'self');
+        const a={},b={};firstMap.set(a,{other:b});secondMap.set(b,{other:a});
+        registry.register(a,'cross-a');registry.register(b,'cross-b');})();
+    "#,
+    )
+    .expect("register plain and ephemeron cycles");
+    rt.run_microtasks();
+    for _ in 0..4 {
+        rt.collect_garbage();
+        rt.run_event_loop(16).expect("pump finalizers");
+        if read(&mut rt, "String(finalized.length===4)") == "true" {
+            return;
+        }
+    }
+    assert_eq!(
+        read(&mut rt, "finalized.sort().join(',')"),
+        "cross-a,cross-b,plain,self"
+    );
+}
+
 struct WorkerScript;
 impl ScriptResourceLoader for WorkerScript {
     fn load(&self, url: &str) -> Option<String> {

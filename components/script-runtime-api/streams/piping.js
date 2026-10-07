@@ -86,10 +86,10 @@ var PipingOps = (function (Core, ReadableOps, WritableOps) {
     }
 
     function convertPipeOptions(value) {
-        // Web IDL converts dictionary members in declaration order.
-        var preventClose = !!dictionaryValue(value, "preventClose");
+        // Web IDL dictionary members are converted in lexicographic order.
         var preventAbort = !!dictionaryValue(value, "preventAbort");
         var preventCancel = !!dictionaryValue(value, "preventCancel");
+        var preventClose = !!dictionaryValue(value, "preventClose");
         var signal = dictionaryValue(value, "signal");
         if (signal !== undefined && !signalOps.isSignal(signal)) {
             throw typeError("The signal option is not an AbortSignal");

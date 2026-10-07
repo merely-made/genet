@@ -68,6 +68,56 @@ const PIPE_TO_CONVERSION_REJECTS: &str = r#"
     check(receiverRejection instanceof TypeError, 'invalid receiver rejects with TypeError');
 "#;
 
+const PIPE_OPTIONS_DICTIONARY_ORDER: &str = r#"
+    const observed = [];
+    const source = new ReadableStream({ start(controller) { controller.close(); } });
+    const destination = new WritableStream();
+    const pipe = source.pipeTo(destination, {
+        get preventAbort() { observed.push('preventAbort'); return false; },
+        get preventCancel() { observed.push('preventCancel'); return false; },
+        get preventClose() { observed.push('preventClose'); return false; },
+        get signal() { observed.push('signal'); return undefined; }
+    });
+    check(pipe instanceof Promise, 'pipeTo returns a promise after option conversion');
+    await pipe;
+    check(observed.join(',') === 'preventAbort,preventCancel,preventClose,signal',
+          'pipe options getters run in Web IDL lexicographic order');
+
+    const pipeReason = { getter: 'pipeTo' };
+    const pipeObserved = [];
+    let pipeResult, pipeThrown;
+    try {
+        pipeResult = new ReadableStream().pipeTo(new WritableStream(), {
+            get preventAbort() { pipeObserved.push('preventAbort'); return false; },
+            get preventCancel() { pipeObserved.push('preventCancel'); throw pipeReason; },
+            get preventClose() { pipeObserved.push('preventClose'); return false; },
+            get signal() { pipeObserved.push('signal'); return undefined; }
+        });
+    } catch (error) { pipeThrown = error; }
+    check(pipeThrown === undefined, 'pipeTo does not throw option getter errors synchronously');
+    check(pipeResult instanceof Promise, 'pipeTo returns a promise for abrupt dictionary conversion');
+    let pipeRejection;
+    try { await pipeResult; } catch (error) { pipeRejection = error; }
+    check(pipeRejection === pipeReason, 'pipeTo preserves the exact getter rejection reason');
+    check(pipeObserved.join(',') === 'preventAbort,preventCancel',
+          'pipeTo stops dictionary conversion after the throwing getter');
+
+    const throughReason = { getter: 'pipeThrough' };
+    const throughObserved = [];
+    let throughThrown;
+    try {
+        new ReadableStream().pipeThrough(new TransformStream(), {
+            get preventAbort() { throughObserved.push('preventAbort'); return false; },
+            get preventCancel() { throughObserved.push('preventCancel'); throw throughReason; },
+            get preventClose() { throughObserved.push('preventClose'); return false; },
+            get signal() { throughObserved.push('signal'); return undefined; }
+        });
+    } catch (error) { throughThrown = error; }
+    check(throughThrown === throughReason, 'pipeThrough throws the exact getter error synchronously');
+    check(throughObserved.join(',') === 'preventAbort,preventCancel',
+          'pipeThrough stops dictionary conversion after the throwing getter');
+"#;
+
 const PIPE_THROUGH_LOCKS_THROW: &str = r#"
     const lockedSource = new ReadableStream();
     lockedSource.getReader();
@@ -110,6 +160,11 @@ macro_rules! cases {
         #[test]
         fn pipe_to_binding_errors_reject_and_preserve_receiver_order() {
             control::<$backend>(PIPE_TO_CONVERSION_REJECTS);
+        }
+
+        #[test]
+        fn pipe_options_follow_webidl_getter_order_and_exception_boundary() {
+            control::<$backend>(PIPE_OPTIONS_DICTIONARY_ORDER);
         }
 
         #[test]

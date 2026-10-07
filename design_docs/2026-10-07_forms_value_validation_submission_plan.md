@@ -506,3 +506,15 @@ dependency cache. Original primary overrides and locks remain preserved.
   selection-range file's harness-error-to-file-failure transition adds 48 observed
   passes and one failure, with no invented baseline assertions. Final attribution
   must be regenerated against the final source/maps.
+- 2026-10-07: Mere candidate preparation at `019e07a0` resolves the exact
+  Genet `b8a3ec1d` source family. The 1,688-package lock preserves every version,
+  dependency array and checksum; exactly 33 Genet, nine Boa and three Vano
+  revisions move. The two legacy Knot-owned Genet identities remain unchanged.
+  The default metadata graph does not activate a JavaScript engine. The catalog
+  acceptance program passes and regenerates the two HTML goldens; this prepares
+  artifacts, not consumer qualification. Root restores the original Mere
+  manifest and lock and verifies all 3,409 tracked source bytes and mtimes
+  outside owned outputs. Luna finds no concrete field/projection defect and
+  identifies the optional `highlight` library feature as an additional gate.
+  Fresh Mere consumer tests and their disabled-marker control follow. The
+  sibling scope question remains unanswered, with no response timer.

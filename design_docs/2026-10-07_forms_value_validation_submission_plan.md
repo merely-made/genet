@@ -544,3 +544,15 @@ dependency cache. Original primary overrides and locks remain preserved.
   decoration descendants. A separate question asks whether app textboxes should
   be accessible leaves across adapters or only in the browser mirror. No
   pruning is implemented while that ruling and sibling scope remain pending.
+- 2026-10-07: `mere-forms-native-routing-imported` executes 59 passes and one
+  failure across five targets, then stops before `text_caret`: an unsized app
+  field takes child-dependent widths of 87px and 400px. The native input's
+  former default is 20 columns at half an em each. Mere restores that intrinsic
+  width with a font-relative `contain-intrinsic-size` substitute and exposes
+  `--cambium-field-intrinsic-width` for host overrides; explicit CSS widths keep
+  their existing behavior. The existing regression and an override fixture
+  must pass on fresh source, and component/catalog receipts must be refreshed.
+  Three preflight-only starts had falsely classified a separate
+  `mere-grammar-g3` worktree's nested target as this gate's output; the helper
+  now compares explicit Cargo roots and actual profile output directories,
+  preserving the independent lane. Those starts mutated no files.

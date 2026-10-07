@@ -3167,7 +3167,7 @@
           if (!this.dispatchEvent(new Event('reset', { bubbles: true, cancelable: true }))) return;
           var seen = new Set();
           var own = this.querySelectorAll('input,textarea');
-          var all = ownerDocumentOf(this).querySelectorAll('input,textarea');
+          var all = this.getRootNode().querySelectorAll('input,textarea');
           function resetAssociated(list, form) {
             for (var i = 0; i < list.length; i++) {
               var control = list[i];

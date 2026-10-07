@@ -2481,9 +2481,8 @@ fn live_input_value_paints_without_replacing_its_default_attribute() {
         })
         .sum::<usize>();
     assert_eq!(painted, "current value".chars().count());
-    assert_eq!(
-        document.dom().text_content(field),
-        None,
+    assert!(
+        document.dom().dom_children(field).next().is_none(),
         "input has no value child text"
     );
 }
@@ -2568,8 +2567,12 @@ fn live_textarea_value_projects_multiline_text_and_preserves_author_children() {
         Device::screen(240.0, 100.0),
     );
     assert_eq!(
-        document.dom().text_content(field).as_deref(),
-        Some("author default")
+        document
+            .dom()
+            .dom_children(field)
+            .filter_map(|child| document.dom().text(child))
+            .collect::<String>(),
+        "author default"
     );
     let frame = document.frame(240, 100).expect("frame");
     let painted = frame

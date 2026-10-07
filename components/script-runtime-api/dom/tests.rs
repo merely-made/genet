@@ -2300,12 +2300,24 @@ fn form_control_owner_works<E: ScriptEngine>() {
       shadow.appendChild(shadowInput); console.log(shadowInput.form === null);
       const shadowForm=document.createElement('form'); shadowForm.id='duplicate';
       shadow.appendChild(shadowForm); console.log(shadowInput.form === shadowForm);
+      shadowInput.defaultValue='shadow-default'; shadowInput.value='edited';
+      shadowForm.reset(); console.log(shadowInput.value);
       console.log('textLength' in outside);
       child.value='A😀B'; console.log(child.textLength);
     "#).expect("form owner script");
     assert_eq!(
         rt.host().borrow().console,
-        vec!["true", "true", "true", "true", "true", "true", "false", "4"]
+        vec![
+            "true",
+            "true",
+            "true",
+            "true",
+            "true",
+            "true",
+            "shadow-default",
+            "false",
+            "4"
+        ]
     );
 }
 

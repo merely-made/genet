@@ -164,3 +164,9 @@ dependency or version change is authorized beyond the named workspace edge.
   The final checkedness guard is committed before the next run. Qualification
   now distinguishes a separate Mere build with its verified `cargo-targets/mere`
   owner, rather than blocking unrelated workspace work globally.
+- 2026-10-07: The fixed-source `draft-frozen-crates` reaches Livery's tests
+  and stops on two nonexistent DOM helper calls. Assertions now read the
+  authored child nodes directly. Reset scans the form's ordinary tree, rather
+  than its owner document, so explicit associations inside a shadow root reset
+  together; the two-engine owner fixture covers this case. No executed test
+  pass is claimed from this compile-only gate.

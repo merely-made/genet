@@ -284,7 +284,7 @@ speexdsp-resampler = "0.1.0"
 # Font enumeration + family resolution, the same stack parley uses (so the
 # cascade's font-metrics provider resolves fonts identically to text layout).
 fontique = { package = "genet-fontique", version = "0.10.0", path = "support/patches/fontique" }
-fontsan = "0.7.0"
+fontsan = { version = "0.7.0", default-features = false, features = ["libz-sys", "wuff"] }
 skrifa = "0.42.1"
 smallvec = { version = "1.15", features = ["serde", "union"] }
 stacker = "0.1.21"

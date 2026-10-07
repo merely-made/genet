@@ -2516,6 +2516,63 @@ fn live_control_text_updates_after_hiding_and_showing_with_a_retained_neighbor()
 }
 
 #[test]
+fn password_input_masks_character_clusters_without_retaining_secret_text() {
+    let secret = "e\u{0301}👩‍👩‍👧‍👦🇺🇸";
+    let mut dom = ScriptedDom::from_serialized_document(
+        "<html><body><input id=field type=password value=default placeholder=hint></body></html>",
+    );
+    let field = by_id(&dom, "field");
+    let mut state = dom.form_control_state(field).expect("password state");
+    state.value = secret.to_owned();
+    state.dirty_value = true;
+    assert!(dom.set_form_control_state(field, state));
+    let mut document = form_control_paint_document(
+        dom,
+        "html, body { margin:0; } input { width:160px; height:28px; }",
+        400.0,
+        120.0,
+    );
+    assert_eq!(painted_runs(&mut document).iter().sum::<usize>(), 3);
+    let text = document
+        .layout
+        .as_ref()
+        .expect("password frame")
+        .fragments
+        .text_frame()
+        .expect("retained masked text");
+    assert!(text.find_text_range("•••").is_some());
+    assert!(text.find_text_range(secret).is_none());
+    assert_eq!(
+        document.dom().form_control_state(field).unwrap().value,
+        secret
+    );
+    assert_eq!(
+        document
+            .dom()
+            .attribute(field, &Namespace::default(), &LocalName::from("value")),
+        Some("default")
+    );
+
+    document.mutate_dom(|dom| {
+        let mut state = dom.form_control_state(field).expect("password state");
+        state.value.clear();
+        assert!(dom.set_form_control_state(field, state));
+    });
+    assert_eq!(painted_runs(&mut document).iter().sum::<usize>(), 4);
+    assert!(
+        document
+            .layout
+            .as_ref()
+            .unwrap()
+            .fragments
+            .text_frame()
+            .unwrap()
+            .find_text_range("•••")
+            .is_none()
+    );
+}
+
+#[test]
 fn live_input_value_paints_without_replacing_its_default_attribute() {
     let dom = ScriptedDom::from_serialized_document(
         "<html><body><input id=field value=default></body></html>",

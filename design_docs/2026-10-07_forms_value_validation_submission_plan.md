@@ -2,9 +2,9 @@
 
 **Status, 2026-10-07:** Phase A implementation in progress; starting runner,
 behavior controls and whole-directory baseline are frozen. The focused arena,
-native-document and Livery repair gate passes all 449 tests. Password display
-and the Cambium compatibility decision remain open; full candidate qualification
-and matched WPT after maps are pending. Phase B and C retain separate checkpoints.
+native-document and Livery repair gate passes all 449 tests. Password cluster
+masking and Cambium migration are approved and being implemented; full candidate
+qualification and matched WPT after maps are pending. Phase B and C retain separate checkpoints.
 Forms Phase A is not accepted or published.
 
 Authority: [standards ledger](2026-09-07_standards_to_features_ledger.md), C1,
@@ -33,8 +33,38 @@ Mark's answer, verbatim: "Proceed".
 Reading, not ruled: this accepts the recommended bounded rendering scope.
 Input values, placeholders and password display join textarea's live-value
 projection. Composition/IME algorithms, validation and submission retain
-their own scope. The password bullet-count question is pending; it has no
-response timer and dependent implementation waits for the answer.
+their own scope. F2 below resolves the password bullet-count question.
+
+### F2: password character clusters, 2026-10-07
+
+Question as put: "For password fields, should each visible character cluster get
+one bullet, or should each Unicode code point get one bullet? Character clusters
+keep accented letters and joined emoji together."
+
+Options: one bullet per character cluster (recommended); one per Unicode code point.
+Mark's answer, verbatim: "One bullet per character cluster (Recommended) and yes
+to the other recommended one. When you stop working and finish your response,
+the prompt disappears, for the record".
+
+Consequence: use the existing ICU grapheme segmenter, draw U+2022 per cluster,
+retain the original arena value and keep only the mask in retained display text.
+This drawing ruling does not expand native password editing or composition.
+
+### F3: Cambium app-owned fields and verified repin, 2026-10-07
+
+Question as put: "May I migrate Cambium's text fields in Mere to app-owned textbox
+elements, preserving highlighting, IME, carets and accessible values, then verify
+a Genet repin? This crosses the Forms brief's repository scope and version restriction."
+
+Options: approve Cambium migration and verified repin (recommended); stop at the
+compatibility checkpoint. Mark's answer is the same verbatim response recorded in F2;
+"yes to the other recommended one" approves the migration and repin scope.
+
+Consequence: Mere owns app-field tags, child text projection, edit routing and
+committed-value accessibility decoration. Genet native inputs/textarea consume
+their arena state. Verify the changed Mere consumer against the Forms source;
+published-source repinning follows integration. Text-valued accessibility action
+routing remains a separately identified pre-existing gap.
 
 The prior rulings remain: C1 HTML constraint validation, C5 value model then
 validation then submission, C6 node state in the DOM arena read through
@@ -260,3 +290,14 @@ dependency or version change is authorized beyond the named workspace edge.
   No Forms push or integration occurs. Stable target `C:/t/cargo-targets/genet-encoding`
   and published-source home `C:/t/cargo-homes/genet-streams` stay owned by this
   unfinished Forms qualification. No Forms worktree was created.
+- 2026-10-07: Mark approves F2 cluster bullets and F3 Mere migration/verified
+  repin. Livery now uses its existing ICU grapheme segmenter for masked display,
+  preserving the original arena/default values and excluding the secret from
+  retained text. A deterministic fixture covers combining accents, joined emoji,
+  flags and empty-value placeholder replacement. The native accessibility
+  child-value fixture is updated under F3 to assert the arena value, stable label
+  and unchanged authored child text. Two Luna agents own the Mere field/selector
+  migration and committed-value accessibility decoration in disjoint files.
+  Native password editing/composition and text-valued accessibility actions are
+  existing separate gaps. The previous 449-test receipt predates these changes;
+  no new pass is inferred from it.

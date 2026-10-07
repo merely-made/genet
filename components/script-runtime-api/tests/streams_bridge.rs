@@ -151,25 +151,34 @@ fn retained_child_stream_uses_parent_borrowed_methods_after_destruction<E: Scrip
 fn discarded_stream_cycles_are_collected_by_normal_pump<E: ScriptEngine>() {
     let mut rt = runtime::<E>();
     rt.eval(
-        r#"var finalized=[];var registry=new FinalizationRegistry(value=>finalized.push(value));
+        r#"var streamRefs;
       (()=>{const readable=new ReadableStream(),byte=new ReadableStream({type:'bytes'});
         const writable=new WritableStream(),transform=new TransformStream();
-        registry.register(readable,'readable');registry.register(byte,'byte');
-        registry.register(writable,'writable');registry.register(transform,'transform');})();
+        streamRefs=[new WeakRef(readable),new WeakRef(byte),new WeakRef(writable),new WeakRef(transform)];})();
     "#,
     )
-    .expect("register cycles");
+    .expect("observe stream cycles");
     rt.run_microtasks();
     for _ in 0..4 {
         rt.collect_garbage();
-        rt.run_event_loop(16).expect("pump finalizers");
-        if read(&mut rt, "String(finalized.length===4)") == "true" {
+        // The first collection ends WeakRef's kept-object turn; collect again
+        // before observing, so a polling deref cannot perpetually retain it.
+        rt.collect_garbage();
+        rt.run_event_loop(16).expect("pump after collection");
+        if read(
+            &mut rt,
+            "String(streamRefs.every(ref=>ref.deref()===undefined))",
+        ) == "true"
+        {
             return;
         }
     }
     assert_eq!(
-        read(&mut rt, "finalized.sort().join(',')"),
-        "byte,readable,transform,writable"
+        read(
+            &mut rt,
+            "String(streamRefs.every(ref=>ref.deref()===undefined))"
+        ),
+        "true"
     );
 }
 
@@ -177,27 +186,52 @@ fn discarded_stream_cycles_are_collected_by_normal_pump<E: ScriptEngine>() {
 fn boa_plain_and_ephemeron_cycles_are_collected() {
     let mut rt = runtime::<script_engine_boa::BoaEngine>();
     rt.eval(
-        r#"var finalized=[];var registry=new FinalizationRegistry(value=>finalized.push(value));
+        r#"var cycleRefs;
       var firstMap=new WeakMap(),secondMap=new WeakMap();
-      (()=>{const plain={};plain.self=plain;registry.register(plain,'plain');
-        const selfKey={};firstMap.set(selfKey,{key:selfKey});registry.register(selfKey,'self');
+      (()=>{const plain={};plain.self=plain;
+        const selfKey={};firstMap.set(selfKey,{key:selfKey});
         const a={},b={};firstMap.set(a,{other:b});secondMap.set(b,{other:a});
-        registry.register(a,'cross-a');registry.register(b,'cross-b');})();
+        cycleRefs=[new WeakRef(plain),new WeakRef(selfKey),new WeakRef(a),new WeakRef(b)];})();
     "#,
     )
-    .expect("register plain and ephemeron cycles");
+    .expect("observe plain and ephemeron cycles");
     rt.run_microtasks();
     for _ in 0..4 {
         rt.collect_garbage();
-        rt.run_event_loop(16).expect("pump finalizers");
-        if read(&mut rt, "String(finalized.length===4)") == "true" {
+        rt.collect_garbage();
+        rt.run_event_loop(16).expect("pump after collection");
+        if read(
+            &mut rt,
+            "String(cycleRefs.every(ref=>ref.deref()===undefined))",
+        ) == "true"
+        {
             return;
         }
     }
     assert_eq!(
-        read(&mut rt, "finalized.sort().join(',')"),
-        "cross-a,cross-b,plain,self"
+        read(
+            &mut rt,
+            "String(cycleRefs.every(ref=>ref.deref()===undefined))"
+        ),
+        "true"
     );
+}
+
+#[test]
+fn boa_finalizer_delivery_survives_an_earlier_microtask_checkpoint() {
+    let mut rt = runtime::<script_engine_boa::BoaEngine>();
+    rt.eval("var finalized=[];var registry=new FinalizationRegistry(value=>finalized.push(value));(()=>{const plain={};registry.register(plain,'plain');})();")
+        .expect("register finalizer before pump");
+    rt.run_microtasks();
+    for _ in 0..4 {
+        rt.collect_garbage();
+        rt.run_event_loop(16)
+            .expect("pump finalizer after collection");
+        if read(&mut rt, "String(finalized.length===1)") == "true" {
+            return;
+        }
+    }
+    assert_eq!(read(&mut rt, "finalized.join(',')"), "plain");
 }
 
 struct WorkerScript;

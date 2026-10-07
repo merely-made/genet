@@ -2433,6 +2433,30 @@ fn painted_runs(document: &mut LiveryDocument<ScriptedDom>) -> Vec<usize> {
 }
 
 #[test]
+fn document_without_text_or_virtual_controls_keeps_text_frame_absent() {
+    let dom =
+        ScriptedDom::from_serialized_document("<html><body><div id=empty></div></body></html>");
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&["html, body { margin: 0; }"]),
+        Device::screen(240.0, 100.0),
+    );
+
+    document.frame(240, 100).expect("empty document frame");
+
+    assert!(
+        document
+            .layout
+            .as_ref()
+            .expect("completed layout")
+            .fragments
+            .text_frame()
+            .is_none(),
+        "an empty document does not allocate a retained text frame"
+    );
+}
+
+#[test]
 fn live_input_value_paints_without_replacing_its_default_attribute() {
     let mut dom = ScriptedDom::from_serialized_document(
         "<html><body><input id=field value=default></body></html>",

@@ -47,11 +47,19 @@ where
     ) where
         D: LayoutDom<NodeId = Id>,
     {
-        let Some(mut frame) = self.text_frame.take() else {
-            return;
-        };
         let mut elements = Vec::new();
         atomic_inline_elements(dom, styles, dom.document(), false, &mut elements);
+        let needs_control_frame = elements
+            .iter()
+            .copied()
+            .any(|element| needs_form_control_text_frame(dom, styles, element));
+        let Some(mut frame) = self
+            .text_frame
+            .take()
+            .or_else(|| needs_control_frame.then(|| text.begin_frame()))
+        else {
+            return;
+        };
         for element in elements {
             if let Some(style) = styles.get(element) {
                 // An element's inline boxes are its boxes in the lines that
@@ -775,5 +783,26 @@ fn atomic_inline_elements<D>(
     }
     for child in dom.dom_children(node) {
         atomic_inline_elements(dom, styles, child, inside, out);
+    }
+}
+
+/// Whether preparing this element can add virtual form-control text to the
+/// retained text frame. Button-like inputs must not create an otherwise empty
+/// frame when a document has no ordinary text.
+fn needs_form_control_text_frame<D: LayoutDom>(
+    dom: &D,
+    styles: &StylePlane<D::NodeId>,
+    node: D::NodeId,
+) -> bool {
+    if styles
+        .get(node)
+        .is_none_or(|style| style.display == Display::None)
+    {
+        return false;
+    }
+    match crate::text::form_control_text_kind(dom, node) {
+        Some(crate::text::FormControlTextKind::Textarea) => dom.form_control_state(node).is_some(),
+        Some(crate::text::FormControlTextKind::Input(_)) => true,
+        None => false,
     }
 }

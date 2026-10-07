@@ -286,8 +286,8 @@ var ReadableOps = (function (Core) {
   function readDefaultPullSteps(controller, request) {
     var stream = streamSlot(controller.stream);
     if (Core.length(controller.queue) > 0) {
-      var entry = Core.shift(controller.queue);
-      resolveReadRequest(request, 'chunk', entry.value);
+      var chunk = Core.shift(controller.queue);
+      resolveReadRequest(request, 'chunk', chunk);
       if (controller.closeRequested && Core.length(controller.queue) === 0) closeStream(controller.stream);
       else callPullIfNeeded(controller, 'default');
       return;

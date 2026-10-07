@@ -388,3 +388,18 @@ incremental network delivery or copying a reference implementation.
   the full engine instead of Runtime's realm-aware `Surface`. Both signatures
   now follow the existing installers, preserving Window, Worker and child-realm
   installation. The failed gate and its source/lock receipt remain intact.
+- `candidate-surface-controls` compiled successfully and executed the existing
+  Fetch tests: 28 passes, four failures, split equally between engines. A default
+  read mistook `Core.shift`'s returned chunk for an entry record and returned
+  `undefined`; it now forwards the chunk directly. The unchanged assertions
+  detected this production defect. A new named gate runs every focused target
+  with `--no-fail-fast` so a failure cannot hide later controls.
+- A source audit found an additional reaction-attachment gap: captured public
+  `Promise.prototype.then` still performs species construction. Internal
+  reactions can therefore inspect authored Promise constructor/species getters.
+  The separate six-case `streams-promise-reaction-properties.html` fixture,
+  SHA-256 `39F8734A4444178BDC8A20C2BF0F3D261FFDF739B5FB94A455A1D24714B901B2`,
+  passes all six cases on each unchanged foundation engine. The candidate has
+  an enabled Rust control for the same edge. A private reaction operation is
+  under read-only engine inspection for the brief's engine-feature checkpoint;
+  no engine or dependency change is authorized by this observation alone.

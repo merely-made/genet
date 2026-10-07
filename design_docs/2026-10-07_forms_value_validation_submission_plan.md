@@ -222,3 +222,14 @@ dependency or version change is authorized beyond the named workspace edge.
   display:none subtrees; a control beneath a hidden ancestor remains unpainted.
   This corrected draft awaits a fresh focused gate; font setup is not yet a
   qualified explanation of the original zero-glyph failures.
+- 2026-10-07: `draft-deterministic-control-crates` repeats the 57 native and
+  67 arena passes; Livery has 320 passes and the same four zero-glyph failures.
+  Ahem alone does not repair them. Diagnostics show valid control geometry but
+  only the outer inline-box shape and zero retained fonts. The actual conflict
+  is `TextFrame::prepared_sources`: inline-box layout marks the control's node
+  there, and the virtual-value producer treats that as prepared text. Native
+  session fixtures use display:block and avoid the marker, explaining their
+  different outcome. A separate `prepared_controls` marker tracks completed
+  value preparation, including retained subtree copies, while the existing
+  inline-box marker continues serving geometry and paint traversal. This repair
+  awaits fresh qualification; the deterministic font fixtures are retained.

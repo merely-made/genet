@@ -691,7 +691,9 @@ impl TextSystem {
         {
             return false;
         }
-        if frame.prepared_sources.contains(&node) {
+        // The outer inline box is recorded under the same node identity.
+        // Its geometry marker does not mean the control's value was shaped.
+        if frame.prepared_controls.contains(&node) {
             return true;
         }
         let state = dom.form_control_state(node);
@@ -811,7 +813,8 @@ impl TextSystem {
                 }),
             });
         }
-        if frame.prepared_sources.insert(node) {
+        if frame.prepared_controls.insert(node) {
+            frame.prepared_sources.insert(node);
             frame.record_prepared_group(vec![node], commands);
         }
         true
@@ -2257,6 +2260,7 @@ pub(crate) struct TextFrame<Id> {
     prepared_groups: Vec<Vec<PreparedCommand<Id>>>,
     source_groups: HashMap<Id, usize>,
     prepared_sources: HashSet<Id>,
+    prepared_controls: HashSet<Id>,
     inline_fragments: HashMap<Id, Vec<Fragment>>,
     inline_line_keys: HashMap<Id, Vec<f32>>,
     /// Formatting-line bounds directly owned by each inline context, in
@@ -2281,6 +2285,7 @@ impl<Id> Default for TextFrame<Id> {
             prepared_groups: Vec::new(),
             source_groups: HashMap::new(),
             prepared_sources: HashSet::new(),
+            prepared_controls: HashSet::new(),
             inline_fragments: HashMap::new(),
             inline_line_keys: HashMap::new(),
             line_bounds: HashMap::new(),
@@ -2394,6 +2399,9 @@ where
             for source in sources {
                 self.source_groups.insert(source, group);
                 self.prepared_sources.insert(source);
+                if source_frame.prepared_controls.contains(&source) {
+                    self.prepared_controls.insert(source);
+                }
             }
         }
     }

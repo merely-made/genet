@@ -1,10 +1,12 @@
 # HTML forms: value state, validation and submission
 
 **Status, 2026-10-07:** Phase A implementation in progress; starting runner,
-behavior controls and whole-directory baseline are frozen. The focused arena,
-native-document and Livery repair gate passes all 449 tests. Password cluster
-masking and Cambium migration are approved and being implemented; full candidate
-qualification and matched WPT after maps are pending. Phase B and C retain separate checkpoints.
+behavior controls and whole-directory baseline are frozen. The full Genet gate
+passes 1,942 tests with zero failures and nine ignores; six paint controls fail
+with the producer disabled, and the restored 450-test gate passes. Password
+cluster masking is implemented and Cambium's migration is committed locally in
+Mere. Matched WPT after maps, Mere consumer qualification and the verified repin
+are pending. Phase B and C retain separate checkpoints.
 Forms Phase A is not accepted or published.
 
 Authority: [standards ledger](2026-09-07_standards_to_features_ledger.md), C1,
@@ -301,3 +303,24 @@ dependency or version change is authorized beyond the named workspace edge.
   Native password editing/composition and text-valued accessibility actions are
   existing separate gaps. The previous 449-test receipt predates these changes;
   no new pass is inferred from it.
+- 2026-10-07: Source `93c9a738ce32037f76d82768edff4e45a74ebfeb` qualifies in
+  `candidate-cluster-mask-crates`: documents 57, Livery 664 (six ignored), render
+  42, scripted 121, arena 94, WPT 77 (three ignored), Boa adapter 26, Vano adapter
+  43 and runtime API 818. Layout DOM and IDL table targets execute zero tests;
+  generated metadata's drift fixture passes in its owning crate. Total: 1,942
+  passed, zero failed, nine ignored. All eleven selected packages and their
+  executable/doctest owners are accounted for, with fixed source tuple and
+  restored primary overrides/lock.
+  `candidate-disabled-control-text` temporarily returns false from the virtual
+  producer; exactly six named live-value, clipping, multiline, placeholder,
+  visibility/neighbor and password fixtures fail behaviorally (exit 101), with
+  no compiler failure. Source bytes, config and lock restore exactly. A fresh
+  rebuild in `candidate-restored-control-crates` then passes documents 57,
+  Livery 326 and arena 67 (450 total). This closes the stale-binary control.
+  Mere's approved field migration is local commit `019e07a0`; its adapter now
+  restricts the committed-value marker to explicit textboxes, and both native
+  and neutral projection fixtures cover Unicode values and transient child
+  content. Mere tests have not yet executed. Its pre-repin freeze records three
+  current-family manifests, 33 current Genet root-lock packages and two separately
+  pinned legacy Knot packages to preserve. The Turnstone/Cleromancy mechanical
+  selector/caret/existing-label scope question is open without a response timer.

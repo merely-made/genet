@@ -123,7 +123,9 @@ completed corpus census or bounded slice does not close its enclosing feature.
   1,142 tests. Both engines pass all transfer prerequisites, and the unchanged
   Streams controls actually fail. Frozen full-directory engine-only runs lose
   zero passing files/assertions. Three modules and S2's private reader-based
-  Fetch seam are drafted; candidate C3/Streams qualification remains pending.
+  Fetch seam are implemented and focused controls run. Private Promise reactions
+  and Boa cleanup-listener retention are at S3/S4 engine checkpoints; candidate
+  full-suite and C3/WPT qualification remains pending.
   Native delivery contracts and the final pre-publication checkpoint remain.
 
 ## WPT census — the web platform beyond CSS

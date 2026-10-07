@@ -1,14 +1,14 @@
 # HTML forms: value state, validation and submission
 
-**Status, 2026-10-07:** Phase A implementation in progress; starting runner,
-behavior controls and whole-directory baseline are frozen. The full Genet gate
-passes 1,942 tests with zero failures and nine ignores; six paint controls fail
-with the producer disabled, and the restored 450-test gate passes. Password
-cluster masking is implemented and Cambium's migration is committed locally in
-Mere. The first matched WPT after maps expose one decimal-range regression on
-each engine; its local repair, final maps, Mere consumer qualification and the
-verified repin are pending. Phase B and C retain separate checkpoints.
-Forms Phase A is not accepted or published.
+**Status, 2026-10-07:** Genet's Phase A source `b8a3ec1d6abe88e07438ca4d53b9ca4d2b92111d`
+qualifies with 1,943 tests passed, zero failures and nine existing ignores.
+All 15 value-model fixtures pass on both engines and the paint guard reports
+`unexpected=0`. The decimal-range regression is repaired. Matched supplementary
+60-second maps have zero starting pass losses; the prescribed 15-second maps
+are retained with Vano selection cutoffs explicitly accounted. Password cluster
+masking and Mere's Cambium migration are local implementations. Mere consumer
+qualification and the verified repin remain pending, so Forms Phase A is not
+accepted or published. Phase B and C retain separate checkpoints.
 
 Authority: [standards ledger](2026-09-07_standards_to_features_ledger.md), C1,
 C5 and C6, and `Code/work/briefs/2026-10-02_genet_forms_value_validation_submission.md`.
@@ -131,6 +131,151 @@ dependency or version change is authorized beyond the named workspace edge.
   and create isolation only for an actual collision. No Forms push is authorized
   at this checkpoint. Root owns commits and serial gates; agents own disjoint
   source files and cannot launch builds independently.
+
+## Genet qualification for Checkpoint A, 2026-10-07
+
+This qualifies the Genet portion only. The approved Mere compatibility gate
+must finish before the complete checkpoint and publication decision.
+
+### Record and consumers
+
+`FormControlState` in [layout-dom/lib.rs:33](../components/shared/layout-dom/lib.rs#L33)
+stores `value: String`, `dirty_value: bool`, `checked: bool`,
+`dirty_checkedness: bool`, `selection_start/end: Option<u32>` in UTF-16 units,
+`selection_direction: SelectionDirection` (`None`, `Forward`, `Backward`) and
+`custom_validity_message: String`. The arena node owns the optional record at
+[genet-scripted-dom/lib.rs:194](../components/genet-scripted-dom/lib.rs#L194).
+The optional getter and default-false setter preserve other LayoutDom
+implementors; this introduces no required implementation seam for them.
+Custom validity storage does not implement Phase B validation.
+
+| Consumer | Current owner and source |
+| --- | --- |
+| Current/default value modes, sanitization and checkedness | [forms.rs:81](../components/genet-scripted-dom/forms.rs#L81), [setter:108](../components/genet-scripted-dom/forms.rs#L108), [checkedness:174](../components/genet-scripted-dom/forms.rs#L174) |
+| Reset and HTML cloning steps | [reset:192](../components/genet-scripted-dom/forms.rs#L192), [clone:240](../components/genet-scripted-dom/forms.rs#L240); adoption preserves the moved node's arena record |
+| Script value and selection APIs | [form_controls.rs:24](../components/script-runtime-api/dom/form_controls.rs#L24), [setter:72](../components/script-runtime-api/dom/form_controls.rs#L72), [selection:106](../components/script-runtime-api/dom/form_controls.rs#L106) |
+| Native editing and caret/selection | [engines/livery.rs:999](../components/genet-documents/src/engines/livery.rs#L999), [write:1008](../components/genet-documents/src/engines/livery.rs#L1008); edit paths convert between UTF-16 offsets and Rust byte offsets |
+| Accessibility current value and checkedness | [a11y.rs:130](../components/genet-render/src/a11y.rs#L130), [checkedness:203](../components/genet-render/src/a11y.rs#L203) |
+| Retained control text | [text.rs:632](../components/genet-livery/src/text.rs#L632), separate `prepared_controls` at [text.rs:2265](../components/genet-livery/src/text.rs#L2265) |
+| Capture and replay state | [capture.rs:112](../components/genet-scripted/capture.rs#L112), [state capture:197](../components/genet-scripted/capture.rs#L197), [copy_state:173](../components/script-runtime-api/dom/form_controls.rs#L173) |
+
+Livery's producer reads the live record, creates virtual text inside the
+control's content box and places shaped/clipped commands in its retained
+`TextFrame`. Textarea preserves line breaks and wraps; input stays on one line.
+Empty values use the placeholder. Password drawing uses one U+2022 per extended
+grapheme cluster and retains only the mask. The paint path takes the retained
+frame in [paint.rs:651](../components/genet-livery/src/paint.rs#L651), prepares
+inline children at [paint.rs:1012](../components/genet-livery/src/paint.rs#L1012)
+and drains text commands into the paint list at
+[paint.rs:1092](../components/genet-livery/src/paint.rs#L1092). Authored value
+attributes and textarea children remain defaults rather than paint input.
+
+### Tests and controls
+
+`candidate-safe-decimal-range-crates` runs all eleven selected packages at the
+fixed source above, restores primary config/lock bytes and records exact
+executable/doctest owners in its `-crate-counts.json` artifact.
+
+| Crate | Passed | Failed | Ignored |
+| --- | ---: | ---: | ---: |
+| genet-documents | 57 | 0 | 0 |
+| genet-livery | 664 | 0 | 6 |
+| genet-render | 42 | 0 | 0 |
+| genet-scripted | 121 | 0 | 0 |
+| genet-scripted-dom | 95 | 0 | 0 |
+| genet-wpt | 77 | 0 | 3 |
+| script-engine-boa | 26 | 0 | 0 |
+| script-engine-nova (Vano compatibility identifier) | 43 | 0 | 0 |
+| script-runtime-api | 818 | 0 | 0 |
+| layout-dom-api | 0 | 0 | 0 |
+| genet-idl-interface-table | 0 | 0 | 0 |
+| Total | 1,943 | 0 | 9 |
+
+The generated metadata drift fixture passes in its owning crate. The value-model
+fixture improves from two of fifteen starting controls to fifteen on each
+engine; those two starting passes are not claimed as new gains. Its assertions
+cover live/default separation, dirty flags, type modes, sanitization, selection,
+reset, cloning and adoption. Paint fixtures additionally cover live/default
+separation, clipping, multiline defaults, placeholder replacement, visibility
+transitions with a retained neighbor and cluster masking. Disabling the producer
+causes exactly those six behavioral failures; restored sources then pass the
+450-test focused gate. That negative control was run at `93c9a738`; subsequent
+product changes affect only `forms.rs`. The current `text.rs` still has the
+original SHA256 `A50491D40A7E255651A5F7B3421047AE39AECFE6FBB4CE4CA5709BF88B26822E`.
+The corrected range fixture also covers decimal `.1`/`.29`, negative bases,
+upper-bound correction and representable small steps at a large base.
+
+### Frozen WPT and paint evidence
+
+Evidence lives under `Code/testing/genet/forms`. The optimized runners use the
+same build settings and public dependency lock:
+
+- Before source `2f4f82652495af72798c7ac02be8a7b73152a357`, runner SHA256
+  `5DB68DE6ECF285B2DBE254E6EC0CB685D1D654BFF6AFFA718DD9E30F38F2BE3F`.
+- Candidate source `b8a3ec1d6abe88e07438ca4d53b9ca4d2b92111d`, runner SHA256
+  `4BFC91627C02871033FE0A9E1F4354D26E866F88EFA8062B576CA54990619213`.
+- Dependency lock SHA256 `9809247CAEE772F61F2228A92FA324D3E68E40681A8591B7BFA06185B593B850`;
+  WPT manifest SHA256 `D5EC5BE9BF1A75ED00D7E7AB28AFE8A694A55E11682BA74305874D70B18DD422`;
+  1,649-file corpus SHA256 `C24C04EC10FC9924D334AEBFE5789A20F179F3971683202193C5652C93B3C50C`.
+
+The prescribed Livery/jobs4/timeout120/drive15 maps remain immutable. The first
+corrected run has no original baseline pass losses, but Vano `select-event.html`
+stops at 265/270 rows; an unchanged repeat stops at 222/270 and leaves five
+original passing rows unobserved. These are accounted as pass-to-missing, not
+waived. The file requests WPT's long timeout and executes 270 serial promises
+with two animation-frame steps per wait. Host drive15 cuts it off before the
+already implemented 60-second testharness allowance.
+
+Supplementary `before-drive60` and `after-safe-decimal-range-drive60` repeat all
+six directories with both frozen binaries, the same corpus and settings, and
+only the drive cap changed equally to sixty. All selection rows complete on
+both engines. Completed-file counts are:
+
+| Directory, each engine | Before pass/fail | Candidate pass/fail |
+| --- | --- | --- |
+| the-input-element | 217 / 1,589 | 920 / 886 |
+| textfieldselection | 92 / 598 | 667 / 72 |
+| form-control-infrastructure | 0 / 120 | 31 / 89 |
+
+Candidate input ERROR files separately retain eight passing, seven failing,
+28 not-run and four timeout rows, with two ERROR files reporting no rows.
+Those eight passes are excluded from the table. Seven newly passing radio rows
+remain partial observations. The old selection-range harness error had zero
+rows; its candidate file has 48 observed passes and one failure, with no
+invented baseline assertions. The numeric `valueAsNumber` setter's expected-100
+row is incidental to preceding range-value clamping; setters expecting zero
+and fifty still fail, so numeric API conformance is not claimed.
+
+`after-safe-decimal-range-drive60-vs-before-drive60-attribution.json` attributes
+94 file movements and 2,634 changed rows (1,317 unique case sources across both
+engines), with zero baseline pass losses and frozen WPT hashes. Exact/template
+source matches and dynamic line hints are distinguished. Selection/event rows
+use the case-insensitive selection classifier; earlier mislabeled attribution
+artifacts are retained and superseded by this artifact. The two truncated
+drive15 maps and their comparisons/attribution remain available independently.
+
+`after-safe-decimal-range-reftest-baselines` passes with `unexpected=0` and fixed
+source/runner. All baseline JSON files match the starting Git source. The guard
+hash matches the actual recorded starting invocation, including the frozen-runner
+parameter, even though that parameter was committed after the starting binary's
+source commit. No baseline changes or new product harness changes were made for
+the supplementary timing checks.
+
+### Remaining checkpoint work
+
+Mere's app-owned field implementation is local commit `019e07a0`. Its exact
+Genet-candidate lock is being prepared; graph classification, live catalog
+regeneration, focused native/browser projection gates and deliberate committed-
+value controls remain pending. This is not yet a Mere compatibility receipt or
+a published-source repin. The Turnstone/Cleromancy mechanical follow-up question
+remains open without a prompt deadline. Native password composition and text-
+valued accessibility actions remain separate existing gaps. Phase B/C and
+Forms publication require their next checkpoint decisions.
+
+The stable `genet-encoding` target and published-source `genet-streams` Cargo
+home remain owned by unfinished Forms qualification. No Forms worktree or new
+isolated Mere home was created; Mere uses its existing stable target and normal
+dependency cache. Original primary overrides and locks remain preserved.
 
 ## Progress
 

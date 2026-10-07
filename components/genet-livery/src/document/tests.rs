@@ -2477,6 +2477,45 @@ fn hidden_ancestor_suppresses_virtual_control_text() {
 }
 
 #[test]
+fn live_control_text_updates_after_hiding_and_showing_with_a_retained_neighbor() {
+    let dom = ScriptedDom::from_serialized_document(
+        "<html><body><input id=field value=cedar><input id=neighbor value=birch></body></html>",
+    );
+    let field = by_id(&dom, "field");
+    let mut document = form_control_paint_document(
+        dom,
+        "html, body { margin:0; } input { width:160px; height:28px; }",
+        400.0,
+        120.0,
+    );
+    assert_eq!(painted_runs(&mut document).iter().sum::<usize>(), 10);
+
+    document.mutate_dom(|dom| {
+        dom.set_attribute(field, attr("style"), "display:none");
+    });
+    assert_eq!(painted_runs(&mut document).iter().sum::<usize>(), 5);
+
+    document.mutate_dom(|dom| {
+        let mut state = dom.form_control_state(field).expect("hidden input state");
+        state.value = "ash".to_owned();
+        state.dirty_value = true;
+        assert!(dom.set_form_control_state(field, state));
+    });
+    assert_eq!(painted_runs(&mut document).iter().sum::<usize>(), 5);
+
+    document.mutate_dom(|dom| {
+        dom.set_attribute(field, attr("style"), "display:inline-block");
+    });
+    assert_eq!(painted_runs(&mut document).iter().sum::<usize>(), 8);
+    assert_eq!(
+        document
+            .dom()
+            .attribute(field, &Namespace::default(), &LocalName::from("value")),
+        Some("cedar")
+    );
+}
+
+#[test]
 fn live_input_value_paints_without_replacing_its_default_attribute() {
     let dom = ScriptedDom::from_serialized_document(
         "<html><body><input id=field value=default></body></html>",

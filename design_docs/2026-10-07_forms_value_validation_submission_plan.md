@@ -1,10 +1,11 @@
 # HTML forms: value state, validation and submission
 
 **Status, 2026-10-07:** Phase A implementation in progress; starting runner,
-behavior controls and whole-directory baseline are frozen. The first executed
-draft suite has seven failures; focused repairs await qualification.
-Phase B and C remain behind separate checkpoints. No Forms qualification or
-publication is claimed yet.
+behavior controls and whole-directory baseline are frozen. The focused arena,
+native-document and Livery repair gate passes all 448 tests. Password display
+and the Cambium compatibility decision remain open; full candidate qualification
+and matched WPT after maps are pending. Phase B and C retain separate checkpoints.
+Forms Phase A is not accepted or published.
 
 Authority: [standards ledger](2026-09-07_standards_to_features_ledger.md), C1,
 C5 and C6, and `Code/work/briefs/2026-10-02_genet_forms_value_validation_submission.md`.
@@ -233,3 +234,18 @@ dependency or version change is authorized beyond the named workspace edge.
   value preparation, including retained subtree copies, while the existing
   inline-box marker continues serving geometry and paint traversal. This repair
   awaits fresh qualification; the deterministic font fixtures are retained.
+- 2026-10-07: `draft-prepared-control-crates` qualifies commit
+  `3020e3c8b9b7a3c7c6a033390543d5779dd99260`: 57 native-document, 324 Livery
+  and 67 arena tests pass with no failures or ignores. The source tuple stays
+  fixed and the original primary config/lock are restored. This repairs all
+  four zero-glyph failures. The ownership preflight now reads only selected
+  target settings from live process environments and verifies foreign workspace
+  defaults/config hashes, preserving unrelated builds even while they have no
+  active compiler child. Receipt and executable-owner counts are under
+  `Code/testing/genet/forms/draft-prepared-control-crates*`.
+  Read-only Luna review finds no concrete marker defect but identifies a
+  visibility-transition gap. A new fixture paints two controls, hides one,
+  changes its live value while hidden and shows it again, checking current text
+  and the retained neighbor without duplicated glyphs or rewritten defaults.
+  That fixture awaits its own fresh focused gate. Password and F3 remain pending;
+  the complete candidate gate, negative control and after maps follow those rulings.

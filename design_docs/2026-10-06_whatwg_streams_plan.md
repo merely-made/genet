@@ -5,7 +5,8 @@ complete Vano's standard buffer-transfer methods and add transfer-only Boa
 support, qualify both, then repin Genet. Both engine revisions are now qualified
 and published. The local Genet repin is prepared; published-Git consumer gates
 remain pending. The frozen baseline retains the actual prerequisite failures.
-Streams implementation has not started; S2 awaits the fetch-body ruling.
+Streams implementation has not started. Mark resumed orchestration and
+approved the described S2 fetch-body change on 2026-10-06.
 
 Authority is the [standards ledger](2026-09-07_standards_to_features_ledger.md#conformance-targets-2026-10-02)
 rulings C1 and C3, the [census panic attribution](2026-09-06_web_platform_wpt_census.md),
@@ -131,7 +132,7 @@ revisions before Streams implementation proceeds. This does not select the
 private adapter alternative or narrow the BYOB done-conditions. Any required
 fetch-body behavior change remains a separate checkpoint.
 
-### S2: fetch-body checkpoint, awaiting ruling
+### S2: fetch-body checkpoint, ruled
 
 The brief requires: **"Checkpoint: stop and report if ... fetch's body handling
 must change beyond wrapping the whole-body delivery in a real stream."**
@@ -150,8 +151,16 @@ Request stream chunks before calling the existing whole-body upload sink,
 use reader-based Response consumption, and preserve the existing incremental
 response hooks. The alternative is to defer stream-backed uploads and retain
 current body behavior, which narrows the brief's done-conditions. No answer
-has yet been recorded; dependent body changes have not started. S1 engine
-qualification and frozen baseline accounting can continue independently.
+was recorded before the pause; dependent body changes had not started. S1
+engine qualification and frozen baseline accounting continued independently.
+
+**Ruling S2, 2026-10-06:** after the status report explicitly identified
+reader-based body consumption as the remaining decision, Mark answered
+**"ok. proceed, orchestrating"**. This authorizes the described reader-based
+Request and Response consumption, validation/collection before the existing
+whole-body upload handler, and resulting asynchronous timing changes. Preserve
+the existing native incremental response hooks. It does not authorize new
+incremental network delivery or copying a reference implementation.
 
 ## Progress, 2026-10-06
 
@@ -288,3 +297,12 @@ qualification and frozen baseline accounting can continue independently.
   paths/features are sealed in `engine-foundation-metadata.receipt.json`.
   Consumer tests and the frozen optimized runner must still qualify the repin
   before the foundation is accepted.
+- Mark paused the gate after compilation had finished and Runtime tests had
+  begun. The `engine-foundation-crates` receipt has exit -1 and is explicitly
+  unqualified; its output remains intact. Mark then resumed orchestration and
+  answered S2 as recorded above. The prepared fetch-binding change shares all
+  sixteen existing bodies across Boa and target-64 Vano while retaining every
+  existing Boa test name. Reverse normalization verifies that assertions and
+  script strings are unchanged; the source comparison receipt is sealed under
+  `Code/testing/genet/streams`. Resume with a fresh named gate and preserve the
+  interrupted one.

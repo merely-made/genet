@@ -125,7 +125,9 @@ completed corpus census or bounded slice does not close its enclosing feature.
   zero passing files/assertions. Three modules and S2's private reader-based
   Fetch seam are implemented and focused controls run. Private Promise reactions
   and Boa cleanup-listener retention are qualified and published at S3/S4; candidate
-  full-suite and C3/WPT qualification remains pending.
+  full-suite qualification passed 1,185 tests and C3 no longer throws.
+  Matched WPT maps show gains and strict old-pass losses; bounded regression
+  repairs and an experimental owning/transfer ruling await qualification.
   Native delivery contracts and the final pre-publication checkpoint remain.
 
 ## WPT census — the web platform beyond CSS

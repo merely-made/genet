@@ -1,5 +1,12 @@
 # BYOB byte-stream plan (type:"bytes" ReadableStream)
 
+**Historical proposal, superseded 2026-10-07:** the active
+[WHATWG Streams plan](../design_docs/2026-10-06_whatwg_streams_plan.md) owns
+the current byte/BYOB implementation, engine rulings and qualification receipts.
+The buffered-model description below is historical. Its formal-web copying
+proposal does not authorize copying in the current lane; that remains an
+explicit source-policy checkpoint in the active plan.
+
 **Date:** 2026-06-24
 **Status:** plan. Spun out of the gterzian/formal-web harvest (`2026-06-24_formal_web_lessons.md`, idea 1) and the grand audit §6 BYOB gap. The highest-value, bounded steal: it closes an audit-named gap against the *same* JS engine (Boa) and *same* spec, with a ready-made reference implementation and conformance test.
 **Thesis:** genet's `ReadableStream` is buffered and `getReader` ignores `{mode:'byob'}` (`components/script-runtime-api/fetch.rs:842`; the gap is flagged at `fetch.rs:452`). formal-web ships a complete `type:"bytes"` controller; port it onto genet's stream surface rather than re-derive the Streams spec's pull-into machinery.

@@ -177,6 +177,14 @@ inside errored records are attributed to real detachment. Streams modules and
 S2's reader-backed Fetch seam are drafted; candidate C3/Streams acceptance and
 the final local checkpoint remain open. The linked plan owns full receipts.
 
+**Streams candidate measured, 2026-10-07:** the first candidate passes 1,185
+consumer tests, all four authored fixture categories on each engine, and its
+optimized runner gate. C3 ceases evaluation throws on both engines. Matched
+maps improve non-transferable Streams to 78 passing files on Boa and 77 on
+Vano, while strict old-pass losses remain under bounded repair and an explicit
+experimental-extension checkpoint. The linked plan retains exact source,
+runner, per-crate counts and immutable raw comparisons; acceptance remains open.
+
 **Streams S1 ruling, 2026-10-06:** Mark answered "Ok, agreed. Proceed" to the
 recommended narrow engine route: complete Vano's standard transfer methods,
 expose only Boa's transfer family, qualify both, then repin Genet. The plan

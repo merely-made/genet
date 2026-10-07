@@ -53,6 +53,7 @@ const STRUCTURED_CLONE_BOOTSTRAP: &str = r#"
   var jsonParse = JSON.parse, jsonStringify = JSON.stringify;
   var decodeBase64 = atob;
   var charCodeAt = String.prototype.charCodeAt;
+  var isStream;
   function defineData(target, key, value, writable, configurable) {
     var descriptor = objectCreate(null);
     descriptor.value = value;
@@ -122,6 +123,9 @@ const STRUCTURED_CLONE_BOOTSTRAP: &str = r#"
     if (t === 'symbol') throw dataClone("A symbol");
     if (t === 'function') throw dataClone("A function");
 
+    // Stream serialization requires transfer plumbing, which is not installed.
+    // Consult trusted brands before mutable tags, constructors or own getters.
+    if (isStream(v)) throw dataClone("A stream");
     if (moved.has(v)) return moved.get(v);
     if (memo.has(v)) return memo.get(v);
 
@@ -396,6 +400,7 @@ const STRUCTURED_CLONE_BOOTSTRAP: &str = r#"
   }
 
   function serNode(v, h, memo, moved, transferred) {
+    if (isStream(v)) throw dataClone("A stream");
     var kind = tag(v);
     if (kind === '[object Boolean]') return { t: 'B', v: v.valueOf() };
     if (kind === '[object Number]') return { t: 'N', v: numOut(v.valueOf()) };
@@ -575,5 +580,8 @@ const STRUCTURED_CLONE_BOOTSTRAP: &str = r#"
   globalThis.__scDeserialize = function(text) {
     return deserializeRecord(jsonParse(text));
   };
+  // Both surfaces finish synchronously before any authored script runs. The
+  // returned brand predicate and clone operation remain in private closures.
+  isStream = globalThis.__finishStreamsClone(globalThis.__structuredClone);
 })();
 "#;

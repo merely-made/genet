@@ -339,7 +339,30 @@ var PipingOps = (function (Core, ReadableOps, WritableOps) {
             }
         }
 
-        function writeChunk(chunk) {
+        function completePendingWrite(node, error, hasError) {
+            removeWrite(node);
+            if (hasError) {
+                node.deferred.reject(error);
+            } else {
+                node.deferred.resolve(undefined);
+            }
+        }
+
+        function startWrite(node, chunk) {
+            if (node.started) {
+                return;
+            }
+            node.started = true;
+
+            // A read may complete just as the destination begins closing or
+            // erroring. The pipe loop writes an already-read chunk only while
+            // the destination is still writable and no close is queued.
+            if (WritableOps.state(destination) !== "writable" ||
+                WritableOps.isClosing(destination)) {
+                completePendingWrite(node, undefined, false);
+                return;
+            }
+
             var writePromise;
             try {
                 writePromise = Core.resolve(WritableOps.writerWrite(writer, chunk));
@@ -348,38 +371,59 @@ var PipingOps = (function (Core, ReadableOps, WritableOps) {
                     state.hasWriteFailure = true;
                     state.writeFailure = error;
                 }
+                node.deferred.reject(error);
                 destinationErrored(error);
+                removeWrite(node);
                 return;
-            }
-            var writeNode = Core.record();
-            writeNode.promise = writePromise;
-            writeNode.next = undefined;
-            if (state.pendingWritesTail === undefined) {
-                state.pendingWritesHead = writeNode;
-                state.pendingWritesTail = writeNode;
-            } else {
-                state.pendingWritesTail.next = writeNode;
-                state.pendingWritesTail = writeNode;
             }
             Core.handled(writePromise);
             Core.react(writePromise, function () {
-                removeWrite(writeNode);
+                completePendingWrite(node, undefined, false);
                 if (!state.shuttingDown) {
                     pump();
                 }
                 return undefined;
             }, function (error) {
-                removeWrite(writeNode);
                 if (!state.hasWriteFailure) {
                     state.hasWriteFailure = true;
                     state.writeFailure = error;
                 }
+                node.deferred.reject(error);
                 destinationErrored(error);
+                removeWrite(node);
                 return undefined;
             });
             // Queueing the write can itself create backpressure. Start another
             // read only when the current writer.ready allows it.
             pump();
+        }
+
+        function writeChunk(chunk) {
+            var node = Core.record();
+            node.deferred = Core.deferred();
+            node.promise = node.deferred.promise;
+            node.next = undefined;
+            node.started = false;
+            Core.handled(node.promise);
+            if (state.pendingWritesTail === undefined) {
+                state.pendingWritesHead = node;
+                state.pendingWritesTail = node;
+            } else {
+                state.pendingWritesTail.next = node;
+                state.pendingWritesTail = node;
+            }
+
+            // ReadableOps.readRequest delivers synchronously when enqueue()
+            // satisfies an outstanding read. Pipe-to's read/write loop runs
+            // as a promise reaction, so the sink's write algorithm must not
+            // run inside the source's enqueue() call.
+            Core.react(Core.resolve(undefined), function () {
+                startWrite(node, chunk);
+                return undefined;
+            }, function (error) {
+                completePendingWrite(node, error, true);
+                return undefined;
+            });
         }
 
         function readOne() {
@@ -509,10 +553,18 @@ var PipingOps = (function (Core, ReadableOps, WritableOps) {
     }
 
     function pipeTo(destination, optionsValue) {
-        if (!WritableOps.isWritable(destination)) {
-            throw typeError("The pipe destination is not a WritableStream");
+        if (!ReadableOps.isReadable(this)) {
+            return rejected(typeError("ReadableStream.pipeTo called on an incompatible receiver"));
         }
-        var options = convertPipeOptions(optionsValue);
+        if (!WritableOps.isWritable(destination)) {
+            return rejected(typeError("The pipe destination is not a WritableStream"));
+        }
+        var options;
+        try {
+            options = convertPipeOptions(optionsValue);
+        } catch (error) {
+            return rejected(error);
+        }
         return pipeToInternal(this, destination, options);
     }
 
@@ -532,6 +584,9 @@ var PipingOps = (function (Core, ReadableOps, WritableOps) {
             options = convertPipeOptions(optionsValue);
         } catch (error) {
             throw error;
+        }
+        if (ReadableOps.isLocked(this) || WritableOps.isLocked(writable)) {
+            throw typeError("Cannot pipe a locked stream");
         }
         var promise = pipeToInternal(this, writable, options);
         Core.handled(promise);

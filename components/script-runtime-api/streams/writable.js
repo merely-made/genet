@@ -938,8 +938,8 @@ var WritableOps = (function (Core, ReadableOps) {
       }
     }, function (error) {
       var t = transformSlot(stream);
-      if (fromReadable) ReadableOps.error(t.readable, error);
-      else errorIfNeeded(streamSlot(t.writable).controller, error);
+      if (fromReadable) errorIfNeeded(streamSlot(t.writable).controller, error);
+      else ReadableOps.error(t.readable, error);
       unblockTransformWrite(stream);
       c.finishPromise.reject(error);
     });

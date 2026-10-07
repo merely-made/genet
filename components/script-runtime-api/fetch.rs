@@ -547,6 +547,7 @@ const FETCH_BOOTSTRAP: &str = r#"
   var nativeArrayBufferIsView = ArrayBuffer.isView;
   var nativeU8Set = Uint8Array.prototype.set;
   var nativeJsonParse = JSON.parse;
+  var nativeUrlParse = globalThis.__url_parse;
   var nativeSetTimeout = setTimeout;
   var nativeFetchStart = globalThis.__fetch_start, nativeFetchSync = globalThis.__fetch_sync;
   var nativeFetchAbort = globalThis.__fetch_abort, nativeFetchPull = globalThis.__fetch_pull;
@@ -1876,6 +1877,39 @@ const FETCH_BOOTSTRAP: &str = r#"
     }
   }
 
+  function isDataUrl(url) {
+    var parsedJson;
+    try { parsedJson = Core.call(nativeUrlParse, undefined, [url, '']); }
+    catch (_) { return false; }
+    if (!parsedJson) return false;
+    try { return Core.call(nativeJsonParse, undefined, [parsedJson]).protocol === 'data:'; }
+    catch (_) { return false; }
+  }
+
+  function startNativeFetch(req, body, id, entry, bytes) {
+    entry.uploadReader = undefined;
+    if (__pending[id] !== entry) return;
+    try {
+      var docHref = (typeof location !== 'undefined' && location && location.href) ? location.href : '';
+      var referrer = req.referrer;
+      if (referrer === undefined || referrer === 'about:client') referrer = docHref;
+      else if (referrer !== '') {
+        try { referrer = new URL(referrer, docHref || undefined).href; } catch (_) { referrer = ''; }
+      }
+      entry.started = true;
+      var inline = Core.call(nativeFetchStart, undefined, [id, req.method, req.url, headersFlat(req.headers),
+        bytesToBinaryString(bytes), req.cache || 'default', req.redirect || 'follow',
+        req.mode || 'cors', referrer, req.referrerPolicy || '',
+        req.credentials || 'same-origin', req.integrity || '', body.stream !== null ? '1' : '0']);
+      if (inline && __pending[id] === entry && !entry.settled) {
+        entry.settled = true; removeEntry(id, entry);
+        settleEntry(entry, Core.call(nativeJsonParse, undefined, [inline]));
+      }
+    } catch (e) {
+      if (__pending[id] === entry) { removeEntry(id, entry); entry.settled = true; entry.reject(e); }
+    }
+  }
+
   globalThis.fetch = function(input, init) {
     var req;
     try { req = new Request(input, init); } catch (e) { return Core.reject(e); }
@@ -1903,33 +1937,22 @@ const FETCH_BOOTSTRAP: &str = r#"
       if (!entry.settled) { entry.settled = true; entry.reject(reason); }
       if (entry.uploadReader !== undefined) Core.handled(ReadableOps.readerCancel(entry.uploadReader, reason));
     });
-    // The native seam still accepts one complete upload. Drain the actual body
-    // through private readers before registering work with that seam.
-    collectBody(req, function (bytes) {
-      entry.uploadReader = undefined;
-      if (__pending[id] !== entry) return;
-      try {
-        var docHref = (typeof location !== 'undefined' && location && location.href) ? location.href : '';
-        var referrer = req.referrer;
-        if (referrer === undefined || referrer === 'about:client') referrer = docHref;
-        else if (referrer !== '') {
-          try { referrer = new URL(referrer, docHref || undefined).href; } catch (_) { referrer = ''; }
-        }
-        entry.started = true;
-        var inline = Core.call(nativeFetchStart, undefined, [id, req.method, req.url, headersFlat(req.headers),
-          bytesToBinaryString(bytes), req.cache || 'default', req.redirect || 'follow',
-          req.mode || 'cors', referrer, req.referrerPolicy || '',
-          req.credentials || 'same-origin', req.integrity || '', body.stream !== null ? '1' : '0']);
-        if (inline && __pending[id] === entry && !entry.settled) {
-          entry.settled = true; removeEntry(id, entry);
-          settleEntry(entry, Core.call(nativeJsonParse, undefined, [inline]));
-        }
-      } catch (e) {
-        if (__pending[id] === entry) { removeEntry(id, entry); entry.settled = true; entry.reject(e); }
-      }
-    }, function (reason) {
-      if (__pending[id] === entry) { removeEntry(id, entry); entry.settled = true; entry.reject(reason); }
-    }, function (reader) { entry.uploadReader = reader; });
+    // Scheme fetch for data: does not consume the request body. Send known
+    // buffered bytes as usual, but never drain a stream just to reach the
+    // native URL handler; an opaque stream body is represented as present and
+    // empty at that seam because the data-URL branch ignores it.
+    if (isDataUrl(req.url)) {
+      startNativeFetch(req, body, id, entry,
+        body.bytes !== null ? body.bytes : new Core.Uint8Array(0));
+    } else {
+      // The native HTTP seam still accepts one complete upload. Drain the body
+      // through private readers before registering work with that seam.
+      collectBody(req, function (bytes) {
+        startNativeFetch(req, body, id, entry, bytes);
+      }, function (reason) {
+        if (__pending[id] === entry) { removeEntry(id, entry); entry.settled = true; entry.reject(reason); }
+      }, function (reader) { entry.uploadReader = reader; });
+    }
     return result.promise;
   };
 

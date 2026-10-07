@@ -494,6 +494,7 @@ var ReadableOps = (function (Core) {
   function clearControllerAlgorithms(controller) {
     controller.pullAlgorithm = null;
     controller.cancelAlgorithm = null;
+    controller.sizeAlgorithm = null;
   }
   function errorStream(stream, reason) {
     var slot = streamSlot(stream);
@@ -519,41 +520,42 @@ var ReadableOps = (function (Core) {
     slot.disturbed = true;
     if (slot.state === 'closed') return Core.resolve(undefinedValue);
     if (slot.state === 'errored') return Core.reject(slot.storedError);
-    var controller = slot.controller;
-    var cancelAlgorithm;
-    if (slot.controllerKind === 'byte') {
-      var bc = mapGet(byteControllerSlots, controller);
-      cancelAlgorithm = bc.cancelAlgorithm;
-      bc.queue.head = null; bc.queue.tail = null; bc.queueTotalSize = 0;
-      invalidateBYOBRequest(bc);
-      var pending = bc.pendingPullIntos;
-      while (pending.length) {
-        var descriptor = shiftPullInto(bc);
-        removeDescriptorRequest(stream, descriptor);
-        var request = descriptor.request;
-        resolveReadRequest(request, 'close', undefinedValue);
-      }
-    } else {
-      var dc = mapGet(defaultControllerSlots, controller);
-      cancelAlgorithm = dc.cancelAlgorithm;
-      Core.clear(dc.queue);
-    }
     slot.cancelled = true;
     slot.state = 'closed';
     finishReaderClosed(stream, false);
     if (slot.reader) {
       var readerSlot = mapGet(defaultReaderSlots, slot.reader) || mapGet(byobReaderSlots, slot.reader);
       if (readerSlot) {
-        while (readerSlot.readRequests && readerSlot.readRequests.length)
-          resolveReadRequest(queueShift(readerSlot.readRequests), 'close', undefinedValue);
-        while (readerSlot.readIntoRequests && readerSlot.readIntoRequests.length)
-          resolveReadRequest(queueShift(readerSlot.readIntoRequests), 'close', undefinedValue);
+        var reads = readerSlot.readRequests, readIntos = readerSlot.readIntoRequests;
+        readerSlot.readRequests = linkedQueue();
+        readerSlot.readIntoRequests = linkedQueue();
+        while (reads.length) resolveReadRequest(queueShift(reads), 'close', undefinedValue);
+        while (readIntos.length) resolveReadRequest(queueShift(readIntos), 'close', undefinedValue);
       }
     }
-    if (!cancelAlgorithm) return Core.resolve(undefinedValue);
+    var controller = slot.controller;
+    var cancelAlgorithm, controllerSlot;
+    if (slot.controllerKind === 'byte') {
+      var bc = mapGet(byteControllerSlots, controller);
+      controllerSlot = bc;
+      cancelAlgorithm = bc.cancelAlgorithm;
+      bc.queue.head = null; bc.queue.tail = null; bc.queueTotalSize = 0;
+      invalidateBYOBRequest(bc);
+      queueClear(bc.pendingPullIntos);
+    } else {
+      var dc = mapGet(defaultControllerSlots, controller);
+      controllerSlot = dc;
+      cancelAlgorithm = dc.cancelAlgorithm;
+      Core.clear(dc.queue);
+    }
+    if (!cancelAlgorithm) {
+      clearControllerAlgorithms(controllerSlot);
+      return Core.resolve(undefinedValue);
+    }
     var sourceCancelPromise;
     try { sourceCancelPromise = Core.resolve(call(cancelAlgorithm, undefinedValue, [reason])); }
-    catch (e) { return Core.reject(e); }
+    catch (e) { clearControllerAlgorithms(controllerSlot); return Core.reject(e); }
+    clearControllerAlgorithms(controllerSlot);
     var cancellation = Core.deferred();
     Core.react(sourceCancelPromise, function () { cancellation.resolve(undefinedValue); },
       function (e) { cancellation.reject(e); });

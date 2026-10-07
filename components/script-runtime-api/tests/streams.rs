@@ -149,10 +149,14 @@ const BYTE_TEE_CANCELLATION: &str = r#"
         const branches=stream.tee(),readers=branches.map(branch=>branch.getReader({mode:'byob'}));
         const first=readers[0].read(new Uint8Array([17]));await flush();
         const second=readers[1].read(new Uint8Array([34]));await flush();
-        const reads=[first,second],cancel=readers[canceled].cancel('unused');
+        const reads=[first,second],order=[];
+        readers[canceled].closed.then(()=>order.push('closed'));
+        reads[canceled].then(()=>order.push('read'));
+        const cancel=readers[canceled].cancel('unused');
         streamsPhase='cancel read '+canceled;
         const canceledRead=await reads[canceled];
         check(canceledRead.done && canceledRead.value===undefined,'canceled tee branch settles its pending BYOB read without a view');
+        check(String(order)==='closed,read','cancel closes the reader before completing pending BYOB reads');
         controller.byobRequest.view[0]=51;controller.byobRequest.respond(1);
         streamsPhase='remaining read '+canceled;
         const item=await reads[1-canceled];

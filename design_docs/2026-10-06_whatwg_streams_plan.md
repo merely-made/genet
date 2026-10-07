@@ -483,6 +483,13 @@ needed for this bounded fix and its qualification.
 - Mark's prompt preference, 2026-10-07: ask and wait for an explicit response, with no response timer or default inferred from elapsed time. Technical gate deadlines remain as specified by their receipts.
 - S3/S4's native revisions are qualified and published: Vano `be68ac01dc5f4f4829476146c7a034552dfe9fab` passed **95 tests, zero failures, 10 existing ignores**, including all six reaction controls, and is on `origin/main`. Boa `4b6d316d1f363f4f483982fecfc62e7532835b89` passed **1,112 tests** and its required formatting, all-features/all-targets Clippy and no-default-features Clippy hooks under Rust 1.97.1; its maintained `origin/genet` advanced from the accepted foundation. Neither native lock changed. Fresh publication receipts verify exact clean source, native gate hashes, remote before/after and enabled hooks. Genet now requests only those qualified revisions; the new lock receipt verifies all other versions, checksums and edges against the accepted foundation. Published-source metadata, consumer tests and WPT remain pending.
 
+- Published-source metadata verifies all 12 Boa/Vano packages resolve from the
+  qualified Git revisions with the foundation's feature sets unchanged. The
+  first consumer gate, `candidate-reactions-focused`, failed compilation before
+  tests: the Vano adapter addressed its private `builtins` module. It now uses
+  the existing public `ecmascript` re-export. The failed receipt is preserved;
+  consumer qualification restarts under a fresh name.
+
 All candidate gates and failed diagnostics remain under `Code/testing/genet/streams`.
 The bounded agents supply source review; root runs gates serially. Retain the reused
 `worktrees/genet-encoding` checkout on `conformance/streams`, stable target

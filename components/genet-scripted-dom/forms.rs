@@ -892,6 +892,36 @@ mod tests {
     }
 
     #[test]
+    fn range_decimal_steps_do_not_add_binary_arithmetic_tails() {
+        let mut dom = ScriptedDom::new();
+        let input = dom.create_element(tag(local_name!("input")));
+        dom.set_attribute(input, attr(local_name!("type")), "range");
+        dom.set_attribute(input, attr(local_name!("min")), "0");
+        dom.set_attribute(input, attr(local_name!("max")), "1");
+        dom.set_attribute(input, attr(local_name!("step")), ".1");
+        for (value, expected) in [
+            (".6", "0.6"),
+            (".3", "0.3"),
+            ("6e-1", "0.6"),
+            (".61", "0.6"),
+        ] {
+            dom.set_form_control_value(input, value).unwrap();
+            assert_eq!(dom.form_control_value(input).as_deref(), Some(expected));
+        }
+        dom.set_attribute(input, attr(local_name!("min")), "-.2");
+        dom.set_form_control_value(input, "-.09").unwrap();
+        assert_eq!(dom.form_control_value(input).as_deref(), Some("-0.1"));
+        dom.set_attribute(input, attr(local_name!("max")), ".36");
+        dom.set_form_control_value(input, "1").unwrap();
+        assert_eq!(dom.form_control_value(input).as_deref(), Some("0.3"));
+        dom.set_attribute(input, attr(local_name!("min")), "0");
+        dom.set_attribute(input, attr(local_name!("max")), "1");
+        dom.set_attribute(input, attr(local_name!("step")), ".29");
+        dom.set_form_control_value(input, ".88").unwrap();
+        assert_eq!(dom.form_control_value(input).as_deref(), Some("0.87"));
+    }
+
+    #[test]
     fn radio_group_uses_form_owner_and_name() {
         let mut dom = ScriptedDom::new();
         let root = dom.document();
@@ -1412,16 +1442,16 @@ fn sanitize_input_value_with_options(
                 let lower = offset.floor();
                 let fraction = offset - lower;
                 let rounded = if fraction >= 0.5 { lower + 1.0 } else { lower };
-                let candidate = base + rounded * step;
+                let candidate = range_step_value(base, step, rounded);
                 if candidate >= low && (high < low || candidate <= high) {
                     n = candidate;
                 } else {
                     // If rounding points outside the bounds, use the nearest
                     // admitted step instead of retaining a step mismatch.
                     let bounded = if candidate < low {
-                        base + ((low - base) / step).ceil() * step
+                        range_step_value(base, step, ((low - base) / step).ceil())
                     } else {
-                        base + ((high - base) / step).floor() * step
+                        range_step_value(base, step, ((high - base) / step).floor())
                     };
                     if bounded.is_finite() && bounded >= low && (high < low || bounded <= high) {
                         n = bounded;
@@ -1467,6 +1497,32 @@ fn sanitize_input_value_with_options(
         },
         "datetime-local" => normalize_local_datetime(value).unwrap_or_default(),
         _ => value.to_owned(),
+    }
+}
+
+/// Form attributes describe decimal steps. Scale their canonical decimal
+/// representations before interpolation so, for example, six tenths produces
+/// 0.6 rather than the binary multiplication tail 0.6000000000000001.
+fn range_step_value(base: f64, step: f64, index: f64) -> f64 {
+    let decimal_places = |value: f64| {
+        value
+            .to_string()
+            .split_once('.')
+            .map_or(0, |(_, fraction)| fraction.len() as i32)
+    };
+    let scale = 10_f64.powi(decimal_places(base).max(decimal_places(step)));
+    let scaled_base = (base * scale).round();
+    let scaled_step = (step * scale).round();
+    let scaled_value = scaled_base + index * scaled_step;
+    if scale.is_finite()
+        && scaled_base.is_finite()
+        && scaled_step.is_finite()
+        && scaled_value.is_finite()
+    {
+        scaled_value / scale
+    } else {
+        // Very large bases or subnormal steps cannot be scaled in f64.
+        base + index * step
     }
 }
 

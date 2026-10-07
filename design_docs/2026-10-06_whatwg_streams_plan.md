@@ -411,3 +411,11 @@ incremental network delivery or copying a reference implementation.
   Vano collection, both-engine child retention and Worker installation, and
   Vano snapshot independence passed. A plain-object/WeakMap-cycle diagnostic
   will distinguish a source retention defect from engine ephemeron behavior.
+- The first plain-object diagnostic also lost every finalizer, including the
+  object without a WeakMap. Boa's `SimpleJobExecutor` moves pending cleanup
+  futures into a local group and drops that group at quiescence. An earlier
+  microtask pump can therefore discard a cleanup listener before GC. The
+  collection controls now observe WeakRefs directly, independently of finalizer
+  delivery; a separate plain-object control retains the finalizer failure.
+  This is read-only attribution pending a fresh diagnostic gate, not an engine
+  fix or a change to GC-policy semantics.

@@ -114,27 +114,86 @@ fn document_role<D: LayoutDom>(dom: &D, node: D::NodeId) -> DocumentA11yRole {
 
 mod name;
 fn text_control_value<D: LayoutDom>(dom: &D, node: D::NodeId) -> Option<String> {
-    let tag = dom.element_name(node).map(|name| name.local.as_ref())?;
-    match tag {
-        "textarea" => Some(descendant_text(dom, node)),
+    let name = dom.element_name(node)?;
+    if name.ns.as_ref() != "http://www.w3.org/1999/xhtml" {
+        return None;
+    }
+    let state = dom.form_control_state(node);
+    match name.local.as_ref() {
+        "textarea" => Some(state.map_or_else(|| descendant_text(dom, node), |state| state.value)),
         "input" => {
             let input_type = dom
                 .attribute(node, &Namespace::default(), &LocalName::from("type"))
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .unwrap_or("text");
+                .map(str::to_ascii_lowercase)
+                .filter(|value| {
+                    matches!(
+                        value.as_str(),
+                        "button"
+                            | "checkbox"
+                            | "color"
+                            | "date"
+                            | "datetime-local"
+                            | "email"
+                            | "file"
+                            | "hidden"
+                            | "image"
+                            | "month"
+                            | "number"
+                            | "password"
+                            | "radio"
+                            | "range"
+                            | "reset"
+                            | "search"
+                            | "submit"
+                            | "tel"
+                            | "text"
+                            | "time"
+                            | "url"
+                            | "week"
+                    )
+                })
+                .unwrap_or_else(|| "text".to_owned());
             matches!(
-                input_type.to_ascii_lowercase().as_str(),
+                input_type.as_str(),
                 "text" | "search" | "email" | "url" | "tel"
             )
             .then(|| {
-                dom.attribute(node, &Namespace::default(), &LocalName::from("value"))
-                    .map(str::to_owned)
-                    .unwrap_or_else(|| descendant_text(dom, node))
+                state.map_or_else(
+                    || {
+                        dom.attribute(node, &Namespace::default(), &LocalName::from("value"))
+                            .map(str::to_owned)
+                            .unwrap_or_else(|| descendant_text(dom, node))
+                    },
+                    |state| state.value,
+                )
             })
         },
         _ => None,
     }
+}
+
+fn native_checked<D: LayoutDom>(dom: &D, node: D::NodeId) -> Option<bool> {
+    let Some(name) = dom.element_name(node) else {
+        return None;
+    };
+    if name.ns.as_ref() != "http://www.w3.org/1999/xhtml"
+        || !name.local.as_ref().eq_ignore_ascii_case("input")
+    {
+        return None;
+    }
+    let kind = dom
+        .attribute(node, &Namespace::default(), &LocalName::from("type"))
+        .filter(|value| !value.is_empty())
+        .unwrap_or("text");
+    matches!(kind.to_ascii_lowercase().as_str(), "checkbox" | "radio").then(|| {
+        dom.form_control_state(node).map_or_else(
+            || {
+                dom.attribute(node, &Namespace::default(), &LocalName::from("checked"))
+                    .is_some()
+            },
+            |state| state.checked,
+        )
+    })
 }
 
 fn descendant_text<D: LayoutDom>(dom: &D, node: D::NodeId) -> String {
@@ -614,7 +673,7 @@ fn neutral_state<D: LayoutDom>(
         disabled,
         selected: aria_bool(dom, node, "aria-selected"),
         expanded: aria_bool(dom, node, "aria-expanded"),
-        checked: aria_bool(dom, node, "aria-checked"),
+        checked: aria_bool(dom, node, "aria-checked").or_else(|| native_checked(dom, node)),
         toggled,
         focused: focus.is_some_and(|focused| focused == node),
         editable,
@@ -1009,6 +1068,59 @@ mod tests {
         assert_eq!(field.name.as_deref(), Some("Board revision"));
         assert_eq!(field.value.as_deref(), Some("3"));
         assert_eq!(projection.revision(), 7);
+    }
+
+    #[test]
+    fn native_form_state_drives_accessible_value_and_checkedness() {
+        fn by_id(
+            dom: &ScriptedDom,
+            node: genet_scripted_dom::NodeId,
+            id: &str,
+        ) -> Option<genet_scripted_dom::NodeId> {
+            if dom.attribute(
+                node,
+                &layout_dom_api::Namespace::default(),
+                &layout_dom_api::LocalName::from("id"),
+            ) == Some(id)
+            {
+                return Some(node);
+            }
+            dom.dom_children(node)
+                .find_map(|child| by_id(dom, child, id))
+        }
+
+        let mut dom = ScriptedDom::new();
+        let root = dom.document();
+        dom.set_inner_html(
+            root,
+            "<input id=field value=default><input id=check type=checkbox checked>",
+        );
+        let field = by_id(&dom, root, "field").expect("text field");
+        let mut field_state = dom.form_control_state(field).expect("field state");
+        field_state.value = "current".to_owned();
+        field_state.dirty_value = true;
+        assert!(dom.set_form_control_state(field, field_state));
+
+        let check = by_id(&dom, root, "check").expect("checkbox");
+        let mut check_state = dom.form_control_state(check).expect("checkbox state");
+        check_state.checked = false;
+        check_state.dirty_checkedness = true;
+        assert!(dom.set_form_control_state(check, check_state));
+
+        let fragments = fragments_from_scripted_dom(&dom, SHEET, 400, 300).expect("layout");
+        let projection = document_a11y_projection(&dom, &fragments, None, 1);
+        let field = projection
+            .nodes()
+            .iter()
+            .find(|node| node.role == DocumentA11yRole::TextField)
+            .expect("field projection");
+        assert_eq!(field.value.as_deref(), Some("current"));
+        let check = projection
+            .nodes()
+            .iter()
+            .find(|node| node.role == DocumentA11yRole::CheckBox)
+            .expect("checkbox projection");
+        assert_eq!(check.state.checked, Some(false));
     }
 
     #[test]

@@ -21,14 +21,15 @@
 use engine_observables_api::{DomArenaStats, DomNodeKindStats};
 use genet_static_dom::{StaticDocument, StaticNodeId};
 use layout_dom_api::{
-    AttributeView, DoctypeView, DomMutation, LayoutDom, LayoutDomMut, LocalName, Namespace,
-    NodeKind, QualName, QuirksMode,
+    AttributeView, DoctypeView, DomMutation, FormControlState, LayoutDom, LayoutDomMut, LocalName,
+    Namespace, NodeKind, QualName, QuirksMode, SelectionDirection,
 };
 
 mod adoption;
 pub use adoption::SubtreeTransferError;
 
 mod forms;
+pub use forms::FormControlValueError;
 pub mod parser;
 mod serialize;
 mod shadow;
@@ -189,6 +190,8 @@ struct Node {
     text: Option<String>,
     parent: Option<NodeId>,
     children: Vec<NodeId>,
+    /// Script-visible current state for HTML input and textarea controls.
+    form_control: Option<FormControlState>,
 }
 
 impl Node {
@@ -200,6 +203,7 @@ impl Node {
             text: None,
             parent: None,
             children: Vec::new(),
+            form_control: None,
         }
     }
 }
@@ -558,6 +562,14 @@ impl ScriptedDom {
 
     pub fn try_create_element(&mut self, name: QualName) -> Result<NodeId, NodeIdentityError> {
         let mut node = Node::new(NodeKind::Element);
+        if name.ns == markup5ever::ns!(html) && matches!(name.local.as_ref(), "input" | "textarea")
+        {
+            node.form_control = Some(FormControlState {
+                selection_start: Some(0),
+                selection_end: Some(0),
+                ..FormControlState::default()
+            });
+        }
         node.name = Some(name);
         self.try_push(node)
     }
@@ -801,6 +813,8 @@ impl ScriptedDom {
             });
             self.record_child_list(former_parent, Vec::new(), vec![child], previous, next);
             self.reassign_for_parent(former_parent, child);
+            self.form_control_children_changed(former_parent);
+            self.radio_group_membership_changed(child);
         }
     }
 
@@ -823,6 +837,7 @@ impl ScriptedDom {
             self.mutations
                 .push(DomMutation::CharacterDataChanged { node });
             self.record_character_data(node, old);
+            self.form_control_children_changed(node);
             return;
         }
 
@@ -848,6 +863,8 @@ impl ScriptedDom {
         self.mutations.push(DomMutation::SubtreeReplaced { node });
         self.record_child_list(node, added, removed, None, None);
         self.reassign_for(node);
+        self.form_control_children_changed(node);
+        self.radio_group_membership_changed(node);
     }
 
     /// Create a detached `Document` node (a second document, for
@@ -1278,6 +1295,16 @@ impl ScriptedDom {
             NodeKind::Element => {
                 let mut node = Node::new(NodeKind::Element);
                 node.name = src.element_name(sid).cloned();
+                if node.name.as_ref().is_some_and(|q| {
+                    q.ns == markup5ever::ns!(html)
+                        && matches!(q.local.as_ref(), "input" | "textarea")
+                }) {
+                    node.form_control = Some(FormControlState {
+                        selection_start: Some(0),
+                        selection_end: Some(0),
+                        ..FormControlState::default()
+                    });
+                }
                 for attr in src.attributes(sid) {
                     node.attrs.push((attr.name.clone(), attr.value.to_owned()));
                 }
@@ -1327,6 +1354,9 @@ impl ScriptedDom {
             }
             self.reassign_slots(dst_root);
         }
+        if self.node(new).form_control.is_some() {
+            self.reset_form_control(new);
+        }
         new
     }
 
@@ -1365,6 +1395,16 @@ fn qual_name_bytes(name: &QualName) -> usize {
 
 impl LayoutDom for ScriptedDom {
     type NodeId = NodeId;
+
+    fn form_control_state(&self, id: NodeId) -> Option<FormControlState> {
+        let mut state = self.node(id).form_control.clone()?;
+        if self.element_name(id).is_some_and(|name| {
+            name.ns == markup5ever::ns!(html) && name.local.as_ref() == "textarea"
+        }) {
+            state.value = crate::forms::api_value_for_state(&state.value);
+        }
+        Some(state)
+    }
 
     fn document(&self) -> NodeId {
         self.root
@@ -1495,6 +1535,72 @@ impl LayoutDom for ScriptedDom {
 }
 
 impl LayoutDomMut for ScriptedDom {
+    fn set_form_control_state(&mut self, id: NodeId, mut state: FormControlState) -> bool {
+        let Some(name) = self.element_name(id).cloned() else {
+            return false;
+        };
+        if name.ns != markup5ever::ns!(html) || !matches!(name.local.as_ref(), "input" | "textarea")
+        {
+            return false;
+        }
+        if name.local.as_ref() == "input" {
+            let kind = self.input_type_for_state(id);
+            match crate::forms::value_mode_for_state(&kind) {
+                crate::forms::InputValueModeForState::Value => {
+                    let min = self.attribute(id, &markup5ever::ns!(), &LocalName::from("min"));
+                    let max = self.attribute(id, &markup5ever::ns!(), &LocalName::from("max"));
+                    let step = self.attribute(id, &markup5ever::ns!(), &LocalName::from("step"));
+                    let multiple = self
+                        .attribute(id, &markup5ever::ns!(), &LocalName::from("multiple"))
+                        .is_some();
+                    let step_base =
+                        self.attribute(id, &markup5ever::ns!(), &LocalName::from("value"));
+                    state.value = crate::forms::sanitize_value_for_state(
+                        &kind,
+                        &state.value,
+                        min,
+                        max,
+                        step,
+                        multiple,
+                        step_base,
+                    );
+                },
+                crate::forms::InputValueModeForState::Default => {
+                    state.value = self
+                        .attribute(id, &markup5ever::ns!(), &LocalName::from("value"))
+                        .unwrap_or("")
+                        .to_owned()
+                },
+                crate::forms::InputValueModeForState::DefaultOn => {
+                    state.value = self
+                        .attribute(id, &markup5ever::ns!(), &LocalName::from("value"))
+                        .unwrap_or("on")
+                        .to_owned()
+                },
+                crate::forms::InputValueModeForState::Filename => state.value.clear(),
+            }
+            crate::forms::clamp_selection_for_state(&mut state, &kind);
+        } else {
+            crate::forms::clamp_selection_for_state(&mut state, "textarea");
+        }
+        if name.local.as_ref() == "textarea" {
+            let current_raw = self.node(id).form_control.as_ref().unwrap().value.clone();
+            if crate::forms::api_value_for_state(&current_raw) == state.value {
+                state.value = current_raw;
+            }
+        }
+        let Some(slot) = self.node_mut(id).form_control.as_mut() else {
+            return false;
+        };
+        let changed = *slot != state;
+        *slot = state;
+        if changed {
+            self.mutations
+                .push(DomMutation::FormControlStateChanged { node: id });
+        }
+        true
+    }
+
     fn create_element(&mut self, name: QualName) -> NodeId {
         self.try_create_element(name)
             .expect("scripted-dom node identity allocation failed")
@@ -1509,7 +1615,8 @@ impl LayoutDomMut for ScriptedDom {
         // Spec observability: appending an in-tree node is a remove + insert,
         // and the former parent's consumers must hear the removal. The detach
         // used to be silent here. (moveBefore plan S1.)
-        if let Some(former_parent) = self.node(child).parent {
+        let former_parent = self.node(child).parent;
+        if let Some(former_parent) = former_parent {
             let previous = self.sibling(child, -1);
             let next = self.sibling(child, 1);
             self.mutations.push(DomMutation::Removed {
@@ -1519,6 +1626,9 @@ impl LayoutDomMut for ScriptedDom {
             self.record_implicit_removal(former_parent, child, previous, next);
         }
         self.detach(child);
+        if let Some(former_parent) = former_parent {
+            self.form_control_children_changed(former_parent);
+        }
         self.node_mut(child).parent = Some(parent);
         self.structure_epoch += 1;
         self.node_mut(parent).children.push(child);
@@ -1528,7 +1638,9 @@ impl LayoutDomMut for ScriptedDom {
         });
         let previous = self.sibling(child, -1);
         self.record_child_list(parent, vec![child], Vec::new(), previous, None);
+        self.form_control_children_changed(parent);
         self.reassign_for_parent(parent, child);
+        self.radio_group_membership_changed(child);
     }
 
     fn insert_before(&mut self, parent: NodeId, child: NodeId, reference: Option<NodeId>) {
@@ -1544,6 +1656,7 @@ impl LayoutDomMut for ScriptedDom {
             });
             self.record_implicit_removal(former_parent, child, previous, next);
         }
+        let former_parent = self.node(child).parent;
         self.attach_at(parent, child, reference);
         self.mutations.push(DomMutation::Inserted {
             node: child,
@@ -1552,7 +1665,12 @@ impl LayoutDomMut for ScriptedDom {
         let previous = self.sibling(child, -1);
         let next = self.sibling(child, 1);
         self.record_child_list(parent, vec![child], Vec::new(), previous, next);
+        if let Some(former_parent) = former_parent {
+            self.form_control_children_changed(former_parent);
+        }
+        self.form_control_children_changed(parent);
         self.reassign_for_parent(parent, child);
+        self.radio_group_membership_changed(child);
     }
 
     fn move_before(&mut self, parent: NodeId, child: NodeId, reference: Option<NodeId>) {
@@ -1578,6 +1696,11 @@ impl LayoutDomMut for ScriptedDom {
         let previous = self.sibling(child, -1);
         let next = self.sibling(child, 1);
         self.record_child_list(parent, vec![child], Vec::new(), previous, next);
+        if let Some(from_parent) = from_parent {
+            self.form_control_children_changed(from_parent);
+        }
+        self.form_control_children_changed(parent);
+        self.radio_group_membership_changed(child);
         match from_parent {
             Some(from_parent) => self.mutations.push(DomMutation::Moved {
                 node: child,
@@ -1610,11 +1733,19 @@ impl LayoutDomMut for ScriptedDom {
             });
             self.record_child_list(former_parent, Vec::new(), vec![node], previous, next);
             self.reassign_for_parent(former_parent, node);
+            self.form_control_children_changed(former_parent);
+            self.radio_group_membership_changed(node);
         }
         self.release_subtree(node);
     }
 
     fn set_attribute(&mut self, node: NodeId, name: QualName, value: &str) {
+        let old_type = (name.ns == markup5ever::ns!() && name.local.as_ref() == "type")
+            .then(|| {
+                self.attribute(node, &markup5ever::ns!(), &LocalName::from("type"))
+                    .map(str::to_owned)
+            })
+            .flatten();
         let attrs = &mut self.node_mut(node).attrs;
         // Capture the prior value before overwriting so a retained style owner
         // can classify the mutation after the old value is gone from the live
@@ -1635,10 +1766,17 @@ impl LayoutDomMut for ScriptedDom {
             old_value: old_value.clone(),
         });
         self.record_attribute(node, name.clone(), old_value);
+        self.form_control_attribute_changed(node, &name, old_type.as_deref());
         self.reassign_for_attribute(node, &name);
     }
 
     fn remove_attribute(&mut self, node: NodeId, name: QualName) {
+        let old_type = (name.ns == markup5ever::ns!() && name.local.as_ref() == "type")
+            .then(|| {
+                self.attribute(node, &markup5ever::ns!(), &LocalName::from("type"))
+                    .map(str::to_owned)
+            })
+            .flatten();
         // Drop the matching attribute and capture its prior value; the
         // borrow ends before we record the mutation. No-op (and no record)
         // when the attribute is absent.
@@ -1656,6 +1794,7 @@ impl LayoutDomMut for ScriptedDom {
                 old_value: Some(old.clone()),
             });
             self.record_attribute(node, name.clone(), Some(old));
+            self.form_control_attribute_changed(node, &name, old_type.as_deref());
             self.reassign_for_attribute(node, &name);
         }
     }
@@ -1666,6 +1805,8 @@ impl LayoutDomMut for ScriptedDom {
         self.mutations
             .push(DomMutation::CharacterDataChanged { node });
         self.record_character_data(node, old);
+        self.form_control_children_changed(node);
+        self.radio_group_membership_changed(node);
     }
 
     fn set_inner_html(&mut self, node: NodeId, html: &str) {

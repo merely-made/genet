@@ -1616,6 +1616,10 @@ struct ScopedDom<'a> {
 impl LayoutDom for ScopedDom<'_> {
     type NodeId = NodeId;
 
+    fn form_control_state(&self, id: Self::NodeId) -> Option<layout_dom_api::FormControlState> {
+        self.dom.form_control_state(id)
+    }
+
     fn document(&self) -> Self::NodeId {
         self.document
     }

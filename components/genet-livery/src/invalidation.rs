@@ -163,6 +163,9 @@ where
                 DomMutation::AttributeChanged { node, .. } => {
                     push_element_hint(dom, &mut roots, *node, sibling_dependencies);
                 },
+                DomMutation::FormControlStateChanged { node } => {
+                    push_element_hint(dom, &mut roots, *node, sibling_dependencies);
+                },
                 DomMutation::Inserted { node, parent } => {
                     if structural_dependencies {
                         push_element_hint(dom, &mut roots, *parent, sibling_dependencies);

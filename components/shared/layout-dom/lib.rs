@@ -25,6 +25,32 @@ pub use markup5ever::{LocalName, Namespace, QualName};
 #[cfg(feature = "capture")]
 use serde::{Deserialize, Serialize};
 
+/// The script-visible state shared by HTML input and textarea controls.
+/// Selection offsets use UTF-16 code units, as required by the HTML selection
+/// APIs, rather than Rust string byte offsets.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "capture", derive(Serialize, Deserialize))]
+pub struct FormControlState {
+    pub value: String,
+    pub dirty_value: bool,
+    pub checked: bool,
+    pub dirty_checkedness: bool,
+    pub selection_start: Option<u32>,
+    pub selection_end: Option<u32>,
+    pub selection_direction: SelectionDirection,
+    pub custom_validity_message: String,
+}
+
+/// Direction of a text-control selection.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "capture", derive(Serialize, Deserialize))]
+pub enum SelectionDirection {
+    #[default]
+    None,
+    Forward,
+    Backward,
+}
+
 /// Profile-neutral DOM. Implementors expose opaque `NodeId`s and a small set
 /// of lookup primitives; traversal happens through the default `walk` impl
 /// over a [`NodeVisitor`], or through caller-driven cursors built on the
@@ -32,6 +58,14 @@ use serde::{Deserialize, Serialize};
 pub trait LayoutDom {
     /// Opaque per-backend node identity. Must be `Copy` for cheap pass-through.
     type NodeId: Copy + Eq + Hash + Debug + 'static;
+
+    /// Current script-facing state for an input or textarea, when this backend
+    /// stores such state. The owned return keeps the profile-neutral trait from
+    /// exposing backend borrows. Static and other backends may leave the
+    /// default implementation in place.
+    fn form_control_state(&self, _id: Self::NodeId) -> Option<FormControlState> {
+        None
+    }
 
     // ---- identity / structure -------------------------------------------
 
@@ -312,6 +346,12 @@ pub trait LayoutDom {
 /// the stream ([`Self::drain_mutations`]) and translates it into style/layout
 /// invalidation; the DOM provider itself stays render-state-free.
 pub trait LayoutDomMut: LayoutDom {
+    /// Replace the stored state for an input or textarea. Returns false when
+    /// the backend does not support stateful form controls or `id` is not one.
+    fn set_form_control_state(&mut self, _id: Self::NodeId, _state: FormControlState) -> bool {
+        false
+    }
+
     /// Create a detached element node (no parent until appended).
     fn create_element(&mut self, name: QualName) -> Self::NodeId;
 
@@ -398,6 +438,10 @@ pub enum DomMutation<Id> {
     },
     /// A text/comment node's character data changed.
     CharacterDataChanged { node: Id },
+    /// A form control's script-visible value, checkedness, selection, or custom
+    /// validity state changed. This is a retained-layout invalidation fact only;
+    /// it does not imply an attribute mutation or MutationObserver record.
+    FormControlStateChanged { node: Id },
     /// `node`'s entire child subtree was replaced (e.g. via `innerHTML`).
     SubtreeReplaced { node: Id },
     /// `node` moved atomically from `from_parent` to `to_parent` (possibly the
@@ -474,6 +518,10 @@ pub enum CapturedMutation {
         from_parent: u64,
         to_parent: u64,
     },
+    // Append capture variants to preserve existing postcard discriminants.
+    FormControlStateChanged {
+        node: u64,
+    },
 }
 
 #[cfg(feature = "capture")]
@@ -502,6 +550,9 @@ impl CapturedMutation {
             },
             DomMutation::CharacterDataChanged { node } => {
                 Self::CharacterDataChanged { node: to_raw(node) }
+            },
+            DomMutation::FormControlStateChanged { node } => {
+                Self::FormControlStateChanged { node: to_raw(node) }
             },
             DomMutation::SubtreeReplaced { node } => Self::SubtreeReplaced { node: to_raw(node) },
             DomMutation::Moved {
@@ -539,6 +590,9 @@ impl CapturedMutation {
                 old_value,
             },
             Self::CharacterDataChanged { node } => DomMutation::CharacterDataChanged {
+                node: from_raw(node),
+            },
+            Self::FormControlStateChanged { node } => DomMutation::FormControlStateChanged {
                 node: from_raw(node),
             },
             Self::SubtreeReplaced { node } => DomMutation::SubtreeReplaced {

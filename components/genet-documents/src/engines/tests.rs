@@ -925,17 +925,22 @@ fn livery_session_replaces_accessible_native_text_values() {
     let note_id = session.document().dom().opaque_id(note);
 
     assert!(session.replace_accessible_text_value(query_id, "birch"));
-    assert_eq!(session.attribute(query, "value"), Some("birch"));
+    assert_eq!(session.attribute(query, "value"), Some("cedar"));
     assert_eq!(
-        session.editor.as_ref().map(|editor| {
-            (
-                editor.node,
-                editor.kind,
-                editor.value.as_str(),
-                editor.caret,
-            )
-        }),
-        Some((query, EditableKind::Input, "birch", "birch".len()))
+        session
+            .document()
+            .dom()
+            .form_control_state(query)
+            .unwrap()
+            .value,
+        "birch"
+    );
+    assert_eq!(
+        session
+            .editor
+            .as_ref()
+            .map(|editor| (editor.node, editor.kind)),
+        Some((query, EditableKind::Input))
     );
     assert_eq!(
         session.form_submission("fallback.html").fields,
@@ -946,17 +951,26 @@ fn livery_session_replaces_accessible_native_text_values() {
     );
 
     assert!(session.replace_accessible_text_value(note_id, "new note"));
-    assert_eq!(session.text_content(note), "new note");
     assert_eq!(
-        session.editor.as_ref().map(|editor| {
-            (
-                editor.node,
-                editor.kind,
-                editor.value.as_str(),
-                editor.caret,
-            )
-        }),
-        Some((note, EditableKind::Textarea, "new note", "new note".len()))
+        session.text_content(note),
+        "old note",
+        "author children remain the default value"
+    );
+    assert_eq!(
+        session
+            .document()
+            .dom()
+            .form_control_state(note)
+            .unwrap()
+            .value,
+        "new note"
+    );
+    assert_eq!(
+        session
+            .editor
+            .as_ref()
+            .map(|editor| (editor.node, editor.kind)),
+        Some((note, EditableKind::Textarea))
     );
     let submission = session.form_submission("fallback.html");
     assert_eq!(submission.action, "result.html");
@@ -1414,11 +1428,18 @@ fn livery_session_drag_selects_a_textarea_without_creating_a_page_clip() {
     assert!(session.pointer_move(target.anchor[0], target.anchor[1]));
     assert_eq!(session.pointer_up(390.0, 150.0), SessionClick::Handled);
     let selection = session
-        .editor
-        .as_ref()
-        .and_then(|editor| editor.selection)
-        .expect("the reverse drag forms a directed editor-local range");
-    assert!(selection.anchor > selection.focus);
+        .document()
+        .dom()
+        .form_control_state(note)
+        .expect("textarea editor state");
+    assert!(
+        selection.selection_start < selection.selection_end,
+        "the reverse drag retains the ordered UTF-16 range"
+    );
+    assert_eq!(
+        selection.selection_direction,
+        layout_dom_api::SelectionDirection::Backward
+    );
     assert!(session.document().text_selection().is_none());
     assert!(
         session.clip().is_none(),
@@ -1441,17 +1462,27 @@ fn livery_session_drag_selects_a_textarea_without_creating_a_page_clip() {
 
     assert!(session.ime_input(SessionIme::Commit("oak".to_owned())));
     let note = livery_node_with_id(session, "note");
-    assert_eq!(session.text_content(note), "oak");
+    assert_eq!(
+        session.text_content(note),
+        "cedar",
+        "author children remain unchanged"
+    );
+    assert_eq!(
+        session
+            .document()
+            .dom()
+            .form_control_state(note)
+            .unwrap()
+            .value,
+        "oak"
+    );
     assert_eq!(
         session.form_submission("fallback.html").fields,
         [("note".to_owned(), "oak".to_owned())]
     );
-    assert!(
-        session
-            .editor
-            .as_ref()
-            .is_some_and(|editor| editor.selection.is_none() && editor.caret == 3)
-    );
+    let state = session.document().dom().form_control_state(note).unwrap();
+    assert_eq!(state.selection_start, Some(3));
+    assert_eq!(state.selection_end, Some(3));
     assert!(
         matches!(
             session.pointer_down(target.anchor[0], target.anchor[1]),
@@ -1477,11 +1508,10 @@ fn livery_session_drag_selects_a_textarea_without_creating_a_page_clip() {
         session.pointer_up(caret_target.anchor[0], caret_target.anchor[1]),
         SessionClick::Handled
     );
+    let state = session.document().dom().form_control_state(note).unwrap();
+    assert_eq!(state.selection_start, state.selection_end);
     assert!(
-        session
-            .editor
-            .as_ref()
-            .is_some_and(|editor| editor.selection.is_none() && editor.caret == 0),
+        state.selection_start.is_some(),
         "a collapsed editor gesture preserves its local caret"
     );
 
@@ -1498,7 +1528,20 @@ fn livery_session_drag_selects_a_textarea_without_creating_a_page_clip() {
         SessionClick::Handled
     );
     assert!(session.delete_backward());
-    assert_eq!(session.text_content(note), "");
+    assert_eq!(
+        session.text_content(note),
+        "cedar",
+        "author children remain unchanged"
+    );
+    assert_eq!(
+        session
+            .document()
+            .dom()
+            .form_control_state(note)
+            .unwrap()
+            .value,
+        ""
+    );
     let empty = session.frame(400, 160);
     let empty_rects = empty
         .ops
@@ -2450,9 +2493,9 @@ fn livery_editor_uses_shared_grapheme_boundaries_for_keys() {
     let query_id = session.document().dom().opaque_id(query);
     assert!(session.replace_accessible_text_value(query_id, "🇺🇸🇨🇦a\u{301}"));
     for (key, expected_caret) in [
-        (SessionKey::ArrowLeft, 16),
         (SessionKey::ArrowLeft, 8),
-        (SessionKey::ArrowRight, 16),
+        (SessionKey::ArrowLeft, 4),
+        (SessionKey::ArrowRight, 8),
     ] {
         assert_eq!(
             session.key_input(
@@ -2463,7 +2506,15 @@ fn livery_editor_uses_shared_grapheme_boundaries_for_keys() {
             ),
             SessionEffect::Handled
         );
-        assert_eq!(session.editor.as_ref().unwrap().caret, expected_caret);
+        assert_eq!(
+            session
+                .document()
+                .dom()
+                .form_control_state(query)
+                .unwrap()
+                .selection_start,
+            Some(expected_caret)
+        );
     }
     assert_eq!(
         session.key_input(
@@ -2474,7 +2525,15 @@ fn livery_editor_uses_shared_grapheme_boundaries_for_keys() {
         ),
         SessionEffect::Handled
     );
-    assert_eq!(session.editor.as_ref().unwrap().value, "🇺🇸🇨🇦");
+    assert_eq!(
+        session
+            .document()
+            .dom()
+            .form_control_state(query)
+            .unwrap()
+            .value,
+        "🇺🇸🇨🇦"
+    );
     assert_eq!(
         session.key_input(
             SessionKey::Backspace,
@@ -2484,21 +2543,78 @@ fn livery_editor_uses_shared_grapheme_boundaries_for_keys() {
         ),
         SessionEffect::Handled
     );
-    assert_eq!(session.editor.as_ref().unwrap().value, "🇺🇸");
-    assert_eq!(session.editor.as_ref().unwrap().caret, 8);
-    // A scalar-aligned hit-test position inside a flag must retain context
-    // from the beginning of the complete string when moving right.
-    session.editor.as_mut().unwrap().caret = 4;
+    let state = session.document().dom().form_control_state(query).unwrap();
+    assert_eq!(state.value, "🇺🇸");
+    assert_eq!(state.selection_start, Some(4));
+}
+
+#[cfg(feature = "livery")]
+#[test]
+fn email_and_number_editing_keep_a_native_cursor_without_selection_idl() {
+    let engine = LiverySessionEngine::new(NoFetch);
+    let request = SessionSpawnRequest::new("fixtures/form/internal-caret.html")
+        .with_body(
+            "<html><head><style>input{display:block;width:180px;height:24px}</style></head><body style='margin:0'><input id=email type=email><input id=number type=number value=12345></body></html>",
+        )
+        .with_viewport(400, 120);
+    let mut boxed = engine.spawn(&request).expect("form session spawns");
+    let session = boxed
+        .as_any()
+        .downcast_mut::<LiveryDocumentSession>()
+        .unwrap();
+    let email = livery_node_with_id(session, "email");
+    let email_id = session.document().dom().opaque_id(email);
+    assert!(session.replace_accessible_text_value(email_id, "person@example.test"));
     assert_eq!(
         session.key_input(
-            SessionKey::ArrowRight,
+            SessionKey::ArrowLeft,
             SessionButtonState::Pressed,
             SessionModifiers::default(),
-            false
+            false,
         ),
         SessionEffect::Handled
     );
-    assert_eq!(session.editor.as_ref().unwrap().caret, 8);
+    assert_eq!(session.character_input("X"), SessionEffect::Handled);
+    assert_eq!(
+        session
+            .document()
+            .dom()
+            .form_control_state(email)
+            .unwrap()
+            .value,
+        "person@example.tesXt"
+    );
+
+    let number = livery_node_with_id(session, "number");
+    assert_eq!(session.click_at(80.0, 40.0), SessionClick::Handled);
+    assert_eq!(
+        session.key_input(
+            SessionKey::End,
+            SessionButtonState::Pressed,
+            SessionModifiers::default(),
+            false,
+        ),
+        SessionEffect::Handled
+    );
+    assert_eq!(
+        session.key_input(
+            SessionKey::ArrowLeft,
+            SessionButtonState::Pressed,
+            SessionModifiers::default(),
+            false,
+        ),
+        SessionEffect::Handled
+    );
+    assert_eq!(session.character_input("9"), SessionEffect::Handled);
+    assert_eq!(
+        session
+            .document()
+            .dom()
+            .form_control_state(number)
+            .unwrap()
+            .value,
+        "123495"
+    );
 }
 
 #[cfg(feature = "scripted")]

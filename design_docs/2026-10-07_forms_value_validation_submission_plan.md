@@ -1,6 +1,7 @@
 # HTML forms: value state, validation and submission
 
-**Status, 2026-10-07:** Phase A authorized and assembling its starting gates.
+**Status, 2026-10-07:** Phase A implementation in progress; starting runner and
+behavior controls frozen. Whole-directory baseline is running serially.
 Phase B and C remain behind separate checkpoints. No Forms qualification or
 publication is claimed yet.
 
@@ -105,3 +106,33 @@ dependency or version change is authorized beyond the named workspace edge.
   Evidence stays under `Code/testing/genet/forms/`. Reuse the approved stable
   `C:/t/cargo-targets/genet-encoding` target and existing published-source cache;
   do not create numbered or timestamped output directories.
+- 2026-10-07: Documentation ruling commit `2f4f8265249` precedes the freshly
+  built frozen runner (published-source lock `9809247C...`, runner
+  `5DB68DE6ECF285B2DBE254E6EC0CB685D1D654BFF6AFFA718DD9E30F38F2BE3F`).
+  Both starting engines execute all 15 value fixtures, passing two controls
+  and failing thirteen target behaviors. The unchanged clean-default and
+  type-transition controls remain passing; they are not reported as failing
+  controls. Receipts: `before-runner.receipt.json` and
+  `before-{boa,nova}-phase-a-value-model.receipt.json` under the Forms evidence.
+  Freeze covers all Forms-family and shared harness/common/IDL/font files
+  (1,649 including the manifest), rather than unrelated WPT asset families.
+  Primary ignored Cargo config and original lock were restored byte-for-byte
+  after the gate. Arena and projection agents now edit their separate owners;
+  the original frozen runner supplies the directory baseline independently.
+- 2026-10-07: All six whole-directory starting maps are recorded. ERROR-file
+  assertions remain separate in `before-summary.json`; the input runner's
+  218 passes include one row from an errored file, so its completed-only count
+  is 217. The starting reftest guard reports unexpected=0. The guard now accepts
+  an explicit frozen runner and uses locked Cargo commands on its fallback
+  path, avoiding an unlocked metadata call in the shared checkout.
+  Review corrects textarea direct-child defaults, raw/API newline distinctions,
+  sanitizer edge cases and state-change invalidation. Capture state records
+  carry the raw arena snapshot; serialized variants are appended to preserve
+  existing postcard discriminants. Password display policy remains pending.
+- 2026-10-07: Arena and non-password projection chunks are handed back for the
+  first serial crate gate. This is a local implementation draft, not Checkpoint
+  A acceptance. Internal arena cursor positions also serve email/number and
+  other previously editable value controls; runtime selection APIs independently
+  apply HTML's type restrictions. Focused coverage includes retained repaint,
+  UTF-16 editing, defaults, textarea lines, placeholder, checkedness and capture
+  payload roundtrip. Password painting remains dependent on the pending answer.

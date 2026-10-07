@@ -820,6 +820,12 @@
       var kids = node.childNodes;
       for (var k = 0; k < kids.length; k++) { copy.appendChild(cloneNodeInto(kids[k], copyDocument, true)); }
     }
+    // Copy HTML live value/dirty flags after child insertion, which itself can
+    // initialize a clean textarea. The native hook reads trusted arena state.
+    if (node.nodeType === 1 && node.namespaceURI === XHTML_NS &&
+        (node.localName === 'input' || node.localName === 'textarea')) {
+      __copyFormControlState(node.__ref, copy.__ref);
+    }
     return copy;
   }
   // Set by the shadow section below, once `attachShadow` exists. Hoisting the
@@ -3077,7 +3083,112 @@
     return Ctor;
   }
 
+  function formOwner(control) {
+    if (control.hasAttribute('form')) {
+      if (!control.isConnected) return null;
+      var identified = ownerDocumentOf(control).getElementById(control.getAttribute('form'));
+      return identified && identified.namespaceURI === XHTML_NS && identified.localName === 'form' ? identified : null;
+    }
+    for (var parent = control.parentNode; parent; parent = parent.parentNode) {
+      if (parent.nodeType === 1 && parent.namespaceURI === XHTML_NS && parent.localName === 'form') return parent;
+    }
+    return null;
+  }
+  function formControlError(error) {
+    if (error === 'TypeError') throw new TypeError('Illegal invocation');
+    if (error) throw new DOMException('This operation is not supported by this input type.', error);
+  }
+  function formUnsignedLong(value) {
+    value = Number(value);
+    if (!isFinite(value) || value === 0) return 0;
+    return (value < 0 ? Math.ceil(value) : Math.floor(value)) >>> 0;
+  }
+  function formSelection(control, start, end, direction) {
+    var oldStart = control.selectionStart, oldEnd = control.selectionEnd, oldDirection = control.selectionDirection;
+    formControlError(__formControlSelect(control.__ref, String(formUnsignedLong(start)), String(formUnsignedLong(end)), String(direction)));
+    if (oldStart !== control.selectionStart || oldEnd !== control.selectionEnd || oldDirection !== control.selectionDirection) {
+      setTimeout(function() { control.dispatchEvent(new Event('select', { bubbles: true })); }, 0);
+    }
+  }
+  function installTextControlMembers(proto) {
+    Object.defineProperty(proto, 'form', { configurable: true, enumerable: true, get: function() { return formOwner(this); } });
+    ['selectionStart', 'selectionEnd', 'selectionDirection'].forEach(function(key) {
+      Object.defineProperty(proto, key, { configurable: true, enumerable: true,
+        get: function() { var value = __formControlGet(this.__ref, key); return value === null || key === 'selectionDirection' ? value : Number(value); },
+        set: function(value) {
+          var start = this.selectionStart, end = this.selectionEnd, direction = this.selectionDirection;
+          if (key === 'selectionStart') { start = formUnsignedLong(value); if (end < start) end = start; }
+          else if (key === 'selectionEnd') end = formUnsignedLong(value);
+          else direction = String(value);
+          formSelection(this, start, end, direction);
+        }
+      });
+    });
+    Object.defineProperty(proto, 'textLength', { configurable: true, enumerable: true, get: function() { return this.value.length; } });
+    proto.setSelectionRange = function(start, end, direction) {
+      if (arguments.length < 2) throw new TypeError('setSelectionRange requires two arguments');
+      formSelection(this, start, end, direction === undefined ? 'none' : String(direction));
+    };
+    proto.select = function() {
+      if (this.selectionStart === null) return;
+      formSelection(this, 0, this.value.length, 'none');
+    };
+    proto.setRangeText = function(replacement, start, end, mode) {
+      if (arguments.length === 0) throw new TypeError('setRangeText requires a replacement');
+      if (this.selectionStart === null) throw new DOMException('Unsupported control type', 'InvalidStateError');
+      var original = this.value, oldStart = this.selectionStart, oldEnd = this.selectionEnd;
+      replacement = String(replacement);
+      if (arguments.length === 1) { start = oldStart; end = oldEnd; }
+      else { if (arguments.length < 3) throw new TypeError('Both range offsets are required'); start = formUnsignedLong(start); end = formUnsignedLong(end); }
+      mode = mode === undefined ? 'preserve' : String(mode);
+      if (['select','start','end','preserve'].indexOf(mode) < 0) throw new TypeError('Invalid SelectionMode');
+      if (start > end) throw new DOMException('Start is greater than end', 'IndexSizeError');
+      start = Math.min(start, original.length); end = Math.min(end, original.length);
+      this.value = original.slice(0, start) + replacement + original.slice(end);
+      var newEnd = start + replacement.length;
+      if (mode === 'select') formSelection(this, start, newEnd, 'none');
+      else if (mode === 'start') formSelection(this, start, start, 'none');
+      else if (mode === 'end') formSelection(this, newEnd, newEnd, 'none');
+      else {
+        var delta = replacement.length - (end - start);
+        if (oldStart > end) oldStart += delta; else if (oldStart > start) oldStart = start;
+        if (oldEnd > end) oldEnd += delta; else if (oldEnd > start) oldEnd = newEnd;
+        formSelection(this, oldStart, oldEnd, 'none');
+      }
+    };
+  }
+
   function installHtmlInterfaceMembers(name, proto) {
+    if (name === 'HTMLInputElement' || name === 'HTMLTextAreaElement') {
+      installTextControlMembers(proto);
+      return;
+    }
+    if (name === 'HTMLFormElement') {
+      var resetting = new WeakSet();
+      proto.reset = function() {
+        if (!this || this.namespaceURI !== XHTML_NS || this.localName !== 'form') throw new TypeError('Illegal invocation');
+        if (resetting.has(this)) return;
+        resetting.add(this);
+        try {
+          if (!this.dispatchEvent(new Event('reset', { bubbles: true, cancelable: true }))) return;
+          var seen = new Set();
+          var own = this.querySelectorAll('input,textarea');
+          var all = ownerDocumentOf(this).querySelectorAll('input,textarea');
+          function resetAssociated(list, form) {
+            for (var i = 0; i < list.length; i++) {
+              var control = list[i];
+              if (!seen.has(control) && formOwner(control) === form) {
+                seen.add(control);
+                __resetFormControl(control.__ref);
+              }
+            }
+          }
+          resetAssociated(own, this);
+          resetAssociated(all, this);
+        } finally { resetting.delete(this); }
+      };
+      return;
+    }
     if (name === 'HTMLIFrameElement') {
       Object.defineProperty(proto, 'referrerPolicy', {
         configurable: true, enumerable: true,
@@ -5031,7 +5142,16 @@
       // which lowercases. Explicit names passed in are already lowercase.
       attr = (attr || idl).toLowerCase();
       var desc = { configurable: true, enumerable: true };
-      if (kind === 's') {
+      if (kind === 'fv' || kind === 'fc') {
+        desc.get = function() { var value = __formControlGet(this.__ref, kind === 'fc' ? 'checked' : 'value'); return kind === 'fc' ? value === 'true' : value === null ? '' : value; };
+        desc.set = function(value) { formControlError(__formControlSet(this.__ref, kind === 'fc' ? 'checked' : 'value', kind === 'fc' ? String(!!value) : value === null ? '' : String(value))); };
+      } else if (kind === 'td') {
+        desc.get = function() { return __formControlGet(this.__ref, 'defaultValue'); };
+        desc.set = function(value) { this.textContent = String(value); };
+      } else if (kind === 'it') {
+        desc.get = function() { var value = (this.getAttribute('type') || '').toLowerCase(); return ['hidden','text','search','tel','url','email','password','date','month','week','time','datetime-local','number','range','color','checkbox','radio','file','submit','image','reset','button'].indexOf(value) >= 0 ? value : 'text'; };
+        desc.set = function(value) { this.setAttribute('type', String(value)); };
+      } else if (kind === 's') {
         desc.get = function() { var v = this.getAttribute(attr); return v === null ? '' : v; };
         desc.set = function(v) { this.setAttribute(attr, String(v)); };
       } else if (kind === 'tc') {

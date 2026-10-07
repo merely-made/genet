@@ -11,7 +11,7 @@ use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use genet_scripted_dom::{CapturedNodeId, NodeId, NodeIdentityError, ScriptedDom};
-use layout_dom_api::{CapturedQualName, DomMutation, LayoutDom, LayoutDomMut};
+use layout_dom_api::{CapturedQualName, DomMutation, FormControlState, LayoutDom, LayoutDomMut};
 use serde::{Deserialize, Serialize};
 
 fn capture_dir() -> Option<&'static PathBuf> {
@@ -108,6 +108,11 @@ pub(crate) enum RecordedMutation {
         to_parent: CapturedNodeId,
         next_sibling: Option<CapturedNodeId>,
     },
+    // Appended so historical postcard mutation discriminants stay unchanged.
+    FormControlStateChanged {
+        node: CapturedNodeId,
+        new_state: FormControlState,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -147,6 +152,7 @@ impl RecordedMutation {
             DomMutation::Inserted { node, .. }
             | DomMutation::AttributeChanged { node, .. }
             | DomMutation::CharacterDataChanged { node }
+            | DomMutation::FormControlStateChanged { node }
             | DomMutation::SubtreeReplaced { node }
             | DomMutation::Moved { node, .. } => Some(*node),
             DomMutation::Removed { .. } => None,
@@ -187,6 +193,15 @@ impl RecordedMutation {
             DomMutation::CharacterDataChanged { node } => Self::CharacterDataChanged {
                 node: capture_id(*node)?,
                 new_data: dom.text(*node).unwrap_or_default().to_string(),
+            },
+            DomMutation::FormControlStateChanged { node } => Self::FormControlStateChanged {
+                node: capture_id(*node)?,
+                new_state: dom.form_control_clone_state(*node).ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "control state mutation has no arena state",
+                    )
+                })?,
             },
             DomMutation::SubtreeReplaced { node } => Self::SubtreeReplaced {
                 node: capture_id(*node)?,
@@ -253,6 +268,7 @@ impl RecordedMutation {
             | Self::Removed { node, .. }
             | Self::AttributeChanged { node, .. }
             | Self::CharacterDataChanged { node, .. }
+            | Self::FormControlStateChanged { node, .. }
             | Self::SubtreeReplaced { node, .. }
             | Self::Moved { node, .. } => *node,
         };
@@ -280,6 +296,7 @@ impl RecordedMutation {
             } => vec![*node, *former_parent],
             Self::AttributeChanged { node, .. }
             | Self::CharacterDataChanged { node, .. }
+            | Self::FormControlStateChanged { node, .. }
             | Self::SubtreeReplaced { node, .. } => vec![*node],
             Self::Moved {
                 node,
@@ -427,6 +444,44 @@ mod tests {
         static NEXT_ID: AtomicU64 = AtomicU64::new(0);
         let unique = NEXT_ID.fetch_add(1, Ordering::Relaxed);
         std::env::temp_dir().join(format!("genet-dom-capture-{}-{unique}.bin", now_millis()))
+    }
+
+    #[test]
+    fn control_capture_roundtrip_preserves_live_value_and_selection() {
+        let mut dom = ScriptedDom::new();
+        let input = dom.create_element(QualName::new(
+            None,
+            Namespace::from("http://www.w3.org/1999/xhtml"),
+            LocalName::from("input"),
+        ));
+        dom.set_attribute(input, qual("value"), "default");
+        dom.set_form_control_value(input, "A😀B").unwrap();
+        let mut state = dom.form_control_state(input).unwrap();
+        state.selection_start = Some(1);
+        state.selection_end = Some(3);
+        state.selection_direction = layout_dom_api::SelectionDirection::Backward;
+        dom.set_form_control_state(input, state.clone());
+        let record =
+            RecordedMutation::capture(&dom, &DomMutation::FormControlStateChanged { node: input })
+                .unwrap();
+        let encoded = postcard::to_allocvec(&record).unwrap();
+        let decoded: RecordedMutation = postcard::from_bytes(&encoded).unwrap();
+        assert_eq!(decoded, record);
+        assert_eq!(decoded.replay_node(&dom).unwrap(), input);
+        let RecordedMutation::FormControlStateChanged { new_state, .. } = decoded else {
+            panic!("state payload missing");
+        };
+        assert_eq!(new_state, state);
+        assert_eq!(
+            dom.attribute(input, &Namespace::default(), &LocalName::from("value")),
+            Some("default")
+        );
+        // Historical node mutations retain their previous enum discriminants.
+        let historical = RecordedMutation::CharacterDataChanged {
+            node: dom.try_capture_node_identity(input).unwrap(),
+            new_data: "text".to_owned(),
+        };
+        assert_eq!(postcard::to_allocvec(&historical).unwrap()[0], 3);
     }
 
     #[test]

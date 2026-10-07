@@ -85,12 +85,21 @@ where
                     // text inside that container.
                     inline_container_style.vertical_align = VerticalAlign::Baseline;
                 }
-                let children = self.build_children(
-                    box_id,
-                    &inline_container_style,
-                    font_size,
-                    child_containing_size,
-                )?;
+                let projected_textarea = self.dom.form_control_state(node).is_some()
+                    && self.dom.element_name(node).is_some_and(|name| {
+                        name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
+                            && name.local.as_ref().eq_ignore_ascii_case("textarea")
+                    });
+                let children = if projected_textarea {
+                    Vec::new()
+                } else {
+                    self.build_children(
+                        box_id,
+                        &inline_container_style,
+                        font_size,
+                        child_containing_size,
+                    )?
+                };
                 let table_handoff = self.pending_table_handoff.take();
                 let mut taffy_style = to_taffy_style(&computed, font_size);
                 let replaced_size = apply_replaced_intrinsic_style(

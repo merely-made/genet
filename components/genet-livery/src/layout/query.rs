@@ -761,9 +761,16 @@ fn atomic_inline_elements<D>(
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
+    let text_control = dom.kind(node) == NodeKind::Element
+        && dom.element_name(node).is_some_and(|name| {
+            matches!(
+                name.local.as_ref().to_ascii_lowercase().as_str(),
+                "input" | "textarea"
+            )
+        });
     let inside =
         inside || (dom.kind(node) == NodeKind::Element && is_atomic_inline_box(dom, styles, node));
-    if inside && dom.kind(node) == NodeKind::Element {
+    if (inside || text_control) && dom.kind(node) == NodeKind::Element {
         out.push(node);
     }
     for child in dom.dom_children(node) {

@@ -6,7 +6,8 @@
 
 [CmdletBinding()]
 param(
-    [switch]$NoBuild
+    [switch]$NoBuild,
+    [string]$RunnerPath
 )
 
 # Reftest baselines are a LOCAL guard, not default CI: reftests render through
@@ -16,20 +17,23 @@ param(
 $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
-if (-not $NoBuild) {
-    cargo build --manifest-path (Join-Path $repo "Cargo.toml") --release -p genet-wpt
+if (-not $NoBuild -and -not $RunnerPath) {
+    cargo build --manifest-path (Join-Path $repo "Cargo.toml") --release --locked --offline -p genet-wpt
     if ($LASTEXITCODE -ne 0) {
         throw "cargo build -p genet-wpt --release failed with exit code $LASTEXITCODE"
     }
 }
 
-$metadata = cargo metadata --manifest-path (Join-Path $repo "Cargo.toml") --format-version 1 --no-deps | ConvertFrom-Json
-if ($LASTEXITCODE -ne 0) {
-    throw "cargo metadata failed with exit code $LASTEXITCODE"
+if ($RunnerPath) {
+    $runner = (Resolve-Path -LiteralPath $RunnerPath).Path
+} else {
+    $metadata = cargo metadata --manifest-path (Join-Path $repo "Cargo.toml") --locked --offline --format-version 1 --no-deps | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0) {
+        throw "cargo metadata failed with exit code $LASTEXITCODE"
+    }
+    $exeName = if ($IsWindows -or $env:OS -eq "Windows_NT") { "genet-wpt.exe" } else { "genet-wpt" }
+    $runner = Join-Path $metadata.target_directory (Join-Path "release" $exeName)
 }
-
-$exeName = if ($IsWindows -or $env:OS -eq "Windows_NT") { "genet-wpt.exe" } else { "genet-wpt" }
-$runner = Join-Path $metadata.target_directory (Join-Path "release" $exeName)
 if (-not (Test-Path $runner)) {
     throw "release genet-wpt binary not found at $runner; rerun without -NoBuild"
 }

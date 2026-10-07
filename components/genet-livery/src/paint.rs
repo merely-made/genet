@@ -1059,6 +1059,23 @@ where
                 }));
                 clips_descendants += 1;
             }
+            if is_text_control_projection(dom, id)
+                && let Some(fragment) = fragments.principal_fragment(id)
+                && paintable_fragment(fragment)
+            {
+                let (x, y, width, height) = crate::layout::content_box_rect(style, fragment);
+                if width.is_finite() && height.is_finite() && width > 0.0 && height > 0.0 {
+                    list.commands.push(PaintCmd::PushClip(ClipSpec {
+                        kind: ClipKind::Rect(LayoutRect::new(
+                            LayoutPoint::new(x, y),
+                            LayoutPoint::new(x + width, y + height),
+                        )),
+                    }));
+                    text.frame
+                        .drain(id, None, scope.stacking_roots, &mut list.commands);
+                    list.commands.push(PaintCmd::PopClip);
+                }
+            }
             if style.display == Display::ListItem
                 || styles
                     .generated_text(id, buckram::PseudoElement::Before)
@@ -2813,6 +2830,13 @@ fn emit_normal_children<'a, D>(
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
+    if dom.form_control_state(parent).is_some()
+        && dom
+            .element_name(parent)
+            .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case("textarea"))
+    {
+        return;
+    }
     let child_ids = order_modified_children(dom, styles, parent);
 
     let mut inline_group = Vec::new();
@@ -3623,6 +3647,58 @@ fn paintable_fragment(fragment: &Fragment) -> bool {
         && fragment.height.is_finite()
         && fragment.width > 0.0
         && fragment.height > 0.0
+}
+
+fn is_text_control_projection<D: LayoutDom>(dom: &D, id: D::NodeId) -> bool {
+    let Some(name) = dom.element_name(id) else {
+        return false;
+    };
+    if name.ns.as_ref() != "http://www.w3.org/1999/xhtml" {
+        return false;
+    }
+    match name.local.as_ref().to_ascii_lowercase().as_str() {
+        "textarea" => dom.form_control_state(id).is_some(),
+        "input" => {
+            let raw_type = dom
+                .attribute(id, &Namespace::default(), &LocalName::from("type"))
+                .map(str::to_ascii_lowercase);
+            let input_type = raw_type
+                .as_deref()
+                .filter(|value| {
+                    matches!(
+                        *value,
+                        "button"
+                            | "checkbox"
+                            | "color"
+                            | "date"
+                            | "datetime-local"
+                            | "email"
+                            | "file"
+                            | "hidden"
+                            | "image"
+                            | "month"
+                            | "number"
+                            | "password"
+                            | "radio"
+                            | "range"
+                            | "reset"
+                            | "search"
+                            | "submit"
+                            | "tel"
+                            | "text"
+                            | "time"
+                            | "url"
+                            | "week"
+                    )
+                })
+                .unwrap_or("text");
+            matches!(
+                input_type,
+                "text" | "search" | "email" | "url" | "tel" | "password" | "number"
+            )
+        },
+        _ => false,
+    }
 }
 
 pub(crate) fn bounds(fragment: &Fragment) -> LayoutRect {

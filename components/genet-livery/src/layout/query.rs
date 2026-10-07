@@ -796,7 +796,7 @@ fn needs_form_control_text_frame<D: LayoutDom>(
 ) -> bool {
     if styles
         .get(node)
-        .is_none_or(|style| style.display == Display::None)
+        .is_none_or(|style| style.display == livery::values::Display::None)
     {
         return false;
     }

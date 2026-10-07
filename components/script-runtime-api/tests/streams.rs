@@ -82,6 +82,23 @@ const BYOB: &str = r#"
     reader.releaseLock(); check(!stream.locked,'BYOB reader releases its lock');
 "#;
 
+const REACTION_PROPERTIES: &str = r#"
+    const originalPromise=Promise;
+    for(const name of ['ReadableStream','WritableStream','TransformStream']) {
+      for(const property of ['constructor','species']) {
+        const target=property==='constructor'?originalPromise.prototype:originalPromise;
+        const key=property==='constructor'?'constructor':Symbol.species;
+        const descriptor=Object.getOwnPropertyDescriptor(target,key);let accesses=0,thrown;
+        try {
+          Object.defineProperty(target,key,{get(){++accesses;return originalPromise;},configurable:true});
+          try{new globalThis[name]();}catch(error){thrown=error;}
+        } finally {Object.defineProperty(target,key,descriptor);}
+        check(thrown===undefined,name+' default construction succeeds');
+        check(accesses===0,name+' internal setup inspected Promise '+property+' '+accesses+' times');
+      }
+    }
+"#;
+
 const PRIVATE_BRANDS: &str = r#"
     let controller;
     const stream=new ReadableStream({start(c){controller=c;c.enqueue('real');}});
@@ -163,6 +180,10 @@ macro_rules! cases {
         #[test]
         fn byob_fill_detaches_and_returns_exact_view() {
             control::<$backend>(BYOB);
+        }
+        #[test]
+        fn internal_reactions_do_not_observe_promise_constructor_or_species() {
+            control::<$backend>(REACTION_PROPERTIES);
         }
         #[test]
         fn frozen_objects_and_public_forgeries_preserve_private_brands() {

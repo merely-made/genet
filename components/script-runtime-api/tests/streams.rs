@@ -9,7 +9,7 @@ use script_runtime_api::Runtime;
 fn control<E: ScriptEngine>(body: &str) {
     let mut runtime = Runtime::<E>::new().expect("runtime");
     let script = format!(
-        r#"var streamsResult='pending';
+        r#"var streamsResult='pending',streamsPhase='start';
         function check(value, message) {{ if (!value) throw new Error(message); }}
         function deferred() {{ let resolve; const promise=new Promise(r=>resolve=r); return {{promise,resolve}}; }}
         async function flush() {{ for(let i=0;i<16;i++) await Promise.resolve(); }}
@@ -20,7 +20,13 @@ fn control<E: ScriptEngine>(body: &str) {
     runtime.eval(&script).expect("control evaluates");
     runtime.run_microtasks();
     let result = runtime.eval("streamsResult").expect("control result");
-    assert_eq!(runtime.value_to_string(&result).expect("stringify"), "ok");
+    let phase = runtime.eval("streamsPhase").expect("control phase");
+    assert_eq!(
+        runtime.value_to_string(&result).expect("stringify"),
+        "ok",
+        "phase: {}",
+        runtime.value_to_string(&phase).expect("stringify phase")
+    );
 }
 
 const BACKPRESSURE: &str = r#"
@@ -144,12 +150,17 @@ const BYTE_TEE_CANCELLATION: &str = r#"
         const first=readers[0].read(new Uint8Array([17]));await flush();
         const second=readers[1].read(new Uint8Array([34]));await flush();
         const reads=[first,second],cancel=readers[canceled].cancel('unused');
-        check((await reads[canceled]).done,'canceled tee branch settles its pending BYOB read');
+        streamsPhase='cancel read '+canceled;
+        const canceledRead=await reads[canceled];
+        check(canceledRead.done && canceledRead.value===undefined,'canceled tee branch settles its pending BYOB read without a view');
         controller.byobRequest.view[0]=51;controller.byobRequest.respond(1);
+        streamsPhase='remaining read '+canceled;
         const item=await reads[1-canceled];
         check(!item.done && item.value[0]===51,'remaining tee branch receives bytes after other branch cancels');
         controller.close();
+        streamsPhase='remaining EOF '+canceled;
         check((await readers[1-canceled].read(new Uint8Array(1))).done,'remaining tee branch observes source EOF');
+        streamsPhase='cancel completion '+canceled;
         await cancel;
     }
 "#;

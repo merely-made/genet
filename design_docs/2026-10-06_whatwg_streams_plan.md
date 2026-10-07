@@ -501,6 +501,15 @@ needed for this bounded fix and its qualification.
   specified pending-versus-settled closed-promise identity; new both-engine
   controls exercise default/BYOB readers in both states.
 
+- `candidate-byte-tee-completion` passed **136 controls** and retained two byte
+  tee failures as pending operations. Released-reader controls passed on both
+  engines. Cancellation tried to construct an empty view from a branch buffer
+  already transferred to the source, rather than closing its pending read with
+  `undefined` as the cancellation algorithm requires. Cancellation now forwards
+  no view and maps successful source cancellation to `undefined`; the existing
+  tee control checks that value and reports its last completed phase without
+  weakening any assertion.
+
 All candidate gates and failed diagnostics remain under `Code/testing/genet/streams`.
 The bounded agents supply source review; root runs gates serially. Retain the reused
 `worktrees/genet-encoding` checkout on `conformance/streams`, stable target

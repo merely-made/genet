@@ -120,6 +120,11 @@ Two later rulings the same day are recorded in the
   zero observed subtests. Their original census attribution remains historical.
   Real ArrayBuffer transfer is missing on both current engine builds, so the
   Streams brief's engine checkpoint is open. No C3 repair is claimed yet.
+  **2026-10-07 foundation:** exact published-Git consumer qualification passed
+  1,142 tests; both engines now pass real transfer prerequisites. Engine-only
+  matched directory runs lose zero passing files/assertions, with four gains
+  inside still-errored byte-stream records attributed separately. C3 repair is
+  drafted in the private Streams/Fetch implementation and remains unqualified.
   **Later 2026-10-06, S1 answered:** Mark approved the narrow Vano/Boa transfer
   foundation and qualified Genet repins. C3 repair and full Streams acceptance
   remain unmeasured; the plan records the ruling and owner gates.

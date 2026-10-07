@@ -12,10 +12,10 @@
 //! surface is a bootstrap over a single native sink (`__fetch`). No network
 //! dependency enters this crate; only the trait does.
 //!
-//! Async shape: `fetch()` returns a real `Promise`, but the handler runs to
-//! completion synchronously and the Promise resolves at the next microtask
-//! checkpoint. That suffices for the testharness runner (cooperative, not truly
-//! concurrent); a future streaming/abortable path is a separate lift.
+//! Request bodies are validated and collected through Streams readers before
+//! the whole-body host call. A synchronous handler answers inline; a deferred
+//! handler retains the existing abort and demand-driven incremental response
+//! hooks. The runtime still owns no network transport.
 
 use std::cell::RefCell;
 
@@ -138,15 +138,15 @@ fn host_handler<E: ScriptEngine>(cx: &mut E::CallCx<'_>) -> Option<std::rc::Rc<d
 
 /// `__fetch_start(id, method, url, headers, body)` — start a fetch for Promise
 /// `id`. `headers` is a newline-delimited `k,v,k,v` list; `body` is the binary
-/// string (empty = no body). Returns the JSON outcome string when the host
+/// string and a separate presence flag (an empty body remains present). Returns the JSON outcome string when the host
 /// answered inline (sync), or `""` when the fetch is deferred (the JS bootstrap
 /// leaves the Promise pending for a later `__fetchSettle` / `__fetchFail`). With no
 /// handler installed, every fetch is an inline network error.
 pub(crate) struct FetchStart;
 
-/// Decode the eleven request arguments starting at `base` (method, url, flat
+/// Decode the twelve request arguments starting at `base` (method, url, flat
 /// headers, body, cache, redirect, mode, referrer, referrer policy, credentials,
-/// integrity). Shared by `__fetch_start` (which carries a leading id) and
+/// integrity, body presence). Shared by `__fetch_start` (which carries a leading id) and
 /// `__fetch_sync` (which does not).
 fn read_request<E: ScriptEngine>(
     cx: &mut E::CallCx<'_>,
@@ -167,10 +167,10 @@ fn read_request<E: ScriptEngine>(
     let referrer_policy = s(8, cx)?;
     let credentials = s(9, cx)?;
     let integrity = s(10, cx)?;
+    let body_present = s(11, cx)? == "1";
     // The body crosses as a lossless "binary string": each JS char code (0-255)
     // is one byte. `char as u8` recovers the byte (every char is <= 0xFF).
-    let body =
-        (!body_str.is_empty()).then(|| body_str.chars().map(|c| c as u8).collect::<Vec<u8>>());
+    let body = body_present.then(|| body_str.chars().map(|c| c as u8).collect::<Vec<u8>>());
     Ok(FetchRequest {
         method,
         url,
@@ -497,8 +497,8 @@ fn push_json_str(out: &mut String, s: &str) {
 pub(crate) fn install_fetch_surface<E: ScriptEngine>(
     engine: &mut crate::Surface<'_, '_, E>,
 ) -> Result<(), crate::SurfaceError<E::Error>> {
-    engine.set_function::<FetchStart>("__fetch_start", 12)?;
-    engine.set_function::<FetchSync>("__fetch_sync", 11)?;
+    engine.set_function::<FetchStart>("__fetch_start", 13)?;
+    engine.set_function::<FetchSync>("__fetch_sync", 12)?;
     engine.set_function::<FetchAbort>("__fetch_abort", 1)?;
     engine.set_function::<FetchPull>("__fetch_pull", 1)?;
     engine.set_function::<ResolveUrl>("__resolve_url", 1)?;
@@ -517,10 +517,9 @@ pub(crate) fn install_fetch_surface<E: ScriptEngine>(
 /// extraction (string / URLSearchParams / Blob / FormData / buffers / stream set
 /// the right Content-Type), and `fetch()` over the `__fetch` sink. Bodies cross
 /// that sink as a lossless binary string, so binary request / response bodies are
-/// exact. `formData()` parses both urlencoded and multipart bodies. Streams are a
-/// buffered model (`ReadableStream` / `WritableStream` / `TransformStream` +
-/// `pipeTo` / `pipeThrough`); still missing byte (BYOB) readers, genuinely async
-/// producers, and strict rejection of malformed multipart.
+/// exact. `formData()` parses both urlencoded and multipart bodies. The separate
+/// Streams bootstrap provides private reader/controller operations for bodies;
+/// malformed multipart validation remains a separate Fetch limitation.
 ///
 /// It also carries `ProgressEvent` and the `XMLHttpRequest` family
 /// (`XMLHttpRequestEventTarget` / `XMLHttpRequestUpload`), which is a state
@@ -530,6 +529,29 @@ pub(crate) fn install_fetch_surface<E: ScriptEngine>(
 /// XML/HTML parser to build a document response from.
 const FETCH_BOOTSTRAP: &str = r#"
 (function() {
+  // This bridge exists only during synchronous host installation. Shared weak
+  // brands preserve body identity across realms; author code never sees slots.
+  var streamsBridge = globalThis.__streamsFetch;
+  delete globalThis.__streamsFetch;
+  var Core = streamsBridge.core, ReadableOps = streamsBridge.readable;
+  var PipingOps = streamsBridge.piping;
+  var Uint8Array = Core.Uint8Array, ArrayBuffer = Core.ArrayBuffer, Promise = Core.Promise;
+  var TypeError = Core.TypeError, RangeError = Core.RangeError;
+  streamsBridge = undefined;
+  var bodySlots = Core.sharedMap('fetch.bodies');
+  var signalSlots = Core.sharedMap('fetch.signals');
+  var controllerSlots = Core.sharedMap('fetch.abortControllers');
+  var NativeEventTarget = EventTarget, NativeEvent = Event, NativeDOMException = DOMException;
+  var nativeEventPrototype = Event.prototype;
+  var nativeDispatch = EventTarget.prototype.dispatchEvent;
+  var nativeArrayBufferIsView = ArrayBuffer.isView;
+  var nativeU8Set = Uint8Array.prototype.set;
+  var nativeJsonParse = JSON.parse;
+  var nativeSetTimeout = setTimeout;
+  var nativeFetchStart = globalThis.__fetch_start, nativeFetchSync = globalThis.__fetch_sync;
+  var nativeFetchAbort = globalThis.__fetch_abort, nativeFetchPull = globalThis.__fetch_pull;
+  var NativeWeakRef = typeof WeakRef === 'function' ? WeakRef : undefined;
+  var nativeDeref = NativeWeakRef === undefined ? undefined : NativeWeakRef.prototype.deref;
   var hasSym = (typeof Symbol !== 'undefined' && Symbol.iterator);
 
   // RFC 7230 token for header names; values reject CR/LF/NUL and trim OWS.
@@ -712,84 +734,102 @@ const FETCH_BOOTSTRAP: &str = r#"
   if (hasSym) Headers.prototype[Symbol.iterator] = Headers.prototype.entries;
   globalThis.Headers = Headers;
 
-  // ---- Body mixin: bytes-backed, single-use. ----
-  // The internal body is raw bytes (`__bytes`, a Uint8Array or null). Every
-  // accessor derives from it, so binary bodies are exact: text/json UTF-8-decode,
-  // arrayBuffer/bytes/blob hand back the bytes. takeBytes is *synchronous* (the
-  // disturb/lock check + the bytes); accessors then resolve a promise with the
-  // already-computed result. That matters: resolving with a primitive (text) is
-  // immune to a poisoned `Object.prototype.then`, which a userland Promise.resolve
-  // of the raw byte array would adopt (the broken-then WPT tests).
-  // Permanently lock + disturb a body stream: consuming a body acquires a reader
-  // and never releases it, so `body.getReader()` afterwards throws (the
-  // disturbed-5 tests). The sentinel is not a real reader, so releaseLock can't
-  // clear it.
-  function lockBody(s) { s._disturbed = true; if (!s._reader) s._reader = { __sentinel: true }; }
-  // Drain a (buffered) body stream to bytes, validating every chunk is a view
-  // (a bad chunk -> TypeError, per the bad-chunk tests).
-  function drainStreamSync(s) {
-    var parts = s._chunks.slice(); s._chunks = [];
-    var total = 0, i, p;
-    for (i = 0; i < parts.length; i++) {
-      p = parts[i];
-      if (!ArrayBuffer.isView(p)) throw new TypeError("ReadableStream chunk is not a Uint8Array");
-      total += p.byteLength;
-    }
-    var all = new Uint8Array(total), off = 0;
-    for (i = 0; i < parts.length; i++) {
-      p = parts[i];
-      all.set(new Uint8Array(p.buffer, p.byteOffset, p.byteLength), off);
-      off += p.byteLength;
-    }
-    return all;
+  // ---- Body mixin: privately branded streams, single-use readers. ----
+  function bodyRecord(self) {
+    var b = Core.get(bodySlots, self);
+    if (b === undefined) throw new Core.TypeError('Illegal body receiver');
+    return b;
   }
-  function takeBytes(self) {
-    if (self.__stream && self.__stream.locked)
-      throw new TypeError("Body is locked");
-    if (self.bodyUsed || (self.__stream && self.__stream._disturbed))
-      throw new TypeError("Body has already been consumed.");
-    self.bodyUsed = true;
-    var bytes;
-    if (self.__bytes != null) {
-      bytes = self.__bytes;                       // buffered body
-    } else if (self.__stream) {
-      bytes = drainStreamSync(self.__stream);     // live stream-backed body
-      self.__bytes = bytes;
-    } else {
-      bytes = new Uint8Array(0);
-    }
-    if (self.__stream) lockBody(self.__stream);
-    return bytes;
+  function byteStrategy() {
+    var strategy = Core.record(); strategy.highWaterMark = 0;
+    strategy.sizeAlgorithm = undefined; return strategy;
   }
-  function settled(fn) { try { return Promise.resolve(fn()); } catch (e) { return Promise.reject(e); } }
-  // The body's ReadableStream. A stream-backed body returns that very stream; a
-  // buffered body lazily wraps its bytes (same stream each access, so identity and
-  // lock state persist). Getting it does not disturb; reading does.
-  function bodyStream(self) {
-    if (self.__stream) return self.__stream;
-    if (self.__bytes == null) return null;
-    var bytes = self.__bytes;
-    self.__stream = new ReadableStream({ start: function(c) { if (bytes.length) c.enqueue(bytes.slice(0)); c.close(); } });
-    self.__stream._owner = self;
-    if (self.bodyUsed) lockBody(self.__stream);
-    return self.__stream;
+  function bufferedBodyStream(bytes) {
+    var stream = ReadableOps.createByte(Core.record(), byteStrategy());
+    if (Core.viewInfo(bytes).byteLength !== 0) ReadableOps.enqueue(stream, Core.copyBytes(bytes));
+    ReadableOps.close(stream);
+    return stream;
   }
-  // Copy a body for clone(): buffered bytes copy by reference; an already-closed
-  // stream is tee'd from its snapshot. A live (still-arriving) stream cannot be
-  // tee'd losslessly by the buffered tee, so cloning one throws rather than
-  // silently truncating both copies (a real fan-out tee is a later refinement).
+  function setBody(self, kind, bytes, stream) {
+    var b = Core.record(); b.kind = kind; b.bytes = bytes; b.nativeLive = false;
+    b.stream = stream !== null ? stream : bytes !== null ? bufferedBodyStream(bytes) : null;
+    Core.set(bodySlots, self, b); return b;
+  }
+  function bodyStream(self) { return bodyRecord(self).stream; }
+  function bodyUsed(self) {
+    var stream = bodyRecord(self).stream;
+    return stream !== null && ReadableOps.isDisturbed(stream);
+  }
+  function bodyUnusable(b) {
+    return b.stream !== null && (ReadableOps.isLocked(b.stream) || ReadableOps.isDisturbed(b.stream));
+  }
   function cloneBodyInto(src, dst) {
-    if (src.__stream && src.__bytes == null && !src.__stream._closed) {
-      throw new TypeError("Cannot clone a body with a streaming (in-flight) ReadableStream");
+    var original = bodyRecord(src);
+    if (bodyUnusable(original)) throw new Core.TypeError('Body is disturbed or locked');
+    if (original.nativeLive) throw new Core.TypeError('Cannot clone an in-flight native response');
+    var copy = Core.record(); copy.kind = original.kind; copy.bytes = original.bytes;
+    copy.nativeLive = false; copy.stream = null;
+    if (original.stream !== null) {
+      var branches = ReadableOps.tee(original.stream, true, function (chunk) { return Core.clone(chunk); });
+      original.stream = branches[0]; copy.stream = branches[1];
     }
-    dst.__bytes = src.__bytes;
-    if (src.__stream && src.__bytes == null) {
-      var t = src.__stream.tee();
-      src.__stream = t[0]; src.__stream._owner = src;
-      dst.__stream = t[1]; dst.__stream._owner = dst;
-    } else {
-      dst.__stream = null;
+    Core.set(bodySlots, dst, copy);
+  }
+  // Private callbacks avoid adopting intermediate byte arrays/read-result
+  // objects as promises. Object.prototype.then must not intercept read-all-bytes.
+  function collectBody(self, success, failure, onReader) {
+    var b, reader;
+    try {
+      b = bodyRecord(self);
+      if (bodyUnusable(b)) throw new Core.TypeError('Body is disturbed or locked');
+      if (b.stream === null) { success(new Core.Uint8Array(0)); return; }
+      reader = ReadableOps.acquireReader(b.stream, 'default');
+    } catch (e) { failure(e); return; }
+    var parts = Core.queue(), total = 0, ended = false, running = false;
+    function fail(reason) { if (!ended) { ended = true; failure(reason); } }
+    function complete() {
+      if (ended) return;
+      ended = true;
+      try {
+        var all = new Core.Uint8Array(total), offset = 0;
+        while (Core.length(parts)) {
+          var part = Core.shift(parts);
+          Core.call(nativeU8Set, all, [part, offset]); offset += Core.viewInfo(part).byteLength;
+        }
+        success(all);
+      } catch (e) { failure(e); }
     }
+    if (onReader !== undefined) onReader(reader);
+    function pump() {
+      if (running || ended) return;
+      running = true;
+      while (!ended) {
+        var synchronous = true, received = false, steps = Core.record();
+        steps.chunk = function (chunk) {
+          if (ended) return;
+          try {
+            var info = Core.viewInfo(chunk);
+            if (info.kind !== 'Uint8Array') throw new Core.TypeError('Body chunk is not a Uint8Array');
+            var bytes = Core.copyBytes(chunk);
+            Core.push(parts, bytes); total += info.byteLength; received = true;
+          } catch (e) { fail(e); }
+          if (!synchronous) pump();
+        };
+        steps.close = complete; steps.error = fail;
+        try { ReadableOps.readRequest(reader, steps); } catch (e) { fail(e); }
+        synchronous = false;
+        if (!received) break;
+      }
+      running = false;
+    }
+    pump();
+  }
+  function consumeBody(self, convert) {
+    var result = Core.deferred();
+    collectBody(self, function (bytes) {
+      try { result.resolve(convert(bytes)); } catch (e) { result.reject(e); }
+    }, result.reject);
+    return result.promise;
   }
   function utf8Encode(s) {
     var b = [];
@@ -1132,213 +1172,6 @@ const FETCH_BOOTSTRAP: &str = r#"
   if (Symbol.toStringTag) encDefine(TextDecoder.prototype, Symbol.toStringTag, { value: 'TextDecoder', configurable: true });
   defineInterface('TextDecoder', TextDecoder, 0);
 
-  // ---- ReadableStream (fully-buffered model) ----
-  // Bodies are already buffered (the __fetch sink returns the whole body), so a
-  // stream is a queue of chunks the source enqueues in start()/pull(). Enough for
-  // the fetch body-as-stream tests; true async streaming, byte (BYOB) readers,
-  // and pipeTo/pipeThrough are deferred.
-  function ReadableStream(source, strategy) {
-    source = source || {};
-    this._chunks = [];
-    this._waiters = []; // parked read() promises {res, rej} for a live (incremental) stream
-    this._closed = false;
-    this._errored = false;
-    this._error = undefined;
-    this._reader = null;
-    this._disturbed = false;
-    this._owner = null;
-    this._source = source;
-    var self = this;
-    this._controller = {
-      enqueue: function(chunk) {
-        if (self._closed || self._errored) throw new TypeError("Cannot enqueue on a closed stream");
-        // Hand the chunk straight to a parked reader, else buffer it.
-        if (self._waiters.length > 0) self._waiters.shift().res({ value: chunk, done: false });
-        else self._chunks.push(chunk);
-      },
-      close: function() { self._closeStream(); },
-      error: function(e) { self._errorStream(e); },
-      get desiredSize() { return self._closed ? null : 1; }
-    };
-    if (typeof source.start === 'function') {
-      try { source.start(this._controller); } catch (e) { this._errorStream(e); }
-    }
-  }
-  // Close: wake every parked reader with done, and resolve the reader's `closed`.
-  ReadableStream.prototype._closeStream = function() {
-    if (this._closed || this._errored) return;
-    this._closed = true;
-    while (this._waiters.length) this._waiters.shift().res({ value: undefined, done: true });
-    if (this._reader && this._reader._cRes) { this._reader._cRes(undefined); this._reader._cRes = null; }
-  };
-  ReadableStream.prototype._errorStream = function(e) {
-    if (this._closed || this._errored) return;
-    this._errored = true; this._error = e;
-    while (this._waiters.length) this._waiters.shift().rej(e);
-    if (this._reader && this._reader._cRej) { this._reader._cRej(e); this._reader._cRej = null; }
-  };
-  Object.defineProperty(ReadableStream.prototype, 'locked', { configurable: true, get: function() { return this._reader !== null; } });
-  ReadableStream.prototype.getReader = function(opts) {
-    // BYOB readers are not implemented; ignore the mode and hand back a default
-    // reader so `getReader({mode:'byob'})` tests still read the bytes.
-    if (this._reader) throw new TypeError("ReadableStream is already locked to a reader");
-    var r = new ReadableStreamDefaultReader(this);
-    this._reader = r;
-    return r;
-  };
-  ReadableStream.prototype.cancel = function(reason) {
-    this._disturbed = true; this._chunks = [];
-    if (this._owner) this._owner.bodyUsed = true;
-    this._closeStream(); // wake any parked readers with done
-    if (typeof this._source.cancel === 'function') { try { this._source.cancel(reason); } catch (e) {} }
-    return Promise.resolve(undefined);
-  };
-  ReadableStream.prototype.tee = function() {
-    // Buffered: snapshot the remaining chunks into two independent streams.
-    var chunks = this._chunks.slice();
-    this._disturbed = true;
-    function mk() {
-      return new ReadableStream({ start: function(c) { for (var i = 0; i < chunks.length; i++) c.enqueue(chunks[i]); c.close(); } });
-    }
-    return [mk(), mk()];
-  };
-  if (hasSym) ReadableStream.prototype[Symbol.asyncIterator] = function() {
-    var reader = this.getReader();
-    return { next: function() { return reader.read(); }, 'return': function() { reader.releaseLock(); return Promise.resolve({ value: undefined, done: true }); } };
-  };
-  globalThis.ReadableStream = ReadableStream;
-
-  function ReadableStreamDefaultReader(stream) {
-    this._stream = stream;
-    var self = this;
-    this.closed = new Promise(function(res, rej) { self._cRes = res; self._cRej = rej; });
-    if (stream._closed) { this._cRes(undefined); }
-    else if (stream._errored) { this._cRej(stream._error); }
-  }
-  ReadableStreamDefaultReader.prototype.read = function() {
-    var s = this._stream;
-    if (!s) return Promise.reject(new TypeError("Reader has been released"));
-    s._disturbed = true;
-    if (s._owner) s._owner.bodyUsed = true;
-    if (s._chunks.length > 0) return Promise.resolve({ value: s._chunks.shift(), done: false });
-    if (!s._closed && !s._errored && typeof s._source.pull === 'function') {
-      try { s._source.pull(s._controller); } catch (e) { s._errorStream(e); }
-      if (s._chunks.length > 0) return Promise.resolve({ value: s._chunks.shift(), done: false });
-    }
-    if (s._errored) { if (this._cRej) { this._cRej(s._error); this._cRej = null; } return Promise.reject(s._error); }
-    if (s._closed) { if (this._cRes) { this._cRes(undefined); this._cRes = null; } return Promise.resolve({ value: undefined, done: true }); }
-    // Live stream, nothing buffered yet: park until enqueue / close / error.
-    return new Promise(function(res, rej) { s._waiters.push({ res: res, rej: rej }); });
-  };
-  ReadableStreamDefaultReader.prototype.releaseLock = function() {
-    if (this._stream) { if (this._stream._reader === this) this._stream._reader = null; this._stream = null; }
-  };
-  ReadableStreamDefaultReader.prototype.cancel = function(reason) {
-    if (this._stream) return this._stream.cancel(reason);
-    return Promise.resolve(undefined);
-  };
-  globalThis.ReadableStreamDefaultReader = ReadableStreamDefaultReader;
-
-  // ---- WritableStream (buffered model) ----
-  function WritableStream(sink, strategy) {
-    sink = sink || {};
-    this._sink = sink;
-    this._writer = null;
-    this._state = 'writable';
-    this._stored = undefined;
-    var self = this;
-    this._controller = { error: function(e) { if (self._state === 'writable') { self._state = 'errored'; self._stored = e; } }, signal: undefined };
-    if (typeof sink.start === 'function') {
-      try { sink.start(this._controller); } catch (e) { this._state = 'errored'; this._stored = e; }
-    }
-  }
-  Object.defineProperty(WritableStream.prototype, 'locked', { configurable: true, get: function() { return this._writer !== null; } });
-  WritableStream.prototype.getWriter = function() {
-    if (this._writer) throw new TypeError("WritableStream is already locked to a writer");
-    var w = new WritableStreamDefaultWriter(this);
-    this._writer = w;
-    return w;
-  };
-  WritableStream.prototype.abort = function(reason) {
-    if (this._state === 'writable') { this._state = 'errored'; this._stored = reason; if (typeof this._sink.abort === 'function') { try { this._sink.abort(reason); } catch (e) {} } }
-    return Promise.resolve(undefined);
-  };
-  WritableStream.prototype.close = function() {
-    if (this._state === 'writable') { this._state = 'closed'; if (typeof this._sink.close === 'function') { try { this._sink.close(); } catch (e) {} } }
-    return Promise.resolve(undefined);
-  };
-  globalThis.WritableStream = WritableStream;
-
-  function WritableStreamDefaultWriter(stream) {
-    this._stream = stream;
-    this.closed = Promise.resolve(undefined);
-    this.ready = Promise.resolve(undefined);
-    this.desiredSize = 1;
-  }
-  WritableStreamDefaultWriter.prototype.write = function(chunk) {
-    var s = this._stream;
-    if (!s) return Promise.reject(new TypeError("Writer has been released"));
-    if (s._state === 'errored') return Promise.reject(s._stored);
-    if (typeof s._sink.write === 'function') {
-      try { return Promise.resolve(s._sink.write(chunk, s._controller)); } catch (e) { return Promise.reject(e); }
-    }
-    return Promise.resolve(undefined);
-  };
-  WritableStreamDefaultWriter.prototype.close = function() { return this._stream ? this._stream.close() : Promise.resolve(undefined); };
-  WritableStreamDefaultWriter.prototype.abort = function(reason) { return this._stream ? this._stream.abort(reason) : Promise.resolve(undefined); };
-  WritableStreamDefaultWriter.prototype.releaseLock = function() { if (this._stream) { if (this._stream._writer === this) this._stream._writer = null; this._stream = null; } };
-  globalThis.WritableStreamDefaultWriter = WritableStreamDefaultWriter;
-
-  // pipeTo: lock + disturb the source synchronously (the by-pipe tests check
-  // bodyUsed right after the call), then pump chunks to the writable. The pump is
-  // best-effort over the buffered model.
-  ReadableStream.prototype.pipeTo = function(dest, options) {
-    if (this.locked) return Promise.reject(new TypeError("ReadableStream is locked"));
-    if (!dest || dest.locked) return Promise.reject(new TypeError("WritableStream is locked"));
-    var reader = this.getReader();
-    this._disturbed = true;
-    if (this._owner) this._owner.bodyUsed = true;
-    var writer = dest.getWriter();
-    return new Promise(function(resolve, reject) {
-      function pump() {
-        reader.read().then(function(r) {
-          if (r.done) { writer.close().then(function() { resolve(undefined); }, function() { resolve(undefined); }); return; }
-          Promise.resolve(writer.write(r.value)).then(pump, reject);
-        }, reject);
-      }
-      pump();
-    });
-  };
-  ReadableStream.prototype.pipeThrough = function(pair, options) {
-    if (this.locked) throw new TypeError("ReadableStream is locked");
-    if (!pair || !pair.writable || !pair.readable) throw new TypeError("pipeThrough needs a {writable, readable} pair");
-    if (pair.writable.locked) throw new TypeError("WritableStream is locked");
-    this.pipeTo(pair.writable, options);
-    return pair.readable;
-  };
-
-  // ---- TransformStream (identity / transformer.transform) ----
-  function TransformStream(transformer) {
-    transformer = transformer || {};
-    var self = this;
-    this.readable = new ReadableStream({ start: function(c) { self.__rc = c; } });
-    var controller = {
-      enqueue: function(chunk) { if (self.__rc) self.__rc.enqueue(chunk); },
-      terminate: function() { if (self.__rc) self.__rc.close(); },
-      error: function(e) { self.__rc && self.__rc.error(e); }
-    };
-    this.writable = new WritableStream({
-      write: function(chunk) {
-        if (typeof transformer.transform === 'function') return transformer.transform(chunk, controller);
-        controller.enqueue(chunk);
-      },
-      close: function() { if (typeof transformer.flush === 'function') transformer.flush(controller); if (self.__rc) self.__rc.close(); },
-      abort: function() {}
-    });
-    if (typeof transformer.start === 'function') { try { transformer.start(controller); } catch (e) {} }
-  }
-  globalThis.TransformStream = TransformStream;
-
   // ---- URLSearchParams ----
   function uspEnc(s) {
     return encodeURIComponent(String(s)).replace(/%20/g, '+')
@@ -1551,14 +1384,14 @@ const FETCH_BOOTSTRAP: &str = r#"
     // Blob / buffers carry their bytes directly: no text round-trip, so binary is exact.
     if (v instanceof Blob) return { bytes: v._b.slice(0), stream: null, type: v.type ? v.type : null };
     if (v instanceof FormData) { var r = serializeFormData(v); return { bytes: utf8Encode(r.body), stream: null, type: r.type }; }
-    if (v instanceof ReadableStream) {
+    if (ReadableOps.isReadable(v)) {
       // A stream body stays a live stream (consumed lazily): a stream already
       // locked or disturbed is not a usable body (the from-stream tests).
-      if (v.locked || v._disturbed) throw new TypeError("Body stream is already locked or disturbed");
+      if (ReadableOps.isLocked(v) || ReadableOps.isDisturbed(v)) throw new TypeError("Body stream is already locked or disturbed");
       return { bytes: null, stream: v, type: null };
     }
-    if (v instanceof ArrayBuffer) return { bytes: new Uint8Array(v.slice(0)), stream: null, type: null };
-    if (ArrayBuffer.isView(v)) return { bytes: new Uint8Array(v.buffer.slice(v.byteOffset, v.byteOffset + v.byteLength)), stream: null, type: null };
+    if (Core.isArrayBuffer(v)) return { bytes: Core.copyBytes(new Uint8Array(v)), stream: null, type: null };
+    if (Core.call(nativeArrayBufferIsView, ArrayBuffer, [v])) return { bytes: Core.copyBytes(v), stream: null, type: null };
     return { bytes: utf8Encode(String(v)), stream: null, type: 'text/plain;charset=UTF-8' };
   }
 
@@ -1604,104 +1437,124 @@ const FETCH_BOOTSTRAP: &str = r#"
     throw new TypeError("Unsupported content-type for formData(): " + ct);
   }
 
-  // A body is "live" when it is backed by a stream that has not closed yet (an
-  // incremental network response fed by __fetchPushChunk). Buffered bodies and
-  // already-closed streams use the synchronous takeBytes path, so their behaviour
-  // (and the broken-then immunity of text/json) is unchanged.
-  function isLive(self) { return self.__stream && self.__bytes == null && !self.__stream._closed; }
-  function bodyGuardError(self) {
-    // An errored (e.g. aborted) body rejects immediately with the stored reason,
-    // ahead of the locked / consumed guards — so consuming an aborted response
-    // rejects in the current microtask, and a second call rejects the same way.
-    if (self.__stream && self.__stream._errored) return self.__stream._error;
-    if (self.__stream && self.__stream.locked) return new TypeError("Body is locked");
-    if (self.bodyUsed || (self.__stream && self.__stream._disturbed)) return new TypeError("Body has already been consumed.");
-    return null;
-  }
-  // Drain a live stream to completion via its reader, returning Promise<Uint8Array>.
-  function drainLive(self) {
-    self.bodyUsed = true;
-    var reader = self.__stream.getReader();
-    var parts = [], total = 0;
-    function pump() {
-      return reader.read().then(function(r) {
-        if (r.done) {
-          var all = new Uint8Array(total), off = 0;
-          for (var i = 0; i < parts.length; i++) { all.set(parts[i], off); off += parts[i].length; }
-          return all;
-        }
-        if (!ArrayBuffer.isView(r.value)) throw new TypeError("ReadableStream chunk is not a Uint8Array");
-        parts.push(r.value); total += r.value.length;
-        return pump();
-      });
-    }
-    return pump();
-  }
-  // text/json resolve with a primitive even on the live path (broken-then immune);
-  // arrayBuffer/bytes/blob resolve with an object, as on the buffered path.
-  var bodyMixin = {
-    text: function() {
-      var s = this; var err = bodyGuardError(s); if (err) return Promise.reject(err);
-      if (isLive(s)) return drainLive(s).then(function(b) { return utf8Decode(b); });
-      return settled(function() { return utf8Decode(takeBytes(s)); });
-    },
-    json: function() {
-      var s = this; var err = bodyGuardError(s); if (err) return Promise.reject(err);
-      if (isLive(s)) return drainLive(s).then(function(b) { return JSON.parse(utf8Decode(b)); });
-      return settled(function() { return JSON.parse(utf8Decode(takeBytes(s))); });
-    },
-    arrayBuffer: function() {
-      var s = this; var err = bodyGuardError(s); if (err) return Promise.reject(err);
-      if (isLive(s)) return drainLive(s).then(function(b) { return b.slice(0).buffer; });
-      return settled(function() { return takeBytes(s).slice(0).buffer; });
-    },
-    bytes: function() {
-      var s = this; var err = bodyGuardError(s); if (err) return Promise.reject(err);
-      if (isLive(s)) return drainLive(s).then(function(b) { return b.slice(0); });
-      return settled(function() { return takeBytes(s).slice(0); });
-    },
-    blob: function() {
-      var s = this; var err = bodyGuardError(s); if (err) return Promise.reject(err);
-      var ct = (s.headers && s.headers.get) ? s.headers.get('content-type') : null;
-      if (isLive(s)) return drainLive(s).then(function(b) { return new Blob([b], { type: ct || '' }); });
-      return settled(function() { return new Blob([takeBytes(s)], { type: ct || '' }); });
-    },
-    formData: function() {
-      var s = this; var err = bodyGuardError(s); if (err) return Promise.reject(err);
-      var ct = (s.headers && s.headers.get) ? s.headers.get('content-type') : '';
-      if (isLive(s)) return drainLive(s).then(function(b) { return parseFormData(utf8Decode(b), ct); });
-      return settled(function() { return parseFormData(utf8Decode(takeBytes(s)), ct); });
-    }
+  // Convert only the final public result into a promise. Intermediate reads
+  // use trusted callbacks; null bodies stay undisturbed and can be read again.
+  var bodyMixin = Core.record();
+  bodyMixin.text = function text() {
+    return consumeBody(this, utf8Decode);
   };
+  bodyMixin.json = function json() {
+    return consumeBody(this, function (bytes) { return Core.call(nativeJsonParse, undefined, [utf8Decode(bytes)]); });
+  };
+  bodyMixin.arrayBuffer = function arrayBuffer() {
+    return consumeBody(this, function (bytes) { return Core.viewInfo(bytes).buffer; });
+  };
+  bodyMixin.bytes = function bytes() {
+    return consumeBody(this, function (bytes) { return bytes; });
+  };
+  bodyMixin.blob = function blob() {
+    var self = this;
+    return consumeBody(self, function (bytes) {
+      var options = Core.record(); options.type = self.headers.get('content-type') || '';
+      return new Blob([bytes], options);
+    });
+  };
+  bodyMixin.formData = function formData() {
+    var self = this;
+    return consumeBody(self, function (bytes) { return parseFormData(utf8Decode(bytes), self.headers.get('content-type')); });
+  };
+  function installBodyMixin(prototype) {
+    var names = ['text', 'json', 'arrayBuffer', 'bytes', 'blob', 'formData'];
+    for (var i = 0; i < names.length; ++i) Core.define(prototype, names[i], {
+      value: bodyMixin[names[i]], enumerable: true, configurable: true, writable: true
+    });
+    Core.define(prototype, 'body', {
+      get: function () { return bodyStream(this); }, enumerable: true, configurable: true
+    });
+    Core.define(prototype, 'bodyUsed', {
+      get: function () { return bodyUsed(this); }, enumerable: true, configurable: true
+    });
+  }
 
   // ---- AbortController / AbortSignal ----
-  // AbortSignal is an EventTarget (the global EventTarget bootstrap supplies
-  // addEventListener / dispatchEvent). It has no public constructor; controllers
-  // and the statics mint one via makeSignal.
   function AbortSignal() { throw new TypeError("Illegal constructor"); }
-  AbortSignal.prototype = Object.create(EventTarget.prototype);
-  AbortSignal.prototype.constructor = AbortSignal;
-  AbortSignal.prototype.throwIfAborted = function() { if (this.aborted) throw this.reason; };
+  AbortSignal.prototype = Core.create(NativeEventTarget.prototype);
+  var signalPrototype = AbortSignal.prototype;
+  Core.define(signalPrototype, 'constructor', { value: AbortSignal, configurable: true, writable: true });
+  function signalRecord(signal) {
+    var state = Core.get(signalSlots, signal);
+    if (state === undefined) throw new TypeError('Illegal AbortSignal receiver');
+    return state;
+  }
+  function isSignal(signal) { return Core.has(signalSlots, signal); }
+  function signalAborted(signal) { return signalRecord(signal).aborted; }
+  function signalReason(signal) { return signalRecord(signal).reason; }
+  Core.define(signalPrototype, 'aborted', { get: function () { return signalAborted(this); }, enumerable: true, configurable: true });
+  Core.define(signalPrototype, 'reason', { get: function () { return signalReason(this); }, enumerable: true, configurable: true });
+  Core.define(signalPrototype, 'onabort', {
+    get: function () { return signalRecord(this).onabort; },
+    set: function (value) { signalRecord(this).onabort = typeof value === 'function' ? value : null; },
+    enumerable: true, configurable: true
+  });
+  Core.define(signalPrototype, 'throwIfAborted', {
+    value: function throwIfAborted() { var state = signalRecord(this); if (state.aborted) throw state.reason; },
+    enumerable: true, configurable: true, writable: true
+  });
+  Core.define(signalPrototype, Core.Symbol.toStringTag, { value: 'AbortSignal', configurable: true });
   function makeSignal() {
-    var s = Object.create(AbortSignal.prototype);
-    EventTarget.call(s);
-    s.aborted = false; s.reason = undefined; s.onabort = null; s._dependents = [];
+    var s = Core.create(signalPrototype), state = Core.record();
+    Core.call(NativeEventTarget, s, []);
+    state.aborted = false; state.reason = undefined; state.onabort = null;
+    state.algorithms = Core.queue(); state.dependents = Core.queue();
+    Core.set(signalSlots, s, state);
     return s;
   }
   function abortReason(reason) {
-    return reason !== undefined ? reason : new DOMException("signal is aborted without reason", "AbortError");
+    return reason !== undefined ? reason : new NativeDOMException("signal is aborted without reason", "AbortError");
+  }
+  function addAbortAlgorithm(signal, algorithm) {
+    var state = signalRecord(signal), token = Core.record();
+    token.algorithm = algorithm; token.active = !state.aborted;
+    if (token.active) Core.push(state.algorithms, token);
+    return token;
+  }
+  function removeAbortAlgorithm(signal, token) {
+    signalRecord(signal);
+    if (token !== undefined) { token.active = false; token.algorithm = undefined; }
   }
   function signalAbort(signal, reason) {
-    if (signal.aborted) return;
-    signal.aborted = true;
-    signal.reason = abortReason(reason);
-    var ev = new Event('abort');
-    if (typeof signal.onabort === 'function') { try { signal.onabort.call(signal, ev); } catch (e) {} }
-    signal.dispatchEvent(ev);
-    // Abort dependent signals AFTER this signal's own listeners run (WHATWG
-    // signal-abort order): a clone/any signal fires after its source.
-    var deps = signal._dependents; signal._dependents = [];
-    for (var i = 0; i < deps.length; i++) signalAbort(deps[i], signal.reason);
+    var initial = signalRecord(signal);
+    if (initial.aborted) return;
+    var pending = Core.queue(), all = Core.queue(), actualReason = abortReason(reason);
+    Core.push(pending, signal);
+    // All dependent states change before the source's author listeners run.
+    while (Core.length(pending)) {
+      var current = Core.shift(pending), state = signalRecord(current);
+      if (state.aborted) continue;
+      state.aborted = true; state.reason = actualReason; Core.push(all, current);
+      while (Core.length(state.dependents)) {
+        var ref = Core.shift(state.dependents);
+        var child = NativeWeakRef === undefined ? ref : Core.call(nativeDeref, ref, []);
+        if (child !== undefined) Core.push(pending, child);
+      }
+    }
+    while (Core.length(all)) {
+      var target = Core.shift(all), targetState = signalRecord(target);
+      while (Core.length(targetState.algorithms)) {
+        var token = Core.shift(targetState.algorithms);
+        if (token.active) {
+          var algorithm = token.algorithm; token.active = false; token.algorithm = undefined;
+          Core.call(algorithm, undefined, []);
+        }
+      }
+      // Initialize without an author prototype; the existing Event constructor
+      // assigns type and would otherwise hit the C3 inherited setter.
+      var event = Core.record(); Core.call(NativeEvent, event, ['abort', Core.record()]);
+      event.isTrusted = true;
+      Core.setPrototypeOf(event, nativeEventPrototype);
+      if (targetState.onabort !== null) { try { Core.call(targetState.onabort, target, [event]); } catch (_) {} }
+      Core.call(nativeDispatch, target, [event]);
+    }
   }
   // A fresh signal that follows its source signals: aborts (with the source's
   // reason) when any source aborts. A Request's signal and a clone's signal are
@@ -1710,24 +1563,57 @@ const FETCH_BOOTSTRAP: &str = r#"
     var s = makeSignal();
     for (var i = 0; i < sources.length; i++) {
       var src = sources[i];
-      if (!src) continue;
-      if (src.aborted) { s.aborted = true; s.reason = src.reason; break; }
-      src._dependents.push(s);
+      if (!isSignal(src)) throw new TypeError('Expected an AbortSignal');
+      var sourceState = signalRecord(src);
+      if (sourceState.aborted) {
+        var state = signalRecord(s); state.aborted = true; state.reason = sourceState.reason; break;
+      }
+      Core.push(sourceState.dependents, NativeWeakRef === undefined ? s : new NativeWeakRef(s));
     }
     return s;
   }
-  AbortSignal.abort = function(reason) { var s = makeSignal(); s.aborted = true; s.reason = abortReason(reason); return s; };
+  AbortSignal.abort = function(reason) {
+    var s = makeSignal(), state = signalRecord(s); state.aborted = true; state.reason = abortReason(reason); return s;
+  };
   AbortSignal.timeout = function(ms) {
+    ms = +ms;
+    if (!(ms >= 0) || ms > 9007199254740991 || ms % 1 !== 0) throw new RangeError('Invalid abort timeout');
     var s = makeSignal();
-    setTimeout(function() { signalAbort(s, new DOMException("signal timed out", "TimeoutError")); }, ms);
+    Core.call(nativeSetTimeout, globalThis, [function() { signalAbort(s, new NativeDOMException("signal timed out", "TimeoutError")); }, ms]);
     return s;
   };
-  AbortSignal.any = function(signals) { return dependentSignal(signals); };
-  globalThis.AbortSignal = AbortSignal;
+  AbortSignal.any = function(signals) {
+    var sources = [];
+    for (var signal of signals) {
+      if (!isSignal(signal)) throw new TypeError('Expected an AbortSignal');
+      sources[sources.length] = signal;
+    }
+    return dependentSignal(sources);
+  };
+  defineInterface('AbortSignal', AbortSignal, 0);
 
-  function AbortController() { this.signal = makeSignal(); }
-  AbortController.prototype.abort = function(reason) { signalAbort(this.signal, reason); };
-  globalThis.AbortController = AbortController;
+  function AbortController() {
+    if (!new.target) throw new TypeError('AbortController requires new');
+    Core.set(controllerSlots, this, makeSignal());
+  }
+  function controllerSignal(controller) {
+    if (!Core.has(controllerSlots, controller)) throw new TypeError('Illegal AbortController receiver');
+    return Core.get(controllerSlots, controller);
+  }
+  Core.define(AbortController.prototype, 'signal', {
+    get: function () { return controllerSignal(this); }, enumerable: true, configurable: true
+  });
+  Core.define(AbortController.prototype, 'abort', {
+    value: function abort(reason) { signalAbort(controllerSignal(this), reason); },
+    enumerable: true, configurable: true, writable: true
+  });
+  Core.define(AbortController.prototype.abort, 'length', { value: 0, configurable: true });
+  Core.define(AbortController.prototype, Core.Symbol.toStringTag, { value: 'AbortController', configurable: true });
+  defineInterface('AbortController', AbortController, 0);
+  Core.signal.makeSignal = makeSignal; Core.signal.abort = signalAbort;
+  Core.signal.isSignal = isSignal; Core.signal.isAborted = signalAborted;
+  Core.signal.reason = signalReason; Core.signal.addAbortAlgorithm = addAbortAlgorithm;
+  Core.signal.removeAbortAlgorithm = removeAbortAlgorithm;
 
   // ---- Request init validation (WHATWG) ----
   var NORMALIZE_METHODS = { DELETE: 1, GET: 1, HEAD: 1, OPTIONS: 1, POST: 1, PUT: 1 };
@@ -1758,15 +1644,18 @@ const FETCH_BOOTSTRAP: &str = r#"
 
   // ---- Request ----
   function Request(input, init) {
-    if (!(this instanceof Request)) throw new TypeError("Failed to construct 'Request': use 'new'");
+    if (!new.target) throw new TypeError("Failed to construct 'Request': use 'new'");
     init = init || {};
+    var inputBody = Core.get(bodySlots, input);
+    if (inputBody !== undefined && inputBody.kind !== 'request') inputBody = undefined;
+    var requestSignal, bytes = null, stream = null;
     if (init.window !== undefined && init.window !== null) throw new TypeError("RequestInit window must be null");
-    if (input instanceof Request) {
+    if (inputBody !== undefined) {
       this.url = input.url; this.method = input.method; this.headers = new Headers(input.headers);
-      this.__bytes = input.__bytes; this.__stream = input.__stream || null; this.mode = input.mode; this.credentials = input.credentials;
+      this.mode = input.mode; this.credentials = input.credentials;
       this.redirect = input.redirect; this.cache = input.cache; this.destination = input.destination;
       this.referrer = input.referrer; this.referrerPolicy = input.referrerPolicy; this.integrity = input.integrity;
-      this.signal = input.signal;
+      this.keepalive = input.keepalive;
     } else {
       // Resolve leniently (relative URLs resolve at fetch when there is no base),
       // then validate: a resolved absolute URL must not carry credentials; an
@@ -1781,18 +1670,18 @@ const FETCH_BOOTSTRAP: &str = r#"
       } else if (typeof location !== 'undefined' && location && location.href && location.href !== 'about:blank') {
         throw new TypeError("Failed to construct 'Request': invalid URL");
       }
-      this.method = 'GET'; this.headers = new Headers(); this.__bytes = null; this.__stream = null;
+      this.method = 'GET'; this.headers = new Headers();
       this.mode = 'cors'; this.credentials = 'same-origin'; this.redirect = 'follow'; this.cache = 'default'; this.destination = '';
       // Default referrer is the client (the document URL, resolved at fetch).
       this.referrer = 'about:client'; this.referrerPolicy = ''; this.integrity = '';
-      this.signal = makeSignal();
+      this.keepalive = false;
     }
     // The request's signal is a fresh dependent signal following a single source
     // (WHATWG): init.signal if present (even null removes it), else the input
     // request's signal — never a shared reference.
     var __sigSource = (init.signal !== undefined) ? init.signal
-                    : (input instanceof Request) ? input.signal : null;
-    this.signal = dependentSignal(__sigSource ? [__sigSource] : []);
+                    : inputBody !== undefined ? inputBody.signal : null;
+    requestSignal = dependentSignal(__sigSource !== null ? [__sigSource] : []);
     if (init.method !== undefined) this.method = normalizeMethod(init.method);
     if (init.mode !== undefined) { if (String(init.mode) === 'navigate') throw new TypeError("Cannot construct a Request with mode 'navigate'"); this.mode = checkEnum('mode', init.mode); }
     if (init.credentials !== undefined) this.credentials = checkEnum('credentials', init.credentials);
@@ -1800,6 +1689,9 @@ const FETCH_BOOTSTRAP: &str = r#"
     if (init.redirect !== undefined) this.redirect = checkEnum('redirect', init.redirect);
     if (init.referrerPolicy !== undefined) this.referrerPolicy = checkEnum('referrerPolicy', init.referrerPolicy);
     if (init.integrity !== undefined) this.integrity = String(init.integrity);
+    if (init.keepalive !== undefined) this.keepalive = !!init.keepalive;
+    var duplex = init.duplex;
+    if (duplex !== undefined && String(duplex) !== 'half') throw new TypeError('Invalid duplex');
     // referrer: "" = no referrer; "about:client" = default (the document); else a URL.
     if (init.referrer !== undefined) this.referrer = String(init.referrer);
     // no-cors restricts the method to GET/HEAD/POST.
@@ -1807,14 +1699,20 @@ const FETCH_BOOTSTRAP: &str = r#"
     // only-if-cached requires same-origin mode.
     if (this.cache === 'only-if-cached' && this.mode !== 'same-origin') throw new TypeError("only-if-cached requires same-origin mode");
     if (init.headers !== undefined) this.headers = new Headers(init.headers);
-    if (init.body !== undefined && init.body !== null) {
+    var bodyInput = init.body;
+    if (bodyInput !== undefined && bodyInput !== null) {
       // A ReadableStream body is an upload stream; it requires duplex: "half".
-      if (init.body instanceof ReadableStream && init.duplex !== 'half')
+      if (ReadableOps.isReadable(bodyInput) && duplex === undefined)
         throw new TypeError("Request with a ReadableStream body requires 'duplex: \"half\"'");
-      var eb = extractBody(init.body);
-      this.__bytes = eb.bytes; this.__stream = eb.stream;
-      if (this.__stream) this.__stream._owner = this;
+      var eb = extractBody(bodyInput);
+      bytes = eb.bytes; stream = eb.stream;
       if (eb.type && !this.headers.has('content-type')) this.headers.set('content-type', eb.type);
+    } else if (inputBody !== undefined) {
+      bytes = inputBody.bytes; stream = inputBody.stream;
+    }
+    if (stream !== null && bytes === null) {
+      if (this.keepalive) throw new TypeError('A stream upload cannot use keepalive');
+      if (this.mode !== 'same-origin' && this.mode !== 'cors') throw new TypeError('A stream upload requires same-origin or cors mode');
     }
     // The request header guard (from the mode) drops forbidden / non-safelisted
     // headers and governs later append/set/delete.
@@ -1823,60 +1721,73 @@ const FETCH_BOOTSTRAP: &str = r#"
     __hs._h = __hs._h.filter(function(p) {
       try { return guardAllows(__g, p[0], p[1]); } catch (e) { return false; }
     });
-    this.bodyUsed = false;
-    if ((this.method === 'GET' || this.method === 'HEAD') && (this.__bytes != null || this.__stream))
+    if ((this.method === 'GET' || this.method === 'HEAD') && (bytes !== null || stream !== null))
       throw new TypeError("Request with GET/HEAD method cannot have body.");
+    if (inputBody !== undefined && (bodyInput === undefined || bodyInput === null) && stream !== null) {
+      if (bodyUnusable(inputBody)) throw new TypeError('Input request body is disturbed or locked');
+      stream = PipingOps.createProxy(stream);
+    }
+    var body = setBody(this, 'request', bytes, stream); body.signal = requestSignal;
   }
+  var requestPrototype = Request.prototype;
   Request.prototype.clone = function() {
-    if (this.bodyUsed || (this.__stream && this.__stream.locked)) throw new TypeError("Body is disturbed or locked.");
-    var r = new Request(this); r.bodyUsed = false; cloneBodyInto(this, r); return r;
+    var original = bodyRecord(this);
+    if (original.kind !== 'request') throw new TypeError('Illegal Request receiver');
+    var r = Core.create(requestPrototype);
+    var fields = ['url', 'method', 'mode', 'credentials', 'redirect', 'cache', 'destination',
+      'referrer', 'referrerPolicy', 'integrity', 'keepalive'];
+    for (var i = 0; i < fields.length; ++i) Core.define(r, fields[i], {
+      value: this[fields[i]], enumerable: true, configurable: true, writable: true
+    });
+    r.headers = new Headers(this.headers); r.headers._guard = this.headers._guard;
+    cloneBodyInto(this, r);
+    bodyRecord(r).signal = dependentSignal([original.signal]);
+    return r;
   };
-  Request.prototype.text = bodyMixin.text;
-  Request.prototype.json = bodyMixin.json;
-  Request.prototype.arrayBuffer = bodyMixin.arrayBuffer;
-  Request.prototype.bytes = bodyMixin.bytes;
-  Request.prototype.blob = bodyMixin.blob;
-  Request.prototype.formData = bodyMixin.formData;
-  Object.defineProperty(Request.prototype, 'body', { configurable: true, get: function() { return bodyStream(this); } });
+  installBodyMixin(requestPrototype);
+  Core.define(requestPrototype, 'signal', { get: function () {
+    var b = bodyRecord(this); if (b.kind !== 'request') throw new TypeError('Illegal Request receiver'); return b.signal;
+  }, enumerable: true, configurable: true });
+  Core.define(requestPrototype, 'duplex', { get: function () {
+    var b = bodyRecord(this); if (b.kind !== 'request') throw new TypeError('Illegal Request receiver'); return 'half';
+  }, enumerable: true, configurable: true });
   globalThis.Request = Request;
 
   // ---- Response ----
   function Response(body, init) {
+    if (!new.target) throw new TypeError('Response requires new');
     init = init || {};
     var status = (init.status !== undefined) ? (init.status | 0) : 200;
     if (status < 200 || status > 599) throw new RangeError("Response status " + status + " out of range");
     this.status = status;
     this.statusText = (init.statusText !== undefined) ? String(init.statusText) : "";
     this.ok = this.status >= 200 && this.status < 300;
-    this.type = "default"; this.url = ""; this.redirected = false;
+    Core.define(this, 'type', { value: 'default', writable: true, enumerable: true, configurable: true });
+    this.url = ""; this.redirected = false;
     this.headers = new Headers(init.headers);
     // Response guard: a script-built Response cannot carry set-cookie / set-cookie2
     // (a network Response sets its headers with the guard bypassed; see
     // responseFromOutcome). Filter the init headers, then govern later writes.
     this.headers._h = this.headers._h.filter(function(p) { return !isForbiddenResponseHeader(p[0]); });
     this.headers._guard = 'response';
-    this.__bytes = null; this.__stream = null;
+    var bytes = null, stream = null;
     if (body != null) {
+      if (isNullBodyStatus(status)) throw new TypeError('A null-body response status cannot have a body');
       var eb = extractBody(body);
-      this.__bytes = eb.bytes; this.__stream = eb.stream;
-      if (this.__stream) this.__stream._owner = this;
+      bytes = eb.bytes; stream = eb.stream;
       if (eb.type && !this.headers.has('content-type')) this.headers.set('content-type', eb.type);
     }
-    this.bodyUsed = false;
+    setBody(this, 'response', bytes, stream);
   }
-  Response.prototype.text = bodyMixin.text;
-  Response.prototype.json = bodyMixin.json;
-  Response.prototype.arrayBuffer = bodyMixin.arrayBuffer;
-  Response.prototype.bytes = bodyMixin.bytes;
-  Response.prototype.blob = bodyMixin.blob;
-  Response.prototype.formData = bodyMixin.formData;
-  Object.defineProperty(Response.prototype, 'body', { configurable: true, get: function() { return bodyStream(this); } });
+  var responsePrototype = Response.prototype;
+  installBodyMixin(responsePrototype);
   Response.prototype.clone = function() {
-    if (this.bodyUsed || (this.__stream && this.__stream.locked)) throw new TypeError("Body is disturbed or locked.");
-    var r = Object.create(Response.prototype);
+    if (bodyRecord(this).kind !== 'response') throw new TypeError('Illegal Response receiver');
+    var r = Core.create(responsePrototype);
     r.status = this.status; r.statusText = this.statusText; r.ok = this.ok;
-    r.type = this.type; r.url = this.url; r.redirected = this.redirected;
-    r.headers = new Headers(this.headers); r.headers._guard = this.headers._guard; r.bodyUsed = false;
+    Core.define(r, 'type', { value: this.type, writable: true, enumerable: true, configurable: true });
+    r.url = this.url; r.redirected = this.redirected;
+    r.headers = new Headers(this.headers); r.headers._guard = this.headers._guard;
     cloneBodyInto(this, r);
     return r;
   };
@@ -1925,7 +1836,7 @@ const FETCH_BOOTSTRAP: &str = r#"
     // Network headers are set with the guard bypassed (a real response keeps
     // set-cookie, readable via getSetCookie); the guard only blocks later writes.
     r.headers = new Headers(o.headers); r.headers._guard = 'response';
-    r.__bytes = isNullBodyStatus(r.status) ? null : binaryStringToBytes(o.body != null ? o.body : "");
+    setBody(r, 'response', isNullBodyStatus(r.status) ? null : binaryStringToBytes(o.body != null ? o.body : ""), null);
     r.type = o.type || "default"; r.url = o.url || ""; r.redirected = !!o.redirected; return r;
   }
   function headersFlat(h) {
@@ -1945,125 +1856,146 @@ const FETCH_BOOTSTRAP: &str = r#"
   var fetchIds = globalThis.__agentTimers;
   if (!fetchIds.nextFetchId) fetchIds.nextFetchId = 1;
 
+  function finishPull(entry) {
+    if (entry.pull !== undefined) {
+      var pull = entry.pull; entry.pull = undefined; pull.resolve(undefined);
+    }
+    entry.awaiting = false;
+  }
+  function removeEntry(id, entry) {
+    delete __pending[id];
+    removeAbortAlgorithm(entry.signal, entry.abortToken);
+    if (entry.response !== null) bodyRecord(entry.response).nativeLive = false;
+  }
   function settleEntry(e, o) {
     if (o.networkError) e.reject(new TypeError('Failed to fetch'));
-    else e.resolve(responseFromOutcome(o));
+    else {
+      var response = responseFromOutcome(o);
+      if (e.method === 'HEAD') setBody(response, 'response', null, null);
+      e.resolve(response);
+    }
   }
 
   globalThis.fetch = function(input, init) {
     var req;
-    try { req = new Request(input, init); } catch (e) { return Promise.reject(e); }
-    if (!req.headers.has("accept")) req.headers.append("accept", "*/*");
-    if (!req.headers.has("accept-language")) req.headers.append("accept-language", "*");
-    // fetch consumes the input request's body: it becomes used (so a later
-    // request.text() etc. rejects). Empty/bodyless requests are untouched.
-    if (input instanceof Request && (input.__bytes != null || input.__stream)) input.bodyUsed = true;
-    // A pre-aborted signal rejects synchronously with its reason and allocates no
-    // id (preserves the immediate-reject ordering + reason identity).
-    if (req.signal && req.signal.aborted) {
-      var pre = abortReason(req.signal.reason);
-      if (req.__stream && !req.__stream._disturbed) { try { req.__stream.cancel(pre); } catch (x) {} }
-      req.bodyUsed = true; // the body is consumed by the (aborted) attempt
-      return Promise.reject(pre);
+    try { req = new Request(input, init); } catch (e) { return Core.reject(e); }
+    if (!req.headers.has('accept')) req.headers.append('accept', '*/*');
+    if (!req.headers.has('accept-language')) req.headers.append('accept-language', '*');
+    var body = bodyRecord(req), signal = body.signal;
+    if (signalAborted(signal)) {
+      var pre = signalReason(signal);
+      if (body.stream !== null) Core.handled(ReadableOps.cancel(body.stream, pre));
+      return Core.reject(pre);
     }
-    var id = fetchIds.nextFetchId++;
-    return new Promise(function(resolve, reject) {
-      var entry = { resolve: resolve, reject: reject, controller: null, settled: false, awaiting: false, method: req.method };
-      __pending[id] = entry;
-      // Mid-flight abort: relay to the host (cancel the in-flight work) and reject
-      // with the signal's reason. JS mints the reason once so the same instance
-      // flows to the body and the rejection (promise_rejects_exactly).
-      if (req.signal) req.signal.addEventListener('abort', function() {
-        var e = __pending[id]; if (!e) return;
-        delete __pending[id];
-        var err = abortReason(req.signal.reason);
-        try { __fetch_abort(id); } catch (x) {}
-        // Mid-stream abort errors the in-flight body; pre-headers abort rejects the
-        // Promise. (A settled streaming entry has a controller but no pending Promise.)
-        if (e.controller) { try { e.controller.error(err); } catch (x) {} }
-        if (!e.settled) { e.settled = true; e.reject(err); }
-      });
-      // Resolve the referrer: "about:client" (the default) / undefined -> the
-      // document URL; "" -> no referrer; otherwise the given URL (resolved).
-      var docHref = (typeof location !== 'undefined' && location && location.href) ? location.href : "";
-      var referrer = req.referrer;
-      if (referrer === undefined || referrer === 'about:client') referrer = docHref;
-      else if (referrer === '') referrer = "";
-      else { try { referrer = new URL(referrer, docHref || undefined).href; } catch (e) { referrer = ""; } }
-      var inline = __fetch_start(id, req.method, req.url, headersFlat(req.headers),
-                                 req.__bytes != null ? bytesToBinaryString(req.__bytes) : "",
-                                 req.cache || "default", req.redirect || "follow",
-                                 req.mode || "cors", referrer, req.referrerPolicy || "",
-                                 req.credentials || "same-origin", req.integrity || "");
-      if (inline) {
-        // Synchronous host answered in this tick (today's path; one pump drains).
-        var e = __pending[id];
-        if (e && !e.settled) { e.settled = true; delete __pending[id]; settleEntry(e, JSON.parse(inline)); }
-      }
+    var id = fetchIds.nextFetchId++, result = Core.deferred(), entry = Core.record();
+    entry.resolve = result.resolve; entry.reject = result.reject;
+    entry.signal = signal; entry.stream = null; entry.response = null;
+    entry.pull = undefined; entry.uploadReader = undefined;
+    entry.settled = false; entry.started = false; entry.awaiting = false; entry.method = req.method;
+    __pending[id] = entry;
+    entry.abortToken = addAbortAlgorithm(signal, function () {
+      if (__pending[id] !== entry) return;
+      var reason = signalReason(signal);
+      removeEntry(id, entry);
+      if (entry.started) { try { Core.call(nativeFetchAbort, undefined, [id]); } catch (_) {} }
+      if (entry.stream !== null) ReadableOps.error(entry.stream, reason);
+      finishPull(entry);
+      if (!entry.settled) { entry.settled = true; entry.reject(reason); }
+      if (entry.uploadReader !== undefined) Core.handled(ReadableOps.readerCancel(entry.uploadReader, reason));
     });
+    // The native seam still accepts one complete upload. Drain the actual body
+    // through private readers before registering work with that seam.
+    collectBody(req, function (bytes) {
+      entry.uploadReader = undefined;
+      if (__pending[id] !== entry) return;
+      try {
+        var docHref = (typeof location !== 'undefined' && location && location.href) ? location.href : '';
+        var referrer = req.referrer;
+        if (referrer === undefined || referrer === 'about:client') referrer = docHref;
+        else if (referrer !== '') {
+          try { referrer = new URL(referrer, docHref || undefined).href; } catch (_) { referrer = ''; }
+        }
+        entry.started = true;
+        var inline = Core.call(nativeFetchStart, undefined, [id, req.method, req.url, headersFlat(req.headers),
+          bytesToBinaryString(bytes), req.cache || 'default', req.redirect || 'follow',
+          req.mode || 'cors', referrer, req.referrerPolicy || '',
+          req.credentials || 'same-origin', req.integrity || '', body.stream !== null ? '1' : '0']);
+        if (inline && __pending[id] === entry && !entry.settled) {
+          entry.settled = true; removeEntry(id, entry);
+          settleEntry(entry, Core.call(nativeJsonParse, undefined, [inline]));
+        }
+      } catch (e) {
+        if (__pending[id] === entry) { removeEntry(id, entry); entry.settled = true; entry.reject(e); }
+      }
+    }, function (reason) {
+      if (__pending[id] === entry) { removeEntry(id, entry); entry.settled = true; entry.reject(reason); }
+    }, function (reader) { entry.uploadReader = reader; });
+    return result.promise;
   };
 
-  // Rust-invoked deferred terminals (eval'd from Runtime::settle_fetch / fail_fetch;
-  // Rust cannot call a held JS function, so it evals these). Guard on presence so a
-  // reply racing an abort is a no-op.
+  // Rust invokes these existing hooks. Response delivery remains headers-first
+  // and demand-driven; Streams changes the private controller implementation.
   globalThis.__fetchSettle = function(id, ojson) {
-    var e = __pending[id]; if (!e || e.settled) return; e.settled = true; delete __pending[id];
-    settleEntry(e, JSON.parse(ojson));
+    var e = __pending[id]; if (!e || e.settled) return;
+    e.settled = true; removeEntry(id, e);
+    settleEntry(e, Core.call(nativeJsonParse, undefined, [ojson]));
   };
   globalThis.__fetchFail = function(id, msg) {
-    var e = __pending[id]; if (!e || e.settled) return; e.settled = true; delete __pending[id];
-    e.reject(new TypeError(msg || 'Failed to fetch'));
+    var e = __pending[id]; if (!e || e.settled) return;
+    e.settled = true; removeEntry(id, e); e.reject(new TypeError(msg || 'Failed to fetch'));
   };
-
-  // ---- Streaming deferred response (incremental body) ----
-  // A deferred host can early-settle with status + headers, then feed the body as
-  // it arrives. __fetchStartStream resolves the Promise with a Response whose body
-  // is a LIVE stream; the entry STAYS in __pending (with its controller) so chunks
-  // and close route to it; __fetchClose removes it.
   globalThis.__fetchStartStream = function(id, ojson) {
     var e = __pending[id]; if (!e || e.settled) return; e.settled = true;
-    var o = JSON.parse(ojson);
-    if (o.networkError) { delete __pending[id]; e.reject(new TypeError('Failed to fetch')); return; }
-    var controller = null;
-    // Pull-driven: the source asks the host for the next chunk only when the
-    // stream is read and its buffer is empty, marking the entry as awaiting a
-    // chunk so the host event loop stays live until it (or close/error) arrives.
-    // A body the script never reads issues no pull, so the host never streams it.
-    var stream = new ReadableStream({
-      start: function(c) { controller = c; },
-      pull: function() { var pe = __pending[id]; if (pe) pe.awaiting = true; __fetch_pull(id); }
-    });
+    var o = Core.call(nativeJsonParse, undefined, [ojson]);
+    if (o.networkError) { removeEntry(id, e); e.reject(new TypeError('Failed to fetch')); return; }
     var r = makeFilteredShell(o);
-    r.headers = new Headers(o.headers); r.headers._guard = 'response'; // network headers, guard bypassed
-    r.type = o.type || "default"; r.url = o.url || ""; r.redirected = !!o.redirected;
+    r.headers = new Headers(o.headers); r.headers._guard = 'response';
+    r.type = o.type || 'default'; r.url = o.url || ''; r.redirected = !!o.redirected;
     if (isNullBodyStatus(r.status) || e.method === 'HEAD') {
-      // A null-body status (or a HEAD response) has no body; drop the (empty)
-      // stream so .body is null. A trailing __fetchClose just removes the pending
-      // entry (controller stays null).
-      r.__bytes = null; r.__stream = null; e.controller = null;
+      setBody(r, 'response', null, null);
     } else {
-      r.__bytes = null; r.__stream = stream; stream._owner = r;
-      e.controller = controller;
+      var algorithms = Core.record();
+      algorithms.pull = function () {
+        var pe = __pending[id];
+        if (pe !== e) return Core.resolve(undefined);
+        if (pe.pull === undefined) {
+          pe.pull = Core.deferred(); pe.awaiting = true;
+          var pending = pe.pull.promise;
+          try { Core.call(nativeFetchPull, undefined, [id]); }
+          catch (reason) { ReadableOps.error(pe.stream, reason); removeEntry(id, pe); finishPull(pe); }
+          return pending;
+        }
+        return pe.pull.promise;
+      };
+      algorithms.cancel = function () {
+        if (__pending[id] === e) {
+          removeEntry(id, e); finishPull(e); Core.call(nativeFetchAbort, undefined, [id]);
+        }
+        return Core.resolve(undefined);
+      };
+      e.stream = ReadableOps.createByte(algorithms, byteStrategy());
+      var body = setBody(r, 'response', null, e.stream); body.nativeLive = true;
     }
-    e.resolve(r);
+    e.response = r; e.resolve(r);
   };
   globalThis.__fetchPushChunk = function(id, arr) {
-    var e = __pending[id]; if (!e || !e.controller) return;
-    e.awaiting = false; // the demanded chunk arrived
+    var e = __pending[id]; if (!e || e.stream === null) return;
     var u8 = new Uint8Array(arr.length);
     for (var i = 0; i < arr.length; i++) u8[i] = arr[i] & 0xFF;
-    try { e.controller.enqueue(u8); } catch (x) {}
+    try { if (arr.length !== 0) ReadableOps.enqueue(e.stream, u8); }
+    finally { finishPull(e); }
   };
   globalThis.__fetchClose = function(id) {
-    var e = __pending[id]; if (!e) return; delete __pending[id];
-    if (e.controller) { try { e.controller.close(); } catch (x) {} }
+    var e = __pending[id]; if (!e) return;
+    removeEntry(id, e);
+    if (e.stream !== null) ReadableOps.close(e.stream);
+    finishPull(e);
   };
-  // The response already resolved at __fetchStartStream; a mid-body failure (e.g. a
-  // Content-Encoding decode error) errors the LIVE body stream so pending/future
-  // reads (arrayBuffer/text/...) reject with a TypeError, while the Response stays.
   globalThis.__fetchError = function(id) {
-    var e = __pending[id]; if (!e) return; delete __pending[id];
-    if (e.controller) { try { e.controller.error(new TypeError('Failed to read response body')); } catch (x) {} }
+    var e = __pending[id]; if (!e) return;
+    removeEntry(id, e);
+    if (e.stream !== null) ReadableOps.error(e.stream, new TypeError('Failed to read response body'));
+    finishPull(e);
   };
 
   // ---- ProgressEvent ----
@@ -2363,15 +2295,15 @@ const FETCH_BOOTSTRAP: &str = r#"
     var flat = [];
     if (!headers.has('accept')) { flat.push('accept'); flat.push('*/*'); }
     for (var i = 0; i < headers._h.length; i++) { flat.push(headers._h[i][0]); flat.push(headers._h[i][1]); }
-    var json = __fetch_sync(x._method, x._url, flat.join('\n'),
+    var json = Core.call(nativeFetchSync, undefined, [x._method, x._url, flat.join('\n'),
                             bodyBytes != null ? bytesToBinaryString(bodyBytes) : '',
                             'default', 'follow', 'cors', xhrDocHref(), '',
-                            x._withCred ? 'include' : 'same-origin', '');
+                            x._withCred ? 'include' : 'same-origin', '', bodyBytes !== null ? '1' : '0']);
     var o = json ? JSON.parse(json) : { networkError: true };
     if (o.networkError) { xhrRequestError(x, 'error', true); return; }
     var res = responseFromOutcome(o);
     x._resp = res;
-    x._bytes = res.__bytes || new Uint8Array(0);
+    x._bytes = bodyRecord(res).bytes || new Uint8Array(0);
     x._state = XD;
     x._sendFlag = false;
     xhrFire(x, 'readystatechange');

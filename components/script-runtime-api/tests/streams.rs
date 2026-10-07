@@ -69,7 +69,7 @@ const BYOB: &str = r#"
     let pulls=0;
     const stream=new ReadableStream({type:'bytes',pull(c){
         if(++pulls===1){const r=c.byobRequest;r.view[0]=17;r.view[1]=34;r.view[2]=51;r.respond(3);}
-        else c.close();
+        else {const r=c.byobRequest;c.close();r.respond(0);}
     }});
     const reader=stream.getReader({mode:'byob'});
     const input=new Uint8Array(5), original=input.buffer;
@@ -82,27 +82,103 @@ const BYOB: &str = r#"
     reader.releaseLock(); check(!stream.locked,'BYOB reader releases its lock');
 "#;
 
+const PRIVATE_BRANDS: &str = r#"
+    let controller;
+    const stream=new ReadableStream({start(c){controller=c;c.enqueue('real');}});
+    stream._chunks=['forged'];stream._disturbed=false;stream._reader=null;
+    Object.freeze(stream);Object.freeze(controller);
+    const reader=stream.getReader();Object.freeze(reader);
+    const read=reader.read();controller.close();
+    check((await read).value==='real','public legacy fields do not replace private queue');
+    check((await reader.read()).done,'frozen controller can close through private state');
+    reader.releaseLock();check(!stream.locked,'frozen reader can release its private lock');
+    let rejected=false;try{ReadableStream.prototype.getReader.call({_chunks:[]});}catch(e){rejected=e instanceof TypeError;}
+    check(rejected,'lookalike object has no stream brand');
+    check(typeof globalThis.__streamsFetch==='undefined' && typeof globalThis.__finishStreamsClone==='undefined',
+        'private installation handoffs are absent before authors');
+"#;
+
+const FETCH_POISONED_PROTOTYPE: &str = r#"
+    const oldType=Object.getOwnPropertyDescriptor(Object.prototype,'type');
+    const oldThen=Object.getOwnPropertyDescriptor(Object.prototype,'then');
+    const stream=new ReadableStream({start(c){c.enqueue(new Uint8Array([65,66]));c.close();}});
+    let text;
+    try {
+        Object.defineProperty(Object.prototype,'type',{configurable:true,get(){throw new Error('type trap');},
+            set(){throw new Error('type setter trap');}});
+        Object.defineProperty(Object.prototype,'then',{configurable:true,get(){throw new Error('then trap');}});
+        text=await new Response(stream).text();
+        check(await new Response('AB').text()==='AB','private buffered byte stream avoids inherited source getters');
+    } finally {
+        if(oldType)Object.defineProperty(Object.prototype,'type',oldType);else delete Object.prototype.type;
+        if(oldThen)Object.defineProperty(Object.prototype,'then',oldThen);else delete Object.prototype.then;
+    }
+    check(text==='AB','Fetch creates and consumes a body without inherited type/then calls');
+    const empty=new Response(null);check(await empty.text()==='' && !empty.bodyUsed,'null body remains undisturbed');
+    check(await empty.text()==='' && !empty.bodyUsed,'null body can be consumed again');
+"#;
+
+const WRITABLE_ABORT_REENTRY: &str = r#"
+    const outer={outer:true},inner={inner:true};let received,signal,recursive;
+    const writer=new WritableStream({start(c){signal=c.signal;},abort(r){received=r;}}).getWriter();
+    signal.addEventListener('abort',()=>{recursive=writer.abort(inner);});
+    const abort=writer.abort(outer);
+    check(abort===recursive,'reentrant abort reserves the shared abort promise');
+    check(signal.aborted && signal.reason===outer,'signal retains the first reason');
+    await abort;check(received===inner,'sink uses the inner reserved abort request reason');
+"#;
+
+const TRANSFORM_PRESSURE_AND_PIPE_CLOSING: &str = r#"
+    const transform=new TransformStream(undefined,undefined,{highWaterMark:0});
+    const writer=transform.writable.getWriter();let written=false;
+    const write=writer.write('one');write.then(()=>written=true);
+    await flush();check(!written,'transform write waits for readable demand');
+    const reader=transform.readable.getReader();check((await reader.read()).value==='one','read pulls the pending transform');
+    await write;const close=writer.close();check((await reader.read()).done,'flush closes transform readable');await close;
+    let sourceCancelled;const closeGate=deferred();
+    const source=new ReadableStream({cancel(reason){sourceCancelled=reason;}});
+    const dest=new WritableStream({close(){return closeGate.promise;}});
+    // Closing before pipeTo must reject/cancel even while its sink close is pending.
+    const closing=dest.close();let error;
+    try{await source.pipeTo(dest);}catch(e){error=e;}
+    check(error instanceof TypeError && sourceCancelled===error,'closing destination cancels source with exact pipe error');
+    check(!source.locked && !dest.locked,'closing shutdown releases both locks');
+    closeGate.resolve();await closing;
+"#;
+
 macro_rules! cases {
     ($backend:ty) => {
         #[test]
-        #[ignore = "starting implementation negative control; candidate enables this test"]
         fn deferred_write_backpressure() {
             control::<$backend>(BACKPRESSURE);
         }
         #[test]
-        #[ignore = "starting implementation negative control; candidate enables this test"]
         fn cancellation_waits_for_source() {
             control::<$backend>(CANCELLATION);
         }
         #[test]
-        #[ignore = "starting implementation negative control; candidate enables this test"]
         fn pipe_error_cancels_source_and_releases_locks() {
             control::<$backend>(PIPE_ERROR);
         }
         #[test]
-        #[ignore = "starting implementation negative control; candidate enables this test"]
         fn byob_fill_detaches_and_returns_exact_view() {
             control::<$backend>(BYOB);
+        }
+        #[test]
+        fn frozen_objects_and_public_forgeries_preserve_private_brands() {
+            control::<$backend>(PRIVATE_BRANDS);
+        }
+        #[test]
+        fn fetch_body_consumption_survives_inherited_type_and_then_traps() {
+            control::<$backend>(FETCH_POISONED_PROTOTYPE);
+        }
+        #[test]
+        fn writable_abort_reentry_preserves_signal_and_inner_request_reasons() {
+            control::<$backend>(WRITABLE_ABORT_REENTRY);
+        }
+        #[test]
+        fn transform_backpressure_and_pipe_closing_shutdown() {
+            control::<$backend>(TRANSFORM_PRESSURE_AND_PIPE_CLOSING);
         }
     };
 }

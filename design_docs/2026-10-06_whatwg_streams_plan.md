@@ -1,12 +1,12 @@
 # WHATWG Streams
 
-**Status:** Engine foundation in progress, 2026-10-06. Mark answered S1:
-complete Vano's standard buffer-transfer methods and add transfer-only Boa
-support, qualify both, then repin Genet. Both engine revisions are now qualified
-and published. The local Genet repin is prepared; published-Git consumer gates
-remain pending. The frozen baseline retains the actual prerequisite failures.
-Streams implementation has not started. Mark resumed orchestration and
-approved the described S2 fetch-body change on 2026-10-06.
+**Status:** Streams implementation in progress, 2026-10-07. S1's published engine
+pins and exact Genet consumer are qualified. Both engines pass real buffer
+transfer; meaningful Streams algorithm controls still fail on the unchanged
+foundation. Three bounded Luna agents now implement readable, writable/transform,
+and piping algorithms; root owns captured internals, Fetch integration and gates.
+Mark approved S2's reader-based body handling on 2026-10-06. The final local
+qualification and pre-publication checkpoint remain open.
 
 Authority is the [standards ledger](2026-09-07_standards_to_features_ledger.md#conformance-targets-2026-10-02)
 rulings C1 and C3, the [census panic attribution](2026-09-06_web_platform_wpt_census.md),
@@ -31,13 +31,13 @@ the Streams implementation. Transferable streams, Encoding streams, and new
 incremental network-delivery work remain follow-ons. The Encoding block is
 outside this lane's edits.
 
-*Reading, not ruled:* use a separate `streams.rs` bootstrap installed immediately
-before fetch by `install_host_surface`. Closure-owned private slots and captured
-intrinsics keep author-patched globals and prototypes out of internal algorithms.
-Fetch will need a trusted bootstrap bridge in place of its direct `_chunks`,
-`_reader`, `_disturbed`, `_closed`, `_errored`, and `_error` field accesses.
-Changes to body-delivery behavior beyond the brief's wrapping scope remain a
-checkpoint; the existing native contracts must first be measured and preserved.
+The implementation uses a separate `streams.rs` bootstrap installed immediately
+before Fetch by `install_host_surface`. Agent-shared weak brands and captured
+per-realm operations replace direct public queue, reader and disturbance fields.
+S2 authorizes reader-based collection at the existing whole-body upload seam;
+native incremental response delivery and its current live-clone rejection remain
+preserved boundaries. A new transport or further native body behavior change
+retains its checkpoint.
 
 ## Phases and done-conditions
 
@@ -192,7 +192,7 @@ incremental network delivery or copying a reference implementation.
   cache. This preserves primary's concurrently used ignored local patches,
   especially its netrender revision, while qualification uses committed Git
   sources. Reuse avoids another worktree or cache; the name reflects its
-  previous owner. No isolated Cargo home exists. The checkpoint plan is local
+  previous owner. At this initial baseline no isolated Cargo home existed. The checkpoint plan is local
   only; Streams is not published or merged.
 - S1 is answered. Two bounded Luna agents own Vano's transfer algorithm and
   Boa's transfer-only feature respectively. They initially prepare source and
@@ -264,7 +264,7 @@ incremental network delivery or copying a reference implementation.
   contains unrelated dependency changes; publish this qualified patch by
   fast-forwarding the maintained Genet ref without absorbing that drift.
   Source work remains on local main. Consumer receipts and the Genet repin
-  remain pending. S2 is awaiting the fetch-body ruling.
+  remained pending at this point. S2 was subsequently answered as recorded above.
 - Boa's native qualification passed: no-feature absence 1/1, transfer-only
   6/6, experimental-only 5/5, combined 5/5, and default features plus the
   narrow feature's owning ArrayBuffer module 19/19. The old allocation
@@ -324,3 +324,62 @@ incremental network delivery or copying a reference implementation.
   only to permit the unchanged-production foundation suite, then explicitly
   executed as starting negative controls. The candidate must enable all eight
   and pass them; an ignored control is not acceptance evidence.
+
+## Progress, 2026-10-07
+
+- Exact published-Git qualification at `d4800b63c656440ba628f058a3e4f06f9cb6521f`
+  passed **1,142 tests, zero failures**, with eight temporarily ignored starting
+  controls and three existing WPT ignores. Counts use exact depfile source and
+  package ownership: Runtime 747, Scripted 120, WPT 77, Vano 43, Boa 26,
+  Documents 56, Render 41 and Taproot 32. The eight starting controls then
+  actually executed and failed (zero passes, eight failures, exit 101).
+- A parallel compilation attempt ran out of memory in Naga before tests. Its
+  failed receipt is preserved. The successful serial gate reused the same
+  stable target and marker-owned Cargo home without changing source or lock.
+  Keep `C:/t/cargo-homes/genet-streams` through final qualification, then remove
+  it after receipts are sealed and its live owners have exited.
+- The ordinary optimized production runner was built without test profile
+  overrides and frozen as `Code/testing/genet/streams/engine-foundation-genet-wpt.exe`,
+  SHA-256 `BB4B79B96CCB98C6793FB36333414D3B64FF14C407C959F20880B130B39BC7AA`.
+  Its lock is `D73B7ADB010BD299D58F006B606FB69C7972A3951CE88E827E1D5A7870CFAE89`.
+  Both engines pass seven transfer assertions and all three prerequisites.
+  The unchanged algorithm fixture remains zero out of four on both engines.
+- All ten engine-only WPT directory runs finished with unchanged corpus,
+  manifest and file IDs. There are zero lost passing files or assertion rows.
+  Completed file and assertion totals match the published baseline table.
+  Each engine gains two assertions inside still-errored byte-stream records:
+  actual detachment now makes the detached respondWithNewView view reject.
+  These gains remain error-file evidence rather than completed conformance
+  credit. `engine-foundation-vs-published-before.json` preserves raw movements;
+  the separate attribution receipt explains all four.
+- Implementation installs one captured bootstrap after DOM and before Fetch.
+  Agent-shared WeakMaps retain brands across same-agent realms and snapshots;
+  operation tables are captured and deleted during synchronous installation.
+  Structured clone is captured afterward, before author script. Public Web IDL
+  strategy conversion remains separate from algorithm extraction so source,
+  sink and transformer getters keep their specified order.
+- S2 uses private reader callbacks for Request upload collection and Response
+  consumption, including byte validation and abort before native start. Existing
+  incremental response hooks retain their native ownership and pull handshake.
+  Request(input) uses the specified private identity-transform proxy. A native
+  body-presence argument distinguishes an empty upload from an absent body.
+  Response's own type field uses captured DefineOwnProperty to survive C3's
+  inherited accessor. The Encoding block remains outside these edits.
+- All three implementation modules are drafted. Source review fixed writable
+  close reservation suppressing the queue sentinel, kept shutdown actions pending
+  until all settle, and captured ReadableStream.from controller methods. Root
+  added both-engine controls for prototype traps, frozen/forged stream objects,
+  abort reentry, transform pressure, exact/empty/invalid uploads, abort before
+  native registration, live authored clone independence, retained child streams,
+  collection and Worker installation, plus a Vano snapshot control. These are
+  candidate source, not yet passing receipts. The original eight controls are now
+  enabled; their starting negative receipt remains unchanged.
+- The authored BYOB control's EOF source now saves its pending request, calls
+  `close()`, then `respond(0)`, as the byte-stream algorithms require. Its
+  assertions are unchanged. The original HTML fixture and receipts remain
+  intact; the separate corrected fixture is
+  `streams-algorithm-controls-byte-eof.html`, SHA-256
+  `DCD51AEC9A5F39A9CDAB7D0410F8CEA2723FB34458D56C9286D9DC3903BFD6CF`.
+  Matched runs on the unchanged foundation still fail all four controls on
+  both engines. `algorithm-controls-byte-eof-correction.receipt.json` records
+  the precise correction and both fixture hashes.

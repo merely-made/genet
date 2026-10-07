@@ -169,6 +169,14 @@ or a narrowed first phase await Mark's ruling. No Streams implementation or
 full directory baseline is claimed. Existing host incremental response hooks
 are recorded separately from the brief's whole-body description.
 
+**Streams foundation qualified, 2026-10-07:** the exact published engine pins
+pass 1,142 Genet consumer tests, transfer 7/7 and prerequisites 3/3 on each
+engine. All eight starting Rust controls executed and failed. Matched engine-only
+directory measurements lose zero passing files/assertions; four assertion gains
+inside errored records are attributed to real detachment. Streams modules and
+S2's reader-backed Fetch seam are drafted; candidate C3/Streams acceptance and
+the final local checkpoint remain open. The linked plan owns full receipts.
+
 **Streams S1 ruling, 2026-10-06:** Mark answered "Ok, agreed. Proceed" to the
 recommended narrow engine route: complete Vano's standard transfer methods,
 expose only Boa's transfer family, qualify both, then repin Genet. The plan

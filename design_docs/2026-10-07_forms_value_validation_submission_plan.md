@@ -209,3 +209,16 @@ dependency or version change is authorized beyond the named workspace edge.
   introducing Genet-specific app markers; raw child text includes IME/ghost/caret
   projections and cannot serve as the committed value. Text-valued accessibility
   action routing is a separate existing gap (the current SetValue path is numeric).
+- 2026-10-07: `draft-visible-control-crates` executes 57 native-document and
+  67 arena tests successfully, including both-engine native behavior and the
+  deep small-stack association walk. Livery has 319 passes and five failures:
+  four zero-glyph fixtures and the newly added empty-frame assertion. Direct
+  tracing disproves the earlier missing-frame diagnosis: `layout_inline_groups`
+  always stores `Some(TextFrame)` even without ordinary text. The redundant
+  frame seed/classifier and incorrect frame-absence assertion are removed.
+  Paint fixtures register the existing local Ahem font with an explicit font
+  face, retaining the exact live/default, clipping and multiline assertions.
+  The atomic text traversal uses an iterative preorder walk and prunes
+  display:none subtrees; a control beneath a hidden ancestor remains unpainted.
+  This corrected draft awaits a fresh focused gate; font setup is not yet a
+  qualified explanation of the original zero-glyph failures.

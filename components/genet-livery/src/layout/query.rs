@@ -47,19 +47,11 @@ where
     ) where
         D: LayoutDom<NodeId = Id>,
     {
-        let mut elements = Vec::new();
-        atomic_inline_elements(dom, styles, dom.document(), false, &mut elements);
-        let needs_control_frame = elements
-            .iter()
-            .copied()
-            .any(|element| needs_form_control_text_frame(dom, styles, element));
-        let Some(mut frame) = self
-            .text_frame
-            .take()
-            .or_else(|| needs_control_frame.then(|| text.begin_frame()))
-        else {
+        let Some(mut frame) = self.text_frame.take() else {
             return;
         };
+        let mut elements = Vec::new();
+        atomic_inline_elements(dom, styles, dom.document(), false, &mut elements);
         for element in elements {
             if let Some(style) = styles.get(element) {
                 // An element's inline boxes are its boxes in the lines that
@@ -769,40 +761,27 @@ fn atomic_inline_elements<D>(
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
-    let text_control = dom.kind(node) == NodeKind::Element
-        && dom.element_name(node).is_some_and(|name| {
-            matches!(
-                name.local.as_ref().to_ascii_lowercase().as_str(),
-                "input" | "textarea"
-            )
-        });
-    let inside =
-        inside || (dom.kind(node) == NodeKind::Element && is_atomic_inline_box(dom, styles, node));
-    if (inside || text_control) && dom.kind(node) == NodeKind::Element {
-        out.push(node);
-    }
-    for child in dom.dom_children(node) {
-        atomic_inline_elements(dom, styles, child, inside, out);
-    }
-}
-
-/// Whether preparing this element can add virtual form-control text to the
-/// retained text frame. Button-like inputs must not create an otherwise empty
-/// frame when a document has no ordinary text.
-fn needs_form_control_text_frame<D: LayoutDom>(
-    dom: &D,
-    styles: &StylePlane<D::NodeId>,
-    node: D::NodeId,
-) -> bool {
-    if styles
-        .get(node)
-        .is_none_or(|style| style.display == livery::values::Display::None)
-    {
-        return false;
-    }
-    match crate::text::form_control_text_kind(dom, node) {
-        Some(crate::text::FormControlTextKind::Textarea) => dom.form_control_state(node).is_some(),
-        Some(crate::text::FormControlTextKind::Input(_)) => true,
-        None => false,
+    let mut pending = vec![(node, inside)];
+    while let Some((node, inside)) = pending.pop() {
+        if styles
+            .get(node)
+            .is_some_and(|style| style.display == livery::values::Display::None)
+        {
+            continue;
+        }
+        let is_element = dom.kind(node) == NodeKind::Element;
+        let text_control = is_element
+            && dom.element_name(node).is_some_and(|name| {
+                matches!(
+                    name.local.as_ref().to_ascii_lowercase().as_str(),
+                    "input" | "textarea"
+                )
+            });
+        let inside = inside || (is_element && is_atomic_inline_box(dom, styles, node));
+        if (inside || text_control) && is_element {
+            out.push(node);
+        }
+        let children: Vec<_> = dom.dom_children(node).collect();
+        pending.extend(children.into_iter().rev().map(|child| (child, inside)));
     }
 }

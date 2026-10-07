@@ -1303,12 +1303,11 @@ mod tests {
         assert_eq!(names, vec![Some("1. Save"), Some("Author")]);
     }
 
-    /// A retained document can carry a field's text as the input's children
-    /// rather than in `value`, as Cambium's field does. The field is still
-    /// named by its label, and its text is its value: a textbox is never named
-    /// from its content.
+    /// Native input children do not replace the arena's live value. App-owned
+    /// fields use ordinary textbox elements and project their committed value
+    /// through their host adapter. Both retain labels rather than content names.
     #[test]
-    fn a_field_holding_its_text_as_children_keeps_its_label_as_its_name() {
+    fn native_input_children_do_not_replace_live_value_or_label() {
         let html = |local: &str| {
             QualName::new(
                 None,
@@ -1335,7 +1334,21 @@ mod tests {
             .find(|node| node.role == DocumentA11yRole::TextField)
             .expect("the field is projected");
         assert_eq!(field.name.as_deref(), Some("Name"));
-        assert_eq!(field.value.as_deref(), Some("Hi"));
+        assert_eq!(field.value.as_deref(), Some(""));
+
+        let mut state = dom.form_control_state(input).expect("native input state");
+        state.value = "Current".to_owned();
+        state.dirty_value = true;
+        assert!(dom.set_form_control_state(input, state));
+        let projection = document_a11y_projection(&dom, &fragments, None, 0);
+        let field = projection
+            .nodes()
+            .iter()
+            .find(|node| node.role == DocumentA11yRole::TextField)
+            .expect("the native field remains projected");
+        assert_eq!(field.name.as_deref(), Some("Name"));
+        assert_eq!(field.value.as_deref(), Some("Current"));
+        assert_eq!(dom.text(typed), Some("Hi"));
     }
 
     #[test]

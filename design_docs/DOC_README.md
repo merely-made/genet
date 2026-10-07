@@ -14,7 +14,9 @@ technical identifiers, not a claim that Genet runs unmodified upstream Nova.
 Historical receipts retain their original names and dependency revisions.
 
 **Human checkpoints and WPT evidence (2026-10-07):** ask and wait for an explicit
-answer, with no response timer or inferred approval. Technical test deadlines
+answer, with no response timer or inferred approval. Keep the turn open while an
+input prompt awaits an answer, since ending the response dismisses its UI.
+Technical test deadlines
 remain part of their recorded gates. Revalidate generated assertion labels by
 unchanged source case and duplicate occurrence against the actual fresh maps;
 preserve raw comparisons and rows inside ERROR records separately.

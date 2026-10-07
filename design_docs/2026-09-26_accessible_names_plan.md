@@ -129,6 +129,15 @@ exposes the child text as value. TextField-role content is excluded from the
 shared name fallback. Updated rendering dependencies and selector click delivery
 from origin main are retained.
 
+**Amended 2026-10-07 by Forms ruling F3:** native input/textarea values now come
+from the shared form-control arena record. Authored child text remains default
+content and cannot supply a native input's live accessibility value. Cambium's
+app fields move to ordinary textbox elements with Mere-owned committed-value
+projection, preserving their styled/IME/caret children. The regression now checks
+the native arena value and stable label; Mere carries the app-field compatibility
+fixture. Implementation and current qualification are recorded in the
+[Forms plan](2026-10-07_forms_value_validation_submission_plan.md#f3-cambium-app-owned-fields-and-verified-repin-2026-10-07).
+
 Downstream Taproot can consume `DocumentA11yProjection::nodes()` from the public
 `genet_render::document_a11y_projection` family. Each node's `id.get()` matches
 `LayoutDom::opaque_id`; `role`, `name` and `description` are owner-computed.

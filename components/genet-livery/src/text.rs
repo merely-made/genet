@@ -717,9 +717,11 @@ impl TextSystem {
                 .filter(|placeholder| !placeholder.is_empty())
                 .map_or((value, true), |placeholder| (placeholder.to_owned(), false))
         } else if input_type == "password" && !is_textarea {
-            // Mask glyph count is a maintainer ruling still pending. Do not
-            // expose the secret while that policy is unresolved.
-            return true;
+            let clusters = icu_segmenter::GraphemeClusterSegmenter::new()
+                .segment_str(&value)
+                .count()
+                .saturating_sub(1);
+            ("\u{2022}".repeat(clusters), true)
         } else {
             (value, true)
         };

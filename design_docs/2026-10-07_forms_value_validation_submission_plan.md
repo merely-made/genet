@@ -518,3 +518,13 @@ dependency cache. Original primary overrides and locks remain preserved.
   identifies the optional `highlight` library feature as an additional gate.
   Fresh Mere consumer tests and their disabled-marker control follow. The
   sibling scope question remains unanswered, with no response timer.
+- 2026-10-07: `mere-forms-default-packages` exits 101 before executing tests:
+  Rootstock's multi-window mutation router lacks the new
+  `FormControlStateChanged` variant. Its receipt preserves stable sources and
+  exact manifest/lock restoration. The bounded Mere compatibility repair routes
+  the event by its node and forwards the new arena state through the existing
+  `WindowDom` read wrapper. New fixtures distinguish current value from its
+  unchanged default attribute and verify only the owning window rebuilds.
+  Independent routing/forwarding controls and fresh combined consumer gates
+  remain pending; the old-pin checkout is not accepted for publication without
+  its verified repin. No Genet product source changes.

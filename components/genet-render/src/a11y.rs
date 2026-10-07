@@ -74,6 +74,20 @@ fn document_role<D: LayoutDom>(dom: &D, node: D::NodeId) -> DocumentA11yRole {
             _ => {},
         }
     }
+    if dom.element_name(node).is_some_and(|name| {
+        name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
+            && name.local.as_ref().eq_ignore_ascii_case("input")
+    }) {
+        let input_type = dom
+            .attribute(node, &Namespace::default(), &LocalName::from("type"))
+            .map(str::to_ascii_lowercase)
+            .unwrap_or_else(|| "text".to_owned());
+        match input_type.as_str() {
+            "checkbox" => return DocumentA11yRole::CheckBox,
+            "radio" => return DocumentA11yRole::RadioButton,
+            _ => {},
+        }
+    }
     match dom.kind(node) {
         NodeKind::Document => DocumentA11yRole::Window,
         NodeKind::Element => match dom.element_name(node).map(|name| name.local.as_ref()) {
@@ -1093,7 +1107,7 @@ mod tests {
         let root = dom.document();
         dom.set_inner_html(
             root,
-            "<input id=field value=default><input id=check type=checkbox checked>",
+            "<input id=field value=default><input id=check type=checkbox checked><input id=radio type=radio checked>",
         );
         let field = by_id(&dom, root, "field").expect("text field");
         let mut field_state = dom.form_control_state(field).expect("field state");
@@ -1106,6 +1120,12 @@ mod tests {
         check_state.checked = false;
         check_state.dirty_checkedness = true;
         assert!(dom.set_form_control_state(check, check_state));
+
+        let radio = by_id(&dom, root, "radio").expect("radio button");
+        let mut radio_state = dom.form_control_state(radio).expect("radio state");
+        radio_state.checked = false;
+        radio_state.dirty_checkedness = true;
+        assert!(dom.set_form_control_state(radio, radio_state));
 
         let fragments = fragments_from_scripted_dom(&dom, SHEET, 400, 300).expect("layout");
         let projection = document_a11y_projection(&dom, &fragments, None, 1);
@@ -1121,6 +1141,12 @@ mod tests {
             .find(|node| node.role == DocumentA11yRole::CheckBox)
             .expect("checkbox projection");
         assert_eq!(check.state.checked, Some(false));
+        let radio = projection
+            .nodes()
+            .iter()
+            .find(|node| node.role == DocumentA11yRole::RadioButton)
+            .expect("radio projection");
+        assert_eq!(radio.state.checked, Some(false));
     }
 
     #[test]

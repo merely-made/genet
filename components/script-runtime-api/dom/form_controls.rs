@@ -6,6 +6,21 @@
 use super::*;
 use layout_dom_api::SelectionDirection;
 
+pub(crate) struct FormControlOwner;
+impl<E: ScriptEngine> NativeFn<E> for FormControlOwner {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let ref_value = cx.arg(0);
+        let Some(node) = cx.owned_node(&ref_value)? else {
+            return Ok(cx.make_null());
+        };
+        let owner = node.with_dom(|dom| dom.form_control_form_owner(node.id()));
+        match owner {
+            Some(owner) => reflect_pinned::<E>(cx, owner.raw() as u64),
+            None => Ok(cx.make_null()),
+        }
+    }
+}
+
 pub(crate) struct FormControlGet;
 impl<E: ScriptEngine> NativeFn<E> for FormControlGet {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {

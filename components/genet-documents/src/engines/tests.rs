@@ -2586,6 +2586,7 @@ fn email_and_number_editing_keep_a_native_cursor_without_selection_idl() {
     );
 
     let number = livery_node_with_id(session, "number");
+    let _ = session.frame(400, 120);
     assert_eq!(session.click_at(80.0, 40.0), SessionClick::Handled);
     assert_eq!(
         session.key_input(

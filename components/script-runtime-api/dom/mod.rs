@@ -167,6 +167,7 @@ pub(crate) fn install_dom_surface<E: ScriptEngine>(
     shadow::install(engine)?;
     markup_insertion::install(engine)?;
     engine.set_function::<DocumentRoot>("__documentRoot", 0)?;
+    engine.set_function::<form_controls::FormControlOwner>("__formControlOwner", 1)?;
     engine.set_function::<form_controls::FormControlGet>("__formControlGet", 2)?;
     engine.set_function::<form_controls::FormControlSet>("__formControlSet", 3)?;
     engine.set_function::<form_controls::FormControlSelect>("__formControlSelect", 4)?;

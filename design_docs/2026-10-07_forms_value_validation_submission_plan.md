@@ -142,3 +142,10 @@ dependency or version change is authorized beyond the named workspace edge.
   parents, while the existing GC opaque-root helper also follows shadow hosts.
   No tests executed in that failed gate. The original lock and local config
   were restored; a fresh receipt will record the repaired draft gate.
+- 2026-10-07: `draft-repaired-crates` stops before tests at a missing
+  `LayoutRect` import in the retained control projection. The import is fixed.
+  Form association now shares an arena owner query across bindings and radio
+  grouping, respecting first-ID lookup, detached ancestor fallback and shadow
+  tree scope. Focused fixtures also correct newline glyph accounting, retained
+  hit-test setup and implicit checkbox/radio accessibility roles. These remain
+  draft checks; password painting and the ID/tree radio rescan are still open.

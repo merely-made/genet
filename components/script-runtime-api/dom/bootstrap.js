@@ -3084,15 +3084,7 @@
   }
 
   function formOwner(control) {
-    if (control.hasAttribute('form')) {
-      if (!control.isConnected) return null;
-      var identified = ownerDocumentOf(control).getElementById(control.getAttribute('form'));
-      return identified && identified.namespaceURI === XHTML_NS && identified.localName === 'form' ? identified : null;
-    }
-    for (var parent = control.parentNode; parent; parent = parent.parentNode) {
-      if (parent.nodeType === 1 && parent.namespaceURI === XHTML_NS && parent.localName === 'form') return parent;
-    }
-    return null;
+    return wrapNode(__formControlOwner(control.__ref)) || null;
   }
   function formControlError(error) {
     if (error === 'TypeError') throw new TypeError('Illegal invocation');
@@ -3124,7 +3116,6 @@
         }
       });
     });
-    Object.defineProperty(proto, 'textLength', { configurable: true, enumerable: true, get: function() { return this.value.length; } });
     proto.setSelectionRange = function(start, end, direction) {
       if (arguments.length < 2) throw new TypeError('setSelectionRange requires two arguments');
       formSelection(this, start, end, direction === undefined ? 'none' : String(direction));
@@ -3161,6 +3152,9 @@
   function installHtmlInterfaceMembers(name, proto) {
     if (name === 'HTMLInputElement' || name === 'HTMLTextAreaElement') {
       installTextControlMembers(proto);
+      if (name === 'HTMLTextAreaElement') {
+        Object.defineProperty(proto, 'textLength', { configurable: true, enumerable: true, get: function() { return this.value.length; } });
+      }
       return;
     }
     if (name === 'HTMLFormElement') {

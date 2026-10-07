@@ -124,7 +124,7 @@ completed corpus census or bounded slice does not close its enclosing feature.
   residuals remain recorded in the plan.
 
 - [WHATWG Streams](2026-10-06_whatwg_streams_plan.md)
-  (**Accepted locally; integration authorized, 2026-10-07**): native transfer,
+  (**Landed and published, 2026-10-07**): native transfer,
   private Promise reactions and Boa finalizer retention are qualified and
   published. Exact consumer `5a539ae3f40` passes 1,209 tests, three existing
   ignores, its optimized runner and all four fixture categories on both engines.
@@ -133,9 +133,12 @@ completed corpus census or bounded slice does not close its enclosing feature.
   old-pass losses are repaired; 24 label equivalents and 12 experimental
   owning/transfer losses remain separately recorded. Independent source review
   qualifies all 8,446 normalized movements with zero gaps. Mark approved the
-  exact 12 experimental losses and authorized the final checkpoint. Publication
-  and main integration follow fresh qualification with current main's
-  independent fontsan/WOFF2 change preserved.
+  exact 12 experimental losses and authorized the final checkpoint. Exact
+  integration `e410a1e1dab8` is published on main: fresh 1,209-test gate,
+  two WOFF2 controls, optimized runner and all fixtures pass; ten matched maps
+  preserve every candidate result with zero movements. Main's independent
+  fontsan/WOFF2 change is preserved. Forms Phase A preparation is read-only;
+  its paint-scope answer is pending without a response timer.
 
 ## WPT census — the web platform beyond CSS
 

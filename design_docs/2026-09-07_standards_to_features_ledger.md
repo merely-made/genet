@@ -212,6 +212,15 @@ all twelve row identities are preserved in the separate ruling receipt.
 Local acceptance is complete. Publication and main integration are authorized
 and follow fresh qualification preserving current main's fontsan/WOFF2 work.
 
+**Streams landed and published, later 2026-10-07:** main/origin now contain
+exact tested integration `e410a1e1dab8`. Fresh qualification passes 1,209 tests,
+two WOFF2 controls, the ordinary optimized runner and all eight fixture runs.
+All ten directory maps match the accepted candidate with zero movements or
+new old-pass losses. The final raw accounting separately records 24 label
+equivalents, 12 approved experimental rows and zero unexplained losses.
+The linked plan preserves complete artifacts, remaining conformance limits,
+and the read-only Forms Phase A preparation with its pending paint-scope choice.
+
 Mark asked for the next lanes to come from WPT and specification
 conformance. These targets were chosen from the 2026-09-29 Vano census
 (`receipts/2026-09-29_vano_wpt_census/outcomes.json.gz`), broken down by

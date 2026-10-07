@@ -151,6 +151,12 @@ Two later rulings the same day are recorded in the
   Streams local acceptance is complete; publication/main integration are
   authorized, with fresh integration receipts to follow. The previous C3
   results and disk FetchHandler limitation remain as measured.
+  **Main integration, later 2026-10-07:** exact tested `e410a1e1dab8` is
+  published on main/origin after the 1,209-test integration gate, two WOFF2
+  controls, optimized runner, all fixtures and ten matched maps. Every
+  candidate result, including both C3 Window/Worker records, is preserved
+  with zero movements. The 12 experimental rows are explicitly approved;
+  raw maps and the original pending receipt remain unchanged.
 - Ruling 9: the Vano lane may fetch Vano's unfetched `tests/test262`
   submodule at its pinned commit `e0d8f66a`, and run Vano's test262 gate.
   Mark: "Allow, pinned commit only (Recommended)".

@@ -1,7 +1,8 @@
 # WHATWG Streams
 
-**Status:** Candidate accepted locally; publication and main integration
-authorized, 2026-10-07. Fresh integration qualification follows current main.
+**Status:** Landed and published on main, 2026-10-07.
+Exact integration `e410a1e1dab8b64cf9dd3b7eff6648015e9c9bd8` passes fresh
+qualification while preserving main's fontsan/WOFF2 work.
 Clean implementation `5a539ae3f402aec659f1bed3172e5f2ccb9d976a` passes
 1,209 tests with three existing ignores, the ordinary optimized runner build,
 and all four authored fixture categories on both engines. All ten matched WPT
@@ -14,8 +15,8 @@ normalized movements have independently verified source attribution against
 the final qualified commit, with zero source gaps.
 Three bounded Luna agents supply source review; root owns integration and
 serial gates. S1 and S3/S4's qualified native revisions are published; Genet
-remains on its local lane branch while integration is qualified. Mark approved
-S2 on 2026-10-06, S3/S4 on 2026-10-07, and S5 plus the final checkpoint below.
+is integrated and published after fresh qualification. Mark approved S2 on
+2026-10-06, S3/S4 on 2026-10-07, and S5 plus the final checkpoint below.
 
 Authority is the [standards ledger](2026-09-07_standards_to_features_ledger.md#conformance-targets-2026-10-02)
 rulings C1 and C3, the [census panic attribution](2026-09-06_web_platform_wpt_census.md),
@@ -838,3 +839,61 @@ earlier push/merge instructions, permits publication and integration after
 fresh qualification against current main. Current main's independent
 fontsan/WOFF2 change is preserved and measured separately from the already
 accepted candidate; old receipts are not relabeled as integration receipts.
+
+## Main integration and publication, 2026-10-07
+
+The accepted lane merges current main `965b64e206a4` cleanly as
+`e410a1e1dab8b64cf9dd3b7eff6648015e9c9bd8`. Streams runtime and adapter
+sources remain identical to qualified `5a539ae3f402`; the main-owned fontsan
+feature selection, valid WOFF2 fixture and font source are preserved exactly.
+The separate independent Luna source/dependency review passes.
+
+The integration lock SHA-256 is
+`9809247CAEE772F61F2228A92FA324D3E68E40681A8591B7BFA06185B593B850`.
+Its only parsed changes from the accepted candidate are main's fontsan backend:
+remove `fontsan-woff2 0.1.1`, add `wuff 0.2.9` and `wuff-capi 0.2.0`, and
+change only `fontsan 0.7.0`'s dependency list. All other packages, including
+the twelve published engine packages, remain unchanged. Locked offline
+metadata confirms `fontsan` features `libz-sys,wuff` and the approved Boa
+feature set without `experimental`. `integration.Cargo.lock` preserves the
+exact qualified lock independently of primary's ignored local override lock.
+
+Fresh integration qualification passes:
+
+- **1,209 tests, zero failures, three existing ignores**, with the same eight
+  per-crate counts as the accepted candidate. The depfile-based attribution
+  is `integration-serial-crates-owner-corrected-counts.json`.
+- Both Livery WOFF2 controls: malformed input rejected before registration,
+  and valid N'Ko WOFF2 decoded to a parseable SFNT with its glyph.
+- The ordinary optimized runner build, frozen SHA-256
+  `C60621B303F43618C99EF0D4E3B0B19B0819C384B84BACA1A4EF7663FA912504`.
+- All four authored fixture categories on each engine: 3/3 prerequisites,
+  7/7 transfer, 4/4 byte EOF algorithms, 6/6 Promise properties.
+- All ten matched directory maps with the unchanged manifest, 1,924-file
+  corpus, default collection and prior run settings.
+
+`integration-vs-candidate-regressions.json` records **zero normalized result
+movements and zero old-pass losses in all ten comparisons**. Thus every
+per-directory result, C3 status and partial ERROR accounting above is preserved.
+The accepted source attribution applies through unchanged source definitions
+and freshly matched raw statuses; it is not a new claim from an old runner.
+`integration-vs-published-before.json`, `integration-vs-engine-foundation.json`
+and `integration-pass-loss-qualification.json` separately conserve the raw
+36 assertion-key losses as **24 revalidated label equivalents and 12 explicitly
+approved experimental rows, zero pending and zero unexplained**. The original
+pending qualification artifacts remain unchanged.
+
+Normal Git publication succeeds for `origin/conformance/streams`, then primary
+main fast-forwards to the exact tested tree and publishes as `origin/main`.
+Both remote heads are verified as `e410a1e1dab8`. Branch and main publication
+receipts retain the command logs and remote identities. Primary's ignored
+Cargo lock and local Cargo overrides remain unmodified; qualification used
+the isolated published-dependency configuration, not those local overrides.
+
+The approved brief scope and all S1-S5 checkpoints are complete. Remaining
+conformance failures, disk-mode C3 Fetch failures, transferable Streams,
+Encoding streams and incremental network body delivery retain their stated
+owner/scope boundaries. Forms Phase A is next: read-only ownership/paint
+findings are saved under `Code/testing/genet/forms/phase-a-ownership-assessment.md`.
+Its input-text rendering scope question remains pending without a response
+timer; no Forms implementation or acceptance is claimed.

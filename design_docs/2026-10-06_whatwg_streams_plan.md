@@ -510,6 +510,14 @@ needed for this bounded fix and its qualification.
   tee control checks that value and reports its last completed phase without
   weakening any assertion.
 
+- `candidate-byob-cancellation` passes the canceled and surviving chunk checks
+  but reports a pending EOF on both engines. Tee's internal close reused the
+  Fetch helper that automatically responds to pending descriptors, before the
+  BYOB buffer returned by the source was installed. Tee now closes through the
+  byte-controller operation, then responds explicitly; its returned empty view
+  also replaces the transferred branch buffer before completion. The Fetch
+  helper retains its existing ownership and behavior.
+
 All candidate gates and failed diagnostics remain under `Code/testing/genet/streams`.
 The bounded agents supply source review; root runs gates serially. Retain the reused
 `worktrees/genet-encoding` checkout on `conformance/streams`, stable target

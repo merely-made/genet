@@ -658,7 +658,8 @@ var ReadableOps = (function (Core) {
   function internalByteClose(stream) {
     var slot = streamSlot(stream);
     if (!slot || slot.controllerKind !== 'byte') throw typeError('Not a byte stream');
-    close(stream);
+    if (slot.state === 'readable')
+      closeByteController(mapGet(byteControllerSlots, slot.controller), false);
   }
   function internalByteEnqueue(stream, chunk) { return byteControllerEnqueue(stream, chunk, false); }
   function acquireReader(stream, mode) {
@@ -1208,7 +1209,6 @@ var ReadableOps = (function (Core) {
       var d = currentPullInto(c);
       if (!d) throw typeError('No pending branch BYOB request');
       var info = Core.viewInfo(view);
-      if (info.byteLength === 0) { respondByteController(c, 0, true); return; }
       if (Core.isDetached(info.buffer)) throw typeError('Branch BYOB view is detached');
       if (info.byteOffset !== d.byteOffset + d.bytesFilled || Core.bufferByteLength(info.buffer) !== d.bufferByteLength)
         throw rangeError('Branch BYOB view does not match the pending request');

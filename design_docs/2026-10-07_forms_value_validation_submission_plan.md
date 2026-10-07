@@ -1,7 +1,8 @@
 # HTML forms: value state, validation and submission
 
-**Status, 2026-10-07:** Phase A implementation in progress; starting runner and
-behavior controls frozen. Whole-directory baseline is running serially.
+**Status, 2026-10-07:** Phase A implementation in progress; starting runner,
+behavior controls and whole-directory baseline are frozen. The first executed
+draft suite has seven failures; focused repairs await qualification.
 Phase B and C remain behind separate checkpoints. No Forms qualification or
 publication is claimed yet.
 
@@ -195,3 +196,16 @@ dependency or version change is authorized beyond the named workspace edge.
   that existing pin is not compatibility evidence for the local Forms draft.
   The old child-value regression is retained pending this decision, rather than
   accepting empty Cambium fields or adding a native HTML child-text fallback.
+- 2026-10-07: Local repair commit `501591635df` seeds control-only text frames
+  through the same eligibility classifier used by the producer, preserves
+  structural/default text in native assertions and removes recursive association
+  walking. `draft-control-projection-crates` stops before tests at a CSS/Taffy
+  `Display` type collision in its new visibility predicate. The CSS enum is
+  explicitly qualified before a fresh gate. Sources stayed fixed and primary
+  overrides/lock restored; no pass is claimed from this compile-only attempt.
+  Read-only follow-up confirms Mere's `cambium-winit-a11y::project_tree_with_actions`
+  already decorates Genet's mutable AccessKit tree from Cambium-owned metadata.
+  Committed-value decoration can use that existing Mere owner seam without
+  introducing Genet-specific app markers; raw child text includes IME/ghost/caret
+  projections and cannot serve as the committed value. Text-valued accessibility
+  action routing is a separate existing gap (the current SetValue path is numeric).

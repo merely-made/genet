@@ -1,12 +1,14 @@
 # WHATWG Streams
 
-**Status:** Streams implementation in progress, 2026-10-07. S1's published engine
-pins and exact Genet consumer are qualified. Both engines pass real buffer
-transfer; meaningful Streams algorithm controls still fail on the unchanged
-foundation. Three bounded Luna agents now implement readable, writable/transform,
-and piping algorithms; root owns captured internals, Fetch integration and gates.
-Mark approved S2's reader-based body handling on 2026-10-06. The final local
-qualification and pre-publication checkpoint remain open.
+**Status:** Candidate implemented; engine checkpoint pending, 2026-10-07.
+S1's published engine pins and exact Genet consumer are qualified. Both engines
+pass real buffer transfer; meaningful Streams algorithm controls still fail on
+the unchanged foundation. The candidate passes those controls and all existing
+focused Fetch, Encoding and Worker tests. A new Boa Promise-property trap and
+plain-object finalizer delivery control fail. Independent WeakRef controls
+confirm collection on both engines. Three bounded Luna agents drafted the
+modules; root owns integration, review and gates. Mark approved S2 on 2026-10-06.
+S3/S4 below and final local qualification/pre-publication remain open.
 
 Authority is the [standards ledger](2026-09-07_standards_to_features_ledger.md#conformance-targets-2026-10-02)
 rulings C1 and C3, the [census panic attribution](2026-09-06_web_platform_wpt_census.md),
@@ -419,3 +421,51 @@ incremental network delivery or copying a reference implementation.
   delivery; a separate plain-object control retains the finalizer failure.
   This is read-only attribution pending a fresh diagnostic gate, not an engine
   fix or a change to GC-policy semantics.
+- `candidate-weak-collection-diagnostic` executed all 17 bridge controls:
+  **16 passes, one failure**. Both engines collect discarded stream cycles;
+  Boa also collects ordinary self-cycles, a WeakMap self-key cycle, and a cycle
+  spanning two maps. All body, realm, Worker and snapshot controls pass. The
+  sole failure is the isolated plain-object finalizer after an earlier pump.
+
+## S3: private Promise reaction operation, awaiting ruling
+
+The brief's engine-feature checkpoint applies: **"an engine feature Streams
+needs ... is missing in one engine"**. The candidate's Boa control records an
+unexpected Promise constructor getter during default ReadableStream setup.
+The six-case fixture passes on the unchanged foundation on both engines.
+The existing in-scope WPT only poisons the public `then` method, so this new
+control preserves evidence for the additional observed standards gap.
+
+Proposed bounded route: expose each maintained engine's existing
+`PerformPromiseThen` operation without a result capability. Add a defaulted
+`CallCx` hook and two adapter implementations, capture a temporary native bridge
+before Streams installation, then delete that global before authors. Core's
+reaction attachment uses it and does not construct a derived promise. No
+caller consumes `Core.react`'s current return value. Public Promise behavior
+remains unchanged. Vano's algorithm and handler type are crate-private;
+Boa's `JsPromise::then` follows the public species path, while its underlying
+perform operation is crate-private. Native engine controls and matched Genet
+qualification precede consumer repinning. Package versions, features and
+dependency edges remain fixed. No engine edits have been made for this route.
+
+## S4: Boa cleanup listener retention, awaiting ruling
+
+The isolated plain-object finalizer control fails only after a microtask pump
+precedes GC. The existing Encoding finalizer control, which collects before
+its first pump, passes. WeakRef observations confirm actual collection, so
+the failed callback does not demonstrate stream retention.
+
+Proposed bounded route: preserve pending FinalizationRegistry cleanup work
+across Boa `SimpleJobExecutor` drains without keeping registries strongly alive
+or changing GC policy. Verify notification before/after a pump, multiple
+registries, repeated collections, and registry collection before a qualified
+repin. The source inspection identifies local pending cleanup futures dropped
+at executor quiescence; implementation details await the ruling and native
+controls. The existing approved Vano finalizer queue remains the owner there.
+
+All candidate gates and failed diagnostics remain under `Code/testing/genet/streams`.
+No gate or agent is active at this checkpoint. Retain the reused
+`worktrees/genet-encoding` checkout on `conformance/streams`, stable target
+`C:/t/cargo-targets/genet-encoding`, and marker-owned
+`C:/t/cargo-homes/genet-streams` for the pending qualification. The candidate
+has not had its full crate suite, optimized runner or post-change WPT qualified.

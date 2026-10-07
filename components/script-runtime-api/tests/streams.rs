@@ -148,7 +148,9 @@ const BYTE_TEE_CANCELLATION: &str = r#"
         controller.byobRequest.view[0]=51;controller.byobRequest.respond(1);
         const item=await reads[1-canceled];
         check(!item.done && item.value[0]===51,'remaining tee branch receives bytes after other branch cancels');
-        controller.close();await cancel;
+        controller.close();
+        check((await readers[1-canceled].read(new Uint8Array(1))).done,'remaining tee branch observes source EOF');
+        await cancel;
     }
 "#;
 

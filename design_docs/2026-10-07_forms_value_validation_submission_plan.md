@@ -345,3 +345,19 @@ dependency or version change is authorized beyond the named workspace edge.
   frozen runner/maps must qualify this repair. Luna prepares movement attribution
   against the immutable first candidate; final-source attribution will be checked
   again after the corrected maps.
+- 2026-10-07: Luna's review of `532a02984ac` finds that finite decimal scaling
+  alone can erase a representable small step above f64's exact-integer range
+  (base `1e15`, step `.1`). Root stops only the verified owning Cargo process
+  tree in `candidate-decimal-range-crates`; its exit-15 receipt and interruption
+  record preserve the unqualified compile and exact config/lock restoration.
+  The repair now bounds every scaled arithmetic intermediate by the exact-
+  integer limit before using it, otherwise retaining the original floating-point
+  calculation. The arena fixture adds the observed large-base live-value case.
+  A fresh source gate follows; no test pass is claimed from the stopped run.
+  `after-vs-before-attribution-first-candidate-final.json` accounts 94 first-
+  candidate file movements and 2,636 changed rows with frozen WPT source hashes.
+  The two old-pass losses are the same range row, once per engine. Seven new
+  passes in each timed-out `radio.html` remain partial observations; the
+  selection-range file's harness-error-to-file-failure transition adds 48 observed
+  passes and one failure, with no invented baseline assertions. Final attribution
+  must be regenerated against the final source/maps.

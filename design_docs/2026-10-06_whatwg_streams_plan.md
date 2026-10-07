@@ -1,6 +1,6 @@
 # WHATWG Streams
 
-**Status:** Candidate implemented; approved engine work in progress, 2026-10-07.
+**Status:** Candidate implemented; native fixes published, consumer qualification in progress, 2026-10-07.
 S1's published engine pins and exact Genet consumer are qualified. Both engines
 pass real buffer transfer; meaningful Streams algorithm controls still fail on
 the unchanged foundation. The candidate passes those controls and all existing
@@ -481,6 +481,7 @@ needed for this bounded fix and its qualification.
 - The fresh Boa whole-engine library gate on `4b6d316d1f363f4f483982fecfc62e7532835b89` passed **1,112 tests**, including the three reaction and three registry controls. Its native formatting check also passed. Required publication hooks and exact published consumer qualification remain pending.
 - A delegated source audit identified synchronous Promise conversion failures outside callback catches in readable pull and sync-iterator value conversion. Both now relay failures through their existing stream error and operation rejection paths. Byte tee also captured branch cancellation flags before a pending BYOB read; it now reads current flags when that read completes. Enabled controls cover default/byte pull conversion errors, iterator conversion errors, and cancellation of either tee branch, alongside the unchanged local WPT cases in `streams/readable-byte-streams/tee.any.js`.
 - Mark's prompt preference, 2026-10-07: ask and wait for an explicit response, with no response timer or default inferred from elapsed time. Technical gate deadlines remain as specified by their receipts.
+- S3/S4's native revisions are qualified and published: Vano `be68ac01dc5f4f4829476146c7a034552dfe9fab` passed **95 tests, zero failures, 10 existing ignores**, including all six reaction controls, and is on `origin/main`. Boa `4b6d316d1f363f4f483982fecfc62e7532835b89` passed **1,112 tests** and its required formatting, all-features/all-targets Clippy and no-default-features Clippy hooks under Rust 1.97.1; its maintained `origin/genet` advanced from the accepted foundation. Neither native lock changed. Fresh publication receipts verify exact clean source, native gate hashes, remote before/after and enabled hooks. Genet now requests only those qualified revisions; the new lock receipt verifies all other versions, checksums and edges against the accepted foundation. Published-source metadata, consumer tests and WPT remain pending.
 
 All candidate gates and failed diagnostics remain under `Code/testing/genet/streams`.
 The bounded agents supply source review; root runs gates serially. Retain the reused

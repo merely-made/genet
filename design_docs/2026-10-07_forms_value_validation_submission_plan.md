@@ -556,3 +556,11 @@ dependency cache. Original primary overrides and locks remain preserved.
   `mere-grammar-g3` worktree's nested target as this gate's output; the helper
   now compares explicit Cargo roots and actual profile output directories,
   preserving the independent lane. Those starts mutated no files.
+- 2026-10-07: The substitute-width attempt remains unqualified:
+  `mere-forms-intrinsic-width-native-routing` executes all six selected targets,
+  with 61 passes and two failures. The unsized short field is still 87px and the
+  long field still 400px, including the host's requested 12em substitute. The
+  receipt verifies stable sources and exact manifest/lock restoration. Mere's
+  existing native width assertions now report properties from the host's live
+  computed-style reader, to distinguish resolution from positioned layout
+  before choosing another repair. Genet product source remains unchanged.

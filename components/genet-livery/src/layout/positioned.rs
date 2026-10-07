@@ -852,7 +852,9 @@ pub(in crate::layout) fn apply_admitted_positioned_inline_sizes<Context, Source>
         // Size containment excludes content-intrinsic measurement. An explicit
         // substitute has already supplied Buckram's used width and needs the
         // same constrained reformat so descendant-bearing roots receive it.
-        if (intrinsic_sizes.contains_key(box_id) || placement.has_contained_intrinsic_inline)
+        let contained_root_is_admitted = placement.has_contained_intrinsic_inline
+            && matches!(tree.kind(*node), AlgorithmKind::Block | AlgorithmKind::Leaf);
+        if (intrinsic_sizes.contains_key(box_id) || contained_root_is_admitted)
             && let Some(size) = placement.formatter_inline_size()
         {
             if placement.style.flow.is_horizontal() {

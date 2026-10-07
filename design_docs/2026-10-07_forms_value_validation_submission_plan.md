@@ -608,3 +608,13 @@ dependency cache. Original primary overrides and locks remain preserved.
   constrained reformat. It leaves content measurement and the general Taffy
   containment adapter unchanged. Fresh fixture, Livery/consumer and CSS guard
   qualification remain required; no pass is inferred from the implementation.
+- 2026-10-07: The repaired field fixture passes all six fallback/override/
+  definite-width cases, and the first broader Livery gate passes. Review
+  confirms the explicit-width and same-flow guards, but finds the alternate
+  admission could bypass the formatter's existing Block/Leaf root-kind
+  boundary. The substitute route is restricted to those same root kinds,
+  preserving Flex/Grid admission. Fresh Livery qualification follows this
+  narrowing. A possible nested-positioned descendant size issue belongs to
+  the existing single-reformat limitation and remains unmeasured; this flat
+  app-field repair does not claim general containment or nested-layout
+  conformance. The field's preedit/ghost/caret runs are ordinary inline spans.

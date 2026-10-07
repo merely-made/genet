@@ -12,6 +12,15 @@ use layout_dom_api::{
 
 use crate::{NodeId, ScriptedDom};
 
+/// A short-lived view of one checked radio's association before a DOM
+/// mutation. This is intentionally not stored on the node or serialized.
+#[derive(Clone, Copy)]
+pub(super) struct RadioAssociationSnapshot {
+    node: NodeId,
+    form_owner: Option<NodeId>,
+    connected: bool,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FormControlValueError {
     InvalidState,
@@ -389,19 +398,75 @@ impl ScriptedDom {
         }
     }
 
-    pub(super) fn radio_group_membership_changed(&mut self, subtree: NodeId) {
-        let mut descendants = Vec::new();
-        collect_descendants(self, subtree, &mut descendants);
-        for id in descendants {
-            if self.is_html_input(id)
-                && self.input_type(id) == "radio"
-                && self
-                    .node(id)
-                    .form_control
-                    .as_ref()
-                    .is_some_and(|state| state.checked)
-            {
-                self.uncheck_radio_group(id);
+    /// Capture checked radios in the affected ordinary trees, traversing each
+    /// host's shadow root as another tree. Call before topology or `id` changes.
+    pub(super) fn snapshot_radio_associations(
+        &self,
+        seeds: &[NodeId],
+    ) -> Vec<RadioAssociationSnapshot> {
+        let mut stack = Vec::new();
+        for seed in seeds.iter().rev().copied() {
+            if self.try_index(seed).is_some() {
+                stack.push(self.form_control_tree_root(seed));
+            }
+        }
+        let mut seen = std::collections::HashSet::new();
+        let mut out = Vec::new();
+        while let Some(root) = stack.pop() {
+            if self.try_index(root).is_none() || !seen.insert(root) {
+                continue;
+            }
+            let mut descendants = Vec::new();
+            collect_descendants(self, root, &mut descendants);
+            for id in descendants {
+                if self.is_html_input(id)
+                    && self.input_type(id) == "radio"
+                    && self
+                        .node(id)
+                        .form_control
+                        .as_ref()
+                        .is_some_and(|state| state.checked)
+                {
+                    out.push(RadioAssociationSnapshot {
+                        node: id,
+                        form_owner: self.form_control_form_owner(id),
+                        connected: self.is_connected_through_shadow_hosts(id),
+                    });
+                }
+                if let Some(shadow_root) = self.shadow_root(id) {
+                    stack.push(shadow_root);
+                }
+            }
+        }
+        out
+    }
+
+    /// Reconcile only checked radios whose form owner changed or which became
+    /// connected. Processing post-mutation tree order lets each later eligible
+    /// checked radio uncheck earlier peers, preserving last-in-tree checkedness.
+    pub(super) fn reconcile_radio_associations(
+        &mut self,
+        before: &[RadioAssociationSnapshot],
+        seeds: &[NodeId],
+    ) {
+        let old: std::collections::HashMap<_, _> =
+            before.iter().map(|item| (item.node, *item)).collect();
+        let after = self.snapshot_radio_associations(seeds);
+        for current in after {
+            // A remove/release may retire a snapshotted node. The post scan
+            // checks roots, and this guard also protects stale candidate IDs.
+            if self.try_index(current.node).is_none() {
+                continue;
+            }
+            let triggered = match old.get(&current.node) {
+                Some(previous) => {
+                    previous.form_owner != current.form_owner
+                        || (!previous.connected && current.connected)
+                },
+                None => current.form_owner.is_some() || current.connected,
+            };
+            if triggered {
+                self.uncheck_radio_group(current.node);
             }
         }
     }
@@ -913,6 +978,175 @@ mod tests {
         assert!(dom.set_form_control_checked(light_radio, true));
         assert!(dom.form_control_state(shadow_radio).unwrap().checked);
         assert!(dom.form_control_state(light_radio).unwrap().checked);
+    }
+
+    #[test]
+    fn radio_reconciliation_preserves_unowned_disconnected_groups_but_resolves_form_owner() {
+        let mut dom = ScriptedDom::new();
+        let fragment = dom.create_fragment();
+        let generic = dom.create_element(tag(local_name!("div")));
+        dom.append_child(fragment, generic);
+        dom.set_inner_html(
+            generic,
+            "<input type=radio name=g checked><input type=radio name=g checked>",
+        );
+        let generic_radios: Vec<_> = dom
+            .dom_children(generic)
+            .filter(|id| dom.is_html_input(*id))
+            .collect();
+        assert_eq!(generic_radios.len(), 2);
+        assert!(
+            generic_radios
+                .iter()
+                .all(|id| dom.form_control_state(*id).unwrap().checked)
+        );
+
+        let form = dom.create_element(tag(local_name!("form")));
+        dom.append_child(fragment, form);
+        dom.set_inner_html(
+            form,
+            "<input type=radio name=g checked><input type=radio name=g checked>",
+        );
+        let form_radios: Vec<_> = dom
+            .dom_children(form)
+            .filter(|id| dom.is_html_input(*id))
+            .collect();
+        assert_eq!(form_radios.len(), 2);
+        assert!(!dom.form_control_state(form_radios[0]).unwrap().checked);
+        assert!(dom.form_control_state(form_radios[1]).unwrap().checked);
+    }
+
+    #[test]
+    fn radio_id_target_removal_reconciles_newly_shared_owner_group() {
+        let mut dom = ScriptedDom::new();
+        let document = dom.document();
+        let form = dom.create_element(tag(local_name!("form")));
+        dom.set_attribute(form, attr(local_name!("id")), "target");
+        let explicit = dom.create_element(tag(local_name!("input")));
+        let unowned = dom.create_element(tag(local_name!("input")));
+        for radio in [explicit, unowned] {
+            dom.set_attribute(radio, attr(local_name!("type")), "radio");
+            dom.set_attribute(radio, attr(local_name!("name")), "shared");
+        }
+        dom.set_attribute(explicit, attr(local_name!("form")), "target");
+        dom.append_child(document, form);
+        dom.append_child(document, explicit);
+        dom.append_child(document, unowned);
+        assert_eq!(dom.form_control_form_owner(explicit), Some(form));
+        assert!(dom.set_form_control_checked(explicit, true));
+        assert!(dom.set_form_control_checked(unowned, true));
+
+        dom.remove_attribute(form, attr(local_name!("id")));
+        assert_eq!(dom.form_control_form_owner(explicit), None);
+        assert!(dom.form_control_state(explicit).unwrap().checked);
+        assert!(!dom.form_control_state(unowned).unwrap().checked);
+    }
+
+    #[test]
+    fn text_content_subtree_replacement_reconciles_surviving_explicit_controls() {
+        let mut dom = ScriptedDom::new();
+        let document = dom.document();
+        let wrapper = dom.create_element(tag(local_name!("div")));
+        let form = dom.create_element(tag(local_name!("form")));
+        dom.set_attribute(form, attr(local_name!("id")), "target");
+        let explicit = dom.create_element(tag(local_name!("input")));
+        let unowned = dom.create_element(tag(local_name!("input")));
+        for radio in [explicit, unowned] {
+            dom.set_attribute(radio, attr(local_name!("type")), "radio");
+            dom.set_attribute(radio, attr(local_name!("name")), "shared");
+        }
+        dom.set_attribute(explicit, attr(local_name!("form")), "target");
+        dom.append_child(document, wrapper);
+        dom.append_child(wrapper, form);
+        dom.append_child(document, explicit);
+        dom.append_child(document, unowned);
+        assert!(dom.set_form_control_checked(explicit, true));
+        assert!(dom.set_form_control_checked(unowned, true));
+        assert_eq!(dom.form_control_form_owner(explicit), Some(form));
+
+        dom.set_text_content(wrapper, "replacement");
+        assert_eq!(dom.form_control_form_owner(explicit), None);
+        assert!(dom.form_control_state(explicit).unwrap().checked);
+        assert!(!dom.form_control_state(unowned).unwrap().checked);
+    }
+
+    #[test]
+    fn simultaneous_owner_changes_keep_last_radio_checked_in_tree_order() {
+        let mut dom = ScriptedDom::new();
+        let document = dom.document();
+        let wrapper = dom.create_element(tag(local_name!("div")));
+        let form_a = dom.create_element(tag(local_name!("form")));
+        let form_b = dom.create_element(tag(local_name!("form")));
+        dom.set_attribute(form_a, attr(local_name!("id")), "a");
+        dom.set_attribute(form_b, attr(local_name!("id")), "b");
+        let first = dom.create_element(tag(local_name!("input")));
+        let second = dom.create_element(tag(local_name!("input")));
+        for (radio, form_id) in [(first, "a"), (second, "b")] {
+            dom.set_attribute(radio, attr(local_name!("type")), "radio");
+            dom.set_attribute(radio, attr(local_name!("name")), "shared");
+            dom.set_attribute(radio, attr(local_name!("form")), form_id);
+        }
+        dom.append_child(document, wrapper);
+        dom.append_child(wrapper, form_a);
+        dom.append_child(wrapper, form_b);
+        dom.append_child(document, first);
+        dom.append_child(document, second);
+        assert!(dom.set_form_control_checked(first, true));
+        assert!(dom.set_form_control_checked(second, true));
+        assert_eq!(dom.form_control_form_owner(first), Some(form_a));
+        assert_eq!(dom.form_control_form_owner(second), Some(form_b));
+
+        dom.set_text_content(wrapper, "replace both form owners");
+        assert_eq!(dom.form_control_form_owner(first), None);
+        assert_eq!(dom.form_control_form_owner(second), None);
+        assert!(!dom.form_control_state(first).unwrap().checked);
+        assert!(dom.form_control_state(second).unwrap().checked);
+    }
+
+    #[test]
+    fn connecting_host_reconciles_checked_radios_inside_its_shadow_tree() {
+        let mut dom = ScriptedDom::new();
+        let document = dom.document();
+        let host = dom.create_element(tag(local_name!("div")));
+        let shadow = dom
+            .attach_shadow(host, layout_dom_api::ShadowRootInit::default())
+            .unwrap();
+        let radios: Vec<_> = (0..2)
+            .map(|_| {
+                let radio = dom.create_element(tag(local_name!("input")));
+                dom.set_attribute(radio, attr(local_name!("type")), "radio");
+                dom.set_attribute(radio, attr(local_name!("name")), "shadow-group");
+                dom.append_child(shadow, radio);
+                dom.set_form_control_checked(radio, true);
+                radio
+            })
+            .collect();
+        assert!(
+            radios
+                .iter()
+                .all(|id| dom.form_control_state(*id).unwrap().checked)
+        );
+
+        dom.append_child(document, host);
+        assert!(!dom.form_control_state(radios[0]).unwrap().checked);
+        assert!(dom.form_control_state(radios[1]).unwrap().checked);
+    }
+
+    #[test]
+    fn release_subtree_skips_retired_radio_snapshot_ids() {
+        let mut dom = ScriptedDom::new();
+        let document = dom.document();
+        let form = dom.create_element(tag(local_name!("form")));
+        let radio = dom.create_element(tag(local_name!("input")));
+        dom.set_attribute(radio, attr(local_name!("type")), "radio");
+        dom.set_attribute(radio, attr(local_name!("name")), "group");
+        dom.append_child(document, form);
+        dom.append_child(form, radio);
+        dom.set_form_control_checked(radio, true);
+
+        LayoutDomMut::remove(&mut dom, form);
+        assert!(!dom.is_live(form));
+        assert!(!dom.is_live(radio));
     }
 
     #[test]

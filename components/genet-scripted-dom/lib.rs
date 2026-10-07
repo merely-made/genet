@@ -803,6 +803,8 @@ impl ScriptedDom {
     /// re-insert it, so the scripted DOM orphans rather than frees.
     pub fn remove_child(&mut self, child: NodeId) {
         let former_parent = self.node(child).parent;
+        let seeds: Vec<_> = former_parent.into_iter().chain([child]).collect();
+        let radio_before = self.snapshot_radio_associations(&seeds);
         let previous = self.sibling(child, -1);
         let next = self.sibling(child, 1);
         self.detach(child);
@@ -814,8 +816,8 @@ impl ScriptedDom {
             self.record_child_list(former_parent, Vec::new(), vec![child], previous, next);
             self.reassign_for_parent(former_parent, child);
             self.form_control_children_changed(former_parent);
-            self.radio_group_membership_changed(child);
         }
+        self.reconcile_radio_associations(&radio_before, &seeds);
     }
 
     /// Implement the DOM `textContent` setter without leaving parsed text
@@ -845,6 +847,7 @@ impl ScriptedDom {
             return;
         }
 
+        let radio_before = self.snapshot_radio_associations(&[node]);
         let existing = std::mem::take(&mut self.node_mut(node).children);
         let removed = existing.clone();
         for child in existing {
@@ -861,10 +864,13 @@ impl ScriptedDom {
             added.push(text);
         }
         self.mutations.push(DomMutation::SubtreeReplaced { node });
-        self.record_child_list(node, added, removed, None, None);
+        self.record_child_list(node, added, removed.clone(), None, None);
         self.reassign_for(node);
         self.form_control_children_changed(node);
-        self.radio_group_membership_changed(node);
+        let seeds: Vec<_> = std::iter::once(node)
+            .chain(removed.iter().copied())
+            .collect();
+        self.reconcile_radio_associations(&radio_before, &seeds);
     }
 
     /// Create a detached `Document` node (a second document, for
@@ -1616,6 +1622,8 @@ impl LayoutDomMut for ScriptedDom {
         // and the former parent's consumers must hear the removal. The detach
         // used to be silent here. (moveBefore plan S1.)
         let former_parent = self.node(child).parent;
+        let seeds: Vec<_> = former_parent.into_iter().chain([parent, child]).collect();
+        let radio_before = self.snapshot_radio_associations(&seeds);
         if let Some(former_parent) = former_parent {
             let previous = self.sibling(child, -1);
             let next = self.sibling(child, 1);
@@ -1640,14 +1648,17 @@ impl LayoutDomMut for ScriptedDom {
         self.record_child_list(parent, vec![child], Vec::new(), previous, None);
         self.form_control_children_changed(parent);
         self.reassign_for_parent(parent, child);
-        self.radio_group_membership_changed(child);
+        self.reconcile_radio_associations(&radio_before, &seeds);
     }
 
     fn insert_before(&mut self, parent: NodeId, child: NodeId, reference: Option<NodeId>) {
         // As in `append_child`: an in-tree insert is a remove + insert, both
         // observable. State preservation is `move_before`'s contract, not this
         // one's. (moveBefore plan S1.)
-        if let Some(former_parent) = self.node(child).parent {
+        let former_parent = self.node(child).parent;
+        let seeds: Vec<_> = former_parent.into_iter().chain([parent, child]).collect();
+        let radio_before = self.snapshot_radio_associations(&seeds);
+        if let Some(former_parent) = former_parent {
             let previous = self.sibling(child, -1);
             let next = self.sibling(child, 1);
             self.mutations.push(DomMutation::Removed {
@@ -1656,7 +1667,6 @@ impl LayoutDomMut for ScriptedDom {
             });
             self.record_implicit_removal(former_parent, child, previous, next);
         }
-        let former_parent = self.node(child).parent;
         self.attach_at(parent, child, reference);
         self.mutations.push(DomMutation::Inserted {
             node: child,
@@ -1670,7 +1680,7 @@ impl LayoutDomMut for ScriptedDom {
         }
         self.form_control_children_changed(parent);
         self.reassign_for_parent(parent, child);
-        self.radio_group_membership_changed(child);
+        self.reconcile_radio_associations(&radio_before, &seeds);
     }
 
     fn move_before(&mut self, parent: NodeId, child: NodeId, reference: Option<NodeId>) {
@@ -1687,6 +1697,8 @@ impl LayoutDomMut for ScriptedDom {
         if from_parent == Some(parent) && self.sibling(child, 1) == reference {
             return;
         }
+        let seeds: Vec<_> = from_parent.into_iter().chain([parent, child]).collect();
+        let radio_before = self.snapshot_radio_associations(&seeds);
         let was_previous = self.sibling(child, -1);
         let was_next = self.sibling(child, 1);
         self.attach_at(parent, child, reference);
@@ -1700,7 +1712,6 @@ impl LayoutDomMut for ScriptedDom {
             self.form_control_children_changed(from_parent);
         }
         self.form_control_children_changed(parent);
-        self.radio_group_membership_changed(child);
         match from_parent {
             Some(from_parent) => self.mutations.push(DomMutation::Moved {
                 node: child,
@@ -1719,10 +1730,13 @@ impl LayoutDomMut for ScriptedDom {
             self.reassign_for(from_parent);
         }
         self.reassign_for_parent(parent, child);
+        self.reconcile_radio_associations(&radio_before, &seeds);
     }
 
     fn remove(&mut self, node: NodeId) {
         let former_parent = self.node(node).parent;
+        let seeds: Vec<_> = former_parent.into_iter().chain([node]).collect();
+        let radio_before = self.snapshot_radio_associations(&seeds);
         let previous = self.sibling(node, -1);
         let next = self.sibling(node, 1);
         self.detach(node);
@@ -1734,12 +1748,14 @@ impl LayoutDomMut for ScriptedDom {
             self.record_child_list(former_parent, Vec::new(), vec![node], previous, next);
             self.reassign_for_parent(former_parent, node);
             self.form_control_children_changed(former_parent);
-            self.radio_group_membership_changed(node);
         }
         self.release_subtree(node);
+        self.reconcile_radio_associations(&radio_before, &seeds);
     }
 
     fn set_attribute(&mut self, node: NodeId, name: QualName, value: &str) {
+        let tracks_id = name.ns == markup5ever::ns!() && name.local.as_ref() == "id";
+        let radio_before = tracks_id.then(|| self.snapshot_radio_associations(&[node]));
         let old_type = (name.ns == markup5ever::ns!() && name.local.as_ref() == "type")
             .then(|| {
                 self.attribute(node, &markup5ever::ns!(), &LocalName::from("type"))
@@ -1768,9 +1784,14 @@ impl LayoutDomMut for ScriptedDom {
         self.record_attribute(node, name.clone(), old_value);
         self.form_control_attribute_changed(node, &name, old_type.as_deref());
         self.reassign_for_attribute(node, &name);
+        if let Some(before) = radio_before {
+            self.reconcile_radio_associations(&before, &[node]);
+        }
     }
 
     fn remove_attribute(&mut self, node: NodeId, name: QualName) {
+        let tracks_id = name.ns == markup5ever::ns!() && name.local.as_ref() == "id";
+        let radio_before = tracks_id.then(|| self.snapshot_radio_associations(&[node]));
         let old_type = (name.ns == markup5ever::ns!() && name.local.as_ref() == "type")
             .then(|| {
                 self.attribute(node, &markup5ever::ns!(), &LocalName::from("type"))
@@ -1796,6 +1817,9 @@ impl LayoutDomMut for ScriptedDom {
             self.record_attribute(node, name.clone(), Some(old));
             self.form_control_attribute_changed(node, &name, old_type.as_deref());
             self.reassign_for_attribute(node, &name);
+            if let Some(before) = radio_before {
+                self.reconcile_radio_associations(&before, &[node]);
+            }
         }
     }
 
@@ -1806,11 +1830,11 @@ impl LayoutDomMut for ScriptedDom {
             .push(DomMutation::CharacterDataChanged { node });
         self.record_character_data(node, old);
         self.form_control_children_changed(node);
-        self.radio_group_membership_changed(node);
     }
 
     fn set_inner_html(&mut self, node: NodeId, html: &str) {
         // Orphan the current children; the single SubtreeReplaced covers it.
+        let radio_before = self.snapshot_radio_associations(&[node]);
         let existing = std::mem::take(&mut self.node_mut(node).children);
         let removed = existing.clone();
         for child in existing {
@@ -1837,8 +1861,14 @@ impl LayoutDomMut for ScriptedDom {
             }
         }
         self.mutations.push(DomMutation::SubtreeReplaced { node });
-        self.record_child_list(node, added, removed, None, None);
+        self.record_child_list(node, added.clone(), removed.clone(), None, None);
         self.reassign_for(node);
+        self.form_control_children_changed(node);
+        let seeds: Vec<_> = std::iter::once(node)
+            .chain(removed.iter().copied())
+            .chain(added.iter().copied())
+            .collect();
+        self.reconcile_radio_associations(&radio_before, &seeds);
     }
 
     fn drain_mutations(&mut self, out: &mut Vec<DomMutation<NodeId>>) {

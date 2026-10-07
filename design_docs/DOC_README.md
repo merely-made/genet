@@ -123,7 +123,8 @@ completed corpus census or bounded slice does not close its enclosing feature.
   repin preserves package versions and dependency edges; exact-Git consumer
   qualification is pending. Frozen full-directory baselines and four actual
   failing algorithm controls are sealed. The separate bootstrap is feasible;
-  C3 and Streams implementation remain pending. S2 awaits the fetch-body ruling.
+  C3 and Streams implementation remain pending. S2 now authorizes reader-based
+  body consumption while preserving the existing native delivery contracts.
 
 ## WPT census — the web platform beyond CSS
 

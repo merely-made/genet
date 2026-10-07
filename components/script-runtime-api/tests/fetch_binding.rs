@@ -6,10 +6,9 @@
 //! handler (no real network). Proves: fetch() returns a Promise that resolves to
 //! a Response carrying the handler's status/headers/body; the request reaches the
 //! handler with method/url/headers/body intact; and no handler = a network error
-//! (rejected promise). Backend: Boa (pure Rust, all targets).
+//! (rejected promise). Backends: Boa (all targets) and Vano (64-bit targets).
 
 use script_engine_api::ScriptEngine;
-use script_engine_boa::BoaEngine;
 use script_runtime_api::{FetchHandler, FetchOutcome, FetchRequest, Runtime};
 
 /// Echoes the request back: 200, a couple of headers describing the request, and
@@ -42,7 +41,7 @@ impl FetchHandler for EchoFetch {
     }
 }
 
-fn read(rt: &mut Runtime<BoaEngine>, expr: &str) -> String {
+fn read<E: ScriptEngine>(rt: &mut Runtime<E>, expr: &str) -> String {
     let v = rt.eval(expr).expect("eval");
     rt.engine_mut()
         .value_to_string(&v)
@@ -67,11 +66,10 @@ impl FetchHandler for DeferredRecorder {
     }
 }
 
-#[test]
-fn deferred_fetch_settles_later() {
+fn case_deferred_fetch_settles_later<E: ScriptEngine>() {
     let seen = std::rc::Rc::new(std::cell::RefCell::new(Vec::<(u64, String)>::new()));
     let cancelled = std::rc::Rc::new(std::cell::RefCell::new(Vec::<u64>::new()));
-    let mut rt = Runtime::<BoaEngine>::new().unwrap();
+    let mut rt = Runtime::<E>::new().unwrap();
     rt.set_fetch_handler(Box::new(DeferredRecorder {
         seen: seen.clone(),
         cancelled: cancelled.clone(),
@@ -144,11 +142,10 @@ fn ok_meta(url: &str) -> FetchOutcome {
     }
 }
 
-#[test]
-fn streaming_response_body_delivers_incrementally() {
+fn case_streaming_response_body_delivers_incrementally<E: ScriptEngine>() {
     let seen = std::rc::Rc::new(std::cell::RefCell::new(Vec::<(u64, String)>::new()));
     let cancelled = std::rc::Rc::new(std::cell::RefCell::new(Vec::<u64>::new()));
-    let mut rt = Runtime::<BoaEngine>::new().unwrap();
+    let mut rt = Runtime::<E>::new().unwrap();
     rt.set_fetch_handler(Box::new(DeferredRecorder {
         seen: seen.clone(),
         cancelled,
@@ -213,11 +210,10 @@ fn streaming_response_body_delivers_incrementally() {
     );
 }
 
-#[test]
-fn clone_of_live_streaming_body_rejects() {
+fn case_clone_of_live_streaming_body_rejects<E: ScriptEngine>() {
     let seen = std::rc::Rc::new(std::cell::RefCell::new(Vec::<(u64, String)>::new()));
     let cancelled = std::rc::Rc::new(std::cell::RefCell::new(Vec::<u64>::new()));
-    let mut rt = Runtime::<BoaEngine>::new().unwrap();
+    let mut rt = Runtime::<E>::new().unwrap();
     rt.set_fetch_handler(Box::new(DeferredRecorder {
         seen: seen.clone(),
         cancelled,
@@ -240,9 +236,8 @@ fn clone_of_live_streaming_body_rejects() {
     rt.close_stream(id);
 }
 
-#[test]
-fn fetch_resolves_to_response_through_the_handler() {
-    let mut rt = Runtime::<BoaEngine>::new().unwrap();
+fn case_fetch_resolves_to_response_through_the_handler<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().unwrap();
     rt.set_fetch_handler(Box::new(EchoFetch));
 
     rt.eval(
@@ -281,9 +276,8 @@ fn fetch_resolves_to_response_through_the_handler() {
     assert_eq!(read(&mut rt, "R.body"), "echo:GET:http://example.test/path");
 }
 
-#[test]
-fn post_body_reaches_the_handler() {
-    let mut rt = Runtime::<BoaEngine>::new().unwrap();
+fn case_post_body_reaches_the_handler<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().unwrap();
     rt.set_fetch_handler(Box::new(EchoFetch));
     rt.eval(
         r#"
@@ -298,9 +292,8 @@ fn post_body_reaches_the_handler() {
     assert_eq!(read(&mut rt, "R.hadBody"), "true");
 }
 
-#[test]
-fn no_handler_is_a_network_error() {
-    let mut rt = Runtime::<BoaEngine>::new().unwrap();
+fn case_no_handler_is_a_network_error<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().unwrap();
     // No set_fetch_handler → every fetch is a network error (rejected promise).
     rt.eval(
         r#"
@@ -319,9 +312,8 @@ fn no_handler_is_a_network_error() {
 
 // ---- Fetch API object semantics (no network / handler needed) ----
 
-#[test]
-fn headers_object_semantics() {
-    let mut rt = Runtime::<BoaEngine>::new().unwrap();
+fn case_headers_object_semantics<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().unwrap();
     // append combines; get joins with ", "; case-insensitive; iteration sorted.
     assert_eq!(
         read(
@@ -369,9 +361,8 @@ fn headers_object_semantics() {
     );
 }
 
-#[test]
-fn request_object_semantics() {
-    let mut rt = Runtime::<BoaEngine>::new().unwrap();
+fn case_request_object_semantics<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().unwrap();
     assert_eq!(read(&mut rt, r#"new Request("http://x/y").method"#), "GET");
     assert_eq!(
         read(
@@ -410,9 +401,8 @@ fn request_object_semantics() {
     );
 }
 
-#[test]
-fn response_object_semantics() {
-    let mut rt = Runtime::<BoaEngine>::new().unwrap();
+fn case_response_object_semantics<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().unwrap();
     assert_eq!(
         read(
             &mut rt,
@@ -459,9 +449,8 @@ fn response_object_semantics() {
     );
 }
 
-#[test]
-fn body_is_single_use() {
-    let mut rt = Runtime::<BoaEngine>::new().unwrap();
+fn case_body_is_single_use<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().unwrap();
     // text() then json() of the same body: second read rejects.
     rt.eval(
         r#"
@@ -488,9 +477,8 @@ fn body_is_single_use() {
     assert_eq!(read(&mut rt, "String(J.k)"), "42");
 }
 
-#[test]
-fn url_object_semantics() {
-    let mut rt = Runtime::<BoaEngine>::new().unwrap();
+fn case_url_object_semantics<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().unwrap();
     // Components.
     rt.eval(r#"var u = new URL("http://example.com:8080/a/b?x=1#h");"#)
         .unwrap();
@@ -532,9 +520,8 @@ fn url_object_semantics() {
     assert_eq!(read(&mut rt, "u2.host"), "other");
 }
 
-#[test]
-fn abort_controller_and_pre_aborted_fetch() {
-    let mut rt = Runtime::<BoaEngine>::new().unwrap();
+fn case_abort_controller_and_pre_aborted_fetch<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().unwrap();
     // No fetch handler installed: a pre-aborted signal must reject with the abort
     // reason *before* any network attempt (which would otherwise be a TypeError).
     rt.eval(
@@ -580,9 +567,8 @@ fn abort_controller_and_pre_aborted_fetch() {
     );
 }
 
-#[test]
-fn web_globals_present() {
-    let mut rt = Runtime::<BoaEngine>::new().unwrap();
+fn case_web_globals_present<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().unwrap();
     // URLSearchParams.
     assert_eq!(
         read(&mut rt, r#"new URLSearchParams("a=1&b=2").get("b")"#),
@@ -672,9 +658,8 @@ impl FetchHandler for BinaryEcho {
     }
 }
 
-#[test]
-fn binary_body_round_trips_losslessly() {
-    let mut rt = Runtime::<BoaEngine>::new().unwrap();
+fn case_binary_body_round_trips_losslessly<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().unwrap();
     rt.set_fetch_handler(Box::new(BinaryEcho));
 
     // A request body of every byte 0..256 (including NUL, 0x80, 0xFF) is echoed
@@ -711,9 +696,8 @@ fn binary_body_round_trips_losslessly() {
     );
 }
 
-#[test]
-fn stream_backed_body_semantics() {
-    let mut rt = Runtime::<BoaEngine>::new().unwrap();
+fn case_stream_backed_body_semantics<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().unwrap();
     // A stream already locked / disturbed is not a usable body (from-stream).
     assert_eq!(
         read(
@@ -769,9 +753,8 @@ fn stream_backed_body_semantics() {
     assert_eq!(read(&mut rt, "String(U.afterRead)"), "true");
 }
 
-#[test]
-fn writable_stream_and_pipe() {
-    let mut rt = Runtime::<BoaEngine>::new().unwrap();
+fn case_writable_stream_and_pipe<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().unwrap();
     // pipeTo disturbs the source synchronously (the by-pipe tests).
     rt.eval(
         r#"
@@ -823,4 +806,34 @@ fn writable_stream_and_pipe() {
         "xfer",
         "TransformStream relays the chunk"
     );
+}
+macro_rules! both_engines {
+    ($($case:ident => ($boa:ident, $vano:ident)),* $(,)?) => {
+        $(
+            #[test]
+            fn $boa() { $case::<script_engine_boa::BoaEngine>(); }
+            #[cfg(target_pointer_width = "64")]
+            #[test]
+            fn $vano() { $case::<script_engine_nova::NovaEngine>(); }
+        )*
+    };
+}
+
+both_engines! {
+    case_deferred_fetch_settles_later => (deferred_fetch_settles_later, deferred_fetch_settles_later_vano),
+    case_streaming_response_body_delivers_incrementally => (streaming_response_body_delivers_incrementally, streaming_response_body_delivers_incrementally_vano),
+    case_clone_of_live_streaming_body_rejects => (clone_of_live_streaming_body_rejects, clone_of_live_streaming_body_rejects_vano),
+    case_fetch_resolves_to_response_through_the_handler => (fetch_resolves_to_response_through_the_handler, fetch_resolves_to_response_through_the_handler_vano),
+    case_post_body_reaches_the_handler => (post_body_reaches_the_handler, post_body_reaches_the_handler_vano),
+    case_no_handler_is_a_network_error => (no_handler_is_a_network_error, no_handler_is_a_network_error_vano),
+    case_headers_object_semantics => (headers_object_semantics, headers_object_semantics_vano),
+    case_request_object_semantics => (request_object_semantics, request_object_semantics_vano),
+    case_response_object_semantics => (response_object_semantics, response_object_semantics_vano),
+    case_body_is_single_use => (body_is_single_use, body_is_single_use_vano),
+    case_url_object_semantics => (url_object_semantics, url_object_semantics_vano),
+    case_abort_controller_and_pre_aborted_fetch => (abort_controller_and_pre_aborted_fetch, abort_controller_and_pre_aborted_fetch_vano),
+    case_web_globals_present => (web_globals_present, web_globals_present_vano),
+    case_binary_body_round_trips_losslessly => (binary_body_round_trips_losslessly, binary_body_round_trips_losslessly_vano),
+    case_stream_backed_body_semantics => (stream_backed_body_semantics, stream_backed_body_semantics_vano),
+    case_writable_stream_and_pipe => (writable_stream_and_pipe, writable_stream_and_pipe_vano),
 }

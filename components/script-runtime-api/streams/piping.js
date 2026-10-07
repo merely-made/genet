@@ -872,7 +872,15 @@ var PipingOps = (function (Core, ReadableOps, WritableOps) {
                     pulling = false;
                 };
                 if (synchronous) {
-                    Core.react(Core.resolve(value), function (resolvedValue) {
+                    var valuePromise;
+                    try { valuePromise = Core.resolve(value); }
+                    catch (error) {
+                        pulling = false;
+                        Core.call(controllerError, controller, [error]);
+                        operation.reject(error);
+                        return undefined;
+                    }
+                    Core.react(valuePromise, function (resolvedValue) {
                         enqueueValue(resolvedValue);
                         return undefined;
                     }, function (error) {

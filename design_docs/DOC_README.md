@@ -124,7 +124,7 @@ completed corpus census or bounded slice does not close its enclosing feature.
   Streams controls actually fail. Frozen full-directory engine-only runs lose
   zero passing files/assertions. Three modules and S2's private reader-based
   Fetch seam are implemented and focused controls run. Private Promise reactions
-  and Boa cleanup-listener retention are at S3/S4 engine checkpoints; candidate
+  and Boa cleanup-listener retention are approved at S3/S4 and in progress; candidate
   full-suite and C3/WPT qualification remains pending.
   Native delivery contracts and the final pre-publication checkpoint remain.
 

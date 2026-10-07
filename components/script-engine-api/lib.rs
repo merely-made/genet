@@ -910,6 +910,26 @@ pub trait CallCx {
     /// The `undefined` value (the usual callback return).
     fn undefined(&mut self) -> Self::Value;
 
+    /// Attach Promise reactions using the engine's internal reaction operation,
+    /// without creating the result Promise produced by `Promise.prototype.then`.
+    /// This is the in-call counterpart of the specification's
+    /// `PerformPromiseThen` with no result capability: it must not consult
+    /// `promise.constructor` or `constructor[Symbol.species]`. `promise` must be
+    /// a genuine Promise. Missing or non-callable handlers are treated as empty
+    /// handlers, as they are by the Promise abstract operation.
+    ///
+    /// Backends that do not expose a native no-capability reaction primitive
+    /// retain the default unsupported result; JS-facing stream installation
+    /// should only rely on this operation where the backend overrides it.
+    fn perform_promise_then(
+        &mut self,
+        _promise: &Self::Value,
+        _on_fulfilled: &Self::Value,
+        _on_rejected: &Self::Value,
+    ) -> Result<(), Self::Error> {
+        Err(self.error("Promise reaction attachment is unsupported by this engine"))
+    }
+
     /// Mint a pending ("deferred") promise mid-call. Returns the JS promise value
     /// (the native callback returns it so JS can `await`) and a [`PromiseToken`] the
     /// host stashes (in host data) to settle the promise once the backing Rust future

@@ -111,8 +111,45 @@ const PRIVATE_BRANDS: &str = r#"
     reader.releaseLock();check(!stream.locked,'frozen reader can release its private lock');
     let rejected=false;try{ReadableStream.prototype.getReader.call({_chunks:[]});}catch(e){rejected=e instanceof TypeError;}
     check(rejected,'lookalike object has no stream brand');
-    check(typeof globalThis.__streamsFetch==='undefined' && typeof globalThis.__finishStreamsClone==='undefined',
+    check(typeof globalThis.__streamsFetch==='undefined' && typeof globalThis.__finishStreamsClone==='undefined' &&
+        !Object.prototype.hasOwnProperty.call(globalThis,'__streamsPerformPromiseThen'),
         'private installation handoffs are absent before authors');
+"#;
+
+const AUTHORED_REACTION_ERRORS: &str = r#"
+    function throwingPromise(reason) {
+        const promise=Promise.resolve();
+        Object.defineProperty(promise,'constructor',{get(){throw reason;}});
+        return promise;
+    }
+    for(const bytes of [false,true]) {
+        const reason={pull:bytes},source={pull(){return throwingPromise(reason);}};
+        if(bytes)source.type='bytes';
+        const reader=new ReadableStream(source,{highWaterMark:0}).getReader();
+        const closed=reader.closed.then(()=>false,error=>error===reason);
+        let rejected;try{await reader.read();}catch(error){rejected=error;}
+        check(rejected===reason && await closed,'pull conversion errors reject read and closed exactly');
+    }
+    const reason={iterator:true},reader=ReadableStream.from([throwingPromise(reason)]).getReader();
+    const closed=reader.closed.then(()=>false,error=>error===reason);
+    let rejected;try{await reader.read();}catch(error){rejected=error;}
+    check(rejected===reason && await closed,'sync iterator Promise conversion errors finish the read operation');
+"#;
+
+const BYTE_TEE_CANCELLATION: &str = r#"
+    for(const canceled of [0,1]) {
+        let controller;
+        const stream=new ReadableStream({type:'bytes',start(c){controller=c;}});
+        const branches=stream.tee(),readers=branches.map(branch=>branch.getReader({mode:'byob'}));
+        const first=readers[0].read(new Uint8Array([17]));await flush();
+        const second=readers[1].read(new Uint8Array([34]));await flush();
+        const reads=[first,second],cancel=readers[canceled].cancel('unused');
+        check((await reads[canceled]).done,'canceled tee branch settles its pending BYOB read');
+        controller.byobRequest.view[0]=51;controller.byobRequest.respond(1);
+        const item=await reads[1-canceled];
+        check(!item.done && item.value[0]===51,'remaining tee branch receives bytes after other branch cancels');
+        controller.close();await cancel;
+    }
 "#;
 
 const FETCH_POISONED_PROTOTYPE: &str = r#"
@@ -188,6 +225,14 @@ macro_rules! cases {
         #[test]
         fn frozen_objects_and_public_forgeries_preserve_private_brands() {
             control::<$backend>(PRIVATE_BRANDS);
+        }
+        #[test]
+        fn authored_promise_conversion_errors_settle_stream_operations() {
+            control::<$backend>(AUTHORED_REACTION_ERRORS);
+        }
+        #[test]
+        fn byte_tee_uses_current_cancellation_state_when_a_read_finishes() {
+            control::<$backend>(BYTE_TEE_CANCELLATION);
         }
         #[test]
         fn fetch_body_consumption_survives_inherited_type_and_then_traps() {

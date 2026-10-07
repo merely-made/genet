@@ -234,6 +234,21 @@ fn boa_finalizer_delivery_survives_an_earlier_microtask_checkpoint() {
     assert_eq!(read(&mut rt, "finalized.join(',')"), "plain");
 }
 
+fn decoder_finalizer_survives_a_prior_checkpoint<E: ScriptEngine>() {
+    let mut rt = runtime::<E>();
+    rt.eval("var decoderFinalized=[];var decoderRegistry=new FinalizationRegistry(value=>decoderFinalized.push(value));(()=>{const decoder=new TextDecoder();decoder.decode(new Uint8Array([0xe2]),{stream:true});decoderRegistry.register(decoder,'decoder');})();")
+        .expect("register streaming decoder before pump");
+    rt.run_microtasks();
+    for _ in 0..4 {
+        rt.collect_garbage();
+        rt.run_event_loop(16).expect("pump decoder finalizer");
+        if read(&mut rt, "decoderFinalized.join(',')") == "decoder" {
+            return;
+        }
+    }
+    assert_eq!(read(&mut rt, "decoderFinalized.join(',')"), "decoder");
+}
+
 struct WorkerScript;
 impl ScriptResourceLoader for WorkerScript {
     fn load(&self, url: &str) -> Option<String> {
@@ -294,6 +309,10 @@ macro_rules! cases {
         #[test]
         fn worker_transform_and_byob() {
             worker_installs_transform_and_byob_algorithms::<$backend>();
+        }
+        #[test]
+        fn decoder_finalizer_after_prior_checkpoint() {
+            decoder_finalizer_survives_a_prior_checkpoint::<$backend>();
         }
     };
 }

@@ -622,6 +622,23 @@ impl CallCx for BoaCallCx<'_> {
         JsValue::undefined()
     }
 
+    fn perform_promise_then(
+        &mut self,
+        promise: &JsValue,
+        on_fulfilled: &JsValue,
+        on_rejected: &JsValue,
+    ) -> Result<(), JsError> {
+        let promise = promise.as_promise().ok_or_else(|| {
+            JsError::from(
+                JsNativeError::typ().with_message("Promise reaction receiver is not a Promise"),
+            )
+        })?;
+        let on_fulfilled = on_fulfilled.as_object().and_then(JsFunction::from_object);
+        let on_rejected = on_rejected.as_object().and_then(JsFunction::from_object);
+        promise.perform_promise_then(on_fulfilled, on_rejected, self.ctx);
+        Ok(())
+    }
+
     fn new_host_promise(&mut self) -> Result<(JsValue, PromiseToken), JsError> {
         make_pending(self.ctx)
     }

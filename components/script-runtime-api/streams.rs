@@ -6,11 +6,28 @@
 //! Fetch captures the operation table during synchronous host installation.
 //! Neither the table nor its records are retained on the author global.
 
-use script_engine_api::ScriptEngine;
+use script_engine_api::{CallCx, NativeFn, ScriptEngine};
+
+struct PerformPromiseThen;
+
+impl<E: ScriptEngine> NativeFn<E> for PerformPromiseThen {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let promise = cx.arg(0);
+        let on_fulfilled = cx.arg(1);
+        let on_rejected = cx.arg(2);
+        cx.perform_promise_then(&promise, &on_fulfilled, &on_rejected)?;
+        Ok(cx.undefined())
+    }
+}
 
 pub(crate) fn install_streams_surface<E: ScriptEngine>(
     engine: &mut crate::Surface<'_, '_, E>,
 ) -> Result<(), crate::SurfaceError<E::Error>> {
+    // Give both adapters a configurable own slot before installing the native
+    // function. Nova's set_function preserves existing property attributes, so
+    // the bootstrap can capture and remove this one-shot bridge afterward.
+    engine.eval("Object.defineProperty(globalThis, '__streamsPerformPromiseThen', { value: undefined, writable: true, configurable: true });")?;
+    engine.set_function::<PerformPromiseThen>("__streamsPerformPromiseThen", 3)?;
     engine.eval(STREAMS_BOOTSTRAP)?;
     Ok(())
 }

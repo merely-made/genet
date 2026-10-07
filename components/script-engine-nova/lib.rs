@@ -720,6 +720,27 @@ mod native {
             NovaValue::new(Global::new(self.agent, Value::Undefined), &self.release)
         }
 
+        fn perform_promise_then(
+            &mut self,
+            promise: &Self::Value,
+            on_fulfilled: &Self::Value,
+            on_rejected: &Self::Value,
+        ) -> Result<(), Self::Error> {
+            let Value::Promise(promise) = promise.get(self.agent, self.gc.nogc()) else {
+                return Err(self.error("Promise reaction receiver is not a Promise"));
+            };
+            let on_fulfilled = on_fulfilled.get(self.agent, self.gc.nogc());
+            let on_rejected = on_rejected.get(self.agent, self.gc.nogc());
+            nova_vm::ecmascript::builtins::perform_promise_then_without_capability(
+                self.agent,
+                promise,
+                on_fulfilled,
+                on_rejected,
+                self.gc.nogc(),
+            );
+            Ok(())
+        }
+
         fn new_host_promise(&mut self) -> Result<(Self::Value, PromiseToken), Self::Error> {
             // Mid-call: the trampoline holds the `Agent` and we are already in the
             // realm, so mint directly (mirrors `make_reflector`'s in-call path).

@@ -805,13 +805,13 @@ var ReadableOps = (function (Core) {
     slot.stream = undefinedValue;
     var err = typeError('Reader lock was released');
     if (!slot.closedSettled) {
-      slot.closedSettled = true;
       slot.closedDeferred.reject(err);
-      Core.handled(slot.closedDeferred.promise);
+    } else {
+      slot.closedDeferred = Core.deferred();
+      slot.closedDeferred.reject(err);
     }
-    slot.closedDeferred = Core.reject(err);
     slot.closedSettled = true;
-    Core.handled(slot.closedDeferred);
+    Core.handled(slot.closedDeferred.promise);
     rejectPendingReads(slot, err);
   }
   function readerClosed(reader) { return currentReader(reader).slot.closedDeferred.promise; }
@@ -1111,13 +1111,19 @@ var ReadableOps = (function (Core) {
       if (!canceled2) error(branch2, r);
       if (!canceled1 || !canceled2) cancelDeferred.resolve(undefinedValue);
     }
-    Core.react(readerClosed(reader), function () { return undefinedValue; }, function (r) { forwardError(r); return undefinedValue; });
+    function forwardReaderError(thisReader) {
+      Core.react(readerClosed(thisReader), function () { return undefinedValue; }, function (r) {
+        if (thisReader === reader) forwardError(r);
+        return undefinedValue;
+      });
+    }
+    forwardReaderError(reader);
     function pullWithDefault() {
       if (readerIsBYOB(reader)) {
         var old = reader;
         readerRelease(old);
         reader = acquireReader(stream, 'default');
-        Core.react(readerClosed(reader), function () { return undefinedValue; }, function (r) { forwardError(r); return undefinedValue; });
+        forwardReaderError(reader);
       }
       readRequest(reader, {
         chunk: function (chunk) {
@@ -1139,6 +1145,10 @@ var ReadableOps = (function (Core) {
           reading = false;
           if (!canceled1) internalByteClose(branch1);
           if (!canceled2) internalByteClose(branch2);
+          var c1 = mapGet(byteControllerSlots, streamSlot(branch1).controller);
+          var c2 = mapGet(byteControllerSlots, streamSlot(branch2).controller);
+          if (c1.pendingPullIntos.length) respondByteController(c1, 0, false);
+          if (c2.pendingPullIntos.length) respondByteController(c2, 0, false);
           if (!canceled1 || !canceled2) cancelDeferred.resolve(undefinedValue);
         },
         error: function (r) { reading = false; forwardError(r); }
@@ -1149,7 +1159,7 @@ var ReadableOps = (function (Core) {
         var old = reader;
         readerRelease(old);
         reader = acquireReader(stream, 'byob');
-        Core.react(readerClosed(reader), function () { return undefinedValue; }, function (r) { forwardError(r); return undefinedValue; });
+        forwardReaderError(reader);
       }
       function byobCanceled() { return forBranch2 ? canceled2 : canceled1; }
       function otherCanceled() { return forBranch2 ? canceled1 : canceled2; }
@@ -1180,6 +1190,12 @@ var ReadableOps = (function (Core) {
           reading = false;
           if (!byobCanceled()) internalByteClose(forBranch2 ? branch2 : branch1);
           if (!otherCanceled()) internalByteClose(forBranch2 ? branch1 : branch2);
+          if (emptyView !== undefinedValue) {
+            if (!byobCanceled()) respondWithNewView(forBranch2 ? branch2 : branch1, emptyView);
+            var otherController = mapGet(byteControllerSlots, streamSlot(forBranch2 ? branch1 : branch2).controller);
+            if (!otherCanceled() && otherController.pendingPullIntos.length)
+              respondByteController(otherController, 0, false);
+          }
           if (!canceled1 || !canceled2) cancelDeferred.resolve(undefinedValue);
         },
         error: function (r) { reading = false; forwardError(r); }

@@ -154,6 +154,24 @@ const BYTE_TEE_CANCELLATION: &str = r#"
     }
 "#;
 
+const READER_RELEASE: &str = r#"
+    for(const bytes of [false,true]) for(const closed of [false,true]) {
+        const source={start(c){if(closed)c.close();}};
+        if(bytes)source.type='bytes';
+        const stream=new ReadableStream(source);
+        const reader=stream.getReader(bytes?{mode:'byob'}:undefined),before=reader.closed;
+        reader.releaseLock();
+        const after=reader.closed;
+        check(after instanceof Promise && !stream.locked,'released reader keeps its closed Promise and frees the lock');
+        check(closed?before!==after:before===after,'closed Promise identity follows the prior stream state');
+        let rejected;try{await after;}catch(error){rejected=error;}
+        check(rejected instanceof TypeError,'released reader closed Promise rejects with TypeError');
+        if(closed)await before;
+        rejected=undefined;try{await reader.read(bytes?new Uint8Array(1):undefined);}catch(error){rejected=error;}
+        check(rejected instanceof TypeError,'released reader rejects new reads');
+    }
+"#;
+
 const FETCH_POISONED_PROTOTYPE: &str = r#"
     const oldType=Object.getOwnPropertyDescriptor(Object.prototype,'type');
     const oldThen=Object.getOwnPropertyDescriptor(Object.prototype,'then');
@@ -235,6 +253,10 @@ macro_rules! cases {
         #[test]
         fn byte_tee_uses_current_cancellation_state_when_a_read_finishes() {
             control::<$backend>(BYTE_TEE_CANCELLATION);
+        }
+        #[test]
+        fn releasing_readers_preserves_closed_promise_semantics() {
+            control::<$backend>(READER_RELEASE);
         }
         #[test]
         fn fetch_body_consumption_survives_inherited_type_and_then_traps() {

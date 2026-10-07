@@ -490,6 +490,17 @@ needed for this bounded fix and its qualification.
   the existing public `ecmascript` re-export. The failed receipt is preserved;
   consumer qualification restarts under a fresh name.
 
+- `candidate-reactions-public-export` executed all focused targets: **134 passes
+  and two failures**, both in byte tee cancellation. All reaction, finalizer,
+  Fetch, Encoding and Worker controls passed. Byte tee forwarded the rejection
+  from a reader it had intentionally released while switching to BYOB. Error
+  forwarding now checks the current reader identity, and tee EOF completes
+  pending branch pull-into requests as required by
+  [ReadableByteStreamTee](https://streams.spec.whatwg.org/#readable-byte-stream-tee).
+  Reader release also now retains its private deferred record and follows the
+  specified pending-versus-settled closed-promise identity; new both-engine
+  controls exercise default/BYOB readers in both states.
+
 All candidate gates and failed diagnostics remain under `Code/testing/genet/streams`.
 The bounded agents supply source review; root runs gates serially. Retain the reused
 `worktrees/genet-encoding` checkout on `conformance/streams`, stable target

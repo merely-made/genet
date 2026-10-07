@@ -1,17 +1,21 @@
 # WHATWG Streams
 
-**Status:** First candidate measured; WPT regression repairs in progress, 2026-10-07.
-S1 and S3/S4's published engine pins and exact Genet consumer are qualified.
-The first candidate at `a97c82514c7c2c47f01f3b7f57769f00d8079466` passes
-1,185 tests with three existing ignores, its optimized runner, and all four
-authored fixture categories on both engines. Both C3 records cease evaluation
-throws. Non-transferable Streams improves from 13 to 78 passing files on Boa,
-and 12 to 77 on Vano, but strict comparisons expose previously passing rows
-that need repairs or an explicit experimental-extension ruling. Three bounded
-Luna agents supply disjoint fixes and source review; root owns integration
-and serial gates. Mark approved S2 on 2026-10-06 and S3/S4 on 2026-10-07.
-Fresh qualification of the regression repairs and the final local
-pre-publication checkpoint remain open.
+**Status:** Candidate qualified locally; experimental-extension ruling and final
+pre-publication checkpoint open, 2026-10-07.
+Clean implementation `5a539ae3f402aec659f1bed3172e5f2ccb9d976a` passes
+1,209 tests with three existing ignores, the ordinary optimized runner build,
+and all four authored fixture categories on both engines. All ten matched WPT
+maps are complete. Both C3 records cease evaluation throws. Non-transferable
+Streams improves from 13 to 88 passing files on Boa and from 12 to 87 on Vano.
+The first candidate's 46 genuine cross-engine old-pass losses are repaired;
+fresh strict accounting retains 24 proven label equivalents and 12 pending
+experimental owning/transfer losses, with zero unexplained losses. All 8,446
+normalized movements have independently verified source attribution against
+the final qualified commit, with zero source gaps.
+Three bounded Luna agents supply source review; root owns integration and
+serial gates. S1 and S3/S4's qualified native revisions are published; Genet
+remains on its local lane branch pending the final checkpoint. Mark approved
+S2 on 2026-10-06 and S3/S4 on 2026-10-07.
 
 Authority is the [standards ledger](2026-09-07_standards_to_features_ledger.md#conformance-targets-2026-10-02)
 rulings C1 and C3, the [census panic attribution](2026-09-06_web_platform_wpt_census.md),
@@ -602,3 +606,209 @@ his explicit answer. Independent regression work may continue while pending.
   preventAbort, preventCancel, preventClose and signal, with both-engine
   getter-order and abrupt-completion controls. Fresh focused controls precede
   a complete eight-crate gate; both failed runs remain recorded.
+
+## Regression candidate qualification, 2026-10-07
+
+The final implementation tuple is clean commit
+`5a539ae3f402aec659f1bed3172e5f2ccb9d976a`, lock SHA-256
+`917405594C6B8D1C4383A94F81BEB8B7BAA72C6FE43E605CB823E3B6BFADEF8C`,
+and optimized runner SHA-256
+`A0BA5A8948B1CD0B707C2883E1FBD0075370FC36B5FB6EE2F0ED987D5631431A`.
+The ordinary build uses `cargo +1.97.1 build --release --locked --offline
+-p genet-wpt --features netfetch -j1`, with test-only profile overrides absent.
+The fixed WPT manifest SHA-256 is
+`D5EC5BE9BF1A75ED00D7E7AB28AFE8A694A55E11682BA74305874D70B18DD422`;
+the unchanged 1,924-file corpus snapshot SHA-256 is
+`1A2217749C178CC54A95E7AD96824B95E9E3669215AC9CB61A640C7C8C3C77EB`.
+All eight fixture runs and ten directory runs complete with exit zero. Each
+paired receipt verifies its own runner/source/lock tuple, default collection,
+Livery, jobs four, outer timeout 120 and drive deadline 15. Those deadlines
+bound test execution; human questions remain pending until explicitly answered.
+
+The fresh focused gate passes all **24** added regression controls. The complete
+eight-crate gate passes **1,209 tests, zero failures, three existing ignores**:
+
+| Crate | Passed | Existing ignored |
+|---|---:|---:|
+| script-runtime-api | 814 | 0 |
+| genet-scripted | 120 | 0 |
+| genet-wpt | 77 | 3 |
+| script-engine-nova | 43 | 0 |
+| script-engine-boa | 26 | 0 |
+| genet-documents | 56 | 0 |
+| genet-render | 41 | 0 |
+| taproot | 32 | 0 |
+
+Counts are attributed by executable depfile source against the exact package
+directories. The original four algorithm controls run on each engine and
+actually fail on the engine-qualified starting source `d4800b63c656`:
+backpressure, cancellation waiting for its source, pipe error propagation
+with lock release, and BYOB fill with real detachment and exact returned view.
+`starting-unit-controls.receipt.json` records **0 pass, 8 fail**, exit 101;
+its source and executable hashes are retained. All eight controls now pass in
+the full suite. The four HTML controls also fail on the frozen pre-change and
+engine-foundation runners, including the corrected close-then-respond-zero EOF
+sequence. Candidate fixture results on each engine are prerequisite 3/3,
+buffer transfer 7/7, byte-EOF algorithms 4/4 and Promise properties 6/6.
+
+### Matched WPT results
+
+These are file passes and rows in completed files, respectively. ERROR records
+remain separate, including any rows observed before an error; no partial rows
+are silently promoted to completed-file results. Baseline source is the
+published Encoding commit `f97f0df038c571c3b1bf4b8590ae564f02fc6cd8`.
+
+| Directory | Engine | Passing files before → after | Completed passing rows before → after |
+|---|---|---:|---:|
+| streams, excluding transferable | Boa | 13 → 88 of 155 | 334/1,111 → 2,233/2,387 |
+| streams, excluding transferable | Vano | 12 → 87 of 155 | 333/1,111 → 2,232/2,387 |
+| streams, including transferable | Boa | 13 → 90 of 168 | 343/1,182 → 2,250/2,466 |
+| streams, including transferable | Vano | 12 → 89 of 168 | 342/1,182 → 2,249/2,466 |
+| fetch/api/basic | Boa | 11 → 12 of 69 | 222/598 → 350/736 |
+| fetch/api/basic | Vano | 11 → 12 of 69 | 222/598 → 350/736 |
+| fetch/api/response | Boa | 24 → 28 of 56 | 391/515 → 445/515 |
+| fetch/api/response | Vano | 24 → 28 of 56 | 391/515 → 443/515 |
+| fetch/api/request | Boa | 14 → 21 of 59 | 603/952 → 644/952 |
+| fetch/api/request | Vano | 14 → 21 of 59 | 604/872 → 645/872 |
+| fetch/api/body | Boa | 4 → 4 of 4 | 46/46 → 46/46 |
+| fetch/api/body | Vano | 4 → 4 of 4 | 46/46 → 46/46 |
+
+Non-transferable Streams has one ERROR record without rows, six skipped files,
+and 154 failing assertion rows on Boa and 155 on Vano. Whole Streams retains four
+ERROR files with three failed and one not-run row, plus seven skips. Fetch
+basic retains five ERROR files containing seven passing and 29 timeout rows;
+response retains three timeout rows in three ERROR files. Request retains
+one ERROR file on Boa and three on Vano, all without rows. Body has no errors.
+Remaining failing and unavailable cases are residual conformance work; these
+measurements establish the brief's improvement condition, not full WPT passage.
+Transfer-family gains remain separately tagged and receive no credit toward
+implementing transferable Streams.
+
+The two specified C3 records have the following fresh outcomes on **both**
+engines: default-readable `patched-global.any.html` and its Worker variant
+are **PASS 5/5**; Fetch `stream-safe-creation.any.html` is **FAIL 54/63** and
+its Worker variant **PASS 63/63**. Both specified Window files were previously
+ERROR/evaluation-threw with zero rows. The nine Fetch Window failures all use
+`fetch(location.href)` on the disk harness path, where `testharness.rs:252-269`
+installs no FetchHandler; `fetch.rs` rejects the missing handler as a network
+error. This is a disk-mode limitation of these cases, not a surviving inherited
+getter trap. The byte-stream `patched-global` 0/1 residual is a different file
+and is not substituted for C3's default-readable record.
+
+### Loss conservation and pending ruling
+
+Fresh immutable raw comparisons are
+`candidate-regressions-vs-published-before.json`,
+`candidate-regressions-vs-engine-foundation.json` and
+`candidate-regressions-vs-candidate-reactions.json`, under
+`Code/testing/genet/streams`. The first candidate's **46 genuine** cross-engine
+old-pass losses are repaired: 34 Streams assertions, four passing Streams
+files and eight Fetch basic assertions. No passing file is lost by the final
+candidate. Its **36** raw assertion-key losses are fully classified as
+**24 verified generated-label pass-to-pass equivalents** and **12 pending
+experimental owning/transfer pass-to-fail rows**, with **zero unexplained
+losses**. `candidate-regressions-pass-loss-qualification.json` validates the
+actual fresh baseline/candidate statuses and explicit duplicate occurrences;
+older label receipts supply source identity only. Raw reports remain unchanged.
+
+The pending question is whether to keep standard behavior and approve those
+12 exact experimental rows as an exception, or scope an owning/transfer
+extension first. The rows are three names in each Window/Worker variant on
+each engine: construction with owning type, enqueue with an empty transfer
+list, and checking a second enqueue transfer parameter. No directory-wide
+waiver or missing-file allowance is proposed. Mark has not answered this
+question; zero-loss acceptance remains pending his ruling. The current
+standard's source-type and enqueue algorithms, rather than historical
+experimental tests, motivate the recommended exception.
+
+Source review covers all **8,446** normalized movements across the three
+comparators: **7,982 assertion-row movements and 464 file movements**. Source
+owners verify actual final statuses and current commit anchors, retaining
+completed rows, partial ERROR rows, newly observed rows and transfer families
+separately. Earlier attribution drafts supply source/algorithm hints only;
+their old statuses never qualify this candidate. Pending semantics and
+out-of-scope credit are separate from source attribution quality.
+
+Eight file transitions have no normalized assertion-status change. They are
+the transferable `transform-stream-members` Window/Worker variants on each
+engine, compared with both published-before and engine-foundation. Each old
+log explicitly reports duplicate test names from `[object Object]` tags,
+with four passing assertions inside an ERROR file. The final standard stream
+tags make all four names unique; the same four source cases remain pass-to-pass
+and the file completes as PASS. Exact old log hashes/messages, source-case
+crosswalks and qualified `Symbol.toStringTag` definitions attribute the
+harness-completion change. It earns no new assertion-level or transferable
+implementation credit.
+
+The attribution formatter initially reused stale line hints, conflated pending
+semantics with source gaps, and treated these eight file transitions as missing
+ownership. Root and the bounded source owners corrected those distinctions,
+required exact qualified source definitions/snippets, and excluded WPT functions
+from implementation anchors. The final independent review also rejected twelve
+source projections that guessed a nonexistent `global.js` for a test whose
+script is embedded in `streams/readable-streams/global.html`. The corrected
+artifact changes only those source projections and their derived evidence;
+all statuses, owners and movement counts are unchanged. The rejected original
+artifact and its review receipt remain preserved.
+
+The accepted immutable artifact is
+`candidate-regressions-movement-attribution-corrected.json`, SHA-256
+`9ac9e46de82ef0787654ccdc74c5ba79ad36645689ffb7a122f19cfe183d5b44`.
+`candidate-regressions-movement-root-review.receipt.json` independently verifies
+all 8,446 WPT source identities against the frozen corpus, 15,964 raw status
+sides, 98,504 qualified anchor occurrences and seven implementation blobs
+against both commit `5a539ae3f402` and the current checkout. Source inputs,
+maps, runner and logs remain unchanged. There are **zero uncovered or weak
+source rows/files**. The 12-row experimental ruling remains pending; source
+coverage does not grant semantic acceptance or publication permission.
+
+### Local commits and publication checkpoint
+
+The lane uses `conformance/streams` in
+`C:/Users/mark_/Code/worktrees/genet-encoding`. Its local commits through the
+tested implementation are:
+
+- `4c08bf32fe5d` docs: record Streams engine checkpoint and fresh C3 baselines
+- `8100dac2eab6` docs: record S1 approval for the narrow Streams engine foundation
+- `0ab5d1d3132f` docs: seal Streams baselines and record fetch body checkpoint
+- `e83058c6f982` docs: record qualified Vano transfer publication and Streams controls
+- `b897dcccc8f4` Repin qualified Vano and Boa buffer transfer support
+- `914d79077318` Exercise existing fetch bindings on both script engines
+- `d4800b63c656` Add both-engine Streams algorithm negative controls
+- `d3f6a6c8f5bd` Implement private WHATWG Streams algorithms and reader-backed Fetch bodies
+- `b99d17b8cee3` Install Streams through the existing realm-aware runtime surface
+- `97e180703448` Forward default reader chunks and expose Promise reaction property traps
+- `e2069ed0601b` Record focused Streams results and isolate Boa ephemeron retention
+- `e046e6215e83` Separate weak stream collection from Boa finalizer delivery
+- `0fc2d85eafd6` Record Streams engine checkpoints with isolated failure evidence
+- `32eabec58fc8` Use private Promise reactions and preserve stream error completion
+- `84f51f83c247` Observe tee EOF before awaiting one-branch cancellation
+- `fcfc78bd6dd6` Repin qualified private reaction and finalizer engine fixes
+- `4e912341ae2b` Use the public Vano Promise reaction export
+- `3755c1e60395` Preserve byte tee reader identity and complete branch EOF
+- `06f807d838a9` Settle canceled BYOB reads without constructing a view
+- `78c9d63565e3` Restore returned BYOB buffer before completing tee EOF
+- `a97c82514c7c` Close canceled readers before completing their pending reads
+- `fe790e6a9901` Repair Streams piping, cancellation and Fetch scheme regressions
+- `3ee93dcd1399` End Fetch control recording borrow before returning
+- `5a539ae3f402` Correct pipe dictionary order and Request proxy controls
+
+Native publication is already authorized and complete. Genet's exact consumer
+pins are Vano `be68ac01dc5f4f4829476146c7a034552dfe9fab` on `origin/main` and
+Boa `4b6d316d1f363f4f483982fecfc62e7532835b89` on its maintained `origin/genet`.
+Native qualification/publication and normalized lock/metadata receipts retain
+their complete histories. Genet is not pushed or merged: the brief explicitly
+requires **"Final checkpoint: report and stop"** and **"Do not push."**
+Source-attribution review is complete. The experimental ruling remains open
+at this checkpoint report. Forms Phase A has read-only owner preparation but no
+implementation edits; it follows the queue after this checkpoint.
+
+The retained local worktree and stable target belong to this unpublished
+Streams lane. Root's completed build/test/WPT processes have no live owner.
+Temporary `C:/t/cargo-homes/genet-streams` is marker-identified dependency-cache
+data; checkout inspection found only Cargo cache markers, including inside
+Vano's copied test262 submodules. Automatic approval review rejected its
+cleanup command before execution with **"blocked by policy"**. The cache is
+retained; `isolated-home-cleanup-blocked.receipt.json` records the marker and
+rejection. No alternative deletion command was attempted. All source, failed
+and successful receipts, and frozen runners remain preserved.

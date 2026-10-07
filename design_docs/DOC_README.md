@@ -13,6 +13,12 @@ uses `script-engine-nova`, `nova_vm`, `NovaEngine` and `--engine nova`; these ar
 technical identifiers, not a claim that Genet runs unmodified upstream Nova.
 Historical receipts retain their original names and dependency revisions.
 
+**Human checkpoints and WPT evidence (2026-10-07):** ask and wait for an explicit
+answer, with no response timer or inferred approval. Technical test deadlines
+remain part of their recorded gates. Revalidate generated assertion labels by
+unchanged source case and duplicate occurrence against the actual fresh maps;
+preserve raw comparisons and rows inside ERROR records separately.
+
 > **Boundary correction landed, 2026-09-03:** Cambium and Genet's upper
 > application components moved to Mere under
 > `mere/design_docs/mere_docs/implementation_strategy/2026-09-02_platform_boundary_and_repository_topology_plan.md`.
@@ -118,17 +124,16 @@ completed corpus census or bounded slice does not close its enclosing feature.
   residuals remain recorded in the plan.
 
 - [WHATWG Streams](2026-10-06_whatwg_streams_plan.md)
-  (**Implementation in progress, 2026-10-07**): standard Vano transfer and
-  Boa's narrow feature are published; exact-Git Genet qualification passed
-  1,142 tests. Both engines pass all transfer prerequisites, and the unchanged
-  Streams controls actually fail. Frozen full-directory engine-only runs lose
-  zero passing files/assertions. Three modules and S2's private reader-based
-  Fetch seam are implemented and focused controls run. Private Promise reactions
-  and Boa cleanup-listener retention are qualified and published at S3/S4; candidate
-  full-suite qualification passed 1,185 tests and C3 no longer throws.
-  Matched WPT maps show gains and strict old-pass losses; bounded regression
-  repairs and an experimental owning/transfer ruling await qualification.
-  Native delivery contracts and the final pre-publication checkpoint remain.
+  (**Qualified locally; final checkpoint open, 2026-10-07**): native transfer,
+  private Promise reactions and Boa finalizer retention are qualified and
+  published. Exact consumer `5a539ae3f40` passes 1,209 tests, three existing
+  ignores, its optimized runner and all four fixture categories on both engines.
+  C3 ceases evaluation throws. Matched maps improve non-transferable Streams
+  to 88 passing files on Boa and 87 on Vano. All 46 genuine first-candidate
+  old-pass losses are repaired; 24 label equivalents and 12 experimental
+  owning/transfer losses remain separately recorded. Independent source review
+  qualifies all 8,446 normalized movements with zero gaps. The experimental
+  ruling and Genet publication checkpoint remain open.
 
 ## WPT census — the web platform beyond CSS
 

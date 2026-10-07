@@ -588,3 +588,17 @@ his explicit answer. Independent regression work may continue while pending.
   the new Fetch helper returned a live `RefCell` borrow temporary. Store its
   cloned result before returning; the unchanged failed receipt is retained.
   A fresh full eight-crate gate qualifies the corrected source.
+
+- `candidate-regressions-borrow-fix-serial-crates` on `3ee93dcd1399`
+  executes and passes all six private clone-brand controls, including sibling
+  realms. It stops at two Fetch control failures. The new test incorrectly
+  expected an input Request body to remain undisturbed: Request constructor
+  steps 41-42 create a proxy, which immediately locks and disturbs its source.
+  The corrected test checks that required synchronous state change, no source
+  cancellation or repeated pulls, and successful response completion while
+  the body remains open. Its four native body-presence assertions are retained.
+  Source review also found pipe-options dictionary members read in declaration
+  order rather than Web IDL's lexicographic order. The correction reads
+  preventAbort, preventCancel, preventClose and signal, with both-engine
+  getter-order and abrupt-completion controls. Fresh focused controls precede
+  a complete eight-crate gate; both failed runs remain recorded.

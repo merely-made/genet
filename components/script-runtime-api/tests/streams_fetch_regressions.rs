@@ -72,10 +72,22 @@ const NEVER_CLOSING_DATA_UPLOADS: &str = r#"
     const request=new Request('data:a/a;charset=utf-8,test',{
         method:'POST',body:requestBody,duplex:'half'
     });
-    const requestResponse=await fetch(request);
+    const requestStream=request.body;
+    check(requestStream===requestBody && !request.bodyUsed && !requestStream.locked,
+        'new Request retains its init body without consuming it');
+    const requestFetch=fetch(request);
+    check(request.bodyUsed && requestStream.locked,
+        'fetch(Request) creates its required proxy and disturbs/locks the input body');
+    check(requestPulls<=1,
+        'proxy setup may start one pending read but does not repeatedly drain the never-closing source');
+    check(requestCancels===0,
+        'Request proxy setup and data dispatch do not cancel the source');
+    const requestResponse=await requestFetch;
     check(await requestResponse.text()==='test','Request-object data URL response resolves');
-    check(!request.bodyUsed && requestPulls===0 && requestCancels===0,
-        'Request-object data fetch does not disturb or cancel its unused body');
+    check(request.bodyUsed && requestStream.locked,
+        'Request input remains disturbed and locked after fetch dispatch');
+    check(requestPulls<=1 && requestCancels===0,
+        'data dispatch resolves without draining or canceling the open Request body proxy');
 
     await fetch('data:a/a;charset=utf-8,test',{method:'POST'});
     await fetch('data:a/a;charset=utf-8,test',{method:'POST',body:''});

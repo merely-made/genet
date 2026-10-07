@@ -4588,6 +4588,26 @@ mod tests {
         assert!(normalized_font_bytes(b"wOF2not-a-font".to_vec()).is_none());
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn valid_woff2_is_decoded_to_sfnt_with_its_nko_glyph() {
+        use read_fonts::TableProvider;
+
+        let woff2 = include_bytes!("../tests/data/NotoSansNko-regular-webfont.woff2");
+        assert!(woff2.starts_with(b"wOF2"));
+        let sfnt = normalized_font_bytes(woff2.to_vec()).expect("valid WOFF2 must sanitize");
+        assert!(sfnt.starts_with(b"\0\x01\0\0"));
+        let font = read_fonts::FontRef::new(&sfnt).expect("sanitized SFNT must parse");
+        let glyph = font
+            .cmap()
+            .expect("NKo font must have a character map")
+            .map_codepoint(0x07cau32)
+            .expect("NKo letter A must retain its glyph");
+        assert_ne!(glyph.to_u32(), 0);
+        assert!(glyph.to_u32() < u32::from(font.maxp().unwrap().num_glyphs()));
+        assert_eq!(normalized_font_bytes(sfnt.clone()), Some(sfnt));
+    }
+
     #[cfg(target_arch = "wasm32")]
     #[test]
     fn wasm_rejects_woff2_without_native_sanitizer() {

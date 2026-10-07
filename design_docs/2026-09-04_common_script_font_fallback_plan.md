@@ -287,3 +287,17 @@ no glyph.
   and Ortet before/after readback. The paired Parley/Fontique source dependency
   also resolves from a standalone consumer. Product pins, upstream disposition,
   and other-platform measurements remain open.
+- **2026-10-06.** Bounded browser compatibility revision from qualified Genet
+  `69a2383b2ad777b884a72f31f8f8fb7ece275c0b`: selected fontsan 0.7's supported
+  `libz-sys,wuff` backend with defaults disabled, matching the upstream Servo
+  host's edge. Cargo rejects the former default `woff2` backend when both hosts
+  are linked because fontsan requires exactly one backend. The sanitizer API
+  and `normalized_font_bytes` implementation are unchanged. Native Livery
+  acceptance passed the existing malformed-WOFF2 rejection and SFNT identity
+  tests plus a valid Noto Sans NKo WOFF2 decode with a nonzero, in-range U+07CA
+  glyph. The unchanged package-local font fixture includes its original OFL
+  license and source provenance in `components/genet-livery/tests/data`.
+  The feature witness contains only `libz-sys,wuff`. Standalone tests used a
+  diagnostic resolver lock, not a newly committed dependency-family upgrade.
+  Exact-pin combined-consumer and native browser qualification remain separate
+  gates. This codec slice does not alter the fallback rulings or platform gates.

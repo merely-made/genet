@@ -8,14 +8,18 @@
 
 use script_engine_api::ScriptEngine;
 
-pub(crate) fn install_streams_surface<E: ScriptEngine>(engine: &mut E) -> Result<(), E::Error> {
+pub(crate) fn install_streams_surface<E: ScriptEngine>(
+    engine: &mut crate::Surface<'_, '_, E>,
+) -> Result<(), crate::SurfaceError<E::Error>> {
     engine.eval(STREAMS_BOOTSTRAP)?;
     Ok(())
 }
 
 /// Structured clone is installed after Fetch's Blob/File constructors. Finish
 /// the private capture before any script can run and remove the one-shot bridge.
-pub(crate) fn finish_streams_install<E: ScriptEngine>(engine: &mut E) -> Result<(), E::Error> {
+pub(crate) fn finish_streams_install<E: ScriptEngine>(
+    engine: &mut crate::Surface<'_, '_, E>,
+) -> Result<(), crate::SurfaceError<E::Error>> {
     engine.eval("globalThis.__finishStreamsClone(globalThis.__structuredClone); delete globalThis.__finishStreamsClone")?;
     Ok(())
 }

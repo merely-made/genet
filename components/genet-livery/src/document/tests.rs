@@ -2517,7 +2517,13 @@ fn live_textarea_value_projects_multiline_text_and_preserves_author_children() {
             _ => None,
         })
         .sum::<usize>();
-    assert_eq!(painted, "line one\nline two".chars().count());
+    assert_eq!(
+        painted,
+        "line one\nline two"
+            .chars()
+            .filter(|character| *character != '\n')
+            .count()
+    );
     let line_bounds = document
         .layout
         .as_ref()
@@ -2563,38 +2569,60 @@ fn empty_live_input_projects_placeholder_instead_of_default_value() {
 
 #[test]
 fn css_checked_reads_live_checkbox_state_instead_of_the_default_attribute() {
-    let mut dom = ScriptedDom::from_serialized_document(
-        "<html><body><input id=field type=checkbox checked></body></html>",
-    );
-    let field = by_id(&dom, "field");
-    let mut state = dom.form_control_state(field).expect("checkbox state");
-    state.checked = false;
-    state.dirty_checkedness = true;
-    assert!(dom.set_form_control_state(field, state));
+    fn checkbox_color(checked_attr: bool, checked_state: bool) -> paint_list_api::ColorF {
+        let checked = if checked_attr { " checked" } else { "" };
+        let html = format!("<html><body><input id=field type=checkbox{checked}></body></html>");
+        let mut dom = ScriptedDom::from_serialized_document(&html);
+        let field = by_id(&dom, "field");
+        let mut state = dom.form_control_state(field).expect("checkbox state");
+        state.checked = checked_state;
+        state.dirty_checkedness = true;
+        assert!(dom.set_form_control_state(field, state));
 
-    let mut document = LiveryDocument::new(
-        dom,
-        StyleSet::cambium(&[
-            "html, body { margin: 0; } input { display:block; width:50px; height:24px; background:#f00; } input:checked { background:#0f0; }",
-        ]),
-        Device::screen(120.0, 80.0),
+        let mut document = LiveryDocument::new(
+            dom,
+            StyleSet::cambium(&[
+                "html, body { margin: 0; } input { display:block; width:50px; height:24px; background:#f00; } input:checked { background:#0f0; }",
+            ]),
+            Device::screen(120.0, 80.0),
+        );
+        let list = document.frame(120, 80).expect("frame");
+        let colors = list
+            .commands()
+            .iter()
+            .filter_map(|command| match command {
+                paint_list_api::PaintCmd::DrawRect(rect) => Some(rect.color),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let red = paint_list_api::ColorF::new(1.0, 0.0, 0.0, 1.0);
+        let green = paint_list_api::ColorF::new(0.0, 1.0, 0.0, 1.0);
+        if checked_state {
+            assert!(
+                colors.contains(&green),
+                "live checked state matches :checked: {colors:?}"
+            );
+            assert!(!colors.contains(&red), "checked rule wins: {colors:?}");
+        } else {
+            assert!(
+                colors.contains(&red),
+                "ordinary input background paints: {colors:?}"
+            );
+            assert!(
+                !colors.contains(&green),
+                "stale checked attr is ignored: {colors:?}"
+            );
+        }
+        if checked_state { green } else { red }
+    }
+
+    assert_eq!(
+        checkbox_color(true, false),
+        paint_list_api::ColorF::new(1.0, 0.0, 0.0, 1.0)
     );
-    let list = document.frame(120, 80).expect("frame");
-    let colors = list
-        .commands()
-        .iter()
-        .filter_map(|command| match command {
-            paint_list_api::PaintCmd::DrawRect(rect) => Some(rect.color),
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    assert!(
-        colors.contains(&paint_list_api::ColorF::new(1.0, 0.0, 0.0, 1.0)),
-        "unchecked live state uses the ordinary input rule: {colors:?}"
-    );
-    assert!(
-        !colors.contains(&paint_list_api::ColorF::new(0.0, 1.0, 0.0, 1.0)),
-        "the stale checked attribute does not match :checked: {colors:?}"
+    assert_eq!(
+        checkbox_color(false, true),
+        paint_list_api::ColorF::new(0.0, 1.0, 0.0, 1.0)
     );
 }
 

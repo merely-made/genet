@@ -470,6 +470,17 @@ impl ScriptedDom {
         )
     }
 
+    /// The current form owner of an HTML input or textarea. Explicit `form`
+    /// lookup is scoped to the control's ordinary tree; it crosses a shadow
+    /// host only when deciding whether the control is connected.
+    pub fn form_control_form_owner(&self, id: NodeId) -> Option<NodeId> {
+        if !self.is_html_input(id) && !self.is_html_textarea(id) {
+            return None;
+        }
+        let root = self.form_control_tree_root(id);
+        self.input_form_owner(id, root)
+    }
+
     fn textarea_default_value(&self, id: NodeId) -> String {
         let mut out = String::new();
         // Only direct Text children contribute to a textarea's value.
@@ -490,7 +501,7 @@ impl ScriptedDom {
             return;
         }
         let root = self.form_control_tree_root(id);
-        let form_owner = self.input_form_owner(id, root);
+        let form_owner = self.form_control_form_owner(id);
         let mut descendants = Vec::new();
         collect_descendants(self, root, &mut descendants);
         let peers: Vec<_> = descendants
@@ -500,7 +511,7 @@ impl ScriptedDom {
                     && self.is_html_input(*peer)
                     && self.input_type(*peer) == "radio"
                     && self.input_attribute(*peer, "name") == Some(name.as_str())
-                    && self.input_form_owner(*peer, root) == form_owner
+                    && self.form_control_form_owner(*peer) == form_owner
             })
             .collect();
         for peer in peers {
@@ -517,16 +528,18 @@ impl ScriptedDom {
         }
     }
     fn input_form_owner(&self, id: NodeId, root: NodeId) -> Option<NodeId> {
-        if let Some(form_id) = self.input_attribute(id, "form") {
+        if let Some(form_id) = self.input_attribute(id, "form")
+            && self.is_connected_through_shadow_hosts(id)
+        {
             let mut nodes = Vec::new();
             collect_descendants(self, root, &mut nodes);
-            return nodes.into_iter().find(|candidate| {
-                self.element_name(*candidate).is_some_and(|q| {
-                    q.ns == markup5ever::ns!(html)
-                        && q.local.as_ref() == "form"
-                        && self.attribute(*candidate, &markup5ever::ns!(), &LocalName::from("id"))
-                            == Some(form_id)
-                })
+            let first_match = nodes.into_iter().find(|candidate| {
+                self.attribute(*candidate, &markup5ever::ns!(), &LocalName::from("id"))
+                    == Some(form_id)
+            });
+            return first_match.filter(|candidate| {
+                self.element_name(*candidate)
+                    .is_some_and(|q| q.ns == markup5ever::ns!(html) && q.local.as_ref() == "form")
             });
         }
         let mut parent = self.parent(id);
@@ -540,6 +553,21 @@ impl ScriptedDom {
             parent = self.parent(candidate);
         }
         None
+    }
+    fn is_connected_through_shadow_hosts(&self, id: NodeId) -> bool {
+        let mut current = id;
+        loop {
+            if self.kind(current) == layout_dom_api::NodeKind::Document {
+                return true;
+            }
+            if let Some(parent) = self.parent(current) {
+                current = parent;
+            } else if let Some(host) = self.shadow_host_of(current) {
+                current = host;
+            } else {
+                return false;
+            }
+        }
     }
     fn form_control_tree_root(&self, id: NodeId) -> NodeId {
         let mut root = id;
@@ -793,6 +821,98 @@ mod tests {
         assert!(!dom.form_control_state(first).unwrap().checked);
         assert!(dom.form_control_state(second).unwrap().checked);
         assert!(dom.form_control_state(other_form).unwrap().checked);
+    }
+
+    #[test]
+    fn explicit_form_uses_first_matching_id_even_when_it_is_not_a_form() {
+        let mut dom = ScriptedDom::new();
+        let root = dom.document();
+        let earlier_div = dom.create_element(tag(local_name!("div")));
+        dom.set_attribute(earlier_div, attr(local_name!("id")), "duplicate");
+        let later_form = dom.create_element(tag(local_name!("form")));
+        dom.set_attribute(later_form, attr(local_name!("id")), "duplicate");
+        let explicit = dom.create_element(tag(local_name!("input")));
+        let owned = dom.create_element(tag(local_name!("input")));
+        for radio in [explicit, owned] {
+            dom.set_attribute(radio, attr(local_name!("type")), "radio");
+            dom.set_attribute(radio, attr(local_name!("name")), "group");
+        }
+        dom.set_attribute(explicit, attr(local_name!("form")), "duplicate");
+        dom.append_child(root, earlier_div);
+        dom.append_child(root, later_form);
+        dom.append_child(root, explicit);
+        dom.append_child(later_form, owned);
+
+        assert_eq!(dom.form_control_form_owner(explicit), None);
+        assert_eq!(dom.form_control_form_owner(owned), Some(later_form));
+        assert!(dom.set_form_control_checked(explicit, true));
+        assert!(dom.set_form_control_checked(owned, true));
+        assert!(dom.form_control_state(explicit).unwrap().checked);
+        assert!(dom.form_control_state(owned).unwrap().checked);
+    }
+
+    #[test]
+    fn disconnected_form_attribute_falls_back_to_nearest_ancestor_form() {
+        let mut dom = ScriptedDom::new();
+        let fragment = dom.create_fragment();
+        let ancestor = dom.create_element(tag(local_name!("form")));
+        dom.set_attribute(ancestor, attr(local_name!("id")), "ancestor");
+        let external = dom.create_element(tag(local_name!("form")));
+        dom.set_attribute(external, attr(local_name!("id")), "external");
+        let detached_radio = dom.create_element(tag(local_name!("input")));
+        let external_radio = dom.create_element(tag(local_name!("input")));
+        let external_textarea = dom.create_element(tag(local_name!("textarea")));
+        for radio in [detached_radio, external_radio] {
+            dom.set_attribute(radio, attr(local_name!("type")), "radio");
+            dom.set_attribute(radio, attr(local_name!("name")), "group");
+        }
+        dom.set_attribute(detached_radio, attr(local_name!("form")), "external");
+        dom.append_child(fragment, ancestor);
+        dom.append_child(ancestor, detached_radio);
+        dom.append_child(fragment, external);
+        dom.append_child(external, external_radio);
+        dom.append_child(external, external_textarea);
+
+        assert_eq!(dom.form_control_form_owner(detached_radio), Some(ancestor));
+        assert_eq!(dom.form_control_form_owner(external_radio), Some(external));
+        assert_eq!(
+            dom.form_control_form_owner(external_textarea),
+            Some(external)
+        );
+        assert!(dom.set_form_control_checked(detached_radio, true));
+        assert!(dom.set_form_control_checked(external_radio, true));
+        assert!(dom.form_control_state(detached_radio).unwrap().checked);
+        assert!(dom.form_control_state(external_radio).unwrap().checked);
+    }
+
+    #[test]
+    fn connected_shadow_radio_searches_its_tree_for_explicit_form_owner() {
+        let mut dom = ScriptedDom::new();
+        let document = dom.document();
+        let host = dom.create_element(tag(local_name!("div")));
+        let light_form = dom.create_element(tag(local_name!("form")));
+        dom.set_attribute(light_form, attr(local_name!("id")), "outside");
+        dom.append_child(document, host);
+        dom.append_child(host, light_form);
+        let shadow = dom
+            .attach_shadow(host, layout_dom_api::ShadowRootInit::default())
+            .unwrap();
+        let shadow_radio = dom.create_element(tag(local_name!("input")));
+        let light_radio = dom.create_element(tag(local_name!("input")));
+        for radio in [shadow_radio, light_radio] {
+            dom.set_attribute(radio, attr(local_name!("type")), "radio");
+            dom.set_attribute(radio, attr(local_name!("name")), "group");
+        }
+        dom.set_attribute(shadow_radio, attr(local_name!("form")), "outside");
+        dom.append_child(shadow, shadow_radio);
+        dom.append_child(light_form, light_radio);
+
+        assert_eq!(dom.form_control_form_owner(shadow_radio), None);
+        assert_eq!(dom.form_control_form_owner(light_radio), Some(light_form));
+        assert!(dom.set_form_control_checked(shadow_radio, true));
+        assert!(dom.set_form_control_checked(light_radio, true));
+        assert!(dom.form_control_state(shadow_radio).unwrap().checked);
+        assert!(dom.form_control_state(light_radio).unwrap().checked);
     }
 
     #[test]

@@ -2280,6 +2280,46 @@ fn form_control_live_state_on_nova() {
     form_control_live_state_works::<script_engine_nova::NovaEngine>();
 }
 
+fn form_control_owner_works<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.eval(r#"
+      const container=document.createElement('section'); document.appendChild(container);
+      const blocker=document.createElement('div'); blocker.id='duplicate';
+      const later=document.createElement('form'); later.id='duplicate';
+      const outside=document.createElement('input'); outside.setAttribute('form','duplicate');
+      container.append(blocker,later,outside);
+      console.log(outside.form === null);
+      blocker.remove(); console.log(outside.form === later);
+      const detached=document.createElement('form');
+      const child=document.createElement('textarea'); child.setAttribute('form','missing');
+      detached.appendChild(child); console.log(child.form === detached);
+      container.appendChild(detached); console.log(child.form === null);
+      const host=document.createElement('div'); container.appendChild(host);
+      const shadow=host.attachShadow({mode:'open'});
+      const shadowInput=document.createElement('input'); shadowInput.setAttribute('form','duplicate');
+      shadow.appendChild(shadowInput); console.log(shadowInput.form === null);
+      const shadowForm=document.createElement('form'); shadowForm.id='duplicate';
+      shadow.appendChild(shadowForm); console.log(shadowInput.form === shadowForm);
+      console.log('textLength' in outside);
+      child.value='A😀B'; console.log(child.textLength);
+    "#).expect("form owner script");
+    assert_eq!(
+        rt.host().borrow().console,
+        vec!["true", "true", "true", "true", "true", "true", "false", "4"]
+    );
+}
+
+#[test]
+fn form_control_owner_on_boa() {
+    form_control_owner_works::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn form_control_owner_on_nova() {
+    form_control_owner_works::<script_engine_nova::NovaEngine>();
+}
+
 /// Shape facts the generated table must carry: interfaces the hand table never
 /// had, an interface without `[HTMLConstructor]`, a readonly reflected
 /// attribute, a named constructor, and the unknown-element fallback.

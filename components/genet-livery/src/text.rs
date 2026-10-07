@@ -38,7 +38,7 @@ use livery::{
 };
 use paint_list_api::{
     ColorF, CommonPlacement, FontInstanceKey, FontResource, GlyphInstance, IdNamespace,
-    LayoutPoint, PaintCmd, TextOptions, TextRunItem,
+    LayoutPoint, LayoutRect, PaintCmd, TextOptions, TextRunItem,
 };
 use parley::{
     Alignment, AlignmentOptions, FontContext, FontFamily, FontFeature, FontFeatures, FontStyle,

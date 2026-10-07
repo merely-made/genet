@@ -618,3 +618,12 @@ dependency cache. Original primary overrides and locks remain preserved.
   the existing single-reformat limitation and remains unmeasured; this flat
   app-field repair does not claim general containment or nested-layout
   conformance. The field's preedit/ghost/caret runs are ordinary inline spans.
+- 2026-10-07: `candidate-contained-width-consumer-crates` qualifies the narrowed
+  product `e84f9c7f9aec23320c539784961d1465f8a53a9b`: Livery 665, documents 57,
+  render 42 and WPT 77 passes, zero failures and nine existing ignores. Counts
+  cover all 54 selected completed targets. Original config/lock restore
+  exactly. Mere's new frozen candidate lock changes 33 Genet source revisions
+  and 31 dependency source references, preserving package versions, graph
+  shape/checksums and both Knot-owned legacy identities. The mechanical lock
+  preparation is not a consumer pass; locked resolution and fresh Mere tests
+  follow. Both unruled questions remain open without response deadlines.

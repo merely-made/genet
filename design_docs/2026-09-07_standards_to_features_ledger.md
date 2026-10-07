@@ -192,6 +192,19 @@ retains the original prerequisite failures and C3 baselines; broad Boa
 experimental enablement, private adapter expansion and BYOB deferral are not
 selected. The remaining fetch-body and final-integration checkpoints stand.
 
+**Streams regression candidate qualified, 2026-10-07:** clean implementation
+`5a539ae3f40` passes 1,209 tests with three existing ignores and all four
+fixture categories on each engine. Ten matched directory maps improve
+non-transferable Streams to 88 passing files on Boa and 87 on Vano; both C3
+records cease evaluation throws. Fresh comparisons repair all 46 genuine
+cross-engine old-pass losses from the first candidate. The 36 remaining raw
+keys are 24 independently revalidated label equivalents and 12 experimental
+owning/transfer rows awaiting Mark's explicit ruling, with zero unexplained
+losses. Independent source review qualifies all 8,446 normalized movements
+with zero gaps. The linked plan owns exact source, runner, lock, per-crate
+counts and the accepted attribution artifact. Genet remains unpublished at the brief's
+final checkpoint; this is not final acceptance while the ruling is pending.
+
 Mark asked for the next lanes to come from WPT and specification
 conformance. These targets were chosen from the 2026-09-29 Vano census
 (`receipts/2026-09-29_vano_wpt_census/outcomes.json.gz`), broken down by

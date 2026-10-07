@@ -133,7 +133,19 @@ Two later rulings the same day are recorded in the
   and an experimental owning/transfer ruling; this is not final acceptance.
   **Later 2026-10-06, S1 answered:** Mark approved the narrow Vano/Boa transfer
   foundation and qualified Genet repins. C3 repair and full Streams acceptance
-  remain unmeasured; the plan records the ruling and owner gates.
+  were still unmeasured at that checkpoint; the plan records the owner gates.
+  **2026-10-07 regression candidate:** fresh `5a539ae3f40` maps preserve
+  default-readable `patched-global` PASS 5/5 in Window and Worker on both
+  engines. `stream-safe-creation` is FAIL 54/63 in Window and PASS 63/63 in
+  Worker on both, with neither throwing on evaluation. All nine Window
+  failures call `fetch(location.href)` on the disk harness route, which passes
+  no FetchHandler (`ports/genet-wpt/src/testharness.rs:252-269`); their
+  `TypeError: Failed to fetch` does not demonstrate a remaining inherited
+  getter trap. Full consumer qualification passes 1,209 tests. Matched maps
+  repair all 46 genuine first-candidate old-pass losses; the 12 experimental
+  owning/transfer rows remain an explicit pending ruling. Independent source
+  review qualifies all 8,446 normalized movements with zero gaps. Genet's
+  pre-publication checkpoint remains open.
 - Ruling 9: the Vano lane may fetch Vano's unfetched `tests/test262`
   submodule at its pinned commit `e0d8f66a`, and run Vano's test262 gate.
   Mark: "Allow, pinned commit only (Recommended)".

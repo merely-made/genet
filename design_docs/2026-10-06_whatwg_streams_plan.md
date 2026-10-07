@@ -579,3 +579,12 @@ whether to retain standard behavior with those 12 exact cross-engine
 experimental losses recorded, or scope an owning/transfer extension. No choice
 is inferred from elapsed time; dependent accounting and final acceptance await
 his explicit answer. Independent regression work may continue while pending.
+
+- Regression repair commit `fe790e6a9901dd0b63f3521e76cda95895cdda6c`
+  adds pipe binding/scheduling, Transform cancellation, BYOB validation,
+  private clone-brand and data-URL scheme-dispatch controls. Encoding's block
+  retains its accepted SHA-256 `efec66e1189c88485799704d6d5710969028e046f0807fb8fffe47e08d557217`.
+  `candidate-regressions-serial-crates` failed compilation before tests because
+  the new Fetch helper returned a live `RefCell` borrow temporary. Store its
+  cloned result before returning; the unchanged failed receipt is retained.
+  A fresh full eight-crate gate qualifies the corrected source.

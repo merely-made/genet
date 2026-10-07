@@ -49,7 +49,8 @@ fn control<E: ScriptEngine>(body: &str) -> Vec<(String, Option<Vec<u8>>)> {
     runtime.run_microtasks();
     let result = runtime.eval("fetchResult").expect("control result");
     assert_eq!(runtime.value_to_string(&result).expect("stringify"), "ok");
-    requests.borrow().clone()
+    let recorded = requests.borrow().clone();
+    recorded
 }
 
 const NEVER_CLOSING_DATA_UPLOADS: &str = r#"

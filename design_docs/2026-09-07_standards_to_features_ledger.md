@@ -132,6 +132,13 @@ a writing product), `streams` (extraction starts before the page finishes),
 
 ## Conformance targets, 2026-10-02
 
+**Forms Phase A execution, 2026-10-07:** the
+[forms plan](2026-10-07_forms_value_validation_submission_plan.md) carries C1/C5/C6.
+Mark answered "Proceed" to the recommended input value/placeholder/password
+and textarea live-value rendering scope. Arena state, consumer migration and
+starting gates are assembling. No Forms passing count or final acceptance is
+claimed; Checkpoint A still precedes validation and submission.
+
 **Encoding execution, 2026-10-05:** the
 [API plan](2026-10-05_encoding_textdecoder_plan.md) retains C1/C2/C4 and the
 corrected API-only scope. E1 authorizes per-realm native storage, a private

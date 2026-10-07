@@ -124,7 +124,7 @@ completed corpus census or bounded slice does not close its enclosing feature.
   residuals remain recorded in the plan.
 
 - [WHATWG Streams](2026-10-06_whatwg_streams_plan.md)
-  (**Qualified locally; final checkpoint open, 2026-10-07**): native transfer,
+  (**Accepted locally; integration authorized, 2026-10-07**): native transfer,
   private Promise reactions and Boa finalizer retention are qualified and
   published. Exact consumer `5a539ae3f40` passes 1,209 tests, three existing
   ignores, its optimized runner and all four fixture categories on both engines.
@@ -132,8 +132,10 @@ completed corpus census or bounded slice does not close its enclosing feature.
   to 88 passing files on Boa and 87 on Vano. All 46 genuine first-candidate
   old-pass losses are repaired; 24 label equivalents and 12 experimental
   owning/transfer losses remain separately recorded. Independent source review
-  qualifies all 8,446 normalized movements with zero gaps. The experimental
-  ruling and Genet publication checkpoint remain open.
+  qualifies all 8,446 normalized movements with zero gaps. Mark approved the
+  exact 12 experimental losses and authorized the final checkpoint. Publication
+  and main integration follow fresh qualification with current main's
+  independent fontsan/WOFF2 change preserved.
 
 ## WPT census — the web platform beyond CSS
 

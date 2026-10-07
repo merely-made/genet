@@ -1,21 +1,21 @@
 # WHATWG Streams
 
-**Status:** Candidate qualified locally; experimental-extension ruling and final
-pre-publication checkpoint open, 2026-10-07.
+**Status:** Candidate accepted locally; publication and main integration
+authorized, 2026-10-07. Fresh integration qualification follows current main.
 Clean implementation `5a539ae3f402aec659f1bed3172e5f2ccb9d976a` passes
 1,209 tests with three existing ignores, the ordinary optimized runner build,
 and all four authored fixture categories on both engines. All ten matched WPT
 maps are complete. Both C3 records cease evaluation throws. Non-transferable
 Streams improves from 13 to 88 passing files on Boa and from 12 to 87 on Vano.
 The first candidate's 46 genuine cross-engine old-pass losses are repaired;
-fresh strict accounting retains 24 proven label equivalents and 12 pending
-experimental owning/transfer losses, with zero unexplained losses. All 8,446
+fresh strict accounting retains 24 proven label equivalents and 12 explicitly
+approved experimental owning/transfer losses, with zero unexplained losses. All 8,446
 normalized movements have independently verified source attribution against
 the final qualified commit, with zero source gaps.
 Three bounded Luna agents supply source review; root owns integration and
 serial gates. S1 and S3/S4's qualified native revisions are published; Genet
-remains on its local lane branch pending the final checkpoint. Mark approved
-S2 on 2026-10-06 and S3/S4 on 2026-10-07.
+remains on its local lane branch while integration is qualified. Mark approved
+S2 on 2026-10-06, S3/S4 on 2026-10-07, and S5 plus the final checkpoint below.
 
 Authority is the [standards ledger](2026-09-07_standards_to_features_ledger.md#conformance-targets-2026-10-02)
 rulings C1 and C3, the [census panic attribution](2026-09-06_web_platform_wpt_census.md),
@@ -812,3 +812,29 @@ cleanup command before execution with **"blocked by policy"**. The cache is
 retained; `isolated-home-cleanup-blocked.receipt.json` records the marker and
 rejection. No alternative deletion command was attempted. All source, failed
 and successful receipts, and frozen runners remain preserved.
+
+## S5 and final checkpoint ruling, 2026-10-07
+
+The question put to Mark was whether to approve the 12 experimental
+owning/transfer losses while keeping standard behavior, or scope an extension.
+The recommendation was standard behavior. Mark answered verbatim:
+**"Approved, authorized"** after the completed local checkpoint report.
+
+S5 therefore keeps the current standard's source-type and enqueue behavior and
+approves only the twelve identified old-pass rows: the three recorded names in
+`streams/readable-streams/owning-type.any.html` and its Worker variant, on Boa
+and Vano. There is no wider waiver or new owning/transfer implementation.
+`candidate-regressions-experimental-owning-ruling.receipt.json` binds this
+answer to the original pending qualification receipt and all twelve exact
+row identities. The pending receipt, raw maps, comparisons and original
+attribution artifacts remain unchanged as dated evidence.
+
+The candidate's local acceptance is complete: 1,209 passing tests, zero
+failures, the eight original failing controls now passing, all fixture gates,
+both C3 evaluation repairs, improved Streams on both engines, every movement
+attributed, and no unexplained old-pass losses. Mark's approval completes the
+brief's report-and-stop checkpoint. His authorization, with the session's
+earlier push/merge instructions, permits publication and integration after
+fresh qualification against current main. Current main's independent
+fontsan/WOFF2 change is preserved and measured separately from the already
+accepted candidate; old receipts are not relabeled as integration receipts.

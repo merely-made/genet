@@ -205,6 +205,13 @@ with zero gaps. The linked plan owns exact source, runner, lock, per-crate
 counts and the accepted attribution artifact. Genet remains unpublished at the brief's
 final checkpoint; this is not final acceptance while the ruling is pending.
 
+**Streams S5 and final checkpoint ruling, 2026-10-07:** Mark answered
+"Approved, authorized" to the completed report and recommended exact 12-row
+experimental owning/transfer exception. Standard behavior remains selected;
+all twelve row identities are preserved in the separate ruling receipt.
+Local acceptance is complete. Publication and main integration are authorized
+and follow fresh qualification preserving current main's fontsan/WOFF2 work.
+
 Mark asked for the next lanes to come from WPT and specification
 conformance. These targets were chosen from the 2026-09-29 Vano census
 (`receipts/2026-09-29_vano_wpt_census/outcomes.json.gz`), broken down by

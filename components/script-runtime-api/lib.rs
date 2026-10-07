@@ -82,6 +82,7 @@ mod messaging;
 pub mod parse;
 mod platform;
 mod selector;
+mod streams;
 mod structured_clone;
 mod text_encoding;
 mod timing;
@@ -2482,6 +2483,7 @@ pub(crate) fn install_host_surface<E: ScriptEngine>(
     // in host state. Native sinks mutate the arena; a JS bootstrap wraps reflectors
     // into ergonomic node objects.
     dom::install_dom_surface(engine)?;
+    streams::install_streams_surface(engine)?;
     // The `fetch()` / `Response` / `Headers` surface over the host fetch seam.
     fetch::install_fetch_surface(engine)?;
 
@@ -2498,6 +2500,7 @@ pub(crate) fn install_host_surface<E: ScriptEngine>(
     // `structuredClone` + the serialize/deserialize algorithm. After `fetch` so
     // `Blob` / `File` exist for the platform-object cases.
     structured_clone::install_structured_clone_surface(engine)?;
+    streams::finish_streams_install(engine)?;
     // `performance` (hr-time, user timing) + `PerformanceObserver`.
     timing::install_timing_surface(engine)?;
     // `MessageChannel` / `MessagePort` / `BroadcastChannel` / `MessageEvent`.

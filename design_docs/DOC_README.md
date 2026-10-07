@@ -118,13 +118,13 @@ completed corpus census or bounded slice does not close its enclosing feature.
   residuals remain recorded in the plan.
 
 - [WHATWG Streams](2026-10-06_whatwg_streams_plan.md)
-  (**Engine foundation in progress, 2026-10-06**): standard Vano transfer and
-  Boa's narrow transfer feature are qualified and published. Genet's local
-  repin preserves package versions and dependency edges; exact-Git consumer
-  qualification is pending. Frozen full-directory baselines and four actual
-  failing algorithm controls are sealed. The separate bootstrap is feasible;
-  C3 and Streams implementation remain pending. S2 now authorizes reader-based
-  body consumption while preserving the existing native delivery contracts.
+  (**Implementation in progress, 2026-10-07**): standard Vano transfer and
+  Boa's narrow feature are published; exact-Git Genet qualification passed
+  1,142 tests. Both engines pass all transfer prerequisites, and the unchanged
+  Streams controls actually fail. Frozen full-directory engine-only runs lose
+  zero passing files/assertions. Three modules and S2's private reader-based
+  Fetch seam are drafted; candidate C3/Streams qualification remains pending.
+  Native delivery contracts and the final pre-publication checkpoint remain.
 
 ## WPT census — the web platform beyond CSS
 

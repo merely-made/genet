@@ -2432,40 +2432,61 @@ fn painted_runs(document: &mut LiveryDocument<ScriptedDom>) -> Vec<usize> {
         .collect()
 }
 
-#[test]
-fn document_without_text_or_virtual_controls_keeps_text_frame_absent() {
-    let dom =
-        ScriptedDom::from_serialized_document("<html><body><div id=empty></div></body></html>");
+/// A known local font keeps control glyph assertions independent of system
+/// fallback. No text node or button is added to seed the control's projection.
+fn form_control_paint_document(
+    dom: ScriptedDom,
+    sheet: &str,
+    width: f32,
+    height: f32,
+) -> LiveryDocument<ScriptedDom> {
+    let sheet = format!(
+        "@font-face {{ font-family: forms-ahem; src: url(/forms-ahem.ttf); }} input, textarea {{ font: 16px/24px forms-ahem; }} {sheet}"
+    );
     let mut document = LiveryDocument::new(
         dom,
-        StyleSet::cambium(&["html, body { margin: 0; }"]),
-        Device::screen(240.0, 100.0),
+        StyleSet::cambium(&[&sheet]),
+        Device::screen(width, height),
     );
+    document.set_font_resource(
+        "/forms-ahem.ttf",
+        include_bytes!("../../../../tests/wpt/tests/fonts/Ahem.ttf").to_vec(),
+    );
+    document
+}
 
-    document.frame(240, 100).expect("empty document frame");
-
+#[test]
+fn hidden_ancestor_suppresses_virtual_control_text() {
+    let dom = ScriptedDom::from_serialized_document(
+        "<html><body><div id=hidden><input id=field value=unpainted></div></body></html>",
+    );
+    let mut document = form_control_paint_document(
+        dom,
+        "#hidden { display:none; } #field { display:block; width:180px; height:28px; }",
+        240.0,
+        100.0,
+    );
+    let frame = document.frame(240, 100).expect("hidden control frame");
     assert!(
-        document
-            .layout
-            .as_ref()
-            .expect("completed layout")
-            .fragments
-            .text_frame()
-            .is_none(),
-        "an empty document does not allocate a retained text frame"
+        !frame
+            .commands()
+            .iter()
+            .any(|command| matches!(command, paint_list_api::PaintCmd::DrawText(_))),
+        "a child's explicit display cannot bypass its display:none ancestor"
     );
 }
 
 #[test]
 fn live_input_value_paints_without_replacing_its_default_attribute() {
-    let mut dom = ScriptedDom::from_serialized_document(
+    let dom = ScriptedDom::from_serialized_document(
         "<html><body><input id=field value=default></body></html>",
     );
     let field = by_id(&dom, "field");
-    let mut document = LiveryDocument::new(
+    let mut document = form_control_paint_document(
         dom,
-        StyleSet::cambium(&["html, body { margin: 0; } input { width: 180px; height: 28px; }"]),
-        Device::screen(240.0, 100.0),
+        "html, body { margin: 0; } input { width: 180px; height: 28px; }",
+        240.0,
+        100.0,
     );
     let initial = document
         .frame(240, 100)
@@ -2478,7 +2499,19 @@ fn live_input_value_paints_without_replacing_its_default_attribute() {
             _ => None,
         })
         .sum::<usize>();
-    assert_eq!(initial_glyphs, "default".chars().count());
+    assert_eq!(
+        initial_glyphs,
+        "default".chars().count(),
+        "control fragment {:?}, shapes {}, retained fonts {}",
+        document
+            .layout
+            .as_ref()
+            .unwrap()
+            .fragments
+            .principal_fragment(field),
+        document.text.shape_count(),
+        document.text.retained_font_count()
+    );
 
     document.mutate_dom(|dom| {
         let mut state = dom.form_control_state(field).expect("input state");
@@ -2523,12 +2556,11 @@ fn live_input_text_is_clipped_to_its_content_box_and_uses_only_current_value() {
     state.dirty_value = true;
     assert!(dom.set_form_control_state(field, state));
 
-    let mut document = LiveryDocument::new(
+    let mut document = form_control_paint_document(
         dom,
-        StyleSet::cambium(&[
-            "html, body { margin: 0; } input { width:40px; height:24px; padding:0; border:0; }",
-        ]),
-        Device::screen(120.0, 80.0),
+        "html, body { margin: 0; } input { width:40px; height:24px; padding:0; border:0; }",
+        120.0,
+        80.0,
     );
     let list = document.frame(120, 80).expect("frame");
     assert_eq!(
@@ -2585,10 +2617,11 @@ fn live_textarea_value_projects_multiline_text_and_preserves_author_children() {
     state.dirty_value = true;
     assert!(dom.set_form_control_state(field, state));
 
-    let mut document = LiveryDocument::new(
+    let mut document = form_control_paint_document(
         dom,
-        StyleSet::cambium(&["html, body { margin: 0; } textarea { width: 180px; height: 60px; }"]),
-        Device::screen(240.0, 100.0),
+        "html, body { margin: 0; } textarea { width: 180px; height: 60px; }",
+        240.0,
+        100.0,
     );
     assert_eq!(
         document
@@ -2639,10 +2672,11 @@ fn empty_live_input_projects_placeholder_instead_of_default_value() {
     state.dirty_value = true;
     assert!(dom.set_form_control_state(field, state));
 
-    let mut document = LiveryDocument::new(
+    let mut document = form_control_paint_document(
         dom,
-        StyleSet::cambium(&["html, body { margin: 0; } input { width: 120px; height: 28px; }"]),
-        Device::screen(180.0, 100.0),
+        "html, body { margin: 0; } input { width: 120px; height: 28px; }",
+        180.0,
+        100.0,
     );
     let painted = document
         .frame(180, 100)

@@ -15,8 +15,8 @@ path = "lib.rs"
 
 [dependencies]
 script-engine-api = { path = "../script-engine-api" }
-boa_engine = { version = "=1.0.0-dev", git = "https://github.com/mark-ik/boa.git", rev = "f9003484f6e83fb3d02024b82cd21a796fe8fb8d", features = ["array-buffer-transfer"] }
-boa_gc = { version = "=1.0.0-dev", git = "https://github.com/mark-ik/boa.git", rev = "f9003484f6e83fb3d02024b82cd21a796fe8fb8d" }
+boa_engine = { version = "=1.0.0-dev", git = "https://github.com/mark-ik/boa.git", rev = "4b6d316d1f363f4f483982fecfc62e7532835b89", features = ["array-buffer-transfer"] }
+boa_gc = { version = "=1.0.0-dev", git = "https://github.com/mark-ik/boa.git", rev = "4b6d316d1f363f4f483982fecfc62e7532835b89" }
 # Pin caller provenance and standard buffer transfer so fresh clones share the
 # same realm and detachment rules. Transfer support does not enable Boa's broad
 # experimental feature. The gitignored local config may

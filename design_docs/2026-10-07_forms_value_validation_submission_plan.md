@@ -534,3 +534,13 @@ dependency cache. Original primary overrides and locks remain preserved.
   signature preserves the existing seam; both failed compile attempts retain
   stable-source and exact manifest/lock restoration receipts. A fresh retry
   follows, with no pass inferred from either failure.
+- 2026-10-07: `mere-forms-owned-window-state-packages` qualifies Mere `40272b30`:
+  Cambium 252, Rootstock 72, native accessibility 22 and browser mirror nine
+  passes, zero failures and two existing ignored doctests. Counts distinguish
+  Rust's two Cambium doctest result blocks. The first focused native-routing
+  build finds a missing `LayoutDom` trait import in the migrated fixture and
+  executes no tests; the import is corrected for a fresh retry. Luna also finds
+  that the browser mirror carries the committed field value and its projected
+  decoration descendants. A separate question asks whether app textboxes should
+  be accessible leaves across adapters or only in the browser mirror. No
+  pruning is implemented while that ruling and sibling scope remain pending.

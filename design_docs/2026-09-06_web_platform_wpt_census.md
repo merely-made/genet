@@ -125,6 +125,12 @@ Two later rulings the same day are recorded in the
   matched directory runs lose zero passing files/assertions, with four gains
   inside still-errored byte-stream records attributed separately. C3 repair is
   drafted in the private Streams/Fetch implementation and remains unqualified.
+  **2026-10-07 candidate:** the matched `a97c82514c7c` runner passes
+  `readable-streams/patched-global` 5/5 in Window and Worker on both engines.
+  `stream-safe-creation` ceases evaluation throws: FAIL 54/63 in Window,
+  PASS 63/63 in Worker on both. Full consumer qualification passes 1,185 tests.
+  The first candidate's strict WPT old-pass losses remain under bounded repair
+  and an experimental owning/transfer ruling; this is not final acceptance.
   **Later 2026-10-06, S1 answered:** Mark approved the narrow Vano/Boa transfer
   foundation and qualified Genet repins. C3 repair and full Streams acceptance
   remain unmeasured; the plan records the ruling and owner gates.

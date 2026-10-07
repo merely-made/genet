@@ -1,14 +1,16 @@
 # WHATWG Streams
 
-**Status:** Candidate implemented; native fixes published, consumer qualification in progress, 2026-10-07.
-S1's published engine pins and exact Genet consumer are qualified. Both engines
-pass real buffer transfer; meaningful Streams algorithm controls still fail on
-the unchanged foundation. The candidate passes those controls and all existing
-focused Fetch, Encoding and Worker tests. A new Boa Promise-property trap and
-plain-object finalizer delivery control fail. Independent WeakRef controls
-confirm collection on both engines. Three bounded Luna agents drafted the
-modules; root owns integration, review and gates. Mark approved S2 on 2026-10-06.
-Mark approved S3/S4 below on 2026-10-07. Their qualification and the final local
+**Status:** First candidate measured; WPT regression repairs in progress, 2026-10-07.
+S1 and S3/S4's published engine pins and exact Genet consumer are qualified.
+The first candidate at `a97c82514c7c2c47f01f3b7f57769f00d8079466` passes
+1,185 tests with three existing ignores, its optimized runner, and all four
+authored fixture categories on both engines. Both C3 records cease evaluation
+throws. Non-transferable Streams improves from 13 to 78 passing files on Boa,
+and 12 to 77 on Vano, but strict comparisons expose previously passing rows
+that need repairs or an explicit experimental-extension ruling. Three bounded
+Luna agents supply disjoint fixes and source review; root owns integration
+and serial gates. Mark approved S2 on 2026-10-06 and S3/S4 on 2026-10-07.
+Fresh qualification of the regression repairs and the final local
 pre-publication checkpoint remain open.
 
 Authority is the [standards ledger](2026-09-07_standards_to_features_ledger.md#conformance-targets-2026-10-02)
@@ -531,5 +533,49 @@ All candidate gates and failed diagnostics remain under `Code/testing/genet/stre
 The bounded agents supply source review; root runs gates serially. Retain the reused
 `worktrees/genet-encoding` checkout on `conformance/streams`, stable target
 `C:/t/cargo-targets/genet-encoding`, and marker-owned
-`C:/t/cargo-homes/genet-streams` for the pending qualification. The candidate
-has not had its full crate suite, optimized runner or post-change WPT qualified.
+`C:/t/cargo-homes/genet-streams` for the pending qualification. The first
+candidate's successful full-suite, optimized-runner and WPT receipts remain
+immutable; the regression repairs require a new source tuple and gates.
+
+## First candidate measurements, 2026-10-07
+
+`candidate-reactions-serial-crates` qualifies clean source `a97c82514c7c` and
+lock `917405594C6B8D1C4383A94F81BEB8B7BAA72C6FE43E605CB823E3B6BFADEF8C`:
+script-runtime-api 790, genet-scripted 120, genet-wpt 77 (three existing
+ignores), script-engine-nova 43, script-engine-boa 26, genet-documents 56,
+genet-render 41 and taproot 32. Counts use executable dependency source paths
+rather than ambiguous executable basenames. The ordinary optimized build
+produces frozen runner SHA-256
+`A3CF4FBBDDDB0893B2C08CDCF59BEA597D725AAA397C6D12F81B2EE484A993CF`.
+Engine prerequisites 3/3, buffer transfer 7/7, byte-EOF algorithm controls 4/4
+and Promise-property controls 6/6 pass on each engine with that runner.
+
+All ten matched directory maps are complete. The immutable comparisons
+`candidate-reactions-vs-published-before.json` and
+`candidate-reactions-vs-engine-foundation.json` retain completed rows separately
+from partial ERROR rows and preserve transfer-family attribution. C3's
+`readable-streams/patched-global` window/worker variants pass 5/5 on both engines.
+`fetch/api/basic/stream-safe-creation` is FAIL 54/63 in Window and PASS 63/63
+in Worker on both engines; neither throws on evaluation. The nine Window
+failures exercise Fetch behavior rather than the repaired inherited-property
+traps. This satisfies C3's specified evaluation done-condition without claiming
+the Window file passes.
+
+Strict Streams comparisons expose 35 assertion-key losses and two passing-file
+losses per engine. Twelve assertion keys are proven generated-label changes
+from the same unchanged WPT cases; their explicit occurrence mappings in
+`candidate-reactions-{boa,nova}-label-attribution.json` are pass-to-pass, and
+the raw comparisons remain unchanged. The remaining losses cover pipe brands,
+pipe-through locks, synchronous sink writes, BYOB validation order, transform
+cancel rejection, serialization of privately branded streams, and six rows
+per engine in the experimental `owning-type` file. Fetch's four old-pass rows
+per engine become not-run after a never-closing upload stream blocks a data-URL
+feature-detection test. These receive bounded repairs and authored controls.
+
+The current standard only permits the `bytes` source type. The `owning-type`
+file also tests a nonstandard second transfer-options argument to `enqueue`,
+including its ordinary-stream transfer-parameter case. Mark has been asked
+whether to retain standard behavior with those 12 exact cross-engine
+experimental losses recorded, or scope an owning/transfer extension. No choice
+is inferred from elapsed time; dependent accounting and final acceptance await
+his explicit answer. Independent regression work may continue while pending.

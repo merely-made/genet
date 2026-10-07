@@ -910,9 +910,10 @@ var ReadableOps = (function (Core) {
     if (!descriptor) throw typeError('No pending BYOB read');
     var info = Core.viewInfo(view);
     if (Core.isDetached(info.buffer)) throw typeError('View buffer is detached');
+    var state = streamSlot(controller.stream).state;
+    if (state !== 'closed' && info.byteLength === 0) throw typeError('View must not be empty');
     if (info.byteOffset !== descriptor.byteOffset + descriptor.bytesFilled) throw rangeError('View offset does not match BYOB request');
     if (Core.bufferByteLength(info.buffer) !== descriptor.bufferByteLength) throw rangeError('View buffer length does not match BYOB request');
-    if (info.byteLength === 0 && streamSlot(controller.stream).state !== 'closed') throw typeError('View must not be empty');
     if (descriptor.bytesFilled + info.byteLength > descriptor.byteLength) throw rangeError('View exceeds BYOB request');
     var copiedBuffer = Core.transfer(info.buffer);
     descriptor.buffer = copiedBuffer;

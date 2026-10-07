@@ -84,3 +84,43 @@ fn size_contained_abspos_uses_its_contain_intrinsic_size_before_ratio_clamping()
         "size-contained aspect-ratio abspos",
     );
 }
+
+fn single_line_contained_field_width(
+    value: &str,
+    host_width: Option<&str>,
+    width: Option<&str>,
+) -> f32 {
+    let host_size = host_width.map_or(String::new(), |size| {
+        format!("--cambium-field-intrinsic-width:{size};")
+    });
+    let explicit_width = width.map_or(String::new(), |width| format!("width:{width};"));
+    let html = format!(
+        "<html><body style=\"margin:0\"><div id=\"field\" role=\"textbox\" \
+         style=\"position:absolute;left:10px;top:10px;{explicit_width}padding:4px 8px;\
+         border:1px solid black;font-size:16px;white-space:pre;overflow-x:auto;\
+         overflow-y:hidden;contain:inline-size;{host_size}contain-intrinsic-size:\
+         var(--cambium-field-intrinsic-width,10em) 1.2em;\">{value}<span> preedit</span>\
+         <span>▍</span></div></body></html>"
+    );
+    document_rects(&html, &["field"])[0][2]
+}
+
+#[test]
+fn abspos_single_line_field_uses_contained_intrinsic_width_with_descendants() {
+    let short = "notes.djot";
+    let long = "C:/Users/someone/AppData/Local/Temp/a/very/long/folder/structure/that/keeps/going/document.djot";
+
+    for value in [short, long] {
+        for (host_width, width, expected) in [
+            (None, None, 178.0),
+            (Some("12em"), None, 210.0),
+            (Some("12em"), Some("200px"), 218.0),
+        ] {
+            let actual = single_line_contained_field_width(value, host_width, width);
+            assert!(
+                (actual - expected).abs() <= 0.5,
+                "value {value:?}, host width {host_width:?}, explicit width {width:?}: expected {expected}px, got {actual}px"
+            );
+        }
+    }
+}

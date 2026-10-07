@@ -1,6 +1,6 @@
 # WHATWG Streams
 
-**Status:** Candidate implemented; engine checkpoint pending, 2026-10-07.
+**Status:** Candidate implemented; approved engine work in progress, 2026-10-07.
 S1's published engine pins and exact Genet consumer are qualified. Both engines
 pass real buffer transfer; meaningful Streams algorithm controls still fail on
 the unchanged foundation. The candidate passes those controls and all existing
@@ -8,7 +8,8 @@ focused Fetch, Encoding and Worker tests. A new Boa Promise-property trap and
 plain-object finalizer delivery control fail. Independent WeakRef controls
 confirm collection on both engines. Three bounded Luna agents drafted the
 modules; root owns integration, review and gates. Mark approved S2 on 2026-10-06.
-S3/S4 below and final local qualification/pre-publication remain open.
+Mark approved S3/S4 below on 2026-10-07. Their qualification and the final local
+pre-publication checkpoint remain open.
 
 Authority is the [standards ledger](2026-09-07_standards_to_features_ledger.md#conformance-targets-2026-10-02)
 rulings C1 and C3, the [census panic attribution](2026-09-06_web_platform_wpt_census.md),
@@ -427,7 +428,7 @@ incremental network delivery or copying a reference implementation.
   spanning two maps. All body, realm, Worker and snapshot controls pass. The
   sole failure is the isolated plain-object finalizer after an earlier pump.
 
-## S3: private Promise reaction operation, awaiting ruling
+## S3: private Promise reaction operation, ruled
 
 The brief's engine-feature checkpoint applies: **"an engine feature Streams
 needs ... is missing in one engine"**. The candidate's Boa control records an
@@ -446,9 +447,15 @@ remains unchanged. Vano's algorithm and handler type are crate-private;
 Boa's `JsPromise::then` follows the public species path, while its underlying
 perform operation is crate-private. Native engine controls and matched Genet
 qualification precede consumer repinning. Package versions, features and
-dependency edges remain fixed. No engine edits have been made for this route.
+dependency edges remain fixed.
 
-## S4: Boa cleanup listener retention, awaiting ruling
+**Ruling S3, 2026-10-07:** Mark answered "Yes and yes" to the two separately
+presented engine questions. S3 authorizes the private hooks, adapter integration
+and consumer repins after native qualification. Root delegated the bounded Vano
+and Boa changes and Genet integration to the existing Luna agents; root owns
+review, serial native gates, publication and consumer qualification.
+
+## S4: Boa cleanup listener retention, ruled
 
 The isolated plain-object finalizer control fails only after a microtask pump
 precedes GC. The existing Encoding finalizer control, which collects before
@@ -463,8 +470,20 @@ repin. The source inspection identifies local pending cleanup futures dropped
 at executor quiescence; implementation details await the ruling and native
 controls. The existing approved Vano finalizer queue remains the owner there.
 
+**Ruling S4, 2026-10-07:** the same explicit answer authorizes Boa cleanup-work
+retention across pumps with the approved GC policy preserved. Actual collection
+remains checked separately from callback delivery. No further confirmation is
+needed for this bounded fix and its qualification.
+
+- S3's Boa native hook gate passed all three controls on `dd0b5af58766b4ffbed65ed7bdbaf295c65b3f09`: constructor/species bypass, empty fulfillment, and thrown-handler identity through the job error path. Vano's first hook gate on `fafc895415e021cda91c2a2774443fb14e8dc0d5` failed compilation because a returned error retained a short GC borrow. Local `e4b85dc83ae3e2775a9d400552c5d8447e336578` consumes the GC scope when rebinding that error; fresh native qualification remains pending.
+- S4's first native registry gate passed six controls and failed the multi-registry case: one drain returned after its first completed cleanup future. Local `4b6d316d` continues polling already-ready cleanup futures before returning at quiescence. A fresh whole-engine gate includes all hook and registry controls. Queued cleanup for a registry created while another waiter is pending remains available on the next drain, with notification buffered and weak ownership retained.
+- Genet captures and deletes the native reaction bridge during each realm's bootstrap. A configurable placeholder preserves the deletion contract across both adapters. Enabled private-brand controls assert that the bridge has no remaining global property. New decoder controls collect after an earlier microtask checkpoint on both engines, preserving the existing Encoding source and tests.
+- The fresh Boa whole-engine library gate on `4b6d316d1f363f4f483982fecfc62e7532835b89` passed **1,112 tests**, including the three reaction and three registry controls. Its native formatting check also passed. Required publication hooks and exact published consumer qualification remain pending.
+- A delegated source audit identified synchronous Promise conversion failures outside callback catches in readable pull and sync-iterator value conversion. Both now relay failures through their existing stream error and operation rejection paths. Byte tee also captured branch cancellation flags before a pending BYOB read; it now reads current flags when that read completes. Enabled controls cover default/byte pull conversion errors, iterator conversion errors, and cancellation of either tee branch, alongside the unchanged local WPT cases in `streams/readable-byte-streams/tee.any.js`.
+- Mark's prompt preference, 2026-10-07: ask and wait for an explicit response, with no response timer or default inferred from elapsed time. Technical gate deadlines remain as specified by their receipts.
+
 All candidate gates and failed diagnostics remain under `Code/testing/genet/streams`.
-No gate or agent is active at this checkpoint. Retain the reused
+The bounded agents supply source review; root runs gates serially. Retain the reused
 `worktrees/genet-encoding` checkout on `conformance/streams`, stable target
 `C:/t/cargo-targets/genet-encoding`, and marker-owned
 `C:/t/cargo-homes/genet-streams` for the pending qualification. The candidate

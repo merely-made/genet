@@ -263,14 +263,14 @@ var ReadableOps = (function (Core) {
     if (!shouldPull || !controller.pullAlgorithm) return;
     if (controller.pulling) { controller.pullAgain = true; return; }
     controller.pulling = true;
-    var result;
-    try { result = call(controller.pullAlgorithm, undefinedValue, [controller.publicObject]); }
+    var promise;
+    try { promise = Core.resolve(call(controller.pullAlgorithm, undefinedValue, [controller.publicObject])); }
     catch (e) {
       controller.pulling = false;
       errorStream(controller.stream, e);
       return;
     }
-    Core.react(Core.resolve(result), function () {
+    Core.react(promise, function () {
       controller.pulling = false;
       if (controller.pullAgain) {
         controller.pullAgain = false;
@@ -1151,13 +1151,13 @@ var ReadableOps = (function (Core) {
         reader = acquireReader(stream, 'byob');
         Core.react(readerClosed(reader), function () { return undefinedValue; }, function (r) { forwardError(r); return undefinedValue; });
       }
-      var byobCanceled = forBranch2 ? canceled2 : canceled1;
-      var otherCanceled = forBranch2 ? canceled1 : canceled2;
+      function byobCanceled() { return forBranch2 ? canceled2 : canceled1; }
+      function otherCanceled() { return forBranch2 ? canceled1 : canceled2; }
       readIntoRequest(reader, view, 1, {
         chunk: function (chunk) {
           var run = function () {
             readAgain1 = false; readAgain2 = false;
-            if (!otherCanceled) {
+            if (!otherCanceled()) {
               var clone;
               try { clone = Core.copyBytes(chunk); }
               catch (e) {
@@ -1166,9 +1166,9 @@ var ReadableOps = (function (Core) {
                 reading = false;
                 return undefinedValue;
               }
-              if (!byobCanceled) respondWithNewView(forBranch2 ? branch2 : branch1, chunk);
+              if (!byobCanceled()) respondWithNewView(forBranch2 ? branch2 : branch1, chunk);
               internalByteEnqueue(forBranch2 ? branch1 : branch2, clone);
-            } else if (!byobCanceled) respondWithNewView(forBranch2 ? branch2 : branch1, chunk);
+            } else if (!byobCanceled()) respondWithNewView(forBranch2 ? branch2 : branch1, chunk);
             reading = false;
             if (readAgain1) { readAgain1 = false; pull1(); }
             else if (readAgain2) { readAgain2 = false; pull2(); }
@@ -1178,8 +1178,8 @@ var ReadableOps = (function (Core) {
         },
         close: function (emptyView) {
           reading = false;
-          if (!byobCanceled) internalByteClose(forBranch2 ? branch2 : branch1);
-          if (!otherCanceled) internalByteClose(forBranch2 ? branch1 : branch2);
+          if (!byobCanceled()) internalByteClose(forBranch2 ? branch2 : branch1);
+          if (!otherCanceled()) internalByteClose(forBranch2 ? branch1 : branch2);
           if (!canceled1 || !canceled2) cancelDeferred.resolve(undefinedValue);
         },
         error: function (r) { reading = false; forwardError(r); }

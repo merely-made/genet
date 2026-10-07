@@ -1,5 +1,7 @@
 // Private per-realm operations. The agent root retains only ephemeron maps;
 // algorithms and instances are reachable through their branded live objects.
+var nativePerformPromiseThen = globalThis.__streamsPerformPromiseThen;
+delete globalThis.__streamsPerformPromiseThen;
 var Core = (function () {
   'use strict';
   var O = Object, P = Promise, W = WeakMap, R = Reflect;
@@ -10,7 +12,7 @@ var Core = (function () {
   var objectPrototype = O.prototype;
   var wmHas = W.prototype.has, wmGet = W.prototype.get, wmSet = W.prototype.set;
   var wmDelete = W.prototype.delete;
-  var promiseResolve = P.resolve, promiseReject = P.reject, promiseThen = P.prototype.then;
+  var promiseResolve = P.resolve, promiseReject = P.reject;
   var getPrototypeOf = O.getPrototypeOf;
   var asyncIteratorPrototype = getPrototypeOf(getPrototypeOf(getPrototypeOf((async function* () {})())));
   var typedPrototype = getPrototypeOf(U8.prototype);
@@ -75,7 +77,9 @@ var Core = (function () {
     return markPromise(call(promiseResolve, P, [value]));
   }
   function reject(reason) { return markPromise(call(promiseReject, P, [reason])); }
-  function react(promise, fulfilled, rejected) { return markPromise(call(promiseThen, promise, [fulfilled, rejected])); }
+  function react(promise, fulfilled, rejected) {
+    call(nativePerformPromiseThen, undefined, [promise, fulfilled, rejected]);
+  }
   function handled(promise) { react(promise, undefined, function () {}); }
   function queue() {
     var q = record(); q.items = record(); q.head = 0; q.tail = 0; q.totalSize = 0; return q;

@@ -528,3 +528,9 @@ dependency cache. Original primary overrides and locks remain preserved.
   Independent routing/forwarding controls and fresh combined consumer gates
   remain pending; the old-pin checkout is not accepted for publication without
   its verified repin. No Genet product source changes.
+- 2026-10-07: `mere-forms-window-bridge-packages` stops before tests because
+  Rootstock's new forwarding method used a borrowed state return. The
+  `LayoutDom` seam returns an owned `FormControlState` snapshot. Correcting that
+  signature preserves the existing seam; both failed compile attempts retain
+  stable-source and exact manifest/lock restoration receipts. A fresh retry
+  follows, with no pass inferred from either failure.

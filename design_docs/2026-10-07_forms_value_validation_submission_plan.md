@@ -2,7 +2,7 @@
 
 **Status, 2026-10-07:** Phase A implementation in progress; starting runner,
 behavior controls and whole-directory baseline are frozen. The focused arena,
-native-document and Livery repair gate passes all 448 tests. Password display
+native-document and Livery repair gate passes all 449 tests. Password display
 and the Cambium compatibility decision remain open; full candidate qualification
 and matched WPT after maps are pending. Phase B and C retain separate checkpoints.
 Forms Phase A is not accepted or published.
@@ -249,3 +249,14 @@ dependency or version change is authorized beyond the named workspace edge.
   and the retained neighbor without duplicated glyphs or rewritten defaults.
   That fixture awaits its own fresh focused gate. Password and F3 remain pending;
   the complete candidate gate, negative control and after maps follow those rulings.
+- 2026-10-07: `draft-control-visibility-crates` qualifies source commit
+  `dd7ce9f21e467bfd234a2c7dc51b34dba791a144`: 57 native-document, 325 Livery
+  and 67 arena tests pass, with zero failures/ignores. The visibility/value
+  transition and retained-neighbor fixture passes. Sources remain fixed, and
+  the primary config and lock restore byte-for-byte. No full-suite or WPT after
+  qualification is inferred from this focused gate. The prepared negative-control
+  helper now names all four `live_` paint fixtures, including the new transition,
+  and records its exact Cargo arguments; it has parsed but has not been executed.
+  No Forms push or integration occurs. Stable target `C:/t/cargo-targets/genet-encoding`
+  and published-source home `C:/t/cargo-homes/genet-streams` stay owned by this
+  unfinished Forms qualification. No Forms worktree was created.

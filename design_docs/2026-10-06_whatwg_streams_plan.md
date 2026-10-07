@@ -403,3 +403,11 @@ incremental network delivery or copying a reference implementation.
   an enabled Rust control for the same edge. A private reaction operation is
   under read-only engine inspection for the brief's engine-feature checkpoint;
   no engine or dependency change is authorized by this observation alone.
+- The frozen `candidate-queue-controls` gate completed all five targets:
+  **126 passes and two failures**. All 32 existing Fetch, 39 Encoding and 24
+  Worker tests passed. Streams had 17 passes and one Boa Promise-constructor
+  trap failure; Vano passed that probe. Bridge controls had 14 passes and one
+  Boa collection failure, with none of its four discarded streams finalized.
+  Vano collection, both-engine child retention and Worker installation, and
+  Vano snapshot independence passed. A plain-object/WeakMap-cycle diagnostic
+  will distinguish a source retention defect from engine ephemeron behavior.

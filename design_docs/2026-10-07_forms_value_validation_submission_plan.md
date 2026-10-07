@@ -596,3 +596,15 @@ dependency cache. Original primary overrides and locks remain preserved.
   Independent native-state routing/forwarding controls can proceed meanwhile.
 - 2026-10-07: Mark approves the bounded Genet layout repair as F4 above.
   Reproduction, a measured handoff repair and fresh qualification follow.
+- 2026-10-07: The unchanged-layout reproduction at `b96112de` executes two
+  passes and the intended new descendant-bearing field failure: expected
+  178px, actual 146px including preedit/caret spans. Its source tuple is stable
+  and the original config/lock are restored. Buckram correctly excludes
+  size-contained roots from content-intrinsic measurement; Livery's reformat
+  gate nevertheless requires that map entry even when its positioned solver
+  used an explicit containment substitute. Final leaf-only resize cannot
+  update the field with descendants. The bounded repair carries whether the
+  positioned solver received that substitute and admits its same-flow
+  constrained reformat. It leaves content measurement and the general Taffy
+  containment adapter unchanged. Fresh fixture, Livery/consumer and CSS guard
+  qualification remain required; no pass is inferred from the implementation.

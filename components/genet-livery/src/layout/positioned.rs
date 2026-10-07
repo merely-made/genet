@@ -287,6 +287,7 @@ pub(in crate::layout) struct PositionedPlacement {
     pub(in crate::layout) containing_size: buckram::LogicalSize,
     pub(in crate::layout) style: BlockStyle,
     pub(in crate::layout) geometry: buckram::PositionedBoxGeometry,
+    pub(in crate::layout) has_contained_intrinsic_inline: bool,
 }
 
 impl PositionedPlacement {
@@ -589,8 +590,10 @@ where
             height: containing_rect.height,
         },
     );
-    let intrinsic_inline = positioned_contain_intrinsic_inline(&computed, &style, font_size)
-        .or_else(|| intrinsic_sizes.get(&box_id).copied());
+    let contained_intrinsic_inline =
+        positioned_contain_intrinsic_inline(&computed, &style, font_size);
+    let intrinsic_inline =
+        contained_intrinsic_inline.or_else(|| intrinsic_sizes.get(&box_id).copied());
     let geometry = buckram::solve_positioned_box(
         style,
         buckram::PositionedBoxInput {
@@ -614,6 +617,7 @@ where
         containing_size,
         style,
         geometry,
+        has_contained_intrinsic_inline: contained_intrinsic_inline.is_some(),
     })
 }
 
@@ -845,7 +849,10 @@ pub(in crate::layout) fn apply_admitted_positioned_inline_sizes<Context, Source>
         let Some(placement) = placement_by_box.get(box_id).copied() else {
             continue;
         };
-        if intrinsic_sizes.contains_key(box_id)
+        // Size containment excludes content-intrinsic measurement. An explicit
+        // substitute has already supplied Buckram's used width and needs the
+        // same constrained reformat so descendant-bearing roots receive it.
+        if (intrinsic_sizes.contains_key(box_id) || placement.has_contained_intrinsic_inline)
             && let Some(size) = placement.formatter_inline_size()
         {
             if placement.style.flow.is_horizontal() {

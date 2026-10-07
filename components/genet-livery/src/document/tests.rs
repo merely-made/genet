@@ -6,7 +6,7 @@
 
 use super::*;
 use genet_scripted_dom::{NodeId, ScriptedDom};
-use layout_dom_api::QualName;
+use layout_dom_api::{LayoutDomMut, QualName};
 use paint_list_api::PaintList;
 
 fn attr(name: &str) -> QualName {
@@ -2430,6 +2430,172 @@ fn painted_runs(document: &mut LiveryDocument<ScriptedDom>) -> Vec<usize> {
             _ => None,
         })
         .collect()
+}
+
+#[test]
+fn live_input_value_paints_without_replacing_its_default_attribute() {
+    let mut dom = ScriptedDom::from_serialized_document(
+        "<html><body><input id=field value=default></body></html>",
+    );
+    let field = by_id(&dom, "field");
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&["html, body { margin: 0; } input { width: 180px; height: 28px; }"]),
+        Device::screen(240.0, 100.0),
+    );
+    let initial = document
+        .frame(240, 100)
+        .expect("initial default-value frame");
+    let initial_glyphs = initial
+        .commands()
+        .iter()
+        .filter_map(|command| match command {
+            paint_list_api::PaintCmd::DrawText(run) => Some(run.glyphs.len()),
+            _ => None,
+        })
+        .sum::<usize>();
+    assert_eq!(initial_glyphs, "default".chars().count());
+
+    document.mutate_dom(|dom| {
+        let mut state = dom.form_control_state(field).expect("input state");
+        state.value = "current value".to_owned();
+        state.dirty_value = true;
+        assert!(dom.set_form_control_state(field, state));
+    });
+    let commands = document
+        .frame(240, 100)
+        .expect("live-value frame")
+        .commands()
+        .to_vec();
+    assert_eq!(
+        document
+            .dom()
+            .attribute(field, &Namespace::default(), &LocalName::from("value")),
+        Some("default")
+    );
+    let painted = commands
+        .iter()
+        .filter_map(|command| match command {
+            paint_list_api::PaintCmd::DrawText(run) => Some(run.glyphs.len()),
+            _ => None,
+        })
+        .sum::<usize>();
+    assert_eq!(painted, "current value".chars().count());
+    assert_eq!(
+        document.dom().text_content(field),
+        None,
+        "input has no value child text"
+    );
+}
+
+#[test]
+fn live_textarea_value_projects_multiline_text_and_preserves_author_children() {
+    let mut dom = ScriptedDom::from_serialized_document(
+        "<html><body><textarea id=field>author default</textarea></body></html>",
+    );
+    let field = by_id(&dom, "field");
+    let mut state = dom.form_control_state(field).expect("textarea state");
+    state.value = "line one\nline two".to_owned();
+    state.dirty_value = true;
+    assert!(dom.set_form_control_state(field, state));
+
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&["html, body { margin: 0; } textarea { width: 180px; height: 60px; }"]),
+        Device::screen(240.0, 100.0),
+    );
+    assert_eq!(
+        document.dom().text_content(field).as_deref(),
+        Some("author default")
+    );
+    let frame = document.frame(240, 100).expect("frame");
+    let painted = frame
+        .commands()
+        .iter()
+        .filter_map(|command| match command {
+            paint_list_api::PaintCmd::DrawText(run) => Some(run.glyphs.len()),
+            _ => None,
+        })
+        .sum::<usize>();
+    assert_eq!(painted, "line one\nline two".chars().count());
+    let line_bounds = document
+        .layout
+        .as_ref()
+        .expect("completed frame")
+        .fragments
+        .text_frame()
+        .and_then(|text| text.line_bounds(field))
+        .expect("virtual textarea lines");
+    assert!(
+        line_bounds.height > 24.0,
+        "newline creates multiple retained lines: {line_bounds:?}"
+    );
+}
+
+#[test]
+fn empty_live_input_projects_placeholder_instead_of_default_value() {
+    let mut dom = ScriptedDom::from_serialized_document(
+        "<html><body><input id=field value=default placeholder=hint></body></html>",
+    );
+    let field = by_id(&dom, "field");
+    let mut state = dom.form_control_state(field).expect("input state");
+    state.value.clear();
+    state.dirty_value = true;
+    assert!(dom.set_form_control_state(field, state));
+
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&["html, body { margin: 0; } input { width: 120px; height: 28px; }"]),
+        Device::screen(180.0, 100.0),
+    );
+    let painted = document
+        .frame(180, 100)
+        .expect("frame")
+        .commands()
+        .iter()
+        .filter_map(|command| match command {
+            paint_list_api::PaintCmd::DrawText(run) => Some(run.glyphs.len()),
+            _ => None,
+        })
+        .sum::<usize>();
+    assert_eq!(painted, "hint".chars().count());
+}
+
+#[test]
+fn css_checked_reads_live_checkbox_state_instead_of_the_default_attribute() {
+    let mut dom = ScriptedDom::from_serialized_document(
+        "<html><body><input id=field type=checkbox checked></body></html>",
+    );
+    let field = by_id(&dom, "field");
+    let mut state = dom.form_control_state(field).expect("checkbox state");
+    state.checked = false;
+    state.dirty_checkedness = true;
+    assert!(dom.set_form_control_state(field, state));
+
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&[
+            "html, body { margin: 0; } input { display:block; width:50px; height:24px; background:#f00; } input:checked { background:#0f0; }",
+        ]),
+        Device::screen(120.0, 80.0),
+    );
+    let list = document.frame(120, 80).expect("frame");
+    let colors = list
+        .commands()
+        .iter()
+        .filter_map(|command| match command {
+            paint_list_api::PaintCmd::DrawRect(rect) => Some(rect.color),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        colors.contains(&paint_list_api::ColorF::new(1.0, 0.0, 0.0, 1.0)),
+        "unchecked live state uses the ordinary input rule: {colors:?}"
+    );
+    assert!(
+        !colors.contains(&paint_list_api::ColorF::new(0.0, 1.0, 0.0, 1.0)),
+        "the stale checked attribute does not match :checked: {colors:?}"
+    );
 }
 
 #[test]

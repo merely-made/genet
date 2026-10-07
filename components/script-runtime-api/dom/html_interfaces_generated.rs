@@ -2498,7 +2498,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
             },
             ReflectedAttribute {
                 idl: "type",
-                kind: "s",
+                kind: "it",
                 attr: None,
                 keywords: &[],
                 missing: None,
@@ -2506,7 +2506,15 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
             },
             ReflectedAttribute {
                 idl: "value",
-                kind: "s",
+                kind: "fv",
+                attr: None,
+                keywords: &[],
+                missing: None,
+                readonly: false,
+            },
+            ReflectedAttribute {
+                idl: "checked",
+                kind: "fc",
                 attr: None,
                 keywords: &[],
                 missing: None,
@@ -2803,7 +2811,15 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
             },
             ReflectedAttribute {
                 idl: "value",
-                kind: "s",
+                kind: "fv",
+                attr: None,
+                keywords: &[],
+                missing: None,
+                readonly: false,
+            },
+            ReflectedAttribute {
+                idl: "defaultValue",
+                kind: "td",
                 attr: None,
                 keywords: &[],
                 missing: None,

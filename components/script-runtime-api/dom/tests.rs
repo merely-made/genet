@@ -2219,6 +2219,67 @@ fn generated_table_is_current() {
     );
 }
 
+fn form_control_live_state_works<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.eval(r#"
+      const input=document.createElement('input');
+      input.defaultValue='authored'; input.value='edited';
+      console.log(input.value + ':' + input.defaultValue + ':' + input.getAttribute('value'));
+      input.defaultValue='later'; console.log(input.value);
+      const copy=input.cloneNode(); console.log(copy.value + ':' + copy.defaultValue);
+      const textarea=document.createElement('textarea');
+      textarea.defaultValue='original'; textarea.value='one\r\ntwo';
+      console.log(textarea.value.replace(/\n/g,'|') + ':' + textarea.textContent);
+      console.log(textarea.cloneNode(true).value.replace(/\n/g,'|'));
+      input.value='A😀B'; input.setSelectionRange(1,3,'backward');
+      console.log(input.selectionStart + ':' + input.selectionEnd + ':' + input.selectionDirection);
+      input.setRangeText('x',1,3,'select'); console.log(input.value + ':' + input.selectionStart + ':' + input.selectionEnd);
+      const check=document.createElement('input'); check.type='checkbox'; check.checked=true;
+      console.log(check.value + ':' + check.checked + ':' + check.defaultChecked);
+      const file=document.createElement('input'); file.type='file';
+      try { file.value='not allowed'; } catch(error) { console.log(error.name); }
+      const form=document.createElement('form'); form.appendChild(input); form.reset();
+      console.log(input.value + ':' + input.defaultValue);
+      input.value='again'; form.addEventListener('reset', event=>event.preventDefault());
+      form.reset(); console.log(input.value);
+      const destination=document.implementation.createHTMLDocument('destination');
+      destination.adoptNode(input); console.log(input.value + ':' + input.defaultValue);
+      const number=document.createElement('input'); number.type='number'; number.value='42';
+      console.log(String(number.selectionStart));
+      try { number.setSelectionRange(0,1); } catch(error) { console.log(error.name); }
+    "#).expect("form state script");
+    assert_eq!(
+        rt.host().borrow().console,
+        vec![
+            "edited:authored:authored",
+            "edited",
+            "edited:later",
+            "one|two:original",
+            "one|two",
+            "1:3:backward",
+            "AxB:1:2",
+            "on:true:false",
+            "InvalidStateError",
+            "later:later",
+            "again",
+            "again:later",
+            "null",
+            "InvalidStateError",
+        ]
+    );
+}
+
+#[test]
+fn form_control_live_state_on_boa() {
+    form_control_live_state_works::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn form_control_live_state_on_nova() {
+    form_control_live_state_works::<script_engine_nova::NovaEngine>();
+}
+
 /// Shape facts the generated table must carry: interfaces the hand table never
 /// had, an interface without `[HTMLConstructor]`, a readonly reflected
 /// attribute, a named constructor, and the unknown-element fallback.

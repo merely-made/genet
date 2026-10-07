@@ -327,9 +327,12 @@ pub const OVERRIDES: &[Override] = &[
         "prose",
         r("tabIndex", "l").missing("-1")
     ),
-    set!("HTMLInputElement", "type", "prose", s("type")),
-    set!("HTMLInputElement", "value", "prose", s("value")),
-    set!("HTMLTextAreaElement", "value", "prose", s("value")),
+    // HTML form control values are arena state, not content-attribute reflection.
+    set!("HTMLInputElement", "type", "prose", r("type", "it")),
+    set!("HTMLInputElement", "value", "prose", r("value", "fv")),
+    set!("HTMLInputElement", "checked", "prose", r("checked", "fc")),
+    set!("HTMLTextAreaElement", "value", "prose", r("value", "fv")),
+    set!("HTMLTextAreaElement", "defaultValue", "prose", r("defaultValue", "td")),
     set!("HTMLOptionElement", "value", "prose", s("value")),
     set!(
         "HTMLCanvasElement",

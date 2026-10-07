@@ -27,9 +27,9 @@ use layout_dom_api::{LayoutDom, LocalName, Namespace, NodeKind, QuirksMode};
 use livery::{
     ComputedValues,
     values::{
-        Direction, Display, FontFamily as CssFontFamily, FontFeatureSetting,
-        FontFeatureSettings as CssFontFeatureSettings, FontStyle as CssFontStyle,
-        FontWeight as CssFontWeight, Hyphens, LineBreak as CssLineBreak,
+        Color as CssColor, ComputedColor, Direction, Display, FontFamily as CssFontFamily,
+        FontFeatureSetting, FontFeatureSettings as CssFontFeatureSettings,
+        FontStyle as CssFontStyle, FontWeight as CssFontWeight, Hyphens, LineBreak as CssLineBreak,
         LineHeight as CssLineHeight, ListStylePosition, ListStyleType, Margin,
         OverflowWrap as CssOverflowWrap, Position, Spacing, TabSize, TextAlign, TextAlignLast,
         TextJustify, TextTransformCase, TextWrapMode, VerticalAlign, WhiteSpaceCollapse,
@@ -629,6 +629,194 @@ impl TextSystem {
         fonts
     }
 
+    fn prepare_form_control_text<D>(
+        &mut self,
+        frame: &mut TextFrame<D::NodeId>,
+        dom: &D,
+        styles: &StylePlane<D::NodeId>,
+        fragments: &LiveryLayout<D::NodeId>,
+        node: D::NodeId,
+    ) -> bool
+    where
+        D: LayoutDom,
+        D::NodeId: Copy + Eq + Hash,
+    {
+        let Some(name) = dom.element_name(node) else {
+            return false;
+        };
+        if name.ns.as_ref() != "http://www.w3.org/1999/xhtml" {
+            return false;
+        }
+        let local = name.local.as_ref();
+        let is_textarea = local.eq_ignore_ascii_case("textarea");
+        if !is_textarea && !local.eq_ignore_ascii_case("input") {
+            return false;
+        }
+        let input_type = dom
+            .attribute(node, &Namespace::default(), &LocalName::from("type"))
+            .map(str::to_ascii_lowercase)
+            .filter(|value| {
+                matches!(
+                    value.as_str(),
+                    "button"
+                        | "checkbox"
+                        | "color"
+                        | "date"
+                        | "datetime-local"
+                        | "email"
+                        | "file"
+                        | "hidden"
+                        | "image"
+                        | "month"
+                        | "number"
+                        | "password"
+                        | "radio"
+                        | "range"
+                        | "reset"
+                        | "search"
+                        | "submit"
+                        | "tel"
+                        | "text"
+                        | "time"
+                        | "url"
+                        | "week"
+                )
+            })
+            .unwrap_or_else(|| "text".to_owned());
+        if !is_textarea
+            && !matches!(
+                input_type.as_str(),
+                "text" | "search" | "email" | "url" | "tel" | "password" | "number"
+            )
+        {
+            return false;
+        }
+        if frame.prepared_sources.contains(&node) {
+            return true;
+        }
+        let state = dom.form_control_state(node);
+        if is_textarea && state.is_none() {
+            return false;
+        }
+        let value = state.as_ref().map_or_else(
+            || {
+                if is_textarea {
+                    descendant_text(dom, node)
+                } else {
+                    dom.attribute(node, &Namespace::default(), &LocalName::from("value"))
+                        .map(str::to_owned)
+                        .unwrap_or_default()
+                }
+            },
+            |state| state.value.clone(),
+        );
+        let (display, selectable) = if value.is_empty() {
+            dom.attribute(node, &Namespace::default(), &LocalName::from("placeholder"))
+                .filter(|placeholder| !placeholder.is_empty())
+                .map_or((value, true), |placeholder| (placeholder.to_owned(), false))
+        } else if input_type == "password" && !is_textarea {
+            // Mask glyph count is a maintainer ruling still pending. Do not
+            // expose the secret while that policy is unresolved.
+            return true;
+        } else {
+            (value, true)
+        };
+        let Some(style) = styles.get(node) else {
+            return true;
+        };
+        if style.display == Display::None {
+            return true;
+        }
+        let Some(fragment) = fragments.principal_fragment(node) else {
+            return true;
+        };
+        let (origin_x, origin_y, width, height) = crate::layout::content_box_rect(style, fragment);
+        if !width.is_finite() || !height.is_finite() || width <= 0.0 || height <= 0.0 {
+            return true;
+        }
+        let mut control_style = style.clone();
+        if is_textarea {
+            control_style.white_space_collapse = WhiteSpaceCollapse::Preserve;
+            control_style.text_wrap_mode = TextWrapMode::Wrap;
+        } else {
+            control_style.white_space_collapse = WhiteSpaceCollapse::PreserveBreaks;
+            control_style.text_wrap_mode = TextWrapMode::Nowrap;
+        }
+        if !selectable {
+            control_style.color = ComputedColor::Absolute(CssColor::srgb(0.45, 0.45, 0.45, 1.0));
+        }
+        let text = display;
+        let spans = [SourceSpan {
+            selectable,
+            source: Some(node),
+            owners: vec![node],
+            style: control_style.clone(),
+            range: 0..text.len(),
+        }];
+        if selectable && !text.is_empty() {
+            frame.record_text_group(vec![(node, text.clone())]);
+        }
+        let mut spans = spans;
+        let shaped = self.shape(
+            &text,
+            &mut spans,
+            &[],
+            &HashMap::new(),
+            false,
+            width,
+            &control_style,
+            None,
+            None,
+        );
+        let mut commands = Vec::new();
+        let origin = (origin_x, origin_y);
+        for item in shaped.items {
+            let ShapedItem::Text(mut run) = item else {
+                continue;
+            };
+            let mut line = run.line_fragment;
+            translate_fragment(&mut line, origin);
+            frame.record_line_bounds(node, line);
+            translate_fragment(&mut run.fragment, origin);
+            let line_y = run.line_y + origin.1;
+            for glyph in &mut run.glyphs {
+                glyph.point.x += origin.0;
+                glyph.point.y += origin.1;
+            }
+            frame.record_inline_fragment(node, run.fragment, line_y);
+            for cluster in &run.clusters {
+                let mut cluster_fragment = cluster.fragment;
+                translate_fragment(&mut cluster_fragment, origin);
+                frame.record_text_cluster(
+                    node,
+                    cluster.range.clone(),
+                    cluster_fragment,
+                    cluster.rtl,
+                );
+            }
+            frame.used_fonts.insert(run.font_instance);
+            commands.push(PreparedCommand {
+                source: node,
+                owners: vec![node],
+                command: PaintCmd::DrawText(TextRunItem {
+                    placement: CommonPlacement::new(LayoutRect::new(
+                        LayoutPoint::new(origin_x, origin_y),
+                        LayoutPoint::new(origin_x + width, origin_y + height),
+                    )),
+                    font_instance: run.font_instance,
+                    font_size: run.font_size,
+                    color: run.color,
+                    glyphs: run.glyphs,
+                    options: TextOptions::default(),
+                }),
+            });
+        }
+        if frame.prepared_sources.insert(node) {
+            frame.record_prepared_group(vec![node], commands);
+        }
+        true
+    }
+
     /// Shape each consecutive inline child group into one Parley layout. The
     /// glyph runs stay keyed by their source text node so the DOM paint walk
     /// keeps source order while line breaking and baselines are shared.
@@ -644,6 +832,9 @@ impl TextSystem {
         D: LayoutDom,
         D::NodeId: Copy + Eq + Hash,
     {
+        if self.prepare_form_control_text(frame, dom, styles, fragments, parent) {
+            return;
+        }
         let Some(parent_box) = fragments.boxes().principal_box(parent) else {
             return;
         };
@@ -3984,6 +4175,20 @@ where
         && dom
             .element_name(id)
             .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case("br"))
+}
+
+fn descendant_text<D: LayoutDom>(dom: &D, node: D::NodeId) -> String {
+    fn append<D: LayoutDom>(dom: &D, node: D::NodeId, out: &mut String) {
+        if dom.kind(node) == NodeKind::Text {
+            out.push_str(dom.text(node).unwrap_or(""));
+        }
+        for child in dom.dom_children(node) {
+            append(dom, child, out);
+        }
+    }
+    let mut text = String::new();
+    append(dom, node, &mut text);
+    text
 }
 
 struct BoxInlineCollector<'a, D, F>

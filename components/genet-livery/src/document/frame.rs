@@ -60,6 +60,7 @@ where
                     ..
                 }
                 | DomMutation::SubtreeReplaced { node: parent }
+                | DomMutation::FormControlStateChanged { node: parent }
                 | DomMutation::AttributeChanged { node: parent, .. } => {
                     if self.dom.is_live(parent) {
                         self.insert_damage_root(&mut roots, self.formatting_damage_root(parent));

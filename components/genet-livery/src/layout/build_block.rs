@@ -674,7 +674,14 @@ where
                 .then(|| build_table_grid(self.boxes, self.dom, box_id));
                 let mut table_cell_nodes = Vec::new();
                 let mut table_out_of_flow_parts = Vec::new();
-                let children = if let Some(table) = table.as_ref() {
+                let projected_textarea = self.dom.form_control_state(node).is_some()
+                    && self.dom.element_name(node).is_some_and(|name| {
+                        name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
+                            && name.local.as_ref().eq_ignore_ascii_case("textarea")
+                    });
+                let children = if projected_textarea {
+                    Vec::new()
+                } else if let Some(table) = table.as_ref() {
                     let mut children = Vec::with_capacity(table.cells.len());
                     for cell in &table.cells {
                         let built = self.build_box(

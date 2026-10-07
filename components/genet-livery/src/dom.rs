@@ -293,7 +293,9 @@ impl<D: LayoutDom> Element for ElementRef<'_, '_, D> {
         self.dom().attributes(self.id).any(|attribute| {
             let namespace_matches = match namespace {
                 NamespaceConstraint::Any => true,
-                NamespaceConstraint::Specific(namespace) => attribute.name.ns.as_ref() == *namespace,
+                NamespaceConstraint::Specific(namespace) => {
+                    attribute.name.ns.as_ref() == *namespace
+                },
             };
             namespace_matches
                 && attribute.name.local.as_ref() == local_name
@@ -302,6 +304,20 @@ impl<D: LayoutDom> Element for ElementRef<'_, '_, D> {
     }
 
     fn matches_pseudo_class(&self, pseudo: &StatePseudoClass) -> bool {
+        if *pseudo == StatePseudoClass::Checked
+            && self.dom().element_name(self.id).is_some_and(|name| {
+                name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
+                    && name.local.as_ref().eq_ignore_ascii_case("input")
+            })
+            && self.attribute("", "type").is_some_and(|kind| {
+                matches!(kind.to_ascii_lowercase().as_str(), "checkbox" | "radio")
+            })
+        {
+            return self.dom().form_control_state(self.id).map_or_else(
+                || self.attribute("", "checked").is_some(),
+                |state| state.checked,
+            );
+        }
         self.tree.states.matches(self.id, *pseudo)
     }
 
@@ -327,24 +343,23 @@ impl<D: LayoutDom> Element for ElementRef<'_, '_, D> {
     /// under. Parsed per read; the attribute is short and only consulted while
     /// a `::part()` selector is climbing shadow boundaries.
     fn imported_part(&self, outer_name: &str) -> Option<String> {
-        self.attribute("", "exportparts")?.split(',').find_map(|entry| {
-            let entry = entry.trim();
-            let (inner, outer) = match entry.split_once(':') {
-                Some((inner, outer)) => (inner.trim(), outer.trim()),
-                None => (entry, entry),
-            };
-            (outer == outer_name).then(|| inner.to_string())
-        })
+        self.attribute("", "exportparts")?
+            .split(',')
+            .find_map(|entry| {
+                let entry = entry.trim();
+                let (inner, outer) = match entry.split_once(':') {
+                    Some((inner, outer)) => (inner.trim(), outer.trim()),
+                    None => (entry, entry),
+                };
+                (outer == outer_name).then(|| inner.to_string())
+            })
     }
 
     /// Whether this element carries part `name` in its `part` attribute — the
     /// whitespace-separated token list `::part()` matches against.
     fn is_part(&self, name: &str) -> bool {
-        self.attribute("", "part").is_some_and(|parts| {
-            parts
-                .split_ascii_whitespace()
-                .any(|part| part == name)
-        })
+        self.attribute("", "part")
+            .is_some_and(|parts| parts.split_ascii_whitespace().any(|part| part == name))
     }
 
     fn is_empty(&self) -> bool {

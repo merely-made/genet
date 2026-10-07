@@ -61,6 +61,7 @@ use markup5ever::Prefix;
 use script_engine_api::{CallCx, NativeFn, ScriptEngine};
 
 use crate::HostState;
+mod form_controls;
 
 /// The XHTML namespace — HTML elements live here; `tagName` upper-cases only in it.
 const XHTML_NS: &str = "http://www.w3.org/1999/xhtml";
@@ -101,6 +102,9 @@ pub(crate) fn clone_into<D: LayoutDom>(
                 }
                 dst.append_child(dst_parent, el);
                 clone_into(src, child, dst, el);
+                if let Some(state) = src.form_control_state(child) {
+                    form_controls::copy_state(dst, el, state);
+                }
                 // A `<template>`'s contents are not its children: the copier has
                 // to ask for the fragment, or the scripted tier would show an
                 // empty `template.content` for a parsed template.
@@ -163,6 +167,11 @@ pub(crate) fn install_dom_surface<E: ScriptEngine>(
     shadow::install(engine)?;
     markup_insertion::install(engine)?;
     engine.set_function::<DocumentRoot>("__documentRoot", 0)?;
+    engine.set_function::<form_controls::FormControlGet>("__formControlGet", 2)?;
+    engine.set_function::<form_controls::FormControlSet>("__formControlSet", 3)?;
+    engine.set_function::<form_controls::FormControlSelect>("__formControlSelect", 4)?;
+    engine.set_function::<form_controls::CopyFormControlState>("__copyFormControlState", 2)?;
+    engine.set_function::<form_controls::ResetFormControl>("__resetFormControl", 1)?;
     engine.set_function::<NodeRealmState>("__nodeRealmState", 1)?;
     engine.set_function::<ReflectNode>("__reflectNode", 1)?;
     engine.set_function::<CreateElement>("__createElement", 1)?;

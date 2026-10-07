@@ -531,10 +531,7 @@ var ReadableOps = (function (Core) {
         var descriptor = shiftPullInto(bc);
         removeDescriptorRequest(stream, descriptor);
         var request = descriptor.request;
-        if (descriptor.readerType === 'byob')
-          resolveReadRequest(request, 'close', descriptorView(descriptor, 0));
-        else
-          resolveReadRequest(request, 'close', undefinedValue);
+        resolveReadRequest(request, 'close', undefinedValue);
       }
     } else {
       var dc = mapGet(defaultControllerSlots, controller);
@@ -554,8 +551,13 @@ var ReadableOps = (function (Core) {
       }
     }
     if (!cancelAlgorithm) return Core.resolve(undefinedValue);
-    try { return Core.resolve(call(cancelAlgorithm, undefinedValue, [reason])); }
+    var sourceCancelPromise;
+    try { sourceCancelPromise = Core.resolve(call(cancelAlgorithm, undefinedValue, [reason])); }
     catch (e) { return Core.reject(e); }
+    var cancellation = Core.deferred();
+    Core.react(sourceCancelPromise, function () { cancellation.resolve(undefinedValue); },
+      function (e) { cancellation.reject(e); });
+    return cancellation.promise;
   }
   function defaultControllerEnqueue(stream, chunk) {
     var c = defaultController(stream), slot = streamSlot(stream);

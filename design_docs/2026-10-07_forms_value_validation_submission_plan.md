@@ -158,3 +158,9 @@ dependency or version change is authorized beyond the named workspace edge.
   a detached generic-container insertion alone does not clear checked peers.
   A focused paint fixture checks that overflowing live-value glyphs are
   enclosed by the content-box clip. All changes await executable qualification.
+- 2026-10-07: `draft-reconciliation-crates` is invalidated by an agent's final
+  source edit after its commit. Root stops only the verified owning Cargo/rustc
+  processes; the receipt records source drift and byte-for-byte restoration.
+  The final checkedness guard is committed before the next run. Qualification
+  now distinguishes a separate Mere build with its verified `cargo-targets/mere`
+  owner, rather than blocking unrelated workspace work globally.

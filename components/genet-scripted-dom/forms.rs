@@ -442,8 +442,9 @@ impl ScriptedDom {
     }
 
     /// Reconcile only checked radios whose form owner changed or which became
-    /// connected. Processing post-mutation tree order lets each later eligible
-    /// checked radio uncheck earlier peers, preserving last-in-tree checkedness.
+    /// connected. Reverse post-tree order gives the last eligible checked radio
+    /// first claim; rechecking live checkedness prevents an earlier candidate
+    /// from undoing that winner after it has already been unchecked.
     pub(super) fn reconcile_radio_associations(
         &mut self,
         before: &[RadioAssociationSnapshot],
@@ -452,10 +453,18 @@ impl ScriptedDom {
         let old: std::collections::HashMap<_, _> =
             before.iter().map(|item| (item.node, *item)).collect();
         let after = self.snapshot_radio_associations(seeds);
-        for current in after {
+        for current in after.into_iter().rev() {
             // A remove/release may retire a snapshotted node. The post scan
             // checks roots, and this guard also protects stale candidate IDs.
             if self.try_index(current.node).is_none() {
+                continue;
+            }
+            if !self
+                .node(current.node)
+                .form_control
+                .as_ref()
+                .is_some_and(|state| state.checked)
+            {
                 continue;
             }
             let triggered = match old.get(&current.node) {
@@ -1116,8 +1125,8 @@ mod tests {
                 let radio = dom.create_element(tag(local_name!("input")));
                 dom.set_attribute(radio, attr(local_name!("type")), "radio");
                 dom.set_attribute(radio, attr(local_name!("name")), "shadow-group");
-                dom.append_child(shadow, radio);
                 dom.set_form_control_checked(radio, true);
+                dom.append_child(shadow, radio);
                 radio
             })
             .collect();

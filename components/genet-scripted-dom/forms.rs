@@ -919,6 +919,15 @@ mod tests {
         dom.set_attribute(input, attr(local_name!("step")), ".29");
         dom.set_form_control_value(input, ".88").unwrap();
         assert_eq!(dom.form_control_value(input).as_deref(), Some("0.87"));
+        dom.set_attribute(input, attr(local_name!("min")), "1000000000000000");
+        dom.set_attribute(input, attr(local_name!("max")), "1000000000000002");
+        dom.set_attribute(input, attr(local_name!("step")), ".1");
+        dom.set_form_control_value(input, "1000000000000000.1")
+            .unwrap();
+        assert_eq!(
+            dom.form_control_value(input).as_deref(),
+            Some("1000000000000000.1")
+        );
     }
 
     #[test]
@@ -1513,15 +1522,18 @@ fn range_step_value(base: f64, step: f64, index: f64) -> f64 {
     let scale = 10_f64.powi(decimal_places(base).max(decimal_places(step)));
     let scaled_base = (base * scale).round();
     let scaled_step = (step * scale).round();
-    let scaled_value = scaled_base + index * scaled_step;
+    let scaled_offset = index * scaled_step;
+    let scaled_value = scaled_base + scaled_offset;
+    const MAX_EXACT_INTEGER: f64 = ((1_u64 << 53) - 1) as f64;
     if scale.is_finite()
-        && scaled_base.is_finite()
-        && scaled_step.is_finite()
-        && scaled_value.is_finite()
+        && [scaled_base, scaled_step, scaled_offset, scaled_value]
+            .iter()
+            .all(|value| value.abs() <= MAX_EXACT_INTEGER)
     {
         scaled_value / scale
     } else {
-        // Very large bases or subnormal steps cannot be scaled in f64.
+        // Scaling outside f64's exact-integer range can erase a representable
+        // small step. Extreme bases and subnormal steps also take this path.
         base + index * step
     }
 }

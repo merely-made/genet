@@ -306,3 +306,21 @@ incremental network delivery or copying a reference implementation.
   script strings are unchanged; the source comparison receipt is sealed under
   `Code/testing/genet/streams`. Resume with a fresh named gate and preserve the
   interrupted one.
+- The resumed online and cache-only Cargo attempts both stopped before
+  compilation while waiting for the shared package-cache lock; each retains
+  its exit -1 receipt and unchanged 914d790 source. Root interrupted only its
+  verified Cargo pair, preserving other projects. A marker-owned temporary
+  Cargo home at `C:/t/cargo-homes/genet-streams` copies existing locked caches
+  for this qualification gate, with no new dependencies or configuration.
+  Remove it after the gate's receipts are recorded. The stable target remains
+  `C:/t/cargo-targets/genet-encoding`.
+- Read-only Luna design agrees on the existing private `__agentTimers` root:
+  agent-shared WeakMaps support borrowed methods, frame retention and snapshot
+  cloning without adding an engine API. Keep operation closures realm-local;
+  Fetch supplies trusted signal operations during synchronous installation.
+- Four meaningful Rust controls run on each engine: deferred-write
+  backpressure, cancellation waiting for its source, pipe error cancellation
+  and lock release, and actual BYOB detachment/fills. They are initially ignored
+  only to permit the unchanged-production foundation suite, then explicitly
+  executed as starting negative controls. The candidate must enable all eight
+  and pass them; an ignored control is not acceptance evidence.

@@ -564,3 +564,16 @@ dependency cache. Original primary overrides and locks remain preserved.
   existing native width assertions now report properties from the host's live
   computed-style reader, to distinguish resolution from positioned layout
   before choosing another repair. Genet product source remains unchanged.
+- 2026-10-07: `mere-forms-field-sizing-diagnostics` has six passes and the same
+  two behavioral failures, with stable source and exact restoration. The live
+  host resolves `position:absolute`, `width:auto`, `contain:inline-size`,
+  `font-size:16px` and `contain-intrinsic-size:10em 1.2em` or `12em 1.2em` as
+  requested. This excludes failed custom-property substitution as the cause.
+  The positioned solver consumes substitute intrinsic sizes, but its scratch
+  reformat handoff and descendant-bearing fragment publication remain to be
+  measured; the Taffy adapter separately omits `computed.contain` from its
+  size-containment flags. That omission is not yet established as the cause.
+  A new checkpoint asks permission for a bounded Genet CSS layout repair with
+  a failing fixture and fresh consumer/reftest gates. That decision, sibling
+  scope and accessible-leaf projection are all pending without response timers.
+  Independent native-state routing/forwarding controls can proceed meanwhile.

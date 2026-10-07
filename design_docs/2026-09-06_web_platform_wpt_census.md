@@ -146,6 +146,11 @@ Two later rulings the same day are recorded in the
   owning/transfer rows remain an explicit pending ruling. Independent source
   review qualifies all 8,446 normalized movements with zero gaps. Genet's
   pre-publication checkpoint remains open.
+  **Later 2026-10-07 ruling:** Mark answered "Approved, authorized" to the
+  completed report and recommended exact 12-row experimental exception.
+  Streams local acceptance is complete; publication/main integration are
+  authorized, with fresh integration receipts to follow. The previous C3
+  results and disk FetchHandler limitation remain as measured.
 - Ruling 9: the Vano lane may fetch Vano's unfetched `tests/test262`
   submodule at its pinned commit `e0d8f66a`, and run Vano's test262 gate.
   Mark: "Allow, pinned commit only (Recommended)".

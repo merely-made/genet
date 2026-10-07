@@ -170,3 +170,28 @@ dependency or version change is authorized beyond the named workspace edge.
   than its owner document, so explicit associations inside a shadow root reset
   together; the two-engine owner fixture covers this case. No executed test
   pass is claimed from this compile-only gate.
+- 2026-10-07: `draft-behavior-crates` executes the fixed-source suite at
+  `6e4a0a9f4064f8bfb05d73f256c815da7c18bced`, with the published-source lock and
+  unchanged sources; primary overrides and lock restore byte-for-byte. Seven
+  failures remain in three library targets. The value/owner runtime fixtures
+  pass on both Boa and Vano. Four direct Livery control fixtures expose a missing
+  text-frame seed when there is no ordinary text; the session fixture happens
+  to seed one through its button label. Native action/edit assertions must read
+  the live value separately from authored defaults. Structural inspection still
+  reports authored DOM content; accessibility is the live-value projection.
+  The association walk is changed to an explicit stack, with a deep small-stack
+  preorder fixture, because mutation snapshots now traverse general trees.
+- 2026-10-07: Compatibility fork F3 is pending, without a prompt deadline.
+  Mere's `crates/cambium/cambium/src/controls/field.rs` and `src/styled_field.rs`
+  deliberately render `TextInput` buffers, syntax spans, IME text, ghosts and
+  carets as input/textarea children. Native HTML form-state projection suppresses
+  those app-owned children. Synchronizing only the value would lose the styled
+  projection and introduce a second editing owner. Proposed scope: migrate
+  Cambium fields to app-owned textbox elements, preserving child rendering and
+  routing, and provide an explicit committed-value accessibility path, then
+  verify the eventual Genet repin in Mere. This crosses the Genet-only brief and
+  its version-change restriction; user authorization is requested before the
+  cross-owner implementation. Mere currently pins Genet `965b64e206a47d1c8808472de9aa461233638768`;
+  that existing pin is not compatibility evidence for the local Forms draft.
+  The old child-value regression is retained pending this decision, rather than
+  accepting empty Cambium fields or adding a native HTML child-text fallback.

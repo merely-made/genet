@@ -1314,7 +1314,17 @@ fn livery_accessibility_actions_reject_stale_revisions() {
     };
     assert!(session.dispatch_accessibility_action(&set_value));
     assert!(!session.dispatch_accessibility_action(&set_value));
-    assert_eq!(session.attribute(input, "value"), Some("birch"));
+    assert_eq!(session.attribute(input, "value"), Some("cedar"));
+    assert_eq!(
+        session
+            .document()
+            .dom()
+            .form_control_state(input)
+            .unwrap()
+            .value,
+        "birch",
+        "the accepted action changes the live value, preserving the authored default"
+    );
 
     let tail = livery_node_with_id(session, "tail");
     let target = DocumentA11yNodeId::new(session.document().dom().opaque_id(tail));
@@ -1577,7 +1587,11 @@ fn livery_session_edits_and_submits_a_retained_get_form() {
             </form></body></html>"#,
         )
         .with_viewport(400, 240);
-    let mut session = engine.spawn(&request).expect("form session spawns");
+    let mut boxed = engine.spawn(&request).expect("form session spawns");
+    let session = boxed
+        .as_any()
+        .downcast_mut::<LiveryDocumentSession>()
+        .expect("Livery engine retains its concrete session");
     let initial = session.frame(400, 240);
     let initial_glyphs = initial
         .ops
@@ -1639,13 +1653,28 @@ fn livery_session_edits_and_submits_a_retained_get_form() {
         edited_glyphs > initial_glyphs,
         "the textarea edit reaches paint"
     );
+    let note = livery_node_with_id(session, "note");
+    let note_id = DocumentA11yNodeId::new(session.document().dom().opaque_id(note));
+    let projection = session
+        .accessibility_projection()
+        .expect("the edited form remains accessible");
+    assert_eq!(
+        projection
+            .node(note_id)
+            .expect("the textarea is projected")
+            .value
+            .as_deref(),
+        Some("cedar and ash")
+    );
+    assert_eq!(session.text_content(note), "cedar");
     assert!(
         session
             .inspect()
             .expect("form remains inspectable")
             .outline
             .iter()
-            .any(|entry| entry.role == "textbox" && entry.name == "cedar and ash")
+            .any(|entry| entry.role == "textbox" && entry.name == "cedar"),
+        "the structural inspection retains the authored default text"
     );
 
     let tabbed = session.input(document_session_api::SessionInput::Key {

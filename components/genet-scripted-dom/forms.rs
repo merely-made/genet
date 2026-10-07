@@ -665,6 +665,33 @@ mod tests {
     }
 
     #[test]
+    fn form_association_walk_preserves_preorder_on_a_small_stack() {
+        std::thread::Builder::new()
+            .stack_size(256 * 1024)
+            .spawn(|| {
+                let mut dom = ScriptedDom::new();
+                let root = dom.document();
+                let mut expected = vec![root];
+                let mut parent = root;
+                for _ in 0..4096 {
+                    let child = dom.create_element(tag(local_name!("div")));
+                    dom.attach_silent(parent, child);
+                    expected.push(child);
+                    parent = child;
+                }
+                let sibling = dom.create_element(tag(local_name!("input")));
+                dom.attach_silent(root, sibling);
+                expected.push(sibling);
+                let mut actual = Vec::new();
+                collect_descendants(&dom, root, &mut actual);
+                assert_eq!(actual, expected);
+            })
+            .expect("the small-stack walker thread starts")
+            .join()
+            .expect("the tree walk completes without using depth-sized stack space");
+    }
+
+    #[test]
     fn input_current_value_is_separate_from_attribute_and_reset_restores_it() {
         let mut dom = ScriptedDom::new();
         let input = dom.create_element(tag(local_name!("input")));
@@ -1249,9 +1276,11 @@ impl ScriptedDom {
     }
 }
 fn collect_descendants(dom: &ScriptedDom, node: NodeId, out: &mut Vec<NodeId>) {
-    out.push(node);
-    for child in dom.dom_children(node) {
-        collect_descendants(dom, child, out);
+    let mut pending = vec![node];
+    while let Some(node) = pending.pop() {
+        out.push(node);
+        let children: Vec<_> = dom.dom_children(node).collect();
+        pending.extend(children.into_iter().rev());
     }
 }
 fn attr_name(local: &str) -> QualName {

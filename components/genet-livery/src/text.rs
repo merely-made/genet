@@ -641,56 +641,13 @@ impl TextSystem {
         D: LayoutDom,
         D::NodeId: Copy + Eq + Hash,
     {
-        let Some(name) = dom.element_name(node) else {
+        let Some(kind) = form_control_text_kind(dom, node) else {
             return false;
         };
-        if name.ns.as_ref() != "http://www.w3.org/1999/xhtml" {
-            return false;
-        }
-        let local = name.local.as_ref();
-        let is_textarea = local.eq_ignore_ascii_case("textarea");
-        if !is_textarea && !local.eq_ignore_ascii_case("input") {
-            return false;
-        }
-        let input_type = dom
-            .attribute(node, &Namespace::default(), &LocalName::from("type"))
-            .map(str::to_ascii_lowercase)
-            .filter(|value| {
-                matches!(
-                    value.as_str(),
-                    "button"
-                        | "checkbox"
-                        | "color"
-                        | "date"
-                        | "datetime-local"
-                        | "email"
-                        | "file"
-                        | "hidden"
-                        | "image"
-                        | "month"
-                        | "number"
-                        | "password"
-                        | "radio"
-                        | "range"
-                        | "reset"
-                        | "search"
-                        | "submit"
-                        | "tel"
-                        | "text"
-                        | "time"
-                        | "url"
-                        | "week"
-                )
-            })
-            .unwrap_or_else(|| "text".to_owned());
-        if !is_textarea
-            && !matches!(
-                input_type.as_str(),
-                "text" | "search" | "email" | "url" | "tel" | "password" | "number"
-            )
-        {
-            return false;
-        }
+        let (is_textarea, input_type) = match kind {
+            FormControlTextKind::Textarea => (true, String::new()),
+            FormControlTextKind::Input(input_type) => (false, input_type),
+        };
         if frame.prepared_sources.contains(&node) {
             return true;
         }
@@ -1989,6 +1946,66 @@ impl TextSystem {
         self.font_keys.insert(identity, key);
         key
     }
+}
+
+/// The HTML form-control kinds whose current value can be projected as text.
+/// Shared by retained-frame creation and the producer so an empty text frame
+/// is allocated only when the paint path can actually prepare control text.
+pub(crate) enum FormControlTextKind {
+    Textarea,
+    Input(String),
+}
+
+pub(crate) fn form_control_text_kind<D: LayoutDom>(
+    dom: &D,
+    node: D::NodeId,
+) -> Option<FormControlTextKind> {
+    let name = dom.element_name(node)?;
+    if name.ns.as_ref() != "http://www.w3.org/1999/xhtml" {
+        return None;
+    }
+    if name.local.as_ref().eq_ignore_ascii_case("textarea") {
+        return Some(FormControlTextKind::Textarea);
+    }
+    if !name.local.as_ref().eq_ignore_ascii_case("input") {
+        return None;
+    }
+    let input_type = dom
+        .attribute(node, &Namespace::default(), &LocalName::from("type"))
+        .map(str::to_ascii_lowercase)
+        .filter(|value| {
+            matches!(
+                value.as_str(),
+                "button"
+                    | "checkbox"
+                    | "color"
+                    | "date"
+                    | "datetime-local"
+                    | "email"
+                    | "file"
+                    | "hidden"
+                    | "image"
+                    | "month"
+                    | "number"
+                    | "password"
+                    | "radio"
+                    | "range"
+                    | "reset"
+                    | "search"
+                    | "submit"
+                    | "tel"
+                    | "text"
+                    | "time"
+                    | "url"
+                    | "week"
+            )
+        })
+        .unwrap_or_else(|| "text".to_owned());
+    matches!(
+        input_type.as_str(),
+        "text" | "search" | "email" | "url" | "tel" | "password" | "number"
+    )
+    .then_some(FormControlTextKind::Input(input_type))
 }
 
 /// Turn a supported webfont container into the SFNT bytes consumed by

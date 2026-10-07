@@ -5,8 +5,9 @@ behavior controls and whole-directory baseline are frozen. The full Genet gate
 passes 1,942 tests with zero failures and nine ignores; six paint controls fail
 with the producer disabled, and the restored 450-test gate passes. Password
 cluster masking is implemented and Cambium's migration is committed locally in
-Mere. Matched WPT after maps, Mere consumer qualification and the verified repin
-are pending. Phase B and C retain separate checkpoints.
+Mere. The first matched WPT after maps expose one decimal-range regression on
+each engine; its local repair, final maps, Mere consumer qualification and the
+verified repin are pending. Phase B and C retain separate checkpoints.
 Forms Phase A is not accepted or published.
 
 Authority: [standards ledger](2026-09-07_standards_to_features_ledger.md), C1,
@@ -324,3 +325,23 @@ dependency or version change is authorized beyond the named workspace edge.
   current-family manifests, 33 current Genet root-lock packages and two separately
   pinned legacy Knot packages to preserve. The Turnstone/Cleromancy mechanical
   selector/caret/existing-label scope question is open without a response timer.
+- 2026-10-07: Frozen after runner `D127C6CD...` at source `1fc2102aec8` executes
+  the 15 value-model assertions successfully on both engines, versus two in the
+  starting controls. All six first-candidate directory maps are complete and
+  accounted in `after-vs-before.json`, preserving ERROR rows separately. Each
+  engine has completed-file passes of 919 input, 667 selection and 31 form
+  infrastructure assertions, versus 217, 92 and zero before. Input ERROR files
+  additionally hold eight passes, seven failures, 28 not-run rows and four
+  timeouts; those are not added to the completed-file counts. One starting pass
+  is lost on each engine: `range-2.html` assigns `.6` with step `.1`, and the
+  candidate reports `0.6000000000000001` instead of `0.6`. The frozen diagnostic
+  `after-range-regression-repro-boa.log` confirms the exact failure. These maps
+  are preserved as the first candidate, not accepted as Checkpoint A.
+  The repair interpolates decimal range steps after scaling their canonical
+  decimal representations, including bound correction, with a finite-arithmetic
+  fallback for extreme values. Its arena fixture covers aligned fractional and
+  exponent inputs, a real mismatch, negative base, a nonaligned upper bound and
+  the decimal `.29` step. No dependency changes. Fresh crate tests and a new
+  frozen runner/maps must qualify this repair. Luna prepares movement attribution
+  against the immutable first candidate; final-source attribution will be checked
+  again after the corrected maps.

@@ -1,19 +1,23 @@
 # HTML forms: value state, validation and submission
 
-**Status, 2026-10-08:** Genet's Phase A source `b8a3ec1d6abe88e07438ca4d53b9ca4d2b92111d`
-qualifies with 1,943 tests passed, zero failures and nine existing ignores.
-All 15 value-model fixtures pass on both engines and the paint guard reports
-`unexpected=0`. The decimal-range regression is repaired. Matched supplementary
-60-second maps have zero starting pass losses; the prescribed 15-second maps
-are retained with Vano selection cutoffs explicitly accounted. Password cluster
-masking and Mere's Cambium migration are local implementations. Mere's local
-consumer gates pass. F5 authorizes the bounded sibling edits and F6 chooses
-accessible leaves across all app projections. F6 qualifies on current integrated Mere
-`9105b1ef` with 362 package passes, 63 native host passes and a Wasm compile
-check. F5 public-pin gates qualify Turnstone with 674 passes and nine existing
-ignores and Cleromancy with 15 passes, zero failures or ignores. Publication
-and the verified published-source repin remain pending, so Forms Phase A is not accepted or
-published. Phase B and C retain separate checkpoints.
+**Status, 2026-10-08:** Genet's Forms value model and F4 repair at
+`e84f9c7f9aec23320c539784961d1465f8a53a9b` are published on main, as is Mere's
+permanent repin at `632c1d29` through published integration `eafb8643`. Fresh
+public-source ThinkPad gates pass 362 Mere package tests and 63 native-host
+tests, with zero failures and two existing ignored doctests; its Wasm
+accessibility example compiles. F1-F6 are ruled, including password cluster
+masking, app-owned Cambium fields and accessible leaves across projections.
+The bounded F5 Turnstone edits are published through `1802a683`, after fresh
+ThinkPad qualification at product `e77e1e2` with 680 passes and nine ignores.
+Cleromancy's current public-pin integration passes 23 ThinkPad tests at
+`9789d64e` and is published through `ff3b1f53`. Forms Phase A is published;
+Phase B and C retain separate checkpoints, and sibling adoption of Mere's new
+Forms dependency family remains distinct from F5 mechanical compatibility.
+
+The eleven-crate 1,943-pass receipt belongs to Genet
+`b8a3ec1d6abe88e07438ca4d53b9ca4d2b92111d`, with zero failures and nine ignores.
+Matched supplementary 60-second WPT maps have zero starting pass losses;
+prescribed 15-second maps retain their Vano selection cutoffs explicitly.
 
 The bounded F4 layout repair at `e84f9c7f` has fresh four-crate qualification
 (841 passes) and Mere native consumer qualification (63 passes), followed by
@@ -21,9 +25,8 @@ passing catalog, highlighting, restored native-bridge and Wasm compile gates.
 The fresh restored four-package Mere suite passes 355 tests. F4's fresh
 optimized runner passes all 15 value fixtures on both engines and its CSS guard
 reports `unexpected=0`, with all sixteen summaries equal to the starting guard.
-Mere's current integration qualifies below; publication and public-source
-verification remain required. The original eleven-crate and WPT maps above
-retain their own source snapshot.
+The later public-source Mere integration qualifies below. The original
+eleven-crate and WPT maps retain their own source snapshot.
 
 Authority: [standards ledger](2026-09-07_standards_to_features_ledger.md), C1,
 C5 and C6, and `Code/work/briefs/2026-10-02_genet_forms_value_validation_submission.md`.
@@ -373,7 +376,10 @@ parameter, even though that parameter was committed after the starting binary's
 source commit. No baseline changes or new product harness changes were made for
 the supplementary timing checks.
 
-### Remaining checkpoint work
+### Retained local checkpoint before publication
+
+This records the earlier local proposal. The completed public-source repin and
+its fresh ThinkPad evidence follow this historical checkpoint.
 
 F1-F6 are ruled. Current integrated Mere `9105b1ef` qualifies against exact Genet product
 `e84f9c7f`: 362 package passes, two existing ignored doctests, 63 native host
@@ -440,6 +446,120 @@ The generated helper bytecode was removed on 2026-10-08 after Mark explicitly
 authorized cleanup; its earlier automatic-review rejection remains historical.
 Mark requested the remaining test work on ThinkPad to relieve local memory
 pressure. Remote gates run serially with one Cargo job and one test thread.
+
+### Public-source publication on ThinkPad, 2026-10-08
+
+Genet main `260207fce6e8c361ac83c3bc498e3e90ff5fa69f` publishes product
+`e84f9c7f9aec23320c539784961d1465f8a53a9b`. Mere's permanent repin is committed
+at `632c1d298dee1ecd5c3dfe00879c95d4a012f8ea`, after integrating upstream
+`4fd2f3f1`. Its modern 33-package locked Genet family moves to the published
+product while Knot `eabd4434` retains its two explicit older Genet identities.
+Baseline and candidate metadata preserve versions, package definitions, owner
+edges and features after the authorized revision mapping. Resolved packages
+increase from 1,566 to 1,568 only for the two protected identities. The selected
+five Cambium roots retain their 605-package closure without either JavaScript
+engine implementation. The permanent lock SHA256 is
+`69eb637d64e7387179cda95b1a2e80768e076d95da29c24b9203d0c573551cd5`.
+
+Fresh Fedora ThinkPad gates use Cargo 1.98.1, one build job and one test thread:
+
+| Public-source Mere gate owner | Passed | Failed | Ignored |
+| --- | ---: | ---: | ---: |
+| Cambium | 257 | 0 | 1 |
+| Rootstock | 72 | 0 | 1 |
+| Native accessibility | 23 | 0 | 0 |
+| Browser mirror | 10 | 0 | 0 |
+| Six native-host targets | 63 | 0 | 0 |
+
+The Wasm `a11y_page` example compiles with its existing getrandom setting. The
+receipts confirm clean stable source and unchanged manifest/lock across each
+run. Their prefixes are `thinkpad-forms-20261008-mere-packages-retry1`,
+`thinkpad-forms-20261008-mere-native-host` and
+`thinkpad-forms-20261008-mere-web-wasm` under
+`Code/testing/genet/forms/thinkpad`. The first package compile is interrupted
+after a separate Cargo owner appears, without executing tests; that attempt
+remains unqualified. The foreign owner is preserved. The unchanged serial retry
+supplies the complete result. These tests and compile checks do not constitute
+new physical-window, browser-operation or human assistive-technology evidence.
+
+The provenance audit verifies clean normal Cargo Git checkouts at the exact
+published Genet and Knot revisions, without local source replacements or Git
+URL rewrites. Root independently recounts all complete result blocks and binds
+the receipt to the current integrated source. Published Mere `eafb8643` includes
+upstream `9ed44a5e`; the extra source changes lie outside all 18 workspace
+packages in the tested closure, and its manifest, lock and toolchain are
+identical to tested `632c1d29`. Evidence is
+`thinkpad-forms-graph-qualification.json`,
+`thinkpad-forms-20261008-provenance.json` and
+`thinkpad-forms-mere-publication-qualification.json` under
+`Code/testing/genet/forms`. Prior publication inventory and proposal artifacts
+retain their original source boundaries.
+
+Turnstone product `e77e1e2db88344c651c1d4bf31e1802a2b142fc0` passes its complete
+Linux library: 680 passes, zero failures, nine existing ignores and no filtered
+cases. Its locked metadata resolves 1,283 packages, including Mere `3ded2cd7`
+and Genet `965b64e2`; all 123 Git packages across ten revision groups have exact
+clean normal public checkouts. Cargo config and Git URL rewrites are absent.
+The manifest and lock remain unchanged, with lock SHA256
+`de6ce134764e50cb82cbf7110121e2d8ac509484afc0d51060d52ba0bd9e6576`.
+Published main `1802a68371327343539b3e73d4517248cf3361b1` adds only documentation
+to that tested product, including intervening public `afe7964` documentation.
+The raw `thinkpad-forms-20261008-turnstone-*` receipts are copied locally;
+`thinkpad-forms-turnstone-integrated-publication-qualification.json` independently
+recounts the complete result and binds the public source. This is F5 mechanical
+compatibility on existing pins, not adoption of Mere's new Forms family.
+
+An additional Windows Turnstone publication worktree isolates e77 from another
+owner's later unpublished resource-content commits. Its documentation is merged
+back into local main after the normal public push; the resource commits and
+untracked `.github/` work remain preserved. The clean publication worktree and
+its integrated temporary branch are then removed after public reachability and
+live-owner checks.
+
+Cleromancy integrates the upstream domain module at `e512763` before its fresh
+Linux gate. That first run passes 19 library tests and fails the marked-textbox
+fixture before either DOM target executes. The fixture clicked fixed coordinates
+beneath its label. The bounded repair at `9789d64e5df4937c3005a2b3a25b5a733f67817b`
+uses the semantic Question textbox and its live painted layout; production
+routing and naming stay unchanged. The focused positive passes and disabling
+only marked-textbox recognition makes it fail. Byte-exact restoration with a
+fresh source mtime precedes the complete qualifying retry: 20 library tests,
+one authoring DOM test and two headed consultation DOM tests, all passing with
+zero failures, ignores or filtered cases. An intervening interrupted attempt
+retains its partial result as unqualified; the foreign Cargo owner is preserved.
+
+Locked metadata at the repaired source verifies 60 Git packages in exact clean
+normal public checkouts: 36 Mere `8106c7c`, 20 Genet `34626a6c` and four Netrender
+`c8c09f1`. Cargo configuration and Git URL rewrites are absent. The ignored root
+lock is unchanged at SHA256
+`6040b3e0030a9114c42c2a83e6e67a3ca1d12753308ca87467264d19efa0f3b1`,
+and its tracked core lock is preserved. Published Cleromancy main
+`ff3b1f5302e15b054b412bba8261dfc28ea81740` adds only the qualification document
+to the tested source. Raw fixed, control, restoration and interrupted-attempt
+receipts live under `Code/testing/genet/forms/thinkpad`.
+`thinkpad-forms-cleromancy-fixed-publication-qualification.json` independently
+binds all three completed targets and metadata provenance to the publication.
+These are automated checks on existing dependency pins; the earlier physical
+desktop receipt retains its own source snapshot.
+
+Remote worktrees `/home/markik/Code/worktrees/mere-forms` and
+`/home/markik/Code/worktrees/turnstone-forms` isolate real collisions with the
+primary Knot lane and untracked Turnstone receipts. Serial gates reuse stable
+repository targets. Both Forms worktrees are removed with `git worktree remove`
+without force after public reachability, evidence transfer, clean status
+including ignored output, and live-owner checks. The audit is
+`thinkpad/thinkpad-forms-20261008-worktree-cleanup-audit.txt`; primary work and
+other owners' worktrees remain preserved. Stable targets remain reusable caches.
+The Windows cleanup preflight retains `C:/t/cargo-homes/genet-streams`, borrowed
+by Forms from Streams, because two cached Vano `test262` submodule entries are
+modified. Its audit is `forms-local-cache-cleanup-audit.json`; dirty source is
+preserved and the stable repository targets remain reusable caches.
+
+The final public-source binding is
+`Code/testing/genet/forms/forms-phase-a-published-thinkpad-source-binding.json`.
+Mere main advances again after this lane's qualified `eafb8643` publication,
+including further Cambium and command-catalogue changes. This lane's receipt
+retains the eafb source boundary; it does not qualify those later changes.
 
 ## Progress
 

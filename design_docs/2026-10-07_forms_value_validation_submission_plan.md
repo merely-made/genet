@@ -10,6 +10,13 @@ masking and Mere's Cambium migration are local implementations. Mere consumer
 qualification and the verified repin remain pending, so Forms Phase A is not
 accepted or published. Phase B and C retain separate checkpoints.
 
+The bounded F4 layout repair at `e84f9c7f` has fresh four-crate qualification
+(841 passes) and Mere native consumer qualification (63 passes), followed by
+passing catalog, highlighting, restored native-bridge and Wasm compile gates.
+Its fresh CSS guard and the remaining Mere policy/integration checkpoints are
+still required; the original eleven-crate and WPT receipts above retain their
+own source snapshot.
+
 Authority: [standards ledger](2026-09-07_standards_to_features_ledger.md), C1,
 C5 and C6, and `Code/work/briefs/2026-10-02_genet_forms_value_validation_submission.md`.
 The HTML standard supplies the [input value modes](https://html.spec.whatwg.org/multipage/input.html#dom-input-value),
@@ -638,3 +645,14 @@ dependency cache. Original primary overrides and locks remain preserved.
   Source bytes/mtimes are stable and original manifest/lock restore exactly.
   Catalog receipts, independent bridge controls and remaining consumer gates
   follow. Accessible-leaf policy and sibling scope remain unanswered.
+- 2026-10-07: Catalog regeneration changes only the single-line width fallback
+  in both HTML receipts, and both catalog acceptance tests pass. Independent
+  disabled-routing and disabled-forwarding controls each record 71 passes and
+  their intended single behavioral failure; the fresh restored Rootstock
+  library passes all 72 tests. Cambium's optional highlighting library passes
+  254 tests and the browser accessibility example compiles for Wasm. The
+  guarded Mere transactions restore the starting manifest/lock and preserve
+  unowned source bytes/mtimes. A read-only multiline review finds no newline
+  or multiline-state loss, but no full-pipeline newline fixture is claimed.
+  A fresh optimized runner and the F4 CSS guard follow. The two pending
+  questions retain their original scope and have no response deadlines.

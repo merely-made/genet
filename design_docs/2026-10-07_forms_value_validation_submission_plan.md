@@ -6,16 +6,19 @@ All 15 value-model fixtures pass on both engines and the paint guard reports
 `unexpected=0`. The decimal-range regression is repaired. Matched supplementary
 60-second maps have zero starting pass losses; the prescribed 15-second maps
 are retained with Vano selection cutoffs explicitly accounted. Password cluster
-masking and Mere's Cambium migration are local implementations. Mere consumer
-qualification and the verified repin remain pending, so Forms Phase A is not
-accepted or published. Phase B and C retain separate checkpoints.
+masking and Mere's Cambium migration are local implementations. Mere's local
+consumer gates pass. Accessible-tree and sibling-scope rulings and the verified
+published-source repin remain pending, so Forms Phase A is not accepted or
+published. Phase B and C retain separate checkpoints.
 
 The bounded F4 layout repair at `e84f9c7f` has fresh four-crate qualification
 (841 passes) and Mere native consumer qualification (63 passes), followed by
 passing catalog, highlighting, restored native-bridge and Wasm compile gates.
-Its fresh CSS guard and the remaining Mere policy/integration checkpoints are
-still required; the original eleven-crate and WPT receipts above retain their
-own source snapshot.
+The fresh restored four-package Mere suite passes 355 tests. F4's fresh
+optimized runner passes all 15 value fixtures on both engines and its CSS guard
+reports `unexpected=0`, with all sixteen summaries equal to the starting guard.
+The remaining Mere policy/integration checkpoints are still required; the
+original eleven-crate and WPT maps above retain their own source snapshot.
 
 Authority: [standards ledger](2026-09-07_standards_to_features_ledger.md), C1,
 C5 and C6, and `Code/work/briefs/2026-10-02_genet_forms_value_validation_submission.md`.
@@ -656,3 +659,20 @@ dependency cache. Original primary overrides and locks remain preserved.
   or multiline-state loss, but no full-pipeline newline fixture is claimed.
   A fresh optimized runner and the F4 CSS guard follow. The two pending
   questions retain their original scope and have no response deadlines.
+- 2026-10-07: The optimized F4 runner freezes at documentation head `79a7f011`
+  over product `e84f9c7f`, SHA256
+  `36088821A7E876098A4F4C639E5DC474547AA25AA321B56712D8CC0A85B4E0A2`.
+  All fifteen value-model assertions pass on Boa and Vano. The unchanged CSS
+  guard reports `unexpected=0`, all sixteen summary counts equal the starting
+  guard, and baseline JSON files remain unchanged. The comparison artifact is
+  `after-contained-width-reftest-comparison.json` under the Forms evidence root.
+  This completes F4's requested fresh regression checks.
+- 2026-10-07: The committed-value negative control initially produces the two
+  intended failures but is rejected because its expected native test module
+  is `tests` instead of `dpi_tests`. That attempt remains unqualified. The
+  corrected fresh control records 74 passes and exactly the two intended
+  failures, then restores both production lookups with fresh mtimes. The fresh
+  restored four-package Mere gate at `ee699000` passes 355 tests with zero
+  failures and two existing ignored doctests. All source bytes/mtimes outside
+  owned restoration remain unchanged. No publication, repin or pruning policy
+  follows without resolving the two outstanding questions.

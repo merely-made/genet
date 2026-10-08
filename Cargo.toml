@@ -33,11 +33,11 @@ members = [
     "components/genet-render",
     "components/shared/layout-dom",
     "components/script-engine-api",
-    # script-engine-boa joined the workspace 2026-05-25. The old blocker (boa
-    # 0.21.1's icu_normalizer ~2.0 vs parley 0.9's ^2.1.1) was resolved by forking
-    # boa to crates/boa (`genet` branch) and widening its icu family ~2.0 -> ^2.1,
-    # which resolves to icu 2.2.0 — the version nova_vm's temporal_rs -> icu_calendar
-    # chain forces, and which parley accepts. Patched in via [patch.crates-io] below.
+    # The maintained Boa fork incorporates stable v0.22 while retaining its
+    # 1.0.0-dev host identity. Its ICU 2.3 family resolves alongside Vano and
+    # Livery under their compatible requirements. Engine/GC revisions and the
+    # browser host feature live in components/script-engine-boa/Cargo.toml.
+    # See design_docs/2026-10-08_boa_stable_upstream_refresh.md.
     "components/script-engine-boa",
     "components/script-engine-nova",
     "components/script-engine-piccolo",

@@ -638,6 +638,12 @@ same session; links out of it are rewritten for its new depth.
 
 ## Working principles
 
+- **Retained diagnostics must scale with the shaped paragraph.** A dormant
+  opportunity stream still runs during real layout. Preserve semantic scans as
+  test oracles, but index repeated owner/range queries in production and enforce
+  a comparison-count bound. Record unchanged host fixtures separately from
+  micro-timing; see the October 8 bounded lookup repair in the line-breaking plan.
+
 - **Set the target for commands that can run Cargo indirectly.** Git hooks can
   inherit a shared `CARGO_TARGET_DIR` even when the preceding native gates used
   an explicit target. Set the approved reusable target and qualified toolchain

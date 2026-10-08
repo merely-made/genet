@@ -1470,6 +1470,15 @@ impl TextSystem {
         // finite breaker chooses lines. Refresh only the break flags from
         // the matching finite-layout clusters; retain the original glyph,
         // source, font, and coordinate metadata.
+        let mut retained_cluster_indices = HashMap::new();
+        for (index, item) in break_stream.items.iter().enumerate() {
+            if let LogicalBreakItem::Cluster { text_range, .. } = item {
+                // Keep the former first-match rule if ranges repeat.
+                retained_cluster_indices
+                    .entry((text_range.start, text_range.end))
+                    .or_insert(index);
+            }
+        }
         for line in layout.lines() {
             for run in line.runs() {
                 for cluster in run.clusters() {
@@ -1478,15 +1487,10 @@ impl TextSystem {
                         soft_break,
                         hard_break,
                         ..
-                    }) = break_stream.items.iter_mut().find(|item| {
-                        matches!(
-                            item,
-                            LogicalBreakItem::Cluster {
-                                text_range: item_range,
-                                ..
-                            } if *item_range == text_range
-                        )
-                    }) {
+                    }) = retained_cluster_indices
+                        .get(&(text_range.start, text_range.end))
+                        .and_then(|index| break_stream.items.get_mut(*index))
+                    {
                         *soft_break = cluster.is_soft_line_break();
                         *hard_break = cluster.is_hard_line_break();
                     }
@@ -3281,7 +3285,7 @@ struct SourceSlice<Id> {
     break_style: BreakStyle,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct BreakStyle {
     white_space_collapse: WhiteSpaceCollapse,
     text_wrap_mode: TextWrapMode,
@@ -3461,19 +3465,26 @@ where
         .filter(|atom| !atom.marker && !atom.edge && !atom.empty_line)
         .map(|atom| atom.index)
         .collect::<BTreeSet<_>>();
+    // Multiplicity matters: every atom contributes a marker at the same offset.
+    let mut atomic_marker_indices = inline_boxes
+        .iter()
+        .filter(|atom| !atom.marker && !atom.edge && !atom.empty_line)
+        .map(|atom| atom.index)
+        .collect::<Vec<_>>();
+    atomic_marker_indices.sort_unstable();
+    let boundary_index = BoundaryIndex::new(text, &items);
     let mut candidate_offsets = Vec::new();
     let mut emergency_candidate_offsets = Vec::new();
     for offset in cluster_edges.iter().copied() {
         if atomic_indices.contains(&offset) {
             continue;
         }
-        if !is_hard_break_boundary(text, offset)
-            && !boundary_allows_wrap(text, offset, &items, inline_styles, root_style)
-        {
+        let hard_break = is_hard_break_boundary(text, offset);
+        let style = boundary_index.style(offset, inline_styles, root_style);
+        if !hard_break && style.text_wrap_mode != TextWrapMode::Wrap {
             continue;
         }
-        let style = boundary_style(text, offset, &items, inline_styles, root_style);
-        if is_hard_break_boundary(text, offset) {
+        if hard_break {
             candidate_offsets.push(offset);
             continue;
         }
@@ -3484,12 +3495,7 @@ where
             {
                 continue;
             }
-            let marker_shift = inline_boxes
-                .iter()
-                .filter(|atom| {
-                    !atom.marker && !atom.edge && !atom.empty_line && atom.index < offset
-                })
-                .count()
+            let marker_shift = atomic_marker_indices.partition_point(|index| *index < offset)
                 * '\u{fffc}'.len_utf8();
             let marked_offset = offset + marker_shift;
             if normal.contains(&marked_offset) || preserved_space_opportunity(text, offset, style) {
@@ -3826,6 +3832,117 @@ fn common_style<'a, Id: Copy + Eq + Hash>(
         .unwrap_or(root_style)
 }
 
+/// Lookup tables for CSS boundary ownership, built once per shaped paragraph.
+/// Owners are borrowed, not copied per opportunity. Sorting includes the logical
+/// item ordinal to preserve the scan's last-equal left / first-equal right rules,
+/// including gaps, overlapping ranges and bidi runs. Atoms do not own text edges.
+struct BoundaryIndex<'a, Id> {
+    starts: Vec<(usize, usize, &'a [Id])>,
+    ends: Vec<(usize, usize, &'a [Id])>,
+    disappearing_spaces: HashMap<usize, BreakStyle>,
+    #[cfg(test)]
+    comparisons: std::cell::Cell<usize>,
+}
+
+impl<'a, Id> BoundaryIndex<'a, Id> {
+    fn new(text: &str, items: &'a [LogicalBreakItem<Id>]) -> Self {
+        let mut starts = Vec::new();
+        let mut ends = Vec::new();
+        let mut disappearing_spaces = HashMap::new();
+        for (ordinal, item) in items.iter().enumerate() {
+            let LogicalBreakItem::Cluster {
+                text_range,
+                start_owners,
+                end_owners,
+                source_mappings,
+                ..
+            } = item
+            else {
+                continue;
+            };
+            starts.push((text_range.start, ordinal, start_owners.as_slice()));
+            ends.push((text_range.end, ordinal, end_owners.as_slice()));
+            for mapping in source_mappings {
+                if !matches!(
+                    mapping.break_style.white_space_collapse,
+                    WhiteSpaceCollapse::Collapse | WhiteSpaceCollapse::PreserveBreaks
+                ) {
+                    continue;
+                }
+                // Real source mappings are clipped to their cluster. Inspect
+                // only that slice, not all items at every space boundary. ASCII
+                // space ends are necessarily valid UTF-8 boundaries. Iteration
+                // and first insertion retain the former find_map precedence.
+                let start = mapping.text_range.start.min(text.len());
+                let end = mapping.text_range.end.min(text.len());
+                if let Some(bytes) = text.as_bytes().get(start..end) {
+                    for (relative, byte) in bytes.iter().enumerate() {
+                        if *byte == b' ' {
+                            disappearing_spaces
+                                .entry(start + relative + 1)
+                                .or_insert(mapping.break_style);
+                        }
+                    }
+                }
+            }
+        }
+        starts.sort_unstable_by_key(|(offset, ordinal, _)| (*offset, *ordinal));
+        ends.sort_unstable_by_key(|(offset, ordinal, _)| (*offset, *ordinal));
+        Self {
+            starts,
+            ends,
+            disappearing_spaces,
+            #[cfg(test)]
+            comparisons: std::cell::Cell::new(0),
+        }
+    }
+
+    fn adjacent_owners(&self, offset: usize, before: bool) -> Option<&'a [Id]> {
+        if before {
+            self.ends
+                .partition_point(|(end, _, _)| {
+                    #[cfg(test)]
+                    self.comparisons.set(self.comparisons.get() + 1);
+                    *end <= offset
+                })
+                .checked_sub(1)
+                .map(|index| self.ends[index].2)
+        } else {
+            self.starts
+                .get(self.starts.partition_point(|(start, _, _)| {
+                    #[cfg(test)]
+                    self.comparisons.set(self.comparisons.get() + 1);
+                    *start < offset
+                }))
+                .map(|(_, _, owners)| *owners)
+        }
+    }
+}
+
+impl<Id: Copy + Eq + Hash> BoundaryIndex<'_, Id> {
+    fn style(
+        &self,
+        offset: usize,
+        inline_styles: &HashMap<Id, ComputedValues>,
+        root_style: &ComputedValues,
+    ) -> BreakStyle {
+        if let Some(style) = self.disappearing_spaces.get(&offset) {
+            return *style;
+        }
+        match (
+            self.adjacent_owners(offset, true),
+            self.adjacent_owners(offset, false),
+        ) {
+            (Some(left), Some(right)) => {
+                BreakStyle::from(common_style(left, right, inline_styles, root_style))
+            },
+            _ => BreakStyle::from(root_style),
+        }
+    }
+}
+
+// Straightforward S1.1 scans remain only as an independent test oracle.
+#[cfg(test)]
 fn adjacent_cluster_owners<Id: Copy>(
     offset: usize,
     items: &[LogicalBreakItem<Id>],
@@ -3889,6 +4006,7 @@ fn is_logical_neighbor<Id>(item: &LogicalBreakItem<Id>) -> bool {
     }
 }
 
+#[cfg(test)]
 fn boundary_allows_wrap<Id: Copy + Eq + Hash>(
     text: &str,
     offset: usize,
@@ -3900,6 +4018,7 @@ fn boundary_allows_wrap<Id: Copy + Eq + Hash>(
         == TextWrapMode::Wrap
 }
 
+#[cfg(test)]
 fn boundary_style<Id: Copy + Eq + Hash>(
     text: &str,
     offset: usize,
@@ -3921,6 +4040,7 @@ fn boundary_style<Id: Copy + Eq + Hash>(
     }
 }
 
+#[cfg(test)]
 fn disappearing_space_owner_style<Id>(
     text: &str,
     offset: usize,
@@ -5901,6 +6021,103 @@ mod tests {
             "finite and retained shaped clusters have the same ranges"
         );
         break_stream
+    }
+
+    fn shape_fixture_stream_with_font_face(
+        text: &str,
+        spans: &mut [SourceSpan<u8>],
+        inline_boxes: &[InlineAtom<u8>],
+        inline_styles: &HashMap<u8, ComputedValues>,
+        root_style: &ComputedValues,
+        width: f32,
+        font_bytes: &[u8],
+        family: &str,
+    ) -> LogicalBreakStream<u8> {
+        let mut text_system = TextSystem::new();
+        text_system.register_font_face_bytes(
+            font_bytes.to_vec(),
+            family,
+            &CssFontFeatureSettings::Normal,
+        );
+        let Shaped {
+            break_stream,
+            finite_break_flags,
+            ..
+        } = text_system.shape(
+            text,
+            spans,
+            inline_boxes,
+            inline_styles,
+            false,
+            width,
+            root_style,
+            None,
+            None,
+        );
+        for (text_range, soft_break, hard_break) in &finite_break_flags {
+            let retained = break_stream.items.iter().find_map(|item| match item {
+                LogicalBreakItem::Cluster {
+                    text_range: retained_range,
+                    soft_break,
+                    hard_break,
+                    ..
+                } if retained_range == text_range => Some((*soft_break, *hard_break)),
+                LogicalBreakItem::Cluster { .. } | LogicalBreakItem::InlineBox { .. } => None,
+            });
+            assert_eq!(retained, Some((*soft_break, *hard_break)));
+        }
+        assert_eq!(
+            finite_break_flags.len(),
+            break_stream
+                .items
+                .iter()
+                .filter(|item| matches!(item, LogicalBreakItem::Cluster { .. }))
+                .count()
+        );
+        break_stream
+    }
+
+    fn parley_ligature_cluster_metadata(
+        text: &str,
+        style: &ComputedValues,
+        font_bytes: &[u8],
+        family: &str,
+    ) -> Vec<(Range<usize>, bool, bool, usize)> {
+        let mut text_system = TextSystem::new();
+        text_system.register_font_face_bytes(
+            font_bytes.to_vec(),
+            family,
+            &CssFontFeatureSettings::Normal,
+        );
+        let features = effective_font_features(&text_system.font_face_features, style);
+        let tab_stop = text_system.tab_stop(style);
+        let mut builder = text_system.layout_context.ranged_builder(
+            &mut text_system.font_context,
+            text,
+            1.0,
+            true,
+        );
+        builder.set_base_level(Some(match style.direction {
+            Direction::Ltr => 0,
+            Direction::Rtl => 1,
+        }));
+        push_defaults(&mut builder, style, features, None, tab_stop);
+        let mut layout = builder.build(text);
+        layout.break_all_lines(None);
+        let mut metadata = Vec::new();
+        for line in layout.lines() {
+            for run in line.runs() {
+                for cluster in run.clusters() {
+                    metadata.push((
+                        cluster.text_range(),
+                        cluster.is_ligature_start(),
+                        cluster.is_ligature_continuation(),
+                        cluster.glyphs().count(),
+                    ));
+                }
+            }
+        }
+        metadata
     }
 
     fn atomic_fixture_side_allowed<Id: Copy + Eq + Hash>(
@@ -8158,6 +8375,375 @@ mod tests {
                 focus_node: 1,
                 focus_offset: 24,
             })
+        );
+    }
+
+    fn boundary_test_cluster(
+        text_range: Range<usize>,
+        start_owners: &[u8],
+        end_owners: &[u8],
+        source_mappings: Vec<SourceSlice<u8>>,
+    ) -> LogicalBreakItem<u8> {
+        LogicalBreakItem::Cluster {
+            text_range,
+            contains_tab: false,
+            contains_preserved_space: false,
+            hangs_trailing_space: false,
+            font: None,
+            font_size: 0.0,
+            normalized_coords: Vec::new(),
+            source_mappings,
+            start_owners: start_owners.to_vec(),
+            end_owners: end_owners.to_vec(),
+            advance: 0.0,
+            glyphs: Vec::new(),
+            soft_break: false,
+            hard_break: false,
+            rtl: false,
+        }
+    }
+
+    fn boundary_test_atom(byte_index: usize, insertion_order: usize) -> LogicalBreakItem<u8> {
+        LogicalBreakItem::InlineBox {
+            byte_index,
+            source: insertion_order as u8,
+            owners: vec![9],
+            insertion_order,
+            advance: 1.0,
+            atomic: true,
+        }
+    }
+
+    fn boundary_test_mapping(text_range: Range<usize>, style: &ComputedValues) -> SourceSlice<u8> {
+        SourceSlice {
+            span_range: 0..text_range.len(),
+            text_range,
+            source: Some(1),
+            owners: vec![1],
+            break_style: BreakStyle::from(style),
+        }
+    }
+
+    fn assert_boundary_index_matches_scan(
+        text: &str,
+        items: &[LogicalBreakItem<u8>],
+        inline_styles: &HashMap<u8, ComputedValues>,
+        root_style: &ComputedValues,
+    ) {
+        let index = BoundaryIndex::new(text, items);
+        for offset in 0..=text.len() {
+            for before in [true, false] {
+                assert_eq!(
+                    index.adjacent_owners(offset, before),
+                    adjacent_cluster_owners(offset, items, before),
+                    "owners at byte {offset}, before={before}"
+                );
+            }
+            assert_eq!(
+                index.style(offset, inline_styles, root_style),
+                boundary_style(text, offset, items, inline_styles, root_style),
+                "style at byte {offset}"
+            );
+        }
+    }
+
+    #[test]
+    fn boundary_index_matches_scan_for_ties_gaps_overlaps_and_atoms() {
+        let text = "ab c\u{3000}de ";
+        let mut root = ComputedValues::default();
+        root.text_wrap_mode = TextWrapMode::Wrap;
+        let mut ineligible = root.clone();
+        ineligible.white_space_collapse = WhiteSpaceCollapse::Preserve;
+        ineligible.text_wrap_mode = TextWrapMode::Nowrap;
+        let mut collapsed_first = root.clone();
+        collapsed_first.white_space_collapse = WhiteSpaceCollapse::Collapse;
+        collapsed_first.text_wrap_mode = TextWrapMode::Nowrap;
+        collapsed_first.line_break = CssLineBreak::Loose;
+        let mut collapsed_later = root.clone();
+        collapsed_later.white_space_collapse = WhiteSpaceCollapse::PreserveBreaks;
+        collapsed_later.text_wrap_mode = TextWrapMode::Wrap;
+        collapsed_later.word_break = CssWordBreak::KeepAll;
+        let mut style_map = HashMap::new();
+        style_map.insert(1, collapsed_first.clone());
+        style_map.insert(2, collapsed_later.clone());
+        style_map.insert(3, ineligible.clone());
+
+        // The first three clusters tie at byte 3 and overlap. The source
+        // mappings deliberately put an ineligible white-space style first,
+        // followed by two eligible owners for the same disappearing space.
+        // The final clusters tie at byte 8 and leave a gap at 7..8. Atomic
+        // boxes are interspersed at both boundaries but own no text edge.
+        let items = vec![
+            boundary_test_cluster(
+                0..3,
+                &[1],
+                &[1, 2],
+                vec![boundary_test_mapping(2..3, &ineligible)],
+            ),
+            boundary_test_atom(3, 0),
+            boundary_test_cluster(
+                1..3,
+                &[3],
+                &[1, 4],
+                vec![boundary_test_mapping(2..3, &collapsed_first)],
+            ),
+            boundary_test_cluster(
+                2..3,
+                &[2],
+                &[2],
+                vec![boundary_test_mapping(2..3, &collapsed_later)],
+            ),
+            boundary_test_cluster(
+                3..7,
+                &[3],
+                &[3],
+                vec![boundary_test_mapping(3..7, &collapsed_later)],
+            ),
+            boundary_test_atom(6, 1),
+            boundary_test_cluster(8..9, &[1], &[1], Vec::new()),
+            boundary_test_cluster(
+                8..10,
+                &[2],
+                &[2],
+                vec![boundary_test_mapping(8..10, &collapsed_later)],
+            ),
+        ];
+
+        assert_boundary_index_matches_scan(text, &items, &style_map, &root);
+
+        let index = BoundaryIndex::new(text, &items);
+        assert_eq!(
+            index.disappearing_spaces.get(&3),
+            Some(&BreakStyle::from(&collapsed_first)),
+            "skip the first ineligible mapping, then preserve the first eligible mapping"
+        );
+        assert!(
+            !index.disappearing_spaces.contains_key(&7),
+            "U+3000 is multibyte whitespace, not a disappearing U+0020 space"
+        );
+        assert_eq!(
+            index.style(7, &style_map, &root),
+            boundary_style(text, 7, &items, &style_map, &root),
+            "the byte after U+3000 uses adjacent boundary ownership"
+        );
+    }
+
+    #[test]
+    fn boundary_index_matches_shaped_rtl_and_ligature_cluster_edges() {
+        let mut root = ComputedValues::default();
+        root.color = "black".parse().expect("test text color");
+        root.text_wrap_mode = TextWrapMode::Wrap;
+        root.direction = Direction::Rtl;
+        root.font_family = CssFontFamily::Named("Noto Naskh Arabic".into());
+        root.font_size = CssFontSize::Value("24px".parse().expect("24px font size"));
+
+        let rtl_text = "سلام اختبار";
+        let split = "سلام".len();
+        let mut rtl_first = root.clone();
+        rtl_first.text_wrap_mode = TextWrapMode::Nowrap;
+        let mut rtl_second = root.clone();
+        rtl_second.line_break = CssLineBreak::Loose;
+        let rtl_styles = HashMap::from([(1, rtl_first.clone()), (2, rtl_second.clone())]);
+        let mut rtl_spans = vec![
+            SourceSpan {
+                selectable: true,
+                source: Some(1),
+                owners: vec![1],
+                style: rtl_first,
+                range: 0..split,
+            },
+            SourceSpan {
+                selectable: true,
+                source: Some(2),
+                owners: vec![2],
+                style: rtl_second,
+                range: split..rtl_text.len(),
+            },
+        ];
+        let arabic_font =
+            include_bytes!("../../../tests/wpt/tests/fonts/noto/NotoNaskhArabic-regular.woff2");
+        let rtl_stream = shape_fixture_stream(
+            rtl_text,
+            &mut rtl_spans,
+            &[],
+            &rtl_styles,
+            &root,
+            600.0,
+            Some(arabic_font),
+        );
+        assert!(
+            rtl_stream
+                .items
+                .iter()
+                .any(|item| matches!(item, LogicalBreakItem::Cluster { rtl: true, .. })),
+            "the registered Arabic font produces a genuinely RTL shaped cluster"
+        );
+        assert_boundary_index_matches_scan(rtl_text, &rtl_stream.items, &rtl_styles, &root);
+
+        let mut latin_root = root.clone();
+        latin_root.direction = Direction::Ltr;
+        latin_root.font_family = CssFontFamily::Named("ligature-font".into());
+        let ligature_text = "office fine";
+        let mut office_style = latin_root.clone();
+        office_style.text_wrap_mode = TextWrapMode::Nowrap;
+        let mut following_style = latin_root.clone();
+        following_style.line_break = CssLineBreak::Strict;
+        let office_end = "office".len();
+        let following_start = office_end + " ".len();
+        let ligature_styles =
+            HashMap::from([(1, office_style.clone()), (2, following_style.clone())]);
+        let mut ligature_spans = vec![
+            SourceSpan {
+                selectable: true,
+                source: Some(1),
+                owners: vec![1],
+                style: office_style,
+                range: 0..office_end,
+            },
+            SourceSpan {
+                selectable: true,
+                source: Some(3),
+                owners: Vec::new(),
+                style: latin_root.clone(),
+                range: office_end..following_start,
+            },
+            SourceSpan {
+                selectable: true,
+                source: Some(2),
+                owners: vec![2],
+                style: following_style,
+                range: following_start..ligature_text.len(),
+            },
+        ];
+        // This WPT font is specifically designed to create common ligatures;
+        // register the same face alias used by its @font-face fixture.
+        let lato_font = include_bytes!("../../../tests/wpt/tests/fonts/Lato-Medium-Liga.ttf");
+        let ligature_stream = shape_fixture_stream_with_font_face(
+            ligature_text,
+            &mut ligature_spans,
+            &[],
+            &ligature_styles,
+            &latin_root,
+            600.0,
+            lato_font,
+            "ligature-font",
+        );
+        let ligature_metadata = parley_ligature_cluster_metadata(
+            "office fine",
+            &latin_root,
+            lato_font,
+            "ligature-font",
+        );
+        let mut ligature_ranges = Vec::new();
+        for (index, (range, is_start, _, _)) in ligature_metadata.iter().enumerate() {
+            if !is_start {
+                continue;
+            }
+            let mut group_end = range.end;
+            for (component_range, _, is_continuation, _) in ligature_metadata.iter().skip(index + 1)
+            {
+                if !is_continuation {
+                    break;
+                }
+                group_end = component_range.end;
+            }
+            ligature_ranges.push(range.start..group_end);
+        }
+        assert!(
+            ligature_ranges
+                .iter()
+                .any(|range| range.start <= 2 && range.end >= 4),
+            "the pinned Lato fixture exposes its `fi` ligature through Parley's start/component metadata; clusters are not required to merge their text ranges"
+        );
+        assert_boundary_index_matches_scan(
+            ligature_text,
+            &ligature_stream.items,
+            &ligature_styles,
+            &latin_root,
+        );
+    }
+
+    #[test]
+    fn boundary_index_lookup_comparisons_scale_logarithmically_per_edge() {
+        for cluster_count in [256_usize, 512, 1024, 2048] {
+            let text = "x".repeat(cluster_count);
+            let items = (0..cluster_count)
+                .map(|offset| boundary_test_cluster(offset..offset + 1, &[1], &[1], Vec::new()))
+                .collect::<Vec<_>>();
+            let index = BoundaryIndex::new(&text, &items);
+            for offset in 0..=cluster_count {
+                let _ = index.adjacent_owners(offset, true);
+                let _ = index.adjacent_owners(offset, false);
+            }
+
+            let maximum_per_lookup = cluster_count.ilog2() as usize + 2;
+            let maximum_total = 2 * (cluster_count + 1) * maximum_per_lookup;
+            assert!(
+                index.comparisons.get() <= maximum_total,
+                "{cluster_count} clusters used {} comparisons, expected at most {maximum_total}",
+                index.comparisons.get()
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "manual bounded timing observation; comparison-count scaling is the enforced gate"]
+    fn boundary_index_timing_matches_reference_semantics() {
+        use std::time::Instant;
+
+        let cluster_count = 1024_usize;
+        let text = (0..cluster_count)
+            .map(|index| if index % 2 == 0 { 'a' } else { ' ' })
+            .collect::<String>();
+        let mut root = ComputedValues::default();
+        root.text_wrap_mode = TextWrapMode::Wrap;
+        let styles = (1_u8..=4)
+            .map(|owner| {
+                let mut style = root.clone();
+                style.text_wrap_mode = if owner % 2 == 0 {
+                    TextWrapMode::Nowrap
+                } else {
+                    TextWrapMode::Wrap
+                };
+                style.white_space_collapse = WhiteSpaceCollapse::Collapse;
+                (owner, style)
+            })
+            .collect::<HashMap<_, _>>();
+        let items = (0..cluster_count)
+            .map(|offset| {
+                let owner = (offset % 4 + 1) as u8;
+                let mappings = if text.as_bytes()[offset] == b' ' {
+                    vec![boundary_test_mapping(offset..offset + 1, &styles[&owner])]
+                } else {
+                    Vec::new()
+                };
+                boundary_test_cluster(offset..offset + 1, &[owner], &[owner], mappings)
+            })
+            .collect::<Vec<_>>();
+
+        let mut reference_times = Vec::new();
+        let mut indexed_times = Vec::new();
+        for _ in 0..5 {
+            let started = Instant::now();
+            let reference = (0..=text.len())
+                .map(|offset| boundary_style(&text, offset, &items, &styles, &root))
+                .collect::<Vec<_>>();
+            reference_times.push(started.elapsed());
+
+            let started = Instant::now();
+            let index = BoundaryIndex::new(&text, &items);
+            let indexed = (0..=text.len())
+                .map(|offset| index.style(offset, &styles, &root))
+                .collect::<Vec<_>>();
+            indexed_times.push(started.elapsed());
+
+            assert_eq!(
+                indexed, reference,
+                "timed paths must preserve every byte-offset style"
+            );
+        }
+        eprintln!(
+            "boundary-index timing, {cluster_count} clusters, five iterations: reference={reference_times:?}, indexed={indexed_times:?}"
         );
     }
 }

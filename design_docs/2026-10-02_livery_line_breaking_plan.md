@@ -419,7 +419,64 @@ and fails on any disagreement.
 
 ## Findings
 
-All dated 2026-10-02, verified at Genet `4ac56bbbe0b` and `6fca091dc26`.
+### 2026-10-08 bounded S1.1 lookup repair (qualified locally)
+
+Mark approved a shared Genet boundary-lookup repair after Knot's unchanged
+400-line Micron redraw test passed but took 190–243 seconds in debug builds.
+This is a performance repair to S1.1's retained model, not authority to start
+S1.2 or change line-breaking policy. Base source is current published
+`6cb2284a33d74ff90fd2c71f95c459eef502206b` in an isolated checkout; the older
+shared Genet checkout is untouched.
+
+`logical_break_stream` previously scanned every logical item for adjacent
+owners and disappearing-space style at every cluster edge, and resolved the
+same boundary style twice. The bounded candidate builds borrowed start/end
+indexes and first-match ASCII-space style entries once, then resolves each edge
+once. Last-equal left/first-equal right selection, source-mapping precedence,
+common-owner style, hard-break classification and atomic ownership remain
+unchanged. A first-match exact-range map also replaces finite-flag refresh scans;
+an ordered atomic-marker vector preserves duplicate atoms and strict preceding
+offset counts. The original style/owner scans remain test-only parity oracles.
+
+Done conditions: exact scan/index parity including ties, gaps, owner transitions,
+collapsed spaces, actual RTL/ligature shaping; a deterministic lookup-comparison
+bound; full affected package gates with any baseline failures attributed on an
+untouched same-source build; unchanged Knot fixture before/after and current-family
+consumer/native qualification. No fixture shrink or assertion removal. Timing is
+observational, not a release benchmark; WPT and S1.2 acceptance remain separate.
+
+Evidence: `Code/testing/genet-boundary-20261008.R85RvP/`. Initial library run:
+316 pass, two float-layout failures. Both failures reproduce exactly at untouched
+base source on this macOS host (`baseline-float-width.log`,
+`baseline-shape-outside.log`); neither assertion is changed by this lane. The first
+new-test run passed synthetic parity and scaling, but its ligature fixture assumed
+a multi-character cluster representation incorrectly. The corrected fixture
+asserts Parley's actual ligature-start/continuation flags with the vendored
+Lato-Medium-Liga face, then checks scan/index parity. Actual Noto Naskh RTL,
+synthetic parity and 256/512/1024/2048-cluster comparison bounds now pass (3 tests).
+The manual ignored timing test also passes exact per-offset style-vector equality:
+five 1024-cluster debug iterations take 29–33 ms for the old scan and 0.7–2.6 ms
+for index construction plus queries. No elapsed-time threshold enters CI.
+
+The complete `genet-livery --no-fail-fast --locked --offline` gate reports
+650 passing checks, three failures and seven ignored across 47 result targets.
+The two library float failures and one table-glyph failure reproduce exactly in
+untouched `6cb2284a` source on this host. Both generated locks are byte-identical,
+SHA-256 `ccc275e2d1c442e662e1cb942d9580546528b653fdd04089692a6a2af397575d`.
+These baseline failures remain open; this is not a wholly green engine suite.
+No test is weakened or ignored in source to obtain the bounded repair result.
+
+The unchanged Knot test passes before and after the local path override:
+384.58 seconds at pinned dependencies, then 7.87 seconds with the repaired
+Genet family. This diagnostic includes other concurrent compilation and is not
+a controlled release benchmark or an old-pin regression measurement. The
+baseline's owned-process sample attributes sustained work to the two repeated
+boundary-style paths. Span mapping and atomic-neighbor scans remain unchanged;
+the sample does not justify expanding the repair to them. Portable downstream
+repinning and committed-runtime native acceptance remain subsequent gates.
+
+The original findings below are dated 2026-10-02, verified at Genet
+`4ac56bbbe0b` and `6fca091dc26`.
 
 - **The unbounded line and the longest-line alignment.** Livery broke
   non-wrapping text unbounded: `break_all_lines(None)`, or an infinite line

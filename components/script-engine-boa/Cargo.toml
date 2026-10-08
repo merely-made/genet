@@ -15,10 +15,15 @@ path = "lib.rs"
 
 [dependencies]
 script-engine-api = { path = "../script-engine-api" }
-boa_engine = { version = "=1.0.0-dev", git = "https://github.com/mark-ik/boa.git", rev = "4b6d316d1f363f4f483982fecfc62e7532835b89", features = ["array-buffer-transfer"] }
-boa_gc = { version = "=1.0.0-dev", git = "https://github.com/mark-ik/boa.git", rev = "4b6d316d1f363f4f483982fecfc62e7532835b89" }
+boa_engine = { version = "=1.0.0-dev", git = "https://github.com/mark-ik/boa.git", rev = "494ae680a10704722df3c98335073245b7088a24", features = ["array-buffer-transfer"] }
+boa_gc = { version = "=1.0.0-dev", git = "https://github.com/mark-ik/boa.git", rev = "494ae680a10704722df3c98335073245b7088a24" }
 # Pin caller provenance and standard buffer transfer so fresh clones share the
 # same realm and detachment rules. Transfer support does not enable Boa's broad
 # experimental feature. The gitignored local config may
 # redirect these sources to crates/boa; it is not part of the public contract.
-# Boa remains on the upstream 1.0.0-dev line, hence the exact prerelease version.
+# The maintained fork retains its 1.0.0-dev identity while incorporating stable
+# v0.22. The exact prerelease version and revision define the host contract.
+
+[target.'cfg(all(target_family = "wasm", not(any(target_os = "emscripten", target_os = "wasi"))))'.dependencies]
+# Browser host glue provides randomness and time on wasm32-unknown-unknown.
+boa_engine = { version = "=1.0.0-dev", git = "https://github.com/mark-ik/boa.git", rev = "494ae680a10704722df3c98335073245b7088a24", features = ["js"] }

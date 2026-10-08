@@ -146,8 +146,11 @@ completed corpus census or bounded slice does not close its enclosing feature.
   (**Phase A in progress, 2026-10-07**): arena value state shared by script,
   native editing, accessibility and retained control text. Mark authorized
   input value/placeholder/password rendering and textarea live-value painting.
-  Starting qualification is assembling; validation and submission remain
-  behind separate checkpoints. The plan owns decisions and receipts.
+  Local Genet value/paint and Mere consumer gates pass, including the bounded
+  app-textbox width repair and fresh CSS guard. Accessible-tree/sibling-scope
+  rulings and a verified published-source repin precede acceptance. Validation
+  and submission remain behind separate checkpoints. The plan owns decisions
+  and receipts.
 
 ## WPT census — the web platform beyond CSS
 

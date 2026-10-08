@@ -143,13 +143,14 @@ completed corpus census or bounded slice does not close its enclosing feature.
   separate plan and Checkpoint A.
 
 - [HTML forms](2026-10-07_forms_value_validation_submission_plan.md)
-  (**Phase A in progress, 2026-10-07**): arena value state shared by script,
+  (**Phase A checkpoint ready locally, 2026-10-08**): arena value state shared by script,
   native editing, accessibility and retained control text. Mark authorized
   input value/placeholder/password rendering and textarea live-value painting.
   Local Genet value/paint and Mere consumer gates pass, including the bounded
   app-textbox width repair and fresh CSS guard. F5 authorizes bounded sibling
-  compatibility; F6 chooses app accessibility leaves across projections. Their
-  implementation gates and a verified published-source repin precede acceptance. Validation
+  compatibility; F6 chooses app accessibility leaves across projections. Fresh
+  integrated Mere and public-pin sibling gates pass. Publication and a verified
+  published-source repin precede acceptance. Validation
   and submission remain behind separate checkpoints. The plan owns decisions
   and receipts.
 

@@ -8,8 +8,9 @@ All 15 value-model fixtures pass on both engines and the paint guard reports
 are retained with Vano selection cutoffs explicitly accounted. Password cluster
 masking and Mere's Cambium migration are local implementations. Mere's local
 consumer gates pass. F5 authorizes the bounded sibling edits and F6 chooses
-accessible leaves across all app projections. Their implementation and fresh
-qualification, followed by the verified published-source repin, remain pending,
+accessible leaves across all app projections. F6 now qualifies locally at Mere
+`7d133ddc` with 357 passes and two existing ignores, plus a Wasm compile check.
+F5 sibling qualification, followed by the verified published-source repin, remains pending,
 so Forms Phase A is not accepted or
 published. Phase B and C retain separate checkpoints.
 
@@ -717,3 +718,29 @@ dependency cache. Original primary overrides and locks remain preserved.
   leaves in disjoint files. Root owns numbered rulings, review, commits and
   serial fresh qualification. No dependency repin or publication occurs during
   implementation; source gates must finish before the complete Checkpoint A.
+- 2026-10-07: Mere `7d133ddc` implements F6 in Rootstock's neutral projection and
+  the native AccessKit adapter; the browser mirror inherits the neutral leaf
+  topology. Prune descendant rows and routes after producer decoration, retain
+  the owner ID/value/name/bounds/actions, and resolve nested descendant focus
+  to its surviving outer textbox. The drawing DOM stays intact. The updated
+  Unicode/newline fixtures and full browser pipeline cover this boundary;
+  generated pseudo rows are traversed by the implementation but do not have a
+  separate pseudo fixture in this slice.
+- 2026-10-07: `mere-forms-accessible-leaves-disabled` disables only pruning,
+  preserving committed-value decoration. It qualifies with 83 passes and four
+  intended failures: one neutral, one browser and two native (including nested
+  focus). Source bytes/mtimes remain stable and the original files restore.
+  The first restored four-package run is unqualified because Windows rejects
+  the native library executable at DLL initialization (`0xc0000142`) before
+  any tests run. Preserve that attempt as a launch failure, not fixture evidence.
+  The unchanged `mere-forms-accessible-leaves-restored-retry` qualifies all ten
+  result blocks: Cambium 252, Rootstock 72, native adapter 23 and browser mirror
+  10 passes, zero failures and two existing ignored doctests. The fresh Wasm
+  accessibility-example compile also passes. Both guards restore the original
+  manifest/lock and preserve all unowned source bytes/mtimes.
+- 2026-10-07: F5 source is committed in Turnstone `c951afa` and Cleromancy
+  `523d54d` with fixture correction `b6b521d`. View builders copy only their
+  existing visible labels; Mere retains sole ownership of its value marker.
+  Native tag and explicit marked-DIV recognition coexist for the current
+  public pins. Sibling source gates run outside checkout-local Cargo overlays
+  and use each existing lock without a dependency repin. Qualification follows.

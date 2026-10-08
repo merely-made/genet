@@ -22,6 +22,10 @@
 use std::any::Any;
 use std::rc::Rc;
 
+mod value;
+
+pub use value::{HostFunction, ScriptValue, ValueEngine, ValueError};
+
 /// JS-opaque native data a reflector carries, bridging a JS object back to the host
 /// DOM. Packs a genet `NodeId` (the DOM crate owns the `NodeId` ↔ `u64` mapping;
 /// this crate stays DOM-neutral).

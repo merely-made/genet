@@ -627,3 +627,14 @@ dependency cache. Original primary overrides and locks remain preserved.
   shape/checksums and both Knot-owned legacy identities. The mechanical lock
   preparation is not a consumer pass; locked resolution and fresh Mere tests
   follow. Both unruled questions remain open without response deadlines.
+- 2026-10-07: Locked Mere resolution fetches only the exact Genet revision
+  through the process-local local-checkout rewrite after the offline start
+  reports an uncached revision. The fresh 1,564-node metadata graph equals its
+  prior graph after revision/checkout-path normalization: 28 modern Genet
+  packages resolve, all 33 remain locked, both legacy identities remain and
+  neither JavaScript engine activates. `mere-forms-contained-width-native-routing`
+  then qualifies all six native targets with 63 passes and zero failures,
+  including both formerly failing widths, caret/scroll/selection and routing.
+  Source bytes/mtimes are stable and original manifest/lock restore exactly.
+  Catalog receipts, independent bridge controls and remaining consumer gates
+  follow. Accessible-leaf policy and sibling scope remain unanswered.

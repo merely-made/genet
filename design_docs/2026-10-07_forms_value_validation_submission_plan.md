@@ -7,8 +7,10 @@ All 15 value-model fixtures pass on both engines and the paint guard reports
 60-second maps have zero starting pass losses; the prescribed 15-second maps
 are retained with Vano selection cutoffs explicitly accounted. Password cluster
 masking and Mere's Cambium migration are local implementations. Mere's local
-consumer gates pass. Accessible-tree and sibling-scope rulings and the verified
-published-source repin remain pending, so Forms Phase A is not accepted or
+consumer gates pass. F5 authorizes the bounded sibling edits and F6 chooses
+accessible leaves across all app projections. Their implementation and fresh
+qualification, followed by the verified published-source repin, remain pending,
+so Forms Phase A is not accepted or
 published. Phase B and C retain separate checkpoints.
 
 The bounded F4 layout repair at `e84f9c7f` has fresh four-crate qualification
@@ -17,7 +19,7 @@ passing catalog, highlighting, restored native-bridge and Wasm compile gates.
 The fresh restored four-package Mere suite passes 355 tests. F4's fresh
 optimized runner passes all 15 value fixtures on both engines and its CSS guard
 reports `unexpected=0`, with all sixteen summaries equal to the starting guard.
-The remaining Mere policy/integration checkpoints are still required; the
+The remaining Mere implementation/integration checkpoints are still required; the
 original eleven-crate and WPT maps above retain their own source snapshot.
 
 Authority: [standards ledger](2026-09-07_standards_to_features_ledger.md), C1,
@@ -99,7 +101,41 @@ layout path (Recommended)".
 Consequence: add the reproducing CSS fixture before changing the positioned
 sizing handoff, qualify the repaired candidate, refresh Mere consumer evidence
 and rerun the existing CSS guard. This does not authorize broader containment
-work. Sibling scope and accessible-leaf policy retain their pending questions.
+work. F5 and F6 below resolve sibling scope and accessible-leaf policy.
+
+### F5: bounded Turnstone and Cleromancy compatibility, 2026-10-07
+
+Question as put: "The Forms checks now pass. May I include the mechanical
+selector, caret-routing, and existing-label updates in Turnstone and Cleromancy
+so they can adopt Mere's DIV textboxes? Currently unnamed fields would stay
+unchanged."
+
+Recorded selected option and Mark's answer, verbatim: "Include Turnstone and
+Cleromancy (Recommended)".
+
+Consequence: update only existing field selectors, native caret classification
+and attachment of existing visible labels. Preserve currently unnamed fields.
+The siblings still use their existing published pins, so compatibility must
+cover those native tags and the explicit new Cambium marker until verified
+adoption. This ruling does not authorize a broad dependency-family repin.
+
+### F6: app textboxes are accessible leaves, 2026-10-07
+
+Question as put: "Which accessible-tree policy should Cambium app textboxes
+use? Both choices expose committed values and preserve all children for drawing."
+
+Options: app textboxes are leaves across neutral, native and browser projections
+(recommended); prune children only in the browser mirror.
+Mark's answer, verbatim: "Make app textboxes accessible leaves across neutral,
+native, and browser projections (Recommended)".
+
+Consequence: Mere prunes accessibility descendants of its explicit app textbox
+marker and clears the textbox's projected child links. Neutral and native
+adapters must agree; the browser mirror consumes the neutral projection. Retain
+the textbox ID, existing name, committed value, bounds, state, actions and focus.
+Drawing children remain in the DOM. Ordinary native HTML inputs and textareas
+keep their existing Genet projection. Text-valued SetValue routing remains the
+separate pre-existing gap identified under F3.
 
 ## Phases and done-conditions
 
@@ -676,3 +712,8 @@ dependency cache. Original primary overrides and locks remain preserved.
   failures and two existing ignored doctests. All source bytes/mtimes outside
   owned restoration remain unchanged. No publication, repin or pruning policy
   follows without resolving the two outstanding questions.
+- 2026-10-07: Mark answers both outstanding questions as F5 and F6. Two bounded
+  Luna agents implement sibling mechanical compatibility and Mere accessibility
+  leaves in disjoint files. Root owns numbered rulings, review, commits and
+  serial fresh qualification. No dependency repin or publication occurs during
+  implementation; source gates must finish before the complete Checkpoint A.

@@ -147,8 +147,9 @@ completed corpus census or bounded slice does not close its enclosing feature.
   native editing, accessibility and retained control text. Mark authorized
   input value/placeholder/password rendering and textarea live-value painting.
   Local Genet value/paint and Mere consumer gates pass, including the bounded
-  app-textbox width repair and fresh CSS guard. Accessible-tree/sibling-scope
-  rulings and a verified published-source repin precede acceptance. Validation
+  app-textbox width repair and fresh CSS guard. F5 authorizes bounded sibling
+  compatibility; F6 chooses app accessibility leaves across projections. Their
+  implementation gates and a verified published-source repin precede acceptance. Validation
   and submission remain behind separate checkpoints. The plan owns decisions
   and receipts.
 

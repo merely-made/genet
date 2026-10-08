@@ -8,8 +8,8 @@ All 15 value-model fixtures pass on both engines and the paint guard reports
 are retained with Vano selection cutoffs explicitly accounted. Password cluster
 masking and Mere's Cambium migration are local implementations. Mere's local
 consumer gates pass. F5 authorizes the bounded sibling edits and F6 chooses
-accessible leaves across all app projections. F6 qualifies on integrated Mere
-`2a89d8dc` with 362 package passes, 63 native host passes and a Wasm compile
+accessible leaves across all app projections. F6 qualifies on current integrated Mere
+`9105b1ef` with 362 package passes, 63 native host passes and a Wasm compile
 check. F5 public-pin gates qualify Turnstone with 674 passes and nine existing
 ignores and Cleromancy with 15 passes, zero failures or ignores. Publication
 and the verified published-source repin remain pending, so Forms Phase A is not accepted or
@@ -21,8 +21,9 @@ passing catalog, highlighting, restored native-bridge and Wasm compile gates.
 The fresh restored four-package Mere suite passes 355 tests. F4's fresh
 optimized runner passes all 15 value fixtures on both engines and its CSS guard
 reports `unexpected=0`, with all sixteen summaries equal to the starting guard.
-The remaining Mere implementation/integration checkpoints are still required; the
-original eleven-crate and WPT maps above retain their own source snapshot.
+Mere's current integration qualifies below; publication and public-source
+verification remain required. The original eleven-crate and WPT maps above
+retain their own source snapshot.
 
 Authority: [standards ledger](2026-09-07_standards_to_features_ledger.md), C1,
 C5 and C6, and `Code/work/briefs/2026-10-02_genet_forms_value_validation_submission.md`.
@@ -270,6 +271,52 @@ original SHA256 `A50491D40A7E255651A5F7B3421047AE39AECFE6FBB4CE4CA5709BF88B26822
 The corrected range fixture also covers decimal `.1`/`.29`, negative bases,
 upper-bound correction and representable small steps at a large base.
 
+The single value-model fixture has these assertions. The starting outcomes are
+the same on Boa and Vano; the final repaired runner passes every row on both.
+
+| Assertion | Starting control | Repaired candidate |
+| --- | --- | --- |
+| Live input preserves authored default | fail | pass |
+| Empty assignment sets dirty value flag | fail | pass |
+| Clean input follows default | pass, unchanged control | pass |
+| Textarea preserves default and normalizes line endings | fail | pass |
+| Checkedness and default/on value have separate defaults | fail | pass |
+| Text sanitizer removes CR/LF | fail | pass |
+| Email sanitizer trims ASCII whitespace | fail | pass |
+| Number rejects invalid floating-point value | fail | pass |
+| Range defaults and clamps to current bounds | fail | pass |
+| Filename mode rejects nonempty script assignment | fail | pass |
+| Value-to-default/on transition preserves old live value in default | pass, unchanged control | pass |
+| Input cloning preserves dirty live value | fail | pass |
+| Textarea cloning preserves raw value without rewriting children | fail | pass |
+| UTF-16 selection and direction reset after value change | fail | pass |
+| Form reset restores defaults and clears dirty flags | fail | pass |
+
+Additional controls retain their own source-qualified receipts:
+
+| Fixture | Deliberate failing control |
+| --- | --- |
+| `live_input_value_paints_without_replacing_its_default_attribute` | Disabled retained control-text producer |
+| `live_input_text_is_clipped_to_its_content_box_and_uses_only_current_value` | Same disabled producer |
+| `live_textarea_value_projects_multiline_text_and_preserves_author_children` | Same disabled producer |
+| `empty_live_input_projects_placeholder_instead_of_default_value` | Same disabled producer |
+| `live_control_text_updates_after_hiding_and_showing_with_a_retained_neighbor` | Same disabled producer |
+| `password_input_masks_character_clusters_without_retaining_secret_text` | Same disabled producer |
+| `abspos_single_line_field_uses_contained_intrinsic_width_with_descendants` | Added before F4 repair; expected 178px, observed 146px in its first case |
+| `native_form_state_reads_through_the_window_view` | Disabled Rootstock state forwarding, sole expected failure |
+| `native_form_state_change_rebuilds_only_its_owning_window` | Disabled owning-window mutation routing, sole expected failure |
+| Neutral committed-value/leaf projection | Disabled pruning; one intended failure |
+| Browser mirror app-textbox leaf | Same disabled pruning; one intended failure |
+| Native committed-value/leaf projection and nested focus | Same disabled pruning; two intended failures |
+| Cleromancy marked-DIV Question-slot typing | Disabled marked-field routing; sole expected failure |
+
+The pruning control passes 83 other cases and fails exactly four. Its unchanged
+production/fixture hashes are carried to the fresh current Mere positive gates.
+Cleromancy's routing control passes 11 other cases, then the restored source
+passes the library and both DOM targets. Turnstone's marked-DIV discovery
+fixture uses an independently authored marker and passes against its existing
+public family. These sibling fixtures demonstrate compatibility preparation.
+
 ### Frozen WPT and paint evidence
 
 Evidence lives under `Code/testing/genet/forms`. The optimized runners use the
@@ -328,14 +375,35 @@ the supplementary timing checks.
 
 ### Remaining checkpoint work
 
-F1-F6 are ruled. Integrated Mere `2a89d8dc` qualifies against exact Genet product
+F1-F6 are ruled. Current integrated Mere `9105b1ef` qualifies against exact Genet product
 `e84f9c7f`: 362 package passes, two existing ignored doctests, 63 native host
-passes and a Wasm accessibility-example compile. Its 1,566-package resolved
-graph preserves versions, dependency definitions, edges and features after
-approved revision/checkout-path normalization; both legacy Knot identities
-remain and neither JavaScript engine activates. The unchanged leaf production
+passes and a Wasm accessibility-example compile. Its graph moves from 1,564 to
+1,566 resolved packages: the modern family preserves versions, dependency
+definitions, edges and features after approved revision/checkout-path
+normalization, while published Knot `eabd4434` retains two Genet `965b64e2`
+identities (Fleece 0.5.0 and LayoutDom 0.1.1). Neither JavaScript engine
+activates. The unchanged leaf production
 and fixture hashes carry the earlier deliberate pruning control, followed by
 fresh integrated positive tests. This is a local Git candidate receipt.
+The frozen 1,690-row candidate lock SHA256 is
+`3537E6067130E1D8993DAC7DB2F143CB9AA60099879F20EBD654DAE79CA97735`.
+The first two-thread package attempt stalls in GPU tests and is terminated;
+its source/config/lock restoration succeeds, but it remains unqualified.
+The unchanged full suite passes at one test thread, with all GPU cases run.
+Receipts are `mere-forms-current-knot-packages-serial-retry`,
+`mere-forms-current-knot-native` and `mere-forms-current-knot-wasm-a11y`.
+
+| Current Mere gate owner | Passed | Failed | Ignored |
+| --- | ---: | ---: | ---: |
+| Cambium | 257 | 0 | 1 |
+| Rootstock | 72 | 0 | 1 |
+| Native accessibility | 23 | 0 | 0 |
+| Browser mirror | 10 | 0 | 0 |
+| Six native-host targets | 63 | 0 | 0 |
+
+The Wasm example check confirms compilation only. Every guarded gate preserves
+unowned source bytes/mtimes and restores the starting manifest/lock. The older
+`2a89d8dc` integration and repin proposal retain their own historical receipts.
 
 Turnstone `8e06a85f` passes its complete public-pin library: 674 passes, zero
 failures, nine existing ignores. Cleromancy `85c8f77` resolves its existing
@@ -347,12 +415,19 @@ adoption of the unpublished Mere/Genet candidate.
 
 Publication remains gated by the brief's "Do not push" instruction. The exact
 two-file qualified Mere repin proposal is recorded in
-`Code/testing/genet/forms/mere-forms-integrated-repin.patch`; apply and verify
-it against the published Genet source after publication is authorized. Mere's
+`Code/testing/genet/forms/mere-forms-current-knot-repin-review.patch`; the exact
+qualified candidate manifest and lock are named in its review-proposal JSON.
+The normalized patch passes `git apply --check`. Verify the candidate files
+against the published Genet source after publication is authorized. Mere's
 shared unpublished history also contains four other-owner Vault/Lattice
 documentation commits; a normal main push would include them. Native password
 composition and text-valued accessibility actions remain separate existing
 gaps. Phase B/C require their next checkpoint decisions.
+
+The complete commit subjects/hashes and known published bases are recorded in
+`Code/testing/genet/forms/forms-phase-a-publication-inventory.json`. Current
+documentation-only descendants are bound to their qualified sources in
+`Code/testing/genet/forms/forms-current-checkpoint-source-binding.json`.
 
 The stable `genet-encoding` target and published-source `genet-streams` Cargo
 home remain owned by the pending Forms publication/repin gate. Mere and
@@ -813,3 +888,20 @@ Cargo home was created. Original primary overrides and locks remain preserved.
   authoring DOM test and both consultation DOM tests: 15 passes, zero failures,
   ignores or filtered cases. Source/config/lock guards pass. These are runner
   DOM checks; H4's earlier desktop receipt retains its own source snapshot.
+- 2026-10-08: Integrate published Mere `f67f5080` at `9105b1ef`, preserving
+  Pelt, dataset and Knot-owner changes; Turnstone's `56aff960` integration at
+  `f6149b3` contains documentation changes only. Turnstone's qualified source
+  bytes are unchanged, so its 674-test result carries. Mere's published Knot
+  repin removes its older d851 identities from the starting lock. Prepare a
+  new candidate lock preserving Knot's explicit 965 source while adopting e84
+  for Mere's modern family. Versions and modern graph definitions/edges/features
+  remain equal after revision mapping; only the two protected identities split
+  out. Package count is 1,564 to 1,566 and lock rows are 1,688 to 1,690.
+  Fresh Mere gates qualify 362 package and 63 native passes plus Wasm compilation.
+  The first package attempt's GPU stall is preserved as unqualified; only its
+  owned test executable is stopped, cleanup restores inputs, and the complete
+  unchanged serial retry passes with all GPU cases. The current two-file review
+  patch passes an application check; exact candidate byte hashes and protected
+  sources are recorded in `mere-forms-current-knot-repin-review-proposal.json`.
+  No source substitution or public-source acceptance is inferred from these
+  local-candidate gates. Checkpoint A publication remains the open decision.

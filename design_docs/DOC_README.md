@@ -149,7 +149,7 @@ completed corpus census or bounded slice does not close its enclosing feature.
   Local Genet value/paint and Mere consumer gates pass, including the bounded
   app-textbox width repair and fresh CSS guard. F5 authorizes bounded sibling
   compatibility; F6 chooses app accessibility leaves across projections. Fresh
-  integrated Mere and public-pin sibling gates pass. Publication and a verified
+  current Mere/Knot integration and public-pin sibling gates pass. Publication and a verified
   published-source repin precede acceptance. Validation
   and submission remain behind separate checkpoints. The plan owns decisions
   and receipts.

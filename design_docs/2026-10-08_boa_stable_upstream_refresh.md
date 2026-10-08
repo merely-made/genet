@@ -19,15 +19,22 @@ feature remains separate from standardized transfer support.
 - Provider: 1,112 engine tests and 30 GC tests passed, with the narrow transfer
   feature enabled. The fork's pre-push formatter, all-feature/all-target lint,
   and no-default-feature lint checks also passed with warnings denied.
-- Candidate adapter: all 26 Genet Boa adapter tests passed.
+- Adapter: all 26 Genet Boa adapter tests passed against the published immutable
+  fork, both on primary and on the combined integration revision.
 - Browser target: `script-engine-boa` checked for `wasm32-unknown-unknown` with
   Boa's `js` feature. The public manifest now supplies that feature automatically
-  on browser Wasm targets; public immutable-source checks are recorded separately.
+  on browser Wasm targets; default public-source checks passed on primary and
+  the combined integration revision without command-line feature overrides.
 - Clean consumer compilation: Livery, scripted DOM, and scripted worker checked
   against immutable Genet `e84f9c7f9aec23320c539784961d1465f8a53a9b` with the
   candidate. Its code and manifests matched primary `6cb2284a` before this
   dependency change; those revisions differed only in documentation. Concurrent
   DOM/forms/runtime edits were excluded from this compile receipt.
+- Combined provider: Livery, scripted DOM, and scripted worker also compiled
+  against the published Boa source after integrating the incoming paragraph
+  layout revision `15713014e2e`. The merge was isolated in a worktree because
+  those paragraph files overlap unfinished primary layout work. All 26 adapter
+  tests and the default browser Wasm check passed on that combined source.
 
 Genet's old generated lock selected arrayvec 0.7.6 and ICU 2.2. Refreshing only
 Boa's dependency subtree left the other ICU users locked to 2.2. A full compatible

@@ -194,8 +194,8 @@ dependency or version change is authorized beyond the named workspace edge.
   must distinguish those sources from the qualified published-source lock.
 - Current workspace instructions supersede the older brief's mandatory branch
   and worktree: work on clean main, preserve the separate browser-fonts tree,
-  and create isolation only for an actual collision. No Forms push is authorized
-  at this checkpoint. Root owns commits and serial gates; agents own disjoint
+  and create isolation only for an actual collision. Mark authorized Forms
+  publication and push on 2026-10-08. Root owns commits and serial gates; agents own disjoint
   source files and cannot launch builds independently.
 
 ## Genet qualification for Checkpoint A, 2026-10-07
@@ -413,12 +413,13 @@ library and two DOM targets qualify 15 passes, zero failures or ignores. These F
 checks qualify mechanical preparation on the siblings' existing pins, not
 adoption of the unpublished Mere/Genet candidate.
 
-Publication remains gated by the brief's "Do not push" instruction. The exact
+Mark authorized publication and push on 2026-10-08, superseding the brief's
+"Do not push" instruction. The exact
 two-file qualified Mere repin proposal is recorded in
 `Code/testing/genet/forms/mere-forms-current-knot-repin-review.patch`; the exact
 qualified candidate manifest and lock are named in its review-proposal JSON.
 The normalized patch passes `git apply --check`. Verify the candidate files
-against the published Genet source after publication is authorized. Mere's
+against the published Genet source before accepting its repin. Mere's
 shared unpublished history also contains four other-owner Vault/Lattice
 documentation commits; a normal main push would include them. Native password
 composition and text-valued accessibility actions remain separate existing
@@ -435,6 +436,10 @@ Turnstone reuse their stable repository targets and normal dependency cache;
 Cleromancy's initially empty approved `C:/t/cargo-targets/cleromancy` is built
 for its F5 checks and retained for reuse. No Forms worktree or new isolated
 Cargo home was created. Original primary overrides and locks remain preserved.
+The generated helper bytecode was removed on 2026-10-08 after Mark explicitly
+authorized cleanup; its earlier automatic-review rejection remains historical.
+Mark requested the remaining test work on ThinkPad to relieve local memory
+pressure. Remote gates run serially with one Cargo job and one test thread.
 
 ## Progress
 

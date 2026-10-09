@@ -644,10 +644,10 @@ impl TextSystem {
         let Some(name) = dom.element_name(node) else {
             return false;
         };
-        if name.ns.as_ref() != "http://www.w3.org/1999/xhtml" {
+        if name.ns.as_str() != "http://www.w3.org/1999/xhtml" {
             return false;
         }
-        let local = name.local.as_ref();
+        let local = name.local.as_str();
         let is_textarea = local.eq_ignore_ascii_case("textarea");
         if !is_textarea && !local.eq_ignore_ascii_case("input") {
             return false;
@@ -4291,9 +4291,9 @@ where
 {
     dom.kind(id) == NodeKind::Element
         && dom.element_name(id).is_some_and(|name| {
-            name.local.as_ref().eq_ignore_ascii_case("img")
-                || name.local.as_ref().eq_ignore_ascii_case("canvas")
-                || name.local.as_ref().eq_ignore_ascii_case("iframe")
+            name.local.as_str().eq_ignore_ascii_case("img")
+                || name.local.as_str().eq_ignore_ascii_case("canvas")
+                || name.local.as_str().eq_ignore_ascii_case("iframe")
         })
 }
 
@@ -4304,7 +4304,7 @@ where
     dom.kind(id) == NodeKind::Element
         && dom
             .element_name(id)
-            .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case("br"))
+            .is_some_and(|name| name.local.as_str().eq_ignore_ascii_case("br"))
 }
 
 fn descendant_text<D: LayoutDom>(dom: &D, node: D::NodeId) -> String {
@@ -4699,8 +4699,8 @@ where
 {
     dom.kind(id) == NodeKind::Element
         && dom.element_name(id).is_some_and(|name| {
-            name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
-                && name.local.as_ref().eq_ignore_ascii_case(local)
+            name.ns.as_str() == "http://www.w3.org/1999/xhtml"
+                && name.local.as_str().eq_ignore_ascii_case(local)
         })
 }
 

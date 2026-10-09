@@ -87,7 +87,7 @@ impl<E: ScriptEngine> NativeFn<E> for AttachShadow {
         let outcome = with_dom::<E, _>(cx, |dom| {
             let local = dom
                 .element_name(host_id)
-                .map(|name| name.local.as_ref().to_owned());
+                .map(|name| name.local.as_str().to_owned());
             match local {
                 Some(local) if may_host_shadow_tree(&local) => dom.attach_shadow(host_id, init),
                 _ => Err(AttachShadowError::NotSupported),
@@ -231,7 +231,7 @@ impl<E: ScriptEngine> NativeFn<E> for TemplateContent {
         let fragment = with_dom::<E, _>(cx, |dom| {
             let is_template = dom
                 .element_name(id)
-                .is_some_and(|name| name.local.as_ref() == "template");
+                .is_some_and(|name| name.local.as_str() == "template");
             is_template.then(|| dom.ensure_template_contents(id))
         })
         .flatten();

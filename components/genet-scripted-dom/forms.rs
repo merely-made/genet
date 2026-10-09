@@ -55,16 +55,16 @@ impl ScriptedDom {
         if node.kind == layout_dom_api::NodeKind::Element {
             if let Some(name) = &node.name {
                 if name.ns == markup5ever::ns!(html)
-                    && matches!(name.local.as_ref(), "input" | "select" | "textarea")
+                    && matches!(name.local.as_str(), "input" | "select" | "textarea")
                 {
                     let attr = |local: &str| {
                         node.attrs
                             .iter()
-                            .find(|(n, _)| n.ns == markup5ever::ns!() && n.local.as_ref() == local)
+                            .find(|(n, _)| n.ns == markup5ever::ns!() && n.local.as_str() == local)
                             .map(|(_, v)| v.as_str())
                     };
                     if let Some(key) = attr("name").or_else(|| attr("id")) {
-                        let value = match name.local.as_ref() {
+                        let value = match name.local.as_str() {
                             "input" | "textarea" => self.form_control_value(id).unwrap_or_default(),
                             _ => attr("value").unwrap_or("").to_owned(),
                         };
@@ -84,7 +84,7 @@ impl ScriptedDom {
         if name.ns != markup5ever::ns!(html) {
             return None;
         }
-        match name.local.as_ref() {
+        match name.local.as_str() {
             "textarea" => Some(api_value(&self.node(id).form_control.as_ref()?.value)),
             "input" => {
                 let state = node.form_control.as_ref()?;
@@ -116,7 +116,7 @@ impl ScriptedDom {
         if name.ns != markup5ever::ns!(html) {
             return Err(FormControlValueError::InvalidState);
         }
-        match name.local.as_ref() {
+        match name.local.as_str() {
             "textarea" => {
                 let state = self
                     .node_mut(id)
@@ -196,7 +196,7 @@ impl ScriptedDom {
         if name.ns != markup5ever::ns!(html) {
             return false;
         }
-        match name.local.as_ref() {
+        match name.local.as_str() {
             "input" => {
                 let kind = self.input_type(id).to_owned();
                 let default = self.input_attribute(id, "value").unwrap_or("").to_owned();
@@ -253,7 +253,7 @@ impl ScriptedDom {
         let Some(dst) = self.node_mut(target).form_control.as_mut() else {
             return false;
         };
-        match src_name.local.as_ref() {
+        match src_name.local.as_str() {
             "input" => {
                 dst.value = src.value;
                 dst.dirty_value = src.dirty_value;
@@ -284,7 +284,7 @@ impl ScriptedDom {
         if name.ns != markup5ever::ns!() || !self.is_html_input(id) {
             return;
         }
-        match name.local.as_ref() {
+        match name.local.as_str() {
             "value" if self.input_value_mode(id) != InputValueMode::Value => {
                 let value = match self.input_value_mode(id) {
                     InputValueMode::Default => {
@@ -482,11 +482,11 @@ impl ScriptedDom {
 
     fn is_html_input(&self, id: NodeId) -> bool {
         self.element_name(id)
-            .is_some_and(|q| q.ns == markup5ever::ns!(html) && q.local.as_ref() == "input")
+            .is_some_and(|q| q.ns == markup5ever::ns!(html) && q.local.as_str() == "input")
     }
     fn is_html_textarea(&self, id: NodeId) -> bool {
         self.element_name(id)
-            .is_some_and(|q| q.ns == markup5ever::ns!(html) && q.local.as_ref() == "textarea")
+            .is_some_and(|q| q.ns == markup5ever::ns!(html) && q.local.as_str() == "textarea")
     }
     fn input_type(&self, id: NodeId) -> String {
         let kind = self
@@ -613,14 +613,14 @@ impl ScriptedDom {
             });
             return first_match.filter(|candidate| {
                 self.element_name(*candidate)
-                    .is_some_and(|q| q.ns == markup5ever::ns!(html) && q.local.as_ref() == "form")
+                    .is_some_and(|q| q.ns == markup5ever::ns!(html) && q.local.as_str() == "form")
             });
         }
         let mut parent = self.parent(id);
         while let Some(candidate) = parent {
             if self
                 .element_name(candidate)
-                .is_some_and(|q| q.ns == markup5ever::ns!(html) && q.local.as_ref() == "form")
+                .is_some_and(|q| q.ns == markup5ever::ns!(html) && q.local.as_str() == "form")
             {
                 return Some(candidate);
             }

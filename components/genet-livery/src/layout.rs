@@ -2243,10 +2243,10 @@ where
     D: LayoutDom,
 {
     dom.element_name(node).is_some_and(|name| {
-        name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
+        name.ns.as_str() == "http://www.w3.org/1999/xhtml"
             && names
                 .iter()
-                .any(|candidate| name.local.as_ref().eq_ignore_ascii_case(candidate))
+                .any(|candidate| name.local.as_str().eq_ignore_ascii_case(candidate))
     })
 }
 
@@ -2346,9 +2346,9 @@ where
 {
     dom.kind(id) == NodeKind::Element
         && dom.element_name(id).is_some_and(|name| {
-            name.local.as_ref().eq_ignore_ascii_case("img")
-                || name.local.as_ref().eq_ignore_ascii_case("canvas")
-                || name.local.as_ref().eq_ignore_ascii_case("iframe")
+            name.local.as_str().eq_ignore_ascii_case("img")
+                || name.local.as_str().eq_ignore_ascii_case("canvas")
+                || name.local.as_str().eq_ignore_ascii_case("iframe")
         })
 }
 
@@ -2366,7 +2366,7 @@ where
     dom.kind(id) == NodeKind::Element
         && dom
             .element_name(id)
-            .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case("iframe"))
+            .is_some_and(|name| name.local.as_str().eq_ignore_ascii_case("iframe"))
 }
 
 /// The CSS default object size, used when a replaced element has no natural
@@ -2443,7 +2443,7 @@ where
     let Some(name) = dom.element_name(id) else {
         return None;
     };
-    if name.ns.as_ref() != "http://www.w3.org/1999/xhtml" {
+    if name.ns.as_str() != "http://www.w3.org/1999/xhtml" {
         return None;
     }
     let attribute = |local: &str| dom.attribute(id, &Namespace::from(""), &LocalName::from(local));
@@ -2456,7 +2456,7 @@ where
 
     let char_width = font_size * 0.5;
     let line_height = line_height_px(&computed.line_height, font_size);
-    let local = name.local.as_ref().to_ascii_lowercase();
+    let local = name.local.as_str().to_ascii_lowercase();
 
     // (natural width, natural height, whether the pair is a floor rather
     // than the box's whole natural size).
@@ -2794,11 +2794,11 @@ where
     D::NodeId: Copy,
 {
     let name = dom.element_name(id)?;
-    if name.ns.as_ref() != "http://www.w3.org/1999/xhtml" {
+    if name.ns.as_str() != "http://www.w3.org/1999/xhtml" {
         return None;
     }
     let attribute = |local: &str| dom.attribute(id, &Namespace::from(""), &LocalName::from(local));
-    let one_line = match name.local.as_ref().to_ascii_lowercase().as_str() {
+    let one_line = match name.local.as_str().to_ascii_lowercase().as_str() {
         "input" => !matches!(
             attribute("type").map(str::to_ascii_lowercase).as_deref(),
             Some("checkbox" | "radio" | "range" | "color" | "file" | "image" | "hidden")
@@ -2918,7 +2918,7 @@ where
     if dom.kind(id) != NodeKind::Element {
         return None;
     }
-    let local = dom.element_name(id)?.local.as_ref().to_ascii_lowercase();
+    let local = dom.element_name(id)?.local.as_str().to_ascii_lowercase();
     if local == "canvas" {
         return Some((
             canvas_intrinsic_dimension(dom, id, "width", 300.0),
@@ -2929,8 +2929,8 @@ where
         return None;
     }
     let source = dom.attributes(id).find_map(|attribute| {
-        (attribute.name.ns.as_ref().is_empty()
-            && attribute.name.local.as_ref().eq_ignore_ascii_case("src"))
+        (attribute.name.ns.as_str().is_empty()
+            && attribute.name.local.as_str().eq_ignore_ascii_case("src"))
         .then_some(attribute.value)
     })?;
     let bytes = if let Ok(data_url) = data_url::DataUrl::process(source) {
@@ -2949,11 +2949,11 @@ where
 {
     dom.attributes(id)
         .find_map(|candidate| {
-            (candidate.name.ns.as_ref().is_empty()
+            (candidate.name.ns.as_str().is_empty()
                 && candidate
                     .name
                     .local
-                    .as_ref()
+                    .as_str()
                     .eq_ignore_ascii_case(attribute))
             .then_some(candidate.value)
         })

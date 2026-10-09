@@ -41,7 +41,7 @@ fn is_metadata(tag: &str) -> bool {
 
 fn walk<D: LayoutDom>(dom: &D, node: D::NodeId, depth: usize, report: &mut ContentReport) {
     let mut child_depth = depth;
-    if let Some(tag) = dom.element_name(node).map(|q| q.local.as_ref().to_string()) {
+    if let Some(tag) = dom.element_name(node).map(|q| q.local.as_str().to_string()) {
         if !is_metadata(&tag) {
             report.outline.push(OutlineEntry {
                 depth,

@@ -297,7 +297,7 @@ where
                 && self
                     .dom
                     .element_name(id)
-                    .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case("a"))
+                    .is_some_and(|name| name.local.as_str().eq_ignore_ascii_case("a"))
                 && let Some(href) = self.attribute(id, "href")
             {
                 return Some(href.to_owned());

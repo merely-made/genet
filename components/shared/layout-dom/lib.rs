@@ -300,7 +300,7 @@ pub trait LayoutDom {
     /// Whether element `id` carries CSS class `class` (whitespace-split `class` attr).
     fn has_class(&self, id: Self::NodeId, class: &str) -> bool {
         self.attributes(id).any(|a| {
-            a.name.local.as_ref() == "class" && a.value.split_whitespace().any(|c| c == class)
+            a.name.local.as_str() == "class" && a.value.split_whitespace().any(|c| c == class)
         })
     }
 
@@ -329,7 +329,7 @@ pub trait LayoutDom {
     fn first_tag(&self, id: Self::NodeId, local: &str) -> Option<Self::NodeId> {
         if self
             .element_name(id)
-            .is_some_and(|q| q.local.as_ref() == local)
+            .is_some_and(|q| q.local.as_str() == local)
         {
             return Some(id);
         }

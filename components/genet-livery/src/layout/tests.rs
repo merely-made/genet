@@ -2737,7 +2737,7 @@ fn k4d6b_row_heights_reach_the_painted_rows() {
         ) {
             if dom
                 .element_name(node)
-                .is_some_and(|name| name.local.as_ref() == "td")
+                .is_some_and(|name| name.local.as_str() == "td")
             {
                 found.push(node);
             }
@@ -3168,7 +3168,7 @@ fn k4e4_used_height_of_a_captioned_table_is_the_grids() {
         ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
             if dom
                 .element_name(node)
-                .is_some_and(|name| name.local.as_ref() == "table")
+                .is_some_and(|name| name.local.as_str() == "table")
             {
                 return Some(node);
             }
@@ -3239,8 +3239,8 @@ fn b3_inline_table_uses_its_first_table_baseline() {
         expected: &str,
     ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
         if dom.attributes(node).any(|attribute| {
-            attribute.name.ns.as_ref().is_empty()
-                && attribute.name.local.as_ref() == "id"
+            attribute.name.ns.as_str().is_empty()
+                && attribute.name.local.as_str() == "id"
                 && attribute.value == expected
         }) {
             return Some(node);
@@ -3494,7 +3494,7 @@ fn k4d6_rows_groups_and_columns_have_their_own_fragments() {
         ) {
             if dom
                 .element_name(node)
-                .is_some_and(|n| n.local.as_ref() == local)
+                .is_some_and(|n| n.local.as_str() == local)
             {
                 out.push(node);
             }
@@ -4317,7 +4317,7 @@ fn retained_inline_format_is_not_shaped_again_for_paint() {
         ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
             if dom
                 .element_name(node)
-                .is_some_and(|name| name.local.as_ref() == "span")
+                .is_some_and(|name| name.local.as_str() == "span")
             {
                 return Some(node);
             }
@@ -4375,7 +4375,7 @@ fn split_inline_continuations_format_their_own_box_children() {
         ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
             if dom
                 .element_name(node)
-                .is_some_and(|name| name.local.as_ref() == "span")
+                .is_some_and(|name| name.local.as_str() == "span")
             {
                 return Some(node);
             }
@@ -4412,7 +4412,7 @@ fn partial_inline_groups_do_not_share_one_box_intrinsic_cache_entry() {
     ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
         if dom
             .element_name(node)
-            .is_some_and(|name| name.local.as_ref() == "div")
+            .is_some_and(|name| name.local.as_str() == "div")
         {
             return Some(node);
         }
@@ -4448,7 +4448,7 @@ fn ordinary_live_block_flow_uses_buckram_without_backend_dispatch() {
     ) {
         if dom
             .element_name(node)
-            .is_some_and(|name| name.local.as_ref() == "div")
+            .is_some_and(|name| name.local.as_str() == "div")
         {
             output.push(node);
         }
@@ -4715,7 +4715,7 @@ fn replaced_html_dimensions_use_computed_css_and_canvas_intrinsics() {
     ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
         if dom
             .element_name(node)
-            .is_some_and(|element| element.local.as_ref() == name)
+            .is_some_and(|element| element.local.as_str() == name)
         {
             return Some(node);
         }
@@ -4788,7 +4788,7 @@ fn positioned_replaced_leaf_keeps_its_hint_size_between_definite_insets() {
     ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
         if dom
             .element_name(node)
-            .is_some_and(|element| element.local.as_ref() == name)
+            .is_some_and(|element| element.local.as_str() == name)
         {
             return Some(node);
         }
@@ -4837,7 +4837,7 @@ fn percentage_height_chain_uses_initial_containing_block_height() {
     ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
         if dom
             .element_name(node)
-            .is_some_and(|element| element.local.as_ref() == name)
+            .is_some_and(|element| element.local.as_str() == name)
         {
             return Some(node);
         }
@@ -4884,7 +4884,7 @@ fn live_block_flow_keeps_collapsed_margin_chains_in_buckram() {
     ) {
         if dom
             .element_name(node)
-            .is_some_and(|name| name.local.as_ref() == "div")
+            .is_some_and(|name| name.local.as_str() == "div")
         {
             output.push(node);
         }
@@ -4952,8 +4952,8 @@ fn live_bfc_places_blockified_floats_and_direct_clearance_in_buckram() {
         expected: &str,
     ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
         if dom.attributes(node).any(|attribute| {
-            attribute.name.ns.as_ref().is_empty()
-                && attribute.name.local.as_ref() == "class"
+            attribute.name.ns.as_str().is_empty()
+                && attribute.name.local.as_str() == "class"
                 && attribute.value == expected
         }) {
             return Some(node);
@@ -5017,8 +5017,8 @@ fn live_empty_clearance_keeps_its_following_margin_chain_in_buckram() {
         expected: &str,
     ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
         if dom.attributes(node).any(|attribute| {
-            attribute.name.ns.as_ref().is_empty()
-                && attribute.name.local.as_ref() == "id"
+            attribute.name.ns.as_str().is_empty()
+                && attribute.name.local.as_str() == "id"
                 && attribute.value == expected
         }) {
             return Some(node);
@@ -5083,8 +5083,8 @@ fn live_inline_lines_in_an_ordinary_wrapper_share_outer_float_exclusions() {
         expected: &str,
     ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
         if dom.attributes(node).any(|attribute| {
-            attribute.name.ns.as_ref().is_empty()
-                && attribute.name.local.as_ref() == "id"
+            attribute.name.ns.as_str().is_empty()
+                && attribute.name.local.as_str() == "id"
                 && attribute.value == expected
         }) {
             return Some(node);
@@ -5162,8 +5162,8 @@ fn live_shape_outside_reference_boxes_change_lines_but_not_float_placement() {
         expected: &str,
     ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
         if dom.attributes(node).any(|attribute| {
-            attribute.name.ns.as_ref().is_empty()
-                && attribute.name.local.as_ref() == "id"
+            attribute.name.ns.as_str().is_empty()
+                && attribute.name.local.as_str() == "id"
                 && attribute.value == expected
         }) {
             return Some(node);
@@ -5358,8 +5358,8 @@ fn live_rounded_shape_boxes_shift_left_and_right_line_edges() {
         expected: &str,
     ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
         if dom.attributes(node).any(|attribute| {
-            attribute.name.ns.as_ref().is_empty()
-                && attribute.name.local.as_ref() == "id"
+            attribute.name.ns.as_str().is_empty()
+                && attribute.name.local.as_str() == "id"
                 && attribute.value == expected
         }) {
             return Some(node);
@@ -5609,8 +5609,8 @@ fn live_nowrap_nested_inline_content_uses_float_bands_in_both_directions() {
         expected: &str,
     ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
         if dom.attributes(node).any(|attribute| {
-            attribute.name.ns.as_ref().is_empty()
-                && attribute.name.local.as_ref() == "id"
+            attribute.name.ns.as_str().is_empty()
+                && attribute.name.local.as_str() == "id"
                 && attribute.value == expected
         }) {
             return Some(node);
@@ -5702,8 +5702,8 @@ fn live_nested_float_state_crosses_ordinary_wrappers_but_stops_at_bfcs() {
         expected: &str,
     ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
         if dom.attributes(node).any(|attribute| {
-            attribute.name.ns.as_ref().is_empty()
-                && attribute.name.local.as_ref() == "id"
+            attribute.name.ns.as_str().is_empty()
+                && attribute.name.local.as_str() == "id"
                 && attribute.value == expected
         }) {
             return Some(node);
@@ -5771,8 +5771,8 @@ fn live_generated_block_roots_translate_nested_float_state() {
         expected: &str,
     ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
         if dom.attributes(node).any(|attribute| {
-            attribute.name.ns.as_ref().is_empty()
-                && attribute.name.local.as_ref() == "id"
+            attribute.name.ns.as_str().is_empty()
+                && attribute.name.local.as_str() == "id"
                 && attribute.value == expected
         }) {
             return Some(node);
@@ -5834,8 +5834,8 @@ fn livery_box_tree_preserves_split_inline_float_provenance() {
         expected: &str,
     ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
         if dom.attributes(node).any(|attribute| {
-            attribute.name.ns.as_ref().is_empty()
-                && attribute.name.local.as_ref() == "id"
+            attribute.name.ns.as_str().is_empty()
+                && attribute.name.local.as_str() == "id"
                 && attribute.value == expected
         }) {
             return Some(node);
@@ -5881,8 +5881,8 @@ fn live_block_bfcs_narrow_beside_a_float_or_move_below_it() {
         expected: &str,
     ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
         if dom.attributes(node).any(|attribute| {
-            attribute.name.ns.as_ref().is_empty()
-                && attribute.name.local.as_ref() == "id"
+            attribute.name.ns.as_str().is_empty()
+                && attribute.name.local.as_str() == "id"
                 && attribute.value == expected
         }) {
             return Some(node);
@@ -5948,8 +5948,8 @@ fn live_bfc_auto_margins_fit_or_move_below_floats_in_both_directions() {
         expected: &str,
     ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
         if dom.attributes(node).any(|attribute| {
-            attribute.name.ns.as_ref().is_empty()
-                && attribute.name.local.as_ref() == "id"
+            attribute.name.ns.as_str().is_empty()
+                && attribute.name.local.as_str() == "id"
                 && attribute.value == expected
         }) {
             return Some(node);
@@ -6045,8 +6045,8 @@ fn live_flex_and_grid_bfcs_use_buckram_float_placement() {
         expected: &str,
     ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
         if dom.attributes(node).any(|attribute| {
-            attribute.name.ns.as_ref().is_empty()
-                && attribute.name.local.as_ref() == "id"
+            attribute.name.ns.as_str().is_empty()
+                && attribute.name.local.as_str() == "id"
                 && attribute.value == expected
         }) {
             return Some(node);
@@ -6132,8 +6132,8 @@ fn live_auto_float_width_clamps_retained_inline_intrinsics() {
         expected: &str,
     ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
         if dom.attributes(node).any(|attribute| {
-            attribute.name.ns.as_ref().is_empty()
-                && attribute.name.local.as_ref() == "id"
+            attribute.name.ns.as_str().is_empty()
+                && attribute.name.local.as_str() == "id"
                 && attribute.value == expected
         }) {
             return Some(node);
@@ -6202,8 +6202,8 @@ fn live_multi_child_float_and_atomic_inline_use_intrinsic_subtrees() {
         expected: &str,
     ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
         if dom.attributes(node).any(|attribute| {
-            attribute.name.ns.as_ref().is_empty()
-                && attribute.name.local.as_ref() == "id"
+            attribute.name.ns.as_str().is_empty()
+                && attribute.name.local.as_str() == "id"
                 && attribute.value == expected
         }) {
             return Some(node);
@@ -6306,8 +6306,8 @@ fn live_bfc_fragments_expose_text_flex_grid_and_atomic_baselines() {
         expected: &str,
     ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
         if dom.attributes(node).any(|attribute| {
-            attribute.name.ns.as_ref().is_empty()
-                && attribute.name.local.as_ref() == "id"
+            attribute.name.ns.as_str().is_empty()
+                && attribute.name.local.as_str() == "id"
                 && attribute.value == expected
         }) {
             return Some(node);
@@ -7216,7 +7216,7 @@ fn replaced_element_as_table_cell_lays_out_like_a_cell_around_it() {
     ) {
         if dom
             .element_name(n)
-            .is_some_and(|e| e.local.as_ref() == "canvas")
+            .is_some_and(|e| e.local.as_str() == "canvas")
         {
             out.push(n);
         }

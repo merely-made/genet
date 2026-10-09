@@ -261,7 +261,7 @@ impl xpath::Node for XPathNode {
             if let XPathKind::Node(idx) = node.kind {
                 for &attr in &node.tree.nodes[idx].attrs {
                     let attr = &node.tree.attrs[attr];
-                    if attr.name.local.as_ref().eq_ignore_ascii_case("lang") {
+                    if attr.name.local.as_str().eq_ignore_ascii_case("lang") {
                         return Some(attr.value.clone());
                     }
                 }
@@ -410,7 +410,7 @@ impl xpath::Document for XPathDocument {
                 };
                 let has_id = self.tree.nodes[idx].attrs.iter().any(|&attr| {
                     let attr = &self.tree.attrs[attr];
-                    attr.name.local.as_ref() == "id" && attr.value == id
+                    attr.name.local.as_str() == "id" && attr.value == id
                 });
                 (has_id && self.tree.nodes[idx].kind == NodeKind::Element)
                     .then(|| XPathElement { node })
@@ -463,7 +463,7 @@ impl xpath::Element for XPathElement {
     }
 
     fn is_html_element_in_html_document(&self) -> bool {
-        self.namespace().as_ref() == XHTML_NS
+        self.namespace().as_str() == XHTML_NS
     }
 }
 

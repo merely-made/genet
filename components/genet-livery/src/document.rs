@@ -612,7 +612,7 @@ where
         let Some(name) = self.dom.element_name(id) else {
             return false;
         };
-        let local = name.local.as_ref();
+        let local = name.local.as_str();
         local.eq_ignore_ascii_case("a") && self.attribute(id, "href").is_some()
             || matches!(
                 local.to_ascii_lowercase().as_str(),

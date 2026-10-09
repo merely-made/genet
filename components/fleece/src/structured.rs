@@ -341,7 +341,7 @@ fn html_tokens(value: &str) -> impl Iterator<Item = &str> {
 
 fn is_html_element<D: LayoutDom>(dom: &D, id: D::NodeId) -> bool {
     dom.element_name(id)
-        .is_some_and(|name| name.ns.as_ref() == "http://www.w3.org/1999/xhtml")
+        .is_some_and(|name| name.ns.as_str() == "http://www.w3.org/1999/xhtml")
 }
 
 fn microdata_property_text<D: LayoutDom>(dom: &D, id: D::NodeId) -> String {

@@ -638,7 +638,7 @@ fn collect_stylesheets<D>(
 {
     if dom
         .element_name(node)
-        .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case("style"))
+        .is_some_and(|name| name.local.as_str().eq_ignore_ascii_case("style"))
     {
         let mut text = String::new();
         collect_text(dom, node, &mut text);
@@ -1158,7 +1158,7 @@ fn collect_document_resources<D>(
 {
     let namespace = Namespace::default();
     let loading = LocalName::from("loading");
-    let attribute = match dom.element_name(node).map(|name| name.local.as_ref()) {
+    let attribute = match dom.element_name(node).map(|name| name.local.as_str()) {
         Some("img" | "embed") => Some("src"),
         Some("object") => Some("data"),
         Some("video") => Some("poster"),
@@ -1166,13 +1166,13 @@ fn collect_document_resources<D>(
     };
     if dom
         .element_name(node)
-        .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case("iframe"))
+        .is_some_and(|name| name.local.as_str().eq_ignore_ascii_case("iframe"))
     {
         collect_frame(dom, node, document_url, fetch, cached, result);
     }
     let lazy = dom
         .element_name(node)
-        .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case("img"))
+        .is_some_and(|name| name.local.as_str().eq_ignore_ascii_case("img"))
         && dom
             .attribute(node, &namespace, &loading)
             .is_some_and(|value| value.trim().eq_ignore_ascii_case("lazy"));
@@ -1396,7 +1396,7 @@ where
     let namespace = Namespace::default();
     let rel = LocalName::from("rel");
     dom.element_name(node)
-        .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case("link"))
+        .is_some_and(|name| name.local.as_str().eq_ignore_ascii_case("link"))
         && dom.attribute(node, &namespace, &rel).is_some_and(|tokens| {
             tokens
                 .split_ascii_whitespace()

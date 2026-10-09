@@ -7,7 +7,7 @@ use std::hash::Hash;
 #[cfg(feature = "accesskit")]
 use accesskit::{
     Action, HasPopup, Live, Node as AccessNode, NodeId as AccessNodeId, Orientation, Rect, Role,
-    Toggled, Tree, TreeId, TreeUpdate,
+    Toggled, TreeId, TreeInfo, TreeUpdate,
 };
 use document_session_api::{
     A11yCapability, DocumentA11yAction, DocumentA11yBounds, DocumentA11yHasPopup, DocumentA11yLive,
@@ -644,7 +644,7 @@ pub fn accesskit_tree_from_projection(projection: DocumentA11yProjection) -> Tre
         .map_or(root_id, |node| AccessNodeId(node.id.get()));
     TreeUpdate {
         nodes,
-        tree: Some(Tree::new(root_id)),
+        tree: Some(TreeInfo::new(root_id)),
         tree_id: TreeId::ROOT,
         focus,
     }

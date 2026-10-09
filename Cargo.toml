@@ -124,13 +124,13 @@ publish = false
 rust-version = "1.86.0"
 
 [workspace.dependencies]
-accesskit = { version = "0.24.0", features = ["serde"] }
+accesskit = { version = "0.25.0", features = ["serde"] }
 # Platform AccessKit adapters for the winit host bridge (genet-winit-host::a11y),
-# tracking accesskit 0.24. Target-gated in the consuming crate, so a non-native
+# tracking accesskit 0.25. Target-gated in the consuming crate, so a non-native
 # build (wasm) never pulls them.
-accesskit_windows = "0.32"
-accesskit_macos = "0.26"
-accesskit_unix = "0.21"
+accesskit_windows = "0.35"
+accesskit_macos = "0.27"
+accesskit_unix = "0.24"
 app_units = "0.7"
 arboard = { git = "https://github.com/mark-ik/arboard.git", branch = "custom-formats" }
 argon2 = { version = "0.5", features = ["alloc"] }

@@ -179,11 +179,19 @@ pub struct CanonicalTextResource {
     pub media_type: &'static str,
 }
 
+/// Lowercase hex SHA-256. sha2 0.11 digests have no `LowerHex`, so the hex
+/// is written out byte by byte; the text is the same as before.
+pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
+    Sha256::digest(bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
 impl CanonicalTextResource {
     pub(crate) fn for_text(text: &str) -> Self {
-        let digest = Sha256::digest(text.as_bytes());
         Self {
-            iri: format!("urn:sha256:{digest:x}"),
+            iri: format!("urn:sha256:{}", sha256_hex(text.as_bytes())),
             media_type: CANONICAL_TEXT_MEDIA_TYPE,
         }
     }

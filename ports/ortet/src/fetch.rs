@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use genet_documents::LocalFetcher;
-use genet_host_api::{ResourceFetcher, ResourceResponse};
+use genet_host_api::{ResourceFetchResponse, ResourceFetcher, ResourceRequest, ResourceResponse};
 
 /// Which lane serves an address.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -70,6 +70,16 @@ impl ResourceFetcher for OrtetFetcher {
         self.fetch_response(url).map(|response| response.bytes)
     }
 
+    fn fetch_request(&self, request: &ResourceRequest) -> Option<ResourceFetchResponse> {
+        match lane_for(&request.url) {
+            FetchLane::Local if request.is_plain_get() => {
+                LocalFetcher.fetch_response(&request.url).map(Into::into)
+            },
+            FetchLane::Remote => self.remote.as_ref()?.fetch_request(request),
+            _ => None,
+        }
+    }
+
     fn fetch_response(&self, url: &str) -> Option<ResourceResponse> {
         match lane_for(url) {
             FetchLane::Local => LocalFetcher.fetch_response(url),
@@ -110,27 +120,127 @@ impl ResourceFetcher for RemoteFetcher {
     }
 
     fn fetch_response(&self, url: &str) -> Option<ResourceResponse> {
-        if lane_for(url) != FetchLane::Remote {
+        self.fetch_request(&ResourceRequest {
+            url: url.into(),
+            method: "GET".into(),
+            headers: vec![],
+            body: None,
+            cache: "default".into(),
+            redirect: "follow".into(),
+            mode: "cors".into(),
+            referrer: String::new(),
+            referrer_policy: String::new(),
+            credentials: "same-origin".into(),
+            integrity: String::new(),
+        })
+        .map(Into::into)
+    }
+
+    fn fetch_request(&self, request: &ResourceRequest) -> Option<ResourceFetchResponse> {
+        if lane_for(&request.url) != FetchLane::Remote {
             return None;
         }
-        let parsed = url::Url::parse(url).ok()?;
+        let parsed = url::Url::parse(&request.url).ok()?;
+        let mut wire = netfetcher::Request::get(parsed);
+        wire.method = match request.method.as_str() {
+            "GET" => netfetcher::Method::Get,
+            "HEAD" => netfetcher::Method::Head,
+            "POST" => netfetcher::Method::Post,
+            "PUT" => netfetcher::Method::Put,
+            "DELETE" => netfetcher::Method::Delete,
+            "PATCH" => netfetcher::Method::Patch,
+            "OPTIONS" => netfetcher::Method::Options,
+            other => netfetcher::Method::Other(other.into()),
+        };
+        wire.headers = request.headers.clone();
+        wire.body = request.body.clone().map(Into::into);
+        wire.cache = match request.cache.as_str() {
+            "default" => netfetcher::CacheMode::Default,
+            "no-store" => netfetcher::CacheMode::NoStore,
+            "reload" => netfetcher::CacheMode::Reload,
+            "no-cache" => netfetcher::CacheMode::NoCache,
+            "force-cache" => netfetcher::CacheMode::ForceCache,
+            "only-if-cached" => netfetcher::CacheMode::OnlyIfCached,
+            _ => return None,
+        };
+        wire.redirect = match request.redirect.as_str() {
+            "follow" => netfetcher::RedirectMode::Follow,
+            "error" => netfetcher::RedirectMode::Error,
+            "manual" => netfetcher::RedirectMode::Manual,
+            _ => return None,
+        };
+        wire.mode = match request.mode.as_str() {
+            "cors" => netfetcher::RequestMode::Cors,
+            "no-cors" => netfetcher::RequestMode::NoCors,
+            "same-origin" => netfetcher::RequestMode::SameOrigin,
+            "navigate" => netfetcher::RequestMode::Navigate,
+            _ => return None,
+        };
+        wire.referrer = if request.referrer.is_empty() {
+            None
+        } else {
+            Some(url::Url::parse(&request.referrer).ok()?)
+        };
+        wire.origin = wire.referrer.as_ref().map(url::Url::origin);
+        wire.referrer_policy = match request.referrer_policy.as_str() {
+            "" => netfetcher::ReferrerPolicy::Empty,
+            "no-referrer" => netfetcher::ReferrerPolicy::NoReferrer,
+            "no-referrer-when-downgrade" => netfetcher::ReferrerPolicy::NoReferrerWhenDowngrade,
+            "same-origin" => netfetcher::ReferrerPolicy::SameOrigin,
+            "origin" => netfetcher::ReferrerPolicy::Origin,
+            "strict-origin" => netfetcher::ReferrerPolicy::StrictOrigin,
+            "origin-when-cross-origin" => netfetcher::ReferrerPolicy::OriginWhenCrossOrigin,
+            "strict-origin-when-cross-origin" => {
+                netfetcher::ReferrerPolicy::StrictOriginWhenCrossOrigin
+            },
+            "unsafe-url" => netfetcher::ReferrerPolicy::UnsafeUrl,
+            _ => return None,
+        };
+        wire.credentials = match request.credentials.as_str() {
+            "omit" => netfetcher::Credentials::Omit,
+            "same-origin" => netfetcher::Credentials::SameOrigin,
+            "include" => netfetcher::Credentials::Include,
+            _ => return None,
+        };
+        wire.integrity = request.integrity.clone();
+        if request.mode == "navigate" {
+            wire.destination = netfetcher::Destination::Document;
+        }
         self.runtime.block_on(async {
-            let response = netfetcher::fetch(netfetcher::Request::get(parsed), &self.context).await;
-            if response.is_network_error() || response.status >= 400 {
+            let response = netfetcher::fetch(wire, &self.context).await;
+            if response.is_network_error() {
                 return None;
             }
             let final_url = response
                 .url_list
                 .last()
-                .map_or_else(|| url.to_owned(), ToString::to_string);
+                .map_or_else(|| request.url.clone(), ToString::to_string);
             let content_type = response
                 .headers
                 .iter()
                 .find(|(name, _)| name.eq_ignore_ascii_case("content-type"))
                 .map(|(_, value)| value.clone());
+            let status = response.status;
+            let headers = response.headers.clone();
+            let response_type = match response.response_type {
+                netfetcher::ResponseType::Basic => "basic",
+                netfetcher::ResponseType::Cors => "cors",
+                netfetcher::ResponseType::Opaque => "opaque",
+                netfetcher::ResponseType::OpaqueRedirect => "opaqueredirect",
+                netfetcher::ResponseType::Error => "error",
+            }
+            .into();
+            let redirected = response.url_list.len() > 1;
             let bytes = response.bytes().await.ok()?.to_vec();
-            let mut resource = ResourceResponse::new(final_url, bytes);
+            let mut resource: ResourceFetchResponse =
+                ResourceResponse::new(final_url, bytes).into();
             resource.content_type = content_type;
+            resource.status = status;
+            // netfetcher exposes the numeric status, not the transport reason phrase.
+            resource.status_text = String::new();
+            resource.headers = headers;
+            resource.response_type = response_type;
+            resource.redirected = redirected;
             Some(resource)
         })
     }

@@ -179,7 +179,7 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
     /// same `fetcher`). `Err` on a failed fetch of the document, or a runtime that
     /// would not initialize.
     pub fn load(fetcher: &impl ResourceFetcher, url: &str) -> Result<Self, String> {
-        Self::load_inner(fetcher, url, None)
+        Self::load_inner(fetcher, url, None, Default::default())
     }
 
     /// Load a document with a host-owned WebGL factory installed before any
@@ -191,13 +191,21 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         url: &str,
         webgl: WebGlFactory,
     ) -> Result<Self, String> {
-        Self::load_inner(fetcher, url, Some(webgl))
+        Self::load_inner(fetcher, url, Some(webgl), Default::default())
     }
 
+    pub fn load_with_decode_options(
+        fetcher: &impl ResourceFetcher,
+        url: &str,
+        decode_options: script_runtime_api::HtmlDecodeOptions,
+    ) -> Result<Self, String> {
+        Self::load_inner(fetcher, url, None, decode_options)
+    }
     fn load_inner(
         fetcher: &impl ResourceFetcher,
         url: &str,
         webgl: Option<WebGlFactory>,
+        decode_options: script_runtime_api::HtmlDecodeOptions,
     ) -> Result<Self, String> {
         // Split a `url#id` fragment off before fetching (the fetcher takes the
         // resource, not the fragment).
@@ -205,16 +213,23 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
             Some((res, frag)) => (res, (!frag.is_empty()).then(|| frag.to_string())),
             None => (url, None),
         };
-        let bytes = fetcher
-            .fetch(resource)
+        let response = fetcher
+            .fetch_response(resource)
             .ok_or_else(|| format!("could not load {resource}"))?;
+        let decoded = genet_scripted_dom::html_encoding::decode_html_document(
+            &response.bytes,
+            response.content_type.as_deref(),
+            decode_options,
+        );
         // External scripts resolve against the document URL and fetch through the
         // same fetcher; pass both into the builder.
-        let me = Self::build(
-            &String::from_utf8_lossy(&bytes),
-            Some((fetcher, resource)),
+        let me = Self::build_encoded(
+            &decoded.source,
+            Some((fetcher, &response.final_url)),
             None,
             webgl,
+            decoded.encoding,
+            decode_options,
         )?;
         // This headless route carries no layout to scroll a fragment into;
         // `LiveryScriptedDocument::load` (via `NavigationFragment`) is the
@@ -279,6 +294,23 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         cookies: Option<Box<dyn CookieProvider>>,
         webgl: Option<WebGlFactory>,
     ) -> Result<Self, String> {
+        Self::build_encoded(
+            html,
+            loader,
+            cookies,
+            webgl,
+            Default::default(),
+            Default::default(),
+        )
+    }
+    fn build_encoded(
+        html: &str,
+        loader: Option<(&dyn ResourceFetcher, &str)>,
+        cookies: Option<Box<dyn CookieProvider>>,
+        webgl: Option<WebGlFactory>,
+        encoding: script_runtime_api::DocumentEncoding,
+        decode_options: script_runtime_api::HtmlDecodeOptions,
+    ) -> Result<Self, String> {
         // This headless route carries no layout, so it resolves no stylesheets
         // and installs no `getComputedStyle` / `matchMedia` bridge — those are
         // `LiveryScriptedDocument`'s (its CSSOM owns both seams). The capture
@@ -286,6 +318,8 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         let sheets: Vec<String> = Vec::new();
 
         let mut rt = Runtime::<E>::new().map_err(|e| format!("script runtime init: {e:?}"))?;
+        rt.set_document_encoding(encoding);
+        rt.set_html_decode_options(decode_options);
         // The document URL is the base for reflected URL attributes (`a.href`,
         // `img.src`, …) and for resolving fetches; set it from the loader when present
         // (the `parse()` path has no URL, so those reflect their raw values).
@@ -667,16 +701,68 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
     where
         Fetch: ResourceFetcher + Send + Sync + 'static,
     {
+        Self::load_with_decode_options_and_wake_generation(
+            fetcher,
+            url,
+            wake,
+            generation,
+            options,
+            Default::default(),
+        )
+    }
+    pub fn load_with_decode_options<Fetch>(
+        fetcher: Fetch,
+        url: &str,
+        decode_options: script_runtime_api::HtmlDecodeOptions,
+    ) -> Result<Self, String>
+    where
+        Fetch: ResourceFetcher + Send + Sync + 'static,
+    {
+        Self::load_with_decode_options_and_wake_generation(
+            fetcher,
+            url,
+            ScriptWake::new(),
+            0,
+            Default::default(),
+            decode_options,
+        )
+    }
+    pub fn load_with_decode_options_and_wake_generation<Fetch>(
+        fetcher: Fetch,
+        url: &str,
+        wake: ScriptWake,
+        generation: u64,
+        options: ScriptedDocumentOptions,
+        decode_options: script_runtime_api::HtmlDecodeOptions,
+    ) -> Result<Self, String>
+    where
+        Fetch: ResourceFetcher + Send + Sync + 'static,
+    {
         let navigation = NavigationFragment::parse(url);
         let fetcher = ScriptResourceBridge::new_with_generation(fetcher, wake, generation);
-        let bytes = fetcher
-            .fetch(&navigation.resource_url)
+        let response = fetcher
+            .fetch_response(&navigation.resource_url)
             .ok_or_else(|| format!("could not load {}", navigation.resource_url))?;
-        let mut document = Self::build(
-            &String::from_utf8_lossy(&bytes),
+        let decoded = genet_scripted_dom::html_encoding::decode_html_document(
+            &response.bytes,
+            response.content_type.as_deref(),
+            decode_options,
+        );
+        let final_address = if response.final_url.contains('#') {
+            response.final_url.clone()
+        } else if let Some((_, fragment)) = url.split_once('#') {
+            format!("{}#{fragment}", response.final_url)
+        } else {
+            response.final_url.clone()
+        };
+        let navigation = NavigationFragment::parse(&final_address);
+        let mut document = Self::build_encoded(
+            &decoded.source,
             fetcher,
             &navigation.script_visible_url,
             options,
+            decoded.encoding,
+            decode_options,
         )?;
         document.pending_fragment = (!navigation.text_directives.is_empty()
             || navigation.element_fragment.is_some())
@@ -799,8 +885,27 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         base_url: &str,
         options: ScriptedDocumentOptions,
     ) -> Result<Self, String> {
+        Self::build_encoded(
+            html,
+            fetcher,
+            base_url,
+            options,
+            Default::default(),
+            Default::default(),
+        )
+    }
+    fn build_encoded(
+        html: &str,
+        fetcher: ScriptResourceBridge,
+        base_url: &str,
+        options: ScriptedDocumentOptions,
+        encoding: script_runtime_api::DocumentEncoding,
+        decode_options: script_runtime_api::HtmlDecodeOptions,
+    ) -> Result<Self, String> {
         let mut rt =
             Runtime::<E>::new().map_err(|error| format!("script runtime init: {error:?}"))?;
+        rt.set_document_encoding(encoding);
+        rt.set_html_decode_options(decode_options);
         rt.set_validation_message_catalog(options.validation_message_catalog);
         rt.set_fetch_handler(Box::new(fetcher.clone()));
         rt.set_script_resource_loader(Box::new(fetcher.clone()));
@@ -3590,5 +3695,140 @@ mod tests {
                 "the hit button received its own runtime click listener"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod phase_c_document_encoding_fixtures {
+    use super::*;
+    use genet_host_api::ResourceResponse;
+
+    #[derive(Clone)]
+    struct Pages;
+    impl ResourceFetcher for Pages {
+        fn fetch(&self, url: &str) -> Option<Vec<u8>> {
+            self.fetch_response(url).map(|response| response.bytes)
+        }
+        fn fetch_response(&self, url: &str) -> Option<ResourceResponse> {
+            let (header, bytes): (&str, &[u8]) = match url.rsplit('/').next()? {
+                "sj" => ("text/html;charset=shift_jis", b"<meta charset=utf-8><input id=v value='\x82\xA0'><script>window.seen=document.characterSet+'|'+document.getElementById('v').value</script>"),
+                "kr" => ("text/html;charset=euc-kr", b"<input id=v value='\xB0\xA1'><script>window.seen=document.characterSet+'|'+document.getElementById('v').value</script>"),
+                "fallback" => ("text/html", b"<input id=v value='\xE9'><script>window.seen=document.characterSet+'|'+document.getElementById('v').value</script>"),
+                _ => return None,
+            };
+            Some(ResourceResponse {
+                final_url: url.replace("/sj", "/final-sj"),
+                content_type: Some(header.into()),
+                bytes: bytes.to_vec(),
+            })
+        }
+    }
+    fn read<E: ScriptEngine>(rt: &mut Runtime<E>, js: &str) -> String {
+        let value = rt.eval(js).expect("read initial document");
+        rt.value_to_string(&value).expect("string projection")
+    }
+    fn headless_initial<E: ScriptEngine>() {
+        let mut document =
+            ScriptedDocument::<E>::load(&Pages, "https://encoding.test/sj").expect("load");
+        assert_eq!(
+            read(&mut document.rt, "document.getElementById('v').value"),
+            "あ",
+            "real initial bytes"
+        );
+        assert_eq!(
+            read(&mut document.rt, "seen"),
+            "Shift_JIS|あ",
+            "metadata before authored parser script"
+        );
+        assert_eq!(
+            read(&mut document.rt, "location.href"),
+            "https://encoding.test/final-sj"
+        );
+    }
+    fn headless_euckr<E: ScriptEngine>() {
+        let mut document =
+            ScriptedDocument::<E>::load(&Pages, "https://encoding.test/kr").expect("load");
+        assert_eq!(
+            read(&mut document.rt, "document.getElementById('v').value"),
+            "가"
+        );
+        assert_eq!(read(&mut document.rt, "seen"), "EUC-KR|가");
+    }
+    #[cfg(feature = "livery")]
+    fn livery_initial<E: ScriptEngine>() {
+        let mut document =
+            LiveryScriptedDocument::<E>::load(Pages, "https://encoding.test/sj#part")
+                .expect("livery load");
+        assert_eq!(
+            read(&mut document.rt, "document.getElementById('v').value"),
+            "あ"
+        );
+        assert_eq!(read(&mut document.rt, "seen"), "Shift_JIS|あ");
+        assert_eq!(
+            read(&mut document.rt, "location.href"),
+            "https://encoding.test/final-sj#part"
+        );
+    }
+    // Test-local adapter configures the actual initial byte-load API.
+    fn configured_headless_load<E: ScriptEngine>() -> ScriptedDocument<E> {
+        ScriptedDocument::<E>::load_with_decode_options(
+            &Pages,
+            "https://encoding.test/fallback",
+            script_runtime_api::HtmlDecodeOptions {
+                fallback: genet_scripted_dom::form_encoding::Encoding::for_label(b"windows-1252")
+                    .unwrap(),
+                ..Default::default()
+            },
+        )
+        .expect("configured initial load")
+    }
+    fn headless_configured_fallback<E: ScriptEngine>() {
+        let mut document = configured_headless_load::<E>();
+        assert_eq!(
+            read(&mut document.rt, "document.getElementById('v').value"),
+            "é"
+        );
+        assert_eq!(read(&mut document.rt, "seen"), "windows-1252|é");
+    }
+    #[test]
+    fn phase_c_document_encoding_headless_configured_fallback_boa() {
+        headless_configured_fallback::<script_engine_boa::BoaEngine>();
+    }
+    #[cfg(all(feature = "scripted-nova", target_pointer_width = "64"))]
+    #[test]
+    fn phase_c_document_encoding_headless_configured_fallback_nova() {
+        headless_configured_fallback::<script_engine_nova::NovaEngine>();
+    }
+    #[test]
+    fn phase_c_document_encoding_headless_initial_boa() {
+        headless_initial::<script_engine_boa::BoaEngine>();
+    }
+    #[test]
+    fn phase_c_document_encoding_headless_euckr_boa() {
+        headless_euckr::<script_engine_boa::BoaEngine>();
+    }
+    #[cfg(feature = "livery")]
+    #[test]
+    fn phase_c_document_encoding_livery_initial_boa() {
+        livery_initial::<script_engine_boa::BoaEngine>();
+    }
+    #[cfg(all(feature = "scripted-nova", target_pointer_width = "64"))]
+    #[test]
+    fn phase_c_document_encoding_headless_initial_nova() {
+        headless_initial::<script_engine_nova::NovaEngine>();
+    }
+    #[cfg(all(feature = "scripted-nova", target_pointer_width = "64"))]
+    #[test]
+    fn phase_c_document_encoding_headless_euckr_nova() {
+        headless_euckr::<script_engine_nova::NovaEngine>();
+    }
+    #[cfg(all(
+        feature = "livery",
+        feature = "scripted-nova",
+        target_pointer_width = "64"
+    ))]
+    #[test]
+    fn phase_c_document_encoding_livery_initial_nova() {
+        livery_initial::<script_engine_nova::NovaEngine>();
     }
 }

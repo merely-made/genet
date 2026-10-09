@@ -806,6 +806,7 @@
         // would prepopulate html/head/body and make copied children duplicates.
         copy = wrapNode(__createDocument());
         copy.__isHtml = isHtmlDocument(node);
+        __copyDocumentEncoding(node.__ref, copy.__ref);
         copyDocument = copy;
         break;
       default: copy = copyDocument.createTextNode('');
@@ -3081,6 +3082,11 @@
     configurable: true,
     get: function() { var r = this.documentElement; return r ? r.dir : ''; },
     set: function(v) { var r = this.documentElement; if (r) r.dir = v; }
+  });
+  ['characterSet', 'charset', 'inputEncoding'].forEach(function(name) {
+    Object.defineProperty(Document.prototype, name, {
+      configurable: true, get: function() { return __documentEncodingName(this.__ref); }
+    });
   });
   Object.defineProperty(Document.prototype, 'compatMode', {
     configurable: true, get: function() { return __documentCompatMode(this.__ref); }

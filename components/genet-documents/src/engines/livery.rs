@@ -22,6 +22,7 @@ use document_session_api::{
     DocumentA11yAction, DocumentA11yActionRequest, DocumentA11yClickTarget, DocumentA11yNodeId,
     DocumentA11yProjection, DocumentCapabilities, DocumentCapabilityStatus,
 };
+use genet_document_resources::ResourceResponseSnapshot;
 use genet_document_resources::{
     PendingResourceRequest, ResolvedDocumentResources, ResolvedStylesheet, ResourceDelta,
     ResourceKind, ResourceLimits, ResourceProvisionError, StagedResourceResolution,
@@ -29,6 +30,9 @@ use genet_document_resources::{
 };
 use genet_host_api::ResourceFetcher;
 use genet_host_api::ResourceResponse;
+use genet_scripted_dom::html_encoding::{
+    DocumentEncoding, HtmlDecodeOptions, decode_html_document,
+};
 use genet_text::{next_grapheme_boundary, previous_grapheme_boundary};
 use layout_dom_api::{
     FormControlState, LayoutDom, LayoutDomMut, LocalName, Namespace, NodeKind, QualName,
@@ -44,6 +48,7 @@ pub struct LiverySessionEngine<Fetch> {
     fetcher: Fetch,
     author_css: Vec<String>,
     resource_limits: ResourceLimits,
+    decode_options: HtmlDecodeOptions,
 }
 
 /// One browser-host preparation for a Livery session.  It owns the exact DOM
@@ -63,16 +68,37 @@ impl LiveryResourcePreparation {
         source_response: ResourceResponse,
         limits: ResourceLimits,
     ) -> Self {
+        Self::new_with_decode_options(request, source_response, limits, Default::default())
+    }
+    pub fn new_with_decode_options(
+        request: &SessionSpawnRequest,
+        source_response: ResourceResponse,
+        limits: ResourceLimits,
+        decode_options: HtmlDecodeOptions,
+    ) -> Self {
         let base_resource = source_response
             .final_url
             .split_once('#')
             .map_or(source_response.final_url.as_str(), |(resource, _)| resource)
             .to_owned();
-        let source = String::from_utf8_lossy(&source_response.bytes).into_owned();
-        let dom = {
-            let _parse = genet_livery::phase::span(genet_livery::phase::Phase::Parse);
-            genet_scripted_dom::ScriptedDom::from_serialized_document(&source)
+        let decoded = match &request.body {
+            Some(source) => genet_scripted_dom::html_encoding::DecodedHtmlDocument {
+                source: source.clone(),
+                encoding: DocumentEncoding::default(),
+            },
+            None => decode_html_document(
+                &source_response.bytes,
+                source_response.content_type.as_deref(),
+                decode_options,
+            ),
         };
+        let mut dom = {
+            let _parse = genet_livery::phase::span(genet_livery::phase::Phase::Parse);
+            genet_scripted_dom::ScriptedDom::from_serialized_document(&decoded.source)
+        };
+        let document = dom.document();
+        dom.set_document_encoding(document, decoded.encoding);
+        dom.set_html_decode_options(decode_options);
         Self {
             requested_address: request.address.clone(),
             source_response,
@@ -106,11 +132,18 @@ impl LiveryResourcePreparation {
             genet_scripted_dom::ScriptedDom,
             ResourceResponse,
             ResolvedDocumentResources,
+            ResourceResponseSnapshot,
         ),
         Vec<PendingResourceRequest>,
     > {
         let resources = self.staged.finish()?;
-        Ok((self.staged.into_document(), self.source_response, resources))
+        let snapshot = self.staged.response_snapshot();
+        Ok((
+            self.staged.into_document(),
+            self.source_response,
+            resources,
+            snapshot,
+        ))
     }
 }
 
@@ -121,6 +154,7 @@ impl<Fetch> LiverySessionEngine<Fetch> {
             fetcher,
             author_css: Vec::new(),
             resource_limits: ResourceLimits::default(),
+            decode_options: HtmlDecodeOptions::default(),
         }
     }
 
@@ -134,9 +168,14 @@ impl<Fetch> LiverySessionEngine<Fetch> {
             fetcher,
             author_css: sheets.into_iter().map(Into::into).collect(),
             resource_limits: ResourceLimits::default(),
+            decode_options: HtmlDecodeOptions::default(),
         }
     }
 
+    pub fn with_html_decode_options(mut self, options: HtmlDecodeOptions) -> Self {
+        self.decode_options = options;
+        self
+    }
     /// Select bounded recursive stylesheet resolution for sessions made by
     /// this host engine.
     pub fn with_resource_limits(mut self, resource_limits: ResourceLimits) -> Self {
@@ -178,14 +217,27 @@ impl<Fetch: ResourceFetcher + Send + Sync> SessionEngine<Scene> for LiverySessio
             .split_once('#')
             .map_or(source_response.final_url.as_str(), |(resource, _)| resource)
             .to_owned();
-        let source = String::from_utf8_lossy(&source_response.bytes).into_owned();
+        let decoded = match &request.body {
+            Some(source) => genet_scripted_dom::html_encoding::DecodedHtmlDocument {
+                source: source.clone(),
+                encoding: DocumentEncoding::default(),
+            },
+            None => decode_html_document(
+                &source_response.bytes,
+                source_response.content_type.as_deref(),
+                self.decode_options,
+            ),
+        };
         // Script-free HTML still uses the mutable DOM backing. Form controls
         // need one retained value plane even when JavaScript is disabled;
         // ScriptedDom supplies LayoutDomMut without constructing a JS runtime.
-        let dom = {
+        let mut dom = {
             let _parse = genet_livery::phase::span(genet_livery::phase::Phase::Parse);
-            genet_scripted_dom::ScriptedDom::from_serialized_document(&source)
+            genet_scripted_dom::ScriptedDom::from_serialized_document(&decoded.source)
         };
+        let document = dom.document();
+        dom.set_document_encoding(document, decoded.encoding);
+        dom.set_html_decode_options(self.decode_options);
         self.spawn_livery_document(request, dom, base_resource, source_response, navigation)
     }
 }
@@ -246,7 +298,7 @@ impl<Fetch: ResourceFetcher + Send + Sync> LiverySessionEngine<Fetch> {
         source_response: ResourceResponse,
         navigation: genet_livery::NavigationFragment,
     ) -> Result<Box<dyn DocumentSession<Scene>>, SessionError> {
-        let resources = ResolvedDocumentResources::resolve_with_limits(
+        let (resources, snapshot) = ResolvedDocumentResources::resolve_with_limits_and_snapshot(
             &dom,
             Some(&base_resource),
             &self.fetcher,
@@ -258,6 +310,7 @@ impl<Fetch: ResourceFetcher + Send + Sync> LiverySessionEngine<Fetch> {
             source_response,
             navigation,
             resources,
+            snapshot,
             Some(as_dyn_fetcher(&self.fetcher)),
         )
     }
@@ -278,11 +331,12 @@ impl<Fetch> LiverySessionEngine<Fetch> {
                 "prepared Livery resources belong to a different navigation".to_owned(),
             ));
         }
-        let (dom, source_response, resources) = preparation.finish().map_err(|pending| {
-            SessionError::SpawnFailed(format!(
-                "prepared Livery resources still pending: {pending:?}"
-            ))
-        })?;
+        let (dom, source_response, resources, snapshot) =
+            preparation.finish().map_err(|pending| {
+                SessionError::SpawnFailed(format!(
+                    "prepared Livery resources still pending: {pending:?}"
+                ))
+            })?;
         let navigation = genet_livery::NavigationFragment::parse(&redirected_navigation_address(
             &request.address,
             &source_response.final_url,
@@ -297,6 +351,7 @@ impl<Fetch> LiverySessionEngine<Fetch> {
             source_response,
             navigation,
             resources,
+            snapshot,
             None,
         )
     }
@@ -308,8 +363,11 @@ impl<Fetch> LiverySessionEngine<Fetch> {
         source_response: ResourceResponse,
         navigation: genet_livery::NavigationFragment,
         resources: ResolvedDocumentResources,
+        snapshot: ResourceResponseSnapshot,
         fetcher: Option<&dyn ResourceFetcher>,
     ) -> Result<Box<dyn DocumentSession<Scene>>, SessionError> {
+        let encoding = dom.document_encoding(dom.document()).unwrap_or_default();
+        let decode_options = dom.html_decode_options();
         let mut sheets = self
             .author_css
             .iter()
@@ -365,6 +423,9 @@ impl<Fetch> LiverySessionEngine<Fetch> {
             base_url.as_deref(),
             &resources.frames,
             &super::frames::FrameBuild {
+                snapshot: &snapshot,
+                parent_encoding: encoding,
+                decode_options,
                 fetcher,
                 limits: self.resource_limits,
                 author_css: &self.author_css,
@@ -2347,5 +2408,345 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
 
     fn as_any(&mut self) -> &mut dyn Any {
         self
+    }
+}
+
+#[cfg(all(test, feature = "livery"))]
+mod phase_c_document_encoding_fixtures {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Clone, Default)]
+    struct Pages {
+        requests: Arc<Mutex<Vec<String>>>,
+    }
+    impl ResourceFetcher for Pages {
+        fn fetch(&self, url: &str) -> Option<Vec<u8>> {
+            self.fetch_response(url).map(|response| response.bytes)
+        }
+        fn fetch_response(&self, url: &str) -> Option<ResourceResponse> {
+            self.requests.lock().unwrap().push(url.into());
+            let (header, bytes): (&str, &[u8]) = match url.rsplit('/').next()? {
+                "parent" => (
+                    "text/html;charset=shift_jis",
+                    b"<input id=v value='\x82\xA0'>",
+                ),
+                "frames" => (
+                    "text/html;charset=utf-8",
+                    b"<iframe src=one></iframe><iframe src=two></iframe>",
+                ),
+                "one" => (
+                    "text/html;charset=shift_jis",
+                    b"<input id=v value='\x82\xA0'>",
+                ),
+                "two" => ("text/html;charset=euc-kr", b"<input id=v value='\xB0\xA1'>"),
+                "fallback" => ("text/html", b"<input id=v value=\xE9>"),
+                _ => return None,
+            };
+            Some(ResourceResponse {
+                final_url: if url.ends_with("/one") || url.ends_with("/two") {
+                    "https://encoding.test/final".into()
+                } else {
+                    url.into()
+                },
+                content_type: Some(header.into()),
+                bytes: bytes.to_vec(),
+            })
+        }
+    }
+    // Test-local adapter reads metadata on the actual retained Document.
+    fn document_encoding_adapter(dom: &genet_scripted_dom::ScriptedDom) -> Option<&'static str> {
+        dom.document_encoding(dom.document())
+            .map(|e| e.encoding.name())
+    }
+    fn value(dom: &genet_scripted_dom::ScriptedDom) -> String {
+        let node = element_with_id(dom, "v").expect("native input");
+        dom.form_control_state(node)
+            .expect("native state")
+            .value
+            .clone()
+    }
+    // Test-local adapter configures the public additive engine policy.
+    fn configured_native_engine() -> LiverySessionEngine<Pages> {
+        LiverySessionEngine::new(Pages::default()).with_html_decode_options(HtmlDecodeOptions {
+            fallback: genet_scripted_dom::form_encoding::Encoding::for_label(b"windows-1252")
+                .unwrap(),
+            ..Default::default()
+        })
+    }
+    #[test]
+    fn phase_c_document_encoding_native_configured_fallback() {
+        let engine = configured_native_engine();
+        let session = engine
+            .spawn(
+                &SessionSpawnRequest::new("https://encoding.test/fallback").with_viewport(800, 600),
+            )
+            .expect("configured native spawn");
+        let document = session
+            .as_any_ref()
+            .downcast_ref::<LiveryDocumentSession>()
+            .unwrap();
+        assert_eq!(value(document.doc.dom()), "é");
+        assert_eq!(
+            document_encoding_adapter(document.doc.dom()),
+            Some("windows-1252")
+        );
+    }
+    #[test]
+    fn phase_c_document_encoding_native_direct_load() {
+        let pages = Pages::default();
+        let engine = LiverySessionEngine::new(pages);
+        let session = engine
+            .spawn(
+                &SessionSpawnRequest::new("https://encoding.test/parent").with_viewport(800, 600),
+            )
+            .expect("spawn");
+        let document = session
+            .as_any_ref()
+            .downcast_ref::<LiveryDocumentSession>()
+            .expect("native Livery session");
+        assert_eq!(value(document.doc.dom()), "あ", "native initial real bytes");
+        assert_eq!(
+            document_encoding_adapter(document.doc.dom()),
+            Some("Shift_JIS")
+        );
+    }
+    #[test]
+    fn phase_c_document_encoding_native_prepared_load() {
+        let pages = Pages::default();
+        let request =
+            SessionSpawnRequest::new("https://encoding.test/parent").with_viewport(800, 600);
+        let preparation = LiveryResourcePreparation::new(
+            &request,
+            pages.fetch_response(&request.address).unwrap(),
+            ResourceLimits::default(),
+        );
+        let engine = LiverySessionEngine::new(pages);
+        let session = engine
+            .spawn_prepared(&request, preparation)
+            .expect("prepared spawn");
+        let document = session
+            .as_any_ref()
+            .downcast_ref::<LiveryDocumentSession>()
+            .unwrap();
+        assert_eq!(
+            value(document.doc.dom()),
+            "あ",
+            "prepared native real bytes"
+        );
+        assert_eq!(
+            document_encoding_adapter(document.doc.dom()),
+            Some("Shift_JIS")
+        );
+    }
+    #[test]
+    fn phase_c_document_encoding_native_unicode_body_stays_unicode() {
+        let engine = LiverySessionEngine::new(Pages::default());
+        let request = SessionSpawnRequest::new("https://encoding.test/body")
+            .with_viewport(800, 600)
+            .with_body("<meta charset=shift_jis><input id=v value='é'>")
+            .with_content_type("text/html;charset=shift_jis");
+        let session = engine.spawn(&request).expect("Unicode body spawn");
+        let document = session
+            .as_any_ref()
+            .downcast_ref::<LiveryDocumentSession>()
+            .unwrap();
+        assert_eq!(value(document.doc.dom()), "é");
+        assert_eq!(document_encoding_adapter(document.doc.dom()), Some("UTF-8"));
+    }
+    #[test]
+    fn phase_c_document_encoding_native_frames_keep_requested_response_identity() {
+        let pages = Pages::default();
+        let requests = pages.requests.clone();
+        let engine = LiverySessionEngine::new(pages);
+        let session = engine
+            .spawn(
+                &SessionSpawnRequest::new("https://encoding.test/frames").with_viewport(800, 600),
+            )
+            .expect("frame spawn");
+        let document = session
+            .as_any_ref()
+            .downcast_ref::<LiveryDocumentSession>()
+            .unwrap();
+        assert_eq!(document.frames.len(), 2);
+        let one = document.frames[0]
+            .document
+            .as_ref()
+            .expect("first loaded frame");
+        let two = document.frames[1]
+            .document
+            .as_ref()
+            .expect("second loaded frame");
+        assert_eq!(
+            value(one.dom()),
+            "あ",
+            "first raw response despite shared final URL"
+        );
+        assert_eq!(
+            value(two.dom()),
+            "가",
+            "second raw response despite shared final URL"
+        );
+        assert_eq!(document_encoding_adapter(one.dom()), Some("Shift_JIS"));
+        assert_eq!(document_encoding_adapter(two.dom()), Some("EUC-KR"));
+        let requests = requests.lock().unwrap();
+        assert_eq!(
+            requests.iter().filter(|url| url.ends_with("/one")).count(),
+            1,
+            "no second frame GET"
+        );
+        assert_eq!(
+            requests.iter().filter(|url| url.ends_with("/two")).count(),
+            1,
+            "no second frame GET"
+        );
+    }
+    #[test]
+    fn phase_c_document_encoding_native_prepared_frames_keep_raw_response() {
+        let pages = Pages::default();
+        let request =
+            SessionSpawnRequest::new("https://encoding.test/frames").with_viewport(800, 600);
+        let mut preparation = LiveryResourcePreparation::new(
+            &request,
+            pages.fetch_response(&request.address).unwrap(),
+            ResourceLimits::default(),
+        );
+        for pending in preparation.pending_requests() {
+            let response = pages.fetch_response(&pending.url).unwrap();
+            preparation.provide_response(pending, response).unwrap();
+        }
+        let engine = LiverySessionEngine::new(pages);
+        let session = engine
+            .spawn_prepared(&request, preparation)
+            .expect("prepared frames");
+        let document = session
+            .as_any_ref()
+            .downcast_ref::<LiveryDocumentSession>()
+            .unwrap();
+        assert_eq!(
+            value(document.frames[0].document.as_ref().unwrap().dom()),
+            "あ"
+        );
+        assert_eq!(
+            value(document.frames[1].document.as_ref().unwrap().dom()),
+            "가"
+        );
+    }
+    #[derive(Clone, Default)]
+    struct EmptyFrames {
+        requests: Arc<Mutex<Vec<String>>>,
+    }
+    impl ResourceFetcher for EmptyFrames {
+        fn fetch(&self, url: &str) -> Option<Vec<u8>> {
+            self.fetch_response(url).map(|response| response.bytes)
+        }
+        fn fetch_response(&self, url: &str) -> Option<ResourceResponse> {
+            self.requests.lock().unwrap().push(url.to_owned());
+            match url {
+                "https://encoding.test/empty-parent" => Some(ResourceResponse {
+                    final_url: url.to_owned(),
+                    content_type: Some("text/html;charset=utf-8".into()),
+                    bytes: b"<iframe src=empty></iframe>".to_vec(),
+                }),
+                "https://encoding.test/empty" => Some(ResourceResponse {
+                    final_url: "https://encoding.test/final-empty".into(),
+                    content_type: Some("text/html;charset=shift_jis".into()),
+                    bytes: Vec::new(),
+                }),
+                _ => None,
+            }
+        }
+    }
+    fn assert_empty_frame_document(
+        session: &dyn DocumentSession<Scene>,
+        requests: &Arc<Mutex<Vec<String>>>,
+    ) {
+        let requests = requests.lock().unwrap();
+        assert_eq!(
+            requests
+                .iter()
+                .filter(|url| url.as_str() == "https://encoding.test/empty-parent")
+                .count(),
+            1,
+            "one parent fetch"
+        );
+        assert_eq!(
+            requests
+                .iter()
+                .filter(|url| url.as_str() == "https://encoding.test/empty")
+                .count(),
+            1,
+            "one requested empty-frame fetch/provision"
+        );
+        assert_eq!(
+            requests.len(),
+            2,
+            "no redirect destination or duplicate fetch"
+        );
+        drop(requests);
+        let session = session
+            .as_any_ref()
+            .downcast_ref::<LiveryDocumentSession>()
+            .unwrap();
+        assert_eq!(session.frames.len(), 1);
+        let frame = &session.frames[0];
+        let document = frame
+            .document
+            .as_ref()
+            .expect("successful empty byte response has a retained Document");
+        let encoding = document
+            .dom()
+            .document_encoding(document.dom().document())
+            .expect("actual loaded Document metadata");
+        assert_eq!(encoding.encoding.name(), "Shift_JIS");
+        assert_eq!(encoding.confidence.as_str(), "certain");
+        let context = session
+            .contexts
+            .get(frame.context)
+            .expect("loaded frame context");
+        assert_eq!(context.document().url, "https://encoding.test/final-empty");
+        assert!(!context.document().initial_about_blank);
+        assert_eq!(frame.outcome, super::super::frames::FrameOutcome::Load);
+    }
+    #[test]
+    fn phase_c_document_encoding_revision_native_direct_empty_frame() {
+        let pages = EmptyFrames::default();
+        let requests = pages.requests.clone();
+        let engine = LiverySessionEngine::new(pages);
+        let session = engine
+            .spawn(
+                &SessionSpawnRequest::new("https://encoding.test/empty-parent")
+                    .with_viewport(800, 600),
+            )
+            .expect("direct empty frame spawn");
+        assert_empty_frame_document(session.as_ref(), &requests);
+    }
+    #[test]
+    fn phase_c_document_encoding_revision_native_prepared_empty_frame() {
+        let pages = EmptyFrames::default();
+        let requests = pages.requests.clone();
+        let request =
+            SessionSpawnRequest::new("https://encoding.test/empty-parent").with_viewport(800, 600);
+        let mut preparation = LiveryResourcePreparation::new(
+            &request,
+            pages.fetch_response(&request.address).unwrap(),
+            ResourceLimits::default(),
+        );
+        let pending = preparation.pending_requests();
+        assert_eq!(pending.len(), 1, "one empty frame provision request");
+        assert_eq!(pending[0].url, "https://encoding.test/empty");
+        for pending in pending {
+            let response = pages.fetch_response(&pending.url).unwrap();
+            preparation.provide_response(pending, response).unwrap();
+        }
+        assert!(
+            preparation.pending_requests().is_empty(),
+            "successful empty response satisfies provision"
+        );
+        let engine = LiverySessionEngine::new(pages);
+        let session = engine
+            .spawn_prepared(&request, preparation)
+            .expect("prepared empty frame spawn");
+        assert_empty_frame_document(session.as_ref(), &requests);
     }
 }

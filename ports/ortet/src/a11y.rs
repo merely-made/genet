@@ -17,7 +17,7 @@ use std::collections::HashMap;
 
 use accesskit::{
     Action, ActionData, HasPopup, Live, Node as AccessNode, NodeId as AccessNodeId, Orientation,
-    Role, Toggled, Tree, TreeId, TreeUpdate,
+    Role, Toggled, TreeId, TreeInfo, TreeUpdate,
 };
 use document_session_api::session_engine::DocumentSession;
 use document_session_api::{
@@ -127,7 +127,7 @@ impl Accessibility {
         self.revision = Some(projection.revision());
         Some(TreeUpdate {
             nodes,
-            tree: Some(Tree::new(root)),
+            tree: Some(TreeInfo::new(root)),
             tree_id: TreeId::ROOT,
             focus,
         })
@@ -141,7 +141,7 @@ impl Accessibility {
         let node = AccessNode::new(Role::Document);
         TreeUpdate {
             nodes: vec![(root, node)],
-            tree: Some(Tree::new(root)),
+            tree: Some(TreeInfo::new(root)),
             tree_id: TreeId::ROOT,
             focus: root,
         }

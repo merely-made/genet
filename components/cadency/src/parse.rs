@@ -8,7 +8,7 @@
 
 use std::fmt;
 
-use cssparser::{BasicParseErrorKind, Delimiter, Parser, ParserInput, Token};
+use cssparser::{BasicParseError, BasicParseErrorKind, Delimiter, Parser, SourcePosition, Token};
 
 use crate::PseudoClass;
 use crate::ast::{Combinator, Nth, NthKind, Selector, SelectorList, Simple};
@@ -46,7 +46,17 @@ impl fmt::Display for ParseError {
 
 impl std::error::Error for ParseError {}
 
-type Error<'i> = cssparser::ParseError<'i, ParseErrorKind>;
+/// A failure and where the parser stood when it arose. cssparser 0.38
+/// errors carry no location, and the enclosing block or delimited parser
+/// skips ahead on failure, so the location is taken at the failure itself.
+#[derive(Debug)]
+struct Failure {
+    kind: ParseErrorKind,
+    line: u32,
+    column: u32,
+}
+
+type Error = cssparser::ParseError<Failure>;
 
 /// Where in a selector the parser stands.
 #[derive(Clone, Copy, Default)]
@@ -76,43 +86,75 @@ impl State {
 impl<P: PseudoClass> SelectorList<P> {
     /// Parse a selector list. One invalid selector fails the list.
     pub fn parse(source: &str) -> Result<Self, ParseError> {
-        let mut input = ParserInput::new(source);
-        let mut input = Parser::new(&mut input);
-        parse_list(&mut input, State::default(), false)
-            .map(Self)
-            .map_err(|error| {
-                let kind = match error.kind {
-                    cssparser::ParseErrorKind::Custom(kind) => kind,
-                    cssparser::ParseErrorKind::Basic(BasicParseErrorKind::UnexpectedToken(t)) => {
-                        ParseErrorKind::UnexpectedToken(format!("{t:?}"))
-                    },
-                    cssparser::ParseErrorKind::Basic(_) => ParseErrorKind::UnexpectedEnd,
-                };
+        let mut input = Parser::new(source);
+        let parsed = parse_list(&mut input, State::default(), false);
+        parsed.map(Self).map_err(|error| match error.kind {
+            cssparser::ParseErrorKind::Custom(Failure { kind, line, column }) => {
+                ParseError { kind, line, column }
+            },
+            // Only cssparser's own block bookkeeping (nesting limit, end of
+            // input) arrives unlocated; place it where the parser stopped.
+            cssparser::ParseErrorKind::Basic(_) => {
+                let at = input.current_source_location();
                 ParseError {
-                    kind,
-                    line: error.location.line,
-                    column: error.location.column,
+                    kind: ParseErrorKind::UnexpectedEnd,
+                    line: at.line,
+                    column: at.column,
                 }
-            })
+            },
+        })
     }
 }
 
-fn custom<'i>(input: &Parser<'i, '_>, kind: ParseErrorKind) -> Error<'i> {
-    input.new_custom_error(kind)
+/// A failure located where the parser stands now.
+fn custom(input: &Parser<'_>, kind: ParseErrorKind) -> Error {
+    let at = input.current_source_location();
+    cssparser::ParseError::custom(Failure {
+        kind,
+        line: at.line,
+        column: at.column,
+    })
+}
+
+/// The token read since `start` was not allowed here; its source text names
+/// it. A read that rewound (as `expect_exhausted` does) is stepped past the
+/// rejected token, so every unexpected-token error stands just after it.
+fn unexpected(input: &mut Parser<'_>, mut start: SourcePosition) -> Error {
+    if input.position() == start {
+        input.skip_whitespace();
+        start = input.position();
+        let _ = input.next_including_whitespace();
+    }
+    custom(
+        input,
+        ParseErrorKind::UnexpectedToken(input.slice_from(start).to_owned()),
+    )
+}
+
+/// Run one of cssparser's own reads, locating its failure as [`custom`] does.
+fn basic<'i, T>(
+    input: &mut Parser<'i>,
+    read: impl FnOnce(&mut Parser<'i>) -> Result<T, BasicParseError>,
+) -> Result<T, Error> {
+    let start = input.position();
+    read(input).map_err(|error| match error.kind {
+        BasicParseErrorKind::UnexpectedToken => unexpected(input, start),
+        _ => custom(input, ParseErrorKind::UnexpectedEnd),
+    })
 }
 
 /// `forgiving` drops invalid selectors instead of failing, as `:is()` and
 /// `:where()` require, and so may return an empty list.
 fn parse_list<'i, P: PseudoClass>(
-    input: &mut Parser<'i, '_>,
+    input: &mut Parser<'i>,
     state: State,
     forgiving: bool,
-) -> Result<Vec<Selector<P>>, Error<'i>> {
+) -> Result<Vec<Selector<P>>, Error> {
     let mut list = Vec::new();
     loop {
         let parsed = input.parse_until_before(Delimiter::Comma, |input| {
             let selector = parse_selector(input, state)?;
-            input.expect_exhausted()?;
+            basic(input, |input| input.expect_exhausted())?;
             Ok(selector)
         });
         match parsed {
@@ -127,9 +169,9 @@ fn parse_list<'i, P: PseudoClass>(
 }
 
 fn parse_selector<'i, P: PseudoClass>(
-    input: &mut Parser<'i, '_>,
+    input: &mut Parser<'i>,
     mut state: State,
-) -> Result<Selector<P>, Error<'i>> {
+) -> Result<Selector<P>, Error> {
     let mut compounds = Vec::new();
     let mut combinators = Vec::new();
     input.skip_whitespace();
@@ -151,7 +193,7 @@ fn parse_selector<'i, P: PseudoClass>(
 
 /// `None` at the end of the selector. A bare non-combinator token is left for
 /// the caller's exhaustion check to reject.
-fn parse_combinator(input: &mut Parser<'_, '_>) -> Option<Combinator> {
+fn parse_combinator(input: &mut Parser<'_>) -> Option<Combinator> {
     let mut whitespace = false;
     loop {
         let before = input.state();
@@ -173,11 +215,11 @@ fn parse_combinator(input: &mut Parser<'_, '_>) -> Option<Combinator> {
 /// compound they follow and open the subject compound, joined by their own
 /// combinator, so one call may push two.
 fn parse_compound<'i, P: PseudoClass>(
-    input: &mut Parser<'i, '_>,
+    input: &mut Parser<'i>,
     state: &mut State,
     compounds: &mut Vec<Vec<Simple<P>>>,
     combinators: &mut Vec<Combinator>,
-) -> Result<(), Error<'i>> {
+) -> Result<(), Error> {
     let mut simples = Vec::new();
     parse_type_selector(input, &mut simples)?;
     if state.after_pseudo() && !simples.is_empty() {
@@ -251,27 +293,27 @@ fn parse_compound<'i, P: PseudoClass>(
     Ok(())
 }
 
-fn expect_adjacent_ident<'i>(input: &mut Parser<'i, '_>) -> Result<Box<str>, Error<'i>> {
-    let location = input.current_source_location();
-    match input.next_including_whitespace()? {
-        Token::Ident(name) => Ok((&**name).into()),
-        token => Err(location.new_unexpected_token_error(token.clone())),
+fn expect_adjacent_ident<'i>(input: &mut Parser<'i>) -> Result<Box<str>, Error> {
+    let start = input.position();
+    match basic(input, |input| input.next_including_whitespace().cloned())? {
+        Token::Ident(name) => Ok((&*name).into()),
+        _ => Err(unexpected(input, start)),
     }
 }
 
 /// `E`, `*`, `*|E`, `*|*`, `|E`, `|*`. Pushes nothing when the compound has no
 /// type selector.
 fn parse_type_selector<'i, P>(
-    input: &mut Parser<'i, '_>,
+    input: &mut Parser<'i>,
     simples: &mut Vec<Simple<P>>,
-) -> Result<(), Error<'i>> {
+) -> Result<(), Error> {
     fn local_name<P>(name: &str) -> Simple<P> {
         Simple::LocalName {
             name: name.into(),
             lower: name.to_ascii_lowercase().into(),
         }
     }
-    fn bar(input: &mut Parser<'_, '_>) -> bool {
+    fn bar(input: &mut Parser<'_>) -> bool {
         input
             .try_parse(|input| match input.next_including_whitespace() {
                 Ok(Token::Delim('|')) => Ok(()),
@@ -279,12 +321,12 @@ fn parse_type_selector<'i, P>(
             })
             .is_ok()
     }
-    fn after_bar<'i, P>(input: &mut Parser<'i, '_>) -> Result<Simple<P>, Error<'i>> {
-        let location = input.current_source_location();
-        match input.next_including_whitespace()? {
-            Token::Ident(name) => Ok(local_name(name)),
+    fn after_bar<'i, P>(input: &mut Parser<'i>) -> Result<Simple<P>, Error> {
+        let start = input.position();
+        match basic(input, |input| input.next_including_whitespace().cloned())? {
+            Token::Ident(name) => Ok(local_name(&name)),
             Token::Delim('*') => Ok(Simple::Universal),
-            token => Err(location.new_unexpected_token_error(token.clone())),
+            _ => Err(unexpected(input, start)),
         }
     }
 
@@ -320,11 +362,11 @@ fn parse_type_selector<'i, P>(
     Ok(())
 }
 
-fn parse_attribute<'i>(input: &mut Parser<'i, '_>) -> Result<Attribute, Error<'i>> {
-    let bad = |input: &Parser<'i, '_>| custom(input, ParseErrorKind::Attribute);
+fn parse_attribute<'i>(input: &mut Parser<'i>) -> Result<Attribute, Error> {
+    let bad = |input: &Parser<'i>| custom(input, ParseErrorKind::Attribute);
     input.skip_whitespace();
-    let (any_namespace, explicit_namespace, name) = match input.next_including_whitespace()?.clone()
-    {
+    let (any_namespace, explicit_namespace, name) =
+        match basic(input, |input| input.next_including_whitespace().cloned())? {
         Token::Ident(name) => {
             let prefixed = input
                 .try_parse(|input| match input.next_including_whitespace() {
@@ -371,7 +413,8 @@ fn parse_attribute<'i>(input: &mut Parser<'i, '_>) -> Result<Attribute, Error<'i
     let operation = match operator {
         None => None,
         Some(operator) => {
-            let value: Box<str> = (&**input.expect_ident_or_string()?).into();
+            let value: Box<str> =
+                (&*basic(input, |input| input.expect_ident_or_string().cloned())?).into();
             let flag = match input.next() {
                 Err(_) => None,
                 Ok(Token::Ident(flag)) => Some(flag.to_ascii_lowercase()),
@@ -402,12 +445,12 @@ fn parse_attribute<'i>(input: &mut Parser<'i, '_>) -> Result<Attribute, Error<'i
 /// After `::`. Pushes the pseudo-element onto `simples` and returns the
 /// combinator that joins it to the compound on its left.
 fn parse_pseudo_element<'i, P: PseudoClass>(
-    input: &mut Parser<'i, '_>,
+    input: &mut Parser<'i>,
     state: &mut State,
     simples: &mut Vec<Simple<P>>,
-) -> Result<Combinator, Error<'i>> {
-    let location = input.current_source_location();
-    let name = match input.next_including_whitespace()?.clone() {
+) -> Result<Combinator, Error> {
+    let start = input.position();
+    let name = match basic(input, |input| input.next_including_whitespace().cloned())? {
         Token::Function(name) => name,
         Token::Ident(name) => {
             return Err(custom(
@@ -415,7 +458,7 @@ fn parse_pseudo_element<'i, P: PseudoClass>(
                 ParseErrorKind::UnsupportedPseudo(format!("::{name}")),
             ));
         },
-        token => return Err(location.new_unexpected_token_error(token)),
+        _ => return Err(unexpected(input, start)),
     };
     if state.nested || state.after_pseudo() {
         return Err(custom(input, ParseErrorKind::Misplaced));
@@ -428,7 +471,9 @@ fn parse_pseudo_element<'i, P: PseudoClass>(
         Ok(Combinator::SlotAssignment)
     } else if name.eq_ignore_ascii_case("part") {
         let names = input.parse_nested_block(|input| {
-            let mut names = vec![Box::<str>::from(&**input.expect_ident()?)];
+            let mut names = vec![Box::<str>::from(&*basic(input, |input| {
+                input.expect_ident_cloned()
+            })?)];
             while let Ok(name) = input.try_parse(|input| input.expect_ident_cloned()) {
                 names.push((&*name).into());
             }
@@ -447,9 +492,9 @@ fn parse_pseudo_element<'i, P: PseudoClass>(
 
 /// One compound and nothing else, as `:host()` and `::slotted()` take.
 fn parse_compound_only<'i, P: PseudoClass>(
-    input: &mut Parser<'i, '_>,
+    input: &mut Parser<'i>,
     mut state: State,
-) -> Result<Selector<P>, Error<'i>> {
+) -> Result<Selector<P>, Error> {
     let mut compounds = Vec::new();
     input.skip_whitespace();
     parse_compound(input, &mut state, &mut compounds, &mut Vec::new())?;
@@ -459,11 +504,11 @@ fn parse_compound_only<'i, P: PseudoClass>(
 
 /// After a single `:`.
 fn parse_pseudo_class<'i, P: PseudoClass>(
-    input: &mut Parser<'i, '_>,
+    input: &mut Parser<'i>,
     state: State,
-) -> Result<Simple<P>, Error<'i>> {
-    let location = input.current_source_location();
-    let unsupported = |input: &Parser<'i, '_>, name: &str| {
+) -> Result<Simple<P>, Error> {
+    let start = input.position();
+    let unsupported = |input: &Parser<'i>, name: &str| {
         custom(input, ParseErrorKind::UnsupportedPseudo(format!(":{name}")))
     };
     let edge = |kind| {
@@ -474,7 +519,7 @@ fn parse_pseudo_class<'i, P: PseudoClass>(
             of: Vec::new(),
         })
     };
-    match input.next_including_whitespace()?.clone() {
+    match basic(input, |input| input.next_including_whitespace().cloned())? {
         Token::Ident(name) => {
             let lower = name.to_ascii_lowercase();
             if state.after_slotted {
@@ -516,7 +561,7 @@ fn parse_pseudo_class<'i, P: PseudoClass>(
             }
             input.parse_nested_block(|input| {
                 if let Some(kind) = nth {
-                    let (a, b) = cssparser::parse_nth(input)?;
+                    let (a, b) = basic(input, cssparser::parse_nth)?;
                     let of = if !kind.of_type()
                         && input
                             .try_parse(|input| input.expect_ident_matching("of"))
@@ -539,6 +584,6 @@ fn parse_pseudo_class<'i, P: PseudoClass>(
                 }
             })
         },
-        token => Err(location.new_unexpected_token_error(token)),
+        _ => Err(unexpected(input, start)),
     }
 }

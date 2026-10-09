@@ -469,6 +469,21 @@ fn everything_else_is_a_parse_error() {
     );
 }
 
+/// cssparser 0.38 errors carry no location, so cadency reports where the
+/// parser stood when it failed (just past the offending token) and slices
+/// that token from the source. Line is 0-based, column 1-based.
+#[test]
+fn parse_errors_locate_where_the_parser_stopped() {
+    // `.5` is one number token, rejected by the end-of-selector check.
+    let error = List::parse("a.5").unwrap_err();
+    assert_eq!(error.kind, ParseErrorKind::UnexpectedToken(".5".into()));
+    assert_eq!((error.line, error.column), (0, 4));
+
+    let error = List::parse("a,\n  b:bogus").unwrap_err();
+    assert_eq!(error.kind, ParseErrorKind::UnsupportedPseudo(":bogus".into()));
+    assert_eq!((error.line, error.column), (1, 10));
+}
+
 #[test]
 fn specificity_is_packed_id_class_element() {
     let spec = |selector: &str| {

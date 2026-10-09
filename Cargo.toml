@@ -159,7 +159,7 @@ chrono = { version = "0.4", features = ["serde"] }
 content-security-policy = { version = "0.8.0", features = ["serde"] }
 cookie = { package = "cookie", version = "0.18" }
 crossbeam-channel = "0.5"
-cssparser = { version = "0.37", features = ["serde"] }
+cssparser = { version = "0.38", features = ["serde"] }
 data-url = "0.3"
 dpi = "0.1"
 dwrote = "0.11.5"

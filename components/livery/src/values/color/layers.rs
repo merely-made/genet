@@ -17,7 +17,7 @@ use cssparser::{ParseError as CssParseError, Parser};
 use super::space::Components;
 use super::{Color, ColorSpace};
 
-type Failure<'i> = CssParseError<'i, ()>;
+type Failure = CssParseError<()>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum BlendMode {
@@ -90,14 +90,13 @@ impl fmt::Display for BlendMode {
     }
 }
 
-pub fn parse_color_layers<'i>(input: &mut Parser<'i, '_>) -> Result<Color, Failure<'i>> {
+pub fn parse_color_layers<'i>(input: &mut Parser<'i>) -> Result<Color, Failure> {
     let mode = input
         .try_parse(|nested| {
-            let location = nested.current_source_location();
             let name = nested.expect_ident_cloned()?;
-            let mode = BlendMode::from_name(&name).ok_or_else(|| location.new_custom_error(()))?;
+            let mode = BlendMode::from_name(&name).ok_or_else(|| cssparser::ParseError::custom(()))?;
             nested.expect_comma()?;
-            Ok::<_, Failure<'i>>(mode)
+            Ok::<_, Failure>(mode)
         })
         .unwrap_or(BlendMode::Normal);
 
@@ -105,7 +104,7 @@ pub fn parse_color_layers<'i>(input: &mut Parser<'i, '_>) -> Result<Color, Failu
     while input.try_parse(|nested| nested.expect_comma()).is_ok() {
         colors.push(super::parse::parse_from(input)?);
     }
-    resolve_layers(mode, &colors).ok_or_else(|| input.new_custom_error(()))
+    resolve_layers(mode, &colors).ok_or_else(|| cssparser::ParseError::custom(()))
 }
 
 fn resolve_layers(mode: BlendMode, colors: &[Color]) -> Option<Color> {

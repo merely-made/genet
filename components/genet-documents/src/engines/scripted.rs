@@ -140,6 +140,7 @@ where
             collection_stats: (0, 0),
             a11y_revision: std::cell::Cell::new(0),
             a11y_cache: std::cell::RefCell::new(None),
+            validation_alert_id: std::cell::Cell::new(None),
         };
         if request.hidden {
             session.doc.set_hidden(true);
@@ -167,6 +168,8 @@ pub struct ScriptedDocumentSession<E: script_engine_api::ScriptEngine> {
     /// so a host may compare revisions to decide whether to republish.
     a11y_revision: std::cell::Cell<u64>,
     a11y_cache: std::cell::RefCell<Option<document_session_api::DocumentA11yProjection>>,
+    /// Identity belongs to the native notice, independently of arena node IDs.
+    validation_alert_id: std::cell::Cell<Option<(u64, document_session_api::DocumentA11yNodeId)>>,
 }
 
 #[cfg(feature = "scripted")]
@@ -188,6 +191,7 @@ impl<E: script_engine_api::ScriptEngine + 'static> ScriptedDocumentSession<E> {
             external_textures: Vec::new(),
             a11y_revision: std::cell::Cell::new(0),
             a11y_cache: std::cell::RefCell::new(None),
+            validation_alert_id: std::cell::Cell::new(None),
         }
     }
 
@@ -257,7 +261,71 @@ impl<E: script_engine_api::ScriptEngine + 'static> ScriptedDocumentSession<E> {
                 )
             },
         )?;
-        Some(projection)
+        Some(self.with_validation_alert(projection))
+    }
+
+    fn with_validation_alert(
+        &self,
+        projection: document_session_api::DocumentA11yProjection,
+    ) -> document_session_api::DocumentA11yProjection {
+        use document_session_api::{
+            DocumentA11yBounds, DocumentA11yLive, DocumentA11yNode, DocumentA11yNodeId,
+            DocumentA11yProjection, DocumentA11yRole, DocumentA11yState,
+        };
+
+        let Some(notice) = self.doc.validation_notice() else {
+            self.validation_alert_id.set(None);
+            return projection;
+        };
+        let id = self
+            .validation_alert_id
+            .get()
+            .filter(|(sequence, id)| *sequence == notice.sequence && projection.node(*id).is_none())
+            .map(|(_, id)| id)
+            .unwrap_or_else(|| {
+                // Host-only nodes cannot alias any current arena projection.
+                // A repeated report receives a new ID so unchanged text can
+                // still be announced as a new alert.
+                let previous = self.validation_alert_id.get().map(|(_, id)| id);
+                (0..=u64::MAX)
+                    .rev()
+                    .map(DocumentA11yNodeId::new)
+                    .find(|id| Some(*id) != previous && projection.node(*id).is_none())
+                    .expect("a finite document leaves a native alert identity available")
+            });
+        self.validation_alert_id.set(Some((notice.sequence, id)));
+        let root = projection.root();
+        let mut nodes = projection.nodes().to_vec();
+        let Some(root_node) = nodes.iter_mut().find(|node| node.id == root) else {
+            return projection;
+        };
+        root_node.children.push(id);
+        nodes.push(DocumentA11yNode {
+            id,
+            parent: Some(root),
+            children: Vec::new(),
+            role: DocumentA11yRole::Alert,
+            name: Some(notice.message.clone()),
+            description: None,
+            value: None,
+            numeric_value: None,
+            numeric_minimum: None,
+            numeric_maximum: None,
+            bounds: notice
+                .bounds
+                .map(|[x, y, width, height]| DocumentA11yBounds {
+                    x,
+                    y,
+                    width,
+                    height,
+                }),
+            state: DocumentA11yState {
+                live: Some(DocumentA11yLive::Assertive),
+                ..DocumentA11yState::default()
+            },
+            actions: Vec::new(),
+        });
+        DocumentA11yProjection::new(0, projection.support().clone(), root, nodes)
     }
 
     fn current_accessibility_projection(
@@ -347,7 +415,9 @@ impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
         } else if pressed_target.is_some() && self.doc.click_target_at(x, y) == pressed_target {
             self.click_at(x, y)
         } else {
-            SessionClick::Miss
+            // The press was captured; releasing outside consumes it without
+            // activating a different target or leaking the gesture to a host.
+            SessionClick::Handled
         }
     }
     fn focus_input(&mut self, focused: bool) {
@@ -361,7 +431,24 @@ impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
         let had_pointer = std::mem::replace(&mut self.pointer_active, false)
             || self.pressed_target.take().is_some();
         self.pressed_target = None;
-        self.doc.cancel_text_selection() || had_pointer
+        let dismissed = self.doc.dismiss_validation_notice();
+        self.doc.cancel_text_selection() || had_pointer || dismissed
+    }
+    fn key_input(
+        &mut self,
+        key: document_session_api::SessionKey,
+        state: document_session_api::SessionButtonState,
+        _modifiers: document_session_api::SessionModifiers,
+        _repeat: bool,
+    ) -> document_session_api::SessionEffect {
+        if key == document_session_api::SessionKey::Escape
+            && state == document_session_api::SessionButtonState::Pressed
+            && self.cancel_input()
+        {
+            document_session_api::SessionEffect::Cancelled
+        } else {
+            document_session_api::SessionEffect::Ignored
+        }
     }
     fn text_target(&self, text: &str) -> Option<SessionTextTarget> {
         let (anchor, focus) = self.doc.text_target(text)?;

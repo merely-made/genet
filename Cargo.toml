@@ -104,7 +104,7 @@ default-members = ["ports/ortet"]
 # path, which genet-wpt absorbed. The platform compositor half of
 # servo-paint survives as components/genet-compositor. See
 # design_docs/2026-09-07_servo_cone_retirement_plan.md.
-exclude = [".cargo"]
+exclude = [".cargo", "support/patches/regress-0.11.1"]
 
 [workspace.package]
 version = "0.2.0"

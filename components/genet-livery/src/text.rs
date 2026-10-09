@@ -96,6 +96,26 @@ pub struct TextRect {
     pub height: f32,
 }
 
+/// One already-shaped run for a host-owned viewport overlay. These runs have
+/// no DOM source and never enter text selection or the retained document tree.
+#[derive(Clone, Debug)]
+pub(crate) struct NativeOverlayTextRun {
+    pub font: FontResource,
+    pub font_instance: FontInstanceKey,
+    pub font_size: f32,
+    pub color: ColorF,
+    pub glyphs: Vec<GlyphInstance>,
+    pub fragment: LayoutRect,
+    pub line_y: f32,
+}
+
+/// Livery-shaped native overlay text in coordinates rooted at `(0, 0)`.
+#[derive(Clone, Debug)]
+pub(crate) struct NativeOverlayText {
+    pub runs: Vec<NativeOverlayTextRun>,
+    pub bounds: LayoutRect,
+}
+
 /// A source-node text range in rendered byte space.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TextRange<Id> {
@@ -700,7 +720,7 @@ impl TextSystem {
         if is_textarea && state.is_none() {
             return false;
         }
-        let value = state.as_ref().map_or_else(
+        let mut value = state.as_ref().map_or_else(
             || {
                 if is_textarea {
                     descendant_text(dom, node)
@@ -712,6 +732,13 @@ impl TextSystem {
             },
             |state| state.value.clone(),
         );
+        if let Some(draft) = dom
+            .form_control_interaction_state(node)
+            .filter(|interaction| interaction.bad_input)
+            .and_then(|interaction| interaction.draft_value)
+        {
+            value = draft;
+        }
         let (display, selectable) = if value.is_empty() {
             dom.attribute(node, &Namespace::default(), &LocalName::from("placeholder"))
                 .filter(|placeholder| !placeholder.is_empty())
@@ -1981,6 +2008,75 @@ impl TextSystem {
             break_lines,
             baselines,
         }
+    }
+
+    /// Shape inert host text through the retained Livery font collection. The
+    /// returned runs have no source node, owner, or selection registration.
+    pub(crate) fn shape_native_overlay(
+        &mut self,
+        text: &str,
+        max_width: f32,
+    ) -> Option<NativeOverlayText> {
+        if text.is_empty() || !max_width.is_finite() || max_width <= 0.0 {
+            return None;
+        }
+        let mut style = ComputedValues::default();
+        style.color = "white".parse().ok()?;
+        style.white_space_collapse = WhiteSpaceCollapse::Preserve;
+        style.text_wrap_mode = TextWrapMode::Wrap;
+        let mut spans = [SourceSpan::<u64> {
+            selectable: false,
+            source: None,
+            owners: Vec::new(),
+            style: style.clone(),
+            range: 0..text.len(),
+        }];
+        let shaped = self.shape(
+            text,
+            &mut spans,
+            &[],
+            &HashMap::new(),
+            false,
+            max_width,
+            &style,
+            None,
+            None,
+        );
+        let mut runs = Vec::new();
+        let mut bounds: Option<LayoutRect> = None;
+        for item in shaped.items {
+            let ShapedItem::Text(run) = item else {
+                continue;
+            };
+            if run.glyphs.is_empty() {
+                continue;
+            }
+            let font = self.fonts.get(&run.font_instance)?.clone();
+            let fragment = LayoutRect::new(
+                LayoutPoint::new(run.fragment.x, run.fragment.y),
+                LayoutPoint::new(
+                    run.fragment.x + run.fragment.width,
+                    run.fragment.y + run.fragment.height,
+                ),
+            );
+            bounds = Some(match bounds {
+                Some(current) => current.union(&fragment),
+                None => fragment,
+            });
+            runs.push(NativeOverlayTextRun {
+                font,
+                font_instance: run.font_instance,
+                font_size: run.font_size,
+                color: run.color,
+                glyphs: run.glyphs,
+                fragment,
+                line_y: run.line_y,
+            });
+        }
+        Some(NativeOverlayText {
+            runs,
+            bounds: bounds?,
+        })
     }
 
     fn intern_font(&mut self, font: &parley::FontData) -> FontInstanceKey {
@@ -5966,6 +6062,31 @@ fn content_key(bytes: &[u8], index: u32) -> FontInstanceKey {
 mod tests {
     use super::*;
     use livery::values::FontSize as CssFontSize;
+
+    #[test]
+    fn native_validation_overlay_preserves_custom_whitespace() {
+        let mut system = TextSystem::new();
+        let single = system
+            .shape_native_overlay("a b", 500.0)
+            .expect("single space");
+        let double = system
+            .shape_native_overlay("a  b", 500.0)
+            .expect("double space");
+        assert!(
+            double.bounds.width() > single.bounds.width(),
+            "custom spaces must remain visible"
+        );
+        let lines = system
+            .shape_native_overlay("a\nb", 500.0)
+            .expect("two lines");
+        assert!(
+            lines
+                .runs
+                .iter()
+                .any(|run| run.line_y > lines.runs[0].line_y),
+            "custom newline must force another line"
+        );
+    }
 
     fn shape_fixture_stream(
         text: &str,

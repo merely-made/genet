@@ -2847,6 +2847,391 @@ fn css_checked_reads_live_checkbox_state_instead_of_the_default_attribute() {
 }
 
 #[test]
+fn css_validation_selectors_track_candidate_and_user_validity() {
+    let mut dom = ScriptedDom::from_serialized_document(
+        "<html><body><form id=form><fieldset><input id=field required minlength=2></fieldset></form></body></html>",
+    );
+    dom.drain_mutations(&mut Vec::new());
+    let field = by_id(&dom, "field");
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&[
+            "html, body { margin: 0; } input, form, fieldset { display:block; width:50px; height:24px; background:#f00; } input:user-invalid { background:#00f; } input:user-valid { background:#00f; } form:invalid { background:#0f0; } form:valid { background:#f0f; } fieldset:invalid { background:#ff0; }",
+        ]),
+        Device::screen(120.0, 80.0),
+    );
+    let colors = |document: &mut LiveryDocument<ScriptedDom>| {
+        document
+            .frame(120, 80)
+            .expect("frame")
+            .commands()
+            .iter()
+            .filter_map(|command| match command {
+                paint_list_api::PaintCmd::DrawRect(rect) => Some(rect.color),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let initial = colors(&mut document);
+    let red = paint_list_api::ColorF::new(1.0, 0.0, 0.0, 1.0);
+    let blue = paint_list_api::ColorF::new(0.0, 0.0, 1.0, 1.0);
+    let green = paint_list_api::ColorF::new(0.0, 1.0, 0.0, 1.0);
+    let yellow = paint_list_api::ColorF::new(1.0, 1.0, 0.0, 1.0);
+    let magenta = paint_list_api::ColorF::new(1.0, 0.0, 1.0, 1.0);
+    assert!(
+        initial.contains(&red),
+        "required empty control is invalid: {initial:?}"
+    );
+    assert!(
+        initial.contains(&green),
+        "form aggregates invalid descendants: {initial:?}"
+    );
+    assert!(
+        initial.contains(&yellow),
+        "fieldset aggregates invalid descendants: {initial:?}"
+    );
+    assert!(
+        !initial.contains(&blue),
+        "user-invalid waits until user validity: {initial:?}"
+    );
+
+    document.mutate_dom(|dom| {
+        assert!(dom.set_form_control_user_value(field, "x", Some(1), Some(1)));
+        assert!(dom.commit_form_control_user_edit(field));
+    });
+    let touched_invalid = colors(&mut document);
+    assert!(
+        touched_invalid.contains(&blue),
+        "user-invalid follows committed invalid user input: {touched_invalid:?}"
+    );
+
+    document.mutate_dom(|dom| {
+        assert!(dom.set_form_control_user_value(field, "ok", Some(2), Some(2)));
+        assert!(dom.commit_form_control_user_edit(field));
+    });
+    let edited = colors(&mut document);
+    assert!(
+        edited.contains(&blue),
+        "user-valid follows the committed valid value: {edited:?}"
+    );
+    assert!(
+        edited.contains(&magenta),
+        "form becomes valid when all owned candidates are valid: {edited:?}"
+    );
+
+    let form = by_id(document.dom(), "form");
+    let (new_control, _) = document.mutate_dom(|dom| {
+        let control = dom.create_element(QualName::new(
+            None,
+            Namespace::from("http://www.w3.org/1999/xhtml"),
+            LocalName::from("input"),
+        ));
+        dom.set_attribute(control, attr("required"), "");
+        dom.append_child(form, control);
+        control
+    });
+    let inserted = colors(&mut document);
+    assert!(
+        inserted.contains(&green),
+        "inserting a required candidate invalidates its form aggregate: {inserted:?}"
+    );
+    assert!(
+        !inserted.contains(&magenta),
+        "stale :valid form styling is removed after insertion: {inserted:?}"
+    );
+
+    document.mutate_dom(|dom| dom.remove(new_control));
+    let removed = colors(&mut document);
+    assert!(
+        removed.contains(&magenta),
+        "removing the candidate restores form validity: {removed:?}"
+    );
+}
+
+#[test]
+fn option_selectedness_restyles_the_external_select_form_owner() {
+    let mut dom = ScriptedDom::from_serialized_document(
+        "<html><body><form id=form></form><section><select id=select form=form required><option value=''></option><option id=choice value=ok>ok</option></select></section></body></html>",
+    );
+    dom.drain_mutations(&mut Vec::new());
+    let choice = by_id(&dom, "choice");
+    let form = by_id(&dom, "form");
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&[
+            "html, body { margin:0; } form { display:block; height:24px; } form:invalid { width:40px; background:#f00; } form:valid { width:80px; background:#0f0; }",
+        ]),
+        Device::screen(160.0, 120.0),
+    );
+    document.frame(160, 120).expect("initial frame");
+    assert_eq!(
+        document
+            .style_session
+            .styles()
+            .computed_style(form, "width"),
+        Some("40px".to_owned()),
+    );
+    document.mutate_dom(|dom| {
+        assert!(dom.set_option_selected_by_script(choice, true));
+    });
+    assert_eq!(
+        document
+            .style_session
+            .styles()
+            .computed_style(form, "width"),
+        Some("80px".to_owned()),
+        "selectedness invalidates the form outside the select's ancestor chain",
+    );
+    let damage = document.last_layout_damage().expect("DOM damage");
+    let form_root = document.formatting_damage_root(form);
+    assert!(
+        damage.roots.contains(&form_root),
+        "the form's formatting root must receive retained damage: {damage:?}",
+    );
+    let paint = document.frame(160, 120).expect("updated frame");
+    assert!(paint.commands().iter().any(|command| {
+        matches!(command, paint_list_api::PaintCmd::DrawRect(rect)
+            if rect.color == paint_list_api::ColorF::new(0.0, 1.0, 0.0, 1.0))
+    }));
+    document.mutate_dom(|dom| {
+        assert!(dom.set_select_selected_index(by_id(dom, "select"), 0));
+    });
+    assert_eq!(
+        document
+            .style_session
+            .styles()
+            .computed_style(form, "width"),
+        Some("40px".to_owned()),
+        "returning to the placeholder invalidates the form again",
+    );
+}
+
+#[test]
+fn non_form_id_blocker_restyles_external_form_association() {
+    let mut dom = ScriptedDom::from_serialized_document(
+        "<html><body><div id=blocker></div><form id=target></form><input id=control form=target required></body></html>",
+    );
+    dom.drain_mutations(&mut Vec::new());
+    let blocker = by_id(&dom, "blocker");
+    let form = by_id(&dom, "target");
+    let control = by_id(&dom, "control");
+    assert_eq!(dom.form_control_form_owner(control), Some(form));
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&[
+            "html, body { margin:0; } form { display:block; height:24px; } form:invalid { width:40px; background:#f00; } form:valid { width:80px; background:#0f0; }",
+        ]),
+        Device::screen(160.0, 120.0),
+    );
+    document.frame(160, 120).expect("initial frame");
+    let width = |document: &LiveryDocument<ScriptedDom>| {
+        document
+            .style_session
+            .styles()
+            .computed_style(form, "width")
+    };
+    assert_eq!(width(&document), Some("40px".to_owned()));
+
+    document.mutate_dom(|dom| dom.set_attribute(blocker, attr("id"), "target"));
+    assert_eq!(document.dom().form_control_form_owner(control), None);
+    assert_eq!(
+        width(&document),
+        Some("80px".to_owned()),
+        "the earlier non-form ID match removes the control from form validity",
+    );
+
+    document.mutate_dom(|dom| dom.set_attribute(blocker, attr("id"), "blocker"));
+    assert_eq!(document.dom().form_control_form_owner(control), Some(form));
+    assert_eq!(
+        width(&document),
+        Some("40px".to_owned()),
+        "restoring the ID restores external form ownership and invalidity",
+    );
+}
+
+#[test]
+fn moving_selected_placeholder_option_restyles_select_without_selectedness_change() {
+    let mut dom = ScriptedDom::from_serialized_document(
+        "<html><body><select id=select required><optgroup id=group><option id=empty value='' selected></option><option value=ok>ok</option></optgroup></select></body></html>",
+    );
+    dom.drain_mutations(&mut Vec::new());
+    let select = by_id(&dom, "select");
+    let group = by_id(&dom, "group");
+    let empty = by_id(&dom, "empty");
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&[
+            "html, body { margin:0; } select { display:block; height:24px; } select:invalid { width:40px; background:#f00; } select:valid { width:80px; background:#0f0; }",
+        ]),
+        Device::screen(160.0, 120.0),
+    );
+    document.frame(160, 120).expect("initial frame");
+    let width = |document: &LiveryDocument<ScriptedDom>| {
+        document
+            .style_session
+            .styles()
+            .computed_style(select, "width")
+    };
+    assert_eq!(width(&document), Some("80px".to_owned()));
+    assert!(
+        document
+            .dom()
+            .option_selected_state(empty)
+            .unwrap()
+            .selected
+    );
+
+    document.mutate_dom(|dom| dom.insert_before(select, empty, Some(group)));
+    assert!(
+        document
+            .dom()
+            .option_selected_state(empty)
+            .unwrap()
+            .selected
+    );
+    assert_eq!(
+        width(&document),
+        Some("40px".to_owned()),
+        "moving the selected empty option out of optgroup makes it the placeholder",
+    );
+
+    document.mutate_dom(|dom| dom.append_child(group, empty));
+    assert!(
+        document
+            .dom()
+            .option_selected_state(empty)
+            .unwrap()
+            .selected
+    );
+    assert_eq!(
+        width(&document),
+        Some("80px".to_owned()),
+        "returning the unchanged selection to optgroup clears placeholder status",
+    );
+}
+
+#[test]
+fn radio_group_validity_restyles_separate_fieldset_and_group_attributes() {
+    let mut dom = ScriptedDom::from_serialized_document(
+        "<html><body><form id=owner></form><section><fieldset id=first-set><input id=first type=radio name=group form=owner></fieldset><fieldset id=peer-set><input id=peer type=radio name=group form=owner required></fieldset></section></body></html>",
+    );
+    dom.drain_mutations(&mut Vec::new());
+    let first = by_id(&dom, "first");
+    let peer = by_id(&dom, "peer");
+    let peer_set = by_id(&dom, "peer-set");
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&[
+            "html, body { margin:0; } fieldset { display:block; height:24px; } fieldset:invalid { width:40px; background:#f00; } fieldset:valid { width:80px; background:#0f0; }",
+        ]),
+        Device::screen(160.0, 120.0),
+    );
+    document.frame(160, 120).expect("initial frame");
+    let width = |document: &LiveryDocument<ScriptedDom>| {
+        document
+            .style_session
+            .styles()
+            .computed_style(peer_set, "width")
+    };
+    assert_eq!(width(&document), Some("40px".to_owned()));
+
+    document.mutate_dom(|dom| assert!(dom.set_form_control_checked(first, true)));
+    assert_eq!(
+        width(&document),
+        Some("80px".to_owned()),
+        "checking the radio makes the required peer valid across fieldsets",
+    );
+    let damage = document.last_layout_damage().expect("radio damage");
+    assert!(
+        damage
+            .roots
+            .contains(&document.formatting_damage_root(document.dom().document()))
+    );
+    let checked_paint = document.frame(160, 120).expect("checked radio frame");
+    assert!(checked_paint.commands().iter().any(|command| {
+        matches!(command, paint_list_api::PaintCmd::DrawRect(rect)
+            if rect.color == paint_list_api::ColorF::new(0.0, 1.0, 0.0, 1.0))
+    }));
+
+    document.mutate_dom(|dom| assert!(dom.set_form_control_checked(first, false)));
+    assert_eq!(width(&document), Some("40px".to_owned()));
+    document.mutate_dom(|dom| dom.remove_attribute(peer, attr("required")));
+    assert_eq!(
+        width(&document),
+        Some("80px".to_owned()),
+        "changing requiredness invalidates the radio group tree",
+    );
+    document.mutate_dom(|dom| dom.set_attribute(peer, attr("required"), ""));
+    assert_eq!(width(&document), Some("40px".to_owned()));
+
+    document.mutate_dom(|dom| assert!(dom.set_form_control_checked(first, true)));
+    assert_eq!(width(&document), Some("80px".to_owned()));
+    document.mutate_dom(|dom| dom.set_attribute(first, attr("name"), "other"));
+    assert_eq!(
+        width(&document),
+        Some("40px".to_owned()),
+        "renaming a checked radio separates the required peer from its group",
+    );
+    document.mutate_dom(|dom| dom.set_attribute(first, attr("name"), "group"));
+    assert_eq!(width(&document), Some("80px".to_owned()));
+
+    document.mutate_dom(|dom| dom.set_attribute(first, attr("type"), "text"));
+    assert_eq!(
+        width(&document),
+        Some("40px".to_owned()),
+        "changing a radio's type invalidates its former group",
+    );
+}
+
+#[test]
+fn radio_group_membership_restyles_peer_without_form_or_fieldset() {
+    let mut dom = ScriptedDom::from_serialized_document(
+        "<html><body><section id=first-section><input id=first type=radio name=group></section><section><input id=peer type=radio name=group required></section></body></html>",
+    );
+    let detached_section = dom.create_element(QualName::new(
+        None,
+        Namespace::from("http://www.w3.org/1999/xhtml"),
+        LocalName::from("section"),
+    ));
+    dom.drain_mutations(&mut Vec::new());
+    let first = by_id(&dom, "first");
+    let first_section = by_id(&dom, "first-section");
+    let peer = by_id(&dom, "peer");
+    dom.set_form_control_checked(first, true);
+    dom.drain_mutations(&mut Vec::new());
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&[
+            "html, body { margin:0; } input { display:block; height:24px; } input:invalid { width:40px; background:#f00; } input:valid { width:80px; background:#0f0; }",
+        ]),
+        Device::screen(160.0, 120.0),
+    );
+    document.frame(160, 120).expect("initial frame");
+    let width = |document: &LiveryDocument<ScriptedDom>| {
+        document
+            .style_session
+            .styles()
+            .computed_style(peer, "width")
+    };
+    assert_eq!(width(&document), Some("80px".to_owned()));
+
+    // ScriptedDom retires nodes on remove(), so move the same checked node to
+    // a detached tree to model leaving and rejoining this radio group's tree.
+    document.mutate_dom(|dom| dom.append_child(detached_section, first));
+    assert_eq!(
+        width(&document),
+        Some("40px".to_owned()),
+        "removing the checked radio makes its required peer invalid",
+    );
+    document.mutate_dom(|dom| dom.append_child(first_section, first));
+    assert_eq!(
+        width(&document),
+        Some("80px".to_owned()),
+        "reinserting the checked radio restores the peer's valid group",
+    );
+}
+
+#[test]
 fn text_inside_an_inline_block_has_caret_hit_and_selection_geometry() {
     let (document, atom, source) = inline_atom_document("inline-block");
     let layout = document.layout.as_ref().expect("completed frame");

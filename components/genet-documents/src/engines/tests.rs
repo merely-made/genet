@@ -290,7 +290,7 @@ fn scripted_session_returns_only_uncancelled_external_navigation() {
     assert_eq!(
         session.pointer_up(500.0, 190.0),
         SessionClick::Handled,
-        "release outside becomes a selection instead of navigation"
+        "release outside consumes the captured gesture without navigating"
     );
     assert_eq!(
         session.pointer_up(next_padding.0, next_padding.1),
@@ -1468,7 +1468,25 @@ fn livery_session_drag_selects_a_textarea_without_creating_a_page_clip() {
                 .iter()
                 .filter(|operation| matches!(operation, netrender::SceneOp::Rect(_)))
                 .count(),
-        "the local range produces retained selection overlay geometry"
+        "the local range produces retained selection overlay geometry; initial rectangles: {:?}; selected rectangles: {:?}; retained range: {:?}",
+        initial
+            .ops
+            .iter()
+            .filter_map(|operation| scene_rect_color_and_bounds(&initial, operation))
+            .collect::<Vec<_>>(),
+        selected
+            .ops
+            .iter()
+            .filter_map(|operation| scene_rect_color_and_bounds(&selected, operation))
+            .collect::<Vec<_>>(),
+        session
+            .document()
+            .selection_for_range(genet_livery::TextRange {
+                anchor_node: note,
+                anchor_offset: 0,
+                focus_node: note,
+                focus_offset: 5,
+            })
     );
 
     assert!(session.ime_input(SessionIme::Commit("oak".to_owned())));
@@ -2648,6 +2666,93 @@ fn email_and_number_editing_keep_a_native_cursor_without_selection_idl() {
     );
 }
 
+#[cfg(feature = "livery")]
+#[test]
+fn incomplete_number_edit_retains_raw_draft_through_blur() {
+    let engine = LiverySessionEngine::new(NoFetch);
+    let request = SessionSpawnRequest::new("fixtures/form/raw-number-draft.html")
+        .with_body("<html><head><style>input{display:block;width:180px;height:24px}</style></head><body style='margin:0'><input id=number type=number></body></html>")
+        .with_viewport(320, 100);
+    let mut boxed = engine.spawn(&request).expect("form session spawns");
+    let session = boxed
+        .as_any()
+        .downcast_mut::<LiveryDocumentSession>()
+        .unwrap();
+    let number = livery_node_with_id(session, "number");
+    let _ = session.frame(320, 100);
+    assert_eq!(session.click_at(80.0, 12.0), SessionClick::Handled);
+    assert!(session.text_input("1e"));
+    let state = session.document().dom().form_control_state(number).unwrap();
+    assert_eq!(
+        state.value, "",
+        "script-facing number value stays sanitized"
+    );
+    let editing = session
+        .document()
+        .dom()
+        .form_control_editing_value(number)
+        .unwrap();
+    assert_eq!(
+        editing.value, "1e",
+        "the editor keeps the raw incomplete draft"
+    );
+    assert_eq!(editing.selection_start, Some(2));
+    assert_eq!(
+        session.key_input(
+            SessionKey::ArrowLeft,
+            SessionButtonState::Pressed,
+            SessionModifiers::default(),
+            false,
+        ),
+        SessionEffect::Handled,
+        "caret movement uses the displayed draft rather than sanitized .value"
+    );
+    assert_eq!(
+        session.key_input(
+            SessionKey::Backspace,
+            SessionButtonState::Pressed,
+            SessionModifiers::default(),
+            false,
+        ),
+        SessionEffect::Handled
+    );
+    assert!(session.text_input("2"));
+    let editing = session
+        .document()
+        .dom()
+        .form_control_editing_value(number)
+        .unwrap();
+    assert_eq!(editing.value, "2e");
+    assert_eq!(editing.selection_start, Some(1));
+    assert_eq!(
+        session
+            .document()
+            .dom()
+            .form_control_state(number)
+            .unwrap()
+            .value,
+        "",
+        "script-facing number value stays sanitized during raw-draft edits"
+    );
+
+    let blurred = session.input(document_session_api::SessionInput::Focus(false));
+    assert_eq!(blurred.effect, SessionEffect::Handled);
+    let interaction = session
+        .document()
+        .dom()
+        .form_control_interaction_state(number)
+        .unwrap();
+    assert!(
+        interaction.user_validity,
+        "a changed value becomes user-validity true on blur"
+    );
+    assert!(
+        interaction.bad_input,
+        "blur does not discard the parse failure"
+    );
+    assert_eq!(interaction.draft_value.as_deref(), Some("2e"));
+}
+
 #[cfg(feature = "scripted")]
 fn check_scripted_generated_names<E: script_engine_api::ScriptEngine + 'static>() {
     let document = genet_scripted::LiveryScriptedDocument::<E>::parse(
@@ -2720,4 +2825,173 @@ fn scripted_generated_names_follow_retained_styles_on_boa() {
 #[test]
 fn scripted_generated_names_follow_retained_styles_on_vano() {
     check_scripted_generated_names::<script_engine_nova::NovaEngine>();
+}
+
+#[cfg(feature = "scripted")]
+fn check_scripted_validation_alert<E: script_engine_api::ScriptEngine + 'static>() {
+    use document_session_api::{DocumentA11yLive, DocumentA11yRole};
+
+    let document = genet_scripted::LiveryScriptedDocument::<E>::parse(
+        r#"<body><input id="field" required><script>
+        globalThis.field = document.getElementById('field');
+        field.setCustomValidity('Exact <native> message');
+        </script></body>"#,
+    )
+    .expect("validation document");
+    let mut session = ScriptedDocumentSession::new(document);
+    session.frame(320, 160);
+    let before = session.document_mut().dom_snapshot();
+    let before_projection = session.accessibility_projection().unwrap();
+    assert!(
+        before_projection
+            .nodes()
+            .iter()
+            .all(|node| node.role != DocumentA11yRole::Alert)
+    );
+
+    session
+        .document_mut()
+        .evaluate("field.reportValidity()")
+        .unwrap();
+    session.pump(0.0);
+    session.frame(320, 160);
+    let first = session.accessibility_projection().unwrap();
+    let first_alert = first
+        .nodes()
+        .iter()
+        .find(|node| node.role == DocumentA11yRole::Alert)
+        .unwrap();
+    assert_eq!(first_alert.name.as_deref(), Some("Exact <native> message"));
+    assert_eq!(first_alert.state.live, Some(DocumentA11yLive::Assertive));
+    assert_eq!(first_alert.parent, Some(first.root()));
+    assert!(
+        first
+            .node(first.root())
+            .unwrap()
+            .children
+            .contains(&first_alert.id)
+    );
+    let bounds = first_alert.bounds.unwrap();
+    assert!(bounds.width > 0.0 && bounds.height > 0.0);
+    assert_eq!(
+        session.document_mut().dom_snapshot(),
+        before,
+        "native notice leaves author DOM unchanged"
+    );
+    assert_eq!(
+        session.accessibility_projection().unwrap().revision(),
+        first.revision(),
+        "unchanged alert retains semantic revision"
+    );
+
+    session
+        .document_mut()
+        .evaluate("field.reportValidity()")
+        .unwrap();
+    session.pump(1.0);
+    session.frame(320, 160);
+    let repeated = session.accessibility_projection().unwrap();
+    let repeated_alert = repeated
+        .nodes()
+        .iter()
+        .find(|node| node.role == DocumentA11yRole::Alert)
+        .unwrap();
+    assert_ne!(
+        repeated_alert.id, first_alert.id,
+        "repeated report can announce the same message again"
+    );
+    assert!(repeated.revision() > first.revision());
+    assert_eq!(
+        session.key_input(
+            SessionKey::Escape,
+            SessionButtonState::Pressed,
+            SessionModifiers::default(),
+            false
+        ),
+        SessionEffect::Cancelled
+    );
+    assert!(
+        session
+            .accessibility_projection()
+            .unwrap()
+            .nodes()
+            .iter()
+            .all(|node| node.role != DocumentA11yRole::Alert)
+    );
+
+    session.document_mut().evaluate("field.addEventListener('invalid', event => event.preventDefault()); field.reportValidity()").unwrap();
+    session.pump(2.0);
+    session.frame(320, 160);
+    assert!(
+        session
+            .accessibility_projection()
+            .unwrap()
+            .nodes()
+            .iter()
+            .all(|node| node.role != DocumentA11yRole::Alert),
+        "canceled invalid has no native alert"
+    );
+}
+
+#[cfg(feature = "scripted")]
+#[test]
+fn scripted_validation_notice_and_alert_on_boa() {
+    check_scripted_validation_alert::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(feature = "scripted-nova")]
+#[test]
+fn scripted_validation_notice_and_alert_on_vano() {
+    check_scripted_validation_alert::<script_engine_nova::NovaEngine>();
+}
+
+#[cfg(feature = "scripted")]
+fn check_scripted_child_validation_alert<E: script_engine_api::ScriptEngine + 'static>() {
+    use document_session_api::DocumentA11yRole;
+    let document = genet_scripted::LiveryScriptedDocument::<E>::parse(
+        r#"<body><iframe id="child" srcdoc='<body><input id="field" required></body>'></iframe></body>"#,
+    ).expect("frame validation document");
+    let mut session = ScriptedDocumentSession::new(document);
+    session.frame(320, 160);
+    session.pump(0.0);
+    session.document_mut().evaluate(
+        "const child = document.getElementById('child').contentWindow; const field = child.document.getElementById('field'); field.setCustomValidity('Child field message'); child.setTimeout(() => field.reportValidity(), 0);"
+    ).unwrap();
+    session.pump(1.0);
+    session.frame(320, 160);
+    let projection = session.accessibility_projection().unwrap();
+    let alert = projection
+        .nodes()
+        .iter()
+        .find(|node| node.role == DocumentA11yRole::Alert)
+        .expect("child notice reaches host alert");
+    assert_eq!(alert.name.as_deref(), Some("Child field message"));
+    assert!(alert.bounds.is_some());
+    session
+        .document_mut()
+        .evaluate("document.getElementById('child').remove()")
+        .unwrap();
+    session.pump(2.0);
+    session.frame(320, 160);
+    assert!(
+        session
+            .accessibility_projection()
+            .unwrap()
+            .nodes()
+            .iter()
+            .all(|node| node.role != DocumentA11yRole::Alert),
+        "destroyed child cannot retain host feedback"
+    );
+}
+
+#[cfg(feature = "scripted")]
+#[test]
+fn scripted_child_validation_alert_on_boa() {
+    check_scripted_child_validation_alert::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(feature = "scripted-nova")]
+#[test]
+fn scripted_child_validation_alert_on_vano() {
+    check_scripted_child_validation_alert::<script_engine_nova::NovaEngine>();
 }

@@ -999,16 +999,6 @@ impl LiveryDocumentSession {
         self.doc.dom().form_control_state(node)
     }
 
-    fn write_control_state(
-        &mut self,
-        node: genet_scripted_dom::NodeId,
-        state: FormControlState,
-    ) -> bool {
-        self.doc
-            .mutate_dom(|dom| dom.set_form_control_state(node, state))
-            .0
-    }
-
     fn write_control_selection(
         &mut self,
         node: genet_scripted_dom::NodeId,
@@ -1016,14 +1006,11 @@ impl LiveryDocumentSession {
         end: u32,
         direction: SelectionDirection,
     ) -> bool {
-        let Some(mut state) = self.control_state(node) else {
-            return false;
-        };
-        let max = state.value.encode_utf16().count().min(u32::MAX as usize) as u32;
-        state.selection_start = Some(start.min(max));
-        state.selection_end = Some(end.min(max));
-        state.selection_direction = direction;
-        self.write_control_state(node, state)
+        self.doc
+            .mutate_dom(|dom| {
+                dom.set_form_control_editing_selection(node, Some(start), Some(end), direction)
+            })
+            .0
     }
 
     fn replace_control_value(&mut self, node: genet_scripted_dom::NodeId, value: &str) -> bool {
@@ -1038,20 +1025,23 @@ impl LiveryDocumentSession {
         start: u32,
         end: u32,
     ) -> bool {
-        let Some(mut state) = self.control_state(node) else {
-            return false;
-        };
-        state.value.clear();
-        state.value.push_str(value);
-        state.dirty_value = true;
-        let max = state.value.encode_utf16().count().min(u32::MAX as usize) as u32;
-        state.selection_start = Some(start.min(max));
-        state.selection_end = Some(end.min(max));
-        state.selection_direction = SelectionDirection::None;
-        self.write_control_state(node, state)
+        self.doc
+            .mutate_dom(|dom| dom.set_form_control_user_value(node, value, Some(start), Some(end)))
+            .0
+    }
+
+    fn commit_active_edit(&mut self) {
+        if let Some(node) = self.editor.as_ref().map(|editor| editor.node) {
+            self.doc
+                .mutate_dom(|dom| dom.commit_form_control_user_edit(node));
+        }
     }
 
     fn activate_editable(&mut self, node: genet_scripted_dom::NodeId, kind: EditableKind) {
+        let new_focus = self.focused_node != Some(node);
+        if new_focus && self.editor.is_some() {
+            self.commit_active_edit();
+        }
         self.editor_drag = None;
         if self.is_disabled_control(node) {
             self.focused_node = None;
@@ -1059,23 +1049,26 @@ impl LiveryDocumentSession {
             self.editor = None;
             return;
         }
+        if new_focus {
+            self.doc
+                .mutate_dom(|dom| dom.begin_form_control_user_edit(node));
+        }
         self.focused_node = Some(node);
         if !self.editable_is_writable(node) {
             self.active_form = None;
             self.editor = None;
             return;
         }
-        let Some(mut state) = self.control_state(node) else {
+        let Some(state) = self.control_state(node) else {
             self.active_form = None;
             self.editor = None;
             return;
         };
-        if state.selection_start.is_none() || state.selection_end.is_none() {
-            let end = state.value.encode_utf16().count().min(u32::MAX as usize) as u32;
-            state.selection_start = Some(end);
-            state.selection_end = Some(end);
-            state.selection_direction = SelectionDirection::None;
-            let _ = self.write_control_state(node, state);
+        if let Some(editing) = self.doc.dom().form_control_editing_value(node)
+            && (editing.selection_start.is_none() || editing.selection_end.is_none())
+        {
+            let end = editing.value.encode_utf16().count().min(u32::MAX as usize) as u32;
+            let _ = self.write_control_selection(node, end, end, SelectionDirection::None);
         }
         self.active_form = self.form_ancestor(node);
         self.editor = Some(EditableControl {
@@ -1113,7 +1106,12 @@ impl LiveryDocumentSession {
         let Some(editor_node) = self.editor.as_ref().map(|editor| editor.node) else {
             return false;
         };
-        let Some(value) = self.control_state(editor_node).map(|state| state.value) else {
+        let Some(value) = self
+            .doc
+            .dom()
+            .form_control_editing_value(editor_node)
+            .map(|state| state.value)
+        else {
             return false;
         };
         let caret = utf16_offset_from_byte(&value, anchor);
@@ -1138,7 +1136,12 @@ impl LiveryDocumentSession {
         if source != drag.source || !self.editor_owns_text_source(editor_node, source) {
             return false;
         }
-        let Some(value) = self.control_state(editor_node).map(|state| state.value) else {
+        let Some(value) = self
+            .doc
+            .dom()
+            .form_control_editing_value(editor_node)
+            .map(|state| state.value)
+        else {
             return false;
         };
         let anchor_utf16 = utf16_offset_from_byte(&value, drag.anchor);
@@ -1177,6 +1180,7 @@ impl LiveryDocumentSession {
 
     fn activate_hit(&mut self, x: f32, y: f32) {
         let Some(hit) = self.doc.hit_test(x, y) else {
+            self.commit_active_edit();
             self.focused_node = None;
             self.editor = None;
             self.active_form = None;
@@ -1186,6 +1190,7 @@ impl LiveryDocumentSession {
             self.activate_editable(node, kind);
             return;
         }
+        self.commit_active_edit();
         self.focused_node = self.ancestor_matching(hit, |node, tag| {
             !self.is_disabled_control(node)
                 && (tag.eq_ignore_ascii_case("button")
@@ -1241,7 +1246,7 @@ impl LiveryDocumentSession {
         let Some(node) = self.editor.as_ref().map(|editor| editor.node) else {
             return false;
         };
-        let Some(state) = self.control_state(node) else {
+        let Some(state) = self.doc.dom().form_control_editing_value(node) else {
             return false;
         };
         let mut value = state.value;
@@ -1266,7 +1271,7 @@ impl LiveryDocumentSession {
         let Some(node) = self.editor.as_ref().map(|editor| editor.node) else {
             return false;
         };
-        let Some(state) = self.control_state(node) else {
+        let Some(state) = self.doc.dom().form_control_editing_value(node) else {
             return false;
         };
         let mut value = state.value;
@@ -1299,7 +1304,7 @@ impl LiveryDocumentSession {
         let Some(node) = self.editor.as_ref().map(|editor| editor.node) else {
             return false;
         };
-        let Some(state) = self.control_state(node) else {
+        let Some(state) = self.doc.dom().form_control_editing_value(node) else {
             return false;
         };
         let mut value = state.value;
@@ -1331,7 +1336,7 @@ impl LiveryDocumentSession {
         let Some(node) = self.editor.as_ref().map(|editor| editor.node) else {
             return false;
         };
-        let Some(state) = self.control_state(node) else {
+        let Some(state) = self.doc.dom().form_control_editing_value(node) else {
             return false;
         };
         let value = state.value;
@@ -1654,16 +1659,16 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
             }
         }
         if let Some(editor) = self.editor.as_ref() {
-            let state = self.control_state(editor.node);
-            let value = state
+            let editing = self.doc.dom().form_control_editing_value(editor.node);
+            let value = editing
                 .as_ref()
-                .map(|state| state.value.as_str())
+                .map(|editing| editing.value.as_str())
                 .unwrap_or("");
-            let start = state
+            let start = editing
                 .as_ref()
                 .and_then(|state| state.selection_start)
                 .unwrap_or(0);
-            let end = state
+            let end = editing
                 .as_ref()
                 .and_then(|state| state.selection_end)
                 .unwrap_or(start);
@@ -1671,7 +1676,7 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
             let end_byte = byte_offset_from_utf16(value, end);
             let selection = (start_byte != end_byte)
                 .then(|| {
-                    let (anchor, focus) = match state
+                    let (anchor, focus) = match editing
                         .as_ref()
                         .map_or(SelectionDirection::None, |state| state.selection_direction)
                     {
@@ -1879,7 +1884,9 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
             SessionKey::End if let Some(editor) = self.editor.as_ref() => {
                 let node = editor.node;
                 let end = self
-                    .control_state(node)
+                    .doc
+                    .dom()
+                    .form_control_editing_value(node)
                     .map(|state| state.value.encode_utf16().count().min(u32::MAX as usize) as u32);
                 if end.is_some_and(|end| {
                     self.write_control_selection(node, end, end, SelectionDirection::None)
@@ -1956,6 +1963,7 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
 
     fn focus_input(&mut self, focused: bool) {
         if !focused {
+            self.commit_active_edit();
             self.editor_drag = None;
             self.focused_node = None;
             self.editor = None;
@@ -1981,6 +1989,9 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
             }),
         };
         let node = focusable[next];
+        if self.focused_node.is_some_and(|focused| focused != node) {
+            self.commit_active_edit();
+        }
         if self.is_disabled_control(node) {
             self.focused_node = None;
             self.editor = None;

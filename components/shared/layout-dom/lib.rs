@@ -41,6 +41,83 @@ pub struct FormControlState {
     pub custom_validity_message: String,
 }
 
+/// User-interaction facts for a native form control. Kept beside, rather than
+/// inside, `FormControlState` so its capture wire layout remains stable.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "capture", derive(Serialize, Deserialize))]
+pub struct FormControlInteractionState {
+    pub user_validity: bool,
+    pub last_change_by_user: bool,
+    /// A value/list change since the latest native edit session began.
+    pub user_edit_pending: bool,
+    /// Displayed value at the beginning of the current native edit session.
+    pub user_edit_initial_value: Option<String>,
+    pub bad_input: bool,
+    pub draft_value: Option<String>,
+    pub draft_selection_start: Option<u32>,
+    pub draft_selection_end: Option<u32>,
+    pub draft_selection_direction: SelectionDirection,
+}
+
+/// The native editor's displayed value and internal UTF-16 caret offsets.
+/// This may expose an incomplete user draft without changing script `.value`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "capture", derive(Serialize, Deserialize))]
+pub struct FormControlEditingValue {
+    pub value: String,
+    pub selection_start: Option<u32>,
+    pub selection_end: Option<u32>,
+    pub selection_direction: SelectionDirection,
+}
+
+/// The ten derived flags exposed through the HTML `ValidityState` interface.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "capture", derive(Serialize, Deserialize))]
+pub struct ValidityState {
+    pub value_missing: bool,
+    pub type_mismatch: bool,
+    pub pattern_mismatch: bool,
+    pub too_long: bool,
+    pub too_short: bool,
+    pub range_underflow: bool,
+    pub range_overflow: bool,
+    pub step_mismatch: bool,
+    pub bad_input: bool,
+    pub custom_error: bool,
+}
+
+impl ValidityState {
+    pub fn valid(self) -> bool {
+        !(self.value_missing
+            || self.type_mismatch
+            || self.pattern_mismatch
+            || self.too_long
+            || self.too_short
+            || self.range_underflow
+            || self.range_overflow
+            || self.step_mismatch
+            || self.bad_input
+            || self.custom_error)
+    }
+}
+
+/// Derived validation view for one control.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "capture", derive(Serialize, Deserialize))]
+pub struct FormControlValidity {
+    pub flags: ValidityState,
+    pub will_validate: bool,
+    pub user_validity: bool,
+}
+
+/// Current selectedness for one option, separate from its authored attribute.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "capture", derive(Serialize, Deserialize))]
+pub struct SelectOptionState {
+    pub selected: bool,
+    pub dirty: bool,
+}
+
 /// Direction of a text-control selection.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "capture", derive(Serialize, Deserialize))]
@@ -64,6 +141,44 @@ pub trait LayoutDom {
     /// exposing backend borrows. Static and other backends may leave the
     /// default implementation in place.
     fn form_control_state(&self, _id: Self::NodeId) -> Option<FormControlState> {
+        None
+    }
+
+    fn form_control_interaction_state(
+        &self,
+        _id: Self::NodeId,
+    ) -> Option<FormControlInteractionState> {
+        None
+    }
+
+    fn form_control_editing_value(&self, id: Self::NodeId) -> Option<FormControlEditingValue> {
+        let state = self.form_control_state(id)?;
+        Some(FormControlEditingValue {
+            value: state.value,
+            selection_start: state.selection_start,
+            selection_end: state.selection_end,
+            selection_direction: state.selection_direction,
+        })
+    }
+
+    fn form_control_validity(&self, _id: Self::NodeId) -> Option<FormControlValidity> {
+        None
+    }
+
+    fn option_selected_state(&self, _id: Self::NodeId) -> Option<SelectOptionState> {
+        None
+    }
+
+    /// Native form association. When `form_control_validity` returns a view,
+    /// this getter must report the same node's actual owner; `None` then means
+    /// no owner, including failed explicit first-ID lookup. Backends without
+    /// a native validity view may leave both optional getters unimplemented.
+    fn form_control_form_owner(&self, _id: Self::NodeId) -> Option<Self::NodeId> {
+        None
+    }
+
+    /// Current custom validity message for any supported validation control.
+    fn form_control_custom_validity_message(&self, _id: Self::NodeId) -> Option<String> {
         None
     }
 
@@ -352,6 +467,18 @@ pub trait LayoutDomMut: LayoutDom {
         false
     }
 
+    fn set_form_control_interaction_state(
+        &mut self,
+        _id: Self::NodeId,
+        _state: FormControlInteractionState,
+    ) -> bool {
+        false
+    }
+
+    fn set_option_selected_state(&mut self, _id: Self::NodeId, _state: SelectOptionState) -> bool {
+        false
+    }
+
     /// Create a detached element node (no parent until appended).
     fn create_element(&mut self, name: QualName) -> Self::NodeId;
 
@@ -457,6 +584,13 @@ pub enum DomMutation<Id> {
         from_parent: Id,
         to_parent: Id,
     },
+    /// User-edit metadata changed; does not imply a value or attribute change.
+    FormControlInteractionStateChanged { node: Id },
+    /// An option's selectedness or dirtiness changed.
+    OptionStateChanged { node: Id },
+    /// Custom validity on controls that do not use the legacy
+    /// `FormControlState` record.
+    FormControlCustomValidityChanged { node: Id },
 }
 
 /// Serializable mirror of [`QualName`] for capture/replay logs.
@@ -522,6 +656,15 @@ pub enum CapturedMutation {
     FormControlStateChanged {
         node: u64,
     },
+    FormControlInteractionStateChanged {
+        node: u64,
+    },
+    OptionStateChanged {
+        node: u64,
+    },
+    FormControlCustomValidityChanged {
+        node: u64,
+    },
 }
 
 #[cfg(feature = "capture")]
@@ -553,6 +696,15 @@ impl CapturedMutation {
             },
             DomMutation::FormControlStateChanged { node } => {
                 Self::FormControlStateChanged { node: to_raw(node) }
+            },
+            DomMutation::FormControlInteractionStateChanged { node } => {
+                Self::FormControlInteractionStateChanged { node: to_raw(node) }
+            },
+            DomMutation::OptionStateChanged { node } => {
+                Self::OptionStateChanged { node: to_raw(node) }
+            },
+            DomMutation::FormControlCustomValidityChanged { node } => {
+                Self::FormControlCustomValidityChanged { node: to_raw(node) }
             },
             DomMutation::SubtreeReplaced { node } => Self::SubtreeReplaced { node: to_raw(node) },
             DomMutation::Moved {
@@ -594,6 +746,19 @@ impl CapturedMutation {
             },
             Self::FormControlStateChanged { node } => DomMutation::FormControlStateChanged {
                 node: from_raw(node),
+            },
+            Self::FormControlInteractionStateChanged { node } => {
+                DomMutation::FormControlInteractionStateChanged {
+                    node: from_raw(node),
+                }
+            },
+            Self::OptionStateChanged { node } => DomMutation::OptionStateChanged {
+                node: from_raw(node),
+            },
+            Self::FormControlCustomValidityChanged { node } => {
+                DomMutation::FormControlCustomValidityChanged {
+                    node: from_raw(node),
+                }
             },
             Self::SubtreeReplaced { node } => DomMutation::SubtreeReplaced {
                 node: from_raw(node),

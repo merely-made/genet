@@ -59,11 +59,43 @@ where
                     former_parent: parent,
                     ..
                 }
-                | DomMutation::SubtreeReplaced { node: parent }
-                | DomMutation::FormControlStateChanged { node: parent }
-                | DomMutation::AttributeChanged { node: parent, .. } => {
+                | DomMutation::SubtreeReplaced { node: parent } => {
                     if self.dom.is_live(parent) {
                         self.insert_damage_root(&mut roots, self.formatting_damage_root(parent));
+                        self.insert_form_validity_tree_damage_roots(&mut roots, parent);
+                        self.insert_select_validity_damage_roots(&mut roots, parent);
+                    }
+                },
+                DomMutation::FormControlStateChanged { node } => {
+                    self.insert_validity_damage_roots(&mut roots, node);
+                    if self.is_radio_control(node) {
+                        self.insert_radio_tree_damage_root(&mut roots, node);
+                    }
+                },
+                DomMutation::FormControlInteractionStateChanged { node }
+                | DomMutation::FormControlCustomValidityChanged { node }
+                | DomMutation::OptionStateChanged { node } => {
+                    self.insert_validity_damage_roots(&mut roots, node);
+                },
+                DomMutation::AttributeChanged {
+                    node,
+                    ref name,
+                    ref old_value,
+                } => {
+                    if self.dom.is_live(node) {
+                        self.insert_damage_root(&mut roots, self.formatting_damage_root(node));
+                        self.insert_validity_dependents(&mut roots, node);
+                        if form_association_attribute_changed(&self.dom, node, name) {
+                            self.insert_form_validity_tree_damage_roots(&mut roots, node);
+                        }
+                        if radio_group_attribute_changed(
+                            &self.dom,
+                            node,
+                            name,
+                            old_value.as_deref(),
+                        ) {
+                            self.insert_radio_tree_damage_root(&mut roots, node);
+                        }
                     }
                 },
                 DomMutation::CharacterDataChanged { node } => {
@@ -73,6 +105,8 @@ where
                     let parent = self.dom.parent(node).unwrap_or(node);
                     if self.dom.is_live(parent) {
                         self.insert_damage_root(&mut roots, self.formatting_damage_root(parent));
+                        self.insert_form_validity_tree_damage_roots(&mut roots, parent);
+                        self.insert_select_validity_damage_roots(&mut roots, parent);
                     }
                 },
                 DomMutation::Moved {
@@ -85,9 +119,13 @@ where
                             &mut roots,
                             self.formatting_damage_root(from_parent),
                         );
+                        self.insert_form_validity_tree_damage_roots(&mut roots, from_parent);
+                        self.insert_select_validity_damage_roots(&mut roots, from_parent);
                     }
                     if self.dom.is_live(to_parent) {
                         self.insert_damage_root(&mut roots, self.formatting_damage_root(to_parent));
+                        self.insert_form_validity_tree_damage_roots(&mut roots, to_parent);
+                        self.insert_select_validity_damage_roots(&mut roots, to_parent);
                     }
                 },
             }
@@ -124,6 +162,94 @@ where
             candidate = self.dom.parent(current);
         }
         self.dom.document()
+    }
+
+    fn insert_validity_damage_roots(&self, roots: &mut Vec<D::NodeId>, node: D::NodeId) {
+        if !self.dom.is_live(node) {
+            return;
+        }
+        self.insert_damage_root(roots, self.formatting_damage_root(node));
+        self.insert_validity_dependents(roots, node);
+    }
+
+    fn insert_validity_dependents(&self, roots: &mut Vec<D::NodeId>, node: D::NodeId) {
+        if !self.dom.is_live(node) {
+            return;
+        }
+        let mut parent = self.dom.parent(node);
+        while let Some(id) = parent {
+            if self.dom.element_name(id).is_some_and(|name| {
+                name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
+                    && (name.local.as_ref().eq_ignore_ascii_case("fieldset")
+                        || name.local.as_ref().eq_ignore_ascii_case("select"))
+            }) {
+                self.insert_damage_root(roots, self.formatting_damage_root(id));
+                if let Some(form) = self.dom.form_control_form_owner(id) {
+                    self.insert_damage_root(roots, self.formatting_damage_root(form));
+                }
+            }
+            parent = self.dom.parent(id);
+        }
+        if let Some(form) = self.dom.form_control_form_owner(node) {
+            self.insert_damage_root(roots, self.formatting_damage_root(form));
+        }
+    }
+
+    fn insert_select_validity_damage_roots(&self, roots: &mut Vec<D::NodeId>, node: D::NodeId) {
+        if !self.dom.is_live(node) {
+            return;
+        }
+        let mut current = Some(node);
+        while let Some(id) = current {
+            if self.dom.element_name(id).is_some_and(|name| {
+                name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
+                    && name.local.as_ref().eq_ignore_ascii_case("select")
+            }) {
+                self.insert_damage_root(roots, self.formatting_damage_root(id));
+                if let Some(form) = self.dom.form_control_form_owner(id) {
+                    self.insert_damage_root(roots, self.formatting_damage_root(form));
+                }
+            }
+            current = self.dom.parent(id);
+        }
+    }
+
+    fn is_radio_control(&self, node: D::NodeId) -> bool {
+        is_radio_control(&self.dom, node)
+    }
+
+    fn insert_radio_tree_damage_root(&self, roots: &mut Vec<D::NodeId>, node: D::NodeId) {
+        if !self.dom.is_live(node) {
+            return;
+        }
+        let mut root = node;
+        while let Some(parent) = self.dom.parent(root) {
+            root = parent;
+        }
+        self.insert_damage_root(roots, self.formatting_damage_root(root));
+    }
+
+    fn insert_form_validity_tree_damage_roots(&self, roots: &mut Vec<D::NodeId>, node: D::NodeId) {
+        if !self.dom.is_live(node) {
+            return;
+        }
+        let mut tree_root = node;
+        while let Some(parent) = self.dom.parent(tree_root) {
+            tree_root = parent;
+        }
+        let mut pending = vec![tree_root];
+        while let Some(current) = pending.pop() {
+            if self.dom.element_name(current).is_some_and(|name| {
+                name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
+                    && (name.local.as_ref().eq_ignore_ascii_case("form")
+                        || name.local.as_ref().eq_ignore_ascii_case("fieldset"))
+            }) || self.is_radio_control(current)
+            {
+                self.insert_damage_root(roots, self.formatting_damage_root(tree_root));
+                return;
+            }
+            pending.extend(self.dom.dom_children(current));
+        }
     }
 
     pub(in crate::document) fn insert_damage_root(
@@ -576,5 +702,67 @@ where
                     .iter()
                     .any(|(_, css_box)| css_box.positioning == buckram::PositioningScheme::Sticky)
             })
+    }
+}
+
+fn is_radio_control<D: LayoutDom>(dom: &D, node: D::NodeId) -> bool {
+    if !dom.is_live(node) {
+        return false;
+    }
+    dom.element_name(node).is_some_and(|name| {
+        name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
+            && name.local.as_ref().eq_ignore_ascii_case("input")
+    }) && dom
+        .attribute(node, &Namespace::from(""), &LocalName::from("type"))
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("radio"))
+}
+
+fn radio_group_attribute_changed<D: LayoutDom>(
+    dom: &D,
+    node: D::NodeId,
+    name: &layout_dom_api::QualName,
+    old_value: Option<&str>,
+) -> bool {
+    if !dom.is_live(node)
+        || name.ns != Namespace::from("")
+        || !dom.element_name(node).is_some_and(|element| {
+            element.ns.as_ref() == "http://www.w3.org/1999/xhtml"
+                && element.local.as_ref().eq_ignore_ascii_case("input")
+        })
+    {
+        return false;
+    }
+    let current_radio = is_radio_control(dom, node);
+    match name.local.as_ref() {
+        "name" | "required" => current_radio,
+        "type" => {
+            current_radio || old_value.is_some_and(|value| value.eq_ignore_ascii_case("radio"))
+        },
+        _ => false,
+    }
+}
+
+fn form_association_attribute_changed<D: LayoutDom>(
+    dom: &D,
+    node: D::NodeId,
+    name: &layout_dom_api::QualName,
+) -> bool {
+    if !dom.is_live(node) || name.ns != Namespace::from("") {
+        return false;
+    }
+    let Some(element) = dom.element_name(node) else {
+        return false;
+    };
+    match name.local.as_ref() {
+        // A non-form element can be the first ID match and block form ownership.
+        "id" => true,
+        "form" => {
+            element.ns.as_ref() == "http://www.w3.org/1999/xhtml"
+                && matches!(
+                    element.local.as_ref().to_ascii_lowercase().as_str(),
+                    "button" | "fieldset" | "input" | "object" | "output" | "select" | "textarea"
+                )
+        },
+        _ => false,
     }
 }

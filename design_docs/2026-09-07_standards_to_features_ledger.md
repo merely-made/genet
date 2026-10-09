@@ -132,12 +132,21 @@ a writing product), `streams` (extraction starts before the page finishes),
 
 ## Conformance targets, 2026-10-02
 
-**Forms Phase A execution, 2026-10-07:** the
+**Forms execution, 2026-10-08:** the
 [forms plan](2026-10-07_forms_value_validation_submission_plan.md) carries C1/C5/C6.
-Mark answered "Proceed" to the recommended input value/placeholder/password
-and textarea live-value rendering scope. Arena state, consumer migration and
-starting gates are assembling. No Forms passing count or final acceptance is
-claimed; Checkpoint A still precedes validation and submission.
+Phase A's arena value model, native consumers and bounded value/paint/layout
+repair are published on main at `e84f9c7f`, with Mere's verified published-source
+repin and qualified Turnstone/Cleromancy compatibility. F1-F9 record Mark's
+rendering, consumer, accessibility and native URL-parser rulings. Mark authorized
+Phase B through its constraint-validation checkpoint. Checkpoint B is qualified
+for main publication on 2026-10-09: 963 passes, exactly six allowed Livery
+failures and four existing ignores; 924 additional Forms assertions per engine
+with every old pass retained, including partial ERROR rows. All 2,731 matched
+CSS results are unchanged (1,044 verified passes plus one unverified pass).
+F8/F9 provide native validity, notices, a configurable catalog and an Alert
+projection; F10 records the native-only matcher correction. The plan preserves
+the invalid original probe, corrected 20/20 supplemental control and native
+backtracking timeout limit. Phase C submission remains stopped.
 
 **Encoding execution, 2026-10-05:** the
 [API plan](2026-10-05_encoding_textdecoder_plan.md) retains C1/C2/C4 and the

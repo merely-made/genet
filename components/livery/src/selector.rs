@@ -22,6 +22,10 @@ pub enum StatePseudoClass {
     FocusWithin,
     Disabled,
     Checked,
+    Valid,
+    Invalid,
+    UserValid,
+    UserInvalid,
 }
 
 impl cadency::PseudoClass for StatePseudoClass {
@@ -33,6 +37,10 @@ impl cadency::PseudoClass for StatePseudoClass {
             "focus-within" => Self::FocusWithin,
             "disabled" => Self::Disabled,
             "checked" => Self::Checked,
+            "valid" => Self::Valid,
+            "invalid" => Self::Invalid,
+            "user-valid" => Self::UserValid,
+            "user-invalid" => Self::UserInvalid,
             _ => return None,
         })
     }

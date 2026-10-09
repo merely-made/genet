@@ -21,8 +21,9 @@
 use engine_observables_api::{DomArenaStats, DomNodeKindStats};
 use genet_static_dom::{StaticDocument, StaticNodeId};
 use layout_dom_api::{
-    AttributeView, DoctypeView, DomMutation, FormControlState, LayoutDom, LayoutDomMut, LocalName,
-    Namespace, NodeKind, QualName, QuirksMode,
+    AttributeView, DoctypeView, DomMutation, FormControlEditingValue, FormControlInteractionState,
+    FormControlState, FormControlValidity, LayoutDom, LayoutDomMut, LocalName, Namespace,
+    NodeKind, QualName, QuirksMode, SelectOptionState, SelectionDirection,
 };
 
 mod adoption;
@@ -30,6 +31,7 @@ pub use adoption::SubtreeTransferError;
 
 mod forms;
 pub use forms::FormControlValueError;
+mod forms_validation;
 pub mod parser;
 mod serialize;
 mod shadow;
@@ -192,6 +194,10 @@ struct Node {
     children: Vec<NodeId>,
     /// Script-visible current state for HTML input and textarea controls.
     form_control: Option<FormControlState>,
+    /// User-originated state kept separate to preserve FormControlState's capture wire shape.
+    form_interaction: Option<FormControlInteractionState>,
+    option_state: Option<SelectOptionState>,
+    custom_validity_message: Option<String>,
 }
 
 impl Node {
@@ -204,6 +210,9 @@ impl Node {
             parent: None,
             children: Vec::new(),
             form_control: None,
+            form_interaction: None,
+            option_state: None,
+            custom_validity_message: None,
         }
     }
 }
@@ -562,13 +571,26 @@ impl ScriptedDom {
 
     pub fn try_create_element(&mut self, name: QualName) -> Result<NodeId, NodeIdentityError> {
         let mut node = Node::new(NodeKind::Element);
-        if name.ns == markup5ever::ns!(html) && matches!(name.local.as_ref(), "input" | "textarea")
-        {
-            node.form_control = Some(FormControlState {
-                selection_start: Some(0),
-                selection_end: Some(0),
-                ..FormControlState::default()
-            });
+        if name.ns == markup5ever::ns!(html) {
+            if matches!(name.local.as_ref(), "input" | "textarea") {
+                node.form_control = Some(FormControlState {
+                    selection_start: Some(0),
+                    selection_end: Some(0),
+                    ..FormControlState::default()
+                });
+            }
+            if matches!(name.local.as_ref(), "input" | "textarea" | "select" | "button" | "fieldset" | "output" | "object") {
+                node.form_interaction = Some(FormControlInteractionState::default());
+            }
+            if matches!(name.local.as_ref(), "select" | "button" | "fieldset" | "output" | "object") {
+                node.custom_validity_message = Some(String::new());
+            }
+            if name.local.as_ref() == "option" {
+                node.option_state = Some(SelectOptionState {
+                    selected: false,
+                    dirty: false,
+                });
+            }
         }
         node.name = Some(name);
         self.try_push(node)
@@ -1311,8 +1333,24 @@ impl ScriptedDom {
                         ..FormControlState::default()
                     });
                 }
+                if node.name.as_ref().is_some_and(|q| q.ns == markup5ever::ns!(html)
+                    && matches!(q.local.as_ref(), "input" | "textarea" | "select" | "button" | "fieldset" | "output" | "object")) {
+                    node.form_interaction = Some(FormControlInteractionState::default());
+                }
+                if node.name.as_ref().is_some_and(|q| q.ns == markup5ever::ns!(html)
+                    && matches!(q.local.as_ref(), "select" | "button" | "fieldset" | "output" | "object")) {
+                    node.custom_validity_message = Some(String::new());
+                }
+                if node.name.as_ref().is_some_and(|q| q.ns == markup5ever::ns!(html) && q.local.as_ref() == "option") {
+                    node.option_state = Some(SelectOptionState { selected: false, dirty: false });
+                }
                 for attr in src.attributes(sid) {
                     node.attrs.push((attr.name.clone(), attr.value.to_owned()));
+                }
+                if node.option_state.is_some() {
+                    node.option_state.as_mut().unwrap().selected = node.attrs.iter().any(|(name, _)| {
+                        name.ns == markup5ever::ns!() && name.local.as_ref() == "selected"
+                    });
                 }
                 self.push(node)
             },
@@ -1410,6 +1448,52 @@ impl LayoutDom for ScriptedDom {
             state.value = crate::forms::api_value_for_state(&state.value);
         }
         Some(state)
+    }
+
+    fn form_control_interaction_state(&self, id: NodeId) -> Option<FormControlInteractionState> {
+        self.node(id).form_interaction.clone()
+    }
+
+    fn form_control_editing_value(&self, id: NodeId) -> Option<FormControlEditingValue> {
+        let state = self.node(id).form_control.as_ref()?;
+        let interaction = self.node(id).form_interaction.as_ref();
+        if let Some(draft) = interaction.and_then(|state| state.draft_value.as_ref()) {
+            return Some(FormControlEditingValue {
+                value: draft.clone(),
+                selection_start: interaction.and_then(|state| state.draft_selection_start),
+                selection_end: interaction.and_then(|state| state.draft_selection_end),
+                selection_direction: interaction.map_or(SelectionDirection::None, |state| state.draft_selection_direction),
+            });
+        }
+        let value = if self.element_name(id).is_some_and(|name| {
+            name.ns == markup5ever::ns!(html) && name.local.as_ref() == "textarea"
+        }) {
+            forms::api_value_for_state(&state.value)
+        } else {
+            state.value.clone()
+        };
+        Some(FormControlEditingValue {
+            value,
+            selection_start: state.selection_start,
+            selection_end: state.selection_end,
+            selection_direction: state.selection_direction,
+        })
+    }
+
+    fn form_control_validity(&self, id: NodeId) -> Option<FormControlValidity> {
+        self.compute_form_control_validity(id)
+    }
+
+    fn option_selected_state(&self, id: NodeId) -> Option<SelectOptionState> {
+        self.node(id).option_state
+    }
+
+    fn form_control_form_owner(&self, id: NodeId) -> Option<NodeId> {
+        ScriptedDom::form_control_form_owner(self, id)
+    }
+
+    fn form_control_custom_validity_message(&self, id: NodeId) -> Option<String> {
+        ScriptedDom::form_control_custom_validity_message(self, id)
     }
 
     fn document(&self) -> NodeId {
@@ -1607,6 +1691,35 @@ impl LayoutDomMut for ScriptedDom {
         true
     }
 
+    fn set_form_control_interaction_state(
+        &mut self,
+        id: NodeId,
+        state: FormControlInteractionState,
+    ) -> bool {
+        let Some(slot) = self.node_mut(id).form_interaction.as_mut() else {
+            return false;
+        };
+        if *slot != state {
+            *slot = state;
+            self.mutations.push(DomMutation::FormControlInteractionStateChanged { node: id });
+        }
+        true
+    }
+
+    fn set_option_selected_state(&mut self, id: NodeId, state: SelectOptionState) -> bool {
+        if self.element_name(id).map_or(true, |q| q.ns != markup5ever::ns!(html) || q.local.as_ref() != "option") {
+            return false;
+        }
+        let Some(slot) = self.node_mut(id).option_state.as_mut() else {
+            return false;
+        };
+        if *slot != state {
+            *slot = state;
+            self.mutations.push(DomMutation::OptionStateChanged { node: id });
+        }
+        true
+    }
+
     fn create_element(&mut self, name: QualName) -> NodeId {
         self.try_create_element(name)
             .expect("scripted-dom node identity allocation failed")
@@ -1622,6 +1735,12 @@ impl LayoutDomMut for ScriptedDom {
         // and the former parent's consumers must hear the removal. The detach
         // used to be silent here. (moveBefore plan S1.)
         let former_parent = self.node(child).parent;
+        let former_select = self.option_select_ancestor(child);
+        let destination_select = if self.html_name(parent) == Some("select") {
+            Some(parent)
+        } else {
+            self.option_select_ancestor(parent)
+        };
         let seeds: Vec<_> = former_parent.into_iter().chain([parent, child]).collect();
         let radio_before = self.snapshot_radio_associations(&seeds);
         if let Some(former_parent) = former_parent {
@@ -1634,7 +1753,9 @@ impl LayoutDomMut for ScriptedDom {
             self.record_implicit_removal(former_parent, child, previous, next);
         }
         self.detach(child);
-        if let Some(former_parent) = former_parent {
+        if let Some(former_parent) = former_parent
+            && (former_select.is_none() || former_select != destination_select)
+        {
             self.form_control_children_changed(former_parent);
         }
         self.node_mut(child).parent = Some(parent);
@@ -1646,6 +1767,7 @@ impl LayoutDomMut for ScriptedDom {
         });
         let previous = self.sibling(child, -1);
         self.record_child_list(parent, vec![child], Vec::new(), previous, None);
+        self.form_control_option_subtree_inserted(child, former_select);
         self.form_control_children_changed(parent);
         self.reassign_for_parent(parent, child);
         self.reconcile_radio_associations(&radio_before, &seeds);
@@ -1656,6 +1778,12 @@ impl LayoutDomMut for ScriptedDom {
         // observable. State preservation is `move_before`'s contract, not this
         // one's. (moveBefore plan S1.)
         let former_parent = self.node(child).parent;
+        let former_select = self.option_select_ancestor(child);
+        let destination_select = if self.html_name(parent) == Some("select") {
+            Some(parent)
+        } else {
+            self.option_select_ancestor(parent)
+        };
         let seeds: Vec<_> = former_parent.into_iter().chain([parent, child]).collect();
         let radio_before = self.snapshot_radio_associations(&seeds);
         if let Some(former_parent) = former_parent {
@@ -1675,9 +1803,12 @@ impl LayoutDomMut for ScriptedDom {
         let previous = self.sibling(child, -1);
         let next = self.sibling(child, 1);
         self.record_child_list(parent, vec![child], Vec::new(), previous, next);
-        if let Some(former_parent) = former_parent {
+        if let Some(former_parent) = former_parent
+            && (former_select.is_none() || former_select != destination_select)
+        {
             self.form_control_children_changed(former_parent);
         }
+        self.form_control_option_subtree_inserted(child, former_select);
         self.form_control_children_changed(parent);
         self.reassign_for_parent(parent, child);
         self.reconcile_radio_associations(&radio_before, &seeds);
@@ -1685,6 +1816,12 @@ impl LayoutDomMut for ScriptedDom {
 
     fn move_before(&mut self, parent: NodeId, child: NodeId, reference: Option<NodeId>) {
         let from_parent = self.node(child).parent;
+        let former_select = self.option_select_ancestor(child);
+        let destination_select = if self.html_name(parent) == Some("select") {
+            Some(parent)
+        } else {
+            self.option_select_ancestor(parent)
+        };
         // Spec pre-move step: a reference of the moving node itself means
         // "before my own next sibling", i.e. stay in place.
         let reference = if reference == Some(child) {
@@ -1708,9 +1845,12 @@ impl LayoutDomMut for ScriptedDom {
         let previous = self.sibling(child, -1);
         let next = self.sibling(child, 1);
         self.record_child_list(parent, vec![child], Vec::new(), previous, next);
-        if let Some(from_parent) = from_parent {
+        if let Some(from_parent) = from_parent
+            && (former_select.is_none() || former_select != destination_select)
+        {
             self.form_control_children_changed(from_parent);
         }
+        self.form_control_option_subtree_inserted(child, former_select);
         self.form_control_children_changed(parent);
         match from_parent {
             Some(from_parent) => self.mutations.push(DomMutation::Moved {

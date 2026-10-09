@@ -212,20 +212,22 @@ where
     fragments.flush_overflow();
     drop(state);
 
-    Ok(RetainedRootFormatting::Formatted(Box::new(
-        LiveryLayout::new(
-            previous.viewport,
-            LayoutResult::new(boxes.into_tree(), fragments),
-            Some(text_frame),
-            BlockAlgorithmCounts {
-                buckram: buckram_blocks,
-                taffy: taffy_blocks,
-                backend_sizing: backend_sizing_blocks,
-            },
-            table_paint,
-            table_shadow,
-        ),
-    )))
+    let mut fresh = LiveryLayout::new(
+        previous.viewport,
+        LayoutResult::new(boxes.into_tree(), fragments),
+        Some(text_frame),
+        BlockAlgorithmCounts {
+            buckram: buckram_blocks,
+            taffy: taffy_blocks,
+            backend_sizing: backend_sizing_blocks,
+        },
+        table_paint,
+        table_shadow,
+    );
+    // Match the complete-layout text preparation before replacing this root.
+    // Native control values use virtual element sources, not author text nodes.
+    fresh.prepare_atomic_inline_subtree_text(dom, styles, text, node);
+    Ok(RetainedRootFormatting::Formatted(Box::new(fresh)))
 }
 
 pub(in crate::layout) fn supports_retained_root_formatting<Id>(

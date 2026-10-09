@@ -79,6 +79,7 @@ impl WebGlHost {
             webgl: Some(Box::new(move |width, height| {
                 Box::new(host.make_handler(width, height))
             })),
+            ..genet_scripted::ScriptedDocumentOptions::default()
         }
     }
 

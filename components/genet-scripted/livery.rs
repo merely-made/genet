@@ -781,6 +781,18 @@ impl LiveryCssom {
         Ok(displayed)
     }
 
+    /// Paint inert host-owned validation text over the current viewport and
+    /// return the viewport-space bounds of its background rectangle.
+    pub fn push_validation_notice(
+        &self,
+        list: &mut LiveryPaintList,
+        message: &str,
+    ) -> Option<[f32; 4]> {
+        let mut state = self.state.borrow_mut();
+        let bounds = list.push_native_text_overlay(&mut state.text, message)?;
+        Some([bounds.min.x, bounds.min.y, bounds.width(), bounds.height()])
+    }
+
     /// The runtime-visible viewport offset retained by this Livery session.
     pub fn scroll(&self) -> (f32, f32) {
         self.state.borrow().scroll

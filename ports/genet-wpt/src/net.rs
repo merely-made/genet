@@ -70,6 +70,11 @@ fn worker_loop(rx: std::sync::mpsc::Receiver<Job>) {
                         let _ = reply.send(do_get(&url).await);
                     });
                 },
+                Ok(Job::GetDocument(url, options, reply)) => {
+                    tokio::spawn(async move {
+                        let _ = reply.send(do_get_document(&url, options).await);
+                    });
+                },
                 Ok(Job::Fetch(key, id, req, reply)) => {
                     let (pull_tx, pull_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
                     pulls.insert(id, pull_tx);
@@ -192,6 +197,55 @@ pub fn http_get(url: &str) -> Option<String> {
     rx.recv().ok().flatten()
 }
 
+#[derive(Clone, Debug)]
+pub struct LoadedHtmlDocument {
+    pub document: genet_scripted_dom::html_encoding::DecodedHtmlDocument,
+    pub final_url: String,
+}
+pub fn http_get_document(
+    url: &str,
+    options: script_runtime_api::HtmlDecodeOptions,
+) -> Option<LoadedHtmlDocument> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    worker_jobs()
+        .send(Job::GetDocument(url.to_owned(), options, tx))
+        .ok()?;
+    rx.recv().ok().flatten()
+}
+async fn do_get_document(
+    url: &str,
+    options: script_runtime_api::HtmlDecodeOptions,
+) -> Option<LoadedHtmlDocument> {
+    let req = netfetcher::Request::get(url::Url::parse(url).ok()?);
+    let cx = netfetcher::FetchContext::permissive();
+    let response = netfetcher::fetch(req, &cx).await;
+    if response.is_network_error()
+        || response.status < 200
+        || response.status >= 300
+        || matches!(response.status, 204 | 205)
+    {
+        return None;
+    }
+    let final_url = response
+        .url_list
+        .last()
+        .map(ToString::to_string)
+        .unwrap_or_else(|| url.to_owned());
+    let content_type = response
+        .headers
+        .iter()
+        .find(|(n, _)| n.eq_ignore_ascii_case("content-type"))
+        .map(|(_, v)| v.clone());
+    let bytes = response.bytes().await.ok()?;
+    Some(LoadedHtmlDocument {
+        document: genet_scripted_dom::html_encoding::decode_html_document(
+            &bytes,
+            content_type.as_deref(),
+            options,
+        ),
+        final_url,
+    })
+}
 async fn do_get(url: &str) -> Option<String> {
     let u = url::Url::parse(url).ok()?;
     let req = netfetcher::Request::get(u);
@@ -521,6 +575,11 @@ async fn run_websocket(
 /// test's channel); `Cancel` aborts an in-flight fetch by its global key.
 pub enum Job {
     Get(String, std::sync::mpsc::Sender<Option<String>>),
+    GetDocument(
+        String,
+        script_runtime_api::HtmlDecodeOptions,
+        std::sync::mpsc::Sender<Option<LoadedHtmlDocument>>,
+    ),
     Fetch(u64, u64, FetchRequest, std::sync::mpsc::Sender<FetchEvent>),
     /// Demand the next body chunk for a streaming fetch, by its JS id.
     Pull(u64),
@@ -953,5 +1012,65 @@ mod tests {
             ctx.doc_url("/fetch/api/basic/x.any.js"),
             "http://web-platform.test:8000/fetch/api/basic/x.any.js"
         );
+    }
+}
+
+#[cfg(test)]
+mod phase_c_document_encoding_fixtures {
+    use super::*;
+    // Test-local adapter exercises the actual rich initial netfetch worker loader.
+    fn initial_document_adapter(url: &str) -> (String, Option<&'static str>, String) {
+        let loaded = http_get_document(url, Default::default()).expect("actual initial HTTP GET");
+        (
+            loaded.document.source,
+            Some(loaded.document.encoding.encoding.name()),
+            loaded.final_url,
+        )
+    }
+    #[test]
+    fn phase_c_document_encoding_actual_net_initial_header_bytes() {
+        let mut server = mockito::Server::new();
+        let page = server
+            .mock("GET", "/page")
+            .with_status(200)
+            .with_header("Content-Type", "text/html;charset=euc-kr")
+            .with_body(b"<input value='\xB0\xA1'>")
+            .expect(1)
+            .create();
+        let (source, name, _) = initial_document_adapter(&format!("{}/page", server.url()));
+        assert_eq!(
+            source, "<input value='가'>",
+            "actual netfetch initial byte decoding"
+        );
+        assert_eq!(name, Some("EUC-KR"));
+        page.assert();
+    }
+    #[test]
+    fn phase_c_document_encoding_actual_net_initial_redirect_bom_metadata() {
+        let mut server = mockito::Server::new();
+        let final_url = format!("{}/final", server.url());
+        let first = server
+            .mock("GET", "/requested")
+            .with_status(302)
+            .with_header("Location", &final_url)
+            .expect(1)
+            .create();
+        let last = server
+            .mock("GET", "/final")
+            .with_status(200)
+            .with_header("Content-Type", "text/html;charset=windows-1252")
+            .with_body(b"\xEF\xBB\xBF<p>\xC3\xA9</p>")
+            .expect(1)
+            .create();
+        let (source, name, actual_url) =
+            initial_document_adapter(&format!("{}/requested", server.url()));
+        assert_eq!(source, "<p>é</p>", "leading BOM is consumed");
+        assert_eq!(name, Some("UTF-8"));
+        assert_eq!(
+            actual_url, final_url,
+            "redirect identity retained by initial loader"
+        );
+        first.assert();
+        last.assert();
     }
 }

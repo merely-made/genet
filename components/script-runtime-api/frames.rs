@@ -14,6 +14,9 @@ use std::rc::Rc;
 use browsing_context_api::{
     ActiveDocument, BrowsingContextId, BrowsingContextTree, FrameAttributes, SandboxFlags,
 };
+use genet_scripted_dom::html_encoding::{
+    DocumentEncoding, HtmlDecodeOptions, decode_html_document,
+};
 use genet_scripted_dom::{NodeId, ScriptedDom};
 use layout_dom_api::LayoutDom;
 use script_engine_api::{
@@ -956,7 +959,18 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
         if let Some(realm) = existing {
             return view::<E>(cx, realm);
         }
-        let (attrs, source, url, base, fetch, loader, websocket, wake, resource_wake) = {
+        let (
+            attrs,
+            source,
+            mut url,
+            base,
+            fetch,
+            loader,
+            websocket,
+            wake,
+            resource_wake,
+            decode_options,
+        ) = {
             let mut h = parent_host.borrow_mut();
             if !h.is_connected_node(node) {
                 return Ok(cx.make_null());
@@ -998,6 +1012,7 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
                 h.websocket.clone(),
                 h.worker_wake.clone(),
                 h.worker_resource_wake.clone(),
+                h.dom.html_decode_options(),
             )
         };
         // Match the existing host frame-loader policy: lazy frames retain an
@@ -1012,16 +1027,52 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
             && url::Url::parse(&url)
                 .is_ok_and(|url| url.scheme() == "about" && url.path() == "blank");
         let lazy = lazy && !initial_blank;
-        let source = source.or_else(|| {
-            if lazy {
-                return None;
-            }
-            if initial_blank {
-                Some(String::new())
+        let mut encoding = DocumentEncoding::default();
+        let source = if source.is_some() || lazy {
+            source
+        } else if initial_blank {
+            Some(String::new())
+        } else if let Some(response) = loader
+            .as_ref()
+            .and_then(|loader| loader.load_document(&url))
+        {
+            if response.network_error
+                || matches!(response.status, 204 | 205)
+                || matches!(
+                    response.response_type.as_str(),
+                    "opaque" | "opaqueredirect" | "error"
+                )
+            {
+                None
             } else {
-                loader.as_ref().and_then(|loader| loader.load(&url))
+                if !response.url.is_empty() {
+                    url = response.url;
+                }
+                let mut options = decode_options;
+                options.same_origin_parent_encoding = eligible_parent_encoding(
+                    &agent,
+                    parent,
+                    &url,
+                    attrs.sandbox.as_deref().is_some_and(|s| {
+                        !s.split_ascii_whitespace()
+                            .any(|t| t.eq_ignore_ascii_case("allow-same-origin"))
+                    }),
+                );
+                let decoded = decode_html_document(
+                    &response.body,
+                    response
+                        .headers
+                        .iter()
+                        .find(|(n, _)| n.eq_ignore_ascii_case("content-type"))
+                        .map(|(_, v)| v.as_str()),
+                    options,
+                );
+                encoding = decoded.encoding;
+                Some(decoded.source)
             }
-        });
+        } else {
+            loader.as_ref().and_then(|loader| loader.load(&url))
+        };
         let Some((context, scripts)) = ({
             let mut a = agent.borrow_mut();
             let document_url = a
@@ -1093,6 +1144,8 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
         drop(raw);
         let referrer_policy = iframe_referrer_policy(&agent.borrow(), parent, node);
         let plan = DocumentPlan {
+            encoding,
+            decode_options,
             container: Some((parent, node)),
             reuse_host: None,
             context,
@@ -1160,6 +1213,8 @@ struct HostSeams {
 /// context's first document or its fifth. A navigation supplies the context's
 /// existing `key`; it is never `lazy` or an `initial_blank` completion.
 struct DocumentPlan {
+    encoding: DocumentEncoding,
+    decode_options: HtmlDecodeOptions,
     /// The container element's realm and node, or `None` for the **top-level**
     /// browsing context, which has neither. A context with a container gets a
     /// [`FrameRecord`] and loads through `__loadFrameDocument`; the top-level
@@ -1203,6 +1258,8 @@ fn open_document_realm<E: ScriptEngine>(
     plan: DocumentPlan,
 ) -> Result<RealmId, RealmError> {
     let DocumentPlan {
+        encoding,
+        decode_options,
         container,
         reuse_host,
         context,
@@ -1238,6 +1295,9 @@ fn open_document_realm<E: ScriptEngine>(
         worker_spawn: Some(crate::worker::worker_main::<E> as fn(_)),
         ..HostState::default()
     };
+    let document = fresh.dom.document();
+    fresh.dom.set_document_encoding(document, encoding);
+    fresh.dom.set_html_decode_options(decode_options);
     if initial_blank {
         fresh.markup.ready_state = crate::ReadyState::Complete;
     }
@@ -2300,7 +2360,7 @@ fn perform_navigation<E: ScriptEngine>(
         return Ok(());
     };
     let key = agent.borrow_mut().frames.context_key(target);
-    let (seams, viewport_size, loader) = {
+    let (seams, viewport_size, loader, decode_options) = {
         let host = outgoing.borrow();
         (
             HostSeams {
@@ -2312,6 +2372,7 @@ fn perform_navigation<E: ScriptEngine>(
             },
             host.viewport_size,
             host.script_loader.clone(),
+            host.dom.html_decode_options(),
         )
     };
     let mut url = request.url.clone();
@@ -2336,6 +2397,7 @@ fn perform_navigation<E: ScriptEngine>(
     } else {
         None
     };
+    let mut encoding = DocumentEncoding::default();
     let source = if blank {
         Some(String::new())
     } else if let Some(source) = (plain_get && response.is_none())
@@ -2365,22 +2427,27 @@ fn perform_navigation<E: ScriptEngine>(
         if !response.url.is_empty() {
             url = response.url;
         }
-        let charset = response
-            .headers
-            .iter()
-            .find(|(name, _)| name.eq_ignore_ascii_case("content-type"))
-            .and_then(|(_, value)| {
-                value.split(';').skip(1).find_map(|parameter| {
-                    let (name, value) = parameter.trim().split_once('=')?;
-                    name.trim()
-                        .eq_ignore_ascii_case("charset")
-                        .then(|| value.trim().trim_matches('"'))
-                })
-            });
-        let encoding = charset
-            .and_then(|label| encoding_rs::Encoding::for_label(label.as_bytes()))
-            .unwrap_or(encoding_rs::UTF_8);
-        Some(encoding.decode(&response.body).0.into_owned())
+        let mut options = decode_options;
+        let opaque = agent
+            .borrow()
+            .frames
+            .tree
+            .as_ref()
+            .and_then(|t| t.get(context))
+            .is_some_and(|c| c.sandbox().contains(SandboxFlags::ORIGIN));
+        options.same_origin_parent_encoding =
+            container.and_then(|(parent, _)| eligible_parent_encoding(agent, parent, &url, opaque));
+        let decoded = decode_html_document(
+            &response.body,
+            response
+                .headers
+                .iter()
+                .find(|(n, _)| n.eq_ignore_ascii_case("content-type"))
+                .map(|(_, v)| v.as_str()),
+            options,
+        );
+        encoding = decoded.encoding;
+        Some(decoded.source)
     };
     // The new document's origin, and the history join. HTML's initial
     // `about:blank` replaces; everything else obeys the caller.
@@ -2408,6 +2475,8 @@ fn perform_navigation<E: ScriptEngine>(
     }
     let discard = unload_for_navigation::<E>(cx, agent, target)?;
     let plan = DocumentPlan {
+        encoding,
+        decode_options,
         container,
         // The top-level document's `HostState` cell is the one `Runtime::host()`
         // hands out, so it is written into rather than replaced.
@@ -2521,3 +2590,37 @@ pub(crate) fn install_frame_surface<E: ScriptEngine>(
 #[cfg(test)]
 #[path = "frames_navigation_tests.rs"]
 mod navigation_requests_unit;
+
+/// Compare actual browsing-context origins, including opaque parent contexts.
+fn eligible_parent_encoding(
+    agent: &Rc<RefCell<crate::AgentState>>,
+    parent: RealmId,
+    url: &str,
+    opaque: bool,
+) -> Option<&'static genet_scripted_dom::form_encoding::Encoding> {
+    if opaque {
+        return None;
+    }
+    let mut a = agent.borrow_mut();
+    let top_url = a
+        .hosts
+        .get(&a.frames.top_realm())
+        .and_then(|h| h.borrow().base_url.clone())
+        .unwrap_or_else(|| "about:blank".into());
+    a.frames.initialize(&top_url);
+    let context = *a.frames.contexts.get(&parent)?;
+    let tree = a.frames.tree.as_mut()?;
+    let child_origin = tree.mint_origin(url);
+    if !tree
+        .get(context)?
+        .document()
+        .origin
+        .is_same_origin(&child_origin)
+    {
+        return None;
+    }
+    let host = a.hosts.get(&parent)?.borrow();
+    host.dom
+        .document_encoding(host.dom.document())
+        .map(|e| e.encoding)
+}

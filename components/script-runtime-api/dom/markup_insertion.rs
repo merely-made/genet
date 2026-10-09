@@ -519,18 +519,25 @@ impl<E: ScriptEngine> NativeFn<E> for DocOpen {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
         let a0 = cx.arg(0);
         let target = stream_target::<E>(cx, &a0)?;
-        with_host::<E, _>(cx, |host| match write_target(host, target) {
-            (_, true) => open_stream_begin(host),
-            // A document with no browsing context has no stream to open; its
-            // buffer is simply emptied, which is what "replace all" comes to
-            // for it.
-            (document, false) => {
-                host.markup.detached_streams.insert(document, String::new());
-                let children: Vec<NodeId> = host.dom.dom_children(document).collect();
-                for child in children {
-                    host.dom.remove_child(child);
-                }
-            },
+        with_host::<E, _>(cx, |host| {
+            let document = write_target(host, target).0;
+            if let Some(mut encoding) = host.dom.document_encoding(document) {
+                encoding.confidence = crate::EncodingConfidence::Irrelevant;
+                host.dom.set_document_encoding(document, encoding);
+            }
+            match write_target(host, target) {
+                (_, true) => open_stream_begin(host),
+                // A document with no browsing context has no stream to open; its
+                // buffer is simply emptied, which is what "replace all" comes to
+                // for it.
+                (document, false) => {
+                    host.markup.detached_streams.insert(document, String::new());
+                    let children: Vec<NodeId> = host.dom.dom_children(document).collect();
+                    for child in children {
+                        host.dom.remove_child(child);
+                    }
+                },
+            }
         });
         cx.make_string("")
     }
@@ -559,12 +566,21 @@ impl<E: ScriptEngine> NativeFn<E> for DocWrite {
             // the active one — which is what this did until 2026-09-08, so
             // `doc.write(...)` on a `createHTMLDocument` result wiped the page.
             if let (document, false) = write_target(host, target) {
+                if let Some(mut encoding) = host.dom.document_encoding(document) {
+                    encoding.confidence = crate::EncodingConfidence::Irrelevant;
+                    host.dom.set_document_encoding(document, encoding);
+                }
                 detached_write(host, document, &text);
                 return;
             }
             if host.markup.open_stream.is_none() {
                 // The implied `document.open`: the document is replaced, so
                 // whatever is in it now goes.
+                let document = host.dom.document();
+                if let Some(mut encoding) = host.dom.document_encoding(document) {
+                    encoding.confidence = crate::EncodingConfidence::Irrelevant;
+                    host.dom.set_document_encoding(document, encoding);
+                }
                 open_stream_begin(host);
             }
             if let Some(stream) = &host.markup.open_stream {

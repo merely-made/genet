@@ -1039,36 +1039,59 @@ fn synthesize_worker_wrapper(test: &TestCase) -> Option<String> {
 }
 
 fn load_test_document_disk(test: &TestCase) -> TestHtml {
+    load_test_document_disk_encoded(test).0
+}
+fn load_test_document_disk_encoded(
+    test: &TestCase,
+) -> (TestHtml, script_runtime_api::DocumentEncoding) {
+    let encoding = script_runtime_api::DocumentEncoding::default();
     if is_any_js(&test.path) {
-        return match variant_global(test) {
-            VariantGlobal::Unhostable(reason) => TestHtml::Skip(reason),
-            VariantGlobal::DedicatedWorker => match synthesize_worker_wrapper(test) {
-                Some(h) => TestHtml::Html(h),
-                None => TestHtml::Skip("dedicated-worker-unsupported"),
-            },
-            VariantGlobal::Window => {
-                match synthesize_any_js(&test.path, Some(test.name()), test.long_timeout) {
+        return (
+            match variant_global(test) {
+                VariantGlobal::Unhostable(reason) => TestHtml::Skip(reason),
+                VariantGlobal::DedicatedWorker => match synthesize_worker_wrapper(test) {
                     Some(h) => TestHtml::Html(h),
-                    None => TestHtml::Skip("non-window-global"),
-                }
+                    None => TestHtml::Skip("dedicated-worker-unsupported"),
+                },
+                VariantGlobal::Window => {
+                    match synthesize_any_js(&test.path, Some(test.name()), test.long_timeout) {
+                        Some(h) => TestHtml::Html(h),
+                        None => TestHtml::Skip("non-window-global"),
+                    }
+                },
             },
-        };
+            encoding,
+        );
     }
     let Ok(bytes) = fs::read(&test.path) else {
-        return TestHtml::ReadError;
+        return (TestHtml::ReadError, encoding);
     };
-    TestHtml::Html(String::from_utf8_lossy(&bytes).into_owned())
+    // XML retains its separate existing decoding route; this is HTML sniffing.
+    if is_xml_path(&test.path) {
+        return (
+            TestHtml::Html(String::from_utf8_lossy(&bytes).into_owned()),
+            encoding,
+        );
+    }
+    let decoded =
+        genet_scripted_dom::html_encoding::decode_html_document(&bytes, None, Default::default());
+    (TestHtml::Html(decoded.source), decoded.encoding)
 }
 
 fn build_test_html_disk(test: &TestCase) -> TestHtml {
+    build_test_html_disk_encoded(test).0
+}
+fn build_test_html_disk_encoded(
+    test: &TestCase,
+) -> (TestHtml, script_runtime_api::DocumentEncoding) {
     if test.kind != Kind::Testharness {
-        return TestHtml::Skip("non-testharness");
+        return (TestHtml::Skip("non-testharness"), Default::default());
     }
     let ext = test.path.extension().and_then(|e| e.to_str()).unwrap_or("");
     if ext.eq_ignore_ascii_case("xhtml") || ext.eq_ignore_ascii_case("xht") {
-        return TestHtml::Skip("xhtml"); // XML parse mode genet's HTML parser doesn't handle
+        return (TestHtml::Skip("xhtml"), Default::default()); // XML parse mode genet's HTML parser doesn't handle
     }
-    load_test_document_disk(test)
+    load_test_document_disk_encoded(test)
 }
 
 /// Render each reftest in the subset + its reference to side-by-side

@@ -37,6 +37,9 @@ use std::collections::VecDeque;
 
 use std::rc::Rc;
 
+pub use genet_scripted_dom::html_encoding::{
+    DocumentEncoding, EncodingConfidence, HtmlDecodeOptions,
+};
 use genet_scripted_dom::{NodeId, ScriptedDom};
 use layout_dom_api::LayoutDom;
 use script_engine_api::{
@@ -437,7 +440,10 @@ struct DocumentBaseCache {
 impl HostState {
     /// The document URL, or its captured about-document fallback base.
     pub fn fallback_base_url(&self) -> Option<&str> {
-        let is_about = self.base_url.as_deref().and_then(|url| url::Url::parse(url).ok())
+        let is_about = self
+            .base_url
+            .as_deref()
+            .and_then(|url| url::Url::parse(url).ok())
             .is_some_and(|url| url.scheme() == "about" && matches!(url.path(), "blank" | "srcdoc"));
         if is_about {
             self.about_base_url.as_deref().or(self.base_url.as_deref())
@@ -2315,6 +2321,17 @@ impl<E: ScriptEngine> Runtime<E> {
         // surface's getters re-read it), so updating the host base URL is enough;
         // no need to rebuild a location snapshot here.
         Ok(())
+    }
+
+    /// Install byte-input metadata before parsing authored source.
+    pub fn set_document_encoding(&mut self, encoding: DocumentEncoding) {
+        let mut host = self.host.borrow_mut();
+        let document = host.dom.document();
+        host.dom.set_document_encoding(document, encoding);
+    }
+    /// Configure HTML decoding for subsequent frame loads and navigation.
+    pub fn set_html_decode_options(&mut self, options: HtmlDecodeOptions) {
+        self.host.borrow_mut().dom.set_html_decode_options(options);
     }
 
     /// The shared host state (e.g. to read `console` output after a run).

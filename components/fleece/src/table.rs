@@ -727,7 +727,7 @@ fn collect_cell_inline<D: LayoutDom>(dom: &D, id: D::NodeId, out: &mut Vec<Inlin
     if html_name(dom, id) == Some("table") {
         return;
     }
-    let name = dom.element_name(id).map(|name| name.local.as_ref());
+    let name = dom.element_name(id).map(|name| name.local.as_str());
     if name.is_some_and(is_cell_chrome_or_non_rendered) {
         return;
     }
@@ -878,7 +878,7 @@ fn html_element_children<D: LayoutDom>(dom: &D, id: D::NodeId) -> Vec<D::NodeId>
 
 fn html_name<D: LayoutDom>(dom: &D, id: D::NodeId) -> Option<&str> {
     let name = dom.element_name(id)?;
-    (name.ns.as_ref() == "http://www.w3.org/1999/xhtml").then_some(name.local.as_ref())
+    (name.ns.as_str() == "http://www.w3.org/1999/xhtml").then_some(name.local.as_str())
 }
 
 fn stable_dedup<T: Eq + std::hash::Hash + Copy>(values: &mut Vec<T>) {

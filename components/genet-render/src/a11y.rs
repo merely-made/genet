@@ -75,8 +75,8 @@ fn document_role<D: LayoutDom>(dom: &D, node: D::NodeId) -> DocumentA11yRole {
         }
     }
     if dom.element_name(node).is_some_and(|name| {
-        name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
-            && name.local.as_ref().eq_ignore_ascii_case("input")
+        name.ns.as_str() == "http://www.w3.org/1999/xhtml"
+            && name.local.as_str().eq_ignore_ascii_case("input")
     }) {
         let input_type = dom
             .attribute(node, &Namespace::default(), &LocalName::from("type"))
@@ -90,7 +90,7 @@ fn document_role<D: LayoutDom>(dom: &D, node: D::NodeId) -> DocumentA11yRole {
     }
     match dom.kind(node) {
         NodeKind::Document => DocumentA11yRole::Window,
-        NodeKind::Element => match dom.element_name(node).map(|name| name.local.as_ref()) {
+        NodeKind::Element => match dom.element_name(node).map(|name| name.local.as_str()) {
             Some("html") => DocumentA11yRole::Document,
             Some("article") => DocumentA11yRole::Article,
             Some("nav") => DocumentA11yRole::Navigation,
@@ -129,11 +129,11 @@ fn document_role<D: LayoutDom>(dom: &D, node: D::NodeId) -> DocumentA11yRole {
 mod name;
 fn text_control_value<D: LayoutDom>(dom: &D, node: D::NodeId) -> Option<String> {
     let name = dom.element_name(node)?;
-    if name.ns.as_ref() != "http://www.w3.org/1999/xhtml" {
+    if name.ns.as_str() != "http://www.w3.org/1999/xhtml" {
         return None;
     }
     let state = dom.form_control_state(node);
-    match name.local.as_ref() {
+    match name.local.as_str() {
         "textarea" => Some(state.map_or_else(|| descendant_text(dom, node), |state| state.value)),
         "input" => {
             let input_type = dom
@@ -190,8 +190,8 @@ fn native_checked<D: LayoutDom>(dom: &D, node: D::NodeId) -> Option<bool> {
     let Some(name) = dom.element_name(node) else {
         return None;
     };
-    if name.ns.as_ref() != "http://www.w3.org/1999/xhtml"
-        || !name.local.as_ref().eq_ignore_ascii_case("input")
+    if name.ns.as_str() != "http://www.w3.org/1999/xhtml"
+        || !name.local.as_str().eq_ignore_ascii_case("input")
     {
         return None;
     }
@@ -375,9 +375,9 @@ where
 
 fn is_native_control<D: LayoutDom>(dom: &D, node: D::NodeId) -> bool {
     matches!(
-        dom.element_name(node).map(|name| name.local.as_ref()),
+        dom.element_name(node).map(|name| name.local.as_str()),
         Some("button" | "input" | "select" | "textarea")
-    ) || (dom.element_name(node).map(|name| name.local.as_ref()) == Some("a")
+    ) || (dom.element_name(node).map(|name| name.local.as_str()) == Some("a")
         && dom
             .attribute(node, &Namespace::default(), &LocalName::from("href"))
             .is_some())
@@ -677,7 +677,7 @@ fn neutral_state<D: LayoutDom>(
     let multiline = is_content_editable(dom, node)
         || dom
             .element_name(node)
-            .is_some_and(|name| name.local.as_ref() == "textarea");
+            .is_some_and(|name| name.local.as_str() == "textarea");
     let toggled =
         aria_toggled(dom, node, "aria-checked").or_else(|| aria_toggled(dom, node, "aria-pressed"));
     let live = aria_live(dom, node);

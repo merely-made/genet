@@ -773,7 +773,7 @@ fn atomic_inline_elements<D>(
         let text_control = is_element
             && dom.element_name(node).is_some_and(|name| {
                 matches!(
-                    name.local.as_ref().to_ascii_lowercase().as_str(),
+                    name.local.as_str().to_ascii_lowercase().as_str(),
                     "input" | "textarea"
                 )
             });

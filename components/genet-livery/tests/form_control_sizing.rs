@@ -39,7 +39,7 @@ fn rect(dom: &ScriptedDom, fragments: &LiveryLayout<Node>, id: &str) -> (f32, f3
     fn find(dom: &ScriptedDom, node: Node, id: &str) -> Option<Node> {
         if dom
             .attributes(node)
-            .any(|a| a.name.local.as_ref() == "id" && a.value == id)
+            .any(|a| a.name.local.as_str() == "id" && a.value == id)
         {
             return Some(node);
         }
@@ -73,7 +73,7 @@ fn size_cols_rows_never_reach_computed_style() {
     fn find(dom: &ScriptedDom, node: Node, id: &str) -> Option<Node> {
         if dom
             .attributes(node)
-            .any(|a| a.name.local.as_ref() == "id" && a.value == id)
+            .any(|a| a.name.local.as_str() == "id" && a.value == id)
         {
             return Some(node);
         }
@@ -283,7 +283,7 @@ fn hidden_inputs_stay_boxless() {
     fn find(dom: &ScriptedDom, node: Node, id: &str) -> Option<Node> {
         if dom
             .attributes(node)
-            .any(|a| a.name.local.as_ref() == "id" && a.value == id)
+            .any(|a| a.name.local.as_str() == "id" && a.value == id)
         {
             return Some(node);
         }
@@ -308,7 +308,7 @@ fn image_input_keeps_its_natural_size_path_untouched() {
     fn find(dom: &ScriptedDom, node: Node, id: &str) -> Option<Node> {
         if dom
             .attributes(node)
-            .any(|a| a.name.local.as_ref() == "id" && a.value == id)
+            .any(|a| a.name.local.as_str() == "id" && a.value == id)
         {
             return Some(node);
         }

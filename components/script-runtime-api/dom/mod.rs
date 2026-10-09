@@ -69,8 +69,8 @@ const XHTML_NS: &str = "http://www.w3.org/1999/xhtml";
 /// A node's qualified name (`prefix:local`, or just `local`), case preserved.
 fn qualified_of(name: &QualName) -> String {
     match name.prefix.as_ref() {
-        Some(p) => format!("{}:{}", p.as_ref(), name.local.as_ref()),
-        None => name.local.as_ref().to_string(),
+        Some(p) => format!("{}:{}", p.as_str(), name.local.as_str()),
+        None => name.local.as_str().to_string(),
     }
 }
 
@@ -137,7 +137,7 @@ pub(crate) fn clone_into<D: LayoutDom>(
             NodeKind::ProcessingInstruction => {
                 let target = src
                     .element_name(child)
-                    .map_or(String::new(), |q| q.local.as_ref().to_string());
+                    .map_or(String::new(), |q| q.local.as_str().to_string());
                 let pi = dst.create_processing_instruction(&target, src.text(child).unwrap_or(""));
                 dst.append_child(dst_parent, pi);
             },

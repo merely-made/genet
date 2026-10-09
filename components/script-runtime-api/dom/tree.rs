@@ -278,7 +278,7 @@ fn collect_by_tag(dom: &ScriptedDom, root: NodeId, tag: &str) -> Vec<NodeId> {
         for child in dom.dom_children(node).collect::<Vec<_>>() {
             if dom
                 .element_name(child)
-                .is_some_and(|q| tag == "*" || q.local.as_ref().eq_ignore_ascii_case(tag))
+                .is_some_and(|q| tag == "*" || q.local.as_str().eq_ignore_ascii_case(tag))
             {
                 out.push(child);
             }

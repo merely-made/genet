@@ -93,7 +93,7 @@ impl Page {
         fn find(dom: &ScriptedDom, node: Node, id: &str) -> Option<Node> {
             if dom
                 .attributes(node)
-                .any(|a| a.name.local.as_ref() == "id" && a.value == id)
+                .any(|a| a.name.local.as_str() == "id" && a.value == id)
             {
                 return Some(node);
             }
@@ -121,13 +121,13 @@ impl Page {
             .dom
             .element_name(node)?
             .local
-            .as_ref()
+            .as_str()
             .to_ascii_uppercase();
         Some(
             match self
                 .dom
                 .attributes(node)
-                .find(|a| a.name.local.as_ref() == "id")
+                .find(|a| a.name.local.as_str() == "id")
             {
                 Some(id) => format!("{name}#{}", id.value),
                 None => name,

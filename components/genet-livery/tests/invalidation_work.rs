@@ -228,7 +228,7 @@ fn disjoint_shadow_roots_share_facts_without_sharing_scopes() {
             dom.dom_children(*root)
                 .find(|node| {
                     dom.element_name(*node)
-                        .is_some_and(|name| name.local.as_ref() == "font")
+                        .is_some_and(|name| name.local.as_str() == "font")
                 })
                 .unwrap()
         })

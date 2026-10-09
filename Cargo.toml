@@ -190,7 +190,7 @@ gstreamer-webrtc = { version = "0.25", features = ["v1_18"] }
 harfbuzz-sys = "0.6.1"
 headers = "0.4"
 hitrace = { version = "0.2.0", features = ["api-19", "tracing-rs"] }
-html5ever = "0.39"
+html5ever = "0.40"
 http = "1.4"
 http-body-util = "0.1"
 hyper = "1.9"
@@ -212,7 +212,7 @@ libc = "0.2"
 lru = "0.18"
 log = "0.4.29"
 mach2 = "0.6"
-markup5ever = "0.39"
+markup5ever = "0.40"
 memmap2 = "0.9.10"
 mime = "0.3.13"
 mime-multipart-hyper1 = "0.10.0"
@@ -335,7 +335,7 @@ windows-sys = "0.61"
 winit = "0.30.13"
 wio = "0.2"
 x25519-dalek = { version = "2.0.1", features = ["static_secrets"] }
-xml5ever = "0.39"
+xml5ever = "0.40"
 yuv = { version = "0.8.14", features = ["rayon"] }
 zeroize = "1.8"
 

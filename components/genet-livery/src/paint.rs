@@ -798,7 +798,7 @@ where
 {
     if dom.kind(id) != NodeKind::Element
         || !matches!(
-            dom.element_name(id)?.local.as_ref(),
+            dom.element_name(id)?.local.as_str(),
             "custom-leaf" | "chisel-leaf"
         )
     {
@@ -917,7 +917,7 @@ fn record_frame_slot<D>(
     if dom.kind(id) != NodeKind::Element
         || !dom
             .element_name(id)
-            .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case("iframe"))
+            .is_some_and(|name| name.local.as_str().eq_ignore_ascii_case("iframe"))
     {
         return;
     }
@@ -1148,7 +1148,7 @@ fn emit_canvas_external_texture<D>(
     if dom.kind(id) != NodeKind::Element
         || !dom
             .element_name(id)
-            .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case("canvas"))
+            .is_some_and(|name| name.local.as_str().eq_ignore_ascii_case("canvas"))
     {
         return;
     }
@@ -2347,7 +2347,7 @@ where
             }
             let replaced = dom.element_name(id).is_some_and(|name| {
                 matches!(
-                    name.local.as_ref(),
+                    name.local.as_str(),
                     "audio"
                         | "canvas"
                         | "embed"
@@ -2833,7 +2833,7 @@ fn emit_normal_children<'a, D>(
     if dom.form_control_state(parent).is_some()
         && dom
             .element_name(parent)
-            .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case("textarea"))
+            .is_some_and(|name| name.local.as_str().eq_ignore_ascii_case("textarea"))
     {
         return;
     }
@@ -3609,13 +3609,13 @@ where
     if dom.kind(id) != NodeKind::Element
         || !dom
             .element_name(id)
-            .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case("img"))
+            .is_some_and(|name| name.local.as_str().eq_ignore_ascii_case("img"))
     {
         return None;
     }
     dom.attributes(id).find_map(|attribute| {
-        (attribute.name.ns.as_ref().is_empty()
-            && attribute.name.local.as_ref().eq_ignore_ascii_case("src"))
+        (attribute.name.ns.as_str().is_empty()
+            && attribute.name.local.as_str().eq_ignore_ascii_case("src"))
         .then(|| attribute.value.to_owned())
     })
 }
@@ -3653,10 +3653,10 @@ fn is_text_control_projection<D: LayoutDom>(dom: &D, id: D::NodeId) -> bool {
     let Some(name) = dom.element_name(id) else {
         return false;
     };
-    if name.ns.as_ref() != "http://www.w3.org/1999/xhtml" {
+    if name.ns.as_str() != "http://www.w3.org/1999/xhtml" {
         return false;
     }
-    match name.local.as_ref().to_ascii_lowercase().as_str() {
+    match name.local.as_str().to_ascii_lowercase().as_str() {
         "textarea" => dom.form_control_state(id).is_some(),
         "input" => {
             let raw_type = dom
@@ -3743,7 +3743,7 @@ where
     }
     let root_is_html = dom
         .element_name(root)
-        .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case("html"));
+        .is_some_and(|name| name.local.as_str().eq_ignore_ascii_case("html"));
     let (source, source_style) = if has_background(root_style) {
         (root, root_style)
     } else if root_is_html {
@@ -3751,7 +3751,7 @@ where
             dom.kind(*child) == NodeKind::Element
                 && dom
                     .element_name(*child)
-                    .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case("body"))
+                    .is_some_and(|name| name.local.as_str().eq_ignore_ascii_case("body"))
         })?;
         let body_style = styles.get(body)?;
         if root_style.contain.is_active()

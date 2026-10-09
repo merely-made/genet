@@ -312,7 +312,7 @@ where
     D: LayoutDom,
 {
     dom.element_name(node)
-        .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case("iframe"))
+        .is_some_and(|name| name.local.as_str().eq_ignore_ascii_case("iframe"))
 }
 
 pub(crate) fn is_replaced_element<D>(dom: &D, node: D::NodeId) -> bool
@@ -320,9 +320,9 @@ where
     D: LayoutDom,
 {
     dom.element_name(node).is_some_and(|name| {
-        name.local.as_ref().eq_ignore_ascii_case("img")
-            || name.local.as_ref().eq_ignore_ascii_case("canvas")
-            || name.local.as_ref().eq_ignore_ascii_case("iframe")
+        name.local.as_str().eq_ignore_ascii_case("img")
+            || name.local.as_str().eq_ignore_ascii_case("canvas")
+            || name.local.as_str().eq_ignore_ascii_case("iframe")
     })
 }
 

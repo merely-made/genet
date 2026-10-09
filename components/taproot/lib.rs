@@ -211,11 +211,11 @@ fn matches(dom: &ScriptedDom, node: NodeId, sel: &Selector) -> bool {
                 || (r == "button"
                     && dom
                         .element_name(node)
-                        .is_some_and(|name| name.local.as_ref() == "button"))
+                        .is_some_and(|name| name.local.as_str() == "button"))
                 || (r == "textbox"
                     && dom
                         .element_name(node)
-                        .is_some_and(|name| name.local.as_ref() == "textarea"))
+                        .is_some_and(|name| name.local.as_str() == "textarea"))
         },
     };
     if !by_kind {

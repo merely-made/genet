@@ -211,7 +211,7 @@ impl<E: ScriptEngine> NativeFn<E> for NodeName {
                 // A PI's node name is its target.
                 NodeKind::ProcessingInstruction => dom
                     .element_name(n)
-                    .map(|q| q.local.as_ref().to_string())
+                    .map(|q| q.local.as_str().to_string())
                     .unwrap_or_default(),
                 // A ShadowRoot is a DocumentFragment, and DOM gives it the same
                 // nodeName.
@@ -328,7 +328,7 @@ impl<E: ScriptEngine> NativeFn<E> for LocalNameOf {
         };
         let name = id.with_dom(|dom| {
             dom.element_name(id.id())
-                .map(|q| q.local.as_ref().to_string())
+                .map(|q| q.local.as_str().to_string())
         });
         match name {
             Some(s) => cx.make_string(&s),
@@ -345,7 +345,7 @@ impl<E: ScriptEngine> NativeFn<E> for NamespaceUri {
         let Some(id) = cx.owned_node(&el)? else {
             return Ok(cx.make_null());
         };
-        let ns = id.with_dom(|dom| dom.element_name(id.id()).map(|q| q.ns.as_ref().to_string()));
+        let ns = id.with_dom(|dom| dom.element_name(id.id()).map(|q| q.ns.as_str().to_string()));
         match ns {
             Some(s) if !s.is_empty() => cx.make_string(&s),
             _ => Ok(cx.make_null()),
@@ -363,7 +363,7 @@ impl<E: ScriptEngine> NativeFn<E> for PrefixOf {
         };
         let prefix = with_dom::<E, _>(cx, |dom| {
             dom.element_name(id.id())
-                .and_then(|q| q.prefix.as_ref().map(|p| p.as_ref().to_string()))
+                .and_then(|q| q.prefix.as_ref().map(|p| p.as_str().to_string()))
         })
         .flatten();
         match prefix {
@@ -410,7 +410,7 @@ impl<E: ScriptEngine> NativeFn<E> for AttributeNames {
         };
         let names = id.with_dom(|dom| {
             dom.attributes(id.id())
-                .map(|a| a.name.local.as_ref().to_string())
+                .map(|a| a.name.local.as_str().to_string())
                 .collect::<Vec<_>>()
                 .join(" ")
         });

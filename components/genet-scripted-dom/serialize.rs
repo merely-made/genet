@@ -147,7 +147,7 @@ impl Serialize for SerializableNode<'_> {
                     self.serialize_children(serializer)?;
                 },
                 NodeKind::ProcessingInstruction => {
-                    let target = node.name.as_ref().map_or("", |n| n.local.as_ref());
+                    let target = node.name.as_ref().map_or("", |n| n.local.as_str());
                     serializer
                         .write_processing_instruction(target, node.text.as_deref().unwrap_or(""))?;
                 },

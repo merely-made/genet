@@ -137,7 +137,7 @@ fn matches_compound<D: LayoutDom>(dom: &D, node: D::NodeId, c: &Compound) -> boo
         return false;
     };
     if let Some(tag) = &c.tag {
-        if !qname.local.as_ref().eq_ignore_ascii_case(tag) {
+        if !qname.local.as_str().eq_ignore_ascii_case(tag) {
             return false;
         }
     }
@@ -416,7 +416,7 @@ mod tests {
             .iter()
             .map(|&n| {
                 dom.element_name(n)
-                    .map(|q| q.local.as_ref().to_string())
+                    .map(|q| q.local.as_str().to_string())
                     .unwrap_or_default()
             })
             .collect()

@@ -65,7 +65,7 @@ impl<'a, D: LayoutDom> Names<'a, D> {
     }
 
     fn tag(&self, node: D::NodeId) -> Option<&str> {
-        self.dom.element_name(node).map(|name| name.local.as_ref())
+        self.dom.element_name(node).map(|name| name.local.as_str())
     }
 
     fn labelable(&self, node: D::NodeId) -> bool {

@@ -1422,7 +1422,7 @@ fn collect_livery_links(
     if dom.kind(node) == layout_dom_api::NodeKind::Element
         && dom
             .element_name(node)
-            .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case("a"))
+            .is_some_and(|name| name.local.as_str().eq_ignore_ascii_case("a"))
         && let Some(href) = dom.attribute(node, &Namespace::default(), &LocalName::from("href"))
         && let Some(rect) = cssom.fragment_rect(node)
     {

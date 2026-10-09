@@ -180,7 +180,7 @@ pub(crate) fn copy_state(
         state.dirty_value = source.dirty_value;
         if dom
             .element_name(copy)
-            .is_some_and(|name| name.local.as_ref() == "input")
+            .is_some_and(|name| name.local.as_str() == "input")
         {
             state.checked = source.checked;
             state.dirty_checkedness = source.dirty_checkedness;

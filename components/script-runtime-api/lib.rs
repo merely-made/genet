@@ -386,8 +386,8 @@ impl HostState {
         let is_base = |node| {
             self.dom.is_live(node)
                 && self.dom.element_name(node).is_some_and(|name| {
-                    name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
-                        && name.local.as_ref() == "base"
+                    name.ns.as_str() == "http://www.w3.org/1999/xhtml"
+                        && name.local.as_str() == "base"
                 })
         };
         let subtree_has_base = |root| {
@@ -434,7 +434,7 @@ impl HostState {
                 _ => {},
             }
             if let DomMutation::AttributeChanged { node, name, .. } = change {
-                if name.ns.as_ref().is_empty() && name.local.as_ref() == "href" && is_base(*node) {
+                if name.ns.as_str().is_empty() && name.local.as_str() == "href" && is_base(*node) {
                     any_base_changed = true;
                     href_changed |= cache.first.as_ref().is_some_and(|(first, _)| first == node);
                 }

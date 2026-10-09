@@ -98,7 +98,7 @@ pub(crate) struct FrameState {
 /// meanwhile been destroyed is discovered and dropped.
 pub(crate) struct PendingNavigation {
     target: RealmId,
-    url: String,
+    request: crate::FetchRequest,
     replace: bool,
     referrer_policy: String,
     about_base_url: Option<String>,
@@ -1867,6 +1867,60 @@ pub(crate) fn with_context<E: ScriptEngine, R>(
     Some(f(tree.get_mut(id)?))
 }
 
+/// Resolve an existing navigable only. Auxiliary-context creation remains host-owned.
+pub(crate) fn navigation_target<E: ScriptEngine>(
+    cx: &E::CallCx<'_>,
+    from: RealmId,
+    name: &str,
+) -> Option<RealmId> {
+    let agent = host::<E>(cx)?.borrow().agent.upgrade()?;
+    let agent = agent.borrow();
+    let frames = &agent.frames;
+    if name.is_empty() || name.eq_ignore_ascii_case("_self") {
+        return Some(from);
+    }
+    if frames.tree.is_none()
+        && from == frames.top_realm()
+        && (name.eq_ignore_ascii_case("_parent") || name.eq_ignore_ascii_case("_top"))
+    {
+        return Some(from);
+    }
+    let tree = frames.tree.as_ref()?;
+    let source = *frames.contexts.get(&from)?;
+    let target = if name.eq_ignore_ascii_case("_parent") {
+        tree.parent_of(source).unwrap_or(source)
+    } else if name.eq_ignore_ascii_case("_top") {
+        tree.top_of(source)?
+    } else if name.eq_ignore_ascii_case("_blank") {
+        return None;
+    } else {
+        tree.iter().find(|context| context.name() == name)?.id()
+    };
+    let sandbox = tree.get(source)?.sandbox();
+    if target != source
+        && tree.parent_of(target).is_some()
+        && sandbox.contains(SandboxFlags::NAVIGATION)
+    {
+        let mut ancestor = tree.parent_of(target);
+        while ancestor.is_some_and(|id| id != source) {
+            ancestor = ancestor.and_then(|id| tree.parent_of(id));
+        }
+        if ancestor != Some(source) {
+            return None;
+        }
+    }
+    if target != source
+        && tree.parent_of(target).is_none()
+        && sandbox.contains(SandboxFlags::TOP_NAVIGATION)
+    {
+        return None;
+    }
+    frames
+        .contexts
+        .iter()
+        .find_map(|(&realm, &context)| (context == target).then_some(realm))
+}
+
 /// [`navigate_context`], for the history surface: a traversal whose entry names
 /// a different document is a navigation like any other.
 pub(crate) fn navigate_from_call<E: ScriptEngine>(
@@ -1906,6 +1960,33 @@ fn navigate_context<E: ScriptEngine>(
     input: &str,
     replace: bool,
 ) -> Result<E::Value, E::Error> {
+    navigate_request::<E>(cx, from, target, navigation_get(input), replace)
+}
+
+fn navigation_get(url: &str) -> crate::FetchRequest {
+    crate::FetchRequest {
+        url: url.into(),
+        method: "GET".into(),
+        headers: Vec::new(),
+        body: None,
+        cache: "default".into(),
+        redirect: "follow".into(),
+        mode: "navigate".into(),
+        referrer: String::new(),
+        referrer_policy: String::new(),
+        credentials: "include".into(),
+        integrity: String::new(),
+    }
+}
+
+/// Queue a complete document request on the existing navigation lifecycle.
+pub(crate) fn navigate_request<E: ScriptEngine>(
+    cx: &mut E::CallCx<'_>,
+    from: RealmId,
+    target: RealmId,
+    mut request: crate::FetchRequest,
+    replace: bool,
+) -> Result<E::Value, E::Error> {
     let Some(agent) = host::<E>(cx).and_then(|h| h.borrow().agent.upgrade()) else {
         return Ok(cx.undefined());
     };
@@ -1940,8 +2021,9 @@ fn navigate_context<E: ScriptEngine>(
     // so a fragment input is not mistaken for a new opaque document URL.
     let url = crate::fetch::resolve_against(
         Some(source_base.as_deref().unwrap_or(NO_DOCUMENT_URL)),
-        input,
+        &request.url,
     );
+    request.url = url.clone();
     // A `javascript:` URL is not a navigation: HTML evaluates it against the
     // target's Document and, whatever it returns, never unloads, never joins
     // the session history and never fires `load`. genet does not evaluate one
@@ -1950,10 +2032,14 @@ fn navigate_context<E: ScriptEngine>(
         return Ok(cx.undefined());
     }
     let current = target_base.unwrap_or_else(|| NO_DOCUMENT_URL.into());
-    if without_fragment(&url) == without_fragment(&current) && url != current {
+    if request.method == "GET"
+        && request.body.is_none()
+        && without_fragment(&url) == without_fragment(&current)
+        && url != current
+    {
         return navigate_fragment::<E>(cx, &agent, target, &url, &current, replace);
     }
-    if url == current && url.contains('#') {
+    if request.method == "GET" && request.body.is_none() && url == current && url.contains('#') {
         // Same URL including the fragment: HTML performs the navigation but
         // fires no `hashchange`.
         return Ok(cx.undefined());
@@ -1963,7 +2049,7 @@ fn navigate_context<E: ScriptEngine>(
     // the teardown both take. A top-level context has no container, so it takes
     // the route next door, which drains on the bootstrap realm instead.
     let Some(container) = container else {
-        return navigate_top_level::<E>(cx, &agent, target, &url, replace, source_base);
+        return navigate_top_level::<E>(cx, &agent, target, request, replace, source_base);
     };
     let referrer_policy = {
         let a = agent.borrow();
@@ -1979,7 +2065,7 @@ fn navigate_context<E: ScriptEngine>(
         .pending_navigations
         .push(PendingNavigation {
             target,
-            url,
+            request,
             replace,
             referrer_policy,
             about_base_url: source_base,
@@ -2055,10 +2141,11 @@ fn navigate_top_level<E: ScriptEngine>(
     cx: &mut E::CallCx<'_>,
     agent: &Rc<RefCell<crate::AgentState>>,
     target: RealmId,
-    url: &str,
+    request: crate::FetchRequest,
     replace: bool,
     about_base_url: Option<String>,
 ) -> Result<E::Value, E::Error> {
+    let url = &request.url;
     // HTML abandons a navigation whose URL does not parse. A child could still
     // be pointed at an opaque string and reach the loader with it; the top-level
     // context cannot - there is no container to rebuild it from - so an input
@@ -2097,7 +2184,7 @@ fn navigate_top_level<E: ScriptEngine>(
         .pending_navigations
         .push(PendingNavigation {
             target,
-            url: url.to_owned(),
+            request,
             replace,
             referrer_policy: String::new(),
             about_base_url,
@@ -2182,7 +2269,7 @@ fn perform_navigation<E: ScriptEngine>(
 ) -> Result<(), E::Error> {
     let PendingNavigation {
         target,
-        url,
+        request,
         replace,
         referrer_policy,
         about_base_url,
@@ -2227,12 +2314,73 @@ fn perform_navigation<E: ScriptEngine>(
             host.script_loader.clone(),
         )
     };
-    let blank =
-        url::Url::parse(&url).is_ok_and(|url| url.scheme() == "about" && url.path() == "blank");
+    let mut url = request.url.clone();
+    let plain_get = request.method == "GET"
+        && request.body.is_none()
+        && request.headers.is_empty()
+        && request.cache == "default"
+        && request.redirect == "follow"
+        && request.integrity.is_empty()
+        && request.referrer.is_empty()
+        && request.referrer_policy.is_empty()
+        && ((request.mode == "navigate" && request.credentials == "include")
+            || (request.mode == "cors" && request.credentials == "same-origin"));
+    let blank = plain_get
+        && url::Url::parse(&url).is_ok_and(|url| url.scheme() == "about" && url.path() == "blank");
+    // A document loader remains authoritative. Metadata-aware loaders preserve
+    // redirects/status; source-only loaders keep their existing GET route.
+    let response = if plain_get && !blank {
+        loader
+            .as_ref()
+            .and_then(|loader| loader.load_document(&url))
+    } else {
+        None
+    };
     let source = if blank {
         Some(String::new())
+    } else if let Some(source) = (plain_get && response.is_none())
+        .then(|| loader.as_ref().and_then(|loader| loader.load(&url)))
+        .flatten()
+    {
+        Some(source)
     } else {
-        loader.as_ref().and_then(|loader| loader.load(&url))
+        let response = if let Some(response) = response {
+            response
+        } else {
+            let Some(fetcher) = seams.fetch.as_ref() else {
+                return Ok(());
+            };
+            // No agent or document borrow survives the host's blocking call.
+            fetcher.fetch_blocking(request)
+        };
+        if response.network_error
+            || matches!(response.status, 204 | 205)
+            || matches!(
+                response.response_type.as_str(),
+                "opaque" | "opaqueredirect" | "error"
+            )
+        {
+            return Ok(());
+        }
+        if !response.url.is_empty() {
+            url = response.url;
+        }
+        let charset = response
+            .headers
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case("content-type"))
+            .and_then(|(_, value)| {
+                value.split(';').skip(1).find_map(|parameter| {
+                    let (name, value) = parameter.trim().split_once('=')?;
+                    name.trim()
+                        .eq_ignore_ascii_case("charset")
+                        .then(|| value.trim().trim_matches('"'))
+                })
+            });
+        let encoding = charset
+            .and_then(|label| encoding_rs::Encoding::for_label(label.as_bytes()))
+            .unwrap_or(encoding_rs::UTF_8);
+        Some(encoding.decode(&response.body).0.into_owned())
     };
     // The new document's origin, and the history join. HTML's initial
     // `about:blank` replaces; everything else obeys the caller.
@@ -2369,3 +2517,7 @@ pub(crate) fn install_frame_surface<E: ScriptEngine>(
     surface.eval(include_str!("frames.js"))?;
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "frames_navigation_tests.rs"]
+mod navigation_requests_unit;

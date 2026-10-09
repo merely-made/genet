@@ -126,19 +126,46 @@ mod tests {
     }
 }
 
+/// A host-owned request, independent of the runtime and transport implementation.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ResourceRequest {
+    pub url: String,
+    pub method: String,
+    pub headers: Vec<(String, String)>,
+    pub body: Option<Vec<u8>>,
+    pub cache: String,
+    pub redirect: String,
+    pub mode: String,
+    pub referrer: String,
+    pub referrer_policy: String,
+    pub credentials: String,
+    pub integrity: String,
+}
+
+impl ResourceRequest {
+    /// Requests a URL-only host can honor without silently losing semantics.
+    pub fn is_plain_get(&self) -> bool {
+        self.method == "GET"
+            && self.body.is_none()
+            && self.headers.is_empty()
+            && self.cache == "default"
+            && self.redirect == "follow"
+            && self.mode == "cors"
+            && self.referrer.is_empty()
+            && self.referrer_policy.is_empty()
+            && self.credentials == "same-origin"
+            && self.integrity.is_empty()
+    }
+}
+
 /// One host-owned resource response. Engines receive the final identity and a
 /// bounded metadata surface, never a transport handle or mutable cache entry.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ResourceResponse {
-    /// Identity after the host's redirect policy has finished.
     pub final_url: String,
-    /// The response `Content-Type` when the host obtained one.
     pub content_type: Option<String>,
-    /// Fully collected resource bytes. Streaming remains a host concern at this
-    /// synchronous document-session boundary.
     pub bytes: Vec<u8>,
 }
-
 impl ResourceResponse {
     pub fn new(final_url: impl Into<String>, bytes: Vec<u8>) -> Self {
         Self {
@@ -147,10 +174,51 @@ impl ResourceResponse {
             bytes,
         }
     }
-
     pub fn with_content_type(mut self, content_type: impl Into<String>) -> Self {
         self.content_type = Some(content_type.into());
         self
+    }
+}
+
+/// Metadata from the request-aware fetch seam. Kept distinct from the legacy
+/// resource record so existing host struct literals and destructuring stay valid.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ResourceFetchResponse {
+    pub final_url: String,
+    pub content_type: Option<String>,
+    pub bytes: Vec<u8>,
+    pub status: u16,
+    pub status_text: String,
+    pub headers: Vec<(String, String)>,
+    pub response_type: String,
+    pub redirected: bool,
+}
+impl From<ResourceResponse> for ResourceFetchResponse {
+    fn from(response: ResourceResponse) -> Self {
+        let headers = response
+            .content_type
+            .as_ref()
+            .map(|value| vec![("content-type".into(), value.clone())])
+            .unwrap_or_default();
+        Self {
+            final_url: response.final_url,
+            content_type: response.content_type,
+            bytes: response.bytes,
+            status: 200,
+            status_text: "OK".into(),
+            headers,
+            response_type: "basic".into(),
+            redirected: false,
+        }
+    }
+}
+impl From<ResourceFetchResponse> for ResourceResponse {
+    fn from(response: ResourceFetchResponse) -> Self {
+        Self {
+            final_url: response.final_url,
+            content_type: response.content_type,
+            bytes: response.bytes,
+        }
     }
 }
 
@@ -187,11 +255,78 @@ pub trait ResourceFetcher {
     /// Fetch `url` to bytes, or `None` on failure / unsupported scheme.
     fn fetch(&self, url: &str) -> Option<Vec<u8>>;
 
+    /// Rich requests are optional. URL-only implementations must decline any
+    /// request whose semantics their legacy URL seam cannot preserve.
+    fn fetch_request(&self, request: &ResourceRequest) -> Option<ResourceFetchResponse> {
+        if request.is_plain_get() {
+            self.fetch_response(&request.url).map(Into::into)
+        } else {
+            None
+        }
+    }
+
     /// Fetch `url` with its redirect-final identity and response type. Existing
     /// byte-only hosts remain valid: their requested URL is the final identity and
     /// their content type is unknown until they opt into this richer response.
     fn fetch_response(&self, url: &str) -> Option<ResourceResponse> {
         self.fetch(url)
             .map(|bytes| ResourceResponse::new(url, bytes))
+    }
+}
+
+#[cfg(test)]
+mod request_compatibility {
+    use super::*;
+    use std::cell::Cell;
+    struct UrlOnly(Cell<usize>);
+    impl ResourceFetcher for UrlOnly {
+        fn fetch(&self, _: &str) -> Option<Vec<u8>> {
+            self.0.set(self.0.get() + 1);
+            Some(vec![0, 128, 255])
+        }
+    }
+    fn plain() -> ResourceRequest {
+        ResourceRequest {
+            url: "https://host.test/resource".into(),
+            method: "GET".into(),
+            headers: vec![],
+            body: None,
+            cache: "default".into(),
+            redirect: "follow".into(),
+            mode: "cors".into(),
+            referrer: String::new(),
+            referrer_policy: String::new(),
+            credentials: "same-origin".into(),
+            integrity: String::new(),
+        }
+    }
+    #[test]
+    fn url_only_default_serves_get_and_declines_semantic_changes() {
+        let fetcher = UrlOnly(Cell::new(0));
+        let response = fetcher.fetch_request(&plain()).unwrap();
+        assert_eq!(response.bytes, [0, 128, 255]);
+        assert_eq!(response.final_url, "https://host.test/resource");
+        for change in 0..10 {
+            let mut request = plain();
+            match change {
+                0 => request.method = "POST".into(),
+                1 => request.body = Some(vec![]),
+                2 => request
+                    .headers
+                    .push(("content-type".into(), "text/plain".into())),
+                3 => request.cache = "no-store".into(),
+                4 => request.redirect = "manual".into(),
+                5 => request.mode = "navigate".into(),
+                6 => request.referrer = "https://host.test/page".into(),
+                7 => request.referrer_policy = "origin".into(),
+                8 => request.credentials = "include".into(),
+                _ => request.integrity = "sha256-example".into(),
+            }
+            assert!(
+                fetcher.fetch_request(&request).is_none(),
+                "changed field {change} cannot be discarded"
+            );
+        }
+        assert_eq!(fetcher.0.get(), 1);
     }
 }

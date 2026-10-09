@@ -830,7 +830,34 @@ const PLATFORM_BOOTSTRAP: &str = r#"
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Runtime;
+    use crate::{FetchHandler, FetchOutcome, FetchRequest, Runtime};
+    use std::{cell::RefCell, rc::Rc};
+
+    #[derive(Clone, Default)]
+    struct DocumentFetch(Rc<RefCell<Vec<(String, String)>>>);
+
+    impl FetchHandler for DocumentFetch {
+        fn fetch(&self, request: FetchRequest) -> FetchOutcome {
+            self.0
+                .borrow_mut()
+                .push((request.method, request.url.clone()));
+            let body = match request.url.as_str() {
+                "https://example.com/c.html" => b"<p id=marker>document c</p>".to_vec(),
+                "https://example.com/d.html" => b"<p id=marker>document d</p>".to_vec(),
+                _ => return FetchOutcome::network_error(),
+            };
+            FetchOutcome {
+                network_error: false,
+                status: 200,
+                status_text: "OK".into(),
+                response_type: "basic".into(),
+                url: request.url,
+                redirected: false,
+                headers: vec![("content-type".into(), "text/html".into())],
+                body,
+            }
+        }
+    }
 
     /// `location` reflects the document URL (`HostState::base_url`), parsed into
     /// the WHATWG components.
@@ -883,6 +910,9 @@ mod tests {
         let mut rt = Runtime::<E>::new().expect("runtime");
         rt.set_base_url("https://example.com/a/b.html")
             .expect("base url");
+        let fetch = DocumentFetch::default();
+        rt.set_fetch_handler(Box::new(fetch.clone()));
+        let initial_realm = rt.top_realm();
         rt.eval("location.assign('../c.html'); console.log(location.href);")
             .expect("assign script");
         assert_eq!(
@@ -891,6 +921,11 @@ mod tests {
             "the navigation is queued; this read precedes it"
         );
         rt.run_event_loop(16).expect("drain the navigation");
+        let c_realm = rt.top_realm();
+        assert_ne!(
+            c_realm, initial_realm,
+            "the first response opened a new realm"
+        );
         rt.eval("console.log(location.href); location.href = 'd.html';")
             .expect("read and reassign");
         assert_eq!(
@@ -898,13 +933,67 @@ mod tests {
             vec!["https://example.com/c.html"],
             "the first navigation ran, and its document's console is its own"
         );
+        let c_document = rt.eval("document.URL").expect("document URL");
+        assert_eq!(
+            rt.value_to_string(&c_document).unwrap(),
+            "https://example.com/c.html"
+        );
+        let c_content = rt
+            .eval("document.getElementById('marker').textContent")
+            .expect("loaded document c");
+        assert_eq!(rt.value_to_string(&c_content).unwrap(), "document c");
+        let c_history = rt.eval("String(history.length)").expect("history length");
+        assert_eq!(rt.value_to_string(&c_history).unwrap(), "2");
         rt.run_event_loop(16).expect("drain the second navigation");
+        assert_ne!(
+            rt.top_realm(),
+            c_realm,
+            "the second response opened a new realm"
+        );
         rt.eval("console.log(location.href); console.log(location.pathname);")
             .expect("read back");
         assert_eq!(
             rt.host().borrow().console,
             vec!["https://example.com/d.html", "/d.html"],
             "the second navigation moved the URL and replaced the document again"
+        );
+        let d_document = rt.eval("document.URL").expect("document URL");
+        assert_eq!(
+            rt.value_to_string(&d_document).unwrap(),
+            "https://example.com/d.html"
+        );
+        let d_content = rt
+            .eval("document.getElementById('marker').textContent")
+            .expect("loaded document d");
+        assert_eq!(rt.value_to_string(&d_content).unwrap(), "document d");
+        let d_history = rt.eval("String(history.length)").expect("history length");
+        assert_eq!(rt.value_to_string(&d_history).unwrap(), "3");
+        assert_eq!(
+            &*fetch.0.borrow(),
+            &[
+                ("GET".into(), "https://example.com/c.html".into()),
+                ("GET".into(), "https://example.com/d.html".into()),
+            ]
+        );
+    }
+
+    /// A request without a document loader or fetch transport cannot replace
+    /// the current document or join session history.
+    fn location_assign_without_transport_keeps_document<E: ScriptEngine>() {
+        let mut rt = Runtime::<E>::new().expect("runtime");
+        rt.set_base_url("https://example.com/a/b.html")
+            .expect("base url");
+        rt.eval("globalThis.savedDocument = document; location.assign('../missing.html');")
+            .expect("assign script");
+        let original_realm = rt.top_realm();
+        rt.run_event_loop(16).expect("drain failed navigation");
+        assert_eq!(rt.top_realm(), original_realm);
+        let state = rt
+            .eval("[location.href, document.URL, savedDocument === document, history.length].join('|')")
+            .expect("current document");
+        assert_eq!(
+            rt.value_to_string(&state).unwrap(),
+            "https://example.com/a/b.html|https://example.com/a/b.html|true|1"
         );
     }
 
@@ -1103,6 +1192,10 @@ mod tests {
         location_assign_updates_url::<script_engine_boa::BoaEngine>();
     }
     #[test]
+    fn location_assign_without_transport_keeps_document_on_boa() {
+        location_assign_without_transport_keeps_document::<script_engine_boa::BoaEngine>();
+    }
+    #[test]
     fn text_fragment_is_hidden_from_script_urls_on_boa() {
         text_fragment_is_hidden_from_script_urls::<script_engine_boa::BoaEngine>();
     }
@@ -1115,6 +1208,11 @@ mod tests {
     #[test]
     fn location_assign_updates_url_on_nova() {
         location_assign_updates_url::<script_engine_nova::NovaEngine>();
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn location_assign_without_transport_keeps_document_on_nova() {
+        location_assign_without_transport_keeps_document::<script_engine_nova::NovaEngine>();
     }
     #[cfg(not(target_arch = "wasm32"))]
     #[test]

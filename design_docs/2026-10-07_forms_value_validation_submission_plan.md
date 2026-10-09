@@ -14,11 +14,12 @@ Cleromancy's current public-pin integration passes 23 ThinkPad tests at
 Phase B and C retain separate checkpoints, and sibling adoption of Mere's new
 Forms dependency family remains distinct from F5 mechanical compatibility.
 
-**Phase B, in progress:** Mark requested "Please continue with forms!" on
-2026-10-08 after the completed Phase A publication report. This authorizes
-constraint validation through Checkpoint B. Submission remains behind that
-checkpoint. Phase B starts from clean published main `6cb2284a33d`; builds and
-matched gates remain on ThinkPad to relieve Windows memory pressure.
+**Current checkpoint, 2026-10-09:** Phase B is qualified and published on main
+at `a0d95ebd6e20220e3430870365112a608b4f83ff`. Mark approved proceeding with
+Phase C after its publication report. Submission work is in progress under
+C5, with builds and matched gates on ThinkPad. The Phase C execution section
+below owns current tasks and done-conditions; earlier Phase B progress entries
+remain historical evidence.
 
 The eleven-crate 1,943-pass receipt belongs to Genet
 `b8a3ec1d6abe88e07438ca4d53b9ca4d2b92111d`, with zero failures and nine ignores.
@@ -1704,3 +1705,94 @@ are qualified projections, not headed assistive-technology validation. Existing
 picker/widget interaction gaps and the remaining WPT failures stay visible.
 These are scoped results; a browser-wide WPT percentage was not refreshed.
 Phase C submission requires the next human checkpoint.
+
+## Phase C execution, 2026-10-09
+
+**Status:** in progress. Mark approved proceeding after the published Checkpoint B report with “Proceed, orchestrate at will”. Checkpoint B is published at `a0d95ebd6e20220e3430870365112a608b4f83ff`; remote main and a clean checkout match. Its 963 passing tests, six explicitly named baseline Livery failures and four existing ignores remain the starting evidence. Root owns qualification and publication on main under the carried approvals. No subsequent feature lane is authorized by this continuation.
+
+**Goal:** complete C5 submission using native live control state, exact charset-dependent bytes and existing browsing-context navigation. The brief remains the spec, together with current HTML, URL, Encoding and XMLHttpRequest standards. The two external reconnaissance reports at `Code/testing/genet/forms/thinkpad/phase-c-{native,navigation}-recon.md` record verified seams; they do not substitute for execution evidence.
+
+### Global Constraints
+
+- Source authorities are WHATWG HTML, URL, Encoding, XMLHttpRequest, their normative Unicode data and unchanged WPT. Original implementation code is written from those algorithms; no unapproved source copying.
+- Use the already-locked `encoding_rs` and `url`; only the original spec's approved `encoding_rs` workspace edge may be added to native scripted-dom so both hosts share the encoder. No new packages, versions, provider identities or other dependency edges. Preserve the original ignored Cargo.lock as a baseline and audit/freeze the sole native dependency-list change.
+- Root owns every build, test launch, commit and publication. Workers do not launch Cargo or edit sources during an active source-bound gate. Gates use installed `+1.98.1`, `--release --locked -j1`, release debug0, incremental0, and test-threads1, after the Cargo/rustc owner guard.
+- Continue in the current clean main checkout, as already approved. Create isolation only for an actual collision. No provider or corpus/expectation edits.
+- Native DOM state owns current control values and selected-file bytes. Scripts project state and dispatch events; there is no page-script-owned submission value model. No arena/host borrow across authored JS callbacks.
+- Existing LayoutDom implementors must not acquire mandatory new methods. File state can remain native arena-only; optional shared projection accessors require defaults.
+- Matched Phase C captures cover all33 form-submission-0 records and all46 encode-form sources /584 variants per engine. The brief's584 total includes five base files absent from the literal trailing-hyphen glob. Preserve ERROR partial rows and exact duplicate occurrences. Require zero old pass losses in Phase A/B and CSS maps.
+- New auxiliary windows, a native file picker and custom-element form association are existing capability gaps. Preserve them explicitly; implement existing-context targets, programmatic selected files and ordinary native controls completely. No fabricated new-window navigation.
+
+### Review Focus
+
+1. Listener reentrancy/mutations must clear per-form construction/submission flags and use the final mutable formdata list without holding native borrows.
+2. Files retain exact binary bytes and JS identity through selected lists, FormData, adoption and events; realm teardown must not orphan adopted selections.
+3. Charset conversion, newline normalization, numeric-reference replacement and multipart header escaping follow independently derived byte fixtures.
+4. POST/redirect requests retain method, body, headers and initiator policies through host adapters; default URL-only hosts decline unsupported requests.
+5. Target selection, detached contexts, canceled validation/submit/click and consecutive planned submissions preserve the existing WindowProxy/lifecycle contract.
+
+### Task 1: request-aware document navigation
+
+**Files:** `components/genet-host-api/lib.rs`, `components/genet-scripted/resource_bridge.rs`, `components/script-runtime-api/frames.rs`, `ports/ortet/src/fetch.rs`, `components/script-runtime-api/tests/navigation_requests.rs`; existing navigation and bridge tests as needed. No changes to submission/FormData surfaces in this task.
+
+**Produces:** a host-owned ResourceRequest record carrying URL, method, headers, body and existing fetch policy fields; optional `ResourceFetcher::fetch_request(&ResourceRequest) -> Option<ResourceFetchResponse>` with a distinct richer response record whose default preserves plain GET compatibility and declines unsupported requests; request-aware `frames::navigate_request<E>(cx, from, target, request: FetchRequest, replace)` alongside the ordinary URL wrapper. The PendingNavigation owns its request until the existing navigation task executes. Product adapters forward rather than reinterpret method/body. The response final URL becomes the document/history identity. Extend named target resolution through existing contexts without inventing auxiliary windows. Keep script/frame loading behavior and same-document GET navigation intact.
+
+- [x] Write real both-engine failing navigation tests using recording FetchHandler: POST bytes `[0,128,255]` and Content-Type survive, redirected final URL binds document and history, named child target preserves its WindowProxy, no loader-only downgrade. Add a product bridge recording ResourceFetcher test for rich forwarding and a URL-only default refusal test. Assert independent literal values, not helper output.
+- [x] Hand root the exact red Cargo commands and pause product writes until their receipts. Root runs runtime integration test and bridge fixture filters under the serial gate contract.
+- [x] Implement request queue, network fallback and host forwarding. GET fragment branches must not consume POST; release borrows before host fetch. Do not replace the existing navigation lifecycle.
+- [x] Root qualified new fixtures and navigation/top-level/frame lifecycle plus host library:74passes; Cargo targetmetadata confirms private fixture is not auto-discovered; Ortet check passed. Scoped review resolved product loader redirect loss. Commit `0d86542939af8f946136c5b289c8338679cedade` owns Task1 only. Task3 completed the full runtime suite:195 library and674 integration passes across57 groups, zero failures/ignores. The earlier interrupted receipt remains preserved and unqualified.
+
+### Task 2: native entries and charset encoders
+
+**Files:** new `components/genet-scripted-dom/forms_submission.rs` and native directionality/classifier files as needed, arena `lib.rs`, `forms.rs`, `forms_validation.rs`; new native `form_encoding.rs`, Unicode source/license/generator/provenance and runtime `form_encoding.rs` re-export. Task1 interfaces are consumed without rewriting navigation.
+
+**Produces:** public native FormFile /FormEntry /FormEntryValue records with stable file identity and immutable bytes; node-owned selected-file accessors; `form_submission_entries(form, submitter, encoding_name, image_position)` preserving native association/tree order and successful-control filtering; shared native pure encoding selection/urlencoded/text-plain/multipart functions returning exact bytes/content type, re-exported by runtime for scripted consumers. Keep FormControlState's existing capture layout intact. Expose shared disabled/datalist helpers within the arena rather than duplicate algorithms.
+
+- [x] Add native failing tests for external association/order, disabled first-legend exception, datalist exclusion, current/default separation, checked controls, submitter/image entries, selected disabled options, empty/multiple files and reset/clone/adoption. Add pure byte fixtures for spaces/plus/ampersand/tilde, CR/LF, duplicates, windows-1252/Shift_JIS, unrepresentable scalars, UTF16 output fallback, multipart header CR/LF/quote and binary `[0,128,255]`.
+- [x] Root executes applicable native and encoder red filters before production code. New APIs may be initially expressed through test-local adapters to reproduce semantic missing behavior; compile errors alone are not red evidence.
+- [x] Implement native traversal and pure encoders from standards. `_charset_` takes the supplied encoding; FormData constructors will supply UTF-8. File content is never converted through text. Directionality uses actual native ancestry/auto rules for dirname entries. Generate classification data from official Unicode17 DerivedBidiClass with its license, source hash, generator and exhaustive scalar validation; no new dependency edge or copied implementation. Carried network approval permits fetching normative data.
+- [x] Root executes green filters and full native DOM/runtime libraries. Report exports/signatures and exact fixture evidence for Task3. Only the approved native encoding_rs dependency-list change is permitted; root audits unchanged package/version/checksum/provider sets and freezes both locks.
+
+### Task 3: document encoding through real loads
+
+**Files:** new shared native `components/genet-scripted-dom/html_encoding.rs` and native document metadata in `lib.rs`; runtime `lib.rs`, `frames.rs`, DOM document bindings and focused integration tests; scripted document/livery source loading; unscripted Livery source preparation and document-resource frame loading as needed; WPT runner initial document source paths in `ports/genet-wpt/src/{net,testharness,harness,main}.rs`. These are byte-to-document seams, not form bindings. Use the native approved encoding_rs owner. Read `Code/testing/genet/forms/thinkpad/phase-c-document-encoding-recon.md` for verified paths and current standards.
+
+**Produces:** one shared HTML byte decoder preserving source, selected canonical document encoding and confidence; native encoding per Document node, with UTF-8 defaults for already-Unicode documents. Carry chosen encoding into initial/top/frame document parsing before authored scripts execute, and preserve it through navigation. Form adoption observes destination document encoding. Existing public String-source entrypoints and legacy host records retain compatibility through additive optional helpers/setters, without new dependency edges.
+
+- [x] Add meaningful failing byte/document fixtures: BOM versus conflicting header/meta, supported header versus meta, invalid header fallback, comments and false meta in tag attributes, duplicate attribute rules and http-equiv pragma, meta UTF-16/x-user-defined adjustments, configured fallback, real EUC-KR/Shift_JIS bytes and canonical characterSet. Add both-engine initial-load/navigation/secondary document/adoption assertions. The actual WPT initial netfetch loader must be exercised, not just a pure decoder. No compile-error-only RED.
+- [x] Root runs RED while workers pause. Implement normative BOM/header/prescan precedence and at most first1024-byte prescan using original code, not regex shortcuts. Preserve Encoding::decode's actual selected encoding. User/default fallback is explicit input/configuration. Identify confidence and the late declaration/parser-restart limitation precisely; do not claim full Encoding lane conformance.
+- [x] Runtime/document constructors initialize metadata before parser scripts. DOMParser and createHTMLDocument remain UTF-8 Unicode inputs; srcdoc/blank special rules are verified against primary standards. No mandatory LayoutDom methods or added mandatory fields on public ResourceResponse/SessionSpawnRequest. Do not parse live DOM meta as a substitute for original byte decoding.
+- [x] Root runs GREEN, complete covering libraries/integration and WPT loader checks. Report exact exports/source gates for the subsequent FormData/submission worker. Preserve initial-load/final-URL identity and snapshot-template source metadata.
+
+### Task 4: FormData and submission bindings
+
+**Files:** new runtime `form_data.rs` / `form_submission.rs` as appropriate; `fetch.rs`, runtime `lib.rs`, `dom/mod.rs`, `dom/form_controls.rs`, `dom/bootstrap.js`; `tests/forms_submission.rs` and byte-safe FormData Fetch integration fixtures. Consume Task2 records/encoders and Task1 navigation. Extend the shared native encoder with an efficient deterministic collision-free boundary selection helper consumed by scripted and unscripted multipart callers. Select a valid RFC boundary absent from the actual encoded part headers/values/binary bytes before adding delimiters; no clock/counter-only collision assumption or new entropy dependency. Preserve caller-supplied primitive for literal byte fixtures. Include actual delimiter collisions and chunk-spanning bytes; do not search intended delimiters in the final body.
+
+**Produces:** native entry-list bridge and private branded FormData/File storage; `FormData(form, submitter)`, selected FileList/DataTransfer bridge necessary for programmatic file assignment; SubmitEvent/FormDataEvent; form.submit/requestSubmit; private activation and implicit-submission hooks callable by native hosts. Methods perform receiver/submitter/owner validation before work. Share native records, preserve cross-realm File identity and mutable formdata event lists, and use encoding_rs for submission bytes. Fetch(fd) uses UTF-8 and the same binary-safe multipart primitive.
+
+- [x] Write both-engine semantic red fixtures for constructor entries, duplicate set order/live iterators, Blob-to-File identity, shared formdata edits, recursive construction cleanup, cross-realm brands/adoption, submit() bypass versus requestSubmit validation/event behavior, canceled events, submitter overrides, `_charset_`, GET query replacement/fragment and POST binary body.
+- [x] Root executes red on unchanged production and freezes each control. Implement only after meaningful failures, preserving constructor exposure and event initialization semantics. No page globals or mutable `_l`/`_b` properties are authority.
+- [x] Complete shared native construction/encoder/navigation bridges, captured per-form flags and trusted UA event construction. Recheck connectedness/ownership after listener mutations as specified; multiple planned submissions replace the form's earlier queued task. Keep every callback outside native borrows. Share the native guarded implicit-submission decision and disabled projection between runtime and script-free hosts, so default-button tree order and normalized blocker types have one authority.
+- [ ] Root executes green and full runtime libraries/integration suite, including existing Fetch binary/realm/navigation tests. Report test counts and movement causes; retain every genuine limitation.
+
+### Task 5: native activation and final qualification
+
+**Host boundaries:** the native request-aware factory preserves full request fields through its chosen fetcher. The browser host uses an explicit limited source-fetch policy for exact bytes and representable request fields, because browser RequestInit rejects navigate mode and owns origin/referrer/forbidden headers. Known unsupported intent declines before transport; real browser receipts are separate from wasm compilation. Scripted focus/key routing for submission is in scope; existing script-free textarea editing is preserved, while absent scripted text editing and physical child hit geometry remain explicit. Existing named-child form navigation still requires qualification.
+
+**Files:** `components/genet-scripted/livery.rs`, `components/genet-documents/src/engines/scripted.rs`, `components/genet-documents/src/engines/livery.rs`, `components/shared/document-session-api/src/session_engine.rs`; public host/session fixtures and Genet-owned Ortet shell/web submission routes and necessary existing web-sys features. Preserve legacy session submission/effect/input shapes. Add a distinct encoded submission record and optional default DocumentSession consuming accessor, paired with the latest input and cleared on the next input. Add an optional request-aware SessionEngine spawn seam if needed to retain the selected factory and its fetcher. Ortet consumes authoritative query/body bytes through actual transport, without a second GET after POST. Unsupported targets/transports decline explicitly. Reuse native entries/encoders; no second algorithm. Mere is outside scope and its legacy route limitations remain explicit. Canonical plan/index/ledger updated by root.
+
+- [ ] Add failing physical click/Enter fixtures for default submitter, disabled default button, multiple implicit blockers, single eligible text control, textarea newline, click cancellation, child-frame request routing and byte-exact session submission.
+- [ ] Root executes red, then connect scripted native events to the private activation hook and unscripted sessions to the shared native algorithm. Use actual top-session host policy; keep paint untouched unless a concrete defect requires it.
+- [ ] Root qualifies seven required crates, runtime integration, both adapters and native host/session fixtures under serial gates; permit only the six recorded baseline Livery failures, retain ignores separately. Freeze actual final source/lock/resources/providers and build a fresh netfetch runner.
+- [ ] Capture matched before/after all33 submission and584 encoding records on both engines using live WPT server and original deadlines. Preserve eight PhaseB maps, original20 and corrected20 controls, and sixteen CSS slices. Attribute every file/assertion movement by unchanged source/name/occurrence, keeping partial ERROR/timeouts separate. Inspect zero oldpassloss and all source/build/resource guards.
+- [ ] Fresh whole-change review, resolve findings, reconcile canonical docs, commit/push qualified owned work under carried authority. Report Checkpoint C with hashes, fixtures/controls, WPT attribution, per-crate counts, limits and preserved evidence. Stop after this checkpoint.
+
+### Phase C qualified progress, 2026-10-09
+
+Task1 request-aware navigation is committed at `0d86542939af8f946136c5b289c8338679cedade`; the independent transport-supplied location fixture follow-up is `7fd3ddd0eaece16f0b3341d47790becc56ff785e`. Task2 native entries, Unicode17 directionality and shared encoders are committed at `80d481529c3e96775185f069755e7b0c7ade87ce`. Its shared native Auto-state button predicate is consumed by the remaining work. The locked879 package identities/versions/sources/checksums remain fixed; the sole approved native encoding_rs dependency-list edge changes lock SHA from `853946ec7ee2869dc61d87fc8fd9a407b2e22f7b5a1ac5e1d7b6fef7cf786a22` to `36a2ca937af642376141be6d01099a27476843974438678e9ac72f6a1a9bbba4`.
+
+Task3 document encoding is committed at `c94733cea4bdb79f558277cc295b84d35d112092`. It carries canonical encoding/confidence through raw HTML loads, realms, navigation, native/prepared frames and actual WPT loader/template paths. First1024-byte prescan is supported; late declaration parser restart is not claimed. Independent semantic RED57 plus review-fix RED8 preceded production. Two Important findings, MIME empty-unquoted parameter handling and successful empty frame responses, were fixed and scoped re-reviewed clean. Root verified all16 committed product Git blobs against the qualified source, all63 frozen original scenario/helper bodies and both fix modules, and raw receipt hashes. Focused65; covering native168, full runtime869 (195 unit plus674 integration), scripted145, documents70, resources18 and WPT80 pass, zero failures. Three existing WPT ignores remain separate. Audit: `/home/markik/Code/testing/genet/forms/thinkpad/phase-c-task3-final-source-receipt-audit-v1.json`; Git proof: `phase-c-task3-postcommit-git-blob-verification-v1.json`.
+
+Task4 FormData and submission bindings are implemented and scoped re-reviewed: F1-F7 and the Nova private-alias qualification finding are addressed, with no new Critical or Important finding. Root verified 212 focused tests and 187 full native tests, zero failures or ignores, on frozen source. The full runtime suite was interrupted during compilation on Mark's request to commit Genet for the physics `.as_str()` conversion; its immutable receipt has exit -2, unchanged source and zero executed test summaries. Full runtime qualification remains pending, so Task4 and Checkpoint C are not declared complete. Exact source and partial evidence remain under `/home/markik/Code/testing/genet/forms/thinkpad/phase-c-task4-*`.
+
+Task5 host/session preflight is ready, with optional typed current-address/effective-base observations, actual Ortet driver synchronization and bounded redirect-fragment repairs inventoried. Its 85 planned fixtures have not been written or run, and production remains unreleased. Final matched PhaseC captures, whole-change review and Checkpoint C publication remain pending. Root owns canonical documents and final qualification; no PhaseC push yet.

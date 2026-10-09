@@ -300,6 +300,7 @@ impl<E: ScriptEngine> Runtime<E> {
 /// HTTP tokens — each a `SyntaxError` `DOMException`.
 const WEBSOCKET_BOOTSTRAP: &str = r#"
 (function() {
+  var FormOps = globalThis.__formsPrivate;
   var CONNECTING = 0, OPEN = 1, CLOSING = 2, CLOSED = 3;
   var sockets = Object.create(null);
   var nextId = 1;
@@ -339,11 +340,7 @@ const WEBSOCKET_BOOTSTRAP: &str = r#"
     }
     return out;
   }
-  function bytesToBinaryString(bytes) {
-    var s = '';
-    for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i] & 255);
-    return s;
-  }
+  function bytesToBinaryString(bytes) { return FormOps.binary(bytes); }
 
   // An `on<type>` property with [TreatNonCallableAsNull]: assigning a
   // non-function clears it.
@@ -492,8 +489,8 @@ const WEBSOCKET_BOOTSTRAP: &str = r#"
       throw new DOMException('Still in CONNECTING state.', 'InvalidStateError');
     }
     var bytes = null, text = null, len = 0;
-    if (typeof Blob !== 'undefined' && data instanceof Blob) {
-      bytes = data._b; len = data.size;
+    if (FormOps.isBlob(data)) {
+      bytes = FormOps.blob(data).bytes; len = bytes.length;
     } else if (data instanceof ArrayBuffer) {
       bytes = new Uint8Array(data.slice(0)); len = bytes.length;
     } else if (ArrayBuffer.isView(data)) {
@@ -568,8 +565,8 @@ const WEBSOCKET_BOOTSTRAP: &str = r#"
   globalThis.__websocketMessageBinary = function(id, arr) {
     var ws = live(id);
     if (!ws || ws._readyState !== OPEN) return;
-    var bytes = new Uint8Array(arr);
-    var data = ws._binaryType === 'arraybuffer' ? bytes.buffer : new Blob([bytes]);
+    var bytes = FormOps.bytes(arr);
+    var data = ws._binaryType === 'arraybuffer' ? bytes.buffer : FormOps.makeBlob(bytes, '');
     ws.dispatchEvent(new MessageEvent('message', { data: data, origin: ws._origin }));
   };
   globalThis.__websocketFlushed = function(id, n) {

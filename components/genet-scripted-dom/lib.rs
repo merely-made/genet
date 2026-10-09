@@ -35,7 +35,10 @@ mod forms_validation;
 pub mod form_encoding;
 pub mod html_encoding;
 mod forms_submission;
-pub use forms_submission::{FormEntry, FormEntryError, FormEntryValue, FormFile, FormFileId};
+pub use forms_submission::{
+    FormEntry, FormEntryError, FormEntryValue, FormFile, FormFileBindingIdentity,
+    FormFileBindingIdentityError, FormFileId, FormImplicitSubmission,
+};
 mod forms_directionality;
 pub use forms_directionality::{FormDirection, text_directionality};
 mod forms_directionality_data;

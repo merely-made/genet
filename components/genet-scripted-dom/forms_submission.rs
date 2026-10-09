@@ -21,6 +21,47 @@ impl FormFileId {
     }
 }
 
+/// Versioned binding interchange, validated against checked native allocation.
+/// This token is data, never proof of a VM File brand.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FormFileBindingIdentity {
+    id: FormFileId,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FormFileBindingIdentityError {
+    InvalidToken,
+}
+impl FormFileBindingIdentity {
+    pub fn encode(self) -> String {
+        format!("genet-form-file-v1:{:016x}", self.id.0)
+    }
+    pub fn decode(token: &str) -> Result<Self, FormFileBindingIdentityError> {
+        let digits = token
+            .strip_prefix("genet-form-file-v1:")
+            .ok_or(FormFileBindingIdentityError::InvalidToken)?;
+        if digits.len() != 16
+            || !digits
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        {
+            return Err(FormFileBindingIdentityError::InvalidToken);
+        }
+        let value = u64::from_str_radix(digits, 16)
+            .map_err(|_| FormFileBindingIdentityError::InvalidToken)?;
+        if value == 0 || value >= NEXT_FILE_ID.load(Ordering::Relaxed) {
+            return Err(FormFileBindingIdentityError::InvalidToken);
+        }
+        Ok(Self {
+            id: FormFileId(value),
+        })
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FormImplicitSubmission {
+    Blocked,
+    SubmitForm,
+    SubmitButton(NodeId),
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FormFile {
     pub id: FormFileId,
@@ -30,6 +71,28 @@ pub struct FormFile {
 }
 
 impl FormFile {
+    pub fn binding_identity(&self) -> FormFileBindingIdentity {
+        FormFileBindingIdentity { id: self.id }
+    }
+    pub fn from_binding_identity(
+        identity: FormFileBindingIdentity,
+        name: String,
+        mime_type: String,
+        bytes: Arc<[u8]>,
+    ) -> Self {
+        let mime_type = if mime_type.bytes().all(|b| (0x20..=0x7e).contains(&b)) {
+            mime_type.to_ascii_lowercase()
+        } else {
+            String::new()
+        };
+        Self {
+            id: identity.id,
+            name,
+            mime_type,
+            bytes,
+        }
+    }
+
     pub fn new(name: String, mime_type: String, bytes: Arc<[u8]>) -> Result<Self, FormEntryError> {
         let id = NEXT_FILE_ID
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
@@ -75,6 +138,63 @@ pub enum FormEntryError {
 }
 
 impl ScriptedDom {
+    pub fn form_control_is_disabled(&self, node: NodeId) -> Option<bool> {
+        (self.is_live(node)
+            && matches!(
+                self.html_name(node),
+                Some(
+                    "input" | "button" | "textarea" | "select" | "fieldset" | "option" | "optgroup"
+                )
+            ))
+        .then(|| self.is_disabled(node))
+    }
+    pub fn implicit_form_submission(
+        &self,
+        form: NodeId,
+    ) -> Result<FormImplicitSubmission, FormEntryError> {
+        if !self.is_live(form) || self.html_name(form) != Some("form") {
+            return Err(FormEntryError::InvalidForm);
+        }
+        let fields = self.associated_form_controls(form);
+        if let Some(button) = fields
+            .iter()
+            .copied()
+            .find(|id| self.is_form_submit_button(*id))
+        {
+            return Ok(if self.is_disabled(button) {
+                FormImplicitSubmission::Blocked
+            } else {
+                FormImplicitSubmission::SubmitButton(button)
+            });
+        }
+        let mut blockers = 0;
+        for field in fields {
+            if self.html_name(field) == Some("input")
+                && matches!(
+                    self.input_type_for_state(field).as_str(),
+                    "text"
+                        | "search"
+                        | "tel"
+                        | "url"
+                        | "email"
+                        | "password"
+                        | "date"
+                        | "month"
+                        | "week"
+                        | "time"
+                        | "datetime-local"
+                        | "number"
+                )
+            {
+                blockers += 1;
+                if blockers > 1 {
+                    return Ok(FormImplicitSubmission::Blocked);
+                }
+            }
+        }
+        Ok(FormImplicitSubmission::SubmitForm)
+    }
+
     /// None identifies a non-file input (including retired or foreign nodes).
     pub fn selected_files(&self, input: NodeId) -> Option<Vec<FormFile>> {
         (self.is_live(input)
@@ -780,5 +900,258 @@ mod tests {
         assert!(foreign.is_form_submit_button(other));
         assert!(!dom.is_live(other));
         assert!(!dom.is_form_submit_button(other));
+    }
+}
+
+#[cfg(test)]
+mod phase_c_task4_fixtures {
+    use super::*;
+    use layout_dom_api::{LayoutDomMut, QualName};
+    use markup5ever::ns;
+    #[derive(Debug, PartialEq, Eq)]
+    enum Implicit {
+        Blocked,
+        SubmitForm,
+        SubmitButton(NodeId),
+    }
+    // RED-only missing-capability adapter. No second implicit algorithm.
+    fn implicit_adapter(dom: &ScriptedDom, form: NodeId) -> Result<Implicit, FormEntryError> {
+        dom.implicit_form_submission(form).map(|decision| match decision {
+            FormImplicitSubmission::Blocked => Implicit::Blocked,
+            FormImplicitSubmission::SubmitForm => Implicit::SubmitForm,
+            FormImplicitSubmission::SubmitButton(id) => Implicit::SubmitButton(id),
+        })
+    }
+    // RED-only missing projection: absence is None, never evidence of disabled.
+    fn disabled_adapter(dom: &ScriptedDom, node: NodeId) -> Option<bool> {
+        dom.form_control_is_disabled(node)
+    }
+    // RED identity wire exposes current as_u64 projection, not an assumed codec.
+    fn identity_encode_adapter(file: &FormFile) -> String {
+        file.binding_identity().encode()
+    }
+    // Missing codec is distinct from authoritative InvalidToken rejection.
+    fn identity_decode_adapter(token: &str) -> Result<FormFileId, &'static str> {
+        FormFileBindingIdentity::decode(token).map(|identity| identity.id).map_err(|_| "InvalidToken")
+    }
+    fn element(dom: &mut ScriptedDom, name: &str) -> NodeId {
+        dom.create_element(QualName::new(None, ns!(html), LocalName::from(name)))
+    }
+    fn attr(dom: &mut ScriptedDom, node: NodeId, name: &str, value: &str) {
+        dom.set_attribute(
+            node,
+            QualName::new(None, ns!(), LocalName::from(name)),
+            value,
+        );
+    }
+    fn fixture() -> (ScriptedDom, NodeId) {
+        let mut dom = ScriptedDom::new();
+        let f = element(&mut dom, "form");
+        attr(&mut dom, f, "id", "f");
+        let doc = dom.document();
+        dom.append_child(doc, f);
+        (dom, f)
+    }
+    fn input(dom: &mut ScriptedDom, parent: NodeId, kind: &str) -> NodeId {
+        let i = element(dom, "input");
+        attr(dom, i, "type", kind);
+        dom.append_child(parent, i);
+        i
+    }
+    #[test]
+    fn phase_c_implicit_no_button_zero_or_one_blocker() {
+        let (mut dom, f) = fixture();
+        assert_eq!(
+            implicit_adapter(&dom, f),
+            Ok(Implicit::SubmitForm),
+            "missing capability: shared implicit decision"
+        );
+        input(&mut dom, f, "text");
+        assert_eq!(implicit_adapter(&dom, f), Ok(Implicit::SubmitForm));
+    }
+    #[test]
+    fn phase_c_implicit_two_blockers() {
+        let (mut dom, f) = fixture();
+        input(&mut dom, f, "text");
+        input(&mut dom, f, "search");
+        assert_eq!(implicit_adapter(&dom, f), Ok(Implicit::Blocked));
+    }
+    #[test]
+    fn phase_c_implicit_invalid_type_normalizes_text() {
+        let (mut dom, f) = fixture();
+        input(&mut dom, f, "bogus");
+        input(&mut dom, f, "text");
+        assert_eq!(implicit_adapter(&dom, f), Ok(Implicit::Blocked));
+    }
+    #[test]
+    fn phase_c_implicit_literal_blocker_type_matrix() {
+        for kind in [
+            "text",
+            "search",
+            "tel",
+            "url",
+            "email",
+            "password",
+            "date",
+            "month",
+            "week",
+            "time",
+            "datetime-local",
+            "number",
+        ] {
+            let (mut dom, f) = fixture();
+            input(&mut dom, f, "text");
+            input(&mut dom, f, kind);
+            assert_eq!(
+                implicit_adapter(&dom, f),
+                Ok(Implicit::Blocked),
+                "literal blocker {kind}"
+            );
+        }
+        for kind in [
+            "hidden", "checkbox", "radio", "range", "color", "file", "button", "reset",
+        ] {
+            let (mut dom, f) = fixture();
+            input(&mut dom, f, "text");
+            input(&mut dom, f, kind);
+            assert_eq!(
+                implicit_adapter(&dom, f),
+                Ok(Implicit::SubmitForm),
+                "literal nonblocker {kind}"
+            );
+        }
+    }
+    #[test]
+    fn phase_c_implicit_image_default_native_predicate() {
+        let (mut dom, f) = fixture();
+        let image = input(&mut dom, f, "image");
+        let later = element(&mut dom, "button");
+        dom.append_child(f, later);
+        assert!(dom.is_form_submit_button(image));
+        assert_eq!(implicit_adapter(&dom, f), Ok(Implicit::SubmitButton(image)));
+    }
+    #[test]
+    fn phase_c_implicit_first_disabled_default_blocks_later_enabled() {
+        let (mut dom, f) = fixture();
+        let first = element(&mut dom, "button");
+        attr(&mut dom, first, "disabled", "");
+        dom.append_child(f, first);
+        let second = element(&mut dom, "button");
+        dom.append_child(f, second);
+        assert!(dom.is_form_submit_button(first) && dom.is_form_submit_button(second));
+        assert_eq!(implicit_adapter(&dom, f), Ok(Implicit::Blocked));
+    }
+    #[test]
+    fn phase_c_implicit_external_association_tree_order() {
+        let (mut dom, f) = fixture();
+        let before = element(&mut dom, "button");
+        attr(&mut dom, before, "form", "f");
+        let doc = dom.document();
+        dom.insert_before(doc, before, Some(f));
+        let inside = element(&mut dom, "button");
+        dom.append_child(f, inside);
+        assert_eq!(dom.form_control_form_owner(before), Some(f));
+        assert_eq!(
+            implicit_adapter(&dom, f),
+            Ok(Implicit::SubmitButton(before))
+        );
+    }
+    #[test]
+    fn phase_c_implicit_auto_command_ignored_explicit_submit_selected() {
+        let (mut dom, f) = fixture();
+        let auto = element(&mut dom, "button");
+        attr(&mut dom, auto, "command", "");
+        dom.append_child(f, auto);
+        let submit = element(&mut dom, "button");
+        attr(&mut dom, submit, "type", "SuBmIt");
+        attr(&mut dom, submit, "commandfor", "");
+        dom.append_child(f, submit);
+        assert!(!dom.is_form_submit_button(auto) && dom.is_form_submit_button(submit));
+        assert_eq!(
+            implicit_adapter(&dom, f),
+            Ok(Implicit::SubmitButton(submit))
+        );
+    }
+    #[test]
+    fn phase_c_implicit_guards_invalid_dead_foreign_form() {
+        let (mut dom, f) = fixture();
+        let div = element(&mut dom, "div");
+        let (other, foreign) = fixture();
+        assert_eq!(
+            implicit_adapter(&dom, div),
+            Err(FormEntryError::InvalidForm)
+        );
+        assert!(other.is_live(foreign));
+        assert_eq!(
+            implicit_adapter(&dom, foreign),
+            Err(FormEntryError::InvalidForm)
+        );
+        LayoutDomMut::remove(&mut dom, f);
+        assert!(!dom.is_live(f));
+        assert_eq!(implicit_adapter(&dom, f), Err(FormEntryError::InvalidForm));
+    }
+    #[test]
+    fn phase_c_disabled_projection_native_fieldset_legend_and_guard() {
+        let (mut dom, f) = fixture();
+        let fieldset = element(&mut dom, "fieldset");
+        attr(&mut dom, fieldset, "disabled", "");
+        dom.append_child(f, fieldset);
+        let legend = element(&mut dom, "legend");
+        dom.append_child(fieldset, legend);
+        let exempt = input(&mut dom, legend, "text");
+        let disabled = input(&mut dom, fieldset, "text");
+        assert_eq!(
+            disabled_adapter(&dom, exempt),
+            Some(false),
+            "missing capability: public live disabled projection"
+        );
+        assert_eq!(disabled_adapter(&dom, disabled), Some(true));
+        attr(&mut dom, exempt, "disabled", "");
+        assert_eq!(disabled_adapter(&dom, exempt), Some(true));
+        assert_eq!(disabled_adapter(&dom, f), None);
+        assert_eq!(disabled_adapter(&dom, dom.document()), None);
+        LayoutDomMut::remove(&mut dom, disabled);
+        assert_eq!(disabled_adapter(&dom, disabled), None);
+        let (mut other, _) = fixture();
+        let document = other.document();
+        let foreign = input(&mut other, document, "text");
+        assert_eq!(disabled_adapter(&dom, foreign), None);
+    }
+    #[test]
+    fn phase_c_file_identity_versioned_roundtrip_and_distinct_allocations() {
+        let bytes: Arc<[u8]> = Arc::from([0, 128, 255]);
+        let a = FormFile::new(
+            "same.bin".into(),
+            "APPLICATION/OCTET-STREAM".into(),
+            bytes.clone(),
+        )
+        .unwrap();
+        let b = FormFile::new("same.bin".into(), "application/octet-stream".into(), bytes).unwrap();
+        assert_ne!(a.id, b.id, "native allocation control");
+        let wire = identity_encode_adapter(&a);
+        assert!(
+            wire.starts_with("genet-form-file-v1:"),
+            "missing capability: versioned opaque identity codec"
+        );
+        assert_eq!(identity_decode_adapter(&wire), Ok(a.id));
+        assert_eq!(&*a.bytes, &[0, 128, 255]);
+    }
+    #[test]
+    fn phase_c_file_identity_invalid_tokens_are_not_absence_rejections() {
+        for token in [
+            "",
+            "1",
+            "genet-form-file-v2:0000000000000001",
+            "genet-form-file-v1:0000000000000000",
+            "genet-form-file-v1:ffffffffffffffff",
+            "genet-form-file-v1:00000000000000GG",
+            "genet-form-file-v1:0000000000000001extra",
+        ] {
+            assert_eq!(
+                identity_decode_adapter(token),
+                Err("InvalidToken"),
+                "invalid token {token:?}, missing codec is not brand authority"
+            );
+        }
     }
 }

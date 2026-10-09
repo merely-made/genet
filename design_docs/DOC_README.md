@@ -150,7 +150,11 @@ completed corpus census or bounded slice does not close its enclosing feature.
   preserve every old pass, including partial errors. All 2,731 CSS results are
   unchanged. F10 records the native-only matcher correction and the separately
   corrected 20/20 probe. The plan preserves the invalid original probe, timeout
-  limit, source identities and receipts. Phase C submission remains stopped.
+  limit, source identities and receipts. Phase C is in progress: request-aware
+  navigation, native encoders and document encoding are committed. FormData and
+  submission bindings pass 212 focused and 187 native tests; the full runtime
+  gate remains pending after the requested physics conversion handoff. Host
+  qualification and Checkpoint C publication remain pending.
 
 ## WPT census — the web platform beyond CSS
 

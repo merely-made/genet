@@ -1214,7 +1214,7 @@ pub(crate) fn root_connected_subtree<E: ScriptEngine>(cx: &mut E::CallCx<'_>, no
     }
 }
 
-fn reflect_pinned<E: ScriptEngine>(cx: &mut E::CallCx<'_>, raw: u64) -> Result<E::Value, E::Error> {
+pub(crate) fn reflect_pinned<E: ScriptEngine>(cx: &mut E::CallCx<'_>, raw: u64) -> Result<E::Value, E::Error> {
     let id = NodeId::from_raw(raw);
     let Some(start) = adoption::current_host(cx) else {
         return cx.reflector_for(raw);

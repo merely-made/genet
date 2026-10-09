@@ -505,6 +505,7 @@ impl ScriptedDom {
                     .as_ref()
                     .is_some_and(|s| s.checked),
                 ("input", Some("radio")) => self.radio_group_required_missing(id),
+                ("input", Some("file")) => self.node(id).selected_files.is_empty(),
                 ("select", _) => self.select_value_missing(id),
                 _ => value.is_empty(),
             };
@@ -610,20 +611,7 @@ impl ScriptedDom {
             return false;
         }
         if name == "button" {
-            let button_type = self.attr(id, "type").unwrap_or("").to_ascii_lowercase();
-            return match button_type.as_str() {
-                "submit" => true,
-                "reset" | "button" => false,
-                // Missing and invalid values map to Auto. Auto is a submit
-                // button only outside command and select contexts.
-                _ => {
-                    !self.has_attr(id, "command")
-                        && !self.has_attr(id, "commandfor")
-                        && self
-                            .parent(id)
-                            .is_none_or(|parent| self.html_name(parent) != Some("select"))
-                },
-            };
+            return self.is_form_submit_button(id);
         }
         if matches!(name, "input" | "textarea") && self.has_attr(id, "readonly") {
             return false;
@@ -631,7 +619,7 @@ impl ScriptedDom {
         true
     }
 
-    fn is_disabled(&self, id: NodeId) -> bool {
+    pub(super) fn is_disabled(&self, id: NodeId) -> bool {
         if self.has_attr(id, "disabled") {
             return true;
         }
@@ -650,7 +638,7 @@ impl ScriptedDom {
         false
     }
 
-    fn has_datalist_ancestor(&self, id: NodeId) -> bool {
+    pub(super) fn has_datalist_ancestor(&self, id: NodeId) -> bool {
         let mut ancestor = self.parent(id);
         while let Some(node) = ancestor {
             if self.html_name(node) == Some("datalist") {

@@ -32,6 +32,12 @@ pub use adoption::SubtreeTransferError;
 mod forms;
 pub use forms::FormControlValueError;
 mod forms_validation;
+pub mod form_encoding;
+mod forms_submission;
+pub use forms_submission::{FormEntry, FormEntryError, FormEntryValue, FormFile, FormFileId};
+mod forms_directionality;
+pub use forms_directionality::{FormDirection, text_directionality};
+mod forms_directionality_data;
 pub mod parser;
 mod serialize;
 mod shadow;
@@ -196,6 +202,8 @@ struct Node {
     form_control: Option<FormControlState>,
     /// User-originated state kept separate to preserve FormControlState's capture wire shape.
     form_interaction: Option<FormControlInteractionState>,
+    /// Immutable selected files belong to the node, outside the capture wire record.
+    selected_files: Vec<FormFile>,
     option_state: Option<SelectOptionState>,
     custom_validity_message: Option<String>,
 }
@@ -211,6 +219,7 @@ impl Node {
             children: Vec::new(),
             form_control: None,
             form_interaction: None,
+            selected_files: Vec::new(),
             option_state: None,
             custom_validity_message: None,
         }

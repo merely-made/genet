@@ -13,7 +13,7 @@ use cssparser::{ParseError as CssParseError, Parser};
 use super::Color;
 use super::space::{ColorSpace, Components, normalize_hue};
 
-type Failure<'i> = CssParseError<'i, ()>;
+type Failure = CssParseError<()>;
 
 /// How a hue channel takes the short or long way round.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -72,14 +72,13 @@ impl HueInterpolation {
 }
 
 /// `color-mix([in <space> [<hue> hue]?,]? [<color> && <percentage>?]#)`
-pub fn parse_color_mix<'i>(input: &mut Parser<'i, '_>) -> Result<Color, Failure<'i>> {
+pub fn parse_color_mix<'i>(input: &mut Parser<'i>) -> Result<Color, Failure> {
     let interpolation = input
         .try_parse(|nested| {
             nested.expect_ident_matching("in")?;
-            let location = nested.current_source_location();
             let space_name = nested.expect_ident_cloned()?;
             let space = ColorSpace::from_interpolation_name(&space_name)
-                .ok_or_else(|| location.new_custom_error(()))?;
+                .ok_or_else(|| cssparser::ParseError::custom(()))?;
 
             // The hue interpolation method is only allowed for polar spaces.
             let hue_method = if space.hue_index().is_some() {
@@ -87,16 +86,16 @@ pub fn parse_color_mix<'i>(input: &mut Parser<'i, '_>) -> Result<Color, Failure<
                     .try_parse(|i| {
                         let name = i.expect_ident_cloned()?;
                         let method = HueInterpolation::from_name(&name)
-                            .ok_or_else(|| i.new_custom_error::<(), ()>(()))?;
+                            .ok_or_else(|| cssparser::ParseError::custom(()))?;
                         i.expect_ident_matching("hue")?;
-                        Ok::<_, Failure<'i>>(method)
+                        Ok::<_, Failure>(method)
                     })
                     .unwrap_or(HueInterpolation::Shorter)
             } else {
                 HueInterpolation::Shorter
             };
             nested.expect_comma()?;
-            Ok::<_, Failure<'i>>((space, hue_method))
+            Ok::<_, Failure>((space, hue_method))
         })
         .ok();
     let (space, hue_method) =
@@ -106,11 +105,11 @@ pub fn parse_color_mix<'i>(input: &mut Parser<'i, '_>) -> Result<Color, Failure<
     while input.try_parse(|nested| nested.expect_comma()).is_ok() {
         items.push(parse_mix_operand(input)?);
     }
-    mix_many(space, hue_method, &items).ok_or_else(|| input.new_custom_error(()))
+    mix_many(space, hue_method, &items).ok_or_else(|| cssparser::ParseError::custom(()))
 }
 
 /// A color with an optional percentage, in either order.
-fn parse_mix_operand<'i>(input: &mut Parser<'i, '_>) -> Result<(Color, Option<f32>), Failure<'i>> {
+fn parse_mix_operand<'i>(input: &mut Parser<'i>) -> Result<(Color, Option<f32>), Failure> {
     let leading = input.try_parse(parse_mix_percentage).ok();
     let color = super::parse::parse_from(input)?;
     let percentage = match leading {
@@ -118,12 +117,12 @@ fn parse_mix_operand<'i>(input: &mut Parser<'i, '_>) -> Result<(Color, Option<f3
         None => input.try_parse(parse_mix_percentage).ok(),
     };
     if percentage.is_some_and(|value| !(0.0..=100.0).contains(&value)) {
-        return Err(input.new_custom_error(()));
+        return Err(cssparser::ParseError::custom(()));
     }
     Ok((color, percentage))
 }
 
-fn parse_mix_percentage<'i>(input: &mut Parser<'i, '_>) -> Result<f32, Failure<'i>> {
+fn parse_mix_percentage<'i>(input: &mut Parser<'i>) -> Result<f32, Failure> {
     let start = input.state();
     if let Ok(value) = input.expect_percentage() {
         return Ok(value * 100.0);
@@ -132,14 +131,14 @@ fn parse_mix_percentage<'i>(input: &mut Parser<'i, '_>) -> Result<f32, Failure<'
     let position = input.position();
     let name = input.expect_function()?.clone();
     if !super::parse::is_math_function(&name) {
-        return Err(input.new_custom_error(()));
+        return Err(cssparser::ParseError::custom(()));
     }
     input.parse_nested_block(|nested| {
         while nested.next().is_ok() {}
-        Ok::<_, Failure<'i>>(())
+        Ok::<_, Failure>(())
     })?;
     crate::values::calc::parse_percentage(input.slice_from(position), 100.0)
-        .map_err(|_| input.new_custom_error(()))
+        .map_err(|_| cssparser::ParseError::custom(()))
 }
 
 /// Mix two colors in `space`.

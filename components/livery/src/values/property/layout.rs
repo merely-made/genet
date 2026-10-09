@@ -74,8 +74,7 @@ impl FromStr for ListStyleType {
             return Ok(Self::Decimal);
         }
 
-        let mut buffer = cssparser::ParserInput::new(input);
-        let mut parser = cssparser::Parser::new(&mut buffer);
+        let mut parser = cssparser::Parser::new(input);
         let value = parser
             .expect_string_cloned()
             .map_err(|_| ParseError::expected("list-style-type keyword or string"))?;

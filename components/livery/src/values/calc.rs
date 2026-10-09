@@ -11,7 +11,7 @@
 //! retained program covers arithmetic, comparison, stepped, trigonometric, and
 //! exponential functions while delaying environmental length bases.
 
-use cssparser::{Parser, ParserInput, Token};
+use cssparser::{Parser, Token};
 
 use super::length::{MathOperand, MathOperation, MathToken, RoundingStrategy};
 use super::{
@@ -110,18 +110,17 @@ fn finite(value: f32) -> Result<f32, ()> {
     value.is_finite().then_some(value).ok_or(())
 }
 
-fn parse_error<'i>(input: &Parser<'i, '_>) -> cssparser::ParseError<'i, ()> {
-    input.new_custom_error(())
+fn parse_error() -> cssparser::ParseError<()> {
+    cssparser::ParseError::custom(())
 }
 
-fn parse_one<'i, 't>(input: &mut Parser<'i, 't>) -> Result<Numeric, cssparser::ParseError<'i, ()>> {
-    let location = input.current_source_location();
+fn parse_one<'i>(input: &mut Parser<'i>) -> Result<Numeric, cssparser::ParseError<()>> {
     match input.next()? {
         &Token::Number { value, .. } if value.is_finite() => Ok(Numeric::Number(value)),
         &Token::Dimension {
             value, ref unit, ..
         } if value.is_finite() => {
-            let unit = match_ignore_ascii_case(unit).ok_or_else(|| parse_error(input))?;
+            let unit = match_ignore_ascii_case(unit).ok_or_else(|| parse_error())?;
             Ok(Numeric::LengthPercentage(length_term(value, unit)))
         },
         &Token::Percentage { unit_value, .. } if unit_value.is_finite() => {
@@ -134,7 +133,7 @@ fn parse_one<'i, 't>(input: &mut Parser<'i, 't>) -> Result<Numeric, cssparser::P
         Token::Function(name) if name.eq_ignore_ascii_case("calc") => {
             input.parse_nested_block(parse_sum)
         },
-        token => Err(location.new_unexpected_token_error(token.clone())),
+        _ => Err(cssparser::ParseError::unexpected_token()),
     }
 }
 
@@ -257,9 +256,9 @@ fn length_term(value: f32, unit: LengthUnit) -> CalcLengthPercentage {
     }
 }
 
-fn parse_product<'i, 't>(
-    input: &mut Parser<'i, 't>,
-) -> Result<Numeric, cssparser::ParseError<'i, ()>> {
+fn parse_product<'i>(
+    input: &mut Parser<'i>,
+) -> Result<Numeric, cssparser::ParseError<()>> {
     let mut product = parse_one(input)?;
     loop {
         let start = input.state();
@@ -267,12 +266,12 @@ fn parse_product<'i, 't>(
             Ok(&Token::Delim('*')) => {
                 product = product
                     .product(parse_one(input)?)
-                    .map_err(|()| parse_error(input))?;
+                    .map_err(|()| parse_error())?;
             },
             Ok(&Token::Delim('/')) => {
                 product = product
                     .divide(parse_one(input)?)
-                    .map_err(|()| parse_error(input))?;
+                    .map_err(|()| parse_error())?;
             },
             _ => {
                 input.reset(&start);
@@ -283,7 +282,7 @@ fn parse_product<'i, 't>(
     Ok(product)
 }
 
-fn parse_sum<'i, 't>(input: &mut Parser<'i, 't>) -> Result<Numeric, cssparser::ParseError<'i, ()>> {
+fn parse_sum<'i>(input: &mut Parser<'i>) -> Result<Numeric, cssparser::ParseError<()>> {
     let mut sum = parse_product(input)?;
     loop {
         let start = input.state();
@@ -302,9 +301,9 @@ fn parse_sum<'i, 't>(input: &mut Parser<'i, 't>) -> Result<Numeric, cssparser::P
                 };
                 let mut right = parse_product(input)?;
                 if subtract {
-                    right = right.negate().map_err(|()| parse_error(input))?;
+                    right = right.negate().map_err(|()| parse_error())?;
                 }
-                sum = sum.sum(right).map_err(|()| parse_error(input))?;
+                sum = sum.sum(right).map_err(|()| parse_error())?;
             },
             _ => {
                 input.reset(&start);
@@ -316,13 +315,12 @@ fn parse_sum<'i, 't>(input: &mut Parser<'i, 't>) -> Result<Numeric, cssparser::P
 }
 
 pub(super) fn parse_length_percentage(source: &str) -> Result<CalcLengthPercentage, ParseError> {
-    let mut input_buffer = ParserInput::new(source);
-    let mut input = Parser::new(&mut input_buffer);
+    let mut input = Parser::new(source);
     let result = (|| {
         input.expect_function_matching("calc")?;
         let value = input.parse_nested_block(parse_sum)?;
         input.expect_exhausted()?;
-        Ok::<_, cssparser::ParseError<'_, ()>>(value)
+        Ok::<_, cssparser::ParseError<()>>(value)
     })();
     match result {
         Ok(Numeric::LengthPercentage(value)) => Ok(value),
@@ -452,51 +450,50 @@ fn general_function(name: &str) -> Option<GeneralFunction> {
     .find_map(|(candidate, function)| name.eq_ignore_ascii_case(candidate).then_some(function))
 }
 
-fn parse_general_one<'i, 't>(
-    input: &mut Parser<'i, 't>,
+fn parse_general_one<'i>(
+    input: &mut Parser<'i>,
     builder: &mut MathBuilder,
-) -> Result<MathDimension, cssparser::ParseError<'i, ()>> {
-    let location = input.current_source_location();
+) -> Result<MathDimension, cssparser::ParseError<()>> {
     match input.next()? {
         &Token::Number { value, .. } if value.is_finite() => builder
             .operand(MathOperand::Number(value))
-            .map_err(|()| parse_error(input)),
+            .map_err(|()| parse_error()),
         &Token::Dimension {
             value, ref unit, ..
         } if value.is_finite() => {
             if let Some(unit) = match_ignore_ascii_case(unit) {
                 builder
                     .operand(MathOperand::Length(Length { value, unit }))
-                    .map_err(|()| parse_error(input))
+                    .map_err(|()| parse_error())
             } else if let Some(radians) = angle_radians(value, unit) {
                 builder
                     .operand(MathOperand::Angle(radians))
-                    .map_err(|()| parse_error(input))
+                    .map_err(|()| parse_error())
             } else if let Some(milliseconds) = time_milliseconds(value, unit) {
                 builder
                     .operand(MathOperand::Time(milliseconds))
-                    .map_err(|()| parse_error(input))
+                    .map_err(|()| parse_error())
             } else {
-                Err(parse_error(input))
+                Err(parse_error())
             }
         },
         &Token::Percentage { unit_value, .. } if unit_value.is_finite() => builder
             .operand(MathOperand::Percentage(unit_value))
-            .map_err(|()| parse_error(input)),
+            .map_err(|()| parse_error()),
         Token::Ident(name) if name.eq_ignore_ascii_case("pi") => builder
             .operand(MathOperand::Number(std::f32::consts::PI))
-            .map_err(|()| parse_error(input)),
+            .map_err(|()| parse_error()),
         Token::Ident(name) if name.eq_ignore_ascii_case("e") => builder
             .operand(MathOperand::Number(std::f32::consts::E))
-            .map_err(|()| parse_error(input)),
+            .map_err(|()| parse_error()),
         Token::Ident(name) if name.eq_ignore_ascii_case("none") => builder
             .operand(MathOperand::None)
-            .map_err(|()| parse_error(input)),
+            .map_err(|()| parse_error()),
         &Token::ParenthesisBlock => {
             input.parse_nested_block(|nested| parse_general_sum(nested, builder))
         },
         Token::Function(name) => {
-            let function = general_function(name).ok_or_else(|| parse_error(input))?;
+            let function = general_function(name).ok_or_else(|| parse_error())?;
             input.parse_nested_block(|nested| match function {
                 GeneralFunction::Calc => parse_general_sum(nested, builder),
                 GeneralFunction::Min => {
@@ -539,14 +536,14 @@ fn parse_general_one<'i, 't>(
                 },
             })
         },
-        token => Err(location.new_unexpected_token_error(token.clone())),
+        _ => Err(cssparser::ParseError::unexpected_token()),
     }
 }
 
-fn parse_general_product<'i, 't>(
-    input: &mut Parser<'i, 't>,
+fn parse_general_product<'i>(
+    input: &mut Parser<'i>,
     builder: &mut MathBuilder,
-) -> Result<MathDimension, cssparser::ParseError<'i, ()>> {
+) -> Result<MathDimension, cssparser::ParseError<()>> {
     let mut dimension = parse_general_one(input, builder)?;
     loop {
         let start = input.state();
@@ -563,7 +560,7 @@ fn parse_general_product<'i, 't>(
             && matches!(builder.tokens.last(), Some(MathToken::Operand(index))
                 if matches!(builder.leaves[usize::from(*index)], MathOperand::Number(0.0)))
         {
-            return Err(parse_error(input));
+            return Err(parse_error());
         }
         dimension = match (operation, dimension, right) {
             (MathOperation::Multiply, MathDimension::Number, value)
@@ -593,17 +590,17 @@ fn parse_general_product<'i, 't>(
             (MathOperation::Divide, MathDimension::Time, MathDimension::Time) => {
                 MathDimension::Number
             },
-            _ => return Err(parse_error(input)),
+            _ => return Err(parse_error()),
         };
         builder.operation(operation);
     }
     Ok(dimension)
 }
 
-fn parse_general_sum<'i, 't>(
-    input: &mut Parser<'i, 't>,
+fn parse_general_sum<'i>(
+    input: &mut Parser<'i>,
     builder: &mut MathBuilder,
-) -> Result<MathDimension, cssparser::ParseError<'i, ()>> {
+) -> Result<MathDimension, cssparser::ParseError<()>> {
     let dimension = parse_general_product(input, builder)?;
     loop {
         let start = input.state();
@@ -622,7 +619,7 @@ fn parse_general_sum<'i, 't>(
                 };
                 let right = parse_general_product(input, builder)?;
                 if dimension == MathDimension::None || right != dimension {
-                    return Err(parse_error(input));
+                    return Err(parse_error());
                 }
                 builder.operation(operation);
             },
@@ -635,35 +632,35 @@ fn parse_general_sum<'i, 't>(
     Ok(dimension)
 }
 
-fn parse_comparison_arguments<'i, 't>(
-    input: &mut Parser<'i, 't>,
+fn parse_comparison_arguments<'i>(
+    input: &mut Parser<'i>,
     builder: &mut MathBuilder,
     operation: MathOperation,
-) -> Result<MathDimension, cssparser::ParseError<'i, ()>> {
+) -> Result<MathDimension, cssparser::ParseError<()>> {
     let dimension = parse_general_sum(input, builder)?;
     if dimension == MathDimension::None {
-        return Err(parse_error(input));
+        return Err(parse_error());
     }
     let mut count = 1;
     while !input.is_exhausted() {
         input.expect_comma()?;
         let right = parse_general_sum(input, builder)?;
         if right != dimension {
-            return Err(parse_error(input));
+            return Err(parse_error());
         }
         builder.operation(operation);
         count += 1;
     }
     if count < 1 {
-        return Err(parse_error(input));
+        return Err(parse_error());
     }
     Ok(dimension)
 }
 
-fn parse_clamp_arguments<'i, 't>(
-    input: &mut Parser<'i, 't>,
+fn parse_clamp_arguments<'i>(
+    input: &mut Parser<'i>,
     builder: &mut MathBuilder,
-) -> Result<MathDimension, cssparser::ParseError<'i, ()>> {
+) -> Result<MathDimension, cssparser::ParseError<()>> {
     let minimum = parse_general_sum(input, builder)?;
     input.expect_comma()?;
     let preferred = parse_general_sum(input, builder)?;
@@ -674,7 +671,7 @@ fn parse_clamp_arguments<'i, 't>(
         || (minimum != MathDimension::None && minimum != preferred)
         || (maximum != MathDimension::None && maximum != preferred)
     {
-        return Err(parse_error(input));
+        return Err(parse_error());
     }
     builder.operation(MathOperation::Clamp);
     Ok(preferred)
@@ -694,99 +691,99 @@ fn rounding_strategy(name: &str) -> Option<RoundingStrategy> {
     }
 }
 
-fn parse_round_arguments<'i, 't>(
-    input: &mut Parser<'i, 't>,
+fn parse_round_arguments<'i>(
+    input: &mut Parser<'i>,
     builder: &mut MathBuilder,
-) -> Result<MathDimension, cssparser::ParseError<'i, ()>> {
+) -> Result<MathDimension, cssparser::ParseError<()>> {
     let strategy = input
         .try_parse(|nested| {
             let name = nested.expect_ident_cloned()?;
-            let strategy = rounding_strategy(&name).ok_or_else(|| parse_error(nested))?;
+            let strategy = rounding_strategy(&name).ok_or_else(|| parse_error())?;
             nested.expect_comma()?;
-            Ok::<RoundingStrategy, cssparser::ParseError<'_, ()>>(strategy)
+            Ok::<RoundingStrategy, cssparser::ParseError<()>>(strategy)
         })
         .unwrap_or(RoundingStrategy::Nearest);
     builder
         .operand(MathOperand::RoundingStrategy(strategy))
-        .map_err(|()| parse_error(input))?;
+        .map_err(|()| parse_error())?;
     let value = parse_general_sum(input, builder)?;
     let step = if input.is_exhausted() {
         builder
             .operand(MathOperand::Number(1.0))
-            .map_err(|()| parse_error(input))?
+            .map_err(|()| parse_error())?
     } else {
         input.expect_comma()?;
         parse_general_sum(input, builder)?
     };
     input.expect_exhausted()?;
     if value == MathDimension::None || value == MathDimension::Strategy || step != value {
-        return Err(parse_error(input));
+        return Err(parse_error());
     }
     builder.operation(MathOperation::Round);
     Ok(value)
 }
 
-fn parse_binary_same_dimension<'i, 't>(
-    input: &mut Parser<'i, 't>,
+fn parse_binary_same_dimension<'i>(
+    input: &mut Parser<'i>,
     builder: &mut MathBuilder,
     operation: MathOperation,
-) -> Result<MathDimension, cssparser::ParseError<'i, ()>> {
+) -> Result<MathDimension, cssparser::ParseError<()>> {
     let left = parse_general_sum(input, builder)?;
     input.expect_comma()?;
     let right = parse_general_sum(input, builder)?;
     input.expect_exhausted()?;
     if left == MathDimension::None || left == MathDimension::Strategy || right != left {
-        return Err(parse_error(input));
+        return Err(parse_error());
     }
     builder.operation(operation);
     Ok(left)
 }
 
-fn parse_trig_argument<'i, 't>(
-    input: &mut Parser<'i, 't>,
+fn parse_trig_argument<'i>(
+    input: &mut Parser<'i>,
     builder: &mut MathBuilder,
     operation: MathOperation,
-) -> Result<MathDimension, cssparser::ParseError<'i, ()>> {
+) -> Result<MathDimension, cssparser::ParseError<()>> {
     let dimension = parse_general_sum(input, builder)?;
     input.expect_exhausted()?;
     if !matches!(dimension, MathDimension::Number | MathDimension::Angle) {
-        return Err(parse_error(input));
+        return Err(parse_error());
     }
     builder.operation(operation);
     Ok(MathDimension::Number)
 }
 
-fn parse_inverse_trig_argument<'i, 't>(
-    input: &mut Parser<'i, 't>,
+fn parse_inverse_trig_argument<'i>(
+    input: &mut Parser<'i>,
     builder: &mut MathBuilder,
     operation: MathOperation,
-) -> Result<MathDimension, cssparser::ParseError<'i, ()>> {
+) -> Result<MathDimension, cssparser::ParseError<()>> {
     let dimension = parse_general_sum(input, builder)?;
     input.expect_exhausted()?;
     if dimension != MathDimension::Number {
-        return Err(parse_error(input));
+        return Err(parse_error());
     }
     builder.operation(operation);
     Ok(MathDimension::Angle)
 }
 
-fn parse_atan2_arguments<'i, 't>(
-    input: &mut Parser<'i, 't>,
+fn parse_atan2_arguments<'i>(
+    input: &mut Parser<'i>,
     builder: &mut MathBuilder,
-) -> Result<MathDimension, cssparser::ParseError<'i, ()>> {
+) -> Result<MathDimension, cssparser::ParseError<()>> {
     parse_binary_same_dimension(input, builder, MathOperation::Atan2)?;
     Ok(MathDimension::Angle)
 }
 
-fn parse_number_unary<'i, 't>(
-    input: &mut Parser<'i, 't>,
+fn parse_number_unary<'i>(
+    input: &mut Parser<'i>,
     builder: &mut MathBuilder,
     operation: MathOperation,
-) -> Result<MathDimension, cssparser::ParseError<'i, ()>> {
+) -> Result<MathDimension, cssparser::ParseError<()>> {
     let dimension = parse_general_sum(input, builder)?;
     input.expect_exhausted()?;
     if dimension != MathDimension::Number {
-        return Err(parse_error(input));
+        return Err(parse_error());
     }
     builder.operation(operation);
     Ok(MathDimension::Number)
@@ -795,37 +792,37 @@ fn parse_number_unary<'i, 't>(
 /// The tree-counting functions take no arguments, so anything inside the
 /// parentheses is a parse error. `sibling-index( )` is still valid: cssparser
 /// skips whitespace before reporting exhaustion.
-fn parse_tree_count<'i, 't>(
-    input: &mut Parser<'i, 't>,
+fn parse_tree_count<'i>(
+    input: &mut Parser<'i>,
     builder: &mut MathBuilder,
     operand: MathOperand,
-) -> Result<MathDimension, cssparser::ParseError<'i, ()>> {
+) -> Result<MathDimension, cssparser::ParseError<()>> {
     input.expect_exhausted()?;
-    builder.operand(operand).map_err(|()| parse_error(input))
+    builder.operand(operand).map_err(|()| parse_error())
 }
 
-fn parse_pow_arguments<'i, 't>(
-    input: &mut Parser<'i, 't>,
+fn parse_pow_arguments<'i>(
+    input: &mut Parser<'i>,
     builder: &mut MathBuilder,
-) -> Result<MathDimension, cssparser::ParseError<'i, ()>> {
+) -> Result<MathDimension, cssparser::ParseError<()>> {
     let left = parse_general_sum(input, builder)?;
     input.expect_comma()?;
     let right = parse_general_sum(input, builder)?;
     input.expect_exhausted()?;
     if left != MathDimension::Number || right != MathDimension::Number {
-        return Err(parse_error(input));
+        return Err(parse_error());
     }
     builder.operation(MathOperation::Pow);
     Ok(MathDimension::Number)
 }
 
-fn parse_hypot_arguments<'i, 't>(
-    input: &mut Parser<'i, 't>,
+fn parse_hypot_arguments<'i>(
+    input: &mut Parser<'i>,
     builder: &mut MathBuilder,
-) -> Result<MathDimension, cssparser::ParseError<'i, ()>> {
+) -> Result<MathDimension, cssparser::ParseError<()>> {
     let dimension = parse_general_sum(input, builder)?;
     if matches!(dimension, MathDimension::None | MathDimension::Strategy) {
-        return Err(parse_error(input));
+        return Err(parse_error());
     }
     if input.is_exhausted() {
         builder.operation(MathOperation::Abs);
@@ -835,20 +832,20 @@ fn parse_hypot_arguments<'i, 't>(
         input.expect_comma()?;
         let right = parse_general_sum(input, builder)?;
         if right != dimension {
-            return Err(parse_error(input));
+            return Err(parse_error());
         }
         builder.operation(MathOperation::Hypot);
     }
     Ok(dimension)
 }
 
-fn parse_log_arguments<'i, 't>(
-    input: &mut Parser<'i, 't>,
+fn parse_log_arguments<'i>(
+    input: &mut Parser<'i>,
     builder: &mut MathBuilder,
-) -> Result<MathDimension, cssparser::ParseError<'i, ()>> {
+) -> Result<MathDimension, cssparser::ParseError<()>> {
     let value = parse_general_sum(input, builder)?;
     if value != MathDimension::Number {
-        return Err(parse_error(input));
+        return Err(parse_error());
     }
     if input.is_exhausted() {
         builder.operation(MathOperation::Ln);
@@ -857,7 +854,7 @@ fn parse_log_arguments<'i, 't>(
         let base = parse_general_sum(input, builder)?;
         input.expect_exhausted()?;
         if base != MathDimension::Number {
-            return Err(parse_error(input));
+            return Err(parse_error());
         }
         builder.operation(MathOperation::Log);
     }
@@ -914,16 +911,15 @@ fn parse_math_dimension(
     source: &str,
     expected: MathDimension,
 ) -> Result<MathLengthPercentage, ParseError> {
-    let mut input_buffer = ParserInput::new(source);
-    let mut input = Parser::new(&mut input_buffer);
+    let mut input = Parser::new(source);
     let mut builder = MathBuilder::default();
     let result = (|| {
         let value = parse_general_one(&mut input, &mut builder)?;
         input.expect_exhausted()?;
         if value != expected {
-            return Err(parse_error(&input));
+            return Err(parse_error());
         }
-        Ok::<_, cssparser::ParseError<'_, ()>>(value)
+        Ok::<_, cssparser::ParseError<()>>(value)
     })();
     result.map_err(|_| ParseError::expected("a bounded CSS math length-percentage expression"))?;
     MathLengthPercentage::new(&builder.leaves, &builder.tokens)

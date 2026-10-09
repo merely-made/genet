@@ -19,7 +19,7 @@
 
 use std::{fmt, str::FromStr};
 
-use cssparser::{Parser, ParserInput, Token};
+use cssparser::{Parser, Token};
 
 use super::layers::BlendMode;
 use super::{Color, ColorSpace, parse};
@@ -98,7 +98,7 @@ enum Percentage {
     Math(String),
 }
 
-type Failure<'i> = cssparser::ParseError<'i, ()>;
+type Failure = cssparser::ParseError<()>;
 
 /// Undo the f32 noise of scaling a tokenizer unit value by 100: an authored
 /// `30%` arrives as 0.30000001 and must not serialize as `30.000002%`. Four
@@ -124,8 +124,7 @@ impl FromStr for SpecifiedColor {
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         let input = input.trim();
-        let mut buffer = ParserInput::new(input);
-        let mut parser = Parser::new(&mut buffer);
+        let mut parser = Parser::new(input);
         match capture(&mut parser) {
             Ok(Some(captured)) if parser.expect_exhausted().is_ok() => Ok(captured),
             _ => {
@@ -144,7 +143,7 @@ impl FromStr for SpecifiedColor {
 
 /// Shallow structural capture. Returns `Ok(None)` for shapes with no retained
 /// form; the caller falls back to the resolved color.
-fn capture<'i>(input: &mut Parser<'i, '_>) -> Result<Option<SpecifiedColor>, Failure<'i>> {
+fn capture<'i>(input: &mut Parser<'i>) -> Result<Option<SpecifiedColor>, Failure> {
     let name = match input.next()?.clone() {
         Token::Function(name) => name.to_string().to_ascii_lowercase(),
         _ => return Ok(None),
@@ -162,9 +161,9 @@ fn capture<'i>(input: &mut Parser<'i, '_>) -> Result<Option<SpecifiedColor>, Fai
 }
 
 fn capture_relative<'i>(
-    input: &mut Parser<'i, '_>,
+    input: &mut Parser<'i>,
     name: &str,
-) -> Result<Option<SpecifiedColor>, Failure<'i>> {
+) -> Result<Option<SpecifiedColor>, Failure> {
     if input
         .try_parse(|i| i.expect_ident_matching("from"))
         .is_err()
@@ -201,7 +200,7 @@ fn capture_relative<'i>(
         channels,
         alpha,
     };
-    validate_relative(&form, input)?;
+    validate_relative(&form)?;
     Ok(Some(SpecifiedColor::Relative(form)))
 }
 
@@ -211,7 +210,7 @@ fn capture_relative<'i>(
 /// the computed parser reject bad channel names and dimensions while the
 /// specified form still retains a valid unresolved origin such as
 /// `currentcolor`.
-fn validate_relative<'i>(form: &RelativeForm, input: &Parser<'i, '_>) -> Result<(), Failure<'i>> {
+fn validate_relative(form: &RelativeForm) -> Result<(), Failure> {
     let mut candidate = format!("{}(from red", form.function);
     if let Some(space) = &form.space {
         candidate.push(' ');
@@ -229,10 +228,10 @@ fn validate_relative<'i>(form: &RelativeForm, input: &Parser<'i, '_>) -> Result<
     candidate
         .parse::<Color>()
         .map(|_| ())
-        .map_err(|_| input.new_custom_error(()))
+        .map_err(|_| cssparser::ParseError::custom(()))
 }
 
-fn capture_mix<'i>(input: &mut Parser<'i, '_>) -> Result<SpecifiedColor, Failure<'i>> {
+fn capture_mix<'i>(input: &mut Parser<'i>) -> Result<SpecifiedColor, Failure> {
     let interpolation = input
         .try_parse(|nested| {
             nested.expect_ident_matching("in")?;
@@ -241,12 +240,12 @@ fn capture_mix<'i>(input: &mut Parser<'i, '_>) -> Result<SpecifiedColor, Failure
                 .try_parse(|i| {
                     let method = i.expect_ident_cloned()?.to_ascii_lowercase();
                     i.expect_ident_matching("hue")?;
-                    Ok::<_, Failure<'i>>(method)
+                    Ok::<_, Failure>(method)
                 })
                 .ok()
                 .filter(|method| method != "shorter");
             nested.expect_comma()?;
-            Ok::<_, Failure<'i>>((space, hue))
+            Ok::<_, Failure>((space, hue))
         })
         .ok();
     let (space, hue) = interpolation.unwrap_or_else(|| ("oklab".to_owned(), None));
@@ -259,15 +258,15 @@ fn capture_mix<'i>(input: &mut Parser<'i, '_>) -> Result<SpecifiedColor, Failure
         hue,
         operands,
     };
-    validate_mix(&form, input)?;
+    validate_mix(&form)?;
     Ok(SpecifiedColor::Mix(form))
 }
 
-fn validate_mix<'i>(form: &MixForm, input: &Parser<'i, '_>) -> Result<(), Failure<'i>> {
+fn validate_mix(form: &MixForm) -> Result<(), Failure> {
     let space = ColorSpace::from_interpolation_name(&form.space)
-        .ok_or_else(|| input.new_custom_error(()))?;
+        .ok_or_else(|| cssparser::ParseError::custom(()))?;
     if form.hue.is_some() && space.hue_index().is_none() {
-        return Err(input.new_custom_error(()));
+        return Err(cssparser::ParseError::custom(()));
     }
     if let Some(hue) = &form.hue
         && !matches!(
@@ -275,7 +274,7 @@ fn validate_mix<'i>(form: &MixForm, input: &Parser<'i, '_>) -> Result<(), Failur
             "longer" | "increasing" | "decreasing" | "shorter"
         )
     {
-        return Err(input.new_custom_error(()));
+        return Err(cssparser::ParseError::custom(()));
     }
 
     let mut candidate = if form.space == "oklab" {
@@ -305,10 +304,10 @@ fn validate_mix<'i>(form: &MixForm, input: &Parser<'i, '_>) -> Result<(), Failur
     candidate
         .parse::<Color>()
         .map(|_| ())
-        .map_err(|_| input.new_custom_error(()))
+        .map_err(|_| cssparser::ParseError::custom(()))
 }
 
-fn capture_alpha<'i>(input: &mut Parser<'i, '_>) -> Result<SpecifiedColor, Failure<'i>> {
+fn capture_alpha<'i>(input: &mut Parser<'i>) -> Result<SpecifiedColor, Failure> {
     input.expect_ident_matching("from")?;
     let origin = capture_origin(input)?;
     let alpha = if input.try_parse(|nested| nested.expect_delim('/')).is_ok() {
@@ -320,7 +319,7 @@ fn capture_alpha<'i>(input: &mut Parser<'i, '_>) -> Result<SpecifiedColor, Failu
         origin: Box::new(origin),
         alpha,
     };
-    validate_alpha(&form, input)?;
+    validate_alpha(&form)?;
     Ok(SpecifiedColor::Alpha(form))
 }
 
@@ -352,7 +351,7 @@ fn canonicalize_alpha_component(source: String) -> String {
     source
 }
 
-fn validate_alpha<'i>(form: &AlphaForm, input: &Parser<'i, '_>) -> Result<(), Failure<'i>> {
+fn validate_alpha(form: &AlphaForm) -> Result<(), Failure> {
     let mut candidate = "alpha(from red".to_owned();
     if let Some(alpha) = &form.alpha {
         candidate.push_str(" / ");
@@ -362,23 +361,23 @@ fn validate_alpha<'i>(form: &AlphaForm, input: &Parser<'i, '_>) -> Result<(), Fa
     candidate
         .parse::<Color>()
         .map(|_| ())
-        .map_err(|_| input.new_custom_error(()))
+        .map_err(|_| cssparser::ParseError::custom(()))
 }
 
-fn capture_contrast<'i>(input: &mut Parser<'i, '_>) -> Result<SpecifiedColor, Failure<'i>> {
+fn capture_contrast<'i>(input: &mut Parser<'i>) -> Result<SpecifiedColor, Failure> {
     Ok(SpecifiedColor::Contrast(ContrastForm {
         origin: Box::new(capture_origin(input)?),
     }))
 }
 
-fn capture_layers<'i>(input: &mut Parser<'i, '_>) -> Result<SpecifiedColor, Failure<'i>> {
+fn capture_layers<'i>(input: &mut Parser<'i>) -> Result<SpecifiedColor, Failure> {
     let blend_mode = input
         .try_parse(|nested| {
             let name = nested.expect_ident_cloned()?;
             let mode =
-                BlendMode::from_name(&name).ok_or_else(|| nested.new_custom_error::<(), ()>(()))?;
+                BlendMode::from_name(&name).ok_or_else(|| cssparser::ParseError::custom(()))?;
             nested.expect_comma()?;
-            Ok::<_, Failure<'i>>(mode)
+            Ok::<_, Failure>(mode)
         })
         .unwrap_or(BlendMode::Normal);
     let mut layers = vec![capture_origin(input)?];
@@ -388,7 +387,7 @@ fn capture_layers<'i>(input: &mut Parser<'i, '_>) -> Result<SpecifiedColor, Fail
     Ok(SpecifiedColor::Layers(LayersForm { blend_mode, layers }))
 }
 
-fn capture_operand<'i>(input: &mut Parser<'i, '_>) -> Result<MixOperand, Failure<'i>> {
+fn capture_operand<'i>(input: &mut Parser<'i>) -> Result<MixOperand, Failure> {
     let leading = input.try_parse(capture_percentage).ok();
     let color = capture_origin(input)?;
     let percentage = match leading {
@@ -401,14 +400,14 @@ fn capture_operand<'i>(input: &mut Parser<'i, '_>) -> Result<MixOperand, Failure
     })
 }
 
-fn capture_percentage<'i>(input: &mut Parser<'i, '_>) -> Result<Percentage, Failure<'i>> {
+fn capture_percentage<'i>(input: &mut Parser<'i>) -> Result<Percentage, Failure> {
     let start = input.state();
     let position = input.position();
     match input.next()?.clone() {
         Token::Percentage { unit_value, .. } => {
             let value = percent_value(unit_value);
             if !(0.0..=100.0).contains(&value) {
-                return Err(input.new_custom_error(()));
+                return Err(cssparser::ParseError::custom(()));
             }
             Ok(Percentage::Number(value))
         },
@@ -417,7 +416,7 @@ fn capture_percentage<'i>(input: &mut Parser<'i, '_>) -> Result<Percentage, Fail
         Token::Function(name) if parse::is_math_function(&name) => {
             input.parse_nested_block(|inner| {
                 while inner.next().is_ok() {}
-                Ok::<(), Failure<'i>>(())
+                Ok::<(), Failure>(())
             })?;
             Ok(Percentage::Math(
                 input.slice_from(position).trim().to_owned(),
@@ -425,14 +424,14 @@ fn capture_percentage<'i>(input: &mut Parser<'i, '_>) -> Result<Percentage, Fail
         },
         _ => {
             input.reset(&start);
-            Err(input.new_custom_error(()))
+            Err(cssparser::ParseError::custom(()))
         },
     }
 }
 
 /// One color argument, advanced by the resolving parser (which validates it)
 /// and captured as its source slice, then recursively given a specified form.
-fn capture_origin<'i>(input: &mut Parser<'i, '_>) -> Result<SpecifiedColor, Failure<'i>> {
+fn capture_origin<'i>(input: &mut Parser<'i>) -> Result<SpecifiedColor, Failure> {
     let position = input.position();
     let start = input.state();
     match capture(input) {
@@ -444,12 +443,12 @@ fn capture_origin<'i>(input: &mut Parser<'i, '_>) -> Result<SpecifiedColor, Fail
     let source = input.slice_from(position).trim();
     source
         .parse::<SpecifiedColor>()
-        .map_err(|_| input.new_custom_error(()))
+        .map_err(|_| cssparser::ParseError::custom(()))
 }
 
 /// One channel value, canonicalized token-by-token: idents lowercase, numbers
 /// and percentages through the shared formatter, math functions kept whole.
-fn capture_component<'i>(input: &mut Parser<'i, '_>) -> Result<String, Failure<'i>> {
+fn capture_component<'i>(input: &mut Parser<'i>) -> Result<String, Failure> {
     let position = input.position();
     match input.next()?.clone() {
         Token::Ident(ident) => Ok(ident.to_ascii_lowercase()),
@@ -465,11 +464,11 @@ fn capture_component<'i>(input: &mut Parser<'i, '_>) -> Result<String, Failure<'
         Token::Function(_) => {
             input.parse_nested_block(|inner| {
                 while inner.next().is_ok() {}
-                Ok::<(), Failure<'i>>(())
+                Ok::<(), Failure>(())
             })?;
             Ok(input.slice_from(position).trim().to_owned())
         },
-        _ => Err(input.new_custom_error(())),
+        _ => Err(cssparser::ParseError::custom(())),
     }
 }
 

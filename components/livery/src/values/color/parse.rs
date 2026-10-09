@@ -16,17 +16,17 @@
 //! and slash alpha.
 
 use cssparser::color::{parse_hash_color, parse_named_color};
-use cssparser::{BasicParseErrorKind, ParseError as CssParseError, Parser, ParserInput, Token};
+use cssparser::{BasicParseErrorKind, ParseError as CssParseError, Parser, Token};
 
 use super::Color;
 use super::relative::{self, Bindings};
 use super::space::{ColorSpace, Components, normalize_hue};
 use crate::values::ParseError;
 
-type Failure<'i> = CssParseError<'i, ()>;
+type Failure = CssParseError<()>;
 
-fn fail<'i>(input: &Parser<'i, '_>) -> Failure<'i> {
-    input.new_custom_error(())
+fn fail() -> Failure {
+    cssparser::ParseError::custom(())
 }
 
 /// How a channel's number maps onto its space's range.
@@ -76,10 +76,10 @@ enum Written {
 
 /// One parsed channel. `None` is CSS `none`, carried as a missing component.
 fn parse_channel<'i>(
-    input: &mut Parser<'i, '_>,
+    input: &mut Parser<'i>,
     channel: Channel,
     bindings: Option<&Bindings>,
-) -> Result<(Option<f32>, Written), Failure<'i>> {
+) -> Result<(Option<f32>, Written), Failure> {
     // `none` is a plain ident and must be checked before the number grammar,
     // as must a bound channel keyword in a relative color.
     let start = input.state();
@@ -99,7 +99,6 @@ fn parse_channel<'i>(
         return parse_hue(input, bindings).map(|hue| (Some(hue), Written::Number));
     }
 
-    let location = input.current_source_location();
     let (value, written) = match input.next()?.clone() {
         Token::Number { value, .. } => (value, Written::Number),
         Token::Percentage { unit_value, .. } => {
@@ -112,21 +111,20 @@ fn parse_channel<'i>(
                 Written::Other,
             )
         },
-        _ => return Err(location.new_custom_error(())),
+        _ => return Err(cssparser::ParseError::custom(())),
     };
     if !value.is_finite() {
-        return Err(fail(input));
+        return Err(fail());
     }
     Ok((Some(value), written))
 }
 
 /// A hue: `<number>` or `<angle>`.
 fn parse_hue<'i>(
-    input: &mut Parser<'i, '_>,
+    input: &mut Parser<'i>,
     bindings: Option<&Bindings>,
-) -> Result<f32, Failure<'i>> {
+) -> Result<f32, Failure> {
     let start = input.state();
-    let location = input.current_source_location();
     let degrees = match input.next()?.clone() {
         Token::Number { value, .. } => value,
         Token::Dimension { value, unit, .. } => match () {
@@ -134,16 +132,16 @@ fn parse_hue<'i>(
             _ if unit.eq_ignore_ascii_case("grad") => value * 360.0 / 400.0,
             _ if unit.eq_ignore_ascii_case("rad") => value.to_degrees(),
             _ if unit.eq_ignore_ascii_case("turn") => value * 360.0,
-            _ => return Err(location.new_custom_error(())),
+            _ => return Err(cssparser::ParseError::custom(())),
         },
         Token::Function(name) => {
             input.reset(&start);
             parse_math_number(input, &name, Channel::Hue, bindings)?
         },
-        _ => return Err(location.new_custom_error(())),
+        _ => return Err(cssparser::ParseError::custom(())),
     };
     if !degrees.is_finite() {
-        return Err(fail(input));
+        return Err(fail());
     }
     Ok(degrees)
 }
@@ -158,20 +156,20 @@ fn parse_hue<'i>(
 /// alpha and modern RGB use 1, legacy RGB uses 255, and each perceptual
 /// channel supplies the range CSS Color assigns to 100%.
 fn parse_math_number<'i>(
-    input: &mut Parser<'i, '_>,
+    input: &mut Parser<'i>,
     name: &str,
     channel: Channel,
     bindings: Option<&Bindings>,
-) -> Result<f32, Failure<'i>> {
+) -> Result<f32, Failure> {
     if !is_math_function(name) {
-        return Err(fail(input));
+        return Err(fail());
     }
     let start_position = input.position();
     // Consume the whole function so the outer parser advances past it.
     input.next()?;
     input.parse_nested_block(|inner| {
         while inner.next().is_ok() {}
-        Ok::<(), Failure<'i>>(())
+        Ok::<(), Failure>(())
     })?;
     let source = input.slice_from(start_position);
     // Livery's math program has no channel keywords, so a relative color
@@ -192,11 +190,11 @@ fn parse_math_number<'i>(
         return crate::values::calc::parse_angle(source)
             .map(f32::to_degrees)
             .or_else(|_| crate::values::calc::parse_number(source))
-            .map_err(|_| fail(input));
+            .map_err(|_| fail());
     }
     crate::values::calc::parse_number(source)
         .or_else(|_| crate::values::calc::parse_percentage(source, channel.percentage_basis()))
-        .map_err(|_| fail(input))
+        .map_err(|_| fail())
 }
 
 pub(super) fn is_math_function(name: &str) -> bool {
@@ -210,9 +208,9 @@ pub(super) fn is_math_function(name: &str) -> bool {
 
 /// The alpha channel: `<number>` or `<percentage>`, or `none`.
 pub(super) fn parse_alpha<'i>(
-    input: &mut Parser<'i, '_>,
+    input: &mut Parser<'i>,
     bindings: Option<&Bindings>,
-) -> Result<Option<f32>, Failure<'i>> {
+) -> Result<Option<f32>, Failure> {
     let start = input.state();
     if let Ok(ident) = input.expect_ident_cloned() {
         if ident.eq_ignore_ascii_case("none") {
@@ -225,7 +223,6 @@ pub(super) fn parse_alpha<'i>(
         }
     }
     input.reset(&start);
-    let location = input.current_source_location();
     let value = match input.next()?.clone() {
         Token::Number { value, .. } => value,
         Token::Percentage { unit_value, .. } => unit_value,
@@ -233,10 +230,10 @@ pub(super) fn parse_alpha<'i>(
             input.reset(&start);
             parse_math_number(input, &name, Channel::Unit, bindings)?
         },
-        _ => return Err(location.new_custom_error(())),
+        _ => return Err(cssparser::ParseError::custom(())),
     };
     if !value.is_finite() {
-        return Err(fail(input));
+        return Err(fail());
     }
     Ok(Some(value.clamp(0.0, 1.0)))
 }
@@ -253,10 +250,10 @@ struct Parsed {
 }
 
 fn parse_components<'i>(
-    input: &mut Parser<'i, '_>,
+    input: &mut Parser<'i>,
     channels: [Channel; 3],
     bindings: Option<&Bindings>,
-) -> Result<Parsed, Failure<'i>> {
+) -> Result<Parsed, Failure> {
     let (first, first_written) = parse_channel(input, channels[0], bindings)?;
     // A relative color is always modern syntax: `rgb(from red r, g, b)` is
     // invalid, so a comma is a failure there rather than a legacy form.
@@ -288,7 +285,7 @@ fn parse_components<'i>(
             },
         };
         if !uniform {
-            return Err(fail(input));
+            return Err(fail());
         }
     }
 
@@ -309,7 +306,7 @@ fn parse_components<'i>(
 
     // Legacy syntax has no missing components: `rgb(none, 0, 0)` is invalid.
     if legacy && (first.is_none() || second.is_none() || third.is_none() || alpha.is_none()) {
-        return Err(fail(input));
+        return Err(fail());
     }
 
     Ok(Parsed {
@@ -324,7 +321,7 @@ fn parse_components<'i>(
 }
 
 /// Parse the body of one color function, given its lowercased name.
-fn parse_color_function<'i>(input: &mut Parser<'i, '_>, name: &str) -> Result<Color, Failure<'i>> {
+fn parse_color_function<'i>(input: &mut Parser<'i>, name: &str) -> Result<Color, Failure> {
     if name.eq_ignore_ascii_case("color-mix") {
         return super::mix::parse_color_mix(input);
     }
@@ -373,7 +370,7 @@ fn parse_color_function<'i>(input: &mut Parser<'i, '_>, name: &str) -> Result<Co
             ColorSpace::Oklch,
             [Channel::OklabLightness, Channel::OklabAxis, Channel::Hue],
         ),
-        _ => return Err(fail(input)),
+        _ => return Err(fail()),
     };
 
     let bindings = parse_origin(input, space, false)?;
@@ -388,10 +385,10 @@ fn parse_color_function<'i>(input: &mut Parser<'i, '_>, name: &str) -> Result<Co
 /// origin is an error rather than a silent black: Livery has no cascade here
 /// to resolve it against, and `color-mix()` rejects the same case.
 fn parse_origin<'i>(
-    input: &mut Parser<'i, '_>,
+    input: &mut Parser<'i>,
     space: ColorSpace,
     predefined: bool,
-) -> Result<Option<Bindings>, Failure<'i>> {
+) -> Result<Option<Bindings>, Failure> {
     let found = input.try_parse(|i| i.expect_ident_matching("from")).is_ok();
     if !found {
         return Ok(None);
@@ -399,32 +396,31 @@ fn parse_origin<'i>(
     let origin = parse_from(input)?;
     relative::bind(origin, space, predefined)
         .map(Some)
-        .ok_or_else(|| fail(input))
+        .ok_or_else(|| fail())
 }
 
 /// `color([from <color>] <predefined-space> c1 c2 c3 [/ alpha])`.
 ///
 /// The space follows the origin here, unlike every other function, so the
 /// origin cannot be bound until it has been read.
-fn parse_predefined<'i>(input: &mut Parser<'i, '_>) -> Result<Color, Failure<'i>> {
+fn parse_predefined<'i>(input: &mut Parser<'i>) -> Result<Color, Failure> {
     let relative_origin = if input.try_parse(|i| i.expect_ident_matching("from")).is_ok() {
         Some(parse_from(input)?)
     } else {
         None
     };
 
-    let location = input.current_source_location();
     let ident = input.expect_ident_cloned()?;
     let space =
-        ColorSpace::from_predefined_name(&ident).ok_or_else(|| location.new_custom_error(()))?;
+        ColorSpace::from_predefined_name(&ident).ok_or_else(|| cssparser::ParseError::custom(()))?;
 
     let bindings = match relative_origin {
-        Some(origin) => Some(relative::bind(origin, space, true).ok_or_else(|| fail(input))?),
+        Some(origin) => Some(relative::bind(origin, space, true).ok_or_else(|| fail())?),
         None => None,
     };
     let parsed = parse_components(input, [Channel::Unit; 3], bindings.as_ref())?;
     if parsed.legacy {
-        return Err(fail(input));
+        return Err(fail());
     }
     Ok(Color::Absolute {
         space,
@@ -539,8 +535,7 @@ fn clamp_non_negative_unbounded(value: f32) -> f32 {
 
 /// Parse a whole color value from a string.
 pub fn parse(source: &str) -> Result<Color, ParseError> {
-    let mut buffer = ParserInput::new(source);
-    let mut input = Parser::new(&mut buffer);
+    let mut input = Parser::new(source);
     let color = parse_from(&mut input).map_err(|_| ParseError::expected("a color"))?;
     input
         .expect_exhausted()
@@ -550,22 +545,21 @@ pub fn parse(source: &str) -> Result<Color, ParseError> {
 
 /// Parse one color from a parser already positioned at it. Shared with
 /// `color-mix()`, which parses colors as arguments.
-pub fn parse_from<'i>(input: &mut Parser<'i, '_>) -> Result<Color, Failure<'i>> {
-    let location = input.current_source_location();
+pub fn parse_from<'i>(input: &mut Parser<'i>) -> Result<Color, Failure> {
     match input.next()?.clone() {
         Token::Hash(value) | Token::IDHash(value) => {
-            parse_hash(&value).ok_or_else(|| location.new_custom_error(()))
+            parse_hash(&value).ok_or_else(|| cssparser::ParseError::custom(()))
         },
-        Token::Ident(name) => parse_keyword(&name).ok_or_else(|| location.new_custom_error(())),
+        Token::Ident(name) => parse_keyword(&name).ok_or_else(|| cssparser::ParseError::custom(())),
         Token::Function(name) => input.parse_nested_block(|inner| {
             let color = parse_color_function(inner, &name)?;
             inner.expect_exhausted().map_err(|error| match error.kind {
-                BasicParseErrorKind::UnexpectedToken(_) => fail(inner),
-                _ => fail(inner),
+                BasicParseErrorKind::UnexpectedToken => fail(),
+                _ => fail(),
             })?;
             Ok(color)
         }),
-        _ => Err(location.new_custom_error(())),
+        _ => Err(cssparser::ParseError::custom(())),
     }
 }
 

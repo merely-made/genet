@@ -6,11 +6,11 @@
 
 use std::{fmt, str::FromStr};
 
-use cssparser::{Parser, ParserInput, Token};
+use cssparser::{Parser, Token};
 
 use super::super::{LengthPercentage, ParseError, ZIndex};
 
-fn parser_contains_percentage(parser: &mut Parser<'_, '_>) -> bool {
+fn parser_contains_percentage(parser: &mut Parser<'_>) -> bool {
     loop {
         let token = match parser.next_including_whitespace() {
             Ok(token) => token,
@@ -24,7 +24,7 @@ fn parser_contains_percentage(parser: &mut Parser<'_, '_>) -> bool {
             | Token::CurlyBracketBlock => {
                 if parser
                     .parse_nested_block(|nested| {
-                        Ok::<bool, cssparser::ParseError<'_, ()>>(parser_contains_percentage(
+                        Ok::<bool, cssparser::ParseError<()>>(parser_contains_percentage(
                             nested,
                         ))
                     })
@@ -39,8 +39,7 @@ fn parser_contains_percentage(parser: &mut Parser<'_, '_>) -> bool {
 }
 
 fn contains_percentage_token(input: &str) -> bool {
-    let mut input_buffer = ParserInput::new(input);
-    let mut parser = Parser::new(&mut input_buffer);
+    let mut parser = Parser::new(input);
     parser_contains_percentage(&mut parser)
 }
 

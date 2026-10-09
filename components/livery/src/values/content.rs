@@ -1,7 +1,7 @@
 use std::{fmt, str::FromStr};
 
 use super::ParseError;
-use cssparser::{Parser, ParserInput, ToCss, Token};
+use cssparser::{Parser, ToCss, Token};
 
 /// Bounded text-only CSS content grammar. Unsupported items invalidate the
 /// declaration instead of silently producing a different string.
@@ -58,8 +58,7 @@ impl Content {
 impl FromStr for Content {
     type Err = ParseError;
     fn from_str(source: &str) -> Result<Self, Self::Err> {
-        let mut input = ParserInput::new(source);
-        let mut parser = Parser::new(&mut input);
+        let mut parser = Parser::new(source);
         if let Ok(keyword) = parser.try_parse(|p| p.expect_ident_cloned()) {
             parser
                 .expect_exhausted()
@@ -85,7 +84,7 @@ impl FromStr for Content {
                         .parse_nested_block(|p| {
                             let name = p.expect_ident_cloned()?;
                             p.expect_exhausted()?;
-                            Ok::<_, cssparser::ParseError<'_, ()>>(name.to_string())
+                            Ok::<_, cssparser::ParseError<()>>(name.to_string())
                         })
                         .map_err(|_| ParseError::expected("attr(identifier)"))?;
                     items.push(ContentItem::Attribute(name));
@@ -99,7 +98,7 @@ impl FromStr for Content {
                         .parse_nested_block(|p| {
                             let name = p.expect_ident_cloned()?;
                             if !super::counters::counter_name(&name) {
-                                return Err(p.new_custom_error(()));
+                                return Err(cssparser::ParseError::custom(()));
                             }
                             let separator = if nested {
                                 p.expect_comma()?;
@@ -112,7 +111,7 @@ impl FromStr for Content {
                                 p.expect_ident_matching("decimal")?;
                             }
                             p.expect_exhausted()?;
-                            Ok::<_, cssparser::ParseError<'_, ()>>(ContentItem::Counter {
+                            Ok::<_, cssparser::ParseError<()>>(ContentItem::Counter {
                                 name: name.to_string(),
                                 separator,
                             })

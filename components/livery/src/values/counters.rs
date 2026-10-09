@@ -5,7 +5,7 @@
 
 use std::{fmt, str::FromStr};
 
-use cssparser::{Parser, ParserInput};
+use cssparser::{Parser};
 
 use super::ParseError;
 
@@ -30,8 +30,7 @@ pub(super) fn counter_name(name: &str) -> bool {
 }
 
 fn parse(source: &str, default: i32) -> Result<Vec<CounterOperation>, ParseError> {
-    let mut input = ParserInput::new(source);
-    let mut parser = Parser::new(&mut input);
+    let mut parser = Parser::new(source);
     if parser
         .try_parse(|p| p.expect_ident_matching("none"))
         .is_ok()

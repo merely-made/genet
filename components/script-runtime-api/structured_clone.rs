@@ -48,10 +48,11 @@ const STRUCTURED_CLONE_BOOTSTRAP: &str = r#"
   var NativeBoolean = Boolean, NativeNumber = Number, NativeString = String;
   var NativeObject = Object, NativeDate = Date, NativeRegExp = RegExp;
   var NativeDataView = DataView, NativeUint8Array = Uint8Array;
-  var NativeBlob = globalThis.Blob, NativeFile = globalThis.File;
+  var FormOps = globalThis.__formsPrivate;
+  var NativeBlob = FormOps.Blob, NativeFile = FormOps.File;
   var NativeBigInt = globalThis.BigInt, NativeDOMException = DOMException;
   var jsonParse = JSON.parse, jsonStringify = JSON.stringify;
-  var decodeBase64 = atob;
+  var decodeBase64 = atob, encodeBase64 = btoa, fromCharCode = String.fromCharCode;
   var charCodeAt = String.prototype.charCodeAt;
   var isStream;
   function defineData(target, key, value, writable, configurable) {
@@ -130,6 +131,19 @@ const STRUCTURED_CLONE_BOOTSTRAP: &str = r#"
     if (memo.has(v)) return memo.get(v);
 
     var out;
+    if (FormOps.isBlob(v)) {
+      var blob = FormOps.blob(v);
+      out = FormOps.isFile(v)
+        ? FormOps.file(blob.bytes, blob.name, blob.type, blob.lastModified)
+        : FormOps.makeBlob(blob.bytes, blob.type);
+      memo.set(v, out); return out;
+    }
+    if (FormOps.isList(v)) {
+      var files = FormOps.listValues(v), copied = [];
+      for (var fi = 0; fi < files.length; fi++) copied[fi] = clone(files[fi], memo, moved);
+      out = FormOps.makeList(copied); memo.set(v, out); return out;
+    }
+
     var kind = tag(v);
 
     // Boxed primitives.
@@ -162,16 +176,6 @@ const STRUCTURED_CLONE_BOOTSTRAP: &str = r#"
     // A transferable reached by value (not in the transfer list) is not cloneable.
     var tr = transferableFor(v);
     if (tr) throw dataClone("A " + (tr.name || 'transferable'));
-
-    if (globalThis.Blob && v instanceof globalThis.Blob) {
-      if (globalThis.File && v instanceof globalThis.File) {
-        out = new globalThis.File([v._b.slice(0)], v.name, { type: v.type, lastModified: v.lastModified });
-      } else {
-        out = new globalThis.Blob([v._b.slice(0)], { type: v.type });
-      }
-      memo.set(v, out);
-      return out;
-    }
 
     if (kind === '[object Map]') {
       out = new Map();
@@ -358,8 +362,8 @@ const STRUCTURED_CLONE_BOOTSTRAP: &str = r#"
   // Bytes travel base64: JSON strings are UTF-16 and would mangle lone bytes.
   function b64(u8) {
     var s = '';
-    for (var i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]);
-    return btoa(s);
+    for (var i = 0; i < u8.length; i++) s += apply(fromCharCode, undefined, [u8[i]]);
+    return encodeBase64(s);
   }
   function unb64(s) {
     var bin = decodeBase64(s), u = new NativeUint8Array(bin.length);
@@ -401,6 +405,16 @@ const STRUCTURED_CLONE_BOOTSTRAP: &str = r#"
 
   function serNode(v, h, memo, moved, transferred) {
     if (isStream(v)) throw dataClone("A stream");
+    if (FormOps.isBlob(v)) {
+      var blob = FormOps.blob(v), rec = { t: 'BL', b: b64(blob.bytes), ty: blob.type };
+      if (FormOps.isFile(v)) { rec.n = blob.name; rec.lm = blob.lastModified; }
+      return rec;
+    }
+    if (FormOps.isList(v)) {
+      var files = FormOps.listValues(v), values = [];
+      for (var fi = 0; fi < files.length; fi++) values[fi] = ser(files[fi], h, memo, moved);
+      return { t: 'FL', p: values };
+    }
     var kind = tag(v);
     if (kind === '[object Boolean]') return { t: 'B', v: v.valueOf() };
     if (kind === '[object Number]') return { t: 'N', v: numOut(v.valueOf()) };
@@ -423,13 +437,6 @@ const STRUCTURED_CLONE_BOOTSTRAP: &str = r#"
       // list serializes through its own codec.
       if (!transferred || !tr.serialize) throw dataClone("A " + (tr.name || 'transferable'));
       return { t: 'X', x: tr.tag, d: tr.serialize(v) };
-    }
-    if (globalThis.Blob && v instanceof globalThis.Blob) {
-      var rec = { t: 'BL', b: b64(v._b), ty: v.type };
-      if (globalThis.File && v instanceof globalThis.File) {
-        rec.n = v.name; rec.lm = v.lastModified;
-      }
-      return rec;
     }
     if (kind === '[object Map]') {
       var mp = [];
@@ -500,11 +507,16 @@ const STRUCTURED_CLONE_BOOTSTRAP: &str = r#"
         out = (r.k === 'DataView') ? new NativeDataView(buf, r.o, r.l) : new viewConstructors[r.k](buf, r.o, r.l);
         return (cache[i] = out);
       }
+      case 'FL': {
+        var files = [];
+        for (var fi = 0; fi < r.p.length; fi++) files[fi] = des(r.p[fi], h, cache);
+        return (cache[i] = FormOps.makeList(files));
+      }
       case 'BL': {
         var bytes = unb64(r.b);
         out = (r.n !== undefined && NativeFile)
-          ? new NativeFile([bytes.buffer], r.n, { type: r.ty, lastModified: r.lm })
-          : new NativeBlob([bytes.buffer], { type: r.ty });
+          ? FormOps.file(bytes, r.n, r.ty, r.lm)
+          : FormOps.makeBlob(bytes, r.ty);
         return (cache[i] = out);
       }
       case 'X': {

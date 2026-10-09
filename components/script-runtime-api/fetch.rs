@@ -505,6 +505,7 @@ pub(crate) fn install_fetch_surface<E: ScriptEngine>(
     engine.set_function::<UrlParse>("__url_parse", 2)?;
     engine.set_function::<UrlWith>("__url_with", 3)?;
     crate::text_encoding::install_text_encoding_surface(engine)?;
+    crate::form_data::install(engine)?;
     engine.eval(FETCH_BOOTSTRAP)?;
     Ok(())
 }
@@ -876,13 +877,7 @@ const FETCH_BOOTSTRAP: &str = r#"
 
   // Body bytes cross the native __fetch sink as a lossless "binary string": each
   // char code (0-255) is one byte. These convert a Uint8Array to/from that form.
-  function bytesToBinaryString(bytes) {
-    var s = '', CH = 0x8000;
-    for (var i = 0; i < bytes.length; i += CH) {
-      s += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
-    }
-    return s;
-  }
+  function bytesToBinaryString(bytes) { return FormOps.binary(bytes); }
   function binaryStringToBytes(s) {
     var b = new Uint8Array(s.length);
     for (var i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xFF;
@@ -1284,96 +1279,10 @@ const FETCH_BOOTSTRAP: &str = r#"
   URL.canParse = function(url, base) { return !!__url_parse(String(url), (base === undefined || base === null) ? "" : String(base)); };
   globalThis.URL = URL;
 
-  // ---- Blob / File ----
-  function toBytes(part) {
-    if (part instanceof Blob) return part._b;
-    if (part instanceof ArrayBuffer) return new Uint8Array(part.slice(0));
-    if (ArrayBuffer.isView(part)) return new Uint8Array(part.buffer.slice(part.byteOffset, part.byteOffset + part.byteLength));
-    return utf8Encode(String(part));
-  }
-  function Blob(parts, opts) {
-    opts = opts || {};
-    var chunks = [], total = 0;
-    if (parts != null) {
-      if (typeof parts !== 'object' || typeof parts.length !== 'number')
-        throw new TypeError("Blob parts must be a sequence");
-      for (var i = 0; i < parts.length; i++) { var b = toBytes(parts[i]); chunks.push(b); total += b.length; }
-    }
-    var all = new Uint8Array(total), off = 0;
-    for (var j = 0; j < chunks.length; j++) { all.set(chunks[j], off); off += chunks[j].length; }
-    this._b = all;
-    this.size = total;
-    var t = opts.type === undefined ? '' : String(opts.type);
-    this.type = /[^ -~]/.test(t) ? '' : t.toLowerCase();
-  }
-  Blob.prototype.text = function() { var self = this; return Promise.resolve(utf8Decode(self._b)); };
-  Blob.prototype.arrayBuffer = function() { return Promise.resolve(this._b.slice(0).buffer); };
-  Blob.prototype.slice = function(start, end, type) {
-    var s = this._b.slice(start || 0, end === undefined ? this._b.length : end);
-    var b = new Blob([], { type: type || '' }); b._b = s; b.size = s.length; return b;
-  };
-  globalThis.Blob = Blob;
-
-  function File(parts, name, opts) {
-    if (name === undefined) throw new TypeError("File requires a name");
-    Blob.call(this, parts, opts);
-    this.name = String(name);
-    this.lastModified = (opts && opts.lastModified != null) ? (opts.lastModified | 0) : 0;
-  }
-  File.prototype = Object.create(Blob.prototype);
-  File.prototype.constructor = File;
-  globalThis.File = File;
-
-  // ---- FormData ----
-  function FormData() { this._l = []; }
-  FormData.prototype.append = function(name, value, filename) {
-    name = String(name);
-    if (value instanceof Blob) {
-      var fv = value;
-      if (filename !== undefined && !(value instanceof File)) {
-        fv = new File([value], filename, { type: value.type });
-      } else if (filename !== undefined) {
-        fv = new File([value], filename, { type: value.type });
-      }
-      this._l.push([name, fv]);
-    } else this._l.push([name, String(value)]);
-  };
-  FormData.prototype.set = function(name, value, filename) {
-    name = String(name); this['delete'](name); this.append(name, value, filename);
-  };
-  FormData.prototype['delete'] = function(name) { name = String(name); this._l = this._l.filter(function(p) { return p[0] !== name; }); };
-  FormData.prototype.get = function(name) { name = String(name); for (var i = 0; i < this._l.length; i++) if (this._l[i][0] === name) return this._l[i][1]; return null; };
-  FormData.prototype.getAll = function(name) { name = String(name); var o = []; for (var i = 0; i < this._l.length; i++) if (this._l[i][0] === name) o.push(this._l[i][1]); return o; };
-  FormData.prototype.has = function(name) { name = String(name); for (var i = 0; i < this._l.length; i++) if (this._l[i][0] === name) return true; return false; };
-  FormData.prototype.forEach = function(cb, thisArg) { for (var i = 0; i < this._l.length; i++) cb.call(thisArg, this._l[i][1], this._l[i][0], this); };
-  FormData.prototype.entries = function() { return makeIterator(this._l.map(function(p) { return [p[0], p[1]]; })); };
-  FormData.prototype.keys = function() { return makeIterator(this._l.map(function(p) { return p[0]; })); };
-  FormData.prototype.values = function() { return makeIterator(this._l.map(function(p) { return p[1]; })); };
-  if (hasSym) FormData.prototype[Symbol.iterator] = FormData.prototype.entries;
-  globalThis.FormData = FormData;
-
-  // Serialize a FormData to a multipart/form-data body + content-type. File field
-  // content is spliced as text here (the one remaining lossy spot for binary file
-  // parts); text fields and filenames round-trip exactly.
-  function serializeFormData(fd) {
-    var boundary = '----genet' + Math.floor(Math.random() * 0x100000000).toString(16) + Math.floor(Math.random() * 0x100000000).toString(16);
-    var s = '';
-    for (var i = 0; i < fd._l.length; i++) {
-      var name = fd._l[i][0], value = fd._l[i][1];
-      s += '--' + boundary + '\r\n';
-      if (value instanceof Blob) {
-        var fn = (value instanceof File) ? value.name : 'blob';
-        s += 'Content-Disposition: form-data; name="' + name + '"; filename="' + fn + '"\r\n';
-        s += 'Content-Type: ' + (value.type || 'application/octet-stream') + '\r\n\r\n';
-        s += utf8Decode(value._b) + '\r\n';
-      } else {
-        s += 'Content-Disposition: form-data; name="' + name + '"\r\n\r\n';
-        s += value + '\r\n';
-      }
-    }
-    s += '--' + boundary + '--\r\n';
-    return { body: s, type: 'multipart/form-data; boundary=' + boundary };
-  }
+  // Blob/File/FormData brands and bytes come from the retained private bootstrap.
+  var FormOps = globalThis.__formsPrivate;
+  var Blob = FormOps.Blob, File = FormOps.File, FormData = FormOps.FormData;
+  function serializeFormData(fd) { return FormOps.encode(fd, 'UTF-8', 'multipart/form-data'); }
 
   // WHATWG "extract a body": returns { bytes: Uint8Array|null, type: string|null }.
   // Blob / ArrayBuffer / typed-array bodies carry their bytes directly, so binary
@@ -1383,59 +1292,61 @@ const FETCH_BOOTSTRAP: &str = r#"
     if (typeof v === 'string') return { bytes: utf8Encode(v), stream: null, type: 'text/plain;charset=UTF-8' };
     if (v instanceof URLSearchParams) return { bytes: utf8Encode(v.toString()), stream: null, type: 'application/x-www-form-urlencoded;charset=UTF-8' };
     // Blob / buffers carry their bytes directly: no text round-trip, so binary is exact.
-    if (v instanceof Blob) return { bytes: v._b.slice(0), stream: null, type: v.type ? v.type : null };
-    if (v instanceof FormData) { var r = serializeFormData(v); return { bytes: utf8Encode(r.body), stream: null, type: r.type }; }
+    if (FormOps.isBlob(v)) { var blob = FormOps.blob(v); return { bytes: blob.bytes, stream: null, type: blob.type || null }; }
+    if (FormOps.isData(v)) { var r = serializeFormData(v); return { bytes: r.bytes, stream: null, type: r.type }; }
     if (ReadableOps.isReadable(v)) {
       // A stream body stays a live stream (consumed lazily): a stream already
       // locked or disturbed is not a usable body (the from-stream tests).
       if (ReadableOps.isLocked(v) || ReadableOps.isDisturbed(v)) throw new TypeError("Body stream is already locked or disturbed");
       return { bytes: null, stream: v, type: null };
     }
-    if (Core.isArrayBuffer(v)) return { bytes: Core.copyBytes(new Uint8Array(v)), stream: null, type: null };
+    if (Core.isArrayBuffer(v)) return { bytes: Core.copyBytes(new Core.Uint8Array(v)), stream: null, type: null };
     if (Core.call(nativeArrayBufferIsView, ArrayBuffer, [v])) return { bytes: Core.copyBytes(v), stream: null, type: null };
     return { bytes: utf8Encode(String(v)), stream: null, type: 'text/plain;charset=UTF-8' };
   }
 
-  // Parse a multipart/form-data body (already decoded to text) into a FormData.
-  // Text fields round-trip exactly; a file part becomes a File (its content via
-  // the UTF-8 text, the one lossy spot for binary parts).
-  function parseMultipart(text, boundary) {
-    var fd = new FormData();
-    var segments = text.split("--" + boundary);
-    for (var i = 0; i < segments.length; i++) {
-      var part = segments[i];
-      if (part === "" || /^--\r?\n?$/.test(part)) continue; // preamble / closing delim
-      part = part.replace(/^\r\n/, "").replace(/\r\n$/, "");
-      var sep = part.indexOf("\r\n\r\n");
-      if (sep < 0) continue;
-      var head = part.slice(0, sep), content = part.slice(sep + 4);
-      var nameM = /name="([^"]*)"/i.exec(head);
-      if (!nameM) continue;
-      var fileM = /filename="([^"]*)"/i.exec(head);
-      var ctM = /content-type:\s*([^\r\n]+)/i.exec(head);
-      if (fileM) {
-        fd.append(nameM[1], new File([utf8Encode(content)], fileM[1], { type: ctM ? ctM[1].replace(/\s+$/, "") : "" }));
-      } else {
-        fd.append(nameM[1], content);
+  // Locate delimiters in a byte-preserving one-byte projection. Only headers
+  // and text fields are decoded; file payloads keep their original octets.
+  function parseMultipart(bytes, boundary) {
+    var text = ''; for (var bi = 0; bi < Core.viewInfo(bytes).byteLength; bi++) text += Core.call(encStringFromCharCode, undefined, [bytes[bi]]);
+    var fd = new FormData(), marker = '--' + boundary;
+    var cursor = text.indexOf(marker);
+    while (cursor >= 0) {
+      var start = cursor + marker.length;
+      if (text.slice(start, start + 2) === '--') break;
+      if (text.slice(start, start + 2) !== '\r\n') break;
+      start += 2;
+      var next = text.indexOf('\r\n' + marker, start);
+      if (next < 0) break;
+      var sep = text.indexOf('\r\n\r\n', start);
+      if (sep >= start && sep < next) {
+        var head = utf8Decode(Core.copyBytes(new Core.Uint8Array(Core.viewInfo(bytes).buffer, Core.viewInfo(bytes).byteOffset + start, sep - start)));
+        var nameM = /(?:^|;)\s*name="([^"]*)"/i.exec(head);
+        if (nameM) {
+          var fileM = /(?:^|;)\s*filename="([^"]*)"/i.exec(head), ctM = /content-type:\s*([^\r\n]+)/i.exec(head);
+          var payload = Core.copyBytes(new Core.Uint8Array(Core.viewInfo(bytes).buffer, Core.viewInfo(bytes).byteOffset + sep + 4, next - sep - 4));
+          var name = nameM[1].replace(/%22/gi, '"').replace(/%0D/gi, '\r').replace(/%0A/gi, '\n');
+          if (fileM) fd.append(name, FormOps.file(payload, fileM[1].replace(/%22/gi, '"').replace(/%0D/gi, '\r').replace(/%0A/gi, '\n'), ctM ? ctM[1].replace(/\s+$/, '').toLowerCase() : '', 0));
+          else fd.append(name, utf8Decode(payload));
+        }
       }
+      cursor = next + 2;
     }
     return fd;
   }
-  // Parse a consumed body back to a FormData for `.formData()`:
-  // application/x-www-form-urlencoded or multipart/form-data.
-  function parseFormData(text, contentType) {
+  function parseFormData(bytes, contentType) {
     var ct = String(contentType || '').toLowerCase();
     if (ct.indexOf('multipart/form-data') === 0) {
       var bM = /boundary=("?)([^";]+)\1/i.exec(String(contentType));
-      if (!bM) throw new TypeError("multipart/form-data without boundary");
-      return parseMultipart(text, bM[2]);
+      if (!bM) throw new TypeError('multipart/form-data without boundary');
+      return parseMultipart(bytes, bM[2]);
     }
     if (ct.indexOf('application/x-www-form-urlencoded') === 0 || ct === '') {
       var fd = new FormData();
-      new URLSearchParams(text).forEach(function(val, key) { fd.append(key, val); });
+      new URLSearchParams(utf8Decode(bytes)).forEach(function(val, key) { fd.append(key, val); });
       return fd;
     }
-    throw new TypeError("Unsupported content-type for formData(): " + ct);
+    throw new TypeError('Unsupported content-type for formData(): ' + ct);
   }
 
   // Convert only the final public result into a promise. Intermediate reads
@@ -1457,12 +1368,12 @@ const FETCH_BOOTSTRAP: &str = r#"
     var self = this;
     return consumeBody(self, function (bytes) {
       var options = Core.record(); options.type = self.headers.get('content-type') || '';
-      return new Blob([bytes], options);
+      return FormOps.makeBlob(bytes, options.type);
     });
   };
   bodyMixin.formData = function formData() {
     var self = this;
-    return consumeBody(self, function (bytes) { return parseFormData(utf8Decode(bytes), self.headers.get('content-type')); });
+    return consumeBody(self, function (bytes) { return parseFormData(bytes, self.headers.get('content-type')); });
   };
   function installBodyMixin(prototype) {
     var names = ['text', 'json', 'arrayBuffer', 'bytes', 'blob', 'formData'];
@@ -2112,11 +2023,7 @@ const FETCH_BOOTSTRAP: &str = r#"
     var cm = /;[\t ]*charset[\t ]*=[\t ]*("?)([^";]*)\1/i.exec(s);
     return { essence: essence.toLowerCase(), charset: cm ? cm[2].toLowerCase() : '' };
   }
-  function latin1Decode(b) {
-    var out = '', CH = 0x8000;
-    for (var i = 0; i < b.length; i += CH) out += String.fromCharCode.apply(null, b.subarray(i, i + CH));
-    return out;
-  }
+  function latin1Decode(b) { return FormOps.binary(b); }
   function hasAnyListener(t) {
     var L = t.__listeners;
     if (!L) return false;
@@ -2415,8 +2322,8 @@ const FETCH_BOOTSTRAP: &str = r#"
     if (this._respObj !== undefined) return this._respObj;
     var bytes = this._bytes || new Uint8Array(0);
     var v = null;
-    if (t === 'arraybuffer') v = bytes.slice(0).buffer;
-    else if (t === 'blob') v = new Blob([bytes], { type: xhrMime(this).essence || '' });
+    if (t === 'arraybuffer') v = Core.viewInfo(Core.copyBytes(bytes)).buffer;
+    else if (t === 'blob') v = FormOps.makeBlob(bytes, xhrMime(this).essence || '');
     else if (t === 'json') { try { v = JSON.parse(utf8Decode(bytes)); } catch (e) { v = null; } }
     this._respObj = v;
     return v;

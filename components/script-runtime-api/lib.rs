@@ -81,6 +81,9 @@ mod crypto;
 mod dom;
 mod fetch;
 pub mod form_encoding;
+mod form_data;
+mod form_submission;
+pub use form_submission::FormKeyModifiers;
 mod frames;
 mod harness;
 mod messaging;
@@ -226,6 +229,28 @@ impl<'cx, E: ScriptEngine + 'cx> Surface<'_, 'cx, E> {
         name: &str,
         length: usize,
     ) -> Result<(), SurfaceError<E::Error>> {
+        // These setup-only aliases are captured by trusted bootstrap and then
+        // deleted. Predeclare their flags before a value-only native installer
+        // can create a nonconfigurable property. A refusal aborts registration.
+        if matches!(
+            name,
+            "__formFileAllocate"
+                | "__formFilesReplace"
+                | "__formFilesSnapshot"
+                | "__formEntrySnapshot"
+                | "__formDataEncode"
+                | "__formControlInfo"
+                | "__formSubmitterCheck"
+                | "__formImplicitDecision"
+                | "__formMeta"
+                | "__formSubmissionPlan"
+                | "__domRegisterHooks"
+        ) {
+            self.eval(&format!(
+                "Object.defineProperty(globalThis, {}, {{value:undefined,writable:true,enumerable:false,configurable:true}})",
+                js_str(name)
+            ))?;
+        }
         match self {
             Self::Engine { engine, realm } if *realm == MAIN_REALM => engine
                 .set_function::<F>(name, length)
@@ -1214,6 +1239,15 @@ impl<E: ScriptEngine> Runtime<E> {
             "start",
             Some(format!("type={event_type};node={raw_node_id}")),
         );
+        if event_type == "click" {
+            let result = self.dispatch_form_activation(raw_node_id, None);
+            self.flush_host_trace_events();
+            match result {
+                Ok(proceed) => self.trace_scheduler("dispatch_event", "end", Some(format!("proceed={proceed}"))),
+                Err(_) => self.trace_scheduler("dispatch_event", "error", None),
+            }
+            return result;
+        }
         // Pass the node id as a *string* literal, not a bare number: a tagged
         // raw NodeId can exceed 2^53 and lose precision as a JS f64, corrupting
         // its doc-tag high bits and tripping the scripted-DOM fence. The
@@ -2637,6 +2671,7 @@ pub(crate) fn install_host_surface<E: ScriptEngine>(
     // `structuredClone` + the serialize/deserialize algorithm. After `fetch` so
     // `Blob` / `File` exist for the platform-object cases.
     structured_clone::install_structured_clone_surface(engine)?;
+    engine.eval("delete globalThis.__formsPrivate")?;
     streams::finish_streams_install(engine)?;
     // `performance` (hr-time, user timing) + `PerformanceObserver`.
     timing::install_timing_surface(engine)?;
@@ -2684,6 +2719,7 @@ const EVENT_LOOP_BOOTSTRAP: &str = r#"
       timers: queue, nextId: 1, now: 0, domNodes: new WeakSet(),
       domWrappers: new WeakMap(), domWrapperGroups: new WeakMap(), domOwners: new WeakMap(),
       domTemplateContents: new WeakMap(), domEventTrust: new WeakMap(),
+      domMouseEvents: new WeakMap(), domNodeDispatch: new WeakMap(), domFormRefs: new WeakMap(),
       domValidityObjects: new WeakMap(), domValidityOwners: new WeakMap(),
       domValidityCreators: new WeakMap(), domInvalidEventCreators: new WeakMap()
     };
@@ -2841,6 +2877,8 @@ const EVENT_TARGET_BOOTSTRAP: &str = r#"
   var uaEventTrust = globalThis.__agentTimers.domEventTrust;
   var trustGet = WeakMap.prototype.get, trustSet = WeakMap.prototype.set;
   var trustApply = Reflect.apply;
+  var nodeDispatch = globalThis.__agentTimers.domNodeDispatch;
+  var mouseEvents = globalThis.__agentTimers.domMouseEvents;
   function clearUAEventTrust(event) {
     if (trustApply(trustGet, uaEventTrust, [event]) !== undefined) {
       trustApply(trustSet, uaEventTrust, [event, false]);
@@ -2905,6 +2943,8 @@ const EVENT_TARGET_BOOTSTRAP: &str = r#"
       throw new DOMException("The event is not initialized or is being dispatched.", "InvalidStateError");
     }
     clearUAEventTrust(event);
+    var dispatcher = trustApply(trustGet, nodeDispatch, [this]);
+    if (dispatcher) return trustApply(dispatcher, this, [event]);
     // window is a leaf target (no DOM tree): target phase only — capture- then
     // bubble-registered listeners on this target, with the dispatch flags set.
     // The stop flags are cleared *after* dispatch, not before (DOM §dispatch):
@@ -2971,7 +3011,7 @@ const EVENT_TARGET_BOOTSTRAP: &str = r#"
   UIEvent.prototype.constructor = UIEvent;
   globalThis.UIEvent = UIEvent;
 
-  function MouseEvent(type, init) {
+  function initializeMouseEvent(type, init) {
     UIEvent.call(this, type, init);
     init = init || {};
     this.screenX = Number(init.screenX || 0);
@@ -2986,13 +3026,20 @@ const EVENT_TARGET_BOOTSTRAP: &str = r#"
     this.buttons = Number(init.buttons || 0);
     this.relatedTarget = init.relatedTarget || null;
   }
+  function MouseEvent(type, init) {
+    if (!new.target) throw new TypeError('MouseEvent requires new');
+    trustApply(initializeMouseEvent, this, [type, init]);
+    trustApply(trustSet, mouseEvents, [this, true]);
+  }
   MouseEvent.prototype = Object.create(UIEvent.prototype);
   MouseEvent.prototype.constructor = MouseEvent;
   globalThis.MouseEvent = MouseEvent;
 
   // PointerEvent extends MouseEvent (Pointer Events): pointer identity + geometry.
   function PointerEvent(type, init) {
-    MouseEvent.call(this, type, init);
+    if (!new.target) throw new TypeError("PointerEvent requires new");
+    trustApply(initializeMouseEvent, this, [type, init]);
+    trustApply(trustSet, mouseEvents, [this, true]);
     init = init || {};
     this.pointerId = Number(init.pointerId || 0);
     this.width = Number(init.width || 1);
@@ -3012,7 +3059,9 @@ const EVENT_TARGET_BOOTSTRAP: &str = r#"
   // WheelEvent extends MouseEvent (CSSOM View / UI Events): scroll deltas.
   var WHEEL_MODE = { PIXEL: 0, LINE: 1, PAGE: 2 };
   function WheelEvent(type, init) {
-    MouseEvent.call(this, type, init);
+    if (!new.target) throw new TypeError("WheelEvent requires new");
+    trustApply(initializeMouseEvent, this, [type, init]);
+    trustApply(trustSet, mouseEvents, [this, true]);
     init = init || {};
     this.deltaX = Number(init.deltaX || 0);
     this.deltaY = Number(init.deltaY || 0);

@@ -9,7 +9,19 @@
   // realm hooks and raw record lookup never become an authored-script API.
   var domAgentDispatch = globalThis.__domAgentDispatch;
   var domRegisterHooks = globalThis.__domRegisterHooks;
-  var domRealmHooks;
+  var domRealmHooks, formOperations, privateValidateForm;
+  var nativeFormOwner = globalThis.__formControlOwner, nativeFormReflect = globalThis.__reflectNode;
+  var formNamespace = globalThis.__namespaceURI, formNodeType = globalThis.__nodeType;
+  var formSplit = String.prototype.split, formTypeError = TypeError;
+  var pointerEventPrototype = globalThis.PointerEvent.prototype;
+  var keyboardEventPrototype = globalThis.KeyboardEvent.prototype;
+  var formRefs = globalThis.__agentTimers.domFormRefs;
+  var nodeDispatchers = globalThis.__agentTimers.domNodeDispatch;
+  var mouseEvents = globalThis.__agentTimers.domMouseEvents;
+  var formEventCreators = globalThis.__agentTimers.domFormEventCreators;
+  if (!formEventCreators) formEventCreators = globalThis.__agentTimers.domFormEventCreators = new WeakMap();
+  var creatorFormKind = globalThis.__formControlGet;
+
   // Captured before authored code runs: parser lifecycle events cannot depend
   // on the page-deletable public Event global at dispatch time.
   var userAgentEventConstructor = globalThis.Event;
@@ -101,6 +113,8 @@
   if (!nodeBaseReaders) nodeBaseReaders = globalThis.__agentTimers.domBaseReaders = new WeakMap();
   function nativeNodeBaseURI(ref, selector) { return __nodeBaseURI(ref, selector); }
   function registerBaseReader(node) {
+    applyDOMBrand(gcWeakMapSet, formRefs, [node, node.__ref]);
+    applyDOMBrand(gcWeakMapSet, nodeDispatchers, [node, dispatchNodeEvent]);
     nodeBaseReaders.set(node, nativeNodeBaseURI);
     // This private factory retains the wrapper's creation realm. A borrowed
     // getter must return the same validity object with that realm's prototype.
@@ -108,6 +122,15 @@
     // Invalid events must likewise be created in the target's relevant realm,
     // even when a borrowed validation method runs in another realm.
     applyDOMBrand(gcWeakMapSet, formInvalidEventCreators, [node, fireInvalidLocal]);
+    // Actual canonical form wrappers keep their first creator factory across
+    // adoption, collections and creator-host retirement. The weak key bounds it.
+    if (creatorFormKind(node.__ref, 'kind') === 'form' && !applyDOMBrand(gcWeakMapGet, formEventCreators, [node])) {
+      applyDOMBrand(gcWeakMapSet, formEventCreators, [node, createFormEventLocal]);
+    }
+  }
+  function createFormEventLocal(kind, value) {
+    if (!formOperations) throw new formTypeError('Form operations unavailable');
+    return formOperations.event(kind, value);
   }
   var wrapperGroups = globalThis.__agentTimers.domWrapperGroups;
   // A template retains its contents, but contents do not retain the template.
@@ -1060,6 +1083,12 @@
       path.push(terminalWindow);
       targets.push(currentTarget);
     }
+    var activationTarget = null;
+    if (event.type === 'click' && applyDOMBrand(gcWeakMapGet, mouseEvents, [event]) && formOperations) {
+      for (var ai = 0; ai < path.length && (ai === 0 || event.bubbles); ai++) {
+        if (formOperations.activationTarget(path[ai])) { activationTarget = path[ai]; break; }
+      }
+    }
     event.target = this;
     event.srcElement = this; // legacy alias for target
     event.__path = path;
@@ -1104,6 +1133,7 @@
     event.__pathIndex = undefined;
     event.target = this;
     event.srcElement = this;
+    if (activationTarget && !event.__canceled) formOperations.activation(activationTarget, event);
     return !event.__canceled;
   }
   Node.prototype.dispatchEvent = function(event) {
@@ -3118,7 +3148,7 @@
   }
 
   function formOwner(control) {
-    return wrapNode(__formControlOwner(control.__ref)) || null;
+    return wrapNode(nativeFormOwner(applyDOMBrand(gcWeakMapGet, formRefs, [control]))) || null;
   }
   function formControlError(error) {
     if (error === 'TypeError') throw new TypeError('Illegal invocation');
@@ -3152,17 +3182,17 @@
   delete globalThis.__formControlListCount;
   delete globalThis.__formControlListItem;
   function validationControlRef(control, kind) {
-    if (!applyDOMBrand(formNodeHas, domNodes, [control])) throw new TypeError('Illegal invocation');
-    var ref = control.__ref;
-    if (kind !== undefined && nativeControlGet(ref, 'kind') !== kind) throw new TypeError('Illegal invocation');
-    if (nativeValidityGet(ref, 'valid') === null) throw new TypeError('Illegal invocation');
+    if (!applyDOMBrand(formNodeHas, domNodes, [control])) throw new formTypeError('Illegal invocation');
+    var ref = applyDOMBrand(gcWeakMapGet, formRefs, [control]);
+    if (kind !== undefined && nativeControlGet(ref, 'kind') !== kind) throw new formTypeError('Illegal invocation');
+    if (nativeValidityGet(ref, 'valid') === null) throw new formTypeError('Illegal invocation');
     return ref;
   }
   function formInterfaceRef(control, kind) {
-    if (!applyDOMBrand(formNodeHas, domNodes, [control]) || nativeControlGet(control.__ref, 'kind') !== kind) {
-      throw new TypeError('Illegal invocation');
+    if (!applyDOMBrand(formNodeHas, domNodes, [control]) || nativeControlGet(applyDOMBrand(gcWeakMapGet, formRefs, [control]), 'kind') !== kind) {
+      throw new formTypeError('Illegal invocation');
     }
-    return control.__ref;
+    return applyDOMBrand(gcWeakMapGet, formRefs, [control]);
   }
   function readValidityFlag(control, key) {
     return nativeValidityGet(validationControlRef(control), key) === 'true';
@@ -3223,9 +3253,9 @@
     return applyDOMBrand(dispatchNodeEvent, control, [event]);
   }
   function nativeControlList(control, kind) {
-    var ref = control.__ref, count = Number(nativeControlListCount(ref, kind)), result = [];
+    var ref = applyDOMBrand(gcWeakMapGet, formRefs, [control]), count = +nativeControlListCount(ref, kind), result = [];
     for (var i = 0; i < count; i++) {
-      var item = wrapNode(nativeControlListItem(ref, kind, String(i)));
+      var item = wrapNode(nativeControlListItem(ref, kind, formToString(i)));
       if (item) result.push(item);
     }
     return result;
@@ -3334,7 +3364,7 @@
         // Snapshot all invalid candidates before listeners can mutate the form.
         for (var i = 0; i < controls.length; i++) {
           if (invalidControl(controls[i])) {
-            var ref = controls[i].__ref;
+            var ref = applyDOMBrand(gcWeakMapGet, formRefs, [controls[i]]);
             invalid.push({ ref: ref, control: controls[i],
               message: report ? nativeValidityGet(ref, 'validationMessage') : '' });
           }
@@ -3348,6 +3378,7 @@
         }
         return invalid.length === 0;
       }
+      privateValidateForm = function(form) { return validateForm(form, true); };
       proto.checkValidity = function() { return validateForm(this, false); };
       proto.reportValidity = function() { return validateForm(this, true); };
       var resetting = new WeakSet();
@@ -6848,8 +6879,52 @@
     return target.dispatchEvent(event);
   }
 
+  function privateElementRef(node) {
+    if (!applyDOMBrand(formNodeHas, domNodes, [node])) throw new formTypeError('Illegal HTMLElement receiver');
+    var ref = applyDOMBrand(gcWeakMapGet, formRefs, [node]);
+    if (formNamespace(ref) !== XHTML_NS || +formNodeType(ref) !== 1) throw new formTypeError('Expected HTMLElement');
+    return ref;
+  }
+  function privateEvent(type, prototype, bubbles, cancelable, trusted, extra) {
+    var event = formObjectCreate(prototype);
+    var fields = { __proto__: null, type: type, bubbles: bubbles, cancelable: cancelable, composed: true,
+      defaultPrevented: false, __canceled: false, eventPhase: 0, target: null, currentTarget: null,
+      srcElement: null, __initialized: true, __dispatch: false, __stop: false, __stopImmediate: false, __inPassive: false };
+    for (var key in fields) gcDefineProperty(event, key, { value: fields[key], writable: true, configurable: true, enumerable: true });
+    if (extra) for (var key in extra) gcDefineProperty(event, key, { value: extra[key], writable: true, configurable: true, enumerable: true });
+    privateTrust(event, trusted); return event;
+  }
+  function privateTrust(event, trusted) {
+    applyDOMBrand(gcWeakMapSet, formInvalidEventTrust, [event, !!trusted]);
+    gcDefineProperty(event, 'isTrusted', { enumerable: true, get: function() { return applyDOMBrand(gcWeakMapGet, formInvalidEventTrust, [event]); } });
+  }
+  globalThis.__formsDOM = {
+    ref: formInterfaceRef, elementRef: privateElementRef,
+    nodeRef: function(node) { if (!applyDOMBrand(formNodeHas, domNodes, [node])) throw new formTypeError('Illegal Node receiver'); return applyDOMBrand(gcWeakMapGet, formRefs, [node]); },
+    isElement: function(node) { return applyDOMBrand(formNodeHas, domNodes, [node]) && +formNodeType(applyDOMBrand(gcWeakMapGet, formRefs, [node])) === 1; },
+    wrap: wrapNode, eventPrototype: userAgentEventPrototype,
+    formPrototype: elementSubclassProto.form, inputPrototype: elementSubclassProto.input,
+    htmlPrototype: htmlInterfaceConstructors.HTMLElement.prototype,
+    validate: function(form) { return privateValidateForm(form); },
+    owner: function(node) { return wrapNode(nativeFormOwner(privateElementRef(node))); },
+    dispatch: function(target,event) { return applyDOMBrand(dispatchNodeEvent,target,[event]); },
+    trust: privateTrust,
+    formEvent: function(form, kind, value) {
+      formInterfaceRef(form, 'form');
+      var creator = applyDOMBrand(gcWeakMapGet, formEventCreators, [form]);
+      if (!creator) throw new formTypeError('Form creator unavailable');
+      return applyDOMBrand(creator, undefined, [kind, value]);
+    },
+    pointer: function(trusted) { var event=privateEvent('click',pointerEventPrototype,true,true,trusted,{__proto__:null,button:0,buttons:0,clientX:0,clientY:0,screenX:0,screenY:0,detail:0,view:globalThis,ctrlKey:false,altKey:false,shiftKey:false,metaKey:false,pointerId:-1,pointerType:'',isPrimary:false,width:1,height:1,pressure:0,tangentialPressure:0,tiltX:0,tiltY:0,twist:0}); applyDOMBrand(gcWeakMapSet,mouseEvents,[event,true]); return event; },
+    key: function(target,details) { return applyDOMBrand(dispatchNodeEvent,target,[privateEvent('keydown',keyboardEventPrototype,true,true,true,{ __proto__:null,key:details.key,altKey:details.alt,ctrlKey:details.ctrl,metaKey:details.meta,shiftKey:details.shift })]); },
+    task: setTimeout,
+    complete: function(operations) { if (formOperations) throw new TypeError('Form operations already installed'); formOperations=operations; }
+  };
   domRealmHooks = function(op, a, b, c, d) {
       switch (op) {
+        case 'formPrivate': return formOperations.private(a,b,c);
+        case 'formActivateRaw': var p=applyDOMBrand(formSplit,b,[',']); return formOperations.hostClick(wrapNode(nativeFormReflect(a)),+p[0],+p[1]);
+        case 'formKeyRaw': return formOperations.key(wrapNode(nativeFormReflect(a)),b);
         case 'uaEvent': return dispatchUserAgentEvent(a, b, c);
         case 'wrap': return wrapNodeLocal(a);
         case 'owners': return setOwnerDocumentSnapshotLocal(a, b);

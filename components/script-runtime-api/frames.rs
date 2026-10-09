@@ -105,6 +105,7 @@ pub(crate) struct PendingNavigation {
     replace: bool,
     referrer_policy: String,
     about_base_url: Option<String>,
+    source_form: Option<(RealmId, NodeId)>,
 }
 
 /// A browsing context's stable identity for `WindowProxy` purposes: the id of
@@ -173,6 +174,17 @@ impl FrameState {
             }
         }
         self.ancestor_origins.insert(realm, list);
+    }
+
+    pub(crate) fn form_submission_allowed(&self, realm: RealmId) -> bool {
+        if self.document_is_detached(realm)
+            || (realm != self.top_realm() && !self.records.contains_key(&realm))
+        {
+            return false;
+        }
+        self.contexts.get(&realm)
+            .and_then(|id| self.tree.as_ref()?.get(*id))
+            .is_none_or(|context| !context.sandbox().contains(SandboxFlags::FORMS))
     }
 
     pub(crate) fn document_is_detached(&self, realm: RealmId) -> bool {
@@ -2041,11 +2053,22 @@ fn navigation_get(url: &str) -> crate::FetchRequest {
 
 /// Queue a complete document request on the existing navigation lifecycle.
 pub(crate) fn navigate_request<E: ScriptEngine>(
-    cx: &mut E::CallCx<'_>,
-    from: RealmId,
-    target: RealmId,
-    mut request: crate::FetchRequest,
-    replace: bool,
+    cx: &mut E::CallCx<'_>, from: RealmId, target: RealmId,
+    request: crate::FetchRequest, replace: bool,
+) -> Result<E::Value, E::Error> {
+    queue_navigation::<E>(cx, from, target, request, replace, None)
+}
+
+pub(crate) fn navigate_form_request<E: ScriptEngine>(
+    cx: &mut E::CallCx<'_>, from: RealmId, target: RealmId,
+    request: crate::FetchRequest, replace: bool, source_form: NodeId,
+) -> Result<E::Value, E::Error> {
+    queue_navigation::<E>(cx, from, target, request, replace, Some(source_form))
+}
+
+fn queue_navigation<E: ScriptEngine>(
+    cx: &mut E::CallCx<'_>, from: RealmId, target: RealmId,
+    mut request: crate::FetchRequest, replace: bool, source_form: Option<NodeId>,
 ) -> Result<E::Value, E::Error> {
     let Some(agent) = host::<E>(cx).and_then(|h| h.borrow().agent.upgrade()) else {
         return Ok(cx.undefined());
@@ -2092,14 +2115,14 @@ pub(crate) fn navigate_request<E: ScriptEngine>(
         return Ok(cx.undefined());
     }
     let current = target_base.unwrap_or_else(|| NO_DOCUMENT_URL.into());
-    if request.method == "GET"
+    if source_form.is_none() && request.method == "GET"
         && request.body.is_none()
         && without_fragment(&url) == without_fragment(&current)
         && url != current
     {
         return navigate_fragment::<E>(cx, &agent, target, &url, &current, replace);
     }
-    if request.method == "GET" && request.body.is_none() && url == current && url.contains('#') {
+    if source_form.is_none() && request.method == "GET" && request.body.is_none() && url == current && url.contains('#') {
         // Same URL including the fragment: HTML performs the navigation but
         // fires no `hashchange`.
         return Ok(cx.undefined());
@@ -2109,7 +2132,7 @@ pub(crate) fn navigate_request<E: ScriptEngine>(
     // the teardown both take. A top-level context has no container, so it takes
     // the route next door, which drains on the bootstrap realm instead.
     let Some(container) = container else {
-        return navigate_top_level::<E>(cx, &agent, target, request, replace, source_base);
+        return navigate_top_level::<E>(cx, &agent, target, request, replace, source_base, source_form.map(|id| (from, id)));
     };
     let referrer_policy = {
         let a = agent.borrow();
@@ -2119,6 +2142,9 @@ pub(crate) fn navigate_request<E: ScriptEngine>(
             .map(|record| iframe_referrer_policy(&a, record.parent, record.owner))
             .unwrap_or_default()
     };
+    if let Some(form) = source_form {
+        agent.borrow_mut().frames.pending_navigations.retain(|plan| plan.source_form.map(|(_, id)| id) != Some(form));
+    }
     agent
         .borrow_mut()
         .frames
@@ -2129,6 +2155,7 @@ pub(crate) fn navigate_request<E: ScriptEngine>(
             replace,
             referrer_policy,
             about_base_url: source_base,
+            source_form: source_form.map(|id| (from, id)),
         });
     realm_eval::<E>(
         cx,
@@ -2204,6 +2231,7 @@ fn navigate_top_level<E: ScriptEngine>(
     request: crate::FetchRequest,
     replace: bool,
     about_base_url: Option<String>,
+    source_form: Option<(RealmId, NodeId)>,
 ) -> Result<E::Value, E::Error> {
     let url = &request.url;
     // HTML abandons a navigation whose URL does not parse. A child could still
@@ -2238,6 +2266,9 @@ fn navigate_top_level<E: ScriptEngine>(
             .unwrap_or_else(|| NO_DOCUMENT_URL.into());
         agent.borrow_mut().frames.initialize(&base);
     }
+    if let Some((_, form)) = source_form {
+        agent.borrow_mut().frames.pending_navigations.retain(|plan| plan.source_form.map(|(_, id)| id) != Some(form));
+    }
     agent
         .borrow_mut()
         .frames
@@ -2248,6 +2279,7 @@ fn navigate_top_level<E: ScriptEngine>(
             replace,
             referrer_policy: String::new(),
             about_base_url,
+            source_form,
         });
     realm_eval::<E>(
         cx,
@@ -2333,6 +2365,7 @@ fn perform_navigation<E: ScriptEngine>(
         replace,
         referrer_policy,
         about_base_url,
+        source_form,
     } = navigation;
     // A child carries a `FrameRecord`; the top-level context carries none, and
     // that absence is the only thing that distinguishes the two here. Both keep
@@ -2359,6 +2392,28 @@ fn perform_navigation<E: ScriptEngine>(
     let Some((container, scripts, context, outgoing)) = facts else {
         return Ok(());
     };
+    if let Some((realm, _)) = source_form {
+        // The planned task records its initiating document, not a requirement
+        // that the form remain connected after the algorithm has queued it.
+        if !agent.borrow().frames.form_submission_allowed(realm) {
+            return Ok(());
+        }
+        let current = outgoing
+            .borrow()
+            .base_url
+            .clone()
+            .unwrap_or_else(|| NO_DOCUMENT_URL.into());
+        if request.method == "GET"
+            && request.body.is_none()
+            && request.url.contains('#')
+            && without_fragment(&request.url) == without_fragment(&current)
+        {
+            if request.url != current {
+                navigate_fragment::<E>(cx, agent, target, &request.url, &current, replace)?;
+            }
+            return Ok(());
+        }
+    }
     let key = agent.borrow_mut().frames.context_key(target);
     let (seams, viewport_size, loader, decode_options) = {
         let host = outgoing.borrow();

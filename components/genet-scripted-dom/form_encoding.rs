@@ -12,6 +12,117 @@ pub struct EncodedFormBody {
     pub bytes: Vec<u8>,
     pub content_type: String,
 }
+
+#[cfg(test)]
+mod phase_c_boundary_fixtures {
+    use super::*;
+    use crate::{FormEntryValue, FormFile};
+    use std::sync::Arc;
+    // RED-only missing automatic-boundary adapter uses the existing literal
+    // primitive. This is not claimed to be an existing collision detector.
+    fn boundary_adapter(entries: &[FormEntry], encoding: &'static Encoding) -> String {
+        select_multipart_boundary(entries, encoding)
+    }
+    fn auto_adapter(entries: &[FormEntry], encoding: &'static Encoding) -> EncodedFormBody {
+        encode_multipart_auto(entries, encoding).unwrap()
+    }
+    // RED-only missing chunk scanner, explicitly independent of final body.
+    fn chunk_boundary_adapter(chunks: &[&[u8]]) -> String {
+        select_multipart_boundary_from_chunks(chunks.iter().copied())
+    }
+    fn text(name: &str, value: &str) -> FormEntry {
+        FormEntry {
+            name: name.into(),
+            value: FormEntryValue::Text(value.into()),
+        }
+    }
+    fn file(name: &str, filename: &str, mime: &str, bytes: &[u8]) -> FormEntry {
+        FormEntry {
+            name: name.into(),
+            value: FormEntryValue::File {
+                file: FormFile::new(filename.into(), mime.into(), Arc::from(bytes)).unwrap(),
+                source_input: None,
+            },
+        }
+    }
+    #[test]
+    fn phase_c_encoding_boundary_empty_deterministic_control() {
+        assert_eq!(boundary_adapter(&[], UTF_8), "GenetBoundary0");
+        assert_eq!(boundary_adapter(&[], UTF_8), boundary_adapter(&[], UTF_8));
+        assert_eq!(auto_adapter(&[], UTF_8).bytes, b"--GenetBoundary0--\r\n");
+    }
+    #[test]
+    fn phase_c_encoding_boundary_actual_text_delimiter_collision() {
+        let entries = [text("q", "\r\n--GenetBoundary0\r\ninside")];
+        assert_eq!(
+            boundary_adapter(&entries, UTF_8),
+            "GenetBoundary1",
+            "missing capability: collision-free automatic boundary"
+        );
+        assert_eq!(auto_adapter(&entries,UTF_8).bytes,b"--GenetBoundary1\r\nContent-Disposition: form-data; name=\"q\"\r\n\r\n\r\n--GenetBoundary0\r\ninside\r\n--GenetBoundary1--\r\n");
+    }
+    #[test]
+    fn phase_c_encoding_boundary_actual_binary_delimiter_collision() {
+        let entries = [file(
+            "upload",
+            "a.bin",
+            "application/octet-stream",
+            b"\0\x80\xff\r\n--GenetBoundary0\r\n",
+        )];
+        assert_eq!(boundary_adapter(&entries, UTF_8), "GenetBoundary1");
+        let expected=b"--GenetBoundary1\r\nContent-Disposition: form-data; name=\"upload\"; filename=\"a.bin\"\r\nContent-Type: application/octet-stream\r\n\r\n\0\x80\xff\r\n--GenetBoundary0\r\n\r\n--GenetBoundary1--\r\n";
+        assert_eq!(auto_adapter(&entries, UTF_8).bytes, expected);
+    }
+    #[test]
+    fn phase_c_encoding_boundary_headers_filename_and_mime_scanned() {
+        for entry in [
+            text("GenetBoundary0", "safe"),
+            file(
+                "x",
+                "GenetBoundary0.bin",
+                "application/octet-stream",
+                b"safe",
+            ),
+            file("x", "a.bin", "genetboundary0", b"safe"),
+        ] {
+            let selected = boundary_adapter(&[entry.clone()], UTF_8);
+            // MIME is ASCII-lowercased natively: lowercase is not a collision
+            // with the case-sensitive candidate; this is a positive control.
+            let expected = if matches!(&entry.value,FormEntryValue::File{file,..} if file.mime_type=="genetboundary0")
+            {
+                "GenetBoundary0"
+            } else {
+                "GenetBoundary1"
+            };
+            assert_eq!(selected, expected);
+        }
+    }
+    #[test]
+    fn phase_c_encoding_boundary_decimal_prefix_trap() {
+        let entries = [text("q", "GenetBoundary0 GenetBoundary12")];
+        assert_eq!(
+            boundary_adapter(&entries, UTF_8),
+            "GenetBoundary2",
+            "candidate1 is a prefix of an actual part token12"
+        );
+    }
+    #[test]
+    fn phase_c_encoding_boundary_chunk_spanning_bytes() {
+        assert_eq!(
+            chunk_boundary_adapter(&[b"\r\n--GenetBound", b"ary0\r\n", b"GenetBoundary12"]),
+            "GenetBoundary2",
+            "carry match/digit state across chunks, before delimiters"
+        );
+    }
+    #[test]
+    fn phase_c_encoding_boundary_legacy_actual_encoded_parts() {
+        let encoding = Encoding::for_label(b"windows-1252").unwrap();
+        let entries = [text("éGenetBoundary0", "é\n😀")];
+        assert_eq!(boundary_adapter(&entries, encoding), "GenetBoundary1");
+        assert_eq!(auto_adapter(&entries,encoding).bytes,b"--GenetBoundary1\r\nContent-Disposition: form-data; name=\"\xE9GenetBoundary0\"\r\n\r\n\xE9\r\n&#128512;\r\n--GenetBoundary1--\r\n");
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FormEncodingError {
     InvalidBoundary,
@@ -79,38 +190,8 @@ pub fn encode_multipart(
     }
     let mut bytes = Vec::new();
     for entry in entries {
-        bytes.extend_from_slice(b"--");
-        bytes.extend_from_slice(boundary.as_bytes());
-        bytes.extend_from_slice(b"\r\n");
-        bytes.extend_from_slice(b"Content-Disposition: form-data; name=\"");
-        escape_header(
-            &encoded(&normalize_newlines(&entry.name), encoding),
-            &mut bytes,
-        );
-        bytes.push(b'"');
-        match &entry.value {
-            FormEntryValue::Text(value) => {
-                bytes.extend_from_slice(b"\r\n\r\n");
-                bytes.extend_from_slice(&encoded(&normalize_newlines(value), encoding));
-            },
-            FormEntryValue::File { file, .. } => {
-                bytes.extend_from_slice(b"; filename=\"");
-                // Filename newlines are escaped directly, never normalized.
-                escape_header(&encoded(&file.name, encoding), &mut bytes);
-                bytes.extend_from_slice(b"\"\r\nContent-Type: ");
-                let mime = if file.mime_type.is_empty()
-                    || !file.mime_type.bytes().all(|b| (0x20..=0x7e).contains(&b))
-                {
-                    "application/octet-stream"
-                } else {
-                    &file.mime_type
-                };
-                bytes.extend_from_slice(mime.as_bytes());
-                bytes.extend_from_slice(b"\r\n\r\n");
-                bytes.extend_from_slice(&file.bytes);
-            },
-        }
-        bytes.extend_from_slice(b"\r\n");
+        bytes.extend_from_slice(b"--"); bytes.extend_from_slice(boundary.as_bytes()); bytes.extend_from_slice(b"\r\n");
+        bytes.extend_from_slice(&multipart_part(entry, encoding)); bytes.extend_from_slice(b"\r\n");
     }
     bytes.extend_from_slice(b"--");
     bytes.extend_from_slice(boundary.as_bytes());
@@ -119,6 +200,100 @@ pub fn encode_multipart(
         bytes,
         content_type: format!("multipart/form-data; boundary={boundary}"),
     })
+}
+
+fn multipart_part(entry: &FormEntry, encoding: &'static Encoding) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    bytes.extend_from_slice(b"Content-Disposition: form-data; name=\"");
+    escape_header(
+        &encoded(&normalize_newlines(&entry.name), encoding),
+        &mut bytes,
+    );
+    bytes.push(b'"');
+    match &entry.value {
+        FormEntryValue::Text(value) => {
+            bytes.extend_from_slice(b"\r\n\r\n");
+            bytes.extend_from_slice(&encoded(&normalize_newlines(value), encoding));
+        },
+        FormEntryValue::File { file, .. } => {
+            bytes.extend_from_slice(b"; filename=\"");
+            // Filename newlines are escaped directly, never normalized.
+            escape_header(&encoded(&file.name, encoding), &mut bytes);
+            bytes.extend_from_slice(b"\"\r\nContent-Type: ");
+            let mime = if file.mime_type.is_empty()
+                || !file.mime_type.bytes().all(|b| (0x20..=0x7e).contains(&b))
+            {
+                "application/octet-stream"
+            } else {
+                &file.mime_type
+            };
+            bytes.extend_from_slice(mime.as_bytes());
+            bytes.extend_from_slice(b"\r\n\r\n");
+            bytes.extend_from_slice(&file.bytes);
+        },
+    }
+    bytes
+}
+pub fn select_multipart_boundary(entries: &[FormEntry], encoding: &'static Encoding) -> String {
+    let parts: Vec<Vec<u8>> = entries
+        .iter()
+        .map(|entry| multipart_part(entry, encoding))
+        .collect();
+    select_multipart_boundary_from_chunks(parts.iter().map(Vec::as_slice))
+}
+pub fn encode_multipart_auto(
+    entries: &[FormEntry],
+    encoding: &'static Encoding,
+) -> Result<EncodedFormBody, FormEncodingError> {
+    encode_multipart(
+        entries,
+        encoding,
+        &select_multipart_boundary(entries, encoding),
+    )
+}
+fn select_multipart_boundary_from_chunks<'a>(chunks: impl IntoIterator<Item = &'a [u8]>) -> String {
+    let prefix = b"GenetBoundary";
+    let mut matched = 0;
+    let mut number: Option<u64> = None;
+    let mut digits = false;
+    let mut leading_zero = false;
+    let mut used = std::collections::HashSet::new();
+    for chunk in chunks {
+        for &byte in chunk {
+            if matched == prefix.len() && byte.is_ascii_digit() {
+                if !digits {
+                    number = Some(0);
+                    leading_zero = byte == b'0';
+                }
+                if !digits || !leading_zero {
+                    number =
+                        number.and_then(|n| n.checked_mul(10)?.checked_add(u64::from(byte - b'0')));
+                    if let Some(value) = number {
+                        used.insert(value);
+                    }
+                }
+                digits = true;
+                continue;
+            }
+            if matched == prefix.len() {
+                matched = 0;
+                number = None;
+                digits = false;
+            }
+            if byte == prefix[matched] {
+                matched += 1;
+            } else {
+                matched = usize::from(byte == prefix[0]);
+            }
+        }
+    }
+    let mut candidate = 0u64;
+    while used.contains(&candidate) {
+        candidate = candidate
+            .checked_add(1)
+            .expect("finite multipart candidate set");
+    }
+    format!("GenetBoundary{candidate}")
 }
 
 fn pair_value(entry: &FormEntry) -> &str {

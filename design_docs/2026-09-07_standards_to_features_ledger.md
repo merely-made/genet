@@ -146,7 +146,14 @@ CSS results are unchanged (1,044 verified passes plus one unverified pass).
 F8/F9 provide native validity, notices, a configurable catalog and an Alert
 projection; F10 records the native-only matcher correction. The plan preserves
 the invalid original probe, corrected 20/20 supplemental control and native
-backtracking timeout limit. Phase C submission remains stopped.
+backtracking timeout limit. Mark authorized Phase C on 2026-10-09. Request-aware
+navigation, shared native encoders and document encoding are committed;
+FormData/submission bindings have 212 focused and 187 full native passes plus
+an accepted scoped review. The full runtime gate was interrupted during
+compilation for the requested physics `.as_str()` conversion handoff and
+remains pending. Host qualification, matched C captures and Checkpoint C
+publication remain pending; these targeted fixtures do not update the WPT
+percentage.
 
 **Encoding execution, 2026-10-05:** the
 [API plan](2026-10-05_encoding_textdecoder_plan.md) retains C1/C2/C4 and the

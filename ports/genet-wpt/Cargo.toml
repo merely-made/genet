@@ -82,4 +82,4 @@ mockito = "1"
 # WebGlHandler over webgl-wgpu's WebGlContext. Dev-only — the runner binary
 # stays graphics-free; only the conformance test wires a GPU.
 webgl_wgpu = { workspace = true }
-pollster = "0.4"
+pollster = "1.0"

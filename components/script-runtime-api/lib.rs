@@ -77,6 +77,7 @@ impl<T: script_engine_api::CallCx + ?Sized> OwnerResolvedCx for T {}
 mod crypto;
 mod dom;
 mod fetch;
+pub mod form_encoding;
 mod frames;
 mod harness;
 mod messaging;

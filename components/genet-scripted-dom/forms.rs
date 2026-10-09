@@ -125,7 +125,9 @@ impl ScriptedDom {
                         .attribute(id, &markup5ever::ns!(), &LocalName::from("value"))
                         .unwrap_or("on")
                         .to_owned(),
-                    InputValueMode::Filename => String::new(),
+                    InputValueMode::Filename => node.selected_files.first()
+                        .map(|file| format!("C:\\fakepath\\{}", file.name))
+                        .unwrap_or_default(),
                 })
             },
             _ => None,
@@ -176,10 +178,13 @@ impl ScriptedDom {
                     Err(FormControlValueError::InvalidState)
                 },
                 InputValueMode::Filename => {
+                    self.node_mut(id).selected_files.clear();
                     if let Some(state) = self.node_mut(id).form_control.as_mut() {
                         state.value.clear();
                     }
                     self.clear_user_edit_state(id);
+                    self.mutations
+                        .push(crate::DomMutation::FormControlStateChanged { node: id });
                     Ok(())
                 },
                 InputValueMode::Default | InputValueMode::DefaultOn => {
@@ -242,6 +247,7 @@ impl ScriptedDom {
                 let default = self.input_attribute(id, "value").unwrap_or("").to_owned();
                 let checked = self.has_input_attribute(id, "checked");
                 let mode = value_mode(&kind);
+                self.node_mut(id).selected_files.clear();
                 let current = match mode {
                     InputValueMode::Default => default.clone(),
                     InputValueMode::DefaultOn => {
@@ -329,6 +335,10 @@ impl ScriptedDom {
             dst.custom_validity_message.clear();
         }
         self.reset_interaction_state(target);
+        // HTML input cloning steps do not propagate selected files.
+        if src_name.local.as_ref() == "input" {
+            self.node_mut(target).selected_files.clear();
+        }
         true
     }
 
@@ -450,6 +460,9 @@ impl ScriptedDom {
                 let old_mode = value_mode(&old_type);
                 let new_type = self.input_type(id).to_owned();
                 let new_mode = value_mode(&new_type);
+                if old_type != new_type {
+                    self.node_mut(id).selected_files.clear();
+                }
                 let old_api_value = match old_mode {
                     InputValueMode::Value => {
                         self.node(id).form_control.as_ref().unwrap().value.clone()

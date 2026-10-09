@@ -53,6 +53,8 @@ use genet_livery::{Device, NavigationFragment};
 use genet_scripted_dom::{NodeId, ScriptedDom};
 #[cfg(test)]
 use genet_static_dom::StaticDocument;
+#[cfg(feature = "livery")]
+use script_engine_api::RealmId;
 use script_engine_api::ScriptEngine;
 use script_runtime_api::{CookieProvider, Runtime, WebGlFactory};
 
@@ -580,6 +582,23 @@ pub struct LiveryScriptedDocument<E: ScriptEngine> {
     hidden: bool,
     frozen: bool,
     last_hidden_pump_ms: f64,
+    validation_notice: Option<ScriptedValidationNotice>,
+    next_validation_notice_sequence: u64,
+}
+
+/// A native, inert presentation of an uncanceled constraint-validation
+/// report. It is not inserted into the authored DOM or its accessibility tree.
+#[cfg(feature = "livery")]
+#[derive(Clone, Debug, PartialEq)]
+pub struct ScriptedValidationNotice {
+    pub sequence: u64,
+    pub realm: RealmId,
+    pub node: NodeId,
+    pub message: String,
+    /// `[x, y, width, height]` for the painted background rectangle in the
+    /// top session viewport, independent of document scroll and child-frame
+    /// coordinates. This is `None` until a frame paints the notice.
+    pub bounds: Option<[f32; 4]>,
 }
 
 #[cfg(feature = "livery")]
@@ -757,11 +776,20 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
     /// Parse an inline fixture with an explicit empty host transport. Inline
     /// styles and scripts still use the same Livery CSSOM ownership path.
     pub fn parse(html: &str) -> Result<Self, String> {
+        Self::parse_with_options(html, ScriptedDocumentOptions::default())
+    }
+
+    /// Parse an inline fixture with host capabilities installed before its
+    /// authored scripts run.
+    pub fn parse_with_options(
+        html: &str,
+        options: ScriptedDocumentOptions,
+    ) -> Result<Self, String> {
         Self::build(
             html,
             ScriptResourceBridge::new(EmptyResourceFetcher, ScriptWake::new()),
             "about:blank",
-            ScriptedDocumentOptions::default(),
+            options,
         )
     }
 
@@ -773,6 +801,7 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
     ) -> Result<Self, String> {
         let mut rt =
             Runtime::<E>::new().map_err(|error| format!("script runtime init: {error:?}"))?;
+        rt.set_validation_message_catalog(options.validation_message_catalog);
         rt.set_fetch_handler(Box::new(fetcher.clone()));
         rt.set_script_resource_loader(Box::new(fetcher.clone()));
         let worker_wake = fetcher.wake();
@@ -855,7 +884,7 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
                 .map_err(|error| format!("dom capture write: {error}"))?;
         }
 
-        Ok(Self {
+        let mut document = Self {
             rt: Box::new(rt),
             bridge: fetcher,
             cssom: Box::new(cssom),
@@ -865,7 +894,69 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             hidden: false,
             frozen: false,
             last_hidden_pump_ms: f64::NAN,
-        })
+            validation_notice: None,
+            next_validation_notice_sequence: 0,
+        };
+        document.drain_validation_reports();
+        Ok(document)
+    }
+
+    fn report_target_is_current(&self, realm: RealmId, node: NodeId) -> bool {
+        let Ok(host) = self.rt.host_in_realm(realm) else {
+            return false;
+        };
+        let host = host.borrow();
+        let dom = &host.dom;
+        if !dom.is_live(node) {
+            return false;
+        }
+        let document = dom.document();
+        if dom.tree_root(node) != Some(document) {
+            return false;
+        }
+        dom.form_control_validity(node)
+            .is_some_and(|validity| validity.will_validate && !validity.flags.valid())
+    }
+
+    /// Drain host-private reports after script work and keep the newest report
+    /// whose control remains live, connected, and eligible for validation.
+    fn drain_validation_reports(&mut self) {
+        let reports = self.rt.take_validation_reports();
+        if self
+            .validation_notice
+            .as_ref()
+            .is_some_and(|notice| !self.report_target_is_current(notice.realm, notice.node))
+        {
+            self.validation_notice = None;
+        }
+        for report in reports {
+            if !self.report_target_is_current(report.realm, report.node) {
+                continue;
+            }
+            self.next_validation_notice_sequence = self
+                .next_validation_notice_sequence
+                .checked_add(1)
+                .expect("validation notice sequence exhausted");
+            self.validation_notice = Some(ScriptedValidationNotice {
+                sequence: self.next_validation_notice_sequence,
+                realm: report.realm,
+                node: report.node,
+                message: report.message,
+                bounds: None,
+            });
+        }
+    }
+
+    /// The latest native validation notice, if its target is still connected
+    /// and invalid. Bounds are populated after the next painted frame.
+    pub fn validation_notice(&self) -> Option<&ScriptedValidationNotice> {
+        self.validation_notice.as_ref()
+    }
+
+    /// Dismiss the current native notice. A later uncanceled report creates a
+    /// new notice with a new sequence number.
+    pub fn dismiss_validation_notice(&mut self) -> bool {
+        self.validation_notice.take().is_some()
     }
 
     /// Render the exact live runtime DOM through Livery and lower the resulting
@@ -941,6 +1032,11 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             .borrow_mut()
             .retain(|realm, _| reachable.contains(realm));
         self.composite_child_realms(self.rt.top_realm(), &mut list);
+        self.drain_validation_reports();
+        if let Some(notice) = &mut self.validation_notice {
+            let message = notice.message.clone();
+            notice.bounds = self.cssom.push_validation_notice(&mut list, &message);
+        }
         genet_render::translate_frame(&list)
     }
 
@@ -1072,6 +1168,7 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
     /// default for the embedding document session.
     pub fn click_at_result(&mut self, x: f32, y: f32) -> ScriptedClick {
         let outcome = self.cssom.click_at_result(&mut self.rt, x, y);
+        self.drain_validation_reports();
         self.flush_dom_capture();
         outcome
     }
@@ -1185,6 +1282,7 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         self.rt.run_microtasks();
         self.flush_dom_capture();
         let (unpinned, collected) = self.rt.collect_garbage();
+        self.drain_validation_reports();
         (external + workers + unpinned, collected)
     }
 
@@ -1223,6 +1321,7 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             .eval(source)
             .map_err(|error| format!("script evaluation: {error:?}"))?;
         self.rt.run_microtasks();
+        self.drain_validation_reports();
         self.flush_dom_capture();
         Ok(())
     }
@@ -1724,6 +1823,7 @@ mod tests {
                         marker.set(true);
                         Box::new(NullWebGl(Some(recorded_drops.clone())))
                     })),
+                    ..ScriptedDocumentOptions::default()
                 },
             )
             .expect("rendered document builds");
@@ -3025,6 +3125,198 @@ mod tests {
             );
         }
 
+        fn native_validation_notice_is_painted_and_dismissible<E: ScriptEngine>() {
+            let html = r#"<body><input id="required" required>
+                <script>setTimeout(function(){
+                  document.getElementById('required').reportValidity();
+                }, 0);</script></body>"#;
+            let mut doc = LiveryScriptedDocument::<E>::parse(html).expect("document");
+            let authored_dom = doc.dom_snapshot();
+            assert!(doc.validation_notice().is_none());
+            doc.pump(0.0);
+            let notice = doc
+                .validation_notice()
+                .expect("timer reports invalid control");
+            assert_eq!(notice.realm, doc.rt.top_realm());
+            assert!(!notice.message.is_empty());
+            assert!(notice.bounds.is_none(), "bounds wait for native paint");
+            let first_sequence = notice.sequence;
+
+            let scene = doc.frame(320, 180);
+            let notice = doc.validation_notice().expect("notice remains live");
+            let [x, y, width, height] = notice.bounds.expect("paint returns viewport bounds");
+            assert!(x >= 0.0 && y >= 0.0 && width > 0.0 && height > 0.0);
+            assert!(x + width <= 320.0 && y + height <= 180.0);
+            assert!(
+                scene
+                    .ops
+                    .iter()
+                    .any(|op| matches!(op, netrender::SceneOp::GlyphRun(_))),
+                "host validation text is painted with the retained text system"
+            );
+            assert_eq!(
+                doc.dom_snapshot(),
+                authored_dom,
+                "the native notice does not mutate authored DOM"
+            );
+
+            doc.evaluate("document.getElementById('required').reportValidity();")
+                .expect("repeat report");
+            let repeated = doc.validation_notice().expect("repeated report retained");
+            assert!(repeated.sequence > first_sequence);
+            assert!(doc.dismiss_validation_notice());
+            assert!(doc.validation_notice().is_none());
+            assert!(!doc.dismiss_validation_notice());
+        }
+
+        fn canceled_and_ineligible_reports_do_not_remain<E: ScriptEngine>() {
+            let mut canceled = LiveryScriptedDocument::<E>::parse(
+                r#"<body><input id="required" required><script>
+                  var field = document.getElementById('required');
+                  field.addEventListener('invalid', function(event){ event.preventDefault(); });
+                  setTimeout(function(){ field.reportValidity(); }, 0);
+                </script></body>"#,
+            )
+            .expect("canceled fixture");
+            canceled.pump(0.0);
+            assert!(
+                canceled.validation_notice().is_none(),
+                "preventDefault suppresses native notice"
+            );
+
+            for mutation in [
+                "field.disabled = true;",
+                "field.value = 'accepted';",
+                "field.remove();",
+            ] {
+                let mut doc = LiveryScriptedDocument::<E>::parse(
+                    r#"<body><input id="required" required></body>"#,
+                )
+                .expect("invalidation fixture");
+                doc.evaluate(
+                    "var field = document.getElementById('required'); field.reportValidity();",
+                )
+                .expect("initial report");
+                assert!(doc.validation_notice().is_some());
+                doc.evaluate(mutation).expect("change eligibility");
+                assert!(
+                    doc.validation_notice().is_none(),
+                    "native notice clears after {mutation}"
+                );
+            }
+        }
+
+        fn validation_feedback_follows_adoption_and_clears_after_teardown<E: ScriptEngine>() {
+            let mut doc = LiveryScriptedDocument::<E>::parse(
+                r#"<body><iframe id="frame" srcdoc="&lt;body&gt;&lt;input id='field' required&gt;&lt;/body&gt;"></iframe></body>"#,
+            ).expect("framed validation document");
+            doc.frame(320, 220);
+            doc.pump(0.0);
+            doc.evaluate("var frame = document.getElementById('frame'); var field = frame.contentDocument.getElementById('field'); field.setCustomValidity('  exact\\nmessage  '); field.reportValidity();")
+                .expect("child report");
+            let child_realm = doc.validation_notice().expect("child notice").realm;
+            assert_ne!(child_realm, doc.rt.top_realm());
+            doc.evaluate("document.body.appendChild(document.adoptNode(field));")
+                .expect("adopt reported control");
+            assert!(
+                doc.validation_notice().is_none(),
+                "old owner feedback clears"
+            );
+            doc.evaluate("field.reportValidity();")
+                .expect("adopted report");
+            let adopted = doc.validation_notice().expect("new owner notice");
+            assert_eq!(adopted.realm, doc.rt.top_realm());
+            assert_eq!(adopted.message, "  exact\nmessage  ");
+            doc.evaluate("frame.contentDocument.body.appendChild(frame.contentDocument.adoptNode(field)); field.reportValidity();")
+                .expect("return to child");
+            assert_eq!(
+                doc.validation_notice().expect("child again").realm,
+                child_realm
+            );
+            doc.evaluate("frame.remove();").expect("detach child frame");
+            doc.pump(16.0);
+            doc.frame(320, 220);
+            assert!(
+                doc.validation_notice().is_none(),
+                "destroyed realm loses feedback"
+            );
+        }
+
+        fn child_frame_timer_report_keeps_its_realm<E: ScriptEngine>() {
+            let mut doc = LiveryScriptedDocument::<E>::parse(
+                r#"<body><iframe style="width:200px;height:100px" srcdoc="&lt;body&gt;&lt;input id='child' required&gt;&lt;script&gt;setTimeout(function(){document.getElementById('child').reportValidity()},0)&lt;/script&gt;&lt;/body&gt;"></iframe></body>"#,
+            )
+            .expect("framed document");
+            let authored_dom = doc.dom_snapshot();
+            doc.pump(0.0);
+            let _ = doc.frame(320, 220);
+            doc.pump(16.0);
+            let notice = doc.validation_notice().expect("child timer report");
+            assert_ne!(notice.realm, doc.rt.top_realm());
+            let frame = doc.frame(320, 220);
+            assert!(
+                frame
+                    .ops
+                    .iter()
+                    .any(|op| matches!(op, netrender::SceneOp::GlyphRun(_))),
+                "the child report is painted by the parent's native overlay"
+            );
+            assert_eq!(doc.dom_snapshot(), authored_dom);
+        }
+
+        fn validation_catalog_is_installed_before_scripts_and_shared_with_children<
+            E: ScriptEngine,
+        >() {
+            let child_html = "<body><input id='child' required><script>\
+                var field = document.getElementById('child');\
+                parent.document.body.setAttribute('child-validation-message', field.validationMessage);\
+                setTimeout(function(){ field.reportValidity(); }, 0);\
+            </script></body>";
+            let escaped_child = child_html
+                .replace('&', "&amp;")
+                .replace('"', "&quot;")
+                .replace('<', "&lt;")
+                .replace('>', "&gt;");
+            let html = format!(
+                "<body><input id='top' required><iframe style='width:200px;height:100px' srcdoc=\"{escaped_child}\"></iframe><script>\
+                    var field = document.getElementById('top');\
+                    if (field.validationMessage !== 'A value is required (embedder).') throw new Error('top catalog missing');\
+                    document.body.setAttribute('top-validation-message', field.validationMessage);\
+                    field.reportValidity();\
+                </script></body>"
+            );
+            let mut options = ScriptedDocumentOptions::default();
+            options.validation_message_catalog.value_missing =
+                "A value is required (embedder).".into();
+            let mut doc = LiveryScriptedDocument::<E>::parse_with_options(&html, options)
+                .expect("catalog fixture");
+            assert_eq!(
+                doc.validation_notice()
+                    .expect("top authored report")
+                    .message,
+                "A value is required (embedder)."
+            );
+            assert!(
+                doc.dom_snapshot()
+                    .contains("top-validation-message=\"A value is required (embedder).\""),
+                "the top validationMessage observes the configured catalog"
+            );
+
+            doc.pump(0.0);
+            let _ = doc.frame(320, 220);
+            doc.pump(16.0);
+            let child_notice = doc
+                .validation_notice()
+                .expect("child authored report reaches host notice");
+            assert_ne!(child_notice.realm, doc.rt.top_realm());
+            assert_eq!(child_notice.message, "A value is required (embedder).");
+            assert!(
+                doc.dom_snapshot()
+                    .contains("child-validation-message=\"A value is required (embedder).\""),
+                "the child validationMessage observes the configured catalog"
+            );
+        }
+
         /// `matchMedia` evaluates against the device the frame was laid out
         /// with. `LiveryCssom` now installs a `MediaQueryHandler`
         /// (`LiveryMediaQueries`) beside its `ComputedStyleHandler`, over
@@ -3053,8 +3345,57 @@ mod tests {
         }
 
         #[test]
+        fn validation_feedback_follows_adoption_and_clears_after_teardown_on_boa() {
+            validation_feedback_follows_adoption_and_clears_after_teardown::<BoaEngine>();
+        }
+        #[cfg(all(target_pointer_width = "64", feature = "scripted-nova"))]
+        #[test]
+        fn validation_feedback_follows_adoption_and_clears_after_teardown_on_vano() {
+            validation_feedback_follows_adoption_and_clears_after_teardown::<
+                script_engine_nova::NovaEngine,
+            >();
+        }
+        #[test]
         fn mutation_renders_on_boa() {
             mutation_renders::<BoaEngine>();
+        }
+        #[test]
+        fn native_validation_notice_is_painted_and_dismissible_on_boa() {
+            native_validation_notice_is_painted_and_dismissible::<BoaEngine>();
+        }
+        #[test]
+        fn canceled_and_ineligible_reports_do_not_remain_on_boa() {
+            canceled_and_ineligible_reports_do_not_remain::<BoaEngine>();
+        }
+        #[test]
+        fn child_frame_timer_report_keeps_its_realm_on_boa() {
+            child_frame_timer_report_keeps_its_realm::<BoaEngine>();
+        }
+        #[test]
+        fn validation_catalog_is_installed_before_scripts_and_shared_with_children_on_boa() {
+            validation_catalog_is_installed_before_scripts_and_shared_with_children::<BoaEngine>();
+        }
+        #[cfg(all(target_pointer_width = "64", feature = "scripted-nova"))]
+        #[test]
+        fn native_validation_notice_is_painted_and_dismissible_on_nova() {
+            native_validation_notice_is_painted_and_dismissible::<script_engine_nova::NovaEngine>();
+        }
+        #[cfg(all(target_pointer_width = "64", feature = "scripted-nova"))]
+        #[test]
+        fn canceled_and_ineligible_reports_do_not_remain_on_nova() {
+            canceled_and_ineligible_reports_do_not_remain::<script_engine_nova::NovaEngine>();
+        }
+        #[cfg(all(target_pointer_width = "64", feature = "scripted-nova"))]
+        #[test]
+        fn child_frame_timer_report_keeps_its_realm_on_nova() {
+            child_frame_timer_report_keeps_its_realm::<script_engine_nova::NovaEngine>();
+        }
+        #[cfg(all(target_pointer_width = "64", feature = "scripted-nova"))]
+        #[test]
+        fn validation_catalog_is_installed_before_scripts_and_shared_with_children_on_nova() {
+            validation_catalog_is_installed_before_scripts_and_shared_with_children::<
+                script_engine_nova::NovaEngine,
+            >();
         }
         #[test]
         fn empty_body_has_no_text_on_boa() {

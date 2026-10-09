@@ -17,6 +17,8 @@ path = "lib.rs"
 engine_observables_api = { workspace = true }
 layout-dom-api = { version = "0.1.1", path = "../shared/layout-dom", features = ["capture"] }
 markup5ever = { workspace = true }
+# Native-only nested UnicodeSets negation fix; engine dependencies stay pinned.
+regress = { version = "=0.11.1", path = "../../support/patches/regress-0.11.1", features = ["utf16"] }
 # The HTML serializer (the `serialize` fn + `SerializeOpts` + void-element/escaping
 # logic) lives in html5ever; markup5ever only carries the `Serialize`/`Serializer`
 # traits. Already a genet workspace dep (genet-static-dom uses it for parsing).
@@ -29,6 +31,8 @@ genet-static-dom = { version = "0.1.1", path = "../genet-static-dom" }
 # identity is this crate's own type, so it derives here rather than being
 # mirrored downstream.
 serde = { workspace = true, features = ["derive"] }
+# Forms URL validity reuses the workspace's already-locked WHATWG URL parser.
+url = { workspace = true }
 
 [dev-dependencies]
 postcard = { workspace = true }

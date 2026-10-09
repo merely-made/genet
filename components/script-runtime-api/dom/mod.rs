@@ -105,6 +105,9 @@ pub(crate) fn clone_into<D: LayoutDom>(
                 if let Some(state) = src.form_control_state(child) {
                     form_controls::copy_state(dst, el, state);
                 }
+                if let Some(state) = src.option_selected_state(child) {
+                    dst.set_option_selected_state(el, state);
+                }
                 // A `<template>`'s contents are not its children: the copier has
                 // to ask for the fragment, or the scripted tier would show an
                 // empty `template.content` for a parsed template.
@@ -173,6 +176,11 @@ pub(crate) fn install_dom_surface<E: ScriptEngine>(
     engine.set_function::<form_controls::FormControlSelect>("__formControlSelect", 4)?;
     engine.set_function::<form_controls::CopyFormControlState>("__copyFormControlState", 2)?;
     engine.set_function::<form_controls::ResetFormControl>("__resetFormControl", 1)?;
+    engine.set_function::<form_controls::FormControlValidityGet>("__formControlValidityGet", 2)?;
+    engine.set_function::<form_controls::QueueValidationReport>("__queueValidationReport", 2)?;
+    engine.set_function::<form_controls::SetCustomValidity>("__setCustomValidity", 2)?;
+    engine.set_function::<form_controls::FormControlListCount>("__formControlListCount", 2)?;
+    engine.set_function::<form_controls::FormControlListItem>("__formControlListItem", 3)?;
     engine.set_function::<NodeRealmState>("__nodeRealmState", 1)?;
     engine.set_function::<ReflectNode>("__reflectNode", 1)?;
     engine.set_function::<CreateElement>("__createElement", 1)?;

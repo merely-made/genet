@@ -47,11 +47,24 @@ where
     ) where
         D: LayoutDom<NodeId = Id>,
     {
+        self.prepare_atomic_inline_subtree_text(dom, styles, text, dom.document());
+    }
+
+    /// Prepare only the formatting subtree being replaced in a retained frame.
+    pub(in crate::layout) fn prepare_atomic_inline_subtree_text<D>(
+        &mut self,
+        dom: &D,
+        styles: &StylePlane<Id>,
+        text: &mut TextSystem,
+        root: Id,
+    ) where
+        D: LayoutDom<NodeId = Id>,
+    {
         let Some(mut frame) = self.text_frame.take() else {
             return;
         };
         let mut elements = Vec::new();
-        atomic_inline_elements(dom, styles, dom.document(), false, &mut elements);
+        atomic_inline_elements(dom, styles, root, false, &mut elements);
         for element in elements {
             if let Some(style) = styles.get(element) {
                 // An element's inline boxes are its boxes in the lines that

@@ -392,6 +392,30 @@ fn dom_element_surface_on_boa() {
     dom_element_surface_works::<script_engine_boa::BoaEngine>();
 }
 
+#[test]
+fn validation_pseudo_classes_match_in_js_selectors_on_boa() {
+    use genet_static_dom::StaticDocument;
+    let mut rt = Runtime::<script_engine_boa::BoaEngine>::new().expect("runtime");
+    rt.load_dom(&StaticDocument::parse(
+        "<html><body><form><fieldset><input id=required required></fieldset></form></body></html>",
+    ));
+    rt.eval(
+        "console.log(String(document.querySelector('input:invalid') !== null));\
+         console.log(String(document.querySelector('form:invalid') !== null));\
+         console.log(String(document.querySelector('fieldset:invalid') !== null));\
+         console.log(String(document.querySelector('input:user-invalid') === null));\
+         console.log(String(document.querySelector('input:valid') === null));\
+         var detached = document.createElement('form');\
+         var detachedField = document.createElement('input'); detachedField.required = true; detached.appendChild(detachedField);\
+         console.log(String(detached.matches(':invalid')));",
+    )
+    .expect("validation selectors");
+    assert_eq!(
+        rt.host().borrow().console,
+        ["true", "true", "true", "true", "true", "true"]
+    );
+}
+
 /// Reflected IDL attributes + namespace getters + createElementNS + tree
 /// walker + document.title, against any backend.
 fn dom_reflection_ns_works<E: ScriptEngine>() {
@@ -2278,6 +2302,413 @@ fn form_control_live_state_on_boa() {
 #[test]
 fn form_control_live_state_on_nova() {
     form_control_live_state_works::<script_engine_nova::NovaEngine>();
+}
+
+fn form_validation_live_flags_and_invalid_events_works<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.load_dom(&genet_static_dom::StaticDocument::parse(
+        "<html><body></body></html>",
+    ));
+    rt.eval(r#"
+      const form = document.createElement('form'); form.id = 'validation-owner'; document.body.appendChild(form);
+      const first = document.createElement('input'); first.required = true; first.id = 'first';
+      const outside = document.createElement('input'); outside.required = true; outside.id = 'outside';
+      outside.setAttribute('form', form.id); form.appendChild(first); document.body.appendChild(outside);
+      const validity = first.validity;
+      console.log((validity === first.validity) + ' ' + validity.valueMissing + ' ' + validity.valid);
+      first.value = 'filled'; console.log(validity.valueMissing + ' ' + validity.valid);
+      first.value = '';
+      const seen = [];
+      form.addEventListener('invalid', event => seen.push('bubble'));
+      [first, outside].forEach(control => control.addEventListener('invalid', event => {
+        seen.push(control.id + ':' + event.isTrusted + ':' + event.bubbles + ':' + event.cancelable);
+        event.preventDefault();
+      }));
+      first.dispatchEvent = function() { throw new Error('author replacement'); };
+      console.log(form.checkValidity() + ' ' + seen.join(','));
+      first.setCustomValidity('retained'); console.log(first.validationMessage);
+      first.disabled = true;
+      console.log(first.willValidate + ' ' + validity.customError + ' ' + first.checkValidity());
+      console.log(first.validationMessage === '');
+      try { new ValidityState(); } catch (error) { console.log(error.name); }
+      try { Object.getOwnPropertyDescriptor(ValidityState.prototype, 'valid').get.call({}); }
+      catch (error) { console.log(error.name); }
+      const textarea = document.createElement('textarea');
+      const inputPrototype = HTMLInputElement.prototype;
+      const attempts = [
+        () => inputPrototype.checkValidity.call(textarea),
+        () => inputPrototype.reportValidity.call(textarea),
+        () => inputPrototype.setCustomValidity.call(textarea, 'wrong interface'),
+        () => Object.getOwnPropertyDescriptor(inputPrototype, 'validity').get.call(textarea),
+        () => Object.getOwnPropertyDescriptor(inputPrototype, 'willValidate').get.call(textarea),
+        () => Object.getOwnPropertyDescriptor(inputPrototype, 'validationMessage').get.call(textarea),
+        () => Object.getOwnPropertyDescriptor(inputPrototype, 'form').get.call(textarea),
+        () => HTMLFormElement.prototype.checkValidity.call(first)
+      ];
+      console.log(attempts.map(attempt => {
+        try { attempt(); return 'accepted'; } catch (error) { return error.name; }
+      }).join(','));
+      first.disabled = false; first.setCustomValidity(''); seen.length = 0;
+      first.addEventListener('invalid', () => { outside.value = 'fixed during dispatch'; });
+      console.log(form.checkValidity() + ' ' + seen.join(',') + ' ' + outside.validity.valid);
+    "#).expect("validation script");
+    assert_eq!(
+        rt.host().borrow().console,
+        vec![
+            "true true false",
+            "false true",
+            "false first:true:false:true,outside:true:false:true",
+            "retained",
+            "false true true",
+            "true",
+            "TypeError",
+            "TypeError",
+            "TypeError,TypeError,TypeError,TypeError,TypeError,TypeError,TypeError,TypeError",
+            "false first:true:false:true,outside:true:false:true true",
+        ]
+    );
+}
+
+fn validation_reports_use_native_queue_and_replaceable_catalog_works<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.load_dom(&genet_static_dom::StaticDocument::parse(
+        "<html><body></body></html>",
+    ));
+    let mut catalog = crate::ValidationMessageCatalog::default();
+    catalog.value_missing = "Localized required message".into();
+    rt.set_validation_message_catalog(catalog);
+    rt.eval(
+        r#"
+      const form = document.createElement('form'); document.body.appendChild(form);
+      const first = document.createElement('input'); first.required = true;
+      const second = document.createElement('input'); second.required = true;
+      const third = document.createElement('input'); third.required = true;
+      form.append(first, second, third);
+      console.log(first.validationMessage);
+      console.log(first.reportValidity());
+      first.addEventListener('invalid', event => event.preventDefault());
+      second.setCustomValidity('author text stays exact');
+      console.log(form.reportValidity());
+      console.log(second.validationMessage);
+      console.log(form.checkValidity());
+      second.addEventListener('invalid', event => event.preventDefault());
+      third.addEventListener('invalid', event => event.preventDefault());
+      console.log(form.reportValidity());
+    "#,
+    )
+    .expect("validation report script");
+    assert_eq!(
+        rt.host().borrow().console,
+        vec![
+            "Localized required message",
+            "false",
+            "false",
+            "author text stays exact",
+            "false",
+            "false",
+        ]
+    );
+
+    let reports = rt.take_validation_reports();
+    assert_eq!(reports.len(), 2, "individual + first unhandled form report");
+    assert_eq!(reports[0].message, "Localized required message");
+    assert_eq!(reports[1].message, "author text stays exact");
+    assert!(reports.iter().all(|report| report.realm == rt.top_realm()));
+    assert!(
+        rt.take_validation_reports().is_empty(),
+        "drain is destructive"
+    );
+}
+
+#[test]
+fn validation_reports_use_native_queue_and_replaceable_catalog_on_boa() {
+    validation_reports_use_native_queue_and_replaceable_catalog_works::<script_engine_boa::BoaEngine>(
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn validation_reports_use_native_queue_and_replaceable_catalog_on_nova() {
+    validation_reports_use_native_queue_and_replaceable_catalog_works::<
+        script_engine_nova::NovaEngine,
+    >();
+}
+
+fn validation_catalog_is_agent_wide_and_borrowed_report_routes_to_owner_works<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    let mut catalog = crate::ValidationMessageCatalog::default();
+    catalog.value_missing = "Shared realm wording".into();
+    rt.set_validation_message_catalog(catalog);
+    rt.load_dom(&genet_static_dom::StaticDocument::parse(
+        "<html><body><iframe id='frame'></iframe></body></html>",
+    ));
+    rt.eval(
+        r#"
+      const childWindow = frame.contentWindow;
+      const childDocument = frame.contentDocument;
+      childDocument.body.innerHTML = '<input id="required" required>';
+      const childControl = childDocument.getElementById('required');
+      console.log(childControl.validationMessage);
+      console.log(HTMLInputElement.prototype.reportValidity.call(childControl));
+    "#,
+    )
+    .expect("borrowed child report script");
+    assert_eq!(
+        rt.host().borrow().console,
+        vec!["Shared realm wording", "false"]
+    );
+    let reports = rt.take_validation_reports();
+    assert_eq!(reports.len(), 1);
+    assert_ne!(reports[0].realm, rt.top_realm());
+    assert_eq!(reports[0].message, "Shared realm wording");
+}
+
+fn validation_reports_preserve_cross_realm_enqueue_order_works<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.load_dom(&genet_static_dom::StaticDocument::parse(
+        "<html><body><iframe id='frame'></iframe></body></html>",
+    ));
+    rt.eval(r#"
+      const child = frame.contentDocument;
+      child.body.innerHTML = '<input id="a" required><input id="b" required>';
+      const a = child.getElementById('a'), b = child.getElementById('b');
+      const topControl = document.createElement('input'); topControl.required = true; document.body.appendChild(topControl);
+      a.setCustomValidity('child first'); topControl.setCustomValidity('top second'); b.setCustomValidity('child third');
+      a.reportValidity(); topControl.reportValidity(); b.reportValidity();
+    "#).expect("interleaved report script");
+    let reports = rt.take_validation_reports();
+    assert_eq!(
+        reports
+            .iter()
+            .map(|report| report.message.as_str())
+            .collect::<Vec<_>>(),
+        vec!["child first", "top second", "child third"]
+    );
+    assert_ne!(reports[0].realm, reports[1].realm);
+    assert_eq!(reports[0].realm, reports[2].realm);
+}
+
+#[test]
+fn validation_reports_preserve_cross_realm_enqueue_order_on_boa() {
+    validation_reports_preserve_cross_realm_enqueue_order_works::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn validation_reports_preserve_cross_realm_enqueue_order_on_nova() {
+    validation_reports_preserve_cross_realm_enqueue_order_works::<script_engine_nova::NovaEngine>();
+}
+
+#[test]
+fn validation_catalog_is_agent_wide_and_borrowed_report_routes_to_owner_on_boa() {
+    validation_catalog_is_agent_wide_and_borrowed_report_routes_to_owner_works::<
+        script_engine_boa::BoaEngine,
+    >();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn validation_catalog_is_agent_wide_and_borrowed_report_routes_to_owner_on_nova() {
+    validation_catalog_is_agent_wide_and_borrowed_report_routes_to_owner_works::<
+        script_engine_nova::NovaEngine,
+    >();
+}
+
+#[test]
+fn form_validation_live_flags_and_invalid_events_on_boa() {
+    form_validation_live_flags_and_invalid_events_works::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn form_validation_live_flags_and_invalid_events_on_nova() {
+    form_validation_live_flags_and_invalid_events_works::<script_engine_nova::NovaEngine>();
+}
+
+fn validity_selectors_preserve_native_no_form_owner<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.load_dom(&genet_static_dom::StaticDocument::parse(
+        "<html><body></body></html>",
+    ));
+    rt.eval(r#"
+      const blocker = document.createElement('div'); blocker.id = 'other';
+      const first = document.createElement('form'); first.id = 'owner';
+      const second = document.createElement('form'); second.id = 'owner';
+      const control = document.createElement('input'); control.required = true;
+      control.setAttribute('form', 'owner');
+      [blocker, first, second, control].forEach(node => document.body.appendChild(node));
+      function read() {
+        console.log((control.form === first) + ':' + first.matches(':invalid') + ':' + second.matches(':valid'));
+      }
+      read();
+      blocker.id = 'owner';
+      console.log((control.form === null) + ':' + first.matches(':valid') + ':' + second.matches(':valid') + ':' + first.checkValidity());
+      blocker.id = 'other'; read();
+    "#).expect("native form ownership selectors");
+    assert_eq!(
+        rt.host().borrow().console,
+        vec!["true:true:true", "true:true:true:true", "true:true:true"]
+    );
+}
+
+#[test]
+fn validity_selectors_preserve_native_no_form_owner_on_boa() {
+    validity_selectors_preserve_native_no_form_owner::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn validity_selectors_preserve_native_no_form_owner_on_nova() {
+    validity_selectors_preserve_native_no_form_owner::<script_engine_nova::NovaEngine>();
+}
+
+fn select_validation_reads_live_selectedness<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.eval(
+        r#"
+      const select = document.createElement('select'); select.required = true;
+      const placeholder = document.createElement('option'); placeholder.value = '';
+      const choice = document.createElement('option'); choice.value = 'chosen';
+      select.appendChild(placeholder); select.appendChild(choice);
+      const validity = select.validity;
+      console.log(select.selectedIndex + ':' + validity.valueMissing);
+      choice.selected = true;
+      console.log(select.value + ':' + validity.valueMissing);
+      choice.selected = false;
+      console.log(select.selectedIndex + ':' + validity.valueMissing);
+      select.selectedIndex = -1;
+      console.log(select.selectedIndex + ':' + validity.valueMissing);
+      select.size = 2; choice.selected = true; choice.selected = false;
+      console.log(select.selectedIndex + ':' + validity.valueMissing);
+      const fresh = document.createElement('option'); fresh.value = 'front'; fresh.selected = true;
+      choice.selected = true; select.insertBefore(fresh, placeholder);
+      console.log(select.value + ':' + choice.selected + ':' + validity.valueMissing);
+    "#,
+    )
+    .expect("select validity script");
+    assert_eq!(
+        rt.host().borrow().console,
+        vec![
+            "0:true",
+            "chosen:false",
+            "0:true",
+            "-1:true",
+            "-1:true",
+            "front:false:false",
+        ]
+    );
+}
+
+#[test]
+fn select_validation_selectedness_on_boa() {
+    select_validation_reads_live_selectedness::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn select_validation_selectedness_on_nova() {
+    select_validation_reads_live_selectedness::<script_engine_nova::NovaEngine>();
+}
+
+fn custom_validity_message_uses_domstring_conversion<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.eval(
+        r#"
+      const control = document.createElement('input');
+      const wrongReceiver = document.createElement('div');
+      const originalString = String;
+      globalThis.String = function() { throw new Error('author String replacement'); };
+      let conversions = 0;
+      const message = { toString() { conversions++; return 'one\r\ntwo'; } };
+      control.setCustomValidity(message);
+      console.log(control.validationMessage.replace(/\n/g, '|') + ':' + conversions);
+      try { control.setCustomValidity(Symbol('invalid')); }
+      catch (error) { console.log(error.name); }
+      console.log(control.validationMessage.replace(/\n/g, '|'));
+      const sentinel = new Error('conversion sentinel');
+      try { control.setCustomValidity({ toString() { throw sentinel; } }); }
+      catch (error) { console.log(error === sentinel); }
+      try { HTMLInputElement.prototype.setCustomValidity.call(wrongReceiver, message); }
+      catch (error) { console.log(error.name + ':' + conversions); }
+      globalThis.String = originalString;
+    "#,
+    )
+    .expect("custom message conversion script");
+    assert_eq!(
+        rt.host().borrow().console,
+        vec!["one|two:1", "TypeError", "one|two", "true", "TypeError:1"]
+    );
+}
+
+#[test]
+fn custom_validity_domstring_conversion_on_boa() {
+    custom_validity_message_uses_domstring_conversion::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn custom_validity_domstring_conversion_on_nova() {
+    custom_validity_message_uses_domstring_conversion::<script_engine_nova::NovaEngine>();
+}
+
+fn form_invalid_event_trust_and_author_overrides_works<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.eval(
+        r#"
+      const control = document.createElement('input'); control.required = true;
+      const originalEvent = Event, prototype = originalEvent.prototype;
+      const fields = ['type', 'bubbles', 'cancelable', 'composed', 'defaultPrevented',
+        '__canceled', 'eventPhase', 'target', 'currentTarget', 'srcElement',
+        '__initialized', '__dispatch', '__stop', '__stopImmediate', '__inPassive',
+        '__path', '__pathTargets', '__pathIndex', 'isTrusted'];
+      const previous = fields.map(key => Object.getOwnPropertyDescriptor(prototype, key));
+      let retained;
+      const seen = [];
+      control.addEventListener('invalid', event => {
+        retained = event; seen.push('node:' + event.isTrusted);
+      });
+      window.addEventListener('invalid', event => { seen.push('window:' + event.isTrusted); });
+      try {
+        window.Event = function() { throw new Error('authored Event constructor'); };
+        fields.forEach(key => Object.defineProperty(prototype, key, { configurable: true,
+          get() { throw new Error('authored event getter ' + key); },
+          set() { throw new Error('authored event setter ' + key); }
+        }));
+        console.log(control.checkValidity() + ' ' + (retained instanceof originalEvent));
+      } finally {
+        window.Event = originalEvent;
+        fields.forEach((key, index) => {
+          if (previous[index]) Object.defineProperty(prototype, key, previous[index]);
+          else delete prototype[key];
+        });
+      }
+      Node.prototype.dispatchEvent.call(control, retained);
+      control.checkValidity(); window.dispatchEvent(retained);
+      control.checkValidity(); EventTarget.prototype.dispatchEvent.call(window, retained);
+      control.checkValidity(); retained.initEvent('invalid', false, true);
+      seen.push('initialized:' + retained.isTrusted);
+      console.log(seen.join(','));
+    "#,
+    )
+    .expect("trusted invalid events");
+    assert_eq!(
+        rt.host().borrow().console,
+        vec![
+            "false true",
+            "node:true,node:false,node:true,window:false,node:true,window:false,node:true,initialized:false",
+        ]
+    );
+}
+
+#[test]
+fn form_invalid_event_trust_and_author_overrides_on_boa() {
+    form_invalid_event_trust_and_author_overrides_works::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn form_invalid_event_trust_and_author_overrides_on_nova() {
+    form_invalid_event_trust_and_author_overrides_works::<script_engine_nova::NovaEngine>();
 }
 
 fn form_control_owner_works<E: ScriptEngine>() {

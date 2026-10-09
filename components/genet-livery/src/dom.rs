@@ -318,6 +318,97 @@ impl<D: LayoutDom> Element for ElementRef<'_, '_, D> {
                 |state| state.checked,
             );
         }
+        if matches!(
+            pseudo,
+            StatePseudoClass::Valid
+                | StatePseudoClass::Invalid
+                | StatePseudoClass::UserValid
+                | StatePseudoClass::UserInvalid
+        ) {
+            let Some(qname) = self.dom().element_name(self.id) else {
+                return false;
+            };
+            if qname.ns.as_ref() != "http://www.w3.org/1999/xhtml" {
+                return false;
+            }
+            let name = qname.local.as_ref().to_ascii_lowercase();
+            let user = matches!(
+                pseudo,
+                StatePseudoClass::UserValid | StatePseudoClass::UserInvalid
+            );
+            let (candidate, valid, user_validity) = if name == "form" || name == "fieldset" {
+                if user {
+                    return false;
+                }
+                let mut nodes = Vec::new();
+                collect_descendants(
+                    self.dom(),
+                    if name == "form" {
+                        tree_root(self.dom(), self.id)
+                    } else {
+                        self.id
+                    },
+                    &mut nodes,
+                );
+                let mut invalid = false;
+                let mut complete = true;
+                for node in nodes {
+                    let Some(control_name) = self
+                        .dom()
+                        .element_name(node)
+                        .map(|name| name.local.as_ref().to_ascii_lowercase())
+                    else {
+                        continue;
+                    };
+                    let status = self.dom().form_control_validity(node);
+                    let belongs = if name == "form" {
+                        associated_with_form(self.dom(), node, self.id, status.is_some())
+                    } else {
+                        true
+                    };
+                    let Some(status) = status else {
+                        if belongs
+                            && matches!(
+                                control_name.as_str(),
+                                "input" | "textarea" | "select" | "button" | "fieldset" | "object"
+                            )
+                        {
+                            complete = false;
+                        }
+                        continue;
+                    };
+                    let relevant = if name == "form" {
+                        belongs
+                    } else {
+                        status.will_validate
+                    };
+                    if relevant && status.will_validate && !status.flags.valid() {
+                        invalid = true;
+                        break;
+                    }
+                }
+                (complete || invalid, !invalid, false)
+            } else {
+                let Some(status) = self.dom().form_control_validity(self.id) else {
+                    return false;
+                };
+                if user && !matches!(name.as_str(), "input" | "textarea" | "select") {
+                    return false;
+                }
+                (
+                    status.will_validate,
+                    status.flags.valid(),
+                    status.user_validity,
+                )
+            };
+            return match pseudo {
+                StatePseudoClass::Valid => candidate && valid,
+                StatePseudoClass::Invalid => candidate && !valid,
+                StatePseudoClass::UserValid => candidate && user_validity && valid,
+                StatePseudoClass::UserInvalid => candidate && user_validity && !valid,
+                _ => false,
+            };
+        }
         self.tree.states.matches(self.id, *pseudo)
     }
 
@@ -375,4 +466,49 @@ impl<D: LayoutDom> Element for ElementRef<'_, '_, D> {
     fn is_root(&self) -> bool {
         self.parent_element().is_none()
     }
+}
+
+fn collect_descendants<D: LayoutDom>(dom: &D, node: D::NodeId, out: &mut Vec<D::NodeId>) {
+    for child in dom.dom_children(node) {
+        out.push(child);
+        collect_descendants(dom, child, out);
+    }
+}
+
+fn tree_root<D: LayoutDom>(dom: &D, mut node: D::NodeId) -> D::NodeId {
+    while let Some(parent) = dom.parent(node) {
+        node = parent;
+    }
+    node
+}
+
+fn associated_with_form<D: LayoutDom>(
+    dom: &D,
+    control: D::NodeId,
+    form: D::NodeId,
+    native_validity: bool,
+) -> bool {
+    let owner = dom.form_control_form_owner(control);
+    if owner.is_some() || native_validity {
+        // A supported native view also authoritatively reports no owner.
+        // Reconstructing from attributes would bypass first-ID lookup rules.
+        return owner == Some(form);
+    }
+    let namespace = layout_dom_api::Namespace::from("");
+    let local = layout_dom_api::LocalName::from("form");
+    if let Some(owner_id) = dom.attribute(control, &namespace, &local) {
+        return dom.attribute(form, &namespace, &layout_dom_api::LocalName::from("id"))
+            == Some(owner_id);
+    }
+    let mut ancestor = dom.parent(control);
+    while let Some(node) = ancestor {
+        if dom.element_name(node).is_some_and(|name| {
+            name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
+                && name.local.as_ref().eq_ignore_ascii_case("form")
+        }) {
+            return node == form;
+        }
+        ancestor = dom.parent(node);
+    }
+    false
 }

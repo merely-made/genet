@@ -128,7 +128,9 @@ where
         D: LayoutDom,
         D::NodeId: Copy + Eq + Hash,
     {
-        if dom.kind(node) == NodeKind::Text {
+        // Native controls retain their current text under the element's ID.
+        // Keep those virtual sources in DOM order during subtree replacement.
+        if dom.kind(node) == NodeKind::Text || dom.form_control_state(node).is_some() {
             sources.push(node);
         }
         for child in dom.dom_children(node) {

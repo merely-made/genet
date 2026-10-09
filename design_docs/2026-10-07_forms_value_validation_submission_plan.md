@@ -14,6 +14,12 @@ Cleromancy's current public-pin integration passes 23 ThinkPad tests at
 Phase B and C retain separate checkpoints, and sibling adoption of Mere's new
 Forms dependency family remains distinct from F5 mechanical compatibility.
 
+**Phase B, in progress:** Mark requested "Please continue with forms!" on
+2026-10-08 after the completed Phase A publication report. This authorizes
+constraint validation through Checkpoint B. Submission remains behind that
+checkpoint. Phase B starts from clean published main `6cb2284a33d`; builds and
+matched gates remain on ThinkPad to relieve Windows memory pressure.
+
 The eleven-crate 1,943-pass receipt belongs to Genet
 `b8a3ec1d6abe88e07438ca4d53b9ca4d2b92111d`, with zero failures and nine ignores.
 Matched supplementary 60-second WPT maps have zero starting pass losses;
@@ -143,6 +149,60 @@ Drawing children remain in the DOM. Ordinary native HTML inputs and textareas
 keep their existing Genet projection. Text-valued SetValue routing remains the
 separate pre-existing gap identified under F3.
 
+### F7: reuse the native URL parser, 2026-10-08
+
+Question as put: "One further dependency choice: may `genet-scripted-dom`
+also reuse the already-locked `url` 2.5.8 parser for URL validity? The Forms
+brief forbids new dependency edges. Its current scheme-only check accepts
+malformed values such as `http://`; using the existing parser would keep
+package versions and checksums fixed."
+
+Options: use the existing URL parser in the DOM (recommended); keep URL
+parsing behind an existing host bridge.
+
+Mark's answer, verbatim: "use the existing one, or if it needs updating,
+update the existing one and then use it".
+
+The existing 2.5.8 API can parse these absolute URLs, so add the workspace
+dependency to `genet-scripted-dom` and preserve its version and checksum.
+URL-derived validity stays in the same native view read by script and CSS.
+
+### F8: native pattern matcher, 2026-10-08
+
+Question as put: "May Forms reuse the already-locked `regress` 0.11.1 library
+directly for HTML `pattern` validation? This adds a dependency edge that the
+brief forbids, but preserves package versions and lets script and CSS read the
+same native result."
+
+Mark's answer, verbatim: "Use the existing native matcher (Recommended)".
+
+Consequence: add that direct edge with UTF-16 support, retaining all locked
+package identities, versions and checksums. Compile HTML's UnicodeSets pattern
+with both the library's Unicode and UnicodeSets flags enabled; omit malformed
+patterns, match the whole applicable value, and check each multiple-email item.
+Native validity remains authoritative for script and CSS. The library exposes
+no public backtracking execution budget; document this implementation limit
+and qualify bounded difficult-pattern fixtures without inventing a new policy.
+
+### F9: native validation notice and accessible alert, 2026-10-08
+
+Question as put: "Should `reportValidity()` show a native validation notice and
+a screen-reader alert now? This requires a new host reporting path, including
+fields inside iframes. Initial English messages would be replaceable by the
+embedder; custom messages would stay exact."
+
+Mark's answer, verbatim: "Include the native notice and accessible alert
+(Recommended)".
+
+Consequence: share native message generation between `validationMessage` and
+host feedback; expose an embedder-replaceable initial English catalog and
+preserve normalized custom message text exactly. Queue reports after uncanceled
+invalid events, drain them during the normal document pump/render, preserve
+realm and node identity, and paint feedback outside the authored DOM. Expose
+the same notice as an assertive accessible alert, including child-frame reports.
+Static `checkValidity()` keeps its existing event/boolean behavior. Submission
+and new select/checkbox interaction widgets remain outside Checkpoint B.
+
 ## Phases and done-conditions
 
 ### A: one live control value
@@ -175,6 +235,419 @@ After Checkpoint A approval, implement ValidityState, barring, validation
 methods/messages, invalid events and validity selectors. Done when focused
 controls and both-engine constraints plus Phase A maps qualify, every movement
 is attributed and no previous pass is lost. Stop at Checkpoint B before C.
+
+The first bounded audit confirms that native validation is absent. The
+input/textarea record already owns custom messages; validation needs native
+listed-control coverage, derived flags and barring, live script wrappers,
+trusted cancelable `invalid` events, selectors and genuine edit provenance.
+Expand native listed controls as the brief requires, distinguishing barred
+fieldset/output/object APIs from form-wide methods and aggregate selectors.
+Form-associated custom-element internals are a separate existing gap, with
+only callback-name recognition implemented today.
+
+HTML fixes user-validity transitions and reset/clone behavior; these are not
+new policy choices. Track user edits separately from script assignments so
+length constraints and bad-input status cannot be guessed from sanitized
+values. Preserve custom validity messages on reset and omit them on cloning;
+reset user validity as HTML specifies. A live `ValidityState` getter must read
+the same native state used by selectors, including while a control is barred.
+Keep the shipped `FormControlState` field layout intact: append separate
+capture records for interaction facts, option selectedness and nonlegacy
+custom messages. The interaction metadata distinguishes last-change origin
+from a pending committed edit and preserves an incomplete number draft with
+its internal UTF-16 caret. The editor reads a derived editing view; script
+still reads the sanitized value and its applicable selection APIs.
+
+F8 and F9 approve the direct DOM edge to already-locked `regress` 0.11.1 and
+a Genet-owned validation notice/accessible alert with replaceable initial
+English messages. Their implementation and fresh qualification are in progress.
+Both frozen starting engines depend on that matcher, including UTF-16 support.
+The newer Boa pin uses 0.12.0 while Vano retains 0.11.1; F8's native
+matcher uses already-locked 0.11.1. No package/version change is
+proposed for that edge. Source review finds Unicode-set support in both
+versions, but `Flags::from("v")` leaves the separate `unicode` flag false.
+The native UTF-16 adapter must set both flags and qualify supplementary
+characters, set operations and malformed-pattern omission. Its UTF-16
+executor exposes no public backtracking budget.
+Do not run validation through page-overridable RegExp properties. Do not
+insert validation feedback into author-observable DOM.
+F7 separately approves the already-locked URL parser edge. The first review
+also corrects requiredness versus mutability, button/object/input barring,
+radio-group requiredness, email grammar, textarea length flags, optional time
+seconds, and reversed periodic time ranges. Those follow HTML rather than
+requiring further semantic rulings. These changes are not qualified until
+the native tests and matched WPT runs finish.
+
+Starting controls are in
+`Code/testing/genet/forms/phase-b-constraint-validation.html` (20 cases).
+The fresh Linux corpus, source, lock, runner, environment and before maps must
+be bound before implementation gates; Phase A's earlier Windows measurements
+retain their own platform/source boundaries. Match baseline and candidate
+deadline and worker count, preserve raw partial/error rows, and stop at
+Checkpoint B before submission.
+
+The ThinkPad starting maps are complete at `6cb2284a33d`, using the frozen
+runner SHA `087c4347...`, the Phase A integration lock SHA `9809247c...`,
+Linux corpus inventory SHA `6c9b599f...` and WPT manifest SHA `d5ec5be9...`.
+Both engines record the same starting counts: constraints 0/877,
+the-input-element 928/1,853, textfieldselection 667/739 and infrastructure
+31/120. Those runner totals include partial rows. Completed-file input counts
+are 920/1,806; all four directories have 1,618/3,542 completed-file passes
+per engine. The input error files separately contain 47 partial rows:
+eight passes, seven failures, 28 not-run and four timeout rows.
+Each engine has 219 file records: 31 passing, 124 failing, nine
+errored and 55 skipped. Assertion rows in errored files remain partial
+evidence. All eight runner processes exit zero; that is not suite success.
+The 20 added controls fail on both frozen starting engines. A separate
+inventory pins all 5,047 tracked WPT resource files, including the harness
+resources outside the focused archive. Builds and maps use installed
+Rust 1.98.1 explicitly for both stages; the repository's toolchain pin is
+unchanged. Runs are serialized with one worker to respect ThinkPad memory.
+
+The in-progress compile preview is identified by source archive
+`5cbe1cf0...` atop `6cb2284a33d` and controlled lock SHA `f540a7c8...`.
+Its sole lock change adds the approved existing URL edge. This preview is
+not Checkpoint B qualification. Its first crate stops at two compile errors
+before tests: a sibling-module private helper and an overlapping mutation
+journal borrow. The local repair exposes the helper within the arena owner
+and snapshots change booleans before recording mutations. Subsequent review repairs public window
+redispatch of trusted invalid events using agent-private weak bookkeeping,
+tests per-interface receiver checks and snapshots invalid candidates before
+any listener runs. These source changes require their own final gates.
+Calendar range ordering compares validated components exactly, while step
+calculations retain finite f64 precision for enormous years; that remaining
+limit is not presented as an HTML rule. Step rounding tolerances scale with
+the calculation's floating-point error rather than accepting a fixed small
+nonzero remainder.
+
+The repaired preview compiles its arena crate, then stops with 78 passing
+tests and four fixture failures. Two radio fixtures used separate detached
+trees, the listed-controls expectation omitted its fieldset, and the large
+year overflow fixture set `min` instead of `max`. Corrections retain the
+actual semantic assertions while fixing those inputs and expectations.
+Cross-realm fixtures additionally cover borrowed validation getters,
+adoption/clone state and public invalid-event redispatch. Agent-private weak
+registries keep one validity object per canonical wrapper and allocate it
+with the wrapper's creation-realm prototype. This repair awaits execution;
+the new integration tests require completed validation messages as well.
+
+The fixture-repaired preview (`de3aa02b...`, 22 owned files) executes 82 arena
+tests with zero failures. Its runtime crate compiles and executes 173 passes
+and two failures before later crate gates stop. Both failing runtime cases
+append controls directly to a document that already has its document element;
+the Vano error is `HierarchyRequestError`. The fixture now loads an HTML body
+and appends its form and external control there. Preserve that failed run
+and its source/resource guards; the correction needs a new source snapshot.
+The selectedness review also repairs size parsing, first-enabled fallback,
+reset normalization, multiple removal, option-list barriers and wrapped
+placeholder eligibility against the current HTML algorithms. These changes
+remain unqualified until their own remote gates execute. Pattern matching
+and validation feedback still await the two explicit answers.
+
+The subsequent select/runtime repair freeze (`4352315a...`, the same 22 owned
+files and controlled lock) adds selected-option insertion and preserves
+selection during moves within one list. Public `option.selected` assignments
+ask for reset; `select.selectedIndex = -1` still permits no selection. A
+two-selected-option subtree fixture checks that the last inserted selected
+option wins without dirtying. The runtime fixture also reads live select
+validity through both engines. Later local work adds the private native
+`validationMessage` custom-message branch, returning empty for valid or barred
+controls, and its interface-brand/adoption fixtures. The built-in catalog
+and report feedback remain pending; that partial binding is not full message
+conformance and is not part of the `4352315a...` freeze.
+The next API preview is `3ef27ae3...`, including the custom-message branch;
+its full cross-realm suite can now run independently of built-in wording.
+Subsequent native review corrects current HTML button Auto candidacy:
+missing/invalid type validates only without command/commandfor and outside
+a direct select parent; explicit submit remains a candidate. That correction
+and its native fixture are not part of the `3ef27ae3...` freeze and need final
+source qualification. A pre-existing Mere/Djinn compiler delays the remote
+preview start; it is preserved and is not interrupted by this lane.
+The custom-message preview subsequently starts after that owner exits, with
+11 GiB available, and stops before tests at a compile error: the new script
+option setter calls `is_html_option` from its sibling module. Expose that
+existing helper within the DOM crate (`pub(super)`) and retain the stopped
+receipt, whose source, lock, WPT/CSS and runner guards pass. The next freeze
+must include this repair and the reviewed button Auto correction.
+
+The shared-option-helper preview (`d713e251...`) passes all 89 arena tests
+and all 177 runtime library tests with no failures or ignores. Gate three
+stops during compilation of Livery: the new attribute-invalidation patterns
+omit the existing `old_value` member. Add `..` to both patterns and retain
+the stopped receipt with its passing source/resource guards. No gate-three
+tests or later gates ran. The next preview also captures the built-in String
+conversion for `setCustomValidity`, rejects primitive Symbols as WebIDL
+requires, and preserves exceptions from authored `toString` methods. Two
+engine fixtures check poisoned global String, newline normalization, one
+conversion, exact thrown-object identity and receiver-brand ordering. These
+new cases and the two Livery compile repairs require a fresh frozen run;
+the unchanged arena preview keeps its separate 89-pass receipt.
+Read-only review additionally finds that option-state mutations invalidate
+their select but omit its external form owner. Both retained style and
+formatting-damage paths now include form owners of the relevant ancestors.
+A fixture selects a nonempty option in a required external select, checks
+the form's computed width and paint, then returns to the empty placeholder.
+The existing user-validity paint fixture now uses `mutate_dom`, handing each
+exact recorded batch to the retained document instead of calling a nonexistent
+mutable accessor. All of these new Livery checks still await execution.
+Before launching the next gate, fixture review catches an unchanged-empty
+assignment that cannot set user validity. The fixture now types one character
+into a `minlength=2` control before commit: a real user change remains invalid,
+then the two-character edit becomes valid. The transferred `c81aed33...`
+snapshot is preserved as an applied-only preview with no tests, and replaced
+by a separately frozen fixture correction. No provenance algorithm changes.
+Further static review borrows the attribute's non-Copy qualified name in the
+retained damage match instead of moving it from a borrowed mutation. Keep
+the runtime gate's exact source unchanged and apply this correction only at
+a stopped gate boundary; it needs the subsequent Livery compilation.
+The borrowed-attribute runtime gate executes 177 passes and two new fixture
+failures, with no ignores. Both report `Error:1` rather than `TypeError:1`
+for the last brand check: its `document.createElement('div')` setup invokes
+the intentionally replaced global String before `setCustomValidity` can run.
+Create that wrong receiver before poisoning String. Preserve the stopped
+run; no later gates ran, and this correction changes the fixture only.
+Further read-only invalidation review finds a radio-group dependency:
+checking one radio can clear another unchecked required radio's missing
+value without changing its checkedness, leaving its separate external
+fieldset's style stale. Both invalidation paths now conservatively widen
+current-radio state changes and radio name/required/type changes to their
+containing DOM tree, considering the old attribute when a type changes away
+from radio. Unrelated inputs retain their prior scope. No reverse group index
+exists, so this favors correct external-peer and fieldset styling at the cost
+of a full-tree restyle for these radio mutations. A retained fixture covers
+selection and grouping changes across two externally associated fieldsets.
+The previously frozen arena sources stay unchanged; the repair needs execution.
+Structural membership changes use the same containing-tree rule when a tree
+contains radios, including when it contains no form or fieldset. A fixture
+removes and reinserts a checked radio in a separate section from its required
+peer, checking the peer's style both ways. Structural edits elsewhere in a
+radio-containing tree therefore widen conservatively too; trees without
+these controls retain the old scope. These local additions follow the frozen
+`f45401dc...` preview and cannot use its unmodified-source receipt.
+The `f45401dc...` runtime gate passes all 179 tests without failures or
+ignores, including both corrected DOMString conversion fixtures. The runner
+then advances to `genet-scripted`; later native rendering and cross-realm
+gates remain unqualified until they complete.
+That compile stops in Livery before tests: the new helper's `QualName` type
+is not imported by `document/frame.rs`. Qualify it as
+`layout_dom_api::QualName`; this is a compile-only correction. Preserve the
+runtime 179-pass source binding and the stopped capture gate. The standalone
+radio-membership archive (`abaca823...`) remains frozen-only, without a
+remote application or tests; the next bundle combines membership coverage
+with this type-path correction at an idle boundary.
+The `0105ecef...` preview compiles Livery and passes all 88 scripted-document
+library tests without failures or ignores, including capture compatibility.
+Its Livery library gate stops with 304 passes and 18 failures. Ten failures
+concern retained-root damage/formatting, two report foreign or retired NodeIds
+(including the new radio-removal fixture), and six concern layout geometry or
+scroll ranges. Preserve the full failed run and passing source/resource guards;
+later package and integration gates did not start. Review invalidation safety
+and scope before changing those assertions, and execute a matched clean-source
+Livery baseline to attribute the geometry failures rather than assuming they
+are platform differences. The stopped evidence archive is `a566f84a...`.
+Further API review follows the DOM Standard's event-firing rule: borrowed
+validation must create an invalid event in the target's relevant realm.
+Register a private realm-local event factory alongside the existing canonical
+wrapper validity factory, preserving constructor-override protection and the
+agent-shared trust registry. The existing six-case integration target now
+checks event realm/prototype and a replaced child Event constructor on both
+engines. Those local runtime changes are outside the frozen `0105ecef...`
+run and need their own executed control and restored-source qualification.
+The negative event-realm control (`7c5e36ed...`) uses unchanged `0105ecef...`
+production and only the strengthened integration fixture. It executes six
+cases: four pass, while the borrowed-validation case fails once on each
+engine. Its source, lock, resource and frozen-binary guards match before and
+after. Preserve that failed control; the positive realm-factory repair still
+needs execution. A receipt timing-field error is retained with a separate
+amendment using its UTC start/end, rather than rewriting the raw receipt.
+The matched tracked-source baseline at `6cb2284a33d` and original lock
+`9809247c...` executes 318 Livery tests: 312 pass and six fail. Those failures
+are exactly the two scroll-range and four float/shape-outside cases from the
+preview. Its two new untracked preview files are retained but inert in this
+library-only baseline; all tracked source blobs match the commit. None of the
+ten retained-root failures or transferred-subtree panic reproduce. The
+baseline archive is `5d32f350...`, with unchanged source/resource guards.
+This attributes those twelve preview failures separately from the six
+pre-existing Linux failures, without altering any baseline assertions.
+
+The next local repair guards validity reads on retired/foreign IDs and keeps
+ordinary ID mutations local in trees without form-related dependencies. ID
+mutations in form-containing trees still widen, including a non-form element
+that blocks a later form's first-ID association. Both selectors now trust a
+native validity view's no-owner result instead of recreating ownership from
+matching attributes. New engine and retained-style fixtures check duplicate
+form IDs and toggling an earlier non-form blocker. Select structural mutations
+invalidate their select and external form owner even if selectedness stays
+unchanged; a placeholder move into/out of an optgroup checks that case. The
+radio-membership fixture moves its node into a detached tree and back, since
+the arena's destructive `remove` retires its ID.
+
+Native-editor review also clears stale bad-input drafts and caret/focus
+metadata on genuine type-state changes, retaining user-validity and custom
+validity. Existing editable date/month/week/time/datetime-local controls now
+preserve partial user drafts through the same derived editing view used for
+numbers. Script assignments clear those drafts. Length flags explicitly
+require dirty value and last-user-change provenance. These corrections and
+their three native fixtures await fresh execution; the earlier 89-pass arena
+receipt does not qualify these changed native sources.
+The combined positive preview is frozen as `690762af...` (22 owned paths,
+controlled lock `f540a7c8...`). Its arena gate passes 92 tests with no failures
+or ignores. The runtime library passes 181 tests, and all six cross-realm
+integration cases pass, including the two event-realm assertions that failed
+in the negative control. Later package gates are running. Subsequent review
+keeps editing-UI cleanup
+separate from value provenance: if a type change leaves the API value unchanged,
+retain the last-user-change fact so newly applicable length constraints remain
+observable. A new local fixture checks user-entered number `123` changed to
+text with `maxlength=2`, then search, and a sanitizing transition that clears
+the value. This inference follows HTML's last-value-change condition and type
+transition steps; it does not assert additional origin rules for every
+conversion. The correction is outside `690762af...`. The fixture-only negative
+control `56b0c383...` executes exactly one failing case at the expected
+`too_long` assertion after number-to-text, with 92 other cases filtered.
+Source and lock guards pass. Its runner misclassifies the expected zero-pass,
+one-failure summary, so preserve the original receipt and a separate
+classification amendment. The restored positive snapshot `261dd437...`
+passes all 93 arena tests with zero failures or ignores. Root verifies the
+source manifests, exact fixture/production deltas, raw output hashes, runner,
+lock and timing for both controls. The supplemental negative archive is
+`eee6bd2f...`, and the positive archive is `dd0fc8c0...`. An incorrectly
+reported amendment digest is corrected in a separate verification record;
+the amendment and original raw receipt are unchanged.
+Concurrent main commit `a26cd7b66734` adopts Boa `494ae680...` and its browser
+host feature. It changes no owned Forms files, but the compatible lock now
+resolves ICU 2.3 instead of the frozen previews' ICU 2.2. Keep the current
+ThinkPad queue at `6cb2284a...` and lock `f540a7c8...`; its results qualify
+that tuple only. Do not combine its before maps with a newer-pin candidate as
+though dependencies matched. Final publication needs a new frozen starting
+runner, lock, focused controls, WPT maps and CSS maps at the updated main
+dependency tuple before applying Forms. Preserve the existing old-tuple maps
+and controls as separate evidence. The stable Boa lane's adapter/compile
+qualification is recorded in `2026-10-08_boa_stable_upstream_refresh.md`;
+its aggregate Forms/WPT qualification remains separate.
+The new baseline lock is prepared as `fd4a121e...` from the public qualified
+878-package resolution, removing only the concurrent native-DOM URL edge.
+Its frozen URL-only preview candidate is `28ee4fe8...`; the guarded accounting
+confirms identical package identities, versions, sources, checksums and all
+other edges. These locks are frozen inputs; current build evidence follows.
+Published main `cca45fc7...` subsequently merges the line-breaking owner's
+paragraph-boundary index and qualification documentation. Forms' eight-line
+draft-display change in `text.rs` merges cleanly with that published code;
+all other owned source bytes remain intact. The incoming index adds three
+tests and one ignored timing observation. Final starting measurements move
+to exact `cca45fc7...` with the same `fd4a121e...` lock before applying Forms.
+Fresh locked ThinkPad metadata resolves 874 packages/nodes and confirms the
+public Boa, Vano and netrender revisions without config or source overlays.
+The fresh optimized ThinkPad starting runner builds successfully at exact
+`cca45fc7...` and lock `fd4a121e...`, with binary SHA `ab486cec...` and
+build receipt SHA `b64ead5a...`. Cargo reports 22m13s; the receipt envelope
+includes preflight and post-build checks. Root verifies the complete 22-member
+evidence archive `8ff2775b...`, raw output/exit hashes, metadata pins and resource
+identities. Its four-font inventory `e1356987...` supplements the preserved
+WPT and Linux corpus inventories. Upstream checkout status contains only
+Cargo markers; a separate amendment `0b022bed...` verifies Vano's unchanged
+test262 gitlink and empty tracked-source diff. Markers and raw evidence remain
+intact. The fresh Livery baseline executes 322 cases: 315 pass, six fail and
+one timing observation is ignored. Root verifies the raw results and exact
+same six failure names as the old clean-source baseline. Its receipt
+`284ee6af...` mistakenly embeds owner JSON in the start-time field; the
+separate `fe49ac25...` amendment supplies the owner's timestamp while
+preserving the original. The verified wall interval is 306.105 seconds and
+test execution takes 8.22 seconds. The unchanged B01-B20 controls subsequently
+execute on both engines with 0/20 passes, all twenty named failures and no
+errors or skips. Root verifies their 25-member archive `15b69aad...`, raw
+results and source/lock/binary/fixture/font bindings. Their constant config
+boolean is not a separate per-run config observation; the runner's build
+receipt contains that audit. Starting WPT and CSS maps still need to complete;
+the Livery result remains a baseline with six known failures.
+The starting-map capture review preserves the failed CSS preflight caused by
+a missing Git working directory. The corrected preflights verify all 5,047
+WPT resources, 60,998 CSS tracked files and four fonts before any maps run.
+Root also catches a summary-parser error that preflight does not exercise:
+named-group `findall` returns tuples, and the parser reads only the header.
+The V4 wrapper `36f79365...` instead checks both header settings and final
+stdout totals against each result map. Its replay verifies all eight archived
+Forms maps and sixteen CSS maps, with failing controls for the old parser,
+incorrect pass totals, duplicate summaries and a missing final summary.
+Before and candidate retain identical wrapper bytes with explicit frozen
+stage configs. The fresh before runner is separately frozen at 75,877,952
+bytes with unchanged binary SHA `ab486cec...`. The V4 preflights pass and all
+eight fresh starting Forms maps complete their capture checks. Root's strict
+accounting verifies build/font/corpus/provider bindings and raw stdout totals.
+Each engine has 219 files: 31 pass, 124 fail, nine error and 55 skip. Completed
+files retain 1,618/3,542 subtest passes; errored files separately retain eight
+passes, seven failures, 28 not-run rows and four timeouts, making 1,626/3,589
+rows including partial results. Status comparison with the old dependency
+tuple observes zero movements in all eight maps; it is not candidate acceptance.
+The raw archive `7f490671...` contains 99 regular files and one directory entry.
+All sixteen fresh CSS slices also complete their capture checks. Root verifies
+2,731 file records: 1,044 verified passes, one reference-unverified pass, 872
+failures and 814 skips, with zero errors. Their test processes exit 1 for the
+baseline failures; the capture stage exits 0 with complete results and passing
+guards. Each map records the static renderer engine `none`, despite the
+historical `--engine boa` argument. Original expectation files, policy script
+and reference map remain unchanged. The `f2160d39...` raw archive contains
+215 regular files and one directory entry. Comparing statuses against the old
+tuple observes zero movements; final acceptance still requires the matched
+Forms candidate. Both fresh starting stages are now ready, and ThinkPad has
+no active compiler or runner owner. Matcher and report-feedback choices
+remain unanswered without a response timer.
+The `690762af...` scripted-document gate also passes all 88 tests. Its Livery
+gate executes 324 cases with 318 passes and the exact six clean-source baseline
+failures, with no ignores. All ten retained-root regressions and the transferred
+subtree panic are repaired, and the six added Forms/invalidation cases pass.
+Record the baseline failures as such; this is not a zero-failure Livery gate.
+The remaining old-tuple library gates pass nine editor tests, ten Livery
+selector tests and 42 render/accessibility tests. The shared layout-DOM
+library compiles and has zero tests. All raw hashes and before/after source
+and lock guards are verified in the complete queue archive `64ae5f82...`.
+The last command mistakenly requests `genet-wpt --lib`, which has no library
+target and executes no tests. Preserve that invocation error separately from
+test failures. The corrected binary-target gate passes 73 tests with zero
+failures and three ignores on unchanged `690762af...` source and lock
+`f540a7c8...`. Its source and lock guards pass. This queue still precedes the
+final provenance correction and the updated Boa dependency tuple.
+
+Read-only report-feedback tracing identifies the existing native request
+pattern `HostState.scroll_into_view`, consumed during scripted layout.
+Validation has no equivalent presentation queue, message provider or notice
+UI. A timer-triggered report also needs a session drain, since input effects
+alone cannot carry it, and child-frame targets require realm identity.
+The host would own visible presentation and the transient accessible alert,
+outside author DOM. This is seam evidence for the still-unanswered notice
+choice, not an implemented queue, catalog or host feature.
+The final method audit finds matching static-validation snapshots, negative
+results after canceled invalid events and native external-form ownership.
+Method calls leave user-validity unchanged; genuine text-edit commits own its
+transition. `commit_select_user_selection` has direct native tests but no
+production picker caller. Select interaction therefore remains a host seam,
+and these API receipts do not qualify a native select picker.
+
+The ThinkPad's faithful starting run of the checked-in 16-slice CSS guard
+passes mediaqueries and css-position, then stops at text-align with
+unexpected results against the Windows expectation file. That completed
+slice has 52 passes, 34 failures, 28 skips and zero errors; the GPU starts
+successfully. Preserve the stopped guard as a platform baseline failure.
+Matched Linux starting maps for all sixteen unchanged slices are recorded
+separately with the frozen starting binary; they do not rewrite repository
+expectations or imply that the checked guard passed. Candidate qualification
+must reject new losses against those Linux starting rows.
+
+All sixteen Linux starting maps complete with zero errored rows across 2,731
+files: 1,044 verified passes, one reference-unverified pass, 872 failures
+and 814 skips. The evidence-only `--write-expectations` commands each exit
+one because raw reftest failures exist; every file count agrees with its
+complete map. That differs from the stopped checked-expectation guard and
+does not establish a passing `unexpected=0` guard. Preserve the malformed
+subset-parser helper attempt separately: it fails before rendering; the
+corrected v2 maps bind the frozen runner and all input inventories.
+Root verifies all 225 archived evidence files against their inventory. The
+guard/map receipts' `before.lock_sha256 = f540a7c8...` records the then-active
+dirty preview checkout, not the frozen baseline binary's build lock. The
+binary's actual build tuple remains clean `6cb2284a33d`, lock `9809247c...`
+and binary `087c4347...`. Preserve the original receipts with a provenance
+amendment separating those two tuples; no baseline result is attributed to
+compiled preview code.
 
 ### C: submission
 
@@ -333,7 +806,7 @@ same build settings and public dependency lock:
   WPT manifest SHA256 `D5EC5BE9BF1A75ED00D7E7AB28AFE8A694A55E11682BA74305874D70B18DD422`;
   1,649-file corpus SHA256 `C24C04EC10FC9924D334AEBFE5789A20F179F3971683202193C5652C93B3C50C`.
 
-The prescribed Livery/jobs4/timeout120/drive15 maps remain immutable. The first
+The prescribed Livery/jobs4/timeout 120/drive15 maps remain immutable. The first
 corrected run has no original baseline pass losses, but Vano `select-event.html`
 stops at 265/270 rows; an unchanged repeat stops at 222/270 and leaves five
 original passing rows unobserved. These are accounted as pass-to-missing, not
@@ -1030,3 +1503,204 @@ retains the eafb source boundary; it does not qualify those later changes.
   sources are recorded in `mere-forms-current-knot-repin-review-proposal.json`.
   No source substitution or public-source acceptance is inferred from these
   local-candidate gates. Checkpoint A publication remains the open decision.
+
+- 2026-10-08: Mark explicitly answers F8 and F9, approving the already-locked
+  native matcher and native notice with an accessible alert. Three bounded
+  Luna agents implement matching, the message/report bridge, and host painting
+  in separate ownership seams; root implements the session alert projection.
+  Native reports retain physical realm/node ownership and agent enqueue order.
+  The native alert is outside the authored DOM and uses the actual notice's
+  top-session viewport bounds, independent of target scroll or child-frame
+  geometry. Repeated reports receive fresh semantic identity; Escape dismisses
+  the current notice. Source formatting is limited evidence: these new edits
+  have not been compiled or executed, and are not Checkpoint B qualification.
+  Runtime catalog replacement exists; the public document construction/options
+  seam still needs review so embedders can set wording before authored scripts.
+- 2026-10-08: Mark requests a handoff because this orchestration chat is long,
+  and chooses a fresh Forms chat on the ThinkPad. Stop local agents after their
+  stable source checkpoint, freeze the owned source and approved F7/F8 lock,
+  and transfer those inputs plus the handoff record to ThinkPad evidence.
+  Preserve the complete fresh CCA starting maps, font/resources and raw
+  receipts. No new candidate build, source application, WPT run, commit or push
+  is inferred from preparing this handoff. The next chat owns candidate
+  qualification and publication through Checkpoint B, then stops before C.
+
+- 2026-10-08, ThinkPad Forms takeover: all 31 transferred source hashes, lock and 17 input evidence hashes verified. Inherited report-red disappeared during temporary-server handoff without test output or receipt; immutable partial evidence remains and unchanged rerun reproduced both-engine form.reportValidity failures. Fixed queueing the first unhandled entry. Narrow-overlay regression reproduced out-of-viewport bounds; scaled margin/padding and background clipping pass the restored regression. Custom whitespace already passed before explicit Preserve shaping, correcting the earlier unconfirmed review finding. Added both-engine adoption/realm-teardown feedback fixtures. Native editor draft dom_mut calls did not compile; existing mutate_dom capture supplies the correct retained mutation path. Child alert fixtures now pump queued iframe parsing before access. Pattern bypass, missing catalog installation, and suppressed native sink have executed intended failures; exact production bytes restored before full qualification. No Checkpoint B acceptance or Phase C work is inferred. Raw receipts and continuation ledger live under Code/testing/genet/forms/thinkpad/phase-b-thinkpad-*.
+
+- 2026-10-08, restored library qualification: the nine-target run binds unchanged source and records 60/2 document tests, 323/6/1 Livery, 42 render passes, 131 scripted passes, 95 DOM passes, 26 Boa adapter passes, nine Vano adapter passes, and 185/2 runtime tests; layout-dom has no tests. The six Livery failures exactly match the refreshed baseline. All new host catalog/adoption/teardown fixtures pass. Four additional failures block acceptance: the runtime ordering fixture illegally redeclared window.top (renamed its control variable); retained subtree merging omitted virtual native-control sources (collect those existing arena carriers in DOM order); and captured scripted pointer release outside its target returned Miss (consume the captured release without navigation, as the existing test contract requires). These corrections await restored verification. The collector adds the previously clean components/genet-livery/src/document.rs to the owned source set, now 32 files. No provider or lock change is involved.
+
+
+### 2026-10-08 final review repair gate
+
+The restored nine-library run is source-stable: runtime187/0, documents61/1,
+Livery 323/6/1, render42/0, scripted131/0, arena95/0, layout0/0, Boa 26/0 and
+Vano 9/0. Navigation capture and cross-realm report ordering are now positive.
+The six Livery failures remain the named baseline. The remaining document
+failure has a real missing highlight: initial and selected scene rectangle
+lists are empty, and the post-relayout control range returns None.
+
+Fresh whole-change review adds two P2 findings. Four new arena cases execute
+RED (95 old passes, four intended failures): required whitespace-only option
+placeholder, normalized option value/setter, space-separated datetime bounds,
+and space-separated datetime step bases. The repair shares HTML-aware option
+text/value between native getters, setters, validity and public script
+projections; explicit value attributes stay exact and non-ASCII whitespace
+stays intact. Datetime comparison and step conversion accept the same two
+separators as existing value sanitization. Both-engine public integration
+cases are added; their execution remains pending.
+
+The textarea failure comes from retained-root formatting omitting the atomic
+and native control text preparation that complete layout performs. The repair
+prepares that formatting subtree before its text frame is merged, alongside
+the earlier virtual-source order preservation. It visits the changed subtree,
+rather than traversing the full document once for every retained root. The
+previously clean layout/query.rs and layout/retained.rs are added to owned
+source guards (34 paths total); exact HEAD preimages are preserved in the
+ThinkPad receipt directory. This is a bounded retained text repair required
+by the native editor fixture, without adding interaction widgets or submission.
+The RED/diagnostic gate is immutable and source-stable. These repairs require
+the next full gate and matched WPT/CSS maps before acceptance.
+
+
+### 2026-10-09 crate qualification and runner freeze
+
+The final source-stable library/integration gate executes documents62/0,
+Livery 323/6/1 (exact six named baseline failures), render42/0, scripted131/0,
+arena99/0, layout0/0, Boa 26/0, Vano 9/0, runtime187/0 and the cross-realm Forms
+integration 8/0. The original textarea highlight assertion now passes; all
+four reviewer regressions execute RED then GREEN. Public option/datetime
+normalization passes on both engines. The netfetch genet-wpt binary gate
+executes75/0/3 ignored. No additional crate failure is accepted. Raw receipts
+and complete failure lists remain under Code/testing/genet/forms/thinkpad.
+
+The next frozen candidate manifest binds34 owned paths and the approved lock.
+Its executable code is identical to these passing gates; this dated progress
+entry is a documentation-only addition. The optimized runner, unchanged20,
+eight exact Forms maps, sixteen CSS maps, loss rejection and movement
+attribution remain required before qualified publication. Checkpoint B is
+not yet declared complete; Phase C remains stopped.
+
+## Checkpoint B qualified main publication, 2026-10-09
+
+ThinkPad Forms owns the transferred work. The sending chat stopped source edits
+and gate launches. The inherited report-red disappeared without a receipt;
+its interruption remains recorded and the unchanged rerun reproduced the two
+intended form-report failures before repair. All subsequent gates bind actual
+source, lock, argv, toolchain and raw output. Phase C submission remains stopped.
+
+### F10: native nested-negation correction
+
+Mark answered the concrete dependency choice, verbatim: "Apply and qualify the
+vendored fix (recommended)". The native DOM edge now uses the vendored
+`support/patches/regress-0.11.1` path with unchanged version, features and
+dependency requirements. The workspace excludes that directory from membership.
+Boa and Vano retain their registry dependencies and original source pins. All
+878 prior lock identities/checksums remain intact; one local identity is added.
+All 46 upstream files match the checksum-verified registry archive. The only
+upstream code delta retains the complement returned by `CodePointSet::inverted()`.
+
+The new native test is RED before that two-line fix and GREEN afterward: nested
+negation on either side of an intersection, subtraction and a UTF16 emoji range.
+The original unchanged20 probe is 0/20 before and 19/20 after on both engines.
+Its B09 pattern `[a-z&&[^aeiou]]+` is invalid v syntax: a range needs a nested
+class when used as an intersection operand. The original fixture and results
+remain unchanged. A separately named copy changes only that pattern to
+`[[a-z]&&[^aeiou]]+`, preserving all 20 names and assertions. It is 0/20 before,
+19/20 with the unpatched matcher and 20/20 with the fixed candidate, on both
+engines. Node 24.19.0 independently confirms the anchored grammar and values.
+See [ECMAScript ClassIntersection grammar](https://tc39.es/ecma262/multipage/text-processing.html#prod-ClassIntersection).
+
+### Qualified source and behavior
+
+The arena supplies live validity flags, barring, custom messages and interaction
+state to script and selectors. Form validation visits associated controls in
+tree order, dispatches trusted invalid events and preserves false results when
+listeners cancel. Native owner-routed reporting supplies a clipped Livery
+notice and an assertive Alert projection in the top session, including child
+realms. The message catalog is installed before authored scripts and is
+replaceable by the embedder; custom-message whitespace and full accessible
+text are preserved. Repeated reports replace the active notice. Adoption and
+realm teardown drop stale routes. The native paint path is
+`components/genet-livery/src/paint.rs` (`validation_notice_layout` and notice
+painting), with shaping in `text.rs` and session accessibility in
+`genet-documents/src/engines/scripted.rs`.
+
+Fresh whole-change review found two further defects. HTML-aware option text
+normalization now serves option/select value and required-placeholder checks;
+datetime-local bound/step parsing accepts a space or T separator. Four native
+RED cases and both-engine public fixtures pass after repair. Retained editing
+now prepares atomic control text only inside the changed subtree before merge;
+the original textarea selection rectangle assertion passes. Captured pointer
+release outside is consumed without navigation. Tiny notice geometry is tested
+at viewport widths 1, 4, 24, 40 and 320. Whitespace already passed before the
+explicit Preserve style; no whitespace RED claim is made.
+
+Pattern bypass and catalog omission each produced the two intended engine
+failures. Suppressed native reporting produced the intended host/catalog,
+adoption, top-alert and corrected child-alert failures. The first sink attempt
+was a compile failure and the first child cases were setup failures; neither
+is counted as semantic evidence. Production bytes were restored before the
+positive gates.
+
+### Matched qualification
+
+Release `+1.98.1 --locked -j1`, `--test-threads=1`: Documents 62, Livery 323,
+Render 42, Scripted 131, native DOM 100, WPT bin 75, layout seam 0, Boa 26, Vano 9,
+Runtime 187 and public Forms integration 8 pass. Total 963 passes, exactly six
+allowed Livery failures and four existing ignores. The six retained names are
+recorded in `phase-b-thinkpad-vendored-crates-forms-wpt.summary.json`; no extra
+failure exists. The optimized netfetch runner is an actual successful build
+with unchanged source and lock, frozen SHA256 `54acfcc6cd2bb7cba840400dc2adbd9ef9b0e772efbba72986749e38c22b68b2`.
+
+The immutable v4 wrapper completes eight Forms maps (219 source files per
+engine) and sixteen static Livery CSS slices (2,731 files), with one worker,
+timeout 120 and drive-deadline 15. All source/resource/build guards pass.
+
+| Matched slice, each engine | Before | Candidate |
+|---|---:|---:|
+| constraints | 0/877 | 825/911 |
+| the-input-element | 928/1853 | 957/1853 |
+| textfieldselection | 667/739 | 667/739 |
+| form-control-infrastructure | 31/120 | 101/120 |
+
+The table includes partial error rows, preserving their exact named identities
+and duplicate occurrence numbers. Completed-only totals are 1,618/3,542 before
+and 2,541/3,576 after; partial rows separately contribute 8/47 and 9/47 passing
+rows. Observed totals are 1,626/3,589 to 2,550/3,623 on each engine. That is 924
+additional passes per engine. Every old file and subtest pass survives,
+including passes in ERROR files. All 88 file movements and 1,850 subtest movements
+have source/case/occurrence attribution, with raw before text where available.
+The aggregate logger omits individual failure text for the partial radio row;
+its exact fail-to-pass identity is retained and its validity cause is explicitly
+inferred from the unchanged source and pre-B absent projection.
+
+CSS has zero movements or pass losses: 1,045 passes, of which 1,044 are verified
+and one is reference-unverified; 872 failures and 814 skips remain. The existing
+Windows checked-expectation guard is distinct from this fresh Linux matched
+pass-preservation qualification. Expectations and corpus files were not changed.
+
+The corpus inventory/archive, 5,047 resource inventory entries, four font bytes
+and all provider pins match the before build. Fresh font inventory SHA256 is
+`e13569870b0ddc0c2673b67cceb61ca3c809e7e708d0c27d446282d0fa780ea2`.
+The final freeze owns 82 paths; publication updates only the three canonical
+documents after the map freeze, with executable source hashes held identical.
+Existing provider/test262 `.cargo-ok` markers are preserved. Preflight status
+aggregation and workspace-exclusion hash corrections have separate preserved
+config versions and failure receipts; the v4 wrapper and map policies are unchanged.
+
+### Evidence and remaining bounds
+
+Evidence root: `/home/markik/Code/testing/genet/forms/thinkpad`. The final source
+manifest, library summary, runner receipt, map stage receipts, strict accounting,
+movement attribution, native vendor provenance and prepublication verification
+use `phase-b-thinkpad-vendored-*` / `phase-b-thinkpad-checkpoint-b-*` names.
+Original archives, raw controls, before binaries and preliminary captures remain.
+
+The matcher has no public execution budget. On both engines, the unchanged
+`infinite_backtracking.tentative.html` moves from an unsupported-API FAIL to
+ERROR/hang-killed; this is a liveness limitation, not a gain. Huge-year step
+arithmetic retains its f64 precision limit. Alert/notice geometry and routing
+are qualified projections, not headed assistive-technology validation. Existing
+picker/widget interaction gaps and the remaining WPT failures stay visible.
+These are scoped results; a browser-wide WPT percentage was not refreshed.
+Phase C submission requires the next human checkpoint.

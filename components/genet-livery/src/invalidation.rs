@@ -160,13 +160,39 @@ where
 
         for mutation in mutations {
             match mutation {
-                DomMutation::AttributeChanged { node, .. } => {
+                DomMutation::AttributeChanged {
+                    node,
+                    name,
+                    old_value,
+                } => {
                     push_element_hint(dom, &mut roots, *node, sibling_dependencies);
+                    push_validity_dependents(dom, &mut roots, *node);
+                    // Ownership changes affect controls outside the target's
+                    // subtree, and the former form owner is no longer
+                    // derivable after the attribute mutation.
+                    if form_association_attribute_changed(dom, *node, name) {
+                        push_form_validity_tree(dom, &mut roots, *node);
+                    }
+                    if radio_group_attribute_changed(dom, *node, name, old_value.as_deref()) {
+                        push_radio_tree(dom, &mut roots, *node);
+                    }
                 },
                 DomMutation::FormControlStateChanged { node } => {
                     push_element_hint(dom, &mut roots, *node, sibling_dependencies);
+                    push_validity_dependents(dom, &mut roots, *node);
+                    if is_radio_control(dom, *node) {
+                        push_radio_tree(dom, &mut roots, *node);
+                    }
+                },
+                DomMutation::FormControlInteractionStateChanged { node }
+                | DomMutation::FormControlCustomValidityChanged { node }
+                | DomMutation::OptionStateChanged { node } => {
+                    push_element_hint(dom, &mut roots, *node, sibling_dependencies);
+                    push_validity_dependents(dom, &mut roots, *node);
                 },
                 DomMutation::Inserted { node, parent } => {
+                    push_form_validity_tree(dom, &mut roots, *parent);
+                    push_select_validity_dependents(dom, &mut roots, *parent);
                     if structural_dependencies {
                         push_element_hint(dom, &mut roots, *parent, sibling_dependencies);
                     } else {
@@ -178,11 +204,15 @@ where
                     former_parent,
                 } => {
                     remove_subtree(dom, &mut self.plane, *node);
+                    push_form_validity_tree(dom, &mut roots, *former_parent);
+                    push_select_validity_dependents(dom, &mut roots, *former_parent);
                     if structural_dependencies {
                         push_element_hint(dom, &mut roots, *former_parent, sibling_dependencies);
                     }
                 },
                 DomMutation::CharacterDataChanged { node } => {
+                    push_form_validity_tree(dom, &mut roots, *node);
+                    push_select_validity_dependents(dom, &mut roots, *node);
                     if structural_dependencies
                         && dom.is_live(*node)
                         && let Some(parent) = dom.parent(*node)
@@ -191,6 +221,8 @@ where
                     }
                 },
                 DomMutation::SubtreeReplaced { node } => {
+                    push_form_validity_tree(dom, &mut roots, *node);
+                    push_select_validity_dependents(dom, &mut roots, *node);
                     if structural_dependencies {
                         push_element_hint(dom, &mut roots, *node, sibling_dependencies);
                     } else {
@@ -202,6 +234,10 @@ where
                     from_parent,
                     to_parent,
                 } => {
+                    push_form_validity_tree(dom, &mut roots, *from_parent);
+                    push_form_validity_tree(dom, &mut roots, *to_parent);
+                    push_select_validity_dependents(dom, &mut roots, *from_parent);
+                    push_select_validity_dependents(dom, &mut roots, *to_parent);
                     if structural_dependencies {
                         push_element_hint(dom, &mut roots, *from_parent, sibling_dependencies);
                         push_element_hint(dom, &mut roots, *to_parent, sibling_dependencies);
@@ -324,6 +360,171 @@ fn push_element_hint<D>(
         node
     };
     push_root(dom, roots, root);
+}
+
+/// A control's validity can affect a fieldset ancestor and a form owner that
+/// is elsewhere in the tree through `form="id"`. Option state can affect its
+/// owning select, so the same ancestor walk covers both paths.
+fn push_validity_dependents<D: LayoutDom>(dom: &D, roots: &mut Vec<D::NodeId>, node: D::NodeId) {
+    if !dom.is_live(node) {
+        return;
+    }
+    let mut parent = dom.parent(node);
+    while let Some(id) = parent {
+        if dom.element_name(id).is_some_and(|name| {
+            name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
+                && (name.local.as_ref().eq_ignore_ascii_case("fieldset")
+                    || name.local.as_ref().eq_ignore_ascii_case("select"))
+        }) {
+            push_root(dom, roots, id);
+            if let Some(form) = dom.form_control_form_owner(id) {
+                push_root(dom, roots, form);
+            }
+        }
+        parent = dom.parent(id);
+    }
+    if let Some(form) = dom.form_control_form_owner(node) {
+        push_root(dom, roots, form);
+    }
+}
+
+/// Option membership and tree position can change a select's value-missing
+/// state without changing any selectedness. Walk from the mutation boundary
+/// itself so direct select-child changes invalidate the select as well as its
+/// external form owner.
+fn push_select_validity_dependents<D: LayoutDom>(
+    dom: &D,
+    roots: &mut Vec<D::NodeId>,
+    node: D::NodeId,
+) {
+    if !dom.is_live(node) {
+        return;
+    }
+    let mut current = Some(node);
+    while let Some(id) = current {
+        if dom.element_name(id).is_some_and(|name| {
+            name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
+                && name.local.as_ref().eq_ignore_ascii_case("select")
+        }) {
+            push_root(dom, roots, id);
+            if let Some(form) = dom.form_control_form_owner(id) {
+                push_root(dom, roots, form);
+            }
+        }
+        current = dom.parent(id);
+    }
+}
+
+fn is_radio_control<D: LayoutDom>(dom: &D, node: D::NodeId) -> bool {
+    if !dom.is_live(node) {
+        return false;
+    }
+    dom.element_name(node).is_some_and(|name| {
+        name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
+            && name.local.as_ref().eq_ignore_ascii_case("input")
+    }) && dom
+        .attribute(
+            node,
+            &layout_dom_api::Namespace::from(""),
+            &layout_dom_api::LocalName::from("type"),
+        )
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("radio"))
+}
+
+fn radio_group_attribute_changed<D: LayoutDom>(
+    dom: &D,
+    node: D::NodeId,
+    name: &layout_dom_api::QualName,
+    old_value: Option<&str>,
+) -> bool {
+    if !dom.is_live(node)
+        || name.ns != layout_dom_api::Namespace::from("")
+        || !dom.element_name(node).is_some_and(|element| {
+            element.ns.as_ref() == "http://www.w3.org/1999/xhtml"
+                && element.local.as_ref().eq_ignore_ascii_case("input")
+        })
+    {
+        return false;
+    }
+    let current_radio = is_radio_control(dom, node);
+    match name.local.as_ref() {
+        "name" | "required" => current_radio,
+        "type" => {
+            current_radio || old_value.is_some_and(|value| value.eq_ignore_ascii_case("radio"))
+        },
+        _ => false,
+    }
+}
+
+fn form_association_attribute_changed<D: LayoutDom>(
+    dom: &D,
+    node: D::NodeId,
+    name: &layout_dom_api::QualName,
+) -> bool {
+    if !dom.is_live(node) || name.ns != layout_dom_api::Namespace::from("") {
+        return false;
+    }
+    let Some(element) = dom.element_name(node) else {
+        return false;
+    };
+    match name.local.as_ref() {
+        // Any earlier element with this ID can block a later form from owning
+        // an explicitly-associated control, regardless of that element's tag.
+        "id" => true,
+        "form" => {
+            element.ns.as_ref() == "http://www.w3.org/1999/xhtml"
+                && matches!(
+                    element.local.as_ref().to_ascii_lowercase().as_str(),
+                    "button" | "fieldset" | "input" | "object" | "output" | "select" | "textarea"
+                )
+        },
+        _ => false,
+    }
+}
+
+/// Radio requiredness is shared by the whole same-name/form-owner group, so
+/// changing one radio can alter validity in a different branch. The selector
+/// owner has no reverse group index; invalidate only this radio's DOM tree.
+fn push_radio_tree<D: LayoutDom>(dom: &D, roots: &mut Vec<D::NodeId>, node: D::NodeId) {
+    if !dom.is_live(node) {
+        return;
+    }
+    let mut root = node;
+    while let Some(parent) = dom.parent(root) {
+        root = parent;
+    }
+    push_root(dom, roots, root);
+}
+
+/// Aggregate validity depends on descendant membership and explicit form
+/// owners, including controls outside a form subtree. Radio validity also
+/// depends on same-name group membership. Widen only DOM trees containing one
+/// of those dependencies, so ordinary documents retain the existing scope.
+fn push_form_validity_tree<D: LayoutDom>(dom: &D, roots: &mut Vec<D::NodeId>, node: D::NodeId) {
+    if !dom.is_live(node) {
+        return;
+    }
+    let mut root = node;
+    while let Some(parent) = dom.parent(root) {
+        root = parent;
+    }
+    let mut pending = vec![root];
+    let mut contains_aggregate = false;
+    while let Some(current) = pending.pop() {
+        if dom.element_name(current).is_some_and(|name| {
+            name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
+                && (name.local.as_ref().eq_ignore_ascii_case("form")
+                    || name.local.as_ref().eq_ignore_ascii_case("fieldset"))
+        }) || is_radio_control(dom, current)
+        {
+            contains_aggregate = true;
+            break;
+        }
+        pending.extend(dom.dom_children(current));
+    }
+    if contains_aggregate {
+        push_root(dom, roots, root);
+    }
 }
 
 fn push_root<D>(dom: &D, roots: &mut Vec<D::NodeId>, root: D::NodeId)

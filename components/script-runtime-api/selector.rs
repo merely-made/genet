@@ -44,6 +44,15 @@ struct Compound {
     id: Option<String>,
     classes: Vec<String>,
     attrs: Vec<AttrSel>,
+    validity: Vec<ValidityPseudo>,
+}
+
+#[derive(Clone, Copy)]
+enum ValidityPseudo {
+    Valid,
+    Invalid,
+    UserValid,
+    UserInvalid,
 }
 
 struct AttrSel {
@@ -168,7 +177,133 @@ fn matches_compound<D: LayoutDom>(dom: &D, node: D::NodeId, c: &Compound) -> boo
             return false;
         }
     }
+    if !c
+        .validity
+        .iter()
+        .all(|pseudo| matches_validity_pseudo(dom, node, *pseudo))
+    {
+        return false;
+    }
     true
+}
+
+fn matches_validity_pseudo<D: LayoutDom>(dom: &D, node: D::NodeId, pseudo: ValidityPseudo) -> bool {
+    let Some(qname) = dom.element_name(node) else {
+        return false;
+    };
+    if qname.ns.as_ref() != "http://www.w3.org/1999/xhtml" {
+        return false;
+    }
+    let name = qname.local.as_ref().to_ascii_lowercase();
+    let is_form = name == "form";
+    let is_fieldset = name == "fieldset";
+    let user = matches!(
+        pseudo,
+        ValidityPseudo::UserValid | ValidityPseudo::UserInvalid
+    );
+    let (candidate, valid, user_validity) = if is_form || is_fieldset {
+        if user {
+            return false;
+        }
+        let mut descendants = Vec::new();
+        collect_descendants(
+            dom,
+            if is_form { tree_root(dom, node) } else { node },
+            &mut descendants,
+        );
+        let mut invalid = false;
+        let mut complete = true;
+        for descendant in descendants {
+            let Some(control_name) = dom
+                .element_name(descendant)
+                .map(|name| name.local.as_ref().to_ascii_lowercase())
+            else {
+                continue;
+            };
+            let validity = dom.form_control_validity(descendant);
+            let belongs = if is_form {
+                associated_with_form(dom, descendant, node, validity.is_some())
+            } else {
+                true
+            };
+            let Some(validity) = validity else {
+                if belongs
+                    && matches!(
+                        control_name.as_str(),
+                        "input" | "textarea" | "select" | "button" | "fieldset" | "object"
+                    )
+                {
+                    complete = false;
+                }
+                continue;
+            };
+            let relevant = if is_form {
+                belongs
+            } else {
+                validity.will_validate
+            };
+            if relevant && validity.will_validate && !validity.flags.valid() {
+                invalid = true;
+                break;
+            }
+        }
+        (complete || invalid, !invalid, false)
+    } else {
+        let Some(validity) = dom.form_control_validity(node) else {
+            return false;
+        };
+        if user {
+            if !matches!(name.as_str(), "input" | "textarea" | "select") {
+                return false;
+            }
+        }
+        (
+            validity.will_validate,
+            validity.flags.valid(),
+            validity.user_validity,
+        )
+    };
+    match pseudo {
+        ValidityPseudo::Valid => candidate && valid,
+        ValidityPseudo::Invalid => candidate && !valid,
+        ValidityPseudo::UserValid => candidate && user_validity && valid,
+        ValidityPseudo::UserInvalid => candidate && user_validity && !valid,
+    }
+}
+
+fn tree_root<D: LayoutDom>(dom: &D, mut node: D::NodeId) -> D::NodeId {
+    while let Some(parent) = dom.parent(node) {
+        node = parent;
+    }
+    node
+}
+
+fn associated_with_form<D: LayoutDom>(
+    dom: &D,
+    control: D::NodeId,
+    form: D::NodeId,
+    native_validity: bool,
+) -> bool {
+    let owner = dom.form_control_form_owner(control);
+    if owner.is_some() || native_validity {
+        // None is authoritative when native validation is implemented.
+        return owner == Some(form);
+    }
+    let namespace = Namespace::from("");
+    if let Some(owner_id) = dom.attribute(control, &namespace, &LocalName::from("form")) {
+        return dom.attribute(form, &namespace, &LocalName::from("id")) == Some(owner_id);
+    }
+    let mut ancestor = dom.parent(control);
+    while let Some(node) = ancestor {
+        if dom.element_name(node).is_some_and(|name| {
+            name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
+                && name.local.as_ref().eq_ignore_ascii_case("form")
+        }) {
+            return node == form;
+        }
+        ancestor = dom.parent(node);
+    }
+    false
 }
 
 // ---- parsing --------------------------------------------------------------
@@ -316,6 +451,17 @@ fn parse_compound(s: &str) -> Option<Compound> {
                 let inner: String = chars[i + 1..close].iter().collect();
                 c.attrs.push(parse_attr(&inner)?);
                 i = close + 1;
+            },
+            ':' => {
+                let (ident, next) = read_ident(&chars, i + 1);
+                c.validity.push(match ident.to_ascii_lowercase().as_str() {
+                    "valid" => ValidityPseudo::Valid,
+                    "invalid" => ValidityPseudo::Invalid,
+                    "user-valid" => ValidityPseudo::UserValid,
+                    "user-invalid" => ValidityPseudo::UserInvalid,
+                    _ => return None,
+                });
+                i = next;
             },
             _ => return None, // pseudo-classes, etc. — unsupported
         }

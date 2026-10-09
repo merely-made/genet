@@ -30,7 +30,7 @@ use paint_list_api::{
     ImageRendering, ImageResource, LayerSpec, LayoutPoint, LayoutRect, LayoutSideOffsets,
     LayoutSize, LayoutTransform, LayoutVector2D, LinearGradientItem, LinearGradientPayload,
     NormalBorder, PaintCmd, PaintList, PathCommand, PathData, RectItem, ShadowItem, StrokeCap,
-    StrokeItem, StrokeJoin, TransformKind, TransformSpec,
+    StrokeItem, StrokeJoin, TextOptions, TextRunItem, TransformKind, TransformSpec,
 };
 use serde::{Deserialize, Serialize};
 
@@ -40,7 +40,7 @@ use crate::{
         Fragment, TablePaintModel, border_width_px, length_percentage_px, order_modified_children,
         z_index_stacking_level,
     },
-    text::{TextFrame, TextSystem},
+    text::{NativeOverlayText, TextFrame, TextSystem},
 };
 use buckram::{
     BoxId, DisplayInside, DisplayOutside, FragmentId, GridEdgeOrientation, PhysicalSize,
@@ -182,6 +182,102 @@ impl LiveryPaintList {
             placement: CommonPlacement::new(rect),
             color,
         }));
+    }
+
+    /// Append a bounded host-owned validation notice after document paint.
+    /// Text is shaped by this Livery session's retained font system and has no
+    /// DOM source, selector state, hit target, or text-selection owner.
+    pub fn push_native_text_overlay(
+        &mut self,
+        text_system: &mut TextSystem,
+        text: &str,
+    ) -> Option<LayoutRect> {
+        const SIDE_MARGIN: f32 = 16.0;
+        const HORIZONTAL_PADDING: f32 = 12.0;
+        const VERTICAL_PADDING: f32 = 9.0;
+        const MAX_LINES: usize = 8;
+        let viewport_width = self.viewport.width.max(1) as f32;
+        let viewport_height = self.viewport.height.max(1) as f32;
+        let side_margin = SIDE_MARGIN.min(viewport_width * 0.1);
+        let max_box_width = viewport_width - side_margin * 2.0;
+        let horizontal_padding = HORIZONTAL_PADDING.min(max_box_width * 0.2);
+        let max_text_width = (max_box_width - horizontal_padding * 2.0).max(1.0);
+        let shaped: NativeOverlayText = text_system.shape_native_overlay(text, max_text_width)?;
+
+        let mut line_y = Vec::new();
+        for run in &shaped.runs {
+            if !line_y.iter().any(|y: &f32| (*y - run.line_y).abs() < 0.25) {
+                line_y.push(run.line_y);
+            }
+        }
+        let line_height = shaped.bounds.height() / line_y.len().max(1) as f32;
+        let side_margin_y = SIDE_MARGIN.min(viewport_height * 0.1);
+        let vertical_padding = VERTICAL_PADDING.min(viewport_height * 0.1);
+        let height_lines = ((viewport_height - side_margin_y * 2.0 - vertical_padding * 2.0)
+            / line_height.max(1.0))
+        .floor()
+        .max(0.0) as usize;
+        if height_lines == 0 {
+            return None;
+        }
+        let keep_lines = MAX_LINES.min(height_lines);
+        line_y.truncate(keep_lines);
+        let visible = |run: &&crate::text::NativeOverlayTextRun| {
+            line_y.iter().any(|y| (*y - run.line_y).abs() < 0.25)
+        };
+        let runs: Vec<_> = shaped.runs.iter().filter(visible).collect();
+        let mut text_bounds: Option<LayoutRect> = None;
+        for run in &runs {
+            text_bounds = Some(match text_bounds {
+                Some(current) => current.union(&run.fragment),
+                None => run.fragment,
+            });
+        }
+        let text_bounds = text_bounds?;
+        let width = (text_bounds.width() + horizontal_padding * 2.0)
+            .max(120.0_f32.min(max_box_width))
+            .min(max_box_width);
+        let height = text_bounds.height() + vertical_padding * 2.0;
+        let bounds = LayoutRect::new(
+            LayoutPoint::new(
+                ((viewport_width - width) * 0.5).max(side_margin),
+                (viewport_height - height - side_margin_y).max(side_margin_y),
+            ),
+            LayoutPoint::new(
+                ((viewport_width - width) * 0.5).max(side_margin) + width,
+                (viewport_height - height - side_margin_y).max(side_margin_y) + height,
+            ),
+        );
+        self.push_overlay_rect(bounds, ColorF::new(0.12, 0.12, 0.12, 0.96));
+        self.commands.push(PaintCmd::PushClip(ClipSpec {
+            kind: ClipKind::Rect(bounds),
+        }));
+        let dx = bounds.min.x + horizontal_padding - text_bounds.min.x;
+        let dy = bounds.min.y + vertical_padding - text_bounds.min.y;
+        for run in runs {
+            if !self.fonts.iter().any(|font| font.key == run.font.key) {
+                self.fonts.push(run.font.clone());
+            }
+            let mut glyphs = run.glyphs.clone();
+            for glyph in &mut glyphs {
+                glyph.point.x += dx;
+                glyph.point.y += dy;
+            }
+            let run_bounds = LayoutRect::new(
+                LayoutPoint::new(run.fragment.min.x + dx, run.fragment.min.y + dy),
+                LayoutPoint::new(run.fragment.max.x + dx, run.fragment.max.y + dy),
+            );
+            self.commands.push(PaintCmd::DrawText(TextRunItem {
+                placement: CommonPlacement::new(run_bounds),
+                font_instance: run.font_instance,
+                font_size: run.font_size,
+                color: run.color,
+                glyphs,
+                options: TextOptions::default(),
+            }));
+        }
+        self.commands.push(PaintCmd::PopClip);
+        Some(bounds)
     }
 
     /// Fill custom-leaf paint slots recorded during the CSS paint walk.
@@ -1764,6 +1860,46 @@ mod collapsed_border_paint_tests {
             }),
             "the phase-002 collapsed edge covers the foreground: {green_rects:?} vs {red_rect:?}"
         );
+    }
+}
+
+#[cfg(test)]
+mod native_validation_overlay_tests {
+    use super::*;
+
+    #[test]
+    fn native_validation_overlay_stays_within_narrow_viewport() {
+        let mut text = TextSystem::new();
+        for width in [1, 4, 24, 40, 320] {
+            let mut list = LiveryPaintList::new(DeviceIntSize::new(width, 120), 0);
+            let bounds = list
+                .push_native_text_overlay(&mut text, "Required value")
+                .expect("notice text");
+            assert!(
+                bounds.min.x >= 0.0 && bounds.max.x <= width as f32,
+                "{bounds:?}"
+            );
+            assert!(bounds.min.y >= 0.0 && bounds.max.y <= 120.0, "{bounds:?}");
+            let mut clip = None;
+            let mut painted = false;
+            for command in list.commands() {
+                match command {
+                    PaintCmd::PushClip(ClipSpec {
+                        kind: ClipKind::Rect(rect),
+                    }) => clip = Some(*rect),
+                    PaintCmd::DrawText(run) => {
+                        assert_eq!(clip, Some(bounds), "native glyphs need the notice clip");
+                        assert!(run.placement.bounds.min.x >= bounds.min.x);
+                        assert!(run.placement.bounds.min.x < bounds.max.x);
+                        painted = true;
+                    },
+                    PaintCmd::PopClip => clip = None,
+                    _ => {},
+                }
+            }
+            assert!(painted);
+            assert!(clip.is_none(), "balanced clip");
+        }
     }
 }
 

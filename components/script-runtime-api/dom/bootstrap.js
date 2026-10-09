@@ -13,6 +13,7 @@
   // Captured before authored code runs: parser lifecycle events cannot depend
   // on the page-deletable public Event global at dispatch time.
   var userAgentEventConstructor = globalThis.Event;
+  var userAgentEventPrototype = userAgentEventConstructor.prototype;
   delete globalThis.__domAgentDispatch;
   delete globalThis.__domRegisterHooks;
 
@@ -61,6 +62,12 @@
   var gcStringIndexOf = String.prototype.indexOf;
   var gcStringSlice = String.prototype.slice;
   var gcDefineProperty = Object.defineProperty;
+  var formObjectCreate = Object.create;
+  var formInvalidEventTrust = globalThis.__agentTimers.domEventTrust;
+  var formValidityObjects = globalThis.__agentTimers.domValidityObjects;
+  var formValidityOwners = globalThis.__agentTimers.domValidityOwners;
+  var formValidityCreators = globalThis.__agentTimers.domValidityCreators;
+  var formInvalidEventCreators = globalThis.__agentTimers.domInvalidEventCreators;
   var gcReflectNode = globalThis.__reflectNode;
   // Agent-private identity branding survives public property/prototype changes.
   var domNodes = globalThis.__agentTimers.domNodes;
@@ -95,6 +102,12 @@
   function nativeNodeBaseURI(ref, selector) { return __nodeBaseURI(ref, selector); }
   function registerBaseReader(node) {
     nodeBaseReaders.set(node, nativeNodeBaseURI);
+    // This private factory retains the wrapper's creation realm. A borrowed
+    // getter must return the same validity object with that realm's prototype.
+    applyDOMBrand(gcWeakMapSet, formValidityCreators, [node, validityObjectLocal]);
+    // Invalid events must likewise be created in the target's relevant realm,
+    // even when a borrowed validation method runs in another realm.
+    applyDOMBrand(gcWeakMapSet, formInvalidEventCreators, [node, fireInvalidLocal]);
   }
   var wrapperGroups = globalThis.__agentTimers.domWrapperGroups;
   // A template retains its contents, but contents do not retain the template.
@@ -998,7 +1011,7 @@
       event.__inPassive = false;
     }
   }
-  Node.prototype.dispatchEvent = function(event) {
+  function dispatchNodeEvent(event) {
     // DOM §dispatch: an uninitialized event (createEvent without initEvent) or
     // one already mid-dispatch is an InvalidStateError.
     if (event.__initialized === false || event.__dispatch) {
@@ -1091,6 +1104,18 @@
     event.target = this;
     event.srcElement = this;
     return !event.__canceled;
+  }
+  Node.prototype.dispatchEvent = function(event) {
+    if (event.__initialized === false || event.__dispatch) {
+      throw new DOMException("The event is not initialized or is being dispatched.", "InvalidStateError");
+    }
+    // A script redispatch is untrusted, including a retained UA invalid event.
+    if (applyDOMBrand(gcWeakMapGet, formInvalidEventTrust, [event]) !== undefined) {
+      applyDOMBrand(gcWeakMapSet, formInvalidEventTrust, [event, false]);
+    } else {
+      gcDefineProperty(event, 'isTrusted', { configurable: true, enumerable: true, value: false });
+    }
+    return applyDOMBrand(dispatchNodeEvent, this, [event]);
   };
   // stopPropagation halts further nodes (the current node's other listeners still
   // run). stopImmediatePropagation also halts the rest of the current node's
@@ -1106,6 +1131,9 @@
     // mid-dispatch, per spec.
     globalThis.Event.prototype.initEvent = function(type, bubbles, cancelable) {
       if (this.__dispatch) { return; }
+      if (applyDOMBrand(gcWeakMapGet, formInvalidEventTrust, [this]) !== undefined) {
+        applyDOMBrand(gcWeakMapSet, formInvalidEventTrust, [this, false]);
+      }
       this.__initialized = true;
       this.type = String(type);
       this.bubbles = !!bubbles;
@@ -3102,8 +3130,129 @@
       setTimeout(function() { control.dispatchEvent(new Event('select', { bubbles: true })); }, 0);
     }
   }
-  function installTextControlMembers(proto) {
-    Object.defineProperty(proto, 'form', { configurable: true, enumerable: true, get: function() { return formOwner(this); } });
+  // All native validation entry points and branding operations are captured
+  // before authors run. Public RegExp and validity objects are never authority.
+  var nativeValidityGet = globalThis.__formControlValidityGet;
+  var nativeQueueValidationReport = globalThis.__queueValidationReport;
+  var nativeControlGet = globalThis.__formControlGet;
+  var nativeSetCustomValidity = globalThis.__setCustomValidity;
+  var nativeControlListCount = globalThis.__formControlListCount;
+  var nativeControlListItem = globalThis.__formControlListItem;
+  var formToString = String;
+  var formNodeHas = WeakSet.prototype.has;
+  delete globalThis.__formControlValidityGet;
+  delete globalThis.__queueValidationReport;
+  delete globalThis.__setCustomValidity;
+  delete globalThis.__formControlListCount;
+  delete globalThis.__formControlListItem;
+  function validationControlRef(control, kind) {
+    if (!applyDOMBrand(formNodeHas, domNodes, [control])) throw new TypeError('Illegal invocation');
+    var ref = control.__ref;
+    if (kind !== undefined && nativeControlGet(ref, 'kind') !== kind) throw new TypeError('Illegal invocation');
+    if (nativeValidityGet(ref, 'valid') === null) throw new TypeError('Illegal invocation');
+    return ref;
+  }
+  function formInterfaceRef(control, kind) {
+    if (!applyDOMBrand(formNodeHas, domNodes, [control]) || nativeControlGet(control.__ref, 'kind') !== kind) {
+      throw new TypeError('Illegal invocation');
+    }
+    return control.__ref;
+  }
+  function readValidityFlag(control, key) {
+    return nativeValidityGet(validationControlRef(control), key) === 'true';
+  }
+  function ValidityState() { throw new TypeError('Illegal constructor'); }
+  setClassString(ValidityState.prototype, 'ValidityState');
+  ['valueMissing', 'typeMismatch', 'patternMismatch', 'tooLong', 'tooShort',
+   'rangeUnderflow', 'rangeOverflow', 'stepMismatch', 'badInput', 'customError', 'valid'].forEach(function(key) {
+    gcDefineProperty(ValidityState.prototype, key, { configurable: true, enumerable: true,
+      get: function() {
+        var control = applyDOMBrand(gcWeakMapGet, formValidityOwners, [this]);
+        if (!control) throw new TypeError('Illegal invocation');
+        return readValidityFlag(control, key);
+      }
+    });
+  });
+  var validityStatePrototype = ValidityState.prototype;
+  globalThis.ValidityState = ValidityState;
+  function validityObject(control, kind) {
+    validationControlRef(control, kind);
+    var object = applyDOMBrand(gcWeakMapGet, formValidityObjects, [control]);
+    if (object) return object;
+    var creator = applyDOMBrand(gcWeakMapGet, formValidityCreators, [control]);
+    return applyDOMBrand(creator, undefined, [control]);
+  }
+  function validityObjectLocal(control) {
+    validationControlRef(control);
+    var object = applyDOMBrand(gcWeakMapGet, formValidityObjects, [control]);
+    if (object) return object;
+    object = formObjectCreate(validityStatePrototype);
+    applyDOMBrand(gcWeakMapSet, formValidityOwners, [object, control]);
+    applyDOMBrand(gcWeakMapSet, formValidityObjects, [control, object]);
+    return object;
+  }
+  function invalidControl(control) {
+    return readValidityFlag(control, 'willValidate') && !readValidityFlag(control, 'valid');
+  }
+  function fireInvalid(control) {
+    var creator = applyDOMBrand(gcWeakMapGet, formInvalidEventCreators, [control]);
+    if (!creator) throw new TypeError('Invalid validation target');
+    return applyDOMBrand(creator, undefined, [control]);
+  }
+  function fireInvalidLocal(control) {
+    // UA construction bypasses page constructors and inherited property setters.
+    var event = formObjectCreate(userAgentEventPrototype);
+    var fields = { __proto__: null, type: 'invalid', bubbles: false,
+      cancelable: true, composed: false, defaultPrevented: false, __canceled: false,
+      eventPhase: 0, target: null, currentTarget: null, srcElement: null,
+      __initialized: true, __dispatch: false, __stop: false, __stopImmediate: false,
+      __inPassive: false, __path: null, __pathTargets: null, __pathIndex: undefined };
+    for (var key in fields) {
+      gcDefineProperty(event, key, { configurable: true, enumerable: true, writable: true, value: fields[key] });
+    }
+    applyDOMBrand(gcWeakMapSet, formInvalidEventTrust, [event, true]);
+    gcDefineProperty(event, 'isTrusted', { enumerable: true,
+      get: function() { return applyDOMBrand(gcWeakMapGet, formInvalidEventTrust, [event]); }
+    });
+    return applyDOMBrand(dispatchNodeEvent, control, [event]);
+  }
+  function nativeControlList(control, kind) {
+    var ref = control.__ref, count = Number(nativeControlListCount(ref, kind)), result = [];
+    for (var i = 0; i < count; i++) {
+      var item = wrapNode(nativeControlListItem(ref, kind, String(i)));
+      if (item) result.push(item);
+    }
+    return result;
+  }
+  function validateControl(control, report, kind) {
+    var ref = validationControlRef(control, kind);
+    if (!invalidControl(control)) return true;
+    var message = report ? nativeValidityGet(ref, 'validationMessage') : '';
+    var unhandled = fireInvalid(control);
+    if (report && unhandled) nativeQueueValidationReport(ref, message);
+    return false;
+  }
+  function installValidationMembers(proto, kind) {
+    gcDefineProperty(proto, 'willValidate', { configurable: true, enumerable: true,
+      get: function() { return nativeValidityGet(validationControlRef(this, kind), 'willValidate') === 'true'; }
+    });
+    gcDefineProperty(proto, 'validity', { configurable: true, enumerable: true,
+      get: function() { return validityObject(this, kind); }
+    });
+    gcDefineProperty(proto, 'validationMessage', { configurable: true, enumerable: true,
+      get: function() { return nativeValidityGet(validationControlRef(this, kind), 'validationMessage'); }
+    });
+    proto.setCustomValidity = function(message) {
+      if (arguments.length === 0) throw new TypeError('setCustomValidity requires a message');
+      var ref = validationControlRef(this, kind);
+      if (typeof message === 'symbol') throw new TypeError('Cannot convert a Symbol to a DOMString');
+      formControlError(nativeSetCustomValidity(ref, formToString(message)));
+    };
+    proto.checkValidity = function() { return validateControl(this, false, kind); };
+    proto.reportValidity = function() { return validateControl(this, true, kind); };
+  }
+  function installTextControlMembers(proto, kind) {
+    Object.defineProperty(proto, 'form', { configurable: true, enumerable: true, get: function() { formInterfaceRef(this, kind); return formOwner(this); } });
     ['selectionStart', 'selectionEnd', 'selectionDirection'].forEach(function(key) {
       Object.defineProperty(proto, key, { configurable: true, enumerable: true,
         get: function() { var value = __formControlGet(this.__ref, key); return value === null || key === 'selectionDirection' ? value : Number(value); },
@@ -3150,37 +3299,122 @@
   }
 
   function installHtmlInterfaceMembers(name, proto) {
+    if (['HTMLInputElement', 'HTMLTextAreaElement', 'HTMLSelectElement', 'HTMLButtonElement',
+         'HTMLFieldSetElement', 'HTMLOutputElement', 'HTMLObjectElement'].indexOf(name) >= 0) {
+      var validationKind = { HTMLInputElement: 'input', HTMLTextAreaElement: 'textarea',
+        HTMLSelectElement: 'select', HTMLButtonElement: 'button', HTMLFieldSetElement: 'fieldset',
+        HTMLOutputElement: 'output', HTMLObjectElement: 'object' }[name];
+      installValidationMembers(proto, validationKind);
+      if (name !== 'HTMLInputElement' && name !== 'HTMLTextAreaElement') {
+        gcDefineProperty(proto, 'form', { configurable: true, enumerable: true,
+          get: function() { formInterfaceRef(this, validationKind); return formOwner(this); }
+        });
+      }
+    }
     if (name === 'HTMLInputElement' || name === 'HTMLTextAreaElement') {
-      installTextControlMembers(proto);
+      installTextControlMembers(proto, name === 'HTMLInputElement' ? 'input' : 'textarea');
       if (name === 'HTMLTextAreaElement') {
         Object.defineProperty(proto, 'textLength', { configurable: true, enumerable: true, get: function() { return this.value.length; } });
       }
       return;
     }
     if (name === 'HTMLFormElement') {
+      function checkForm(form) {
+        formInterfaceRef(form, 'form');
+      }
+      function validateForm(form, report) {
+        checkForm(form);
+        var controls = nativeControlList(form, 'form'), invalid = [], unhandled = [];
+        // Snapshot all invalid candidates before listeners can mutate the form.
+        for (var i = 0; i < controls.length; i++) {
+          if (invalidControl(controls[i])) {
+            var ref = controls[i].__ref;
+            invalid.push({ ref: ref, control: controls[i],
+              message: report ? nativeValidityGet(ref, 'validationMessage') : '' });
+          }
+        }
+        for (var j = 0; j < invalid.length; j++) {
+          if (fireInvalid(invalid[j].control)) unhandled.push(invalid[j]);
+        }
+        if (report && unhandled.length) {
+          var first = unhandled[0];
+          nativeQueueValidationReport(first.ref, first.message);
+        }
+        return invalid.length === 0;
+      }
+      proto.checkValidity = function() { return validateForm(this, false); };
+      proto.reportValidity = function() { return validateForm(this, true); };
       var resetting = new WeakSet();
       proto.reset = function() {
-        if (!this || this.namespaceURI !== XHTML_NS || this.localName !== 'form') throw new TypeError('Illegal invocation');
+        checkForm(this);
         if (resetting.has(this)) return;
         resetting.add(this);
         try {
           if (!this.dispatchEvent(new Event('reset', { bubbles: true, cancelable: true }))) return;
-          var seen = new Set();
-          var own = this.querySelectorAll('input,textarea');
-          var all = this.getRootNode().querySelectorAll('input,textarea');
-          function resetAssociated(list, form) {
-            for (var i = 0; i < list.length; i++) {
-              var control = list[i];
-              if (!seen.has(control) && formOwner(control) === form) {
-                seen.add(control);
-                __resetFormControl(control.__ref);
-              }
-            }
-          }
-          resetAssociated(own, this);
-          resetAssociated(all, this);
+          var controls = nativeControlList(this, 'form');
+          for (var i = 0; i < controls.length; i++) __resetFormControl(controls[i].__ref);
         } finally { resetting.delete(this); }
       };
+      return;
+    }
+    if (name === 'HTMLSelectElement') {
+      gcDefineProperty(proto, 'value', { configurable: true, enumerable: true,
+        get: function() { return nativeControlGet(formInterfaceRef(this, 'select'), 'value') || ''; },
+        set: function(value) { formControlError(__formControlSet(formInterfaceRef(this, 'select'), 'value', String(value))); }
+      });
+      gcDefineProperty(proto, 'selectedIndex', { configurable: true, enumerable: true,
+        get: function() { return Number(nativeControlGet(formInterfaceRef(this, 'select'), 'selectedIndex')); },
+        set: function(value) { formControlError(__formControlSet(formInterfaceRef(this, 'select'), 'selectedIndex', String(Number(value) >> 0))); }
+      });
+      gcDefineProperty(proto, 'options', { configurable: true, enumerable: true,
+        get: function() {
+          var select = this;
+          formInterfaceRef(select, 'select');
+          return makeCollection(function() { return nativeControlList(select, 'select'); }, true);
+        }
+      });
+      gcDefineProperty(proto, 'length', { configurable: true, enumerable: true,
+        get: function() { formInterfaceRef(this, 'select'); return nativeControlList(this, 'select').length; }
+      });
+      proto.item = function(index) { return this.options.item(index); };
+      proto.namedItem = function(name) { return this.options.namedItem(String(name)); };
+      proto.add = function(element, before) {
+        formInterfaceRef(this, 'select');
+        requireNode(element, 'select.add');
+        if (element.namespaceURI !== XHTML_NS || ['option', 'optgroup'].indexOf(element.localName) < 0) {
+          throw new TypeError('Expected an option or optgroup');
+        }
+        if (before !== undefined && before !== null && typeof before !== 'object') {
+          before = this.options.item(Number(before) >> 0);
+        }
+        if (before === undefined) before = null;
+        if (before !== null && !this.contains(before)) throw new DOMException('The reference option is not in this select', 'NotFoundError');
+        (before ? before.parentNode : this).insertBefore(element, before);
+      };
+      proto.remove = function(index) {
+        formInterfaceRef(this, 'select');
+        if (arguments.length === 0) {
+          if (this.parentNode) this.parentNode.removeChild(this);
+        } else {
+          var option = this.options.item(Number(index) >> 0);
+          if (option && option.parentNode) option.parentNode.removeChild(option);
+        }
+      };
+      return;
+    }
+    if (name === 'HTMLOptionElement') {
+      gcDefineProperty(proto, 'selected', { configurable: true, enumerable: true,
+        get: function() { return nativeControlGet(formInterfaceRef(this, 'option'), 'selected') === 'true'; },
+        set: function(value) { formControlError(__formControlSet(formInterfaceRef(this, 'option'), 'selected', String(!!value))); }
+      });
+      gcDefineProperty(proto, 'value', { configurable: true, enumerable: true,
+        get: function() { return nativeControlGet(formInterfaceRef(this, 'option'), 'optionValue'); },
+        set: function(value) { this.setAttribute('value', String(value)); }
+      });
+      gcDefineProperty(proto, 'text', { configurable: true, enumerable: true,
+        get: function() { return nativeControlGet(formInterfaceRef(this, 'option'), 'optionText'); },
+        set: function(value) { formInterfaceRef(this, 'option'); this.textContent = String(value); }
+      });
       return;
     }
     if (name === 'HTMLIFrameElement') {

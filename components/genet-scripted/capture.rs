@@ -11,7 +11,10 @@ use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use genet_scripted_dom::{CapturedNodeId, NodeId, NodeIdentityError, ScriptedDom};
-use layout_dom_api::{CapturedQualName, DomMutation, FormControlState, LayoutDom, LayoutDomMut};
+use layout_dom_api::{
+    CapturedQualName, DomMutation, FormControlInteractionState, FormControlState, LayoutDom,
+    LayoutDomMut, SelectOptionState,
+};
 use serde::{Deserialize, Serialize};
 
 fn capture_dir() -> Option<&'static PathBuf> {
@@ -113,6 +116,20 @@ pub(crate) enum RecordedMutation {
         node: CapturedNodeId,
         new_state: FormControlState,
     },
+    // New state has its own appended payload; old control records keep their
+    // exact field layout and enum tag.
+    FormControlInteractionStateChanged {
+        node: CapturedNodeId,
+        new_state: FormControlInteractionState,
+    },
+    OptionStateChanged {
+        node: CapturedNodeId,
+        new_state: SelectOptionState,
+    },
+    FormControlCustomValidityChanged {
+        node: CapturedNodeId,
+        message: String,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -153,6 +170,9 @@ impl RecordedMutation {
             | DomMutation::AttributeChanged { node, .. }
             | DomMutation::CharacterDataChanged { node }
             | DomMutation::FormControlStateChanged { node }
+            | DomMutation::FormControlInteractionStateChanged { node }
+            | DomMutation::OptionStateChanged { node }
+            | DomMutation::FormControlCustomValidityChanged { node }
             | DomMutation::SubtreeReplaced { node }
             | DomMutation::Moved { node, .. } => Some(*node),
             DomMutation::Removed { .. } => None,
@@ -202,6 +222,39 @@ impl RecordedMutation {
                         "control state mutation has no arena state",
                     )
                 })?,
+            },
+            DomMutation::FormControlInteractionStateChanged { node } => {
+                Self::FormControlInteractionStateChanged {
+                    node: capture_id(*node)?,
+                    new_state: dom.form_control_interaction_state(*node).ok_or_else(|| {
+                        io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "control interaction mutation has no arena state",
+                        )
+                    })?,
+                }
+            },
+            DomMutation::OptionStateChanged { node } => Self::OptionStateChanged {
+                node: capture_id(*node)?,
+                new_state: dom.option_selected_state(*node).ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "option mutation has no arena state",
+                    )
+                })?,
+            },
+            DomMutation::FormControlCustomValidityChanged { node } => {
+                Self::FormControlCustomValidityChanged {
+                    node: capture_id(*node)?,
+                    message: dom
+                        .form_control_custom_validity_message(*node)
+                        .ok_or_else(|| {
+                            io::Error::new(
+                                io::ErrorKind::InvalidData,
+                                "custom validity mutation has no arena state",
+                            )
+                        })?,
+                }
             },
             DomMutation::SubtreeReplaced { node } => Self::SubtreeReplaced {
                 node: capture_id(*node)?,
@@ -269,6 +322,9 @@ impl RecordedMutation {
             | Self::AttributeChanged { node, .. }
             | Self::CharacterDataChanged { node, .. }
             | Self::FormControlStateChanged { node, .. }
+            | Self::FormControlInteractionStateChanged { node, .. }
+            | Self::OptionStateChanged { node, .. }
+            | Self::FormControlCustomValidityChanged { node, .. }
             | Self::SubtreeReplaced { node, .. }
             | Self::Moved { node, .. } => *node,
         };
@@ -297,6 +353,9 @@ impl RecordedMutation {
             Self::AttributeChanged { node, .. }
             | Self::CharacterDataChanged { node, .. }
             | Self::FormControlStateChanged { node, .. }
+            | Self::FormControlInteractionStateChanged { node, .. }
+            | Self::OptionStateChanged { node, .. }
+            | Self::FormControlCustomValidityChanged { node, .. }
             | Self::SubtreeReplaced { node, .. } => vec![*node],
             Self::Moved {
                 node,
@@ -482,6 +541,71 @@ mod tests {
             new_data: "text".to_owned(),
         };
         assert_eq!(postcard::to_allocvec(&historical).unwrap()[0], 3);
+    }
+
+    #[test]
+    fn historical_control_payload_still_decodes_byte_for_byte() {
+        // Frozen pre-Phase-B tag 6, node 1:2 and the old control field order.
+        let bytes = [
+            6, 1, 2, 3, b'o', b'l', b'd', 0, 1, 0, 0, 1, 3, 2, 5, b'e', b'r', b'r', b'o', b'r',
+        ];
+        let decoded: RecordedMutation = postcard::from_bytes(&bytes).unwrap();
+        let RecordedMutation::FormControlStateChanged { node, new_state } = &decoded else {
+            panic!("historical control payload changed tag");
+        };
+        assert_eq!(
+            *node,
+            CapturedNodeId {
+                arena: 1,
+                serial: 2
+            }
+        );
+        assert_eq!(new_state.value, "old");
+        assert!(new_state.checked);
+        assert_eq!(new_state.selection_start, None);
+        assert_eq!(new_state.selection_end, Some(3));
+        assert_eq!(
+            new_state.selection_direction,
+            layout_dom_api::SelectionDirection::Backward
+        );
+        assert_eq!(new_state.custom_validity_message, "error");
+        assert_eq!(postcard::to_allocvec(&decoded).unwrap(), bytes);
+    }
+
+    #[test]
+    fn validation_capture_records_native_interaction_options_and_custom_messages() {
+        let mut dom = ScriptedDom::new();
+        let html = |local| {
+            QualName::new(
+                None,
+                Namespace::from("http://www.w3.org/1999/xhtml"),
+                LocalName::from(local),
+            )
+        };
+        let input = dom.create_element(html("input"));
+        dom.set_attribute(input, qual("type"), "number");
+        dom.set_form_control_user_value(input, "1e", Some(2), Some(2));
+        dom.commit_form_control_user_edit(input);
+        let option = dom.create_element(html("option"));
+        dom.set_option_selected(option, true, true);
+        let select = dom.create_element(html("select"));
+        dom.set_custom_validity(select, "Choose another option");
+        let mutations = [
+            DomMutation::FormControlInteractionStateChanged { node: input },
+            DomMutation::OptionStateChanged { node: option },
+            DomMutation::FormControlCustomValidityChanged { node: select },
+        ];
+        for mutation in mutations {
+            let record = RecordedMutation::capture(&dom, &mutation).unwrap();
+            let encoded = postcard::to_allocvec(&record).unwrap();
+            assert!(encoded[0] > 6);
+            let decoded: RecordedMutation = postcard::from_bytes(&encoded).unwrap();
+            assert_eq!(decoded, record);
+            assert_eq!(
+                decoded.replay_ids(&dom).unwrap(),
+                vec![decoded.replay_node(&dom).unwrap()]
+            );
+        }
     }
 
     #[test]

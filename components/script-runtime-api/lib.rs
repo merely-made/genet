@@ -33,6 +33,7 @@
 //! `docs/2026-05-26_pluggable_engines_testharness_plan.md`.
 
 use std::cell::RefCell;
+use std::collections::VecDeque;
 
 use std::rc::Rc;
 
@@ -105,6 +106,86 @@ pub use webgl::{WebGlFactory, WebGlHandler};
 pub use websocket::{WebSocketHandler, WebSocketRequest};
 pub use worker::ScriptResourceLoader;
 
+/// Built-in constraint-validation message selected for a control's first
+/// failing validity flag. Embedders can replace the English defaults through
+/// [`Runtime::set_validation_message_catalog`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ValidationMessageKind {
+    ValueMissing,
+    TypeMismatch,
+    PatternMismatch,
+    TooLong,
+    TooShort,
+    RangeUnderflow,
+    RangeOverflow,
+    StepMismatch,
+    BadInput,
+}
+
+/// Replaceable built-in validation wording shared by `validationMessage` and
+/// native `reportValidity()` feedback. Author-provided custom validity text is
+/// returned verbatim and does not use this catalog.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ValidationMessageCatalog {
+    pub value_missing: String,
+    pub type_mismatch: String,
+    pub pattern_mismatch: String,
+    pub too_long: String,
+    pub too_short: String,
+    pub range_underflow: String,
+    pub range_overflow: String,
+    pub step_mismatch: String,
+    pub bad_input: String,
+}
+
+impl Default for ValidationMessageCatalog {
+    fn default() -> Self {
+        Self {
+            value_missing: "Please fill out this field.".into(),
+            type_mismatch: "Please enter a valid value.".into(),
+            pattern_mismatch: "Please match the requested format.".into(),
+            too_long: "Please shorten this text.".into(),
+            too_short: "Please lengthen this text.".into(),
+            range_underflow: "Value is below the allowed minimum.".into(),
+            range_overflow: "Value is above the allowed maximum.".into(),
+            step_mismatch: "Please enter a valid value.".into(),
+            bad_input: "Please enter a valid value.".into(),
+        }
+    }
+}
+
+impl ValidationMessageCatalog {
+    pub fn message(&self, kind: ValidationMessageKind) -> &str {
+        match kind {
+            ValidationMessageKind::ValueMissing => &self.value_missing,
+            ValidationMessageKind::TypeMismatch => &self.type_mismatch,
+            ValidationMessageKind::PatternMismatch => &self.pattern_mismatch,
+            ValidationMessageKind::TooLong => &self.too_long,
+            ValidationMessageKind::TooShort => &self.too_short,
+            ValidationMessageKind::RangeUnderflow => &self.range_underflow,
+            ValidationMessageKind::RangeOverflow => &self.range_overflow,
+            ValidationMessageKind::StepMismatch => &self.step_mismatch,
+            ValidationMessageKind::BadInput => &self.bad_input,
+        }
+    }
+}
+
+/// A host-native request to show validation feedback for a control. It is not
+/// inserted into the authored DOM or exposed to page script.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ValidationReport {
+    pub realm: RealmId,
+    pub node: NodeId,
+    pub message: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct PendingValidationReport {
+    pub(crate) sequence: u64,
+    pub(crate) node: NodeId,
+    pub(crate) message: String,
+}
+
 /// Installation errors preserve the existing main-realm engine error.
 #[derive(Debug)]
 pub(crate) enum SurfaceError<T> {
@@ -162,6 +243,8 @@ impl<'cx, E: ScriptEngine + 'cx> Surface<'_, 'cx, E> {
 #[derive(Default)]
 pub struct HostState {
     pub(crate) agent: std::rc::Weak<RefCell<AgentState>>,
+    /// Native `reportValidity()` feedback, drained by the owning user agent.
+    pub(crate) pending_validation_reports: VecDeque<PendingValidationReport>,
     /// `console.log` / `console.error` output, in call order.
     pub console: Vec<String>,
     /// The document (viewport) scroll offset in CSS px, the script side of
@@ -539,6 +622,8 @@ pub struct Runtime<E: ScriptEngine> {
 pub(crate) struct AgentState {
     pub(crate) dom_adoption: dom::adoption::AgentDomState,
     pub(crate) frames: crate::frames::FrameState,
+    pub(crate) validation_message_catalog: ValidationMessageCatalog,
+    pub(crate) next_validation_report_sequence: u64,
     pub(crate) child_host_initializer: Option<Rc<dyn Fn(RealmId, &SharedHost)>>,
     /// Whether a host lets a *top-level* navigation proceed. HTML gives the
     /// user agent the last word on where the top-level browsing context may go,
@@ -822,6 +907,40 @@ impl<E: ScriptEngine> Runtime<E> {
     /// [`parse_document_interleaved`]: Self::parse_document_interleaved
     pub fn top_realm(&self) -> RealmId {
         self.agent.borrow().frames.top_realm()
+    }
+
+    /// Replace the built-in wording used by `validationMessage` and native
+    /// validation feedback. The catalog is agent-wide, so child realms created
+    /// later observe the same replacement.
+    pub fn set_validation_message_catalog(&mut self, catalog: ValidationMessageCatalog) {
+        self.agent.borrow_mut().validation_message_catalog = catalog;
+    }
+
+    /// Drain pending native validation feedback from every live document realm.
+    /// Reports retain the physical owner realm even when a borrowed method was
+    /// invoked through a wrapper created in another realm.
+    pub fn take_validation_reports(&mut self) -> Vec<ValidationReport> {
+        let top = self.top_realm();
+        let mut hosts = self.child_hosts();
+        if let Ok(host) = self.host_in_realm(top) {
+            hosts.insert(top, host);
+        }
+        let mut reports = Vec::new();
+        for (realm, host) in hosts {
+            let pending = std::mem::take(&mut host.borrow_mut().pending_validation_reports);
+            reports.extend(pending.into_iter().map(|report| {
+                (
+                    report.sequence,
+                    ValidationReport {
+                        realm,
+                        node: report.node,
+                        message: report.message,
+                    },
+                )
+            }));
+        }
+        reports.sort_by_key(|(sequence, _)| *sequence);
+        reports.into_iter().map(|(_, report)| report).collect()
     }
 
     /// Evaluate in the top-level context's current realm. The engine's plain
@@ -2546,7 +2665,9 @@ const EVENT_LOOP_BOOTSTRAP: &str = r#"
     state = globalThis.__agentTimers = {
       timers: queue, nextId: 1, now: 0, domNodes: new WeakSet(),
       domWrappers: new WeakMap(), domWrapperGroups: new WeakMap(), domOwners: new WeakMap(),
-      domTemplateContents: new WeakMap()
+      domTemplateContents: new WeakMap(), domEventTrust: new WeakMap(),
+      domValidityObjects: new WeakMap(), domValidityOwners: new WeakMap(),
+      domValidityCreators: new WeakMap(), domInvalidEventCreators: new WeakMap()
     };
   }
   var timers = state.timers;
@@ -2697,6 +2818,16 @@ const EVENT_LOOP_BOOTSTRAP: &str = r#"
 /// per target keyed by type; `dispatchEvent` calls them synchronously over a copy.
 const EVENT_TARGET_BOOTSTRAP: &str = r#"
 (function() {
+  // Shared across the agent's realms, then hidden with __agentTimers. Public
+  // redispatch must clear trust even when a UA event came from another realm.
+  var uaEventTrust = globalThis.__agentTimers.domEventTrust;
+  var trustGet = WeakMap.prototype.get, trustSet = WeakMap.prototype.set;
+  var trustApply = Reflect.apply;
+  function clearUAEventTrust(event) {
+    if (trustApply(trustGet, uaEventTrust, [event]) !== undefined) {
+      trustApply(trustSet, uaEventTrust, [event, false]);
+    }
+  }
   // Shared EventTarget. Listeners are stored as `{cb, once, passive}` records,
   // keyed by phase ('c:'/'b:' + type) — the same model Node uses in dom.rs, so
   // window and DOM nodes share one listener shape and one firing helper
@@ -2755,6 +2886,7 @@ const EVENT_TARGET_BOOTSTRAP: &str = r#"
     if (event.__initialized === false || event.__dispatch) {
       throw new DOMException("The event is not initialized or is being dispatched.", "InvalidStateError");
     }
+    clearUAEventTrust(event);
     // window is a leaf target (no DOM tree): target phase only — capture- then
     // bubble-registered listeners on this target, with the dispatch flags set.
     // The stop flags are cleared *after* dispatch, not before (DOM §dispatch):

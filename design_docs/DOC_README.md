@@ -139,20 +139,18 @@ completed corpus census or bounded slice does not close its enclosing feature.
   integration `e410a1e1dab8` is published on main: fresh 1,209-test gate,
   two WOFF2 controls, optimized runner and all fixtures pass; ten matched maps
   preserve every candidate result with zero movements. Main's independent
-  fontsan/WOFF2 change is preserved. Forms Phase A is now authorized under its
-  separate plan and Checkpoint A.
+  fontsan/WOFF2 change is preserved. Forms phases have separate checkpoints
+  in their own plan.
 
 - [HTML forms](2026-10-07_forms_value_validation_submission_plan.md)
-  (**Phase A checkpoint ready locally, 2026-10-08**): arena value state shared by script,
-  native editing, accessibility and retained control text. Mark authorized
-  input value/placeholder/password rendering and textarea live-value painting.
-  Local Genet value/paint and Mere consumer gates pass, including the bounded
-  app-textbox width repair and fresh CSS guard. F5 authorizes bounded sibling
-  compatibility; F6 chooses app accessibility leaves across projections. Fresh
-  current Mere/Knot integration and public-pin sibling gates pass. Publication and a verified
-  published-source repin precede acceptance. Validation
-  and submission remain behind separate checkpoints. The plan owns decisions
-  and receipts.
+  (**Phases A and B published, 2026-10-09**): native value/validity shared by
+  script, editing and selectors, with owner-routed notices, configurable messages
+  and an accessible Alert projection. Phase B passes 963 tests with exactly six
+  allowed Livery failures; both engines gain 924 matched Forms assertions and
+  preserve every old pass, including partial errors. All 2,731 CSS results are
+  unchanged. F10 records the native-only matcher correction and the separately
+  corrected 20/20 probe. The plan preserves the invalid original probe, timeout
+  limit, source identities and receipts. Phase C submission remains stopped.
 
 ## WPT census — the web platform beyond CSS
 

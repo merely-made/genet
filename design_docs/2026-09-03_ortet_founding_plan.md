@@ -1,5 +1,48 @@
 # Ortet founding plan
 
+## Standalone renderer patch policy follow-up, 2026-10-10
+
+**Status: dependency resolution and native compilation verified.**
+Genet's root now patches `netrender-vello`, `vello_encoding` and `vello_shaders`
+together to maintained Vello `491c376cf2b01fc11132cf8f86419dec114ae032`.
+This matches Mere `11236fd4f8da9b7e2ce3712b4f036fbf676b1c8d` and its actual
+WorkshopState preview regression at
+`mere/crates/cambium/tabard-workshop/tests/native_preview_render.rs`. The
+maintained renderer includes guarded coarse traversal and bounded bump sizing.
+Genet's engine APIs and netrender `9607d16f1` dependencies remain unchanged.
+
+Cargo applies patches only from the active workspace root. This policy makes
+Genet's own renderer checks use the qualified shader family; consuming apps
+must still restate all three patches at their roots. Their current Genet
+`7422e90613f` source pin remains compatible with that policy.
+
+Done-conditions for this slice are full locked metadata, a single maintained
+source identity for each of the three packages, and compilation of
+`genet-render-host`. CPU-only frame semantics may be tested separately.
+No GPU or headed native execution belongs to this dependency-policy slice;
+Mere's production-preview receipts and each application's visual acceptance
+remain separate evidence.
+
+**Resolution, 2026-10-10:** full locked metadata resolves exactly one
+`netrender-vello` 0.10.1, `vello_encoding` 0.10.0 and `vello_shaders` 0.10.0,
+all at `491c376cf2b01fc11132cf8f86419dec114ae032`. The ignored local lockfile
+changes only those source identities and removes the obsolete Naga 29.0.4
+chain (`bit-set` 0.9.1 and `hexf-parse` 0.2.1); Naga 30.0.1 remains. Its
+SHA-256 is `fd21397085fcab64d860d77294cc8bccf9d5e8afada3fd31ba41045beb7435c7`.
+The resolution and lock diff are recorded in
+`/tmp/genet-renderer491-locked-closure.json` and
+`/tmp/genet-renderer491-lock.diff`. Genet continues to ignore its root lockfile.
+
+
+**Static qualification, 2026-10-10:** `cargo metadata --locked --offline
+--format-version 1` passes for the complete workspace. `cargo check -p
+genet-render-host --lib --locked --offline -j2` passes in 51.89 seconds on
+macOS; it compiles the maintained shader, encoding and renderer crates and
+the shared host without creating a GPU device or opening a native window.
+The check log is `/tmp/genet-renderer491-check.log`. No GPU tests, CPU unit
+tests, browser checks or headed visual receipts were run in this slice.
+
+
 ## Classic scene-buffer dependency follow-up, 2026-09-27
 
 **Status: repin implemented and compatibility verified.** The four workspace

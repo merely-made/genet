@@ -152,6 +152,9 @@ impl Accessibility {
         session: &mut dyn DocumentSession<Scene>,
         raw: &A11yActionRequest,
     ) -> RoutedAction {
+        if raw.target_tree != TreeId::ROOT {
+            return RoutedAction::Rejected;
+        }
         let Some(binding) = self.published.get(&raw.target_node) else {
             return RoutedAction::Rejected;
         };
@@ -419,6 +422,7 @@ mod tests {
 
     fn action(action: Action, target_node: AccessNodeId) -> A11yActionRequest {
         A11yActionRequest {
+            target_tree: TreeId::ROOT,
             action,
             target_node,
             data: None,
@@ -528,7 +532,12 @@ mod tests {
         assert_eq!(checkbox.description(), Some("Receive updates"));
         assert_eq!(checkbox.is_selected(), Some(false));
         assert_eq!(checkbox.live(), Some(Live::Polite));
-        let root = &tree.nodes.iter().find(|(_, node)| node.role() == Role::Document).expect("root").1;
+        let root = &tree
+            .nodes
+            .iter()
+            .find(|(_, node)| node.role() == Role::Document)
+            .expect("root")
+            .1;
         assert_eq!(root.toggled(), None, "absent source state stays absent");
         assert_eq!(root.is_selected(), None, "absence is not false");
         let slider = &tree
@@ -542,6 +551,31 @@ mod tests {
         assert_eq!(slider.max_numeric_value(), Some(10.0));
         assert_eq!(slider.orientation(), Some(Orientation::Horizontal));
         assert_eq!(slider.has_popup(), Some(HasPopup::Dialog));
+    }
+
+    #[test]
+    fn foreign_tree_action_cannot_use_a_colliding_host_node() {
+        let mut session = session("<input aria-label=\"Name\" value=\"a\">");
+        let projection = session.accessibility_projection().unwrap();
+        let local = projection
+            .nodes()
+            .iter()
+            .find(|node| node.actions.contains(&DocumentA11yAction::Focus))
+            .unwrap()
+            .id;
+        let mut custody = Accessibility::default();
+        custody.publish(Some(projection)).unwrap();
+        let mut request = action(Action::Focus, custody.host_id_for(local));
+        request.target_tree = TreeId(accesskit::Uuid::from_u128(77));
+        assert!(matches!(
+            custody.route(session.as_mut(), &request),
+            RoutedAction::Rejected
+        ));
+        request.target_tree = TreeId::ROOT;
+        assert!(!matches!(
+            custody.route(session.as_mut(), &request),
+            RoutedAction::Rejected
+        ));
     }
 
     #[test]

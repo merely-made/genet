@@ -482,13 +482,15 @@ genet-taffy = { path = "support/patches/taffy" }
 # the dx12 suballocator in any build that compiles the dx12 backend (meerkat, via
 # scrying). Vendored, not a git fork, since the change is manifest-only.
 ipc-channel = { path = "support/patches/ipc-channel" }
-# vello, re-forked 2026-08-15 for the stack-wide wgpu 30 unification. The
-# 2026-05-15 audit removed the previous patch and took vello 0.9 from
-# crates.io; that is no longer possible, because upstream vello 0.10 still
-# requires wgpu 29 and their own migration (linebender/vello#1754) is open,
-# stalled, and conflicted. The owned v0.10.0 tag carries exactly the
-# API changes in that PR, so this entry retires by deletion when a wgpu-30
-# vello (0.11) ships. The immutable tag prevents branch-tip drift.
+# Genet's own render-host tests must use the same qualified native shader
+# family as application roots. Cargo root patches are not inherited by
+# consumers: each application must restate all three rows at this revision.
+# The maintained fork includes the guarded coarse traversal and bounded bump
+# sizing qualified by Mere's real WorkshopState preview gate; see the October
+# 10 dependency follow-up in design_docs/2026-09-03_ortet_founding_plan.md.
+netrender-vello = { git = "https://github.com/mark-ik/vello.git", rev = "491c376cf2b01fc11132cf8f86419dec114ae032" }
+vello_encoding = { git = "https://github.com/mark-ik/vello.git", rev = "491c376cf2b01fc11132cf8f86419dec114ae032" }
+vello_shaders = { git = "https://github.com/mark-ik/vello.git", rev = "491c376cf2b01fc11132cf8f86419dec114ae032" }
 # For WebRender / netrender:
 # The netrender/ workspace (formerly the webrender-wgpu fork) dropped
 # webrender, webrender_api, and wr_malloc_size_of as separate crates. Local

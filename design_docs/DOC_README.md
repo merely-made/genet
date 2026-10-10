@@ -636,6 +636,13 @@ same session; links out of it are rewritten for its new depth.
 
 ## Working principles
 
+- **Qualify renderer dependencies at each workspace root.** Genet's standalone
+  host checks and consuming applications must each patch `netrender-vello`,
+  `vello_encoding` and `vello_shaders` to the same maintained revision. Root
+  patches are not inherited; verify the resolved identities before treating
+  engine or application pins as a qualified rendering closure. See the
+  [October 10 Ortet dependency-policy follow-up](2026-09-03_ortet_founding_plan.md#standalone-renderer-patch-policy-follow-up-2026-10-10).
+
 - **Retained diagnostics must scale with the shaped paragraph.** A dormant
   opportunity stream still runs during real layout. Preserve semantic scans as
   test oracles, but index repeated owner/range queries in production and enforce

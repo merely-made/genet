@@ -1,5 +1,26 @@
 # Ortet founding plan
 
+## Interleaved image atlas patch policy, 2026-10-10
+
+**Status: full locked resolution and native host compilation verified.**
+The three root patches now select maintained Vello
+`10f01d6d88e94eac087daf033b24895cf97b8e82`, retaining the earlier Radeon guards.
+Its resolver preserves image-atlas dimensions across solid-only or empty
+frames instead of discarding GPU atlas pixels while retaining clean residency.
+The published renderer passes 33 encoding tests, a 13-frame exact-pixel GPU
+sequence and the existing repeated clipped-preview gate on Radeon Pro Vega 56 /
+Metal. Those are Vello qualification receipts, separate from this Genet slice.
+
+Complete `cargo metadata --locked --offline --format-version 1` resolves one
+maintained source for each renderer/encoding/shader package. The ignored local
+lockfile changes only those three source identities. `cargo check -p
+genet-render-host --lib --locked --offline -j2` passes in 55.25 seconds; the log is
+`/tmp/genet-patchless-atlas-check.log`. No GPU device or native window is created
+by that check. Engine APIs, NetRender `9607d16f1` dependencies and Genet `7422e90613f` source used
+by the already-qualified applications remain unchanged. Consuming application
+roots must restate the renderer triple because root patches are not inherited.
+
+
 ## Standalone renderer patch policy follow-up, 2026-10-10
 
 **Status: dependency resolution and native compilation verified.**

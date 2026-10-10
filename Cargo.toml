@@ -488,9 +488,9 @@ ipc-channel = { path = "support/patches/ipc-channel" }
 # The maintained fork includes the guarded coarse traversal and bounded bump
 # sizing qualified by Mere's real WorkshopState preview gate; see the October
 # 10 dependency follow-up in design_docs/2026-09-03_ortet_founding_plan.md.
-netrender-vello = { git = "https://github.com/mark-ik/vello.git", rev = "491c376cf2b01fc11132cf8f86419dec114ae032" }
-vello_encoding = { git = "https://github.com/mark-ik/vello.git", rev = "491c376cf2b01fc11132cf8f86419dec114ae032" }
-vello_shaders = { git = "https://github.com/mark-ik/vello.git", rev = "491c376cf2b01fc11132cf8f86419dec114ae032" }
+netrender-vello = { git = "https://github.com/mark-ik/vello.git", rev = "10f01d6d88e94eac087daf033b24895cf97b8e82" }
+vello_encoding = { git = "https://github.com/mark-ik/vello.git", rev = "10f01d6d88e94eac087daf033b24895cf97b8e82" }
+vello_shaders = { git = "https://github.com/mark-ik/vello.git", rev = "10f01d6d88e94eac087daf033b24895cf97b8e82" }
 # For WebRender / netrender:
 # The netrender/ workspace (formerly the webrender-wgpu fork) dropped
 # webrender, webrender_api, and wr_malloc_size_of as separate crates. Local

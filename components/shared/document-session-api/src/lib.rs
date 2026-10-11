@@ -58,6 +58,7 @@ pub use session_engine::{
     DocumentFindState, DocumentSession, DocumentZoomState, EngineKindIndex, EngineKinds,
     OutlineEntry, SessionButtonState, SessionClick, SessionCursor, SessionEffect, SessionEngine,
     SessionError, SessionExternalTextureDraw, SessionFocusDirection, SessionFormMethod,
+    SessionDocumentRequest, SessionEncodedFormSubmission, SessionRequestSpawnResult,
     SessionFormSubmission, SessionIme, SessionInput, SessionInputResult, SessionKey, SessionLink,
     SessionModifiers, SessionNavigationCommand, SessionPendingWork, SessionPointerButton,
     SessionRegistry, SessionScrollKey, SessionSpawnRequest, SessionTextTarget,

@@ -1,0 +1,406 @@
+{
+  "schema_version": 1,
+  "captured_at_utc": "2026-10-11T08:27:36.212718+00:00",
+  "base_genet_commit": "0583da30d6e9e36481a0fbe82ac3b5899377681c",
+  "netrender_commit": "46606610cd387e2e6956d8a3ebbcf442eab210d9",
+  "vello_provider_commit": "5862bba26c8a9f56f6a5fdc8ea6966b360a5d63a",
+  "source_hashes": [
+    {
+      "path": "Cargo.toml",
+      "sha256": "e0bd26142ba56bab5b3efbabc1b655cb2d7c9bf758c641fecf3a686161c439f5",
+      "bytes": 25254
+    },
+    {
+      "path": "Cargo.lock",
+      "sha256": "be305590668d9e12dcc7f3defa1584d23c88e9b2689c40442e9d2b1bb379c576",
+      "bytes": 221734
+    },
+    {
+      "path": "examples/netrender_smoke/Cargo.toml",
+      "sha256": "6af6e46218cc9ca8a424af5b706282a9b987c26fbc8e672b9dce0f4ce18fc066",
+      "bytes": 1386
+    },
+    {
+      "path": "examples/netrender_smoke/src/main.rs",
+      "sha256": "8b0a1dd7a7c306738e7630c2dfeecb9017faa3515f1b66b0813d4a55a748e748",
+      "bytes": 3100
+    },
+    {
+      "path": "examples/netrender_smoke/Cargo.lock",
+      "sha256": "979a4dd59cac096bfcb054de65a848263fffb0b64114e80d53e18b7b4136b706",
+      "bytes": 38552
+    }
+  ],
+  "metadata": {
+    "source_path": "/Users/markik/Code/output/vello-release-adoption-20261011/genet-metadata.json",
+    "sha256": "d0f2ed89e9e346c58f893756eb3cfce7660edee53e4ffef1facbbe243e279613",
+    "bytes": 4221576,
+    "scope": "selected renderer, text and Wasm-family resolved packages; full metadata remains in task output"
+  },
+  "resolved_packages": [
+    {
+      "name": "genet-fontique",
+      "version": "0.10.0",
+      "id": "path+file:///Users/markik/Code/worktrees/genet-vello-release-adoption/support/patches/fontique#genet-fontique@0.10.0",
+      "source": null,
+      "features": [
+        "default",
+        "std",
+        "system"
+      ]
+    },
+    {
+      "name": "genet-parley",
+      "version": "0.10.0",
+      "id": "path+file:///Users/markik/Code/worktrees/genet-vello-release-adoption/support/patches/parley#genet-parley@0.10.0",
+      "source": null,
+      "features": [
+        "default",
+        "font-diagnostic",
+        "std",
+        "system"
+      ]
+    },
+    {
+      "name": "harfrust",
+      "version": "0.8.4",
+      "id": "registry+https://github.com/rust-lang/crates.io-index#harfrust@0.8.4",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "features": [
+        "std"
+      ]
+    },
+    {
+      "name": "js-sys",
+      "version": "0.3.104",
+      "id": "registry+https://github.com/rust-lang/crates.io-index#js-sys@0.3.104",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "features": [
+        "default",
+        "std",
+        "unsafe-eval"
+      ]
+    },
+    {
+      "name": "netrender",
+      "version": "0.1.2",
+      "id": "git+https://github.com/merely-made/netrender.git?rev=46606610cd387e2e6956d8a3ebbcf442eab210d9#netrender@0.1.2",
+      "source": "git+https://github.com/merely-made/netrender.git?rev=46606610cd387e2e6956d8a3ebbcf442eab210d9#46606610cd387e2e6956d8a3ebbcf442eab210d9",
+      "features": [
+        "default"
+      ]
+    },
+    {
+      "name": "netrender-vello",
+      "version": "0.11.0",
+      "id": "git+https://github.com/mark-ik/vello?rev=5862bba26c8a9f56f6a5fdc8ea6966b360a5d63a#netrender-vello@0.11.0",
+      "source": "git+https://github.com/mark-ik/vello?rev=5862bba26c8a9f56f6a5fdc8ea6966b360a5d63a#5862bba26c8a9f56f6a5fdc8ea6966b360a5d63a",
+      "features": [
+        "wgpu"
+      ]
+    },
+    {
+      "name": "netrender_device",
+      "version": "0.1.2",
+      "id": "git+https://github.com/merely-made/netrender.git?rev=46606610cd387e2e6956d8a3ebbcf442eab210d9#netrender_device@0.1.2",
+      "source": "git+https://github.com/merely-made/netrender.git?rev=46606610cd387e2e6956d8a3ebbcf442eab210d9#46606610cd387e2e6956d8a3ebbcf442eab210d9",
+      "features": [
+        "default"
+      ]
+    },
+    {
+      "name": "paint_list_api",
+      "version": "0.1.2",
+      "id": "git+https://github.com/merely-made/netrender.git?rev=46606610cd387e2e6956d8a3ebbcf442eab210d9#paint_list_api@0.1.2",
+      "source": "git+https://github.com/merely-made/netrender.git?rev=46606610cd387e2e6956d8a3ebbcf442eab210d9#46606610cd387e2e6956d8a3ebbcf442eab210d9",
+      "features": []
+    },
+    {
+      "name": "paint_list_render",
+      "version": "0.1.2",
+      "id": "git+https://github.com/merely-made/netrender.git?rev=46606610cd387e2e6956d8a3ebbcf442eab210d9#paint_list_render@0.1.2",
+      "source": "git+https://github.com/merely-made/netrender.git?rev=46606610cd387e2e6956d8a3ebbcf442eab210d9#46606610cd387e2e6956d8a3ebbcf442eab210d9",
+      "features": []
+    },
+    {
+      "name": "read-fonts",
+      "version": "0.39.2",
+      "id": "registry+https://github.com/rust-lang/crates.io-index#read-fonts@0.39.2",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "read-fonts",
+      "version": "0.41.0",
+      "id": "registry+https://github.com/rust-lang/crates.io-index#read-fonts@0.41.0",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "features": [
+        "std"
+      ]
+    },
+    {
+      "name": "skrifa",
+      "version": "0.42.1",
+      "id": "registry+https://github.com/rust-lang/crates.io-index#skrifa@0.42.1",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "features": [
+        "std"
+      ]
+    },
+    {
+      "name": "skrifa",
+      "version": "0.44.0",
+      "id": "registry+https://github.com/rust-lang/crates.io-index#skrifa@0.44.0",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "features": [
+        "autohint_shaping",
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "vello_encoding",
+      "version": "0.11.0",
+      "id": "git+https://github.com/mark-ik/vello?rev=5862bba26c8a9f56f6a5fdc8ea6966b360a5d63a#vello_encoding@0.11.0",
+      "source": "git+https://github.com/mark-ik/vello?rev=5862bba26c8a9f56f6a5fdc8ea6966b360a5d63a#5862bba26c8a9f56f6a5fdc8ea6966b360a5d63a",
+      "features": []
+    },
+    {
+      "name": "vello_shaders",
+      "version": "0.11.0",
+      "id": "git+https://github.com/mark-ik/vello?rev=5862bba26c8a9f56f6a5fdc8ea6966b360a5d63a#vello_shaders@0.11.0",
+      "source": "git+https://github.com/mark-ik/vello?rev=5862bba26c8a9f56f6a5fdc8ea6966b360a5d63a#5862bba26c8a9f56f6a5fdc8ea6966b360a5d63a",
+      "features": [
+        "cpu",
+        "default",
+        "wgsl"
+      ]
+    },
+    {
+      "name": "wasm-bindgen",
+      "version": "0.2.127",
+      "id": "registry+https://github.com/rust-lang/crates.io-index#wasm-bindgen@0.2.127",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "wasm-bindgen-futures",
+      "version": "0.4.77",
+      "id": "registry+https://github.com/rust-lang/crates.io-index#wasm-bindgen-futures@0.4.77",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "web-sys",
+      "version": "0.3.104",
+      "id": "registry+https://github.com/rust-lang/crates.io-index#web-sys@0.3.104",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "features": [
+        "AbortController",
+        "AbortSignal",
+        "AngleInstancedArrays",
+        "Blob",
+        "BlobPropertyBag",
+        "CssStyleDeclaration",
+        "Document",
+        "DomException",
+        "DomRect",
+        "DomRectReadOnly",
+        "Element",
+        "Event",
+        "EventTarget",
+        "ExtBlendMinmax",
+        "ExtColorBufferFloat",
+        "ExtColorBufferHalfFloat",
+        "ExtDisjointTimerQuery",
+        "ExtFragDepth",
+        "ExtSRgb",
+        "ExtShaderTextureLod",
+        "ExtTextureFilterAnisotropic",
+        "FocusEvent",
+        "Headers",
+        "HtmlCanvasElement",
+        "HtmlElement",
+        "HtmlImageElement",
+        "HtmlMediaElement",
+        "HtmlVideoElement",
+        "ImageBitmap",
+        "ImageBitmapOptions",
+        "ImageBitmapRenderingContext",
+        "ImageData",
+        "IntersectionObserver",
+        "IntersectionObserverEntry",
+        "KeyboardEvent",
+        "Location",
+        "MediaQueryList",
+        "MessageChannel",
+        "MessagePort",
+        "MouseEvent",
+        "Navigator",
+        "Node",
+        "NodeList",
+        "OesElementIndexUint",
+        "OesStandardDerivatives",
+        "OesTextureFloat",
+        "OesTextureFloatLinear",
+        "OesTextureHalfFloat",
+        "OesTextureHalfFloatLinear",
+        "OesVertexArrayObject",
+        "OffscreenCanvas",
+        "OrientationLockType",
+        "OrientationType",
+        "OvrMultiview2",
+        "PageTransitionEvent",
+        "PermissionState",
+        "PermissionStatus",
+        "Permissions",
+        "PointerEvent",
+        "PremultiplyAlpha",
+        "ReadableStream",
+        "ReadableStreamDefaultReader",
+        "Request",
+        "RequestInit",
+        "ResizeObserver",
+        "ResizeObserverBoxOptions",
+        "ResizeObserverEntry",
+        "ResizeObserverOptions",
+        "ResizeObserverSize",
+        "Response",
+        "Screen",
+        "ScreenOrientation",
+        "UiEvent",
+        "Url",
+        "VideoFrame",
+        "VisibilityState",
+        "WebGl2RenderingContext",
+        "WebGlActiveInfo",
+        "WebGlBuffer",
+        "WebGlFramebuffer",
+        "WebGlProgram",
+        "WebGlQuery",
+        "WebGlRenderbuffer",
+        "WebGlRenderingContext",
+        "WebGlSampler",
+        "WebGlShader",
+        "WebGlShaderPrecisionFormat",
+        "WebGlSync",
+        "WebGlTexture",
+        "WebGlTransformFeedback",
+        "WebGlUniformLocation",
+        "WebGlVertexArrayObject",
+        "WebglColorBufferFloat",
+        "WebglCompressedTextureAstc",
+        "WebglCompressedTextureEtc",
+        "WebglCompressedTextureEtc1",
+        "WebglCompressedTexturePvrtc",
+        "WebglCompressedTextureS3tc",
+        "WebglCompressedTextureS3tcSrgb",
+        "WebglDebugRendererInfo",
+        "WebglDebugShaders",
+        "WebglDepthTexture",
+        "WebglDrawBuffers",
+        "WebglLoseContext",
+        "WheelEvent",
+        "Window",
+        "Worker",
+        "WorkerGlobalScope",
+        "WorkerNavigator",
+        "console",
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "wgpu",
+      "version": "30.0.1",
+      "id": "registry+https://github.com/rust-lang/crates.io-index#wgpu@30.0.1",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "features": [
+        "default",
+        "dx12",
+        "gles",
+        "metal",
+        "parking_lot",
+        "std",
+        "vulkan",
+        "web",
+        "webgpu",
+        "wgsl"
+      ]
+    }
+  ],
+  "logs": [
+    {
+      "path": "logs/genet-render-host-check.log",
+      "source_path": "/Users/markik/Code/output/vello-release-adoption-20261011/genet-render-host-check.log",
+      "sha256": "1513c374fb25f30580fb687080ec3514649f2826370f21b9ad6c3de29809d09c",
+      "bytes": 60
+    },
+    {
+      "path": "logs/genet-composition-check.log",
+      "source_path": "/Users/markik/Code/output/vello-release-adoption-20261011/genet-composition-check.log",
+      "sha256": "dbd4b30baadcab3dd3d637cd1934fd66bb166402c554743cbefe92fd975620e4",
+      "bytes": 54402
+    },
+    {
+      "path": "logs/genet-standalone-check.log",
+      "source_path": "/Users/markik/Code/output/vello-release-adoption-20261011/genet-standalone-check.log",
+      "sha256": "f4ed343287e131cea19c91b54fadff0697b25d837111158a24b6f13ff3ac6852",
+      "bytes": 181
+    }
+  ],
+  "validation": {
+    "metadata": "passed",
+    "render_host": {
+      "status": "passed",
+      "command": [
+        "cargo",
+        "check",
+        "--locked",
+        "-p",
+        "genet-render-host",
+        "-j2"
+      ]
+    },
+    "composition": {
+      "status": "passed",
+      "command": [
+        "cargo",
+        "check",
+        "--locked",
+        "-p",
+        "genet-render",
+        "--no-default-features",
+        "--features",
+        "livery,accesskit",
+        "-j2"
+      ]
+    },
+    "standalone": {
+      "status": "compilation_passed",
+      "manifest": "examples/netrender_smoke/Cargo.toml",
+      "locked": true,
+      "runtime": "not_run"
+    },
+    "environment": {
+      "CARGO_TARGET_DIR": "/Users/markik/Code/targets/netrender-cambium-cpu-20261010",
+      "CARGO_INCREMENTAL": "0",
+      "CARGO_PROFILE_DEV_DEBUG": "0",
+      "CARGO_PROFILE_TEST_DEBUG": "0"
+    },
+    "gpu_runtime": "not_run",
+    "wasm_compilation": "not_run",
+    "browser_qualification": "not_run",
+    "native_presentation": "not_run"
+  },
+  "qualified_genet_source_commit": "cec760f4ae6ce336823bc2be250d9ab4e35a8a47"
+}

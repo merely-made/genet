@@ -32,6 +32,16 @@ pub use adoption::SubtreeTransferError;
 mod forms;
 pub use forms::FormControlValueError;
 mod forms_validation;
+pub mod form_encoding;
+pub mod html_encoding;
+mod forms_submission;
+pub use forms_submission::{
+    FormEntry, FormEntryError, FormEntryValue, FormFile, FormFileBindingIdentity,
+    FormFileBindingIdentityError, FormFileId, FormImplicitSubmission,
+};
+mod forms_directionality;
+pub use forms_directionality::{FormDirection, text_directionality};
+mod forms_directionality_data;
 pub mod parser;
 mod serialize;
 mod shadow;
@@ -186,6 +196,7 @@ impl std::hash::Hasher for FnvHasher {
 type NodeStore = std::collections::HashMap<u64, Node, std::hash::BuildHasherDefault<FnvHasher>>;
 
 struct Node {
+    document_encoding: Option<html_encoding::DocumentEncoding>,
     kind: NodeKind,
     name: Option<QualName>,
     attrs: Vec<(QualName, String)>,
@@ -196,6 +207,8 @@ struct Node {
     form_control: Option<FormControlState>,
     /// User-originated state kept separate to preserve FormControlState's capture wire shape.
     form_interaction: Option<FormControlInteractionState>,
+    /// Immutable selected files belong to the node, outside the capture wire record.
+    selected_files: Vec<FormFile>,
     option_state: Option<SelectOptionState>,
     custom_validity_message: Option<String>,
 }
@@ -203,6 +216,8 @@ struct Node {
 impl Node {
     fn new(kind: NodeKind) -> Self {
         Self {
+            document_encoding: (kind == NodeKind::Document)
+                .then(html_encoding::DocumentEncoding::default),
             kind,
             name: None,
             attrs: Vec::new(),
@@ -211,6 +226,7 @@ impl Node {
             children: Vec::new(),
             form_control: None,
             form_interaction: None,
+            selected_files: Vec::new(),
             option_state: None,
             custom_validity_message: None,
         }
@@ -222,6 +238,7 @@ impl Node {
 /// to *live* nodes by [`collect`](ScriptedDom::collect) (G3), not to every node
 /// ever created.
 pub struct ScriptedDom {
+    html_decode_options: html_encoding::HtmlDecodeOptions,
     nodes: NodeStore,
     /// Arenas this store has imported nodes from, in adoption order. The
     /// capture/replay translation registry: an identity whose origin arena is
@@ -421,6 +438,7 @@ impl ScriptedDom {
     pub fn try_new() -> Result<Self, NodeIdentityError> {
         let arena_id = next_arena_id(&NEXT_ARENA_ID)?;
         let mut dom = Self {
+            html_decode_options: html_encoding::HtmlDecodeOptions::default(),
             nodes: NodeStore::default(),
             imported_arenas: std::collections::BTreeSet::new(),
             next_id: 0,
@@ -450,6 +468,31 @@ impl ScriptedDom {
         };
         dom.root = dom.try_push(Node::new(NodeKind::Document))?;
         Ok(dom)
+    }
+
+    /// Metadata belongs to each live Document, including secondary documents.
+    pub fn document_encoding(&self, document: NodeId) -> Option<html_encoding::DocumentEncoding> {
+        self.nodes.get(&document.raw())?.document_encoding
+    }
+    pub fn set_document_encoding(
+        &mut self,
+        document: NodeId,
+        encoding: html_encoding::DocumentEncoding,
+    ) -> bool {
+        let Some(node) = self.nodes.get_mut(&document.raw()) else {
+            return false;
+        };
+        if node.kind != NodeKind::Document {
+            return false;
+        }
+        node.document_encoding = Some(encoding);
+        true
+    }
+    pub fn html_decode_options(&self) -> html_encoding::HtmlDecodeOptions {
+        self.html_decode_options
+    }
+    pub fn set_html_decode_options(&mut self, options: html_encoding::HtmlDecodeOptions) {
+        self.html_decode_options = options;
     }
 
     /// The namespace used for new allocations, not an ownership query for a node.

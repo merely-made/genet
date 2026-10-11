@@ -21,6 +21,7 @@ pub(crate) struct AgentDomState {
 }
 
 impl AgentDomState {
+    pub(crate) fn hook(&self, realm: RealmId) -> Option<Rc<dyn Any>> { self.hooks.get(&realm).cloned() }
     pub(crate) fn register_realm(&mut self, realm: RealmId, arena: u32) {
         self.creation_realms.entry(arena).or_insert(realm);
     }
@@ -335,7 +336,7 @@ impl<E: ScriptEngine> NativeFn<E> for RegisterHooks {
     }
 }
 
-fn call_hook<E: ScriptEngine>(
+pub(crate) fn call_hook<E: ScriptEngine>(
     cx: &mut E::CallCx<'_>,
     realm: RealmId,
     op: &str,

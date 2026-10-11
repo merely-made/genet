@@ -313,21 +313,38 @@ impl ScriptResourceBridge {
         count
     }
 
-    fn outcome(&self, request_url: &str) -> FetchOutcome {
-        match self.state.fetcher.fetch_response(request_url) {
+    fn outcome(&self, request: &FetchRequest) -> FetchOutcome {
+        let host_request = genet_host_api::ResourceRequest {
+            url: request.url.clone(),
+            method: request.method.clone(),
+            headers: request.headers.clone(),
+            body: request.body.clone(),
+            cache: request.cache.clone(),
+            redirect: request.redirect.clone(),
+            mode: request.mode.clone(),
+            referrer: request.referrer.clone(),
+            referrer_policy: request.referrer_policy.clone(),
+            credentials: request.credentials.clone(),
+            integrity: request.integrity.clone(),
+        };
+        match self.state.fetcher.fetch_request(&host_request) {
             Some(response) => {
-                let redirected = response.final_url != request_url;
-                let mut headers = Vec::new();
-                if let Some(content_type) = response.content_type {
-                    headers.push(("content-type".to_owned(), content_type));
+                let mut headers = response.headers;
+                if !headers
+                    .iter()
+                    .any(|(name, _)| name.eq_ignore_ascii_case("content-type"))
+                {
+                    if let Some(content_type) = response.content_type {
+                        headers.push(("content-type".into(), content_type));
+                    }
                 }
                 FetchOutcome {
                     network_error: false,
-                    status: 200,
-                    status_text: "OK".to_owned(),
-                    response_type: "basic".to_owned(),
+                    status: response.status,
+                    status_text: response.status_text,
+                    response_type: response.response_type,
+                    redirected: response.redirected || response.final_url != request.url,
                     url: response.final_url,
-                    redirected,
                     headers,
                     body: response.bytes,
                 }
@@ -350,6 +367,13 @@ impl ResourceFetcher for ScriptResourceBridge {
         self.state.fetcher.fetch(url)
     }
 
+    fn fetch_request(
+        &self,
+        request: &genet_host_api::ResourceRequest,
+    ) -> Option<genet_host_api::ResourceFetchResponse> {
+        self.state.fetcher.fetch_request(request)
+    }
+
     fn fetch_response(&self, url: &str) -> Option<genet_host_api::ResourceResponse> {
         self.state.fetcher.fetch_response(url)
     }
@@ -368,7 +392,7 @@ impl FetchHandler for ScriptResourceBridge {
                 let outcome = Self {
                     state: Arc::clone(&state),
                 }
-                .outcome(&request.url);
+                .outcome(&request);
                 let resource = request.url.clone();
                 let mut completions = state
                     .completions
@@ -394,7 +418,7 @@ impl FetchHandler for ScriptResourceBridge {
     }
 
     fn fetch(&self, request: FetchRequest) -> FetchOutcome {
-        self.outcome(&request.url)
+        self.outcome(&request)
     }
 }
 
@@ -402,6 +426,31 @@ impl ScriptResourceLoader for ScriptResourceBridge {
     fn load(&self, url: &str) -> Option<String> {
         let response = self.state.fetcher.fetch_response(url)?;
         String::from_utf8(response.bytes).ok()
+    }
+
+    fn load_document(&self, url: &str) -> Option<FetchOutcome> {
+        // This is the existing URL-only document loader's policy boundary.
+        // Rich/nondefault navigation requests never enter load_document.
+        // Metadata retrieval uses a host plain GET (cors/same-origin), retaining
+        // legacy loader compatibility rather than claiming navigate/include.
+        let request = FetchRequest {
+            url: url.into(),
+            method: "GET".into(),
+            headers: Vec::new(),
+            body: None,
+            cache: "default".into(),
+            redirect: "follow".into(),
+            mode: "cors".into(),
+            referrer: String::new(),
+            referrer_policy: String::new(),
+            credentials: "same-origin".into(),
+            integrity: String::new(),
+        };
+        Some(if self.state.closed.load(Ordering::Acquire) {
+            FetchOutcome::network_error()
+        } else {
+            self.outcome(&request)
+        })
     }
 
     fn load_classic_script(
@@ -434,7 +483,7 @@ impl ScriptResourceLoader for ScriptResourceBridge {
                 let outcome = Self {
                     state: Arc::clone(&state),
                 }
-                .outcome(&resource);
+                .outcome(&request);
                 state.active.fetch_sub(1, Ordering::AcqRel);
                 if state.closed.load(Ordering::Acquire) {
                     let active = state.wake.active_generation();
@@ -475,6 +524,320 @@ mod tests {
         }
     }
 
+    fn product_bridge_redirect_identity<E: ScriptEngine>() {
+        #[derive(Clone)]
+        struct Redirecting(Arc<Mutex<Vec<String>>>);
+        impl ResourceFetcher for Redirecting {
+            fn fetch(&self, url: &str) -> Option<Vec<u8>> {
+                self.fetch_response(url).map(|r| r.bytes)
+            }
+            fn fetch_response(&self, url: &str) -> Option<ResourceResponse> {
+                self.0.lock().unwrap().push(url.into());
+                let final_url = if url == "https://origin.test/requested.html" {
+                    "https://final.test/final.html"
+                } else {
+                    url
+                };
+                Some(
+                    ResourceResponse::new(final_url, b"<p id=mark>redirected</p>".to_vec())
+                        .with_content_type("text/html"),
+                )
+            }
+        }
+        fn read<E: ScriptEngine>(runtime: &mut Runtime<E>, code: &str) -> String {
+            let value = runtime.eval(code).unwrap();
+            runtime.value_to_string(&value).unwrap()
+        }
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let bridge = ScriptResourceBridge::new(Redirecting(requests.clone()), ScriptWake::new());
+        let mut runtime = Runtime::<E>::new().unwrap();
+        runtime
+            .set_base_url("https://origin.test/start.html")
+            .unwrap();
+        // Product document installation uses this same bridge on both seams.
+        runtime.set_fetch_handler(Box::new(bridge.clone()));
+        runtime.set_script_resource_loader(Box::new(bridge));
+        runtime.parse_document_interleaved("<p>start</p>", &script_runtime_api::NoScriptLoader);
+        runtime.run_event_loop(100).unwrap();
+        let window = runtime.eval("window").unwrap();
+        runtime
+            .engine_mut()
+            .set_global_in_realm(script_engine_api::MAIN_REALM, "held", &window)
+            .unwrap();
+        runtime
+            .eval("location.href='https://origin.test/requested.html'")
+            .unwrap();
+        runtime.run_event_loop(100).unwrap();
+        assert_eq!(
+            read(&mut runtime, "location.href"),
+            "https://final.test/final.html"
+        );
+        assert_eq!(
+            read(&mut runtime, "document.URL"),
+            "https://final.test/final.html"
+        );
+        assert_eq!(
+            read(&mut runtime, "document.documentURI"),
+            "https://final.test/final.html"
+        );
+        assert_eq!(read(&mut runtime, "location.origin"), "https://final.test");
+        assert_eq!(
+            read(&mut runtime, "document.getElementById('mark').textContent"),
+            "redirected"
+        );
+        let window = runtime.eval("window").unwrap();
+        runtime
+            .engine_mut()
+            .set_global_in_realm(script_engine_api::MAIN_REALM, "current", &window)
+            .unwrap();
+        let value = runtime.engine_mut().eval("String(held===current)").unwrap();
+        assert_eq!(runtime.value_to_string(&value).unwrap(), "true");
+        assert_eq!(
+            &*requests.lock().unwrap(),
+            &["https://origin.test/requested.html"]
+        );
+        runtime.eval("history.back()").unwrap();
+        runtime.run_event_loop(100).unwrap();
+        assert_eq!(
+            read(&mut runtime, "location.href"),
+            "https://origin.test/start.html"
+        );
+        runtime.eval("history.forward()").unwrap();
+        runtime.run_event_loop(100).unwrap();
+        assert_eq!(
+            read(&mut runtime, "document.URL"),
+            "https://final.test/final.html"
+        );
+        assert_eq!(
+            read(&mut runtime, "location.href"),
+            "https://final.test/final.html"
+        );
+        assert_eq!(
+            &*requests.lock().unwrap(),
+            &[
+                "https://origin.test/requested.html",
+                "https://origin.test/start.html",
+                "https://final.test/final.html"
+            ]
+        );
+    }
+    #[test]
+    fn boa_product_bridge_redirect_identity() {
+        product_bridge_redirect_identity::<script_engine_boa::BoaEngine>();
+    }
+    #[cfg(all(target_pointer_width = "64", feature = "scripted-nova"))]
+    #[test]
+    fn nova_product_bridge_redirect_identity() {
+        product_bridge_redirect_identity::<script_engine_nova::NovaEngine>();
+    }
+
+    fn product_bridge_metadata_retains_document<E: ScriptEngine>() {
+        #[derive(Clone)]
+        struct Metadata {
+            status: u16,
+            calls: Arc<Mutex<Vec<genet_host_api::ResourceRequest>>>,
+        }
+        impl ResourceFetcher for Metadata {
+            fn fetch(&self, _: &str) -> Option<Vec<u8>> {
+                panic!("metadata load downgraded to source-only loader")
+            }
+            fn fetch_request(
+                &self,
+                request: &genet_host_api::ResourceRequest,
+            ) -> Option<genet_host_api::ResourceFetchResponse> {
+                self.calls.lock().unwrap().push(request.clone());
+                if self.status == 0 {
+                    return None;
+                }
+                let mut response: genet_host_api::ResourceFetchResponse = ResourceResponse::new(
+                    "https://final.test/final.html",
+                    b"<p>replacement</p>".to_vec(),
+                )
+                .into();
+                response.status = self.status;
+                if self.status == 1 {
+                    response.response_type = "error".into();
+                }
+                Some(response)
+            }
+        }
+        struct Unrelated;
+        impl FetchHandler for Unrelated {
+            fn fetch(&self, _: FetchRequest) -> FetchOutcome {
+                panic!("document loader failure fell through to unrelated fetch handler")
+            }
+        }
+        for status in [204, 205, 0, 1] {
+            let calls = Arc::new(Mutex::new(Vec::new()));
+            let bridge = ScriptResourceBridge::new(
+                Metadata {
+                    status,
+                    calls: calls.clone(),
+                },
+                ScriptWake::new(),
+            );
+            let mut runtime = Runtime::<E>::new().unwrap();
+            runtime
+                .set_base_url("https://origin.test/start.html")
+                .unwrap();
+            runtime.set_fetch_handler(Box::new(Unrelated));
+            runtime.set_script_resource_loader(Box::new(bridge));
+            runtime.parse_document_interleaved("<p id=original>original</p><script>var lifecycle=[];addEventListener('pagehide',function(){lifecycle.push('pagehide')});addEventListener('unload',function(){lifecycle.push('unload')})</script>", &script_runtime_api::NoScriptLoader);
+            runtime.run_event_loop(100).unwrap();
+            let outgoing = runtime.top_realm();
+            runtime
+                .eval("location.href='https://origin.test/requested.html'")
+                .unwrap();
+            runtime.run_event_loop(100).unwrap();
+            assert_eq!(
+                runtime.top_realm(),
+                outgoing,
+                "status {status} retains document"
+            );
+            for (expression, expected) in [
+                ("location.href", "https://origin.test/start.html"),
+                (
+                    "document.getElementById('original').textContent",
+                    "original",
+                ),
+                ("lifecycle.join(',')", ""),
+                ("history.length", "1"),
+            ] {
+                let value = runtime.eval(expression).unwrap();
+                assert_eq!(runtime.value_to_string(&value).unwrap(), expected);
+            }
+            let calls = calls.lock().unwrap();
+            assert_eq!(calls.len(), 1);
+            assert_eq!(calls[0].url, "https://origin.test/requested.html");
+            assert_eq!(calls[0].method, "GET");
+            assert_eq!(calls[0].mode, "cors");
+            assert_eq!(calls[0].credentials, "same-origin");
+            assert!(calls[0].referrer.is_empty());
+            assert!(calls[0].referrer_policy.is_empty());
+            assert!(calls[0].body.is_none());
+            assert!(calls[0].headers.is_empty());
+        }
+    }
+    #[test]
+    fn boa_product_bridge_metadata_retains_document() {
+        product_bridge_metadata_retains_document::<script_engine_boa::BoaEngine>();
+    }
+    #[cfg(all(target_pointer_width = "64", feature = "scripted-nova"))]
+    #[test]
+    fn nova_product_bridge_metadata_retains_document() {
+        product_bridge_metadata_retains_document::<script_engine_nova::NovaEngine>();
+    }
+
+    fn fixture_request(method: &str) -> FetchRequest {
+        FetchRequest {
+            url: "https://origin.test/script.js".into(),
+            method: method.into(),
+            headers: vec![],
+            body: None,
+            cache: "default".into(),
+            redirect: "follow".into(),
+            mode: "cors".into(),
+            referrer: String::new(),
+            referrer_policy: String::new(),
+            credentials: "same-origin".into(),
+            integrity: String::new(),
+        }
+    }
+
+    #[test]
+    fn rich_request_preserves_bytes_policies_and_response_metadata() {
+        #[derive(Clone)]
+        struct Recording(Arc<Mutex<Vec<genet_host_api::ResourceRequest>>>);
+        impl ResourceFetcher for Recording {
+            fn fetch(&self, _: &str) -> Option<Vec<u8>> {
+                panic!("rich request downgraded")
+            }
+            fn fetch_request(
+                &self,
+                request: &genet_host_api::ResourceRequest,
+            ) -> Option<genet_host_api::ResourceFetchResponse> {
+                self.0.lock().unwrap().push(request.clone());
+                let mut response: genet_host_api::ResourceFetchResponse =
+                    ResourceResponse::new("https://final.test/posted", b"accepted".to_vec()).into();
+                response.status = 201;
+                response.status_text = "Created".into();
+                response.response_type = "cors".into();
+                response.redirected = true;
+                response.headers = vec![("x-result".into(), "created".into())];
+                Some(response)
+            }
+        }
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let bridge = ScriptResourceBridge::new(Recording(requests.clone()), ScriptWake::new());
+        let mut request = fixture_request("POST");
+        request.body = Some(vec![0, 128, 255]);
+        request.headers = vec![("Content-Type".into(), "application/octet-stream".into())];
+        request.cache = "no-store".into();
+        request.redirect = "manual".into();
+        request.mode = "navigate".into();
+        request.referrer = "https://origin.test/form".into();
+        request.referrer_policy = "origin".into();
+        request.credentials = "include".into();
+        request.integrity = "sha256-example".into();
+        let outcome = FetchHandler::fetch(&bridge, request);
+        let requests = requests.lock().unwrap();
+        let request = &requests[0];
+        assert_eq!(requests.len(), 1);
+        assert_eq!(request.method, "POST");
+        assert_eq!(request.url, "https://origin.test/script.js");
+        assert_eq!(request.body.as_deref(), Some(&[0, 128, 255][..]));
+        assert_eq!(
+            request.headers,
+            [("Content-Type".into(), "application/octet-stream".into())]
+        );
+        assert_eq!(request.cache, "no-store");
+        assert_eq!(request.redirect, "manual");
+        assert_eq!(request.mode, "navigate");
+        assert_eq!(request.referrer, "https://origin.test/form");
+        assert_eq!(request.referrer_policy, "origin");
+        assert_eq!(request.credentials, "include");
+        assert_eq!(request.integrity, "sha256-example");
+        assert_eq!(outcome.status, 201);
+        assert_eq!(outcome.status_text, "Created");
+        assert_eq!(outcome.response_type, "cors");
+        assert!(outcome.redirected);
+        assert_eq!(outcome.url, "https://final.test/posted");
+        assert_eq!(outcome.headers, [("x-result".into(), "created".into())]);
+        assert_eq!(outcome.body, b"accepted");
+    }
+
+    #[test]
+    fn url_only_host_refuses_post_instead_of_loading_get() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let bridge = ScriptResourceBridge::new(
+            Fixture {
+                calls: calls.clone(),
+            },
+            ScriptWake::new(),
+        );
+        let outcome = FetchHandler::fetch(
+            &bridge,
+            FetchRequest {
+                url: "https://origin.test/submit".into(),
+                method: "POST".into(),
+                headers: vec![("content-type".into(), "application/octet-stream".into())],
+                body: Some(vec![0, 128, 255]),
+                cache: "default".into(),
+                redirect: "follow".into(),
+                mode: "navigate".into(),
+                referrer: "https://origin.test/form".into(),
+                referrer_policy: "origin".into(),
+                credentials: "include".into(),
+                integrity: String::new(),
+            },
+        );
+        assert!(
+            outcome.network_error,
+            "URL-only host cannot serve a POST as GET"
+        );
+        assert_eq!(calls.load(Ordering::Relaxed), 0);
+    }
+
     #[test]
     fn async_mapping_preserves_final_url_and_content_type() {
         let bridge = ScriptResourceBridge::new(
@@ -483,7 +846,7 @@ mod tests {
             },
             ScriptWake::new(),
         );
-        let outcome = bridge.outcome("https://origin.test/script.js");
+        let outcome = FetchHandler::fetch(&bridge, fixture_request("GET"));
         assert_eq!(outcome.url, "https://final.test/script.js");
         assert!(outcome.redirected);
         assert_eq!(

@@ -19,6 +19,7 @@ use std::rc::Rc;
 use document_session_api::session_engine::{
     DocumentSession, SessionButtonState, SessionEffect, SessionEngine, SessionInput, SessionKey,
     SessionModifiers, SessionPointerButton, SessionScrollKey, SessionSpawnRequest,
+    SessionDocumentRequest, SessionEncodedFormSubmission,
 };
 use genet_document_resources::ResourceLimits;
 use genet_documents::{LiveryResourcePreparation, LiverySessionEngine, LocalFetcher};
@@ -146,8 +147,10 @@ struct WebOrtet {
     pointer_capture_id: Option<i32>,
     browser_limits: BrowserResourceLimits,
     navigation_generation: u64,
-    pending_navigation: Option<String>,
+    pending_navigation: Option<BrowserNavigation>,
 }
+
+enum BrowserNavigation { Link(String), Form(SessionEncodedFormSubmission) }
 
 struct LoadedSession {
     session: Box<dyn DocumentSession<Scene>>,
@@ -157,6 +160,7 @@ struct LoadedSession {
 impl WebOrtet {
     fn render(&mut self) {
         let scene = self.session.frame(self.layout_width, self.layout_height);
+        self.sync_address();
         let (_texture, view) = self.core.rasterize_scaled(
             &scene,
             self.physical_width,
@@ -206,25 +210,29 @@ impl WebOrtet {
         self.render();
     }
 
+    fn sync_address(&mut self) {
+        if let Some(address) = self.session.current_address() { self.address = address; }
+    }
     fn dispatch_input(&mut self, input: SessionInput) -> Option<bool> {
         let result = self.session.input(input);
         let capture = result.capture;
         match result.effect {
             SessionEffect::Navigate(target) => {
-                self.pending_navigation = Some(resolve_href(&self.address, &target));
+                self.pending_navigation = Some(BrowserNavigation::Link(resolve_href(&self.address, &target)));
             },
-            SessionEffect::Submit(submission) => {
-                web_sys::console::warn_1(
-                    &format!(
-                        "[ortet] form submission to {} is not wired in this host",
-                        submission.action
-                    )
-                    .into(),
-                );
+            SessionEffect::Submit(_) => {
+                match self.session.take_encoded_form_submission() {
+                    Some(encoded) => self.pending_navigation = Some(BrowserNavigation::Form(encoded)),
+                    None => {
+                        self.navigation_generation = self.navigation_generation.wrapping_add(1);
+                        web_sys::console::warn_1(&JsValue::from_str("[ortet] encoded submission unavailable"));
+                    },
+                }
             },
             SessionEffect::Handled | SessionEffect::Cancelled => self.render(),
             SessionEffect::Ignored => {},
         }
+        self.sync_address();
         capture
     }
 
@@ -261,40 +269,38 @@ impl WebOrtet {
 }
 
 fn launch_pending_navigation(host: &Rc<RefCell<WebOrtet>>) {
-    let Some((generation, address, width, height, limits)) = (|| {
+    let Some((generation, address, request, width, height, limits)) = (|| {
         let mut host = host.borrow_mut();
-        let address = host.pending_navigation.take()?;
-        if address == host.address {
-            return None;
-        }
+        let navigation = host.pending_navigation.take()?;
+        if matches!(&navigation, BrowserNavigation::Link(address) if address == &host.address) { return None; }
         host.navigation_generation = host.navigation_generation.wrapping_add(1);
-        Some((
-            host.navigation_generation,
-            address,
-            host.layout_width,
-            host.layout_height,
-            host.browser_limits,
-        ))
-    })() else {
-        return;
-    };
+        let (address, request) = match navigation {
+            BrowserNavigation::Link(address) => {
+                if address == host.address { return None; } (address, None)
+            },
+            BrowserNavigation::Form(encoded) => {
+                if !encoded.target.is_empty() && !["_self", "_parent", "_top"].iter()
+                    .any(|target| encoded.target.eq_ignore_ascii_case(target)) {
+                    web_sys::console::warn_1(&JsValue::from_str("[ortet] unsupported native form target")); return None;
+                }
+                if let Err(error) = browser_request(&encoded.request) { web_sys::console::warn_1(&error); return None; }
+                (encoded.request.url.clone(), Some(encoded.request))
+            },
+        };
+        Some((host.navigation_generation, address, request, host.layout_width, host.layout_height, host.browser_limits))
+    })() else { return; };
     let host = host.clone();
     spawn_local(async move {
-        match load_session(&address, width, height, limits).await {
+        match load_session_request(&address, width, height, limits, request.as_ref()).await {
             Ok(loaded) => {
                 let mut host = host.borrow_mut();
-                if host.navigation_generation != generation {
-                    return;
-                }
-                host.session = loaded.session;
-                host.address = loaded.navigation_address;
-                host.render();
+                if host.navigation_generation != generation { return; }
+                host.release_captured_pointer(); host.session = loaded.session;
+                host.address = loaded.navigation_address; host.render();
             },
             Err(error) => {
                 if host.borrow().navigation_generation == generation {
-                    web_sys::console::warn_1(
-                        &format!("[ortet] could not open {address}: {error:?}").into(),
-                    );
+                    web_sys::console::warn_1(&format!("[ortet] could not open {address}: {error:?}").into());
                 }
             },
         }
@@ -307,9 +313,15 @@ async fn load_session(
     height: u32,
     limits: BrowserResourceLimits,
 ) -> Result<LoadedSession, JsValue> {
+    load_session_request(address, width, height, limits, None).await
+}
+
+async fn load_session_request(address: &str, width: u32, height: u32,
+    limits: BrowserResourceLimits, outbound: Option<&SessionDocumentRequest>) -> Result<LoadedSession, JsValue> {
     let request = SessionSpawnRequest::new(address).with_viewport(width, height);
     let engine = LiverySessionEngine::new(LocalFetcher);
     if !is_remote_http(address) {
+        if outbound.is_some() { return Err(JsValue::from_str("unsupported browser form transport")); }
         let session = engine
             .spawn(&request)
             .map_err(|error| JsValue::from_str(&format!("could not open {address}: {error}")))?;
@@ -322,7 +334,7 @@ async fn load_session(
     if limits.max_resources == 0 {
         return Err(JsValue::from_str("browser resource count limit exceeded"));
     }
-    let source_response = fetch_browser_response(address, &limits, &mut total_bytes).await?;
+    let source_response = fetch_browser_request(address, outbound, &limits, &mut total_bytes).await?;
     let navigation_address = redirected_navigation_address(address, &source_response.final_url);
     let mut staged =
         LiveryResourcePreparation::new(&request, source_response, ResourceLimits::default());
@@ -363,16 +375,71 @@ async fn fetch_browser_response(
     limits: &BrowserResourceLimits,
     total_bytes: &mut usize,
 ) -> Result<ResourceResponse, JsValue> {
+    fetch_browser_request(url, None, limits, total_bytes).await
+}
+
+/// Translate a native navigation into the browser's supported source-fetch lane.
+/// The neutral record retains native intent and the raw source URL for eligibility.
+fn browser_request(request: &SessionDocumentRequest) -> Result<web_sys::Request, JsValue> {
+    let window = web_sys::window().ok_or_else(|| JsValue::from_str("browser window unavailable"))?;
+    let outer_origin = window.location().origin()?;
+    let initiator = web_sys::Url::new(&request.referrer)?;
+    let destination = web_sys::Url::new(&request.url)?;
+    if !matches!(initiator.protocol().as_str(), "http:" | "https:") || initiator.origin() != outer_origin {
+        return Err(JsValue::from_str("embedded source origin cannot initiate browser form fetch"));
+    }
+    if !matches!(destination.protocol().as_str(), "http:" | "https:")
+        || !matches!(request.method.as_str(), "GET" | "POST")
+        || request.method == "GET" && request.body.is_some()
+        || !matches!(request.cache.as_str(), "default" | "no-store" | "reload" | "no-cache" | "force-cache" | "only-if-cached")
+        || !matches!(request.redirect.as_str(), "follow" | "error" | "manual")
+        || !matches!(request.mode.as_str(), "navigate" | "cors" | "same-origin")
+        || !matches!(request.credentials.as_str(), "omit" | "same-origin" | "include")
+        || !matches!(request.referrer_policy.as_str(), "" | "no-referrer" | "no-referrer-when-downgrade" | "same-origin"
+            | "origin" | "strict-origin" | "origin-when-cross-origin" | "strict-origin-when-cross-origin" | "unsafe-url") {
+        return Err(JsValue::from_str("unsupported browser form request field"));
+    }
+    let mode = if request.mode == "navigate" {
+        if destination.origin() == outer_origin { "same-origin" } else { "cors" }
+    } else { request.mode.as_str() };
+    if request.cache == "only-if-cached" && mode != "same-origin" {
+        return Err(JsValue::from_str("unsupported browser cache and mode combination"));
+    }
+    let init = web_sys::RequestInit::new();
+    for (key, value) in [("method", request.method.as_str()), ("cache", request.cache.as_str()),
+        ("redirect", request.redirect.as_str()), ("mode", mode), ("referrer", request.referrer.as_str()),
+        ("referrerPolicy", request.referrer_policy.as_str()), ("credentials", request.credentials.as_str()),
+        ("integrity", request.integrity.as_str())] {
+        js_sys::Reflect::set(init.as_ref(), &JsValue::from_str(key), &JsValue::from_str(value))?;
+    }
+    let headers = web_sys::Headers::new()?;
+    for (name, value) in &request.headers {
+        // Fetch silently strips forbidden headers: decline fields this lane cannot forward.
+        if !name.eq_ignore_ascii_case("content-type") {
+            return Err(JsValue::from_str("unsupported browser form header"));
+        }
+        headers.append(name, value)?;
+    }
+    js_sys::Reflect::set(init.as_ref(), &JsValue::from_str("headers"), headers.as_ref())?;
+    if let Some(body) = &request.body {
+        let bytes = js_sys::Uint8Array::from(body.as_slice());
+        js_sys::Reflect::set(init.as_ref(), &JsValue::from_str("body"), bytes.as_ref())?;
+    }
+    web_sys::Request::new_with_str_and_init(&request.url, &init)
+}
+
+async fn fetch_browser_request(url: &str, outbound: Option<&SessionDocumentRequest>,
+    limits: &BrowserResourceLimits, total_bytes: &mut usize) -> Result<ResourceResponse, JsValue> {
     let window =
         web_sys::window().ok_or_else(|| JsValue::from_str("browser window is unavailable"))?;
-    let response = JsFuture::from(window.fetch_with_str(url))
+    let fetch = match outbound { Some(request) => window.fetch_with_request(&browser_request(request)?),
+        None => window.fetch_with_str(url) };
+    let response = JsFuture::from(fetch)
         .await?
         .dyn_into::<Response>()?;
-    if !response.ok() {
-        return Err(JsValue::from_str(&format!(
-            "HTTP status {}",
-            response.status()
-        )));
+    let kind = js_sys::Reflect::get(response.as_ref(), &JsValue::from_str("type"))?.as_string().unwrap_or_default();
+    if matches!(response.status(), 0 | 204 | 205) || !matches!(kind.as_str(), "basic" | "cors" | "default") {
+        return Err(JsValue::from_str("browser response cannot install a document"));
     }
     if response
         .headers()
@@ -388,9 +455,9 @@ async fn fetch_browser_response(
         response.url()
     };
     let content_type = response.headers().get("content-type")?;
-    let body = response
-        .body()
-        .ok_or_else(|| JsValue::from_str("browser response body is unavailable"))?;
+    let Some(body) = response.body() else {
+        return Ok(ResourceResponse { final_url, content_type, bytes: Vec::new() });
+    };
     let reader = body
         .get_reader()
         .dyn_into::<web_sys::ReadableStreamDefaultReader>()?;
@@ -431,13 +498,9 @@ fn is_remote_http(address: &str) -> bool {
 /// Keep an explicitly requested fragment while replacing the transport base
 /// with the redirect-final document identity.
 fn redirected_navigation_address(requested: &str, final_url: &str) -> String {
-    let final_base = final_url
-        .split_once('#')
-        .map_or(final_url, |(base, _)| base);
-    requested.split_once('#').map_or_else(
-        || final_base.to_owned(),
-        |(_, fragment)| format!("{final_base}#{fragment}"),
-    )
+    if final_url.contains('#') { return final_url.to_owned(); }
+    requested.split_once('#').map_or_else(|| final_url.to_owned(),
+        |(_, fragment)| format!("{final_url}#{fragment}"))
 }
 
 #[cfg(test)]

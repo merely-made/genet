@@ -33,6 +33,8 @@ genet-static-dom = { version = "0.1.1", path = "../genet-static-dom" }
 serde = { workspace = true, features = ["derive"] }
 # Forms URL validity reuses the workspace's already-locked WHATWG URL parser.
 url = { workspace = true }
+# Shared native form encoders use the already-locked workspace codec.
+encoding_rs = { workspace = true }
 
 [dev-dependencies]
 postcard = { workspace = true }

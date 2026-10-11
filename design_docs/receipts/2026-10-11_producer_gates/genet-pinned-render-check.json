@@ -1,0 +1,18 @@
+{
+  "command": [
+    "cargo",
+    "check",
+    "-p",
+    "genet-render-host",
+    "-p",
+    "genet-render",
+    "-j",
+    "2"
+  ],
+  "cwd": "/Users/markik/Code/worktrees/genet-vello-release-adoption",
+  "deadline_seconds": 600,
+  "elapsed_seconds": 130.355,
+  "exit_code": 0,
+  "timed_out": false,
+  "log": "/Users/markik/Code/output/vello-producer-gates-20261011/checks/genet-pinned-render-check.log"
+}

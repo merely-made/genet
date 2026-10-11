@@ -211,6 +211,8 @@ pub(crate) fn install_dom_surface<E: ScriptEngine>(
     engine.set_function::<DoctypeField>("__doctypeField", 2)?;
     engine.set_function::<DocumentDoctype>("__documentDoctype", 1)?;
     engine.set_function::<DocumentCompatMode>("__documentCompatMode", 1)?;
+    engine.set_function::<DocumentEncodingName>("__documentEncodingName", 1)?;
+    engine.set_function::<CopyDocumentEncoding>("__copyDocumentEncoding", 2)?;
     engine.set_function::<GetOuterHtml>("__getOuterHtml", 1)?;
     engine.set_function::<ParseDocument>("__parseDocument", 2)?;
     engine.set_function::<AttributeRecords>("__attributeRecords", 1)?;
@@ -1212,7 +1214,7 @@ pub(crate) fn root_connected_subtree<E: ScriptEngine>(cx: &mut E::CallCx<'_>, no
     }
 }
 
-fn reflect_pinned<E: ScriptEngine>(cx: &mut E::CallCx<'_>, raw: u64) -> Result<E::Value, E::Error> {
+pub(crate) fn reflect_pinned<E: ScriptEngine>(cx: &mut E::CallCx<'_>, raw: u64) -> Result<E::Value, E::Error> {
     let id = NodeId::from_raw(raw);
     let Some(start) = adoption::current_host(cx) else {
         return cx.reflector_for(raw);
@@ -1275,3 +1277,35 @@ use xpath_eval::*;
 /// (`__ref`) and the methods that drive the native sinks. ES5-style (no arrows /
 /// classes / let) for the widest backend coverage, matching the other bootstraps.
 const DOM_BOOTSTRAP: &str = include_str!("bootstrap.js");
+
+/// These accessors resolve the reflector's owning arena, including retained
+/// secondary and removed-frame Documents, rather than the current realm root.
+struct DocumentEncodingName;
+impl<E: ScriptEngine> NativeFn<E> for DocumentEncodingName {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let value = cx.arg(0);
+        let Some(node) = cx.owned_node(&value)? else {
+            return Err(cx.error("Document receiver required"));
+        };
+        let Some(encoding) = node.with_dom(|dom| dom.document_encoding(node.id())) else {
+            return Err(cx.error("Document receiver required"));
+        };
+        cx.make_string(encoding.encoding.name())
+    }
+}
+struct CopyDocumentEncoding;
+impl<E: ScriptEngine> NativeFn<E> for CopyDocumentEncoding {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let source = cx.arg(0);
+        let destination = cx.arg(1);
+        if let (Some(source), Some(destination)) =
+            (cx.owned_node(&source)?, cx.owned_node(&destination)?)
+        {
+            if let Some(mut encoding) = source.with_dom(|dom| dom.document_encoding(source.id())) {
+                encoding.confidence = crate::EncodingConfidence::Irrelevant;
+                destination.with_dom(|dom| dom.set_document_encoding(destination.id(), encoding));
+            }
+        }
+        Ok(cx.undefined())
+    }
+}

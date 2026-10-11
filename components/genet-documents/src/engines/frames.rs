@@ -14,11 +14,16 @@
 //! a DOM it is given and fetches their sources, and this one parses each source
 //! into a document and asks the same question again.
 
+use genet_document_resources::ResourceResponseSnapshot;
 use genet_document_resources::{
     FrameSource, ResolvedDocumentResources, ResolvedFrame, ResolvedStylesheet, ResourceKind,
     ResourceLimits, StylesheetOwner,
 };
 use genet_host_api::ResourceFetcher;
+use genet_scripted_dom::html_encoding::{
+    DocumentEncoding, HtmlDecodeOptions, decode_html_document,
+};
+use layout_dom_api::LayoutDom;
 
 use crate::browsing_context::{
     ActiveDocument, BrowsingContextId, BrowsingContextTree, FrameAttributes,
@@ -93,6 +98,9 @@ pub enum FrameOutcome {
 /// this session gets. Bundled so the recursion carries three moving parts
 /// (`tree`, `ancestor_urls`, `depth`) rather than nine arguments.
 pub(crate) struct FrameBuild<'a> {
+    pub(crate) snapshot: &'a ResourceResponseSnapshot,
+    pub(crate) parent_encoding: DocumentEncoding,
+    pub(crate) decode_options: HtmlDecodeOptions,
     pub(crate) fetcher: Option<&'a dyn ResourceFetcher>,
     pub(crate) limits: ResourceLimits,
     pub(crate) author_css: &'a [String],
@@ -176,10 +184,13 @@ fn build_child_frame(
         && ancestor_urls
             .iter()
             .any(|ancestor| ancestor == &frame.resolved_url);
-    if recursive || depth >= MAX_FRAME_DEPTH || frame.source.is_empty() {
-        // Still a real context on the initial `about:blank`, and still a
-        // `load` event: the element loaded a document, it was just an empty
-        // one.
+    // An empty successful response is still a loaded byte-backed Document.
+    // Consult the retained snapshot, never fetch again or use source length
+    // to infer whether a response exists.
+    let response = build.snapshot.frame_response(frame, parent_url);
+    if recursive || depth >= MAX_FRAME_DEPTH || (frame.source.is_empty() && response.is_none()) {
+        // Keep the existing initial-blank and recursion/depth fallback policy;
+        // a successful zero-byte response continues to the decoder below.
         return Some(ChildFrame {
             owner_node: frame.owner_node,
             context,
@@ -198,15 +209,42 @@ fn build_child_frame(
         _ => Some(frame.resolved_url.clone()),
     };
 
-    let dom = genet_scripted_dom::ScriptedDom::from_serialized_document(&frame.source);
-    let resources = match build.fetcher {
-        Some(fetcher) => ResolvedDocumentResources::resolve_with_limits(
+    let mut options = build.decode_options;
+    let frame_origin = tree.mint_origin(&frame.resolved_url);
+    let sandboxed = tree
+        .get(context)?
+        .sandbox()
+        .contains(crate::browsing_context::SandboxFlags::ORIGIN);
+    options.same_origin_parent_encoding = (!sandboxed
+        && tree
+            .get(parent_context)?
+            .document()
+            .origin
+            .is_same_origin(&frame_origin))
+    .then_some(build.parent_encoding.encoding);
+    let decoded = if let Some(response) = response {
+        decode_html_document(&response.bytes, response.content_type.as_deref(), options)
+    } else {
+        genet_scripted_dom::html_encoding::DecodedHtmlDocument {
+            source: frame.source.clone(),
+            encoding: DocumentEncoding::default(),
+        }
+    };
+    let mut dom = genet_scripted_dom::ScriptedDom::from_serialized_document(&decoded.source);
+    let document = dom.document();
+    dom.set_document_encoding(document, decoded.encoding);
+    dom.set_html_decode_options(build.decode_options);
+    let (resources, snapshot) = match build.fetcher {
+        Some(fetcher) => ResolvedDocumentResources::resolve_with_limits_and_snapshot(
             &dom,
             base_url.as_deref(),
             fetcher,
             build.limits,
         ),
-        None => ResolvedDocumentResources::discover(&dom, base_url.as_deref()),
+        None => (
+            ResolvedDocumentResources::discover(&dom, base_url.as_deref()),
+            ResourceResponseSnapshot::default(),
+        ),
     };
 
     let origin = tree.mint_origin(&frame.resolved_url);
@@ -235,7 +273,11 @@ fn build_child_frame(
         context,
         base_url.as_deref(),
         &resources.frames,
-        build,
+        &FrameBuild {
+            snapshot: &snapshot,
+            parent_encoding: decoded.encoding,
+            ..*build
+        },
         ancestor_urls,
         depth + 1,
     );

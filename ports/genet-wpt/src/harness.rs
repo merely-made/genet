@@ -510,6 +510,35 @@ fn run_test_with_webgl_and_style(
     engine: Engine,
     style: StyleRoute,
 ) -> HarnessOutcome {
+    run_test_with_encoding_and_style(
+        testharness_js,
+        html,
+        loader,
+        base_url,
+        handler,
+        websocket,
+        completion,
+        webgl,
+        engine,
+        style,
+        Default::default(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn run_test_with_encoding_and_style(
+    testharness_js: &str,
+    html: &str,
+    loader: &dyn ScriptSrcLoader,
+    base_url: Option<&str>,
+    handler: Option<Box<dyn FetchHandler>>,
+    websocket: Option<Box<dyn WebSocketHandler>>,
+    completion: Option<&dyn CompletionSource>,
+    webgl: Option<WebGlFactory>,
+    engine: Engine,
+    style: StyleRoute,
+    encoding: script_runtime_api::DocumentEncoding,
+) -> HarnessOutcome {
     let route = loader.resource_route();
 
     match engine {
@@ -524,6 +553,7 @@ fn run_test_with_webgl_and_style(
             webgl,
             style,
             route,
+            encoding,
         ),
         Engine::Nova => run_with::<script_engine_nova::NovaEngine>(
             testharness_js,
@@ -536,6 +566,7 @@ fn run_test_with_webgl_and_style(
             webgl,
             style,
             route,
+            encoding,
         ),
     }
 }
@@ -621,6 +652,31 @@ impl NovaHarnessTemplate {
         webgl: Option<WebGlFactory>,
         style: StyleRoute,
     ) -> HarnessOutcome {
+        self.run_test_with_encoding_and_style(
+            html,
+            loader,
+            base_url,
+            handler,
+            websocket,
+            completion,
+            webgl,
+            style,
+            Default::default(),
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub fn run_test_with_encoding_and_style(
+        &mut self,
+        html: &str,
+        loader: &dyn ScriptSrcLoader,
+        base_url: Option<&str>,
+        handler: Option<Box<dyn FetchHandler>>,
+        websocket: Option<Box<dyn WebSocketHandler>>,
+        completion: Option<&dyn CompletionSource>,
+        webgl: Option<WebGlFactory>,
+        style: StyleRoute,
+        encoding: script_runtime_api::DocumentEncoding,
+    ) -> HarnessOutcome {
         let route = loader.resource_route();
         if html_requests_long_timeout(html) {
             // Real WPT's realm/window-proxy state does not survive the current
@@ -637,6 +693,7 @@ impl NovaHarnessTemplate {
                 webgl,
                 style,
                 route,
+                encoding,
             );
         }
         let mut rt = match self.rt.snapshot_clone() {
@@ -649,9 +706,11 @@ impl NovaHarnessTemplate {
             collect_scripts(&doc, doc.document(), loader, &mut scripts);
             let test_src = scripts.join("\n;\n");
             rt.load_dom(&doc);
+            rt.set_document_encoding(encoding);
             prepare_runtime(&mut rt, base_url, handler, websocket, webgl, route);
             return run_loaded_with(&mut rt, &test_src, completion, style);
         }
+        rt.set_document_encoding(encoding);
         prepare_runtime(&mut rt, base_url, handler, websocket, webgl, route);
         run_parsed_with(&mut rt, html, loader, completion, style)
     }
@@ -721,6 +780,7 @@ fn run_with<E: ScriptEngine>(
     webgl: Option<WebGlFactory>,
     style: StyleRoute,
     route: Option<Box<dyn ScriptResourceLoader>>,
+    encoding: script_runtime_api::DocumentEncoding,
 ) -> HarnessOutcome {
     let mut rt = match Runtime::<E>::new() {
         Ok(rt) => rt,
@@ -732,6 +792,7 @@ fn run_with<E: ScriptEngine>(
         collect_scripts(&doc, doc.document(), loader, &mut scripts);
         let test_src = scripts.join("\n;\n");
         rt.load_dom(&doc);
+        rt.set_document_encoding(encoding);
         prepare_runtime(&mut rt, base_url, handler, websocket, webgl, route);
         if let Err(e) = rt.load_testharness(testharness_js) {
             return HarnessOutcome::Threw(format!("testharness load: {e:?}"));
@@ -741,6 +802,7 @@ fn run_with<E: ScriptEngine>(
     if html_requests_long_timeout(html) {
         load_long_timeout_metadata(&mut rt);
     }
+    rt.set_document_encoding(encoding);
     prepare_runtime(&mut rt, base_url, handler, websocket, webgl, route);
     // The prelude: `testharness.js` and the results bridge are installed
     // *before* the first parsed script runs, which is where a real browser has

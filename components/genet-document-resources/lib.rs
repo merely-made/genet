@@ -324,6 +324,18 @@ pub struct ResourceResponseSnapshot {
 }
 
 impl ResourceResponseSnapshot {
+    /// Associate a frame with the response fetched for its authored/requested URL.
+    /// Redirect destinations need not uniquely identify a response body.
+    pub fn frame_response(
+        &self,
+        frame: &ResolvedFrame,
+        parent_url: Option<&str>,
+    ) -> Option<ResourceResponse> {
+        if frame.source_kind != FrameSource::Src {
+            return None;
+        }
+        self.fetch_response(&resolve_url(parent_url, frame.authored_url.as_deref()?))
+    }
     pub fn insert(&mut self, requested_url: impl Into<String>, response: ResourceResponse) {
         self.responses.insert(requested_url.into(), response);
     }
@@ -452,6 +464,10 @@ impl<D: LayoutDom> StagedResourceResolution<D> {
     }
 
     /// Recover the caller's document after finishing its resource ledger.
+    pub fn response_snapshot(&self) -> ResourceResponseSnapshot {
+        self.responses.clone()
+    }
+
     pub fn into_document(self) -> D {
         self.dom
     }
@@ -470,6 +486,23 @@ impl ResolvedDocumentResources {
 
     /// Resolve resources with explicit host-selected bounds for recursive CSS
     /// imports and individual stylesheet bodies.
+    /// Resolve once, retaining the same raw responses for byte-aware consumers.
+    pub fn resolve_with_limits_and_snapshot<D: LayoutDom, Fetch: ResourceFetcher + ?Sized>(
+        dom: &D,
+        document_url: Option<&str>,
+        fetcher: &Fetch,
+        limits: ResourceLimits,
+    ) -> (Self, ResourceResponseSnapshot) {
+        let mut snapshot = ResourceResponseSnapshot::default();
+        let mut fetch = |url: &str| {
+            let response = fetcher.fetch_response(url)?;
+            snapshot.insert(url, response.clone());
+            Some(response)
+        };
+        let resources = resolve_responses_with_limits(dom, document_url, &mut fetch, limits);
+        (resources, snapshot)
+    }
+
     pub fn resolve_with_limits<D, Fetch>(
         dom: &D,
         document_url: Option<&str>,

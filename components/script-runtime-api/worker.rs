@@ -45,6 +45,15 @@ pub trait ScriptResourceLoader {
     /// to the network seam.
     fn load(&self, url: &str) -> Option<String>;
 
+    /// Optional metadata for the existing plain-GET document source route.
+    /// None leaves the source-only `load` route authoritative. Some claims the
+    /// load even on failure, so network errors and 204/205 cannot fall through
+    /// to a different fetcher. Policies are those of this legacy loader, not
+    /// the fields of a rich navigation request; rich requests bypass this seam.
+    fn load_document(&self, _url: &str) -> Option<FetchOutcome> {
+        None
+    }
+
     /// Load a classic script on the same resource route. Text-only loaders
     /// already return decoded source, but cannot verify integrity against the
     /// original response bytes, so they decline nonempty integrity metadata.

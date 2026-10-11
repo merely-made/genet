@@ -148,6 +148,24 @@ impl ScriptedDom {
             ))
         .then(|| self.is_disabled(node))
     }
+    /// Live input eligibility for Enter's implicit default action.
+    pub fn form_control_implicit_submit_eligible(&self, field: NodeId) -> bool {
+        self.is_live(field) && self.html_name(field) == Some("input") && matches!(
+                    self.input_type_for_state(field).as_str(),
+                    "text"
+                        | "search"
+                        | "tel"
+                        | "url"
+                        | "email"
+                        | "password"
+                        | "date"
+                        | "month"
+                        | "week"
+                        | "time"
+                        | "datetime-local"
+                        | "number"
+                )
+    }
     pub fn implicit_form_submission(
         &self,
         form: NodeId,
@@ -169,22 +187,7 @@ impl ScriptedDom {
         }
         let mut blockers = 0;
         for field in fields {
-            if self.html_name(field) == Some("input")
-                && matches!(
-                    self.input_type_for_state(field).as_str(),
-                    "text"
-                        | "search"
-                        | "tel"
-                        | "url"
-                        | "email"
-                        | "password"
-                        | "date"
-                        | "month"
-                        | "week"
-                        | "time"
-                        | "datetime-local"
-                        | "number"
-                )
+            if self.form_control_implicit_submit_eligible(field)
             {
                 blockers += 1;
                 if blockers > 1 {

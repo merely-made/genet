@@ -102,7 +102,7 @@ fn post_fragment_and_failure<E: ScriptEngine>() {
     );
     assert_eq!(
         read(&mut runtime, "location.href"),
-        "https://nav.test/final.html"
+        "https://nav.test/final.html#post"
     );
     assert_eq!(
         read(&mut runtime, "document.getElementById('mark').textContent"),
@@ -137,7 +137,7 @@ fn post_fragment_and_failure<E: ScriptEngine>() {
             .history()
             .current()
             .url,
-        "https://nav.test/final.html"
+        "https://nav.test/final.html#post"
     );
     drop(a);
     let incoming = runtime.top_realm();

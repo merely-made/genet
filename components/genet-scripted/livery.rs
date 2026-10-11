@@ -1117,9 +1117,11 @@ impl LiveryCssom {
         let Some(target) = target else {
             return ScriptedClick::Miss;
         };
+        let position = self.fragment_rect(target).map(|[left, top, _, _]|
+            ((x - left).max(0.0).floor() as u32, (y - top).max(0.0).floor() as u32));
         let proceed = runtime
-            .dispatch_event(target.raw(), "click")
-            .unwrap_or(true);
+            .dispatch_form_activation(target.raw(), position)
+            .unwrap_or(false);
         if !proceed {
             return ScriptedClick::Handled;
         }

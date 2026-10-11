@@ -10,6 +10,10 @@
   var domAgentDispatch = globalThis.__domAgentDispatch;
   var domRegisterHooks = globalThis.__domRegisterHooks;
   var domRealmHooks, formOperations, privateValidateForm;
+  var hostFocusedRef = null;
+  var focusParent = globalThis.__parentNode, focusType = globalThis.__nodeType;
+  var focusBody = globalThis.__documentBody, focusRoot = globalThis.__documentElement;
+  var focusShadowHost = globalThis.__shadowHost;
   var nativeFormOwner = globalThis.__formControlOwner, nativeFormReflect = globalThis.__reflectNode;
   var formNamespace = globalThis.__namespaceURI, formNodeType = globalThis.__nodeType;
   var formSplit = String.prototype.split, formTypeError = TypeError;
@@ -2759,6 +2763,25 @@
     return doc;
   }
   Document.prototype = Object.create(Node.prototype);
+  // This projection follows only private native-host focus, never authored properties.
+  Object.defineProperty(Document.prototype, 'activeElement', {
+    configurable: true, get: function() {
+      if (this !== document) return null;
+      var ref = hostFocusedRef, projected = ref;
+      while (ref) {
+        var parent = focusParent(ref);
+        if (parent) { ref = parent; continue; }
+        if (+focusType(ref) === 11) {
+          var host = focusShadowHost(ref);
+          if (host) { projected = host; ref = host; continue; }
+        }
+        break;
+      }
+      if (ref === docRef) return wrapNode(projected);
+      hostFocusedRef = null;
+      return wrapNode(focusBody(docRef) || focusRoot(docRef));
+    }
+  });
   Object.defineProperty(Document.prototype, 'defaultView', {
     get: function() { return this === globalThis.document ? globalThis : null; },
     configurable: true
@@ -6924,6 +6947,7 @@
       switch (op) {
         case 'formPrivate': return formOperations.private(a,b,c);
         case 'formActivateRaw': var p=applyDOMBrand(formSplit,b,[',']); return formOperations.hostClick(wrapNode(nativeFormReflect(a)),+p[0],+p[1]);
+        case 'formFocusRaw': hostFocusedRef = b === 'true' ? nativeFormReflect(a) : null; return true;
         case 'formKeyRaw': return formOperations.key(wrapNode(nativeFormReflect(a)),b);
         case 'uaEvent': return dispatchUserAgentEvent(a, b, c);
         case 'wrap': return wrapNodeLocal(a);

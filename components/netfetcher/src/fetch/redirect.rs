@@ -117,9 +117,12 @@ pub(super) fn process_redirect(
             if *redirects_remaining == 0 {
                 return RedirectStep::Done(Response::network_error());
             }
-            let Ok(next) = current_url.join(&location) else {
+            let Ok(mut next) = current_url.join(&location) else {
                 return RedirectStep::Done(Response::network_error());
             };
+            if next.fragment().is_none() {
+                next.set_fragment(current_url.fragment());
+            }
             // A redirect to a URL embedding credentials (user:password@host) is a
             // network error for any non-navigate request (WHATWG HTTP-redirect fetch).
             if (!next.username().is_empty() || next.password().is_some())

@@ -25,13 +25,14 @@ impl<E: ScriptEngine> NativeFn<E> for ControlInfo {
         let Some(node) = cx.owned_node(&v)? else {
             return cx.make_string("null");
         };
-        let (submit, disabled) = node.with_dom(|dom| {
+        let (submit, disabled, implicit) = node.with_dom(|dom| {
             (
                 dom.is_form_submit_button(node.id()),
                 dom.form_control_is_disabled(node.id()).unwrap_or(false),
+                dom.form_control_implicit_submit_eligible(node.id()),
             )
         });
-        cx.make_string(&format!("{{\"submit\":{submit},\"disabled\":{disabled}}}"))
+        cx.make_string(&format!("{{\"submit\":{submit},\"disabled\":{disabled},\"implicit\":{implicit}}}"))
     }
 }
 pub(crate) struct SubmitterCheck;
@@ -310,6 +311,14 @@ impl<E: ScriptEngine> crate::Runtime<E> {
             .unwrap_or(false);
         self.perform_microtask_checkpoint();
         Ok(result)
+    }
+    /// Set the represented realm's private host focus projection.
+    pub fn dispatch_form_focus(&mut self, raw_node_id: u64, focused: bool) -> Result<bool, E::Error> {
+        if focused {
+            let Some((_, host)) = adoption::owner_host(&self.host, NodeId::from_raw(raw_node_id)) else { return Ok(false); };
+            if !host.borrow_mut().is_connected_node(NodeId::from_raw(raw_node_id)) { return Ok(false); }
+        }
+        self.private_form_host(raw_node_id, "formFocusRaw", if focused { "true" } else { "false" })
     }
     /// Dispatch a trusted pointer click, then its cancellation/default action,
     /// before the host microtask checkpoint. The position is relative to an image.

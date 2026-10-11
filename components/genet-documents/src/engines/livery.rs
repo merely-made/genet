@@ -16,7 +16,8 @@ use document_session_api::session_engine::{
     DocumentZoomState, SessionButtonState, SessionClick, SessionCursor, SessionEffect,
     SessionEngine, SessionError, SessionFocusDirection, SessionFormMethod, SessionFormSubmission,
     SessionIme, SessionKey, SessionLink, SessionModifiers, SessionScrollKey, SessionSpawnRequest,
-    SessionTextTarget,
+    SessionTextTarget, SessionDocumentRequest, SessionEncodedFormSubmission, SessionRequestSpawnResult,
+    SessionInput, SessionInputResult, dispatch_session_input,
 };
 use document_session_api::{
     DocumentA11yAction, DocumentA11yActionRequest, DocumentA11yClickTarget, DocumentA11yNodeId,
@@ -238,8 +239,15 @@ impl<Fetch: ResourceFetcher + Send + Sync> SessionEngine<Scene> for LiverySessio
         let document = dom.document();
         dom.set_document_encoding(document, decoded.encoding);
         dom.set_html_decode_options(self.decode_options);
+        let navigation = genet_livery::NavigationFragment::parse(&redirected_navigation_address(
+            &request.address, &source_response.final_url));
         self.spawn_livery_document(request, dom, base_resource, source_response, navigation)
     }
+    fn spawn_request(&self, spawn: &SessionSpawnRequest, request: &SessionDocumentRequest)
+        -> Result<SessionRequestSpawnResult<Scene>, SessionError> {
+        self.spawn_document_request(spawn, request)
+    }
+
 }
 
 /// The first element whose `id` attribute is exactly `id`, in document order.
@@ -289,7 +297,40 @@ fn as_dyn_fetcher<F: ResourceFetcher>(fetcher: &F) -> &dyn ResourceFetcher {
 }
 
 #[cfg(feature = "livery")]
-impl<Fetch: ResourceFetcher + Send + Sync> LiverySessionEngine<Fetch> {
+impl<Fetch: ResourceFetcher> LiverySessionEngine<Fetch> {
+    pub fn spawn_document_request(&self, spawn: &SessionSpawnRequest, request: &SessionDocumentRequest)
+        -> Result<SessionRequestSpawnResult<Scene>, SessionError>
+    {
+        if spawn.body.is_some() || spawn.address != request.url {
+            return Err(SessionError::Unsupported("request spawn address or Unicode source mismatch".into()));
+        }
+        let transport = genet_host_api::ResourceRequest {
+            url: request.url.clone(), method: request.method.clone(), headers: request.headers.clone(),
+            body: request.body.clone(), cache: request.cache.clone(), redirect: request.redirect.clone(),
+            mode: request.mode.clone(), referrer: request.referrer.clone(),
+            referrer_policy: request.referrer_policy.clone(), credentials: request.credentials.clone(),
+            integrity: request.integrity.clone(),
+        };
+        let response = self.fetcher.fetch_request(&transport)
+            .ok_or_else(|| SessionError::SpawnFailed(format!("could not load {}", request.url)))?;
+        if matches!(response.status, 0 | 204 | 205)
+            || !matches!(response.response_type.as_str(), "basic" | "cors" | "default") {
+            return Err(SessionError::Unsupported("response cannot install a document".into()));
+        }
+        let navigation_address = redirected_navigation_address(&request.url, &response.final_url);
+        let navigation = genet_livery::NavigationFragment::parse(&navigation_address);
+        let source_response: ResourceResponse = response.into();
+        let base_resource = source_response.final_url.split('#').next().unwrap_or("").to_owned();
+        let decoded = decode_html_document(&source_response.bytes,
+            source_response.content_type.as_deref(), self.decode_options);
+        let mut dom = genet_scripted_dom::ScriptedDom::from_serialized_document(&decoded.source);
+        let document = dom.document();
+        dom.set_document_encoding(document, decoded.encoding);
+        dom.set_html_decode_options(self.decode_options);
+        let session = self.spawn_livery_document(spawn, dom, base_resource, source_response, navigation)?;
+        Ok(SessionRequestSpawnResult { session, navigation_address })
+    }
+
     fn spawn_livery_document(
         &self,
         request: &SessionSpawnRequest,
@@ -441,6 +482,9 @@ impl<Fetch> LiverySessionEngine<Fetch> {
             editor_drag: None,
             active_form: None,
             pressed_submit: None,
+            pressed_target: None,
+            pending_submission: None,
+            latest_submission: None,
             last_error: None,
             resources,
             source_response,
@@ -460,13 +504,9 @@ impl<Fetch> LiverySessionEngine<Fetch> {
 
 #[cfg(feature = "livery")]
 fn redirected_navigation_address(requested: &str, final_url: &str) -> String {
-    let final_base = final_url
-        .split_once('#')
-        .map_or(final_url, |(base, _)| base);
-    requested.split_once('#').map_or_else(
-        || final_base.to_owned(),
-        |(_, fragment)| format!("{final_base}#{fragment}"),
-    )
+    if final_url.contains('#') { return final_url.to_owned(); }
+    requested.split_once('#').map_or_else(|| final_url.to_owned(),
+        |(_, fragment)| format!("{final_url}#{fragment}"))
 }
 
 /// Render each child browsing context at its used content size and splice its
@@ -562,6 +602,9 @@ pub struct LiveryDocumentSession {
     editor_drag: Option<EditableDrag>,
     pub(crate) active_form: Option<genet_scripted_dom::NodeId>,
     pressed_submit: Option<genet_scripted_dom::NodeId>,
+    pressed_target: Option<genet_scripted_dom::NodeId>,
+    pending_submission: Option<SessionEncodedFormSubmission>,
+    latest_submission: Option<SessionFormSubmission>,
     last_error: Option<String>,
     pub(crate) resources: ResolvedDocumentResources,
     source_response: ResourceResponse,
@@ -940,7 +983,7 @@ impl LiveryDocumentSession {
         &self,
         node: genet_scripted_dom::NodeId,
     ) -> Option<genet_scripted_dom::NodeId> {
-        self.ancestor_matching(node, |_node, tag| tag.eq_ignore_ascii_case("form"))
+        self.doc.dom().form_control_form_owner(node)
     }
 
     fn editable_kind(&self, node: genet_scripted_dom::NodeId) -> Option<EditableKind> {
@@ -1006,26 +1049,15 @@ impl LiveryDocumentSession {
     }
 
     fn is_disabled_control(&self, node: genet_scripted_dom::NodeId) -> bool {
-        self.attribute(node, "disabled").is_some() || self.aria_true(node, "aria-disabled")
+        self.doc.dom().form_control_is_disabled(node).unwrap_or(false)
+            || self.aria_true(node, "aria-disabled")
     }
 
     fn is_submit_control(&self, node: genet_scripted_dom::NodeId) -> bool {
         if self.is_disabled_control(node) {
             return false;
         }
-        match self.tag(node) {
-            Some(tag) if tag.eq_ignore_ascii_case("button") => {
-                !self.attribute(node, "type").is_some_and(|kind| {
-                    matches!(kind.to_ascii_lowercase().as_str(), "button" | "reset")
-                })
-            },
-            Some(tag) if tag.eq_ignore_ascii_case("input") => {
-                self.attribute(node, "type").is_some_and(|kind| {
-                    matches!(kind.to_ascii_lowercase().as_str(), "submit" | "image")
-                })
-            },
-            _ => false,
-        }
+        self.doc.dom().is_form_submit_button(node)
     }
 
     fn submit_ancestor(
@@ -1228,12 +1260,13 @@ impl LiveryDocumentSession {
     /// collapsed-gesture tail of `pointer_up`, which has already converted.
     fn click_at_css(&mut self, x: f32, y: f32) -> SessionClick {
         let hit = self.doc.hit_test(x, y);
-        let submit = hit.and_then(|node| self.submit_ancestor(node));
+        let submit = hit.and_then(|node| self.submit_ancestor(node))
+            .map(|node| (node, self.submit_position(node, x, y)));
         self.activate_hit(x, y);
         match self.doc.click_at(x, y) {
             genet_livery::ClickOutcome::None => SessionClick::Miss,
             genet_livery::ClickOutcome::Focused | genet_livery::ClickOutcome::Scrolled => {
-                submit.map_or(SessionClick::Handled, |submit| self.submit_click(submit))
+                submit.map_or(SessionClick::Handled, |(submit, position)| self.submit_click(submit, position))
             },
             genet_livery::ClickOutcome::Navigate(href) => SessionClick::Navigate(href),
         }
@@ -1263,41 +1296,120 @@ impl LiveryDocumentSession {
         self.active_form = self.focused_node.and_then(|node| self.form_ancestor(node));
     }
 
-    fn submission_for_form(
-        &self,
-        form: genet_scripted_dom::NodeId,
-        fallback_action: &str,
-    ) -> SessionFormSubmission {
-        let action = self
-            .attribute(form, "action")
-            .filter(|action| !action.is_empty())
-            .unwrap_or(fallback_action)
-            .to_owned();
-        let method = if self
-            .attribute(form, "method")
-            .is_some_and(|method| method.eq_ignore_ascii_case("post"))
-        {
-            SessionFormMethod::Post
-        } else {
-            SessionFormMethod::Get
-        };
-        SessionFormSubmission {
-            action,
-            method,
-            fields: self.doc.dom().form_values(form),
+    fn resolution_base(&self) -> String {
+        let fallback = self.source_response.final_url.as_str();
+        let mut stack = vec![self.doc.dom().document()];
+        while let Some(node) = stack.pop() {
+            if self.tag(node) == Some("base") {
+                if let Some(href) = self.attribute(node, "href") {
+                    return url::Url::parse(fallback).and_then(|base| base.join(href))
+                        .map(|u| u.to_string()).unwrap_or_else(|_| fallback.to_owned());
+                }
+            }
+            stack.extend(self.doc.dom().dom_children(node).collect::<Vec<_>>().into_iter().rev());
         }
+        fallback.to_owned()
     }
 
-    fn submit_click(&mut self, submit: genet_scripted_dom::NodeId) -> SessionClick {
-        let Some(form) = self.form_ancestor(submit) else {
+    fn submit_form(&mut self, form: genet_scripted_dom::NodeId,
+        submitter: Option<genet_scripted_dom::NodeId>, position: (u32, u32)) -> SessionClick {
+        use genet_scripted_dom::form_encoding::{select_form_encoding, encode_urlencoded,
+            encode_text_plain, encode_multipart_auto, UTF_8};
+        use genet_scripted_dom::FormEntryValue;
+        let dom = self.doc.dom();
+        if dom.tree_root(form) != Some(dom.document()) || submitter.is_some_and(|id|
+            !dom.is_form_submit_button(id) || dom.form_control_form_owner(id) != Some(form)
+                || dom.form_control_is_disabled(id).unwrap_or(true)) {
+            return SessionClick::Handled;
+        }
+        let choose = |name: &str, override_name: &str| submitter
+            .and_then(|id| self.attribute(id, override_name)).or_else(|| self.attribute(form, name));
+        let no_validate = self.attribute(form, "novalidate").is_some()
+            || submitter.is_some_and(|id| self.attribute(id, "formnovalidate").is_some());
+        if !no_validate && dom.associated_form_controls(form).into_iter().any(|id|
+            dom.form_control_validity(id).is_some_and(|v| v.will_validate && !v.flags.valid())) {
+            return SessionClick::Handled;
+        }
+        let method = choose("method", "formmethod").unwrap_or("get");
+        if method.eq_ignore_ascii_case("dialog") { return SessionClick::Handled; }
+        let post = method.eq_ignore_ascii_case("post");
+        let mut target = choose("target", "formtarget").unwrap_or("").to_owned();
+        if target.is_empty() {
+            let mut stack = vec![dom.document()];
+            while let Some(node) = stack.pop() {
+                if self.tag(node) == Some("base") && self.attribute(node, "target").is_some() {
+                    target = self.attribute(node, "target").unwrap().to_owned(); break;
+                }
+                stack.extend(dom.dom_children(node).collect::<Vec<_>>().into_iter().rev());
+            }
+        }
+        let action = choose("action", "formaction").filter(|v| !v.is_empty()).unwrap_or(&self.address).to_owned();
+        let encoding = select_form_encoding(self.attribute(form, "accept-charset"),
+            dom.document_encoding(dom.document()).map(|e| e.encoding).unwrap_or(UTF_8));
+        let Ok(entries) = dom.form_submission_entries(form, submitter, encoding.name(), position) else {
             return SessionClick::Handled;
         };
+        let fields = entries.iter().map(|entry| (entry.name.clone(), match &entry.value {
+            FormEntryValue::Text(value) => value.clone(),
+            FormEntryValue::File { file, .. } => file.name.clone(),
+        })).collect();
+        let legacy = SessionFormSubmission { action: action.clone(),
+            method: if post { SessionFormMethod::Post } else { SessionFormMethod::Get }, fields };
+        if !target.is_empty() && !["_self", "_parent", "_top"].iter().any(|t| target.eq_ignore_ascii_case(t)) {
+            self.active_form = Some(form); self.latest_submission = Some(legacy);
+            return SessionClick::Submit(action);
+        }
+        let resolved = url::Url::parse(&self.resolution_base()).and_then(|base| base.join(&action));
+        let Ok(mut url) = resolved else {
+            self.active_form = Some(form); self.latest_submission = Some(legacy);
+            return SessionClick::Submit(action);
+        };
+        if !matches!(url.scheme(), "http" | "https") {
+            self.active_form = Some(form); self.latest_submission = Some(legacy);
+            return SessionClick::Submit(action);
+        }
+        let (body, headers) = if post {
+            let encoded = match choose("enctype", "formenctype").unwrap_or("").to_ascii_lowercase().as_str() {
+                "multipart/form-data" => match encode_multipart_auto(&entries, encoding) {
+                    Ok(body) => body, Err(_) => return SessionClick::Handled,
+                },
+                "text/plain" => genet_scripted_dom::form_encoding::EncodedFormBody {
+                    bytes: encode_text_plain(&entries, encoding), content_type: "text/plain".into(),
+                },
+                _ => genet_scripted_dom::form_encoding::EncodedFormBody {
+                    bytes: encode_urlencoded(&entries, encoding), content_type: "application/x-www-form-urlencoded".into(),
+                },
+            };
+            (Some(encoded.bytes), vec![("Content-Type".into(), encoded.content_type)])
+        } else {
+            let bytes = encode_urlencoded(&entries, encoding);
+            url.set_query(Some(std::str::from_utf8(&bytes).expect("ASCII form query")));
+            (None, Vec::new())
+        };
+        let referrer_policy = if self.attribute(form, "rel").is_some_and(|rel|
+            rel.split_ascii_whitespace().any(|v| v.eq_ignore_ascii_case("noreferrer"))) {
+            "no-referrer"
+        } else { "" };
+        let request = SessionDocumentRequest { url: url.to_string(), method: if post { "POST" } else { "GET" }.into(),
+            headers, body, cache: "default".into(), redirect: "follow".into(), mode: "navigate".into(),
+            referrer: self.address.clone(), referrer_policy: referrer_policy.into(),
+            credentials: "include".into(), integrity: String::new() };
         self.active_form = Some(form);
-        let action = self
-            .attribute(form, "action")
-            .unwrap_or(&self.address)
-            .to_owned();
+        self.latest_submission = Some(legacy);
+        self.pending_submission = Some(SessionEncodedFormSubmission { request, target });
         SessionClick::Submit(action)
+    }
+
+    // Capture CSS-local coordinates while the hit-test layout is retained;
+    // focusing the control can discard it before submission runs.
+    fn submit_position(&self, submit: genet_scripted_dom::NodeId, x: f32, y: f32) -> (u32, u32) {
+        self.doc.fragment_rect(submit).map_or((0, 0), |[left, top, _, _]|
+            ((x - left).max(0.0).floor() as u32, (y - top).max(0.0).floor() as u32))
+    }
+
+    fn submit_click(&mut self, submit: genet_scripted_dom::NodeId, position: (u32, u32)) -> SessionClick {
+        let Some(form) = self.form_ancestor(submit) else { return SessionClick::Handled; };
+        self.submit_form(form, Some(submit), position)
     }
 
     fn insert_text(&mut self, text: &str) -> bool {
@@ -1657,6 +1769,16 @@ impl LiveryDocumentSession {
 
 #[cfg(feature = "livery")]
 impl DocumentSession<Scene> for LiveryDocumentSession {
+    fn input(&mut self, input: SessionInput) -> SessionInputResult {
+        self.pending_submission = None;
+        self.latest_submission = None;
+        dispatch_session_input(self, input)
+    }
+    fn take_encoded_form_submission(&mut self) -> Option<SessionEncodedFormSubmission> {
+        self.pending_submission.take()
+    }
+    fn current_address(&self) -> Option<String> { Some(self.address.clone()) }
+
     fn document_capabilities(&self) -> DocumentCapabilities {
         DocumentCapabilities {
             find_in_page: DocumentCapabilityStatus::Supported,
@@ -1844,6 +1966,7 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
     fn pointer_down(&mut self, x: f32, y: f32) -> SessionClick {
         let (x, y) = self.to_css_point(x, y);
         self.editor_drag = None;
+        self.pressed_target = self.doc.hit_test(x, y);
         self.pressed_submit = self
             .doc
             .hit_test(x, y)
@@ -1882,6 +2005,8 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
 
     fn pointer_up(&mut self, x: f32, y: f32) -> SessionClick {
         let (x, y) = self.to_css_point(x, y);
+        let pressed_target = self.pressed_target.take();
+        if pressed_target.is_none() { self.pressed_submit = None; return SessionClick::Miss; }
         if self.editor_drag.is_some() {
             let _ = self.extend_editor_selection(x, y);
             self.editor_drag = None;
@@ -1900,9 +2025,14 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
             if let Some(submit) = released_submit
                 && Some(submit) == pressed_submit
             {
+                let position = self.submit_position(submit, x, y);
                 let _ = self.doc.click_at(x, y);
                 self.activate_hit(x, y);
-                self.submit_click(submit)
+                self.submit_click(submit, position)
+            } else if released_submit.is_some() || pressed_submit.is_some() {
+                SessionClick::Handled
+            } else if self.editor.is_some() {
+                SessionClick::Handled
             } else {
                 self.click_at_css(x, y)
             }
@@ -1968,8 +2098,22 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
                     } else {
                         SessionEffect::Ignored
                     }
-                } else if let Some(form) = self.active_form {
-                    SessionEffect::Submit(self.submission_for_form(form, &self.address))
+                } else if !modifiers.alt && !modifiers.control && !modifiers.meta && !modifiers.shift
+                    && let Some(node) = self.focused_node
+                    && self.is_submit_control(node) {
+                    let click = self.submit_click(node, (0, 0));
+                    self.effect_for_click(click)
+                } else if !modifiers.alt && !modifiers.control && !modifiers.meta && !modifiers.shift
+                    && let Some(node) = self.focused_node
+                    && self.doc.dom().form_control_implicit_submit_eligible(node)
+                    && !self.is_disabled_control(node)
+                    && let Some(form) = self.form_ancestor(node) {
+                    let click = match self.doc.dom().implicit_form_submission(form) {
+                        Ok(genet_scripted_dom::FormImplicitSubmission::SubmitButton(button)) => self.submit_form(form, Some(button), (0, 0)),
+                        Ok(genet_scripted_dom::FormImplicitSubmission::SubmitForm) => self.submit_form(form, None, (0, 0)),
+                        _ => SessionClick::Handled,
+                    };
+                    self.effect_for_click(click)
                 } else {
                     SessionEffect::Ignored
                 }
@@ -2026,6 +2170,8 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
         if !focused {
             self.commit_active_edit();
             self.editor_drag = None;
+            self.pressed_target = None;
+            self.pressed_submit = None;
             self.focused_node = None;
             self.editor = None;
             self.active_form = None;
@@ -2074,6 +2220,8 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
     }
 
     fn cancel_input(&mut self) -> bool {
+        self.pressed_target = None;
+        self.pressed_submit = None;
         self.editor_drag = None;
         let Some(editor) = self.editor.as_mut() else {
             return false;
@@ -2106,13 +2254,23 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
     }
 
     fn form_submission(&mut self, action: &str) -> SessionFormSubmission {
-        self.active_form.map_or_else(
-            || SessionFormSubmission {
-                action: action.to_owned(),
-                ..Default::default()
-            },
-            |form| self.submission_for_form(form, action),
-        )
+        if let Some(submission) = &self.latest_submission { return submission.clone(); }
+        let Some(form) = self.active_form else { return SessionFormSubmission {
+            action: action.to_owned(), ..Default::default()
+        }; };
+        let dom = self.doc.dom();
+        let encoding = genet_scripted_dom::form_encoding::select_form_encoding(self.attribute(form, "accept-charset"),
+            dom.document_encoding(dom.document()).map(|e| e.encoding)
+                .unwrap_or(genet_scripted_dom::form_encoding::UTF_8));
+        let fields = dom.form_submission_entries(form, None, encoding.name(), (0, 0)).unwrap_or_default()
+            .into_iter().map(|entry| (entry.name, match entry.value {
+                genet_scripted_dom::FormEntryValue::Text(value) => value,
+                genet_scripted_dom::FormEntryValue::File { file, .. } => file.name,
+            })).collect();
+        SessionFormSubmission { action: self.attribute(form, "action").filter(|v| !v.is_empty()).unwrap_or(action).to_owned(),
+            method: if self.attribute(form, "method").is_some_and(|v| v.eq_ignore_ascii_case("post")) {
+                SessionFormMethod::Post
+            } else { SessionFormMethod::Get }, fields }
     }
 
     fn text_target(&self, text: &str) -> Option<SessionTextTarget> {
@@ -2184,7 +2342,7 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
             .links()
             .into_iter()
             .map(|link| SessionLink {
-                url: link.url,
+                url: genet_host_api::navigation::resolve_href(&self.resolution_base(), &link.url),
                 rect: link.rect.map(|value| self.to_presentation_length(value)),
             })
             .collect()
@@ -2385,6 +2543,23 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
                     },
                     links,
                 )
+            },
+            None
+                if self.editor.as_ref().is_some_and(|editor| {
+                    self.focused_node == Some(editor.node)
+                        && self.doc.dom().is_live(editor.node)
+                        && self.editable_kind(editor.node) == Some(editor.kind)
+                        && self
+                            .doc
+                            .dom()
+                            .form_control_editing_value(editor.node)
+                            .is_some_and(|editing| {
+                                editing.selection_start.is_some()
+                                    && editing.selection_end.is_some()
+                            })
+                }) =>
+            {
+                None
             },
             None => semantic_clip_from_dom(&self.address, self.doc.dom()),
         }?;
@@ -2748,5 +2923,62 @@ mod phase_c_document_encoding_fixtures {
             .spawn_prepared(&request, preparation)
             .expect("prepared empty frame spawn");
         assert_empty_frame_document(session.as_ref(), &requests);
+    }
+}
+
+#[cfg(all(test, feature = "livery"))]
+mod phase_c_t5_editor_clip_fix2_controls {
+    use super::*;
+
+    #[derive(Clone)]
+    struct NoFetch;
+    impl ResourceFetcher for NoFetch {
+        fn fetch(&self, _: &str) -> Option<Vec<u8>> { None }
+    }
+
+    fn editor_owns_clip_context(page: &str, expected_page_text: &str) {
+        let body = format!(r#"<html><head><style>
+            html, body {{ margin: 0; padding: 0; }}
+            textarea {{ display: block; width: 220px; min-height: 40px; }}
+            </style></head><body>{page}<textarea>cedar</textarea></body></html>"#);
+        let request = SessionSpawnRequest::new("https://clip.test/page")
+            .with_body(&body).with_viewport(400, 240);
+        let mut boxed = LiverySessionEngine::new(NoFetch).spawn(&request).unwrap();
+        let session = boxed.as_any().downcast_mut::<LiveryDocumentSession>().unwrap();
+        session.frame(400, 240);
+        let initial = session.clip().expect("whole page clip before editor focus");
+        assert!(initial.text.contains(expected_page_text), "initial page clip: {:?}", initial.text);
+        assert_eq!(initial.artifacts[0].bytes, body.as_bytes());
+        assert!(session.focus_move(SessionFocusDirection::Forward));
+        let node = session.focused_node.expect("focus reaches textarea");
+        let caret = session.doc.dom().form_control_editing_value(node).unwrap();
+        assert!(caret.selection_start.is_some());
+        assert_eq!(caret.selection_start, caret.selection_end);
+        assert!(session.doc.text_selection().is_none());
+        assert!(session.clip().is_none(), "collapsed editor caret remains control local");
+        session.frame(400, 240);
+        let target = session.text_target("cedar").expect("focused editor has refreshed retained text endpoints");
+        assert_eq!(session.pointer_down(target.focus[0], target.focus[1]), SessionClick::Handled);
+        assert!(session.pointer_move(target.anchor[0], target.anchor[1]));
+        assert_eq!(session.pointer_up(target.anchor[0], target.anchor[1]), SessionClick::Handled);
+        let selected = session.doc.dom().form_control_editing_value(node).unwrap();
+        assert!(selected.selection_start < selected.selection_end);
+        assert!(session.doc.text_selection().is_none());
+        assert!(session.clip().is_none(), "editor selection remains control local");
+        session.focus_input(false);
+        let after_blur = session.clip().expect("whole page clip returns after blur");
+        assert_eq!(after_blur.text, initial.text);
+        assert_eq!(after_blur.links, initial.links);
+        assert_eq!(after_blur.artifacts[0].bytes, body.as_bytes());
+    }
+
+    #[test]
+    fn phase_c_t5_editor_clip_fix2_short_page_and_blur() {
+        editor_owns_clip_context("<p>useful page</p>", "useful page");
+    }
+
+    #[test]
+    fn phase_c_t5_editor_clip_fix2_article_page_and_blur() {
+        editor_owns_clip_context("<article><h1>Finding</h1><p>useful page</p></article>", "Finding");
     }
 }

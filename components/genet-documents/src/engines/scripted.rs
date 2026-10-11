@@ -357,6 +357,7 @@ impl<E: script_engine_api::ScriptEngine + 'static> ScriptedDocumentSession<E> {
 impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
     for ScriptedDocumentSession<E>
 {
+    fn current_address(&self) -> Option<String> { Some(self.doc.current_document_address()) }
     fn document_capabilities(&self) -> DocumentCapabilities {
         retained_document_capabilities("scripted sessions do not expose document find")
     }
@@ -393,6 +394,7 @@ impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
     }
     fn pointer_down(&mut self, x: f32, y: f32) -> SessionClick {
         let pressed_target = self.doc.click_target_at(x, y);
+        if let Some(node) = pressed_target { let _ = self.doc.focus_host_node(node); }
         self.pressed_target = pressed_target;
         self.pointer_active = self.doc.begin_text_selection(x, y) || pressed_target.is_some();
         if self.pointer_active {
@@ -421,11 +423,15 @@ impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
         }
     }
     fn focus_input(&mut self, focused: bool) {
+        if !focused { self.doc.clear_host_focus(); }
         if !focused && self.pointer_active {
             self.pointer_active = false;
             self.pressed_target = None;
             let _ = self.doc.cancel_text_selection();
         }
+    }
+    fn focus_move(&mut self, direction: document_session_api::SessionFocusDirection) -> bool {
+        self.doc.move_host_focus(direction == document_session_api::SessionFocusDirection::Backward)
     }
     fn cancel_input(&mut self) -> bool {
         let had_pointer = std::mem::replace(&mut self.pointer_active, false)
@@ -438,18 +444,26 @@ impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
         &mut self,
         key: document_session_api::SessionKey,
         state: document_session_api::SessionButtonState,
-        _modifiers: document_session_api::SessionModifiers,
+        modifiers: document_session_api::SessionModifiers,
         _repeat: bool,
     ) -> document_session_api::SessionEffect {
-        if key == document_session_api::SessionKey::Escape
-            && state == document_session_api::SessionButtonState::Pressed
-            && self.cancel_input()
-        {
-            document_session_api::SessionEffect::Cancelled
-        } else {
-            document_session_api::SessionEffect::Ignored
+        use document_session_api::{SessionButtonState, SessionEffect, SessionKey};
+        if state != SessionButtonState::Pressed { return SessionEffect::Ignored; }
+        if key == SessionKey::Escape && self.cancel_input() { return SessionEffect::Cancelled; }
+        if key == SessionKey::Tab {
+            return if self.doc.move_host_focus(modifiers.shift) { SessionEffect::Handled } else { SessionEffect::Ignored };
         }
+        let name = match &key {
+            SessionKey::Character(value) => value.as_str(), SessionKey::Enter => "Enter",
+            SessionKey::Space => " ", SessionKey::Escape => "Escape", SessionKey::Backspace => "Backspace",
+            SessionKey::Delete => "Delete", SessionKey::ArrowLeft => "ArrowLeft", SessionKey::ArrowRight => "ArrowRight",
+            SessionKey::ArrowUp => "ArrowUp", SessionKey::ArrowDown => "ArrowDown", SessionKey::Home => "Home",
+            SessionKey::End => "End", SessionKey::PageUp => "PageUp", SessionKey::PageDown => "PageDown",
+            _ => return SessionEffect::Ignored,
+        };
+        if self.doc.dispatch_host_keydown(name, modifiers.alt, modifiers.control, modifiers.meta, modifiers.shift) { SessionEffect::Handled } else { SessionEffect::Ignored }
     }
+
     fn text_target(&self, text: &str) -> Option<SessionTextTarget> {
         let (anchor, focus) = self.doc.text_target(text)?;
         Some(SessionTextTarget { anchor, focus })
@@ -501,11 +515,13 @@ impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
     }
     fn clip(&self) -> Option<DocumentClip> {
         let selection = self.doc.text_selection();
+        let address = self.doc.current_document_address();
+        let resolution_base = self.doc.document_resolution_base().unwrap_or_else(|| address.clone());
         self.doc.with_dom(|dom| match selection {
             Some(selection) => {
                 let selected_links = links_for_source_nodes(dom, &selection.source_nodes);
                 semantic_clip_from_selection_with_links(
-                    &self.address,
+                    &address,
                     dom,
                     ClipSelection {
                         range: ClipRange {
@@ -519,7 +535,12 @@ impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
                     selected_links,
                 )
             },
-            None => semantic_clip_from_dom(&self.address, dom),
+            None => semantic_clip_from_dom(&address, dom).map(|mut clip| {
+                for href in &mut clip.links {
+                    *href = genet_scripted::resolve_href(&resolution_base, href);
+                }
+                clip
+            }),
         })
     }
     /// Observation extras (extract, dom_snapshot, dispatch_event, dom stats)

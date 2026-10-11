@@ -2431,6 +2431,7 @@ fn perform_navigation<E: ScriptEngine>(
         )
     };
     let mut url = request.url.clone();
+    let requested_fragment = request.url.split_once('#').map(|(_, f)| f.to_owned());
     let plain_get = request.method == "GET"
         && request.body.is_none()
         && request.headers.is_empty()
@@ -2481,6 +2482,12 @@ fn perform_navigation<E: ScriptEngine>(
         }
         if !response.url.is_empty() {
             url = response.url;
+            if !url.contains('#') {
+                if let Some(fragment) = requested_fragment.as_ref() {
+                    url.push('#');
+                    url.push_str(fragment);
+                }
+            }
         }
         let mut options = decode_options;
         let opaque = agent

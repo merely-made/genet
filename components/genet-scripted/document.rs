@@ -606,6 +606,7 @@ pub struct LiveryScriptedDocument<E: ScriptEngine> {
     // them so the route does not consume the Windows main-thread stack merely
     // by carrying one live document through `ViewerApp`.
     rt: Box<Runtime<E>>,
+    host_focused_node: Option<NodeId>,
     bridge: ScriptResourceBridge,
     cssom: Box<LiveryCssom>,
     child_cssoms: std::rc::Rc<
@@ -991,6 +992,7 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
 
         let mut document = Self {
             rt: Box::new(rt),
+            host_focused_node: None,
             bridge: fetcher,
             cssom: Box::new(cssom),
             child_cssoms,
@@ -1258,6 +1260,66 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         moved
     }
 
+    /// Visible top-context identity from the retained host, with text directives hidden.
+    pub fn current_document_address(&self) -> String {
+        let host = self.rt.host().borrow();
+        NavigationFragment::parse(host.base_url.as_deref().unwrap_or("about:blank")).script_visible_url
+    }
+    pub fn document_resolution_base(&self) -> Option<String> {
+        self.rt.host().borrow().document_base_url()
+    }
+    fn host_focus_is_current(&self, node: NodeId) -> bool {
+        let host = self.rt.host().borrow();
+        host.dom.is_live(node) && host.dom.tree_root(node) == Some(host.dom.document())
+            && !host.dom.form_control_is_disabled(node).unwrap_or(false)
+    }
+    pub fn clear_host_focus(&mut self) {
+        if let Some(node) = self.host_focused_node.take() {
+            let _ = self.rt.dispatch_form_focus(node.raw(), false);
+        }
+    }
+    pub fn focus_host_node(&mut self, node: NodeId) -> bool {
+        if !self.host_focus_is_current(node) { self.clear_host_focus(); return false; }
+        self.clear_host_focus();
+        if self.rt.dispatch_form_focus(node.raw(), true).unwrap_or(false) {
+            self.host_focused_node = Some(node); true
+        } else { false }
+    }
+    pub fn move_host_focus(&mut self, backward: bool) -> bool {
+        let nodes = self.with_dom(|dom| {
+            let mut stack = vec![dom.document()]; let mut nodes = Vec::new();
+            while let Some(node) = stack.pop() {
+                if let Some(name) = dom.element_name(node) {
+                    let attr = |key: &str| dom.attribute(node, &Namespace::default(), &LocalName::from(key));
+                    let tabindex = attr("tabindex").and_then(|v| v.parse::<i32>().ok());
+                    if !dom.form_control_is_disabled(node).unwrap_or(false)
+                        && tabindex.is_none_or(|i| i >= 0)
+                        && (matches!(name.local.as_ref(), "input" | "button" | "select" | "textarea")
+                            && !attr("type").is_some_and(|v| v.eq_ignore_ascii_case("hidden"))
+                            || name.local.as_ref() == "a" && attr("href").is_some() || tabindex.is_some()) {
+                        nodes.push(node);
+                    }
+                }
+                stack.extend(dom.dom_children(node).collect::<Vec<_>>().into_iter().rev());
+            }
+            nodes
+        });
+        let nodes = nodes.into_iter().filter(|node| self.cssom.fragment_rect(*node)
+            .is_some_and(|[_, _, w, h]| w > 0.0 && h > 0.0)).collect::<Vec<_>>();
+        if nodes.is_empty() { self.clear_host_focus(); return false; }
+        let current = self.host_focused_node.and_then(|node| nodes.iter().position(|n| *n == node));
+        let next = if backward { current.map_or(nodes.len()-1, |i| (i+nodes.len()-1)%nodes.len()) }
+            else { current.map_or(0, |i| (i+1)%nodes.len()) };
+        self.focus_host_node(nodes[next])
+    }
+    pub fn dispatch_host_keydown(&mut self, key: &str, alt: bool, ctrl: bool, meta: bool, shift: bool) -> bool {
+        let Some(node) = self.host_focused_node else { return false; };
+        if !self.host_focus_is_current(node) { self.clear_host_focus(); return false; }
+        let handled = self.rt.dispatch_form_keydown(node.raw(), key, script_runtime_api::FormKeyModifiers { alt, ctrl, meta, shift }).unwrap_or(false);
+        if !self.host_focus_is_current(node) { self.clear_host_focus(); }
+        self.drain_validation_reports(); self.flush_dom_capture(); handled
+    }
+
     pub fn click_at(&mut self, x: f32, y: f32) -> bool {
         !matches!(self.click_at_result(x, y), ScriptedClick::Miss)
     }
@@ -1272,6 +1334,7 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
     /// Dispatch a live-DOM click and preserve its typed external-navigation
     /// default for the embedding document session.
     pub fn click_at_result(&mut self, x: f32, y: f32) -> ScriptedClick {
+        if let Some(node) = self.click_target_at(x, y) { let _ = self.focus_host_node(node); }
         let outcome = self.cssom.click_at_result(&mut self.rt, x, y);
         self.drain_validation_reports();
         self.flush_dom_capture();
@@ -1282,7 +1345,9 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         let host = self.rt.host().borrow();
         let mut links = Vec::new();
         collect_livery_links(&host.dom, host.dom.document(), &self.cssom, &mut links);
-        links
+        let base = host.document_base_url();
+        links.into_iter().map(|(href, rect)|
+            (crate::resolve_href(base.as_deref().unwrap_or("about:blank"), &href), rect)).collect()
     }
 
     pub fn begin_text_selection(&mut self, x: f32, y: f32) -> bool {

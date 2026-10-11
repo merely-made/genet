@@ -152,9 +152,12 @@ completed corpus census or bounded slice does not close its enclosing feature.
   corrected 20/20 probe. The plan preserves the invalid original probe, timeout
   limit, source identities and receipts. Phase C is in progress: request-aware
   navigation, native encoders and document encoding are committed. FormData and
-  submission bindings pass 212 focused and 187 native tests; the full runtime
-  gate remains pending after the requested physics conversion handoff. Host
-  qualification and Checkpoint C publication remain pending.
+  submission bindings at `5c45bdf0a75` pass 212 focused, 187 native and 1,062
+  full runtime tests with every earlier pass preserved. The interrupted compile
+  receipt remains separate. Native activation and host submission routes have
+  scoped pre-integration Documents (135) and runtime (1,064) results. Mark
+  requested progress publication and upstream integration on 2026-10-11;
+  final host/WPT qualification and Checkpoint C remain pending.
 
 ## WPT census — the web platform beyond CSS
 

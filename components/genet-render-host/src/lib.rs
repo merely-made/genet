@@ -26,6 +26,8 @@
 //! ```
 
 use netrender::{ColorLoad, NetrenderOptions, Renderer, Scene};
+use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::time::Duration;
 
 #[derive(Default)]
 struct CaptureMasterCompositor {
@@ -50,6 +52,75 @@ pub struct RgbaFrame {
     pub width: u32,
     pub height: u32,
     pub rgba: Vec<u8>,
+}
+
+/// An owned RGBA copy whose mapping is completed on later host turns.
+///
+/// Polling never waits for the GPU, so a shared render device can keep servicing
+/// native window events and presentations while this capture is outstanding.
+/// The copy is queued when this value is created; later draws cannot replace
+/// the pixels it returns. A host owns its scheduling and deadline.
+pub struct PendingRgbaReadback {
+    device: wgpu::Device,
+    buffer: wgpu::Buffer,
+    mapped: Receiver<Result<(), wgpu::BufferAsyncError>>,
+    submission: wgpu::SubmissionIndex,
+    width: u32,
+    height: u32,
+    padded: u32,
+    completed: bool,
+}
+
+impl PendingRgbaReadback {
+    /// Service completed GPU work and return the captured pixels once mapped.
+    /// `None` means the host should yield and poll on a later turn.
+    pub fn poll(&mut self) -> Option<Result<RgbaFrame, String>> {
+        if self.completed {
+            return Some(Err("RGBA readback was already collected".into()));
+        }
+        if let Err(error) = self.device.poll(wgpu::PollType::Poll) {
+            self.completed = true;
+            return Some(Err(format!("RGBA readback poll failed: {error}")));
+        }
+        self.collect()
+    }
+
+    fn collect(&mut self) -> Option<Result<RgbaFrame, String>> {
+        match self.mapped.try_recv() {
+            Err(TryRecvError::Empty) => return None,
+            Err(TryRecvError::Disconnected) => {
+                self.completed = true;
+                return Some(Err("RGBA readback map callback disconnected".into()));
+            },
+            Ok(Err(error)) => {
+                self.completed = true;
+                return Some(Err(format!("RGBA readback map failed: {error}")));
+            },
+            Ok(Ok(())) => {},
+        }
+        self.completed = true;
+        Some(self.copy_mapped_rows())
+    }
+
+    fn copy_mapped_rows(&self) -> Result<RgbaFrame, String> {
+        let slice = self.buffer.slice(..);
+        let data = slice
+            .get_mapped_range()
+            .map_err(|error| format!("RGBA readback map failed: {error}"))?;
+        let unpadded = self.width as usize * 4;
+        let mut rgba = Vec::with_capacity(unpadded * self.height as usize);
+        for row in 0..self.height as usize {
+            let start = row * self.padded as usize;
+            rgba.extend_from_slice(&data[start..start + unpadded]);
+        }
+        drop(data);
+        self.buffer.unmap();
+        Ok(RgbaFrame {
+            width: self.width,
+            height: self.height,
+            rgba,
+        })
+    }
 }
 
 impl RgbaFrame {
@@ -92,6 +163,112 @@ mod rgba_frame_tests {
         };
         assert!(!black.is_blank());
         assert_ne!(black.digest(), transparent.digest());
+    }
+}
+
+#[cfg(test)]
+mod pending_readback_tests {
+    use super::*;
+    use std::time::Instant;
+
+    fn write(core: &RenderCore, texture: &wgpu::Texture, width: u32, height: u32, color: [u8; 4]) {
+        core.queue().write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &color.repeat((width * height) as usize),
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(width * 4),
+                rows_per_image: Some(height),
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+    }
+
+    fn collect(pending: &mut PendingRgbaReadback) -> RgbaFrame {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let before = Instant::now();
+            let result = pending.poll();
+            assert!(
+                before.elapsed() < Duration::from_millis(250),
+                "a readback poll blocked"
+            );
+            if let Some(result) = result {
+                return result.expect("capture maps successfully");
+            }
+            assert!(
+                Instant::now() < deadline,
+                "GPU readback exceeded five seconds"
+            );
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+
+    #[test]
+    fn pending_capture_keeps_original_rows_while_shared_device_draws_again() {
+        // This is an actual adapter test. A boot failure must fail the gate,
+        // rather than turn absent GPU evidence into a successful test result.
+        let core = RenderCore::boot(NetrenderOptions {
+            tile_cache_size: Some(4),
+            ..Default::default()
+        })
+        .expect("GPU adapter is required for the pending readback gate");
+        let adapter = core.renderer.wgpu_device.core.adapter.get_info();
+        eprintln!(
+            "pending readback adapter: {} ({:?}, {:?})",
+            adapter.name, adapter.backend, adapter.device_type
+        );
+        let (width, height) = (67, 3); // Both row padding and multiple rows.
+        let texture = core.device().create_texture(&wgpu::TextureDescriptor {
+            label: Some("pending RGBA readback regression"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        write(&core, &texture, width, height, [18, 52, 86, 255]);
+        let mut first = core.start_rgba8_readback(&texture, width, height).unwrap();
+        write(&core, &texture, width, height, [32, 48, 32, 255]);
+        let mut second = core.start_rgba8_readback(&texture, width, height).unwrap();
+        // Reversing collection order must not alias the first capture's pixels.
+        let second_frame = collect(&mut second);
+        let first_frame = collect(&mut first);
+        assert_eq!(
+            first_frame.rgba,
+            [18, 52, 86, 255].repeat((width * height) as usize)
+        );
+        assert_eq!(
+            second_frame.rgba,
+            [32, 48, 32, 255].repeat((width * height) as usize)
+        );
+        assert!(!first_frame.is_blank());
+        assert_ne!(first_frame.digest(), second_frame.digest());
+        assert!(matches!(first.poll(), Some(Err(error)) if error.contains("already collected")));
+        // A cancelled receiver must not make a later map callback panic.
+        let cancelled = core.start_rgba8_readback(&texture, width, height).unwrap();
+        drop(cancelled);
+        let frame = core.read_rgba8_texture(&texture, width, height).unwrap();
+        assert_eq!(frame.rgba, second_frame.rgba);
+        assert!(
+            core.start_rgba8_readback(&texture, u32::MAX, height)
+                .is_err()
+        );
     }
 }
 
@@ -408,14 +585,43 @@ impl RenderCore {
         width: u32,
         height: u32,
     ) -> Result<RgbaFrame, String> {
+        let mut pending = self.start_rgba8_readback(texture, width, height)?;
+        // Compatibility for offscreen/CLI callers. Event-loop hosts should use
+        // start_rgba8_readback and poll it on later turns instead of waiting.
+        pending
+            .device
+            .poll(wgpu::PollType::Wait {
+                submission_index: Some(pending.submission.clone()),
+                timeout: Some(Duration::from_secs(5)),
+            })
+            .map_err(|error| format!("RGBA readback poll failed: {error}"))?;
+        pending
+            .collect()
+            .unwrap_or_else(|| Err("RGBA readback mapping did not complete".into()))
+    }
+
+    /// Queue an RGBA8 copy and mapping without waiting for GPU completion.
+    /// Native event-loop hosts must use this path: blocking after presentation
+    /// can prevent the platform from servicing other windows on the same device.
+    pub fn start_rgba8_readback(
+        &self,
+        texture: &wgpu::Texture,
+        width: u32,
+        height: u32,
+    ) -> Result<PendingRgbaReadback, String> {
         let width = width.max(1);
         let height = height.max(1);
-        let unpadded = width * 4;
+        let unpadded = width
+            .checked_mul(4)
+            .ok_or("RGBA readback row size overflow")?;
         let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
-        let padded = unpadded.div_ceil(align) * align;
+        let padded = unpadded
+            .div_ceil(align)
+            .checked_mul(align)
+            .ok_or("RGBA readback aligned row size overflow")?;
         let buffer = self.device().create_buffer(&wgpu::BufferDescriptor {
             label: Some("genet render host RGBA readback"),
-            size: (padded * height) as u64,
+            size: u64::from(padded) * u64::from(height),
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
         });
@@ -445,29 +651,23 @@ impl RenderCore {
                 depth_or_array_layers: 1,
             },
         );
-        self.queue().submit(Some(encoder.finish()));
-        let slice = buffer.slice(..);
-        slice.map_async(wgpu::MapMode::Read, |_| {});
-        self.device()
-            .poll(wgpu::PollType::Wait {
-                submission_index: None,
-                timeout: None,
-            })
-            .map_err(|error| format!("RGBA readback poll failed: {error}"))?;
-        let data = slice
-            .get_mapped_range()
-            .map_err(|error| format!("RGBA readback map failed: {error}"))?;
-        let mut rgba = Vec::with_capacity((unpadded * height) as usize);
-        for row in 0..height {
-            let start = (row * padded) as usize;
-            rgba.extend_from_slice(&data[start..start + unpadded as usize]);
-        }
-        drop(data);
-        buffer.unmap();
-        Ok(RgbaFrame {
+        let submission = self.queue().submit(Some(encoder.finish()));
+        let (send, mapped) = mpsc::channel();
+        buffer
+            .slice(..)
+            .map_async(wgpu::MapMode::Read, move |result| {
+                // Cancellation drops the receiver; a late callback is harmless.
+                let _ = send.send(result);
+            });
+        Ok(PendingRgbaReadback {
+            device: self.device().clone(),
+            buffer,
+            mapped,
+            submission,
             width,
             height,
-            rgba,
+            padded,
+            completed: false,
         })
     }
 

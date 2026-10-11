@@ -1,0 +1,990 @@
+   Compiling rustversion v1.0.23
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:38:14
+   |
+38 |     (Script::from_str_unchecked("Adlm"), "𞤀𞤁𞤂𞤃𞤄𞤅𞤆𞤇𞤈𞤉𞤊𞤋𞤌𞤍𞤎𞤏"),
+   |              ^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:39:14
+   |
+39 |     (Script::from_str_unchecked("Aghb"), "𐔰𐔱𐔲𐔳𐔴𐔵𐔶𐔷𐔸𐔹𐔺𐔻𐔼𐔽𐔾𐔿"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:40:14
+   |
+40 |     (Script::from_str_unchecked("Ahom"), "𑜀𑜁𑜂𑜃𑜄𑜅𑜆𑜇𑜈𑜉𑜊𑜋𑜌𑜍𑜎𑜏"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:42:17
+   |
+42 |         Script::from_str_unchecked("Arab"),
+   |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:45:14
+   |
+45 |     (Script::from_str_unchecked("Armi"), "𐡀𐡁𐡂𐡃𐡄𐡅𐡆𐡇𐡈𐡉𐡊𐡋𐡌𐡍𐡎𐡏"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:46:14
+   |
+46 |     (Script::from_str_unchecked("Armn"), "ԱԲԳԴԵԶԷԸԹԺԻԼԽԾԿՀ"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:47:14
+   |
+47 |     (Script::from_str_unchecked("Avst"), "𐬀𐬁𐬂𐬃𐬄𐬅𐬆𐬇𐬈𐬉𐬊𐬋𐬌𐬍𐬎𐬏"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:49:17
+   |
+49 |         Script::from_str_unchecked("Bali"),
+   |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:52:14
+   |
+52 |     (Script::from_str_unchecked("Bamu"), "ꚠꚡꚢꚣꚤꚥꚦꚧꚨꚩꚪꚫꚬꚭꚮꚯ"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:53:14
+   |
+53 |     (Script::from_str_unchecked("Bass"), "𖫐𖫑𖫒𖫓𖫔𖫕𖫖𖫗𖫘𖫙𖫚𖫛𖫜𖫝𖫞𖫟"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:54:14
+   |
+54 |     (Script::from_str_unchecked("Batk"), "ᯀᯁᯂᯃᯄᯅᯆᯇᯈᯉᯊᯋᯌᯍᯎᯏ"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:55:14
+   |
+55 |     (Script::from_str_unchecked("Beng"), "ঀ\u{981}ংঃঅআইঈউঊঋঌএঐওঔ"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:56:14
+   |
+56 |     (Script::from_str_unchecked("Bhks"), "𑰀𑰁𑰂𑰃𑰄𑰅𑰆𑰇𑰈𑰊𑰋𑰌𑰍𑰎𑰏𑰐"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:58:17
+   |
+58 |         Script::from_str_unchecked("Bopo"),
+   |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:62:17
+   |
+62 |         Script::from_str_unchecked("Brah"),
+   |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:65:14
+   |
+65 |     (Script::from_str_unchecked("Brai"), "⠀⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:66:14
+   |
+66 |     (Script::from_str_unchecked("Bugi"), "ᨀᨁᨂᨃᨄᨅᨆᨇᨈᨉᨊᨋᨌᨍᨎᨏ"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:67:14
+   |
+67 |     (Script::from_str_unchecked("Buhd"), "ᝀᝁᝂᝃᝄᝅᝆᝇᝈᝉᝊᝋᝌᝍᝎᝏ"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:69:17
+   |
+69 |         Script::from_str_unchecked("Cakm"),
+   |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:72:14
+   |
+72 |     (Script::from_str_unchecked("Cans"), "᐀ᐁᐂᐃᐄᐅᐆᐇᐈᐉᐊᐋᐌᐍᐎᐏ"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:73:14
+   |
+73 |     (Script::from_str_unchecked("Cari"), "𐊠𐊡𐊢𐊣𐊤𐊥𐊦𐊧𐊨𐊩𐊪𐊫𐊬𐊭𐊮𐊯"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:74:14
+   |
+74 |     (Script::from_str_unchecked("Cham"), "ꨀꨁꨂꨃꨄꨅꨆꨇꨈꨉꨊꨋꨌꨍꨎꨏ"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:75:14
+   |
+75 |     (Script::from_str_unchecked("Cher"), "ᎠᎡᎢᎣᎤᎥᎦᎧᎨᎩᎪᎫᎬᎭᎮᎯ"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:76:14
+   |
+76 |     (Script::from_str_unchecked("Chrs"), "𐾰𐾱𐾲𐾳𐾴𐾵𐾶𐾷𐾸𐾹𐾺𐾻𐾼𐾽𐾾𐾿"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:77:14
+   |
+77 |     (Script::from_str_unchecked("Copt"), "ϢϣϤϥϦϧϨϩϪϫϬϭϮϯⲀⲁ"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:78:14
+   |
+78 |     (Script::from_str_unchecked("Cpmn"), "𒾐𒾑𒾒𒾓𒾔𒾕𒾖𒾗𒾘𒾙𒾚𒾛𒾜𒾝𒾞𒾟"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:79:14
+   |
+79 |     (Script::from_str_unchecked("Cprt"), "𐠀𐠁𐠂𐠃𐠄𐠅𐠈𐠊𐠋𐠌𐠍𐠎𐠏𐠐𐠑𐠒"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:80:14
+   |
+80 |     (Script::from_str_unchecked("Cyrl"), "ЀЁЂЃЄЅІЇЈЉЊЋЌЍЎЏ"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:82:17
+   |
+82 |         Script::from_str_unchecked("Deva"),
+   |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:85:14
+   |
+85 |     (Script::from_str_unchecked("Diak"), "𑤀𑤁𑤂𑤃𑤄𑤅𑤆𑤉𑤌𑤍𑤎𑤏𑤐𑤑𑤒𑤓"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:86:14
+   |
+86 |     (Script::from_str_unchecked("Dogr"), "𑠀𑠁𑠂𑠃𑠄𑠅𑠆𑠇𑠈𑠉𑠊𑠋𑠌𑠍𑠎𑠏"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:87:14
+   |
+87 |     (Script::from_str_unchecked("Dsrt"), "𐐀𐐁𐐂𐐃𐐄𐐅𐐆𐐇𐐈𐐉𐐊𐐋𐐌𐐍𐐎𐐏"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:88:14
+   |
+88 |     (Script::from_str_unchecked("Dupl"), "𛰀𛰁𛰂𛰃𛰄𛰅𛰆𛰇𛰈𛰉𛰊𛰋𛰌𛰍𛰎𛰏"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:89:14
+   |
+89 |     (Script::from_str_unchecked("Egyp"), "𓀀𓀁𓀂𓀃𓀄𓀅𓀆𓀇𓀈𓀉𓀊𓀋𓀌𓀍𓀎𓀏"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:90:14
+   |
+90 |     (Script::from_str_unchecked("Elba"), "𐔀𐔁𐔂𐔃𐔄𐔅𐔆𐔇𐔈𐔉𐔊𐔋𐔌𐔍𐔎𐔏"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:91:14
+   |
+91 |     (Script::from_str_unchecked("Elym"), "𐿠𐿡𐿢𐿣𐿤𐿥𐿦𐿧𐿨𐿩𐿪𐿫𐿬𐿭𐿮𐿯"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:92:14
+   |
+92 |     (Script::from_str_unchecked("Ethi"), "ሀሁሂሃሄህሆሇለሉሊላሌልሎሏ"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:93:14
+   |
+93 |     (Script::from_str_unchecked("Geor"), "ႠႡႢႣႤႥႦႧႨႩႪႫႬႭႮႯ"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:94:14
+   |
+94 |     (Script::from_str_unchecked("Glag"), "ⰀⰁⰂⰃⰄⰅⰆⰇⰈⰉⰊⰋⰌⰍⰎⰏ"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:95:14
+   |
+95 |     (Script::from_str_unchecked("Gong"), "𑵠𑵡𑵢𑵣𑵤𑵥𑵧𑵨𑵪𑵫𑵬𑵭𑵮𑵯𑵰𑵱"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:96:14
+   |
+96 |     (Script::from_str_unchecked("Gonm"), "𑴀𑴁𑴂𑴃𑴄𑴅𑴆𑴈𑴉𑴋𑴌𑴍𑴎𑴏𑴐𑴑"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:97:14
+   |
+97 |     (Script::from_str_unchecked("Goth"), "𐌰𐌱𐌲𐌳𐌴𐌵𐌶𐌷𐌸𐌹𐌺𐌻𐌼𐌽𐌾𐌿"),
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+  --> support/patches/fontique/src/script.rs:99:17
+   |
+99 |         Script::from_str_unchecked("Gran"),
+   |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:102:14
+    |
+102 |     (Script::from_str_unchecked("Grek"), "ͰͱͲͳ͵ͶͷͺͻͼͽͿ΄ΆΈΉ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:104:17
+    |
+104 |         Script::from_str_unchecked("Gujr"),
+    |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:108:17
+    |
+108 |         Script::from_str_unchecked("Guru"),
+    |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:111:14
+    |
+111 |     (Script::from_str_unchecked("Hang"), "가"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:112:14
+    |
+112 |     (Script::from_str_unchecked("Hani"), "今"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:113:14
+    |
+113 |     (Script::from_str_unchecked("Hano"), "ᜠᜡᜢᜣᜤᜥᜦᜧᜨᜩᜪᜫᜬᜭᜮᜯ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:114:14
+    |
+114 |     (Script::from_str_unchecked("Hatr"), "𐣠𐣡𐣢𐣣𐣤𐣥𐣦𐣧𐣨𐣩𐣪𐣫𐣬𐣭𐣮𐣯"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:116:17
+    |
+116 |         Script::from_str_unchecked("Hebr"),
+    |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:120:17
+    |
+120 |         Script::from_str_unchecked("Hira"),
+    |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:123:14
+    |
+123 |     (Script::from_str_unchecked("Hluw"), "𔐀𔐁𔐂𔐃𔐄𔐅𔐆𔐇𔐈𔐉𔐊𔐋𔐌𔐍𔐎𔐏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:124:14
+    |
+124 |     (Script::from_str_unchecked("Hmng"), "𖬀𖬁𖬂𖬃𖬄𖬅𖬆𖬇𖬈𖬉𖬊𖬋𖬌𖬍𖬎𖬏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:125:14
+    |
+125 |     (Script::from_str_unchecked("Hmnp"), "𞄀𞄁𞄂𞄃𞄄𞄅𞄆𞄇𞄈𞄉𞄊𞄋𞄌𞄍𞄎𞄏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:126:14
+    |
+126 |     (Script::from_str_unchecked("Hung"), "𐲀𐲁𐲂𐲃𐲄𐲅𐲆𐲇𐲈𐲉𐲊𐲋𐲌𐲍𐲎𐲏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:127:14
+    |
+127 |     (Script::from_str_unchecked("Ital"), "𐌀𐌁𐌂𐌃𐌄𐌅𐌆𐌇𐌈𐌉𐌊𐌋𐌌𐌍𐌎𐌏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:129:17
+    |
+129 |         Script::from_str_unchecked("Java"),
+    |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:132:14
+    |
+132 |     (Script::from_str_unchecked("Kali"), "꤀꤁꤂꤃꤄꤅꤆꤇꤈꤉ꤊꤋꤌꤍꤎꤏ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:134:17
+    |
+134 |         Script::from_str_unchecked("Kana"),
+    |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:138:17
+    |
+138 |         Script::from_str_unchecked("Kawi"),
+    |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:142:17
+    |
+142 |         Script::from_str_unchecked("Khar"),
+    |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:145:14
+    |
+145 |     (Script::from_str_unchecked("Khmr"), "កខគឃងចឆជឈញដឋឌឍណត"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:146:14
+    |
+146 |     (Script::from_str_unchecked("Khoj"), "𑈀𑈁𑈂𑈃𑈄𑈅𑈆𑈇𑈈𑈉𑈊𑈋𑈌𑈍𑈎𑈏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:148:17
+    |
+148 |         Script::from_str_unchecked("Kits"),
+    |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:151:14
+    |
+151 |     (Script::from_str_unchecked("Knda"), "ಀ\u{c81}ಂಃ಄ಅಆಇಈಉಊಋಌಎಏಐ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:153:17
+    |
+153 |         Script::from_str_unchecked("Kthi"),
+    |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:156:14
+    |
+156 |     (Script::from_str_unchecked("Lana"), "ᨠᨡᨢᨣᨤᨥᨦᨧᨨᨩᨪᨫᨬᨭᨮᨯ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:157:14
+    |
+157 |     (Script::from_str_unchecked("Laoo"), "ກຂຄຆງຈຉຊຌຍຎຏຐຑຒຓ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:158:14
+    |
+158 |     (Script::from_str_unchecked("Latn"), "abcdefgABCDEFG"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:159:14
+    |
+159 |     (Script::from_str_unchecked("Lepc"), "ᰀᰁᰂᰃᰄᰅᰆᰇᰈᰉᰊᰋᰌᰍᰎᰏ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:160:14
+    |
+160 |     (Script::from_str_unchecked("Limb"), "ᤀᤁᤂᤃᤄᤅᤆᤇᤈᤉᤊᤋᤌᤍᤎᤏ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:161:14
+    |
+161 |     (Script::from_str_unchecked("Lina"), "𐘀𐘁𐘂𐘃𐘄𐘅𐘆𐘇𐘈𐘉𐘊𐘋𐘌𐘍𐘎𐘏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:162:14
+    |
+162 |     (Script::from_str_unchecked("Linb"), "𐀀𐀁𐀂𐀃𐀄𐀅𐀆𐀇𐀈𐀉𐀊𐀋𐀍𐀎𐀏𐀐"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:163:14
+    |
+163 |     (Script::from_str_unchecked("Lisu"), "ꓐꓑꓒꓓꓔꓕꓖꓗꓘꓙꓚꓛꓜꓝꓞꓟ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:164:14
+    |
+164 |     (Script::from_str_unchecked("Lyci"), "𐊀𐊁𐊂𐊃𐊄𐊅𐊆𐊇𐊈𐊉𐊊𐊋𐊌𐊍𐊎𐊏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:165:14
+    |
+165 |     (Script::from_str_unchecked("Lydi"), "𐤠𐤡𐤢𐤣𐤤𐤥𐤦𐤧𐤨𐤩𐤪𐤫𐤬𐤭𐤮𐤯"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:166:14
+    |
+166 |     (Script::from_str_unchecked("Mahj"), "𑅐𑅑𑅒𑅓𑅔𑅕𑅖𑅗𑅘𑅙𑅚𑅛𑅜𑅝𑅞𑅟"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:167:14
+    |
+167 |     (Script::from_str_unchecked("Maka"), "𑻠𑻡𑻢𑻣𑻤𑻥𑻦𑻧𑻨𑻩𑻪𑻫𑻬𑻭𑻮𑻯"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:168:14
+    |
+168 |     (Script::from_str_unchecked("Mand"), "ࡀࡁࡂࡃࡄࡅࡆࡇࡈࡉࡊࡋࡌࡍࡎࡏ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:169:14
+    |
+169 |     (Script::from_str_unchecked("Mani"), "𐫀𐫁𐫂𐫃𐫄𐫅𐫆𐫇𐫈𐫉𐫊𐫋𐫌𐫍𐫎𐫏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:170:14
+    |
+170 |     (Script::from_str_unchecked("Marc"), "𑱰𑱱𑱲𑱳𑱴𑱵𑱶𑱷𑱸𑱹𑱺𑱻𑱼𑱽𑱾𑱿"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:171:14
+    |
+171 |     (Script::from_str_unchecked("Medf"), "𖹀𖹁𖹂𖹃𖹄𖹅𖹆𖹇𖹈𖹉𖹊𖹋𖹌𖹍𖹎𖹏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:172:14
+    |
+172 |     (Script::from_str_unchecked("Mend"), "𞠀𞠁𞠂𞠃𞠄𞠅𞠆𞠇𞠈𞠉𞠊𞠋𞠌𞠍𞠎𞠏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:173:14
+    |
+173 |     (Script::from_str_unchecked("Merc"), "𐦠𐦡𐦢𐦣𐦤𐦥𐦦𐦧𐦨𐦩𐦪𐦫𐦬𐦭𐦮𐦯"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:174:14
+    |
+174 |     (Script::from_str_unchecked("Mero"), "𐦀𐦁𐦂𐦃𐦄𐦅𐦆𐦇𐦈𐦉𐦊𐦋𐦌𐦍𐦎𐦏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:176:17
+    |
+176 |         Script::from_str_unchecked("Mlym"),
+    |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:179:14
+    |
+179 |     (Script::from_str_unchecked("Modi"), "𑘀𑘁𑘂𑘃𑘄𑘅𑘆𑘇𑘈𑘉𑘊𑘋𑘌𑘍𑘎𑘏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:181:17
+    |
+181 |         Script::from_str_unchecked("Mong"),
+    |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:184:14
+    |
+184 |     (Script::from_str_unchecked("Mroo"), "𖩀𖩁𖩂𖩃𖩄𖩅𖩆𖩇𖩈𖩉𖩊𖩋𖩌𖩍𖩎𖩏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:186:17
+    |
+186 |         Script::from_str_unchecked("Mtei"),
+    |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:189:14
+    |
+189 |     (Script::from_str_unchecked("Mult"), "𑊀𑊁𑊂𑊃𑊄𑊅𑊆𑊈𑊊𑊋𑊌𑊍𑊏𑊐𑊑𑊒"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:190:14
+    |
+190 |     (Script::from_str_unchecked("Mymr"), "ကခဂဃငစဆဇဈဉညဋဌဍဎဏ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:191:14
+    |
+191 |     (Script::from_str_unchecked("Nagm"), "𞓐𞓑𞓒𞓓𞓔𞓕𞓖𞓗𞓘𞓙𞓚𞓛𞓜𞓝𞓞𞓟"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:192:14
+    |
+192 |     (Script::from_str_unchecked("Nand"), "𑦠𑦡𑦢𑦣𑦤𑦥𑦦𑦧𑦪𑦫𑦬𑦭𑦮𑦯𑦰𑦱"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:193:14
+    |
+193 |     (Script::from_str_unchecked("Narb"), "𐪀𐪁𐪂𐪃𐪄𐪅𐪆𐪇𐪈𐪉𐪊𐪋𐪌𐪍𐪎𐪏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:194:14
+    |
+194 |     (Script::from_str_unchecked("Nbat"), "𐢀𐢁𐢂𐢃𐢄𐢅𐢆𐢇𐢈𐢉𐢊𐢋𐢌𐢍𐢎𐢏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:195:14
+    |
+195 |     (Script::from_str_unchecked("Newa"), "𑐀𑐁𑐂𑐃𑐄𑐅𑐆𑐇𑐈𑐉𑐊𑐋𑐌𑐍𑐎𑐏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:196:14
+    |
+196 |     (Script::from_str_unchecked("Nkoo"), "߀߁߂߃߄߅߆߇߈߉ߊߋߌߍߎߏ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:198:17
+    |
+198 |         Script::from_str_unchecked("Nshu"),
+    |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:202:17
+    |
+202 |         Script::from_str_unchecked("Ogam"),
+    |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:205:14
+    |
+205 |     (Script::from_str_unchecked("Olck"), "᱐᱑᱒᱓᱔᱕᱖᱗᱘᱙ᱚᱛᱜᱝᱞᱟ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:206:14
+    |
+206 |     (Script::from_str_unchecked("Orkh"), "𐰀𐰁𐰂𐰃𐰄𐰅𐰆𐰇𐰈𐰉𐰊𐰋𐰌𐰍𐰎𐰏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:207:14
+    |
+207 |     (Script::from_str_unchecked("Orya"), "\u{b01}ଂଃଅଆଇଈଉଊଋଌଏଐଓଔକ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:208:14
+    |
+208 |     (Script::from_str_unchecked("Osge"), "𐒰𐒱𐒲𐒳𐒴𐒵𐒶𐒷𐒸𐒹𐒺𐒻𐒼𐒽𐒾𐒿"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:209:14
+    |
+209 |     (Script::from_str_unchecked("Osma"), "𐒀𐒁𐒂𐒃𐒄𐒅𐒆𐒇𐒈𐒉𐒊𐒋𐒌𐒍𐒎𐒏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:210:14
+    |
+210 |     (Script::from_str_unchecked("Ougr"), "𐽰𐽱𐽲𐽳𐽴𐽵𐽶𐽷𐽸𐽹𐽺𐽻𐽼𐽽𐽾𐽿"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:211:14
+    |
+211 |     (Script::from_str_unchecked("Palm"), "𐡠𐡡𐡢𐡣𐡤𐡥𐡦𐡧𐡨𐡩𐡪𐡫𐡬𐡭𐡮𐡯"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:212:14
+    |
+212 |     (Script::from_str_unchecked("Pauc"), "𑫀𑫁𑫂𑫃𑫄𑫅𑫆𑫇𑫈𑫉𑫊𑫋𑫌𑫍𑫎𑫏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:213:14
+    |
+213 |     (Script::from_str_unchecked("Perm"), "𐍐𐍑𐍒𐍓𐍔𐍕𐍖𐍗𐍘𐍙𐍚𐍛𐍜𐍝𐍞𐍟"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:214:14
+    |
+214 |     (Script::from_str_unchecked("Phag"), "ꡀꡁꡂꡃꡄꡅꡆꡇꡈꡉꡊꡋꡌꡍꡎꡏ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:215:14
+    |
+215 |     (Script::from_str_unchecked("Phli"), "𐭠𐭡𐭢𐭣𐭤𐭥𐭦𐭧𐭨𐭩𐭪𐭫𐭬𐭭𐭮𐭯"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:216:14
+    |
+216 |     (Script::from_str_unchecked("Phlp"), "𐮀𐮁𐮂𐮃𐮄𐮅𐮆𐮇𐮈𐮉𐮊𐮋𐮌𐮍𐮎𐮏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:217:14
+    |
+217 |     (Script::from_str_unchecked("Phnx"), "𐤀𐤁𐤂𐤃𐤄𐤅𐤆𐤇𐤈𐤉𐤊𐤋𐤌𐤍𐤎𐤏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:218:14
+    |
+218 |     (Script::from_str_unchecked("Plrd"), "𖼀𖼁𖼂𖼃𖼄𖼅𖼆𖼇𖼈𖼉𖼊𖼋𖼌𖼍𖼎𖼏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:219:14
+    |
+219 |     (Script::from_str_unchecked("Prti"), "𐭀𐭁𐭂𐭃𐭄𐭅𐭆𐭇𐭈𐭉𐭊𐭋𐭌𐭍𐭎𐭏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:220:14
+    |
+220 |     (Script::from_str_unchecked("Rjng"), "ꤰꤱꤲꤳꤴꤵꤶꤷꤸꤹꤺꤻꤼꤽꤾꤿ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:221:14
+    |
+221 |     (Script::from_str_unchecked("Rohg"), "𐴀𐴁𐴂𐴃𐴄𐴅𐴆𐴇𐴈𐴉𐴊𐴋𐴌𐴍𐴎𐴏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:222:14
+    |
+222 |     (Script::from_str_unchecked("Runr"), "ᚠᚡᚢᚣᚤᚥᚦᚧᚨᚩᚪᚫᚬᚭᚮᚯ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:223:14
+    |
+223 |     (Script::from_str_unchecked("Samr"), "ࠀࠁࠂࠃࠄࠅࠆࠇࠈࠉࠊࠋࠌࠍࠎࠏ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:224:14
+    |
+224 |     (Script::from_str_unchecked("Sarb"), "𐩠𐩡𐩢𐩣𐩤𐩥𐩦𐩧𐩨𐩩𐩪𐩫𐩬𐩭𐩮𐩯"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:225:14
+    |
+225 |     (Script::from_str_unchecked("Saur"), "ꢀꢁꢂꢃꢄꢅꢆꢇꢈꢉꢊꢋꢌꢍꢎꢏ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:226:14
+    |
+226 |     (Script::from_str_unchecked("Sgnw"), "𝠀𝠁𝠂𝠃𝠄𝠅𝠆𝠇𝠈𝠉𝠊𝠋𝠌𝠍𝠎𝠏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:227:14
+    |
+227 |     (Script::from_str_unchecked("Shaw"), "𐑐𐑑𐑒𐑓𐑔𐑕𐑖𐑗𐑘𐑙𐑚𐑛𐑜𐑝𐑞𐑟"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:229:17
+    |
+229 |         Script::from_str_unchecked("Shrd"),
+    |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:232:14
+    |
+232 |     (Script::from_str_unchecked("Sidd"), "𑖀𑖁𑖂𑖃𑖄𑖅𑖆𑖇𑖈𑖉𑖊𑖋𑖌𑖍𑖎𑖏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:233:14
+    |
+233 |     (Script::from_str_unchecked("Sind"), "𑊰𑊱𑊲𑊳𑊴𑊵𑊶𑊷𑊸𑊹𑊺𑊻𑊼𑊽𑊾𑊿"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:234:14
+    |
+234 |     (Script::from_str_unchecked("Sinh"), "\u{d81}ංඃඅආඇඈඉඊඋඌඍඎඏඐඑ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:235:14
+    |
+235 |     (Script::from_str_unchecked("Sogd"), "𐼰𐼱𐼲𐼳𐼴𐼵𐼶𐼷𐼸𐼹𐼺𐼻𐼼𐼽𐼾𐼿"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:236:14
+    |
+236 |     (Script::from_str_unchecked("Sogo"), "𐼀𐼁𐼂𐼃𐼄𐼅𐼆𐼇𐼈𐼉𐼊𐼋𐼌𐼍𐼎𐼏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:237:14
+    |
+237 |     (Script::from_str_unchecked("Sora"), "𑃐𑃑𑃒𑃓𑃔𑃕𑃖𑃗𑃘𑃙𑃚𑃛𑃜𑃝𑃞𑃟"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:239:17
+    |
+239 |         Script::from_str_unchecked("Soyo"),
+    |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:243:17
+    |
+243 |         Script::from_str_unchecked("Sund"),
+    |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:247:17
+    |
+247 |         Script::from_str_unchecked("Sylo"),
+    |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:250:14
+    |
+250 |     (Script::from_str_unchecked("Syrc"), "܀܁܂܃܄܅܆܇܈܉܊܋܌܍\u{70f}ܐ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:251:14
+    |
+251 |     (Script::from_str_unchecked("Tagb"), "ᝠᝡᝢᝣᝤᝥᝦᝧᝨᝩᝪᝫᝬᝮᝯᝰ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:252:14
+    |
+252 |     (Script::from_str_unchecked("Takr"), "𑚀𑚁𑚂𑚃𑚄𑚅𑚆𑚇𑚈𑚉𑚊𑚋𑚌𑚍𑚎𑚏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:253:14
+    |
+253 |     (Script::from_str_unchecked("Tale"), "ᥐᥑᥒᥓᥔᥕᥖᥗᥘᥙᥚᥛᥜᥝᥞᥟ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:254:14
+    |
+254 |     (Script::from_str_unchecked("Talu"), "ᦀᦁᦂᦃᦄᦅᦆᦇᦈᦉᦊᦋᦌᦍᦎᦏ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:255:14
+    |
+255 |     (Script::from_str_unchecked("Taml"), "\u{b82}ஃஅஆஇஈஉஊஎஏஐஒஓஔகங"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:257:17
+    |
+257 |         Script::from_str_unchecked("Tang"),
+    |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:260:14
+    |
+260 |     (Script::from_str_unchecked("Tavt"), "ꪀꪁꪂꪃꪄꪅꪆꪇꪈꪉꪊꪋꪌꪍꪎꪏ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:262:17
+    |
+262 |         Script::from_str_unchecked("Telu"),
+    |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:265:14
+    |
+265 |     (Script::from_str_unchecked("Tfng"), "ⴰⴱⴲⴳⴴⴵⴶⴷⴸⴹⴺⴻⴼⴽⴾⴿ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:266:14
+    |
+266 |     (Script::from_str_unchecked("Tglg"), "ᜀᜁᜂᜃᜄᜅᜆᜇᜈᜉᜊᜋᜌᜍᜎᜏ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:267:14
+    |
+267 |     (Script::from_str_unchecked("Thaa"), "ހށނރބޅކއވމފދތލގޏ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:268:14
+    |
+268 |     (Script::from_str_unchecked("Thai"), "กขฃคฅฆงจฉชซฌญฎฏฐ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:269:14
+    |
+269 |     (Script::from_str_unchecked("Tibt"), "ༀ༁༂༃༄༅༆༇༈༉༊་༌།༎༏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:270:14
+    |
+270 |     (Script::from_str_unchecked("Tirh"), "𑒀𑒁𑒂𑒃𑒄𑒅𑒆𑒇𑒈𑒉𑒊𑒋𑒌𑒍𑒎𑒏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:271:14
+    |
+271 |     (Script::from_str_unchecked("Tnsa"), "𖩰𖩱𖩲𖩳𖩴𖩵𖩶𖩷𖩸𖩹𖩺𖩻𖩼𖩽𖩾𖩿"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:272:14
+    |
+272 |     (Script::from_str_unchecked("Toto"), "𞊐𞊑𞊒𞊓𞊔𞊕𞊖𞊗𞊘𞊙𞊚𞊛𞊜𞊝𞊞𞊟"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:273:14
+    |
+273 |     (Script::from_str_unchecked("Ugar"), "𐎀𐎁𐎂𐎃𐎄𐎅𐎆𐎇𐎈𐎉𐎊𐎋𐎌𐎍𐎎𐎏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:274:14
+    |
+274 |     (Script::from_str_unchecked("Vaii"), "ꔀꔁꔂꔃꔄꔅꔆꔇꔈꔉꔊꔋꔌꔍꔎꔏ"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:275:14
+    |
+275 |     (Script::from_str_unchecked("Vith"), "𐕰𐕱𐕲𐕳𐕴𐕵𐕶𐕷𐕸𐕹𐕺𐕼𐕽𐕾𐕿𐖀"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:276:14
+    |
+276 |     (Script::from_str_unchecked("Wara"), "𑢠𑢡𑢢𑢣𑢤𑢥𑢦𑢧𑢨𑢩𑢪𑢫𑢬𑢭𑢮𑢯"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:277:14
+    |
+277 |     (Script::from_str_unchecked("Wcho"), "𞋀𞋁𞋂𞋃𞋄𞋅𞋆𞋇𞋈𞋉𞋊𞋋𞋌𞋍𞋎𞋏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:278:14
+    |
+278 |     (Script::from_str_unchecked("Xpeo"), "𐎠𐎡𐎢𐎣𐎤𐎥𐎦𐎧𐎨𐎩𐎪𐎫𐎬𐎭𐎮𐎯"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:279:14
+    |
+279 |     (Script::from_str_unchecked("Xsux"), "𒀀𒀁𒀂𒀃𒀄𒀅𒀆𒀇𒀈𒀉𒀊𒀋𒀌𒀍𒀎𒀏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:280:14
+    |
+280 |     (Script::from_str_unchecked("Yezi"), "𐺀𐺁𐺂𐺃𐺄𐺅𐺆𐺇𐺈𐺉𐺊𐺋𐺌𐺍𐺎𐺏"),
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:282:17
+    |
+282 |         Script::from_str_unchecked("Yiii"),
+    |                 ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated associated function `parlance::Script::from_str_unchecked`: You should use `from_bytes(*b"....")` instead.
+   --> support/patches/fontique/src/script.rs:286:17
+    |
+286 |         Script::from_str_unchecked("Zanb"),
+    |                 ^^^^^^^^^^^^^^^^^^
+
+warning: `genet-fontique` (lib) generated 161 warnings
+    Checking simdutf8 v0.1.5
+    Checking core_detect v1.0.0
+   Compiling multiversion_no_op v1.0.0
+    Checking genet-host-api v0.2.0 (/Users/markik/Code/worktrees/genet-vello-release-adoption/components/genet-host-api)
+    Checking genet-document-resources v0.2.1 (/Users/markik/Code/worktrees/genet-vello-release-adoption/components/genet-document-resources)
+warning: use of deprecated method `icu_properties::props::BidiClass::to_icu4c_value`: please comment on https://github.com/unicode-org/icu4x/issues/6067 if you need this
+   --> support/patches/parley/src/bidi.rs:893:13
+    |
+893 |     1 << (t.to_icu4c_value() as u32)
+    |             ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: `genet-parley` (lib) generated 1 warning
+    Checking genet-livery v0.0.4 (/Users/markik/Code/worktrees/genet-vello-release-adoption/components/genet-livery)
+   Compiling encoding_rs v0.8.42
+    Checking document-session-api v0.1.0 (/Users/markik/Code/worktrees/genet-vello-release-adoption/components/shared/document-session-api)
+    Checking genet-scripted-dom v0.1.2 (/Users/markik/Code/worktrees/genet-vello-release-adoption/components/genet-scripted-dom)
+    Checking genet-render v0.2.0 (/Users/markik/Code/worktrees/genet-vello-release-adoption/components/genet-render)
+    Finished `dev` profile [unoptimized] target(s) in 9.47s

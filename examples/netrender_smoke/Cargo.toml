@@ -5,10 +5,8 @@ edition = "2024"
 publish = false
 
 # Standalone project — intentionally NOT a genet workspace member.
-# The genet workspace Cargo.toml patches webrender from a path that no
-# longer exists (the directory was renamed to netrender in netrender commit
-# c9481b04b); that patch failure blocks the full workspace. This example proves
-# the netrender embedder hookup independently, without Servo.
+# This example exercises the current Scene renderer without the Genet runtime.
+# Its independent root must restate the maintained Classic source patches.
 #
 # Build:
 #   cargo run --manifest-path examples/netrender_smoke/Cargo.toml
@@ -24,13 +22,13 @@ path = "src/main.rs"
 # netrender lives in the sibling netrender/ workspace. Git dep (not a path dep)
 # so this standalone example clones-and-builds anywhere; a local netrender
 # checkout is picked up via the gitignored `.cargo/config.toml` `paths` override.
-netrender = { git = "https://github.com/merely-made/netrender.git", rev = "6f1a4fe70a58a57ba6b248acfa662f0ec4e44a25" }
+netrender = { git = "https://github.com/merely-made/netrender.git", rev = "46606610cd387e2e6956d8a3ebbcf442eab210d9" }
 wgpu = "30"
 pollster = "0.4"
 
-# netrender pulls vello, and upstream vello 0.10 still requires wgpu 29.
-# Patches are per-workspace-root and this example is its own root, so it
-# restates genet's redirect to the owned wgpu-30 fork. Retires when a
-# wgpu-30 vello ships upstream.
+# Match the root's Classic 0.11 provider and encoding/shader source. Patches
+# are per-workspace-root and are not inherited from the Netrender dependency.
 [patch.crates-io]
-vello = { git = "https://github.com/mark-ik/vello.git", tag = "vello-0.10.0" }
+netrender-vello = { git = "https://github.com/mark-ik/vello", rev = "5862bba26c8a9f56f6a5fdc8ea6966b360a5d63a" }
+vello_encoding = { git = "https://github.com/mark-ik/vello", rev = "5862bba26c8a9f56f6a5fdc8ea6966b360a5d63a" }
+vello_shaders = { git = "https://github.com/mark-ik/vello", rev = "5862bba26c8a9f56f6a5fdc8ea6966b360a5d63a" }

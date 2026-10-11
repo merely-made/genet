@@ -14,6 +14,40 @@ Chrome, structural-inspection, and shell accessibility slices completed
 held-source Fleece/Pelt receipt; Reader's partial Focus-only link tree completed
 2026-08-28. IOSurface and DMA-BUF imports remain separate platform lanes.
 
+## Shared native capture follow-up (2026-10-09)
+
+**Status:** shared renderer implementation qualified; Mere integration and
+fresh multiwindow acceptance remain open. A macOS Pelt application appearance capture stalled
+inside `RenderCore::read_rgba8_texture` after presentation, with the main
+thread waiting indefinitely in Metal device maintenance. The retained process
+sample is `Code/tabard-app-receipts/2026-10-09/pelt/fresh-05/process-sample.txt`.
+
+The shared render host now offers `start_rgba8_readback`, which submits the
+copy and returns an owned `PendingRgbaReadback`. Its `poll` services completed
+GPU work without waiting; the host yields to its event loop between polls.
+Map callback errors are propagated, and the queued copy keeps its original
+pixels when other windows use the same device. The synchronous read method
+remains for offscreen callers with a five-second timeout tied to its own copy
+submission. Native Cambium/Mesquite consumers live in Mere and must use the
+pending path while preserving the original capture request and presentation
+identity.
+
+Done conditions are an actual-adapter test of padded rows, independently
+pending copies collected in reverse order, cancellation, and bounded polls;
+Mere's native capture deadline and presentation-pairing tests; and a fresh
+multiwindow Pelt appearance receipt with real presentations and nonblank
+captures. The old failed receipt remains failed. This change does not qualify
+Windows/Linux presentation or browser captures by itself.
+
+The focused `cargo test -p genet-render-host` gate passed all four tests on
+2026-10-09, including the new pending-copy test and the existing ordered
+external-texture composition test. The actual adapter was **AMD Radeon Pro
+Vega 56, Metal, DiscreteGpu**. Gate log: `/tmp/genet-native-capture-tests.log`.
+The test requires an adapter rather than treating absent GPU execution as a
+successful receipt. Source starts from current origin `a0d95ebd6e2`; that
+upstream delta also contains Boa/forms changes, so consumers must requalify
+their own dependency closure when advancing their coherent Genet pin.
+
 ## Objective
 
 Restore Pelt as Genet's small reference browser host: embeddable, recursively

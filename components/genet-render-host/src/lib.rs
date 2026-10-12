@@ -38,6 +38,32 @@ pub use recovery::{
     ReplacementFactory, SharedRenderCore,
 };
 
+/// A rendering refusal on the actual host device. Provider errors do not
+/// imply device loss; only the installed monitor can authorize recovery.
+#[derive(Clone, Debug)]
+pub enum RasterizeFailure {
+    DeviceLost(DeviceLossNotice),
+    ProviderError(Arc<netrender::VelloError>),
+}
+impl std::fmt::Display for RasterizeFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DeviceLost(loss) => write!(f, "rasterization refused: DeviceLost({loss:?})"),
+            Self::ProviderError(error) => write!(f, "rasterization refused: {error}"),
+        }
+    }
+}
+impl std::error::Error for RasterizeFailure {}
+
+#[cfg(not(target_arch = "wasm32"))]
+struct ScopedRasterResult {
+    result: Result<(wgpu::Texture, wgpu::TextureView), RasterizeFailure>,
+    #[cfg(test)]
+    captured_scope_error: Option<Arc<netrender::VelloError>>,
+    #[cfg(test)]
+    scope_pending: bool,
+}
+
 pub enum SurfaceAcquire {
     Frame(wgpu::SurfaceTexture),
     SurfaceLost,
@@ -775,8 +801,9 @@ impl RenderCore {
         (tex, view)
     }
 
-    /// Host-owned drawing refuses a notified lost generation before and after
-    /// rasterization. Surface acquisition still checks again before present.
+    /// Checked host drawing keeps provider refusals distinct from an actual
+    /// device loss. Creation/submission participates in loss admission, and
+    /// the monitor is checked again before any output is returned.
     pub fn try_rasterize_scaled_for(
         &self,
         surface: u64,
@@ -785,15 +812,158 @@ impl RenderCore {
         h: u32,
         clear: ColorLoad,
         scale: f32,
-    ) -> Result<(wgpu::Texture, wgpu::TextureView), DeviceLossNotice> {
-        if let Some(loss) = self.device_failure() {
-            return Err(loss);
+    ) -> Result<(wgpu::Texture, wgpu::TextureView), RasterizeFailure> {
+        self.rasterize_scaled_for_admitted(surface, scene, w, h, clear, scale, || {})
+    }
+
+    // Hooks are private per-call seams. Production passes no-ops; no mutable
+    // global injection state exists.
+    #[allow(clippy::too_many_arguments)]
+    fn rasterize_scaled_for_admitted(
+        &self,
+        surface: u64,
+        scene: &Scene,
+        w: u32,
+        h: u32,
+        clear: ColorLoad,
+        scale: f32,
+        after_admission: impl FnOnce(),
+    ) -> Result<(wgpu::Texture, wgpu::TextureView), RasterizeFailure> {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.rasterize_scaled_for_scoped(
+                surface,
+                scene,
+                w,
+                h,
+                clear,
+                scale,
+                after_admission,
+                || {},
+            )
+            .result
         }
-        let output = self.rasterize_scaled_for(surface, scene, w, h, clear, scale);
-        if let Some(loss) = self.device_failure() {
-            return Err(loss);
+        #[cfg(target_arch = "wasm32")]
+        {
+            // WebGPU scope results are asynchronous JS promises. This existing
+            // synchronous API cannot qualify them without an async host seam;
+            // do not block JS or drop a promise and call the frame successful.
+            let _operation = self
+                .loss
+                .begin_operation()
+                .map_err(RasterizeFailure::DeviceLost)?;
+            let (texture, view) = self.scene_target(w, h);
+            after_admission();
+            if let Some(loss) = self.device_failure() {
+                return Err(RasterizeFailure::DeviceLost(loss));
+            }
+            let rendered = self
+                .renderer
+                .render_vello_scaled_for_checked(surface, scene, &view, clear, scale);
+            if let Some(loss) = self.device_failure() {
+                return Err(RasterizeFailure::DeviceLost(loss));
+            }
+            rendered.map_err(|error| RasterizeFailure::ProviderError(Arc::new(error)))?;
+            self.log_raster_spans(w, h);
+            Ok((texture, view))
         }
-        Ok(output)
+    }
+
+    /// Native target creation and checked raster submission are covered by
+    /// device error scopes. This does not scope host composition, presentation,
+    /// producer upload/staging, or browser asynchronous validation.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[allow(clippy::too_many_arguments)]
+    fn rasterize_scaled_for_scoped(
+        &self,
+        surface: u64,
+        scene: &Scene,
+        w: u32,
+        h: u32,
+        clear: ColorLoad,
+        scale: f32,
+        after_admission: impl FnOnce(),
+        before_renderer: impl FnOnce(),
+    ) -> ScopedRasterResult {
+        let _operation = match self.loss.begin_operation() {
+            Ok(operation) => operation,
+            Err(loss) => {
+                return ScopedRasterResult {
+                    result: Err(RasterizeFailure::DeviceLost(loss)),
+                    #[cfg(test)]
+                    captured_scope_error: None,
+                    #[cfg(test)]
+                    scope_pending: false,
+                };
+            },
+        };
+        // wgpu 30 scopes are thread-local and must pop in reverse order.
+        let out_of_memory = self
+            .device()
+            .push_error_scope(wgpu::ErrorFilter::OutOfMemory);
+        let internal = self.device().push_error_scope(wgpu::ErrorFilter::Internal);
+        let validation = self
+            .device()
+            .push_error_scope(wgpu::ErrorFilter::Validation);
+        let rendered = (|| {
+            let (texture, view) = self.scene_target(w, h);
+            after_admission();
+            if let Some(loss) = self.device_failure() {
+                return Err(RasterizeFailure::DeviceLost(loss));
+            }
+            // Regression destroys a device after the final check, then lets
+            // the actual renderer touch its buffers inside these real scopes.
+            before_renderer();
+            self.renderer
+                .render_vello_scaled_for_checked(surface, scene, &view, clear, scale)
+                .map_err(|error| RasterizeFailure::ProviderError(Arc::new(error)))?;
+            Ok((texture, view))
+        })();
+        let mut scoped_error = None;
+        let mut scope_pending = false;
+        for scope in [validation, internal, out_of_memory] {
+            use std::future::Future as _;
+            let mut future = Box::pin(scope.pop());
+            let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+            // Native wgpu-core currently returns ready(scope.error). A future
+            // backend that returns Pending is a typed refusal, never success.
+            match future.as_mut().poll(&mut context) {
+                std::task::Poll::Ready(Some(error)) => {
+                    if scoped_error.is_none() {
+                        scoped_error =
+                            Some(Arc::new(netrender::VelloError::WgpuErrorFromScope(error)));
+                    }
+                },
+                std::task::Poll::Ready(None) => {},
+                std::task::Poll::Pending => scope_pending = true,
+            }
+        }
+        let result = if let Some(loss) = self.device_failure() {
+            Err(RasterizeFailure::DeviceLost(loss))
+        } else if let Some(error) = &scoped_error {
+            Err(RasterizeFailure::ProviderError(error.clone()))
+        } else if scope_pending {
+            Err(RasterizeFailure::ProviderError(Arc::new(
+                netrender::VelloError::WgpuErrorFromScope(wgpu::Error::Internal {
+                    source: Box::new(std::io::Error::other(
+                        "native GPU error scope did not resolve synchronously",
+                    )),
+                    description: "native GPU error scope outcome is unavailable".into(),
+                }),
+            )))
+        } else {
+            rendered
+        };
+        if result.is_ok() {
+            self.log_raster_spans(w, h);
+        }
+        ScopedRasterResult {
+            result,
+            #[cfg(test)]
+            captured_scope_error: scoped_error,
+            #[cfg(test)]
+            scope_pending,
+        }
     }
 
     /// Like [`rasterize`](Self::rasterize) but for a scene laid out in **logical**
@@ -985,5 +1155,273 @@ impl WindowSurface {
                 }
             },
         }
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod admitted_raster_tests {
+    use super::*;
+    #[test]
+    #[ignore = "actual device destruction; coordinator executes serialized GPU gate"]
+    fn actual_device_destroy_after_raster_admission_is_typed_and_does_not_panic() {
+        let core = RenderCore::boot(NetrenderOptions {
+            tile_cache_size: Some(8),
+            enable_vello: true,
+            ..Default::default()
+        })
+        .expect("an actual adapter is required for this ignored gate");
+        let scene = Scene::new(32, 24);
+        let result = core.rasterize_scaled_for_admitted(
+            0x6164_6d69_7373,
+            &scene,
+            32,
+            24,
+            ColorLoad::Clear(wgpu::Color::TRANSPARENT),
+            1.0,
+            || {
+                core.device().destroy();
+                let deadline = std::time::Instant::now() + Duration::from_secs(5);
+                while core.device_failure().is_none() {
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "actual loss callback did not arrive within five seconds"
+                    );
+                    let _ = core.device().poll(wgpu::PollType::Poll);
+                    std::thread::yield_now();
+                }
+                assert!(
+                    core.loss_notice().is_none(),
+                    "the admitted raster still prevents replacement readiness"
+                );
+            },
+        );
+        match result {
+            Err(RasterizeFailure::DeviceLost(loss)) => {
+                assert_eq!(loss, core.loss_notice().expect("admission has now drained"));
+                assert_eq!(loss.reason, wgpu::DeviceLostReason::Destroyed);
+            },
+            _ => panic!("mid-admission destruction must refuse the frame without unwinding"),
+        }
+        assert!(matches!(
+            core.try_rasterize_scaled_for(
+                0x6164_6d69_7373,
+                &scene,
+                32,
+                24,
+                ColorLoad::Clear(wgpu::Color::TRANSPARENT),
+                1.0,
+            ),
+            Err(RasterizeFailure::DeviceLost(_))
+        ));
+    }
+    #[test]
+    #[ignore = "actual healthy-device curve refusal; coordinator executes serialized GPU gate"]
+    fn finite_huge_curve_returns_provider_error_and_valid_raster_recovers_on_same_core() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::time::Instant;
+        let core = Arc::new(
+            RenderCore::boot(NetrenderOptions {
+                tile_cache_size: Some(8),
+                enable_vello: true,
+                ..Default::default()
+            })
+            .expect("an actual adapter is required for this ignored gate"),
+        );
+        let calls = Arc::new(AtomicUsize::new(0));
+        let counted = calls.clone();
+        let owner = SharedRenderCore::with_factory(
+            core.clone(),
+            Arc::new(move || {
+                counted.fetch_add(1, Ordering::SeqCst);
+                Err("healthy provider refusal must never request replacement".into())
+            }),
+        );
+        let generation = core.generation();
+        // All GPU/readback work after boot shares one finite deadline. Large
+        // coordinates remain a four-command CPU path and a 32x24 target;
+        // the actual estimate must refuse before allocating curve scratch.
+        let deadline = Instant::now() + Duration::from_secs(5);
+        fn pixels(core: &RenderCore, texture: &wgpu::Texture, deadline: Instant) -> RgbaFrame {
+            let mut pending = core.start_rgba8_readback(texture, 32, 24).unwrap();
+            loop {
+                assert!(
+                    Instant::now() < deadline,
+                    "healthy-refusal gate exceeded five seconds"
+                );
+                if let Some(frame) = pending.poll() {
+                    return frame.unwrap();
+                }
+                std::thread::yield_now();
+            }
+        }
+        let mut valid = Scene::new(32, 24);
+        valid.push_rect(0.0, 0.0, 32.0, 24.0, [0.25, 0.5, 0.75, 1.0]);
+        let (baseline_texture, _) = core
+            .try_rasterize_scaled_for(
+                0x6865_616c_7468,
+                &valid,
+                32,
+                24,
+                ColorLoad::Clear(wgpu::Color::TRANSPARENT),
+                1.0,
+            )
+            .unwrap();
+        let baseline = pixels(&core, &baseline_texture, deadline);
+        assert!(!baseline.is_blank());
+        while core.renderer().poll_vello_curve_quality().unwrap() != Some((0, 0)) {
+            assert!(
+                Instant::now() < deadline,
+                "baseline quality observation exceeded five seconds"
+            );
+            std::thread::yield_now();
+        }
+        let mut huge = Scene::new(32, 24);
+        let mut path = netrender::scene::ScenePath::new();
+        path.move_to(0.0, 0.0)
+            .cubic_to(0.0, 1e30, 1e30, 1e30, 31.0, 0.0)
+            .line_to(0.0, 0.0)
+            .close();
+        huge.push_shape_filled(path, [1.0, 0.0, 0.0, 1.0]);
+        match core.try_rasterize_scaled_for(
+            0x6865_616c_7468,
+            &huge,
+            32,
+            24,
+            ColorLoad::Clear(wgpu::Color::TRANSPARENT),
+            1.0,
+        ) {
+            Err(RasterizeFailure::ProviderError(error)) => {
+                assert!(
+                    matches!(&*error, netrender::VelloError::CurveEstimateLimit { lines, limit }
+                    if *lines as usize > *limit)
+                );
+            },
+            _ => panic!("the real finite curve estimate must return its typed provider refusal"),
+        }
+        assert_eq!(
+            core.renderer().vello_curve_quality_status(),
+            Some((0, 0)),
+            "estimate refusal must not submit a huge frame or allocate its quality counters"
+        );
+        assert!(core.device_failure().is_none());
+        assert_eq!(core.generation(), generation);
+        assert!(Arc::ptr_eq(&owner.current().unwrap(), &core));
+        assert!(
+            matches!(owner.status(), RecoveryStatus::Ready { generation: actual } if actual == generation)
+        );
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        let (after_texture, _) = core
+            .try_rasterize_scaled_for(
+                0x6865_616c_7468,
+                &valid,
+                32,
+                24,
+                ColorLoad::Clear(wgpu::Color::TRANSPARENT),
+                1.0,
+            )
+            .unwrap();
+        assert_eq!(pixels(&core, &after_texture, deadline).rgba, baseline.rgba);
+
+        // Also verify the shared-cache checked API's actual take/put store.
+        // A propagated error must restore tile scenes before releasing locks.
+        let (shared_texture, shared_view) = core.scene_target(32, 24);
+        let shared_error = core
+            .renderer()
+            .render_vello_scaled_checked(
+                &huge,
+                &shared_view,
+                ColorLoad::Clear(wgpu::Color::TRANSPARENT),
+                1.0,
+            )
+            .unwrap_err();
+        assert!(matches!(
+            shared_error,
+            netrender::VelloError::CurveEstimateLimit { .. }
+        ));
+        assert!(
+            core.renderer().vello_cached_tile_count().unwrap() > 0,
+            "the shared tile-scene store must be restored even on provider refusal"
+        );
+        core.renderer()
+            .render_vello_scaled_checked(
+                &valid,
+                &shared_view,
+                ColorLoad::Clear(wgpu::Color::TRANSPARENT),
+                1.0,
+            )
+            .unwrap();
+        assert_eq!(pixels(&core, &shared_texture, deadline).rgba, baseline.rgba);
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        assert!(core.device_failure().is_none());
+    }
+    #[test]
+    #[ignore = "actual destruction after final native precheck; coordinator executes serialized GPU gate"]
+    fn native_scope_captures_actual_renderer_errors_after_final_precheck_loss() {
+        let core = RenderCore::boot(NetrenderOptions {
+            tile_cache_size: Some(8),
+            enable_vello: true,
+            ..Default::default()
+        })
+        .expect("an actual adapter is required for this ignored gate");
+        let mut scene = Scene::new(32, 24);
+        scene.push_rect(0.0, 0.0, 32.0, 24.0, [0.25, 0.5, 0.75, 1.0]);
+        let outcome = core.rasterize_scaled_for_scoped(
+            0x7363_6f70_6564,
+            &scene,
+            32,
+            24,
+            ColorLoad::Clear(wgpu::Color::TRANSPARENT),
+            1.0,
+            || {},
+            || {
+                core.device().destroy();
+                let deadline = std::time::Instant::now() + Duration::from_secs(5);
+                while core.device_failure().is_none() {
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "actual loss callback did not arrive within five seconds"
+                    );
+                    let _ = core.device().poll(wgpu::PollType::Poll);
+                    std::thread::yield_now();
+                }
+                assert!(
+                    core.loss_notice().is_none(),
+                    "raster admission still owns the generation"
+                );
+            },
+        );
+        assert!(
+            !outcome.scope_pending,
+            "native scope results must be observed synchronously"
+        );
+        assert!(
+            matches!(
+                outcome.captured_scope_error.as_deref(),
+                Some(netrender::VelloError::WgpuErrorFromScope(_))
+            ),
+            "the actual invalid renderer buffer calls must be captured by native wgpu scopes"
+        );
+        match outcome.result {
+            Err(RasterizeFailure::DeviceLost(loss)) => {
+                assert_eq!(
+                    loss,
+                    core.loss_notice()
+                        .expect("scoped submission admission has drained")
+                );
+                assert_eq!(loss.reason, wgpu::DeviceLostReason::Destroyed);
+            },
+            _ => panic!("native scoped loss must return a typed refusal, never an output"),
+        }
+        assert!(matches!(
+            core.try_rasterize_scaled_for(
+                0x7363_6f70_6564,
+                &scene,
+                32,
+                24,
+                ColorLoad::Clear(wgpu::Color::TRANSPARENT),
+                1.0,
+            ),
+            Err(RasterizeFailure::DeviceLost(_))
+        ));
     }
 }

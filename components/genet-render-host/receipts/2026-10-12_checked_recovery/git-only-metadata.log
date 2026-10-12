@@ -1,0 +1,10 @@
+    Updating git repository `https://github.com/merely-made/netrender.git`
+    Updating git repository `https://github.com/mark-ik/vello`
+     Locking 7 packages to latest compatible versions
+      Adding netrender v0.1.2 (https://github.com/merely-made/netrender.git?rev=c74b7cb28090c28b1c6d80b08dcdea18aff48d3e#c74b7cb2)
+      Adding netrender-vello v0.11.0 (https://github.com/mark-ik/vello?rev=2eae6243881d5b24c984d5ee35dde509ca5db782#2eae6243)
+      Adding netrender_device v0.1.2 (https://github.com/merely-made/netrender.git?rev=c74b7cb28090c28b1c6d80b08dcdea18aff48d3e#c74b7cb2)
+      Adding paint_list_api v0.1.2 (https://github.com/merely-made/netrender.git?rev=c74b7cb28090c28b1c6d80b08dcdea18aff48d3e#c74b7cb2)
+      Adding paint_list_render v0.1.2 (https://github.com/merely-made/netrender.git?rev=c74b7cb28090c28b1c6d80b08dcdea18aff48d3e#c74b7cb2)
+      Adding vello_encoding v0.11.0 (https://github.com/mark-ik/vello?rev=2eae6243881d5b24c984d5ee35dde509ca5db782#2eae6243)
+      Adding vello_shaders v0.11.0 (https://github.com/mark-ik/vello?rev=2eae6243881d5b24c984d5ee35dde509ca5db782#2eae6243)

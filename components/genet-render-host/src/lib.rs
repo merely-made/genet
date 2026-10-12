@@ -845,9 +845,10 @@ impl RenderCore {
         }
         #[cfg(target_arch = "wasm32")]
         {
-            // WebGPU scope results are asynchronous JS promises. This existing
-            // synchronous API cannot qualify them without an async host seam;
-            // do not block JS or drop a promise and call the frame successful.
+            // WebGPU scope results and current-frame quality completion are
+            // asynchronous. This existing synchronous API does not qualify
+            // either; an async host seam remains open. Do not block JS or
+            // drop a promise and claim native completion guarantees here.
             let _operation = self
                 .loss
                 .begin_operation()
@@ -897,6 +898,7 @@ impl RenderCore {
                 };
             },
         };
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
         // wgpu 30 scopes are thread-local and must pop in reverse order.
         let out_of_memory = self
             .device()
@@ -917,6 +919,7 @@ impl RenderCore {
             self.renderer
                 .render_vello_scaled_for_checked(surface, scene, &view, clear, scale)
                 .map_err(|error| RasterizeFailure::ProviderError(Arc::new(error)))?;
+            self.qualify_native_raster(deadline)?;
             Ok((texture, view))
         })();
         let mut scoped_error = None;
@@ -963,6 +966,56 @@ impl RenderCore {
             captured_scope_error: scoped_error,
             #[cfg(test)]
             scope_pending,
+        }
+    }
+
+    // An API-error-free submission is not yet a qualified Classic frame.
+    // Observe its shader counters while scopes/admission still protect the
+    // request. Native queue waits are finite; WebGPU must use an async seam.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn qualify_native_raster(&self, deadline: std::time::Instant) -> Result<(), RasterizeFailure> {
+        fn unavailable(description: String) -> RasterizeFailure {
+            RasterizeFailure::ProviderError(Arc::new(netrender::VelloError::WgpuErrorFromScope(
+                wgpu::Error::Internal {
+                    source: Box::new(std::io::Error::other(description.clone())),
+                    description,
+                },
+            )))
+        }
+        loop {
+            if let Some(loss) = self.device_failure() {
+                return Err(RasterizeFailure::DeviceLost(loss));
+            }
+            match self.renderer.poll_vello_curve_quality() {
+                Ok(Some((0, 0))) => return Ok(()),
+                Ok(Some(_)) => {},
+                Ok(None) => {
+                    return Err(unavailable(
+                        "native Classic quality observer is unavailable".into(),
+                    ));
+                },
+                Err(error) => return Err(RasterizeFailure::ProviderError(Arc::new(error))),
+            }
+            let remaining = deadline
+                .checked_duration_since(std::time::Instant::now())
+                .filter(|remaining| !remaining.is_zero())
+                .ok_or_else(|| {
+                    unavailable("native Classic quality completion exceeded five seconds".into())
+                })?;
+            if let Err(error) = self.device().poll(wgpu::PollType::Wait {
+                submission_index: None,
+                timeout: Some(remaining),
+            }) {
+                if let Some(loss) = self.device_failure() {
+                    return Err(RasterizeFailure::DeviceLost(loss));
+                }
+                return Err(unavailable(format!(
+                    "native Classic quality completion failed: {error}"
+                )));
+            }
+            // A queue completion may precede delivery of a mapping callback.
+            // Yield before observing again; the shared deadline bounds retries.
+            std::thread::yield_now();
         }
     }
 
@@ -1423,5 +1476,104 @@ mod admitted_raster_tests {
             ),
             Err(RasterizeFailure::DeviceLost(_))
         ));
+    }
+    #[test]
+    #[ignore = "actual current-frame shader refusal; coordinator executes serialized GPU gate"]
+    fn round_cap_shader_quality_refuses_current_frame_before_checked_raster_success() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let core = Arc::new(
+            RenderCore::boot(NetrenderOptions {
+                tile_cache_size: Some(32),
+                enable_vello: true,
+                ..Default::default()
+            })
+            .expect("an actual adapter is required for this ignored gate"),
+        );
+        let calls = Arc::new(AtomicUsize::new(0));
+        let counted = calls.clone();
+        let owner = SharedRenderCore::with_factory(
+            core.clone(),
+            Arc::new(move || {
+                counted.fetch_add(1, Ordering::SeqCst);
+                Err("shader quality refusal must not replace a healthy device".into())
+            }),
+        );
+        let generation = core.generation();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let mut path = netrender::scene::ScenePath::new();
+        path.move_to(8.0, 12.0).line_to(24.0, 12.0);
+        let mut scene = Scene::new(32, 24);
+        scene.push_shape_stroked(path, [0.25, 0.5, 0.75, 1.0], 40_000_000.0);
+        let netrender::scene::SceneOp::Shape(shape) = &mut scene.ops[0] else {
+            unreachable!()
+        };
+        shape.stroke.as_mut().unwrap().cap = netrender::scene::SceneStrokeCap::Round;
+        // Its conservative estimate is admitted, but the current shader cap
+        // requires more than 65,536 arc segments at 1/256 device-pixel error.
+        // A preflight CurveEstimateLimit is not this regression's success.
+        match core.try_rasterize_scaled_for(
+            0x726f_756e_6463,
+            &scene,
+            32,
+            24,
+            ColorLoad::Clear(wgpu::Color::TRANSPARENT),
+            1.0,
+        ) {
+            Err(RasterizeFailure::ProviderError(error)) => {
+                assert!(
+                    matches!(&*error, netrender::VelloError::CurveFlatteningLimit),
+                    "the current submitted frame's actual shader refusal must be observed: {error:?}"
+                );
+            },
+            _ => panic!(
+                "the current frame must be refused before the checked API can return a texture"
+            ),
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "shader-quality gate exceeded five seconds"
+        );
+        assert_eq!(
+            core.renderer().vello_curve_quality_status(),
+            Some((0, 0)),
+            "the single rejected frame's counter buffer must be retired"
+        );
+        assert!(core.device_failure().is_none());
+        assert_eq!(core.generation(), generation);
+        assert!(Arc::ptr_eq(&owner.current().unwrap(), &core));
+        assert!(
+            matches!(owner.status(), RecoveryStatus::Ready { generation: actual } if actual == generation)
+        );
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        let mut valid = Scene::new(32, 24);
+        valid.push_rect(0.0, 0.0, 32.0, 24.0, [0.25, 0.5, 0.75, 1.0]);
+        let (texture, _) = core
+            .try_rasterize_scaled_for(
+                0x726f_756e_6463,
+                &valid,
+                32,
+                24,
+                ColorLoad::Clear(wgpu::Color::TRANSPARENT),
+                1.0,
+            )
+            .unwrap();
+        assert_eq!(
+            core.renderer().vello_curve_quality_status(),
+            Some((0, 0)),
+            "a successful native checked raster must already have qualified its own counters"
+        );
+        let mut pixels = core.start_rgba8_readback(&texture, 32, 24).unwrap();
+        loop {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "shader-quality/readback gate exceeded five seconds"
+            );
+            if let Some(frame) = pixels.poll() {
+                assert!(!frame.unwrap().is_blank());
+                break;
+            }
+            std::thread::yield_now();
+        }
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
     }
 }

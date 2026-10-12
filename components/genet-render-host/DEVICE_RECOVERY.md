@@ -43,3 +43,20 @@ These native raster scopes do not qualify every producer upload, composition,
 presentation or physical driver-reset path. WebGPU error scopes resolve through
 JavaScript promises and need a corresponding asynchronous checked host path;
 the synchronous browser API is not qualified for loss inside submission.
+
+Native checked rasterization now qualifies the current Classic frame before
+returning its target. Submission alone is insufficient: shader curve-limit
+flags arrive through asynchronous counter readback. The checked call observes
+all current counter buffers until zero pending bytes/count remain, preserving
+any actual provider quality error. Native queue completion and repeated
+observation share a five-second deadline inside loss admission and API scopes.
+A missing observer, timeout or completion error refuses the frame. This adds
+native completion waiting; encode-only timings must not be described as the
+complete checked-host call cost.
+
+The actual 32x24 round-cap regression submits a finite width-40,000,000 stroke
+that passes aggregate preflight but exceeds the shader's per-curve bound. It
+requires CurveFlatteningLimit before a successful checked target could escape,
+then zero pending counters and a valid render on the same healthy device.
+Browser current-frame shader-counter qualification also requires an async host
+seam and remains separate from the native completion guarantee.

@@ -1,0 +1,13 @@
+   Compiling netrender_device v0.1.2 (https://github.com/merely-made/netrender.git?rev=c74b7cb28090c28b1c6d80b08dcdea18aff48d3e#c74b7cb2)
+   Compiling netrender v0.1.2 (https://github.com/merely-made/netrender.git?rev=c74b7cb28090c28b1c6d80b08dcdea18aff48d3e#c74b7cb2)
+   Compiling genet-render-host v0.2.0 (/Users/markik/Code/worktrees/genet-vello-release-adoption/components/genet-render-host)
+    Finished `test` profile [unoptimized] target(s) in 4.97s
+     Running unittests src/lib.rs (/Users/markik/Code/targets/mere-s2s3/debug/deps/genet_render_host-9af9cc9eb8ac4200)
+
+running 3 tests
+test admitted_raster_tests::actual_device_destroy_after_raster_admission_is_typed_and_does_not_panic ... ok
+test admitted_raster_tests::finite_huge_curve_returns_provider_error_and_valid_raster_recovers_on_same_core ... ok
+test admitted_raster_tests::native_scope_captures_actual_renderer_errors_after_final_precheck_loss ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.39s
+

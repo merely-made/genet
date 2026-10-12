@@ -1,0 +1,20 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "genet-render-host",
+    "--lib",
+    "-j2",
+    "--",
+    "--test-threads=1"
+  ],
+  "cwd": "/Users/markik/Code/worktrees/genet-vello-release-adoption",
+  "deadline_seconds": 180,
+  "elapsed_seconds": 2.46,
+  "exit_code": 0,
+  "timed_out": false,
+  "disk_refused": false,
+  "log": "/Users/markik/Code/output/vello-production-fixes-20261011/checks/checked-recovery-owner-git-only-cpu.log"
+}

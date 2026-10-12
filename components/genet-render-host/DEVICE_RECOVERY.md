@@ -27,3 +27,19 @@ registered reader images, exact-once capture/readback refusal and a later failed
 factory. Its headless distinct-leaf-key scope and fresh native presentation are
 recorded separately in Mere's recovery receipt. Controlled destruction does not
 claim physical driver-reset recovery or browser automatic replacement.
+
+The checked raster API returns `RasterizeFailure`: an installed loss notice has
+priority over the original provider error. Admission holds the replacement
+barrier through target creation and render submission. It rechecks the monitor
+immediately before rendering and after rendering; it does not make a physical
+GPU immune to concurrent loss. Native checked raster operations also capture
+wgpu validation, internal and out-of-memory errors through per-thread scopes,
+including target/filter creation and buffer uploads, so an invalid resource
+caused by concurrent destruction can return through the checked error path.
+Every native scope result is observed before success. The original Vello scope
+error is retained on a healthy device; loss routes to the shared owner instead.
+
+These native raster scopes do not qualify every producer upload, composition,
+presentation or physical driver-reset path. WebGPU error scopes resolve through
+JavaScript promises and need a corresponding asynchronous checked host path;
+the synchronous browser API is not qualified for loss inside submission.

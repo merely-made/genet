@@ -1,0 +1,18 @@
+{
+  "command": [
+    "cargo",
+    "check",
+    "--locked",
+    "-p",
+    "genet-render-host",
+    "--lib",
+    "-j2"
+  ],
+  "cwd": "/Users/markik/Code/worktrees/genet-vello-release-adoption",
+  "deadline_seconds": 180,
+  "elapsed_seconds": 35.53,
+  "exit_code": 0,
+  "timed_out": false,
+  "disk_refused": false,
+  "log": "/Users/markik/Code/output/vello-production-fixes-20261011/checks/native-quality-production-library-check.log"
+}

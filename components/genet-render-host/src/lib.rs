@@ -898,7 +898,7 @@ impl RenderCore {
                 };
             },
         };
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         // wgpu 30 scopes are thread-local and must pop in reverse order.
         let out_of_memory = self
             .device()
@@ -1254,7 +1254,7 @@ mod admitted_raster_tests {
             1.0,
             || {
                 core.device().destroy();
-                let deadline = std::time::Instant::now() + Duration::from_secs(5);
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
                 while core.device_failure().is_none() {
                     assert!(
                         std::time::Instant::now() < deadline,
@@ -1449,7 +1449,7 @@ mod admitted_raster_tests {
             || {},
             || {
                 core.device().destroy();
-                let deadline = std::time::Instant::now() + Duration::from_secs(5);
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
                 while core.device_failure().is_none() {
                     assert!(
                         std::time::Instant::now() < deadline,
@@ -1520,7 +1520,7 @@ mod admitted_raster_tests {
             }),
         );
         let generation = core.generation();
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         let mut path = netrender::scene::ScenePath::new();
         path.move_to(8.0, 12.0).line_to(24.0, 12.0);
         let mut scene = Scene::new(32, 24);

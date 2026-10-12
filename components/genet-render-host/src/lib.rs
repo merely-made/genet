@@ -954,6 +954,10 @@ impl RenderCore {
                     description: "native GPU error scope outcome is unavailable".into(),
                 }),
             )))
+        } else if rendered.is_ok() && std::time::Instant::now() >= deadline {
+            Err(Self::native_raster_unavailable(
+                "native Classic quality completion exceeded five seconds",
+            ))
         } else {
             rendered
         };
@@ -973,25 +977,40 @@ impl RenderCore {
     // Observe its shader counters while scopes/admission still protect the
     // request. Native queue waits are finite; WebGPU must use an async seam.
     #[cfg(not(target_arch = "wasm32"))]
+    fn native_raster_unavailable(description: impl Into<String>) -> RasterizeFailure {
+        let description = description.into();
+        RasterizeFailure::ProviderError(Arc::new(netrender::VelloError::WgpuErrorFromScope(
+            wgpu::Error::Internal {
+                source: Box::new(std::io::Error::other(description.clone())),
+                description,
+            },
+        )))
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     fn qualify_native_raster(&self, deadline: std::time::Instant) -> Result<(), RasterizeFailure> {
-        fn unavailable(description: String) -> RasterizeFailure {
-            RasterizeFailure::ProviderError(Arc::new(netrender::VelloError::WgpuErrorFromScope(
-                wgpu::Error::Internal {
-                    source: Box::new(std::io::Error::other(description.clone())),
-                    description,
-                },
-            )))
-        }
         loop {
             if let Some(loss) = self.device_failure() {
                 return Err(RasterizeFailure::DeviceLost(loss));
             }
+            if std::time::Instant::now() >= deadline {
+                return Err(Self::native_raster_unavailable(
+                    "native Classic quality completion exceeded five seconds",
+                ));
+            }
             match self.renderer.poll_vello_curve_quality() {
-                Ok(Some((0, 0))) => return Ok(()),
+                Ok(Some((0, 0))) => {
+                    if std::time::Instant::now() >= deadline {
+                        return Err(Self::native_raster_unavailable(
+                            "native Classic quality completion exceeded five seconds",
+                        ));
+                    }
+                    return Ok(());
+                },
                 Ok(Some(_)) => {},
                 Ok(None) => {
-                    return Err(unavailable(
-                        "native Classic quality observer is unavailable".into(),
+                    return Err(Self::native_raster_unavailable(
+                        "native Classic quality observer is unavailable",
                     ));
                 },
                 Err(error) => return Err(RasterizeFailure::ProviderError(Arc::new(error))),
@@ -1000,7 +1019,9 @@ impl RenderCore {
                 .checked_duration_since(std::time::Instant::now())
                 .filter(|remaining| !remaining.is_zero())
                 .ok_or_else(|| {
-                    unavailable("native Classic quality completion exceeded five seconds".into())
+                    Self::native_raster_unavailable(
+                        "native Classic quality completion exceeded five seconds",
+                    )
                 })?;
             if let Err(error) = self.device().poll(wgpu::PollType::Wait {
                 submission_index: None,
@@ -1009,7 +1030,7 @@ impl RenderCore {
                 if let Some(loss) = self.device_failure() {
                     return Err(RasterizeFailure::DeviceLost(loss));
                 }
-                return Err(unavailable(format!(
+                return Err(Self::native_raster_unavailable(format!(
                     "native Classic quality completion failed: {error}"
                 )));
             }

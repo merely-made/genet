@@ -26,8 +26,59 @@
 //! ```
 
 use netrender::{ColorLoad, NetrenderOptions, Renderer, Scene};
-use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex, Weak};
+#[cfg(test)]
 use std::time::Duration;
+
+mod readback;
+mod recovery;
+pub use recovery::{
+    CoreGeneration, DeviceLossMonitor, DeviceLossNotice, RecoveryStatus, RecoverySubscription,
+    ReplacementFactory, SharedRenderCore,
+};
+
+pub enum SurfaceAcquire {
+    Frame(wgpu::SurfaceTexture),
+    SurfaceLost,
+    Unavailable { reason: String },
+    DeviceLost(DeviceLossNotice),
+}
+
+#[derive(Clone, Copy)]
+struct CoreBootRecipe {
+    apply_limit_buckets: bool,
+    tile_cache_size: Option<u32>,
+    enable_vello: bool,
+    enable_tile_dirty_overlay: bool,
+    tile_dirty_overlay_window_frames: u32,
+    backends: Option<wgpu::Backends>,
+    optional_features: wgpu::Features,
+}
+impl CoreBootRecipe {
+    fn from_options(o: &NetrenderOptions) -> Self {
+        Self {
+            apply_limit_buckets: o.apply_limit_buckets,
+            tile_cache_size: o.tile_cache_size,
+            enable_vello: o.enable_vello,
+            enable_tile_dirty_overlay: o.enable_tile_dirty_overlay,
+            tile_dirty_overlay_window_frames: o.tile_dirty_overlay_window_frames,
+            backends: o.backends,
+            optional_features: o.optional_features,
+        }
+    }
+    fn options(self) -> NetrenderOptions {
+        NetrenderOptions {
+            apply_limit_buckets: self.apply_limit_buckets,
+            tile_cache_size: self.tile_cache_size,
+            enable_vello: self.enable_vello,
+            enable_tile_dirty_overlay: self.enable_tile_dirty_overlay,
+            tile_dirty_overlay_window_frames: self.tile_dirty_overlay_window_frames,
+            backends: self.backends,
+            optional_features: self.optional_features,
+        }
+    }
+}
 
 #[derive(Default)]
 struct CaptureMasterCompositor {
@@ -60,68 +111,7 @@ pub struct RgbaFrame {
 /// native window events and presentations while this capture is outstanding.
 /// The copy is queued when this value is created; later draws cannot replace
 /// the pixels it returns. A host owns its scheduling and deadline.
-pub struct PendingRgbaReadback {
-    device: wgpu::Device,
-    buffer: wgpu::Buffer,
-    mapped: Receiver<Result<(), wgpu::BufferAsyncError>>,
-    submission: wgpu::SubmissionIndex,
-    width: u32,
-    height: u32,
-    padded: u32,
-    completed: bool,
-}
-
-impl PendingRgbaReadback {
-    /// Service completed GPU work and return the captured pixels once mapped.
-    /// `None` means the host should yield and poll on a later turn.
-    pub fn poll(&mut self) -> Option<Result<RgbaFrame, String>> {
-        if self.completed {
-            return Some(Err("RGBA readback was already collected".into()));
-        }
-        if let Err(error) = self.device.poll(wgpu::PollType::Poll) {
-            self.completed = true;
-            return Some(Err(format!("RGBA readback poll failed: {error}")));
-        }
-        self.collect()
-    }
-
-    fn collect(&mut self) -> Option<Result<RgbaFrame, String>> {
-        match self.mapped.try_recv() {
-            Err(TryRecvError::Empty) => return None,
-            Err(TryRecvError::Disconnected) => {
-                self.completed = true;
-                return Some(Err("RGBA readback map callback disconnected".into()));
-            },
-            Ok(Err(error)) => {
-                self.completed = true;
-                return Some(Err(format!("RGBA readback map failed: {error}")));
-            },
-            Ok(Ok(())) => {},
-        }
-        self.completed = true;
-        Some(self.copy_mapped_rows())
-    }
-
-    fn copy_mapped_rows(&self) -> Result<RgbaFrame, String> {
-        let slice = self.buffer.slice(..);
-        let data = slice
-            .get_mapped_range()
-            .map_err(|error| format!("RGBA readback map failed: {error}"))?;
-        let unpadded = self.width as usize * 4;
-        let mut rgba = Vec::with_capacity(unpadded * self.height as usize);
-        for row in 0..self.height as usize {
-            let start = row * self.padded as usize;
-            rgba.extend_from_slice(&data[start..start + unpadded]);
-        }
-        drop(data);
-        self.buffer.unmap();
-        Ok(RgbaFrame {
-            width: self.width,
-            height: self.height,
-            rgba,
-        })
-    }
-}
+pub use readback::{PendingRgbaReadback, ReadbackFailure};
 
 impl RgbaFrame {
     /// A stable, order-sensitive FNV-1a digest of the frame bytes.
@@ -259,7 +249,10 @@ mod pending_readback_tests {
         );
         assert!(!first_frame.is_blank());
         assert_ne!(first_frame.digest(), second_frame.digest());
-        assert!(matches!(first.poll(), Some(Err(error)) if error.contains("already collected")));
+        assert!(matches!(
+            first.poll(),
+            Some(Err(ReadbackFailure::AlreadyCollected))
+        ));
         // A cancelled receiver must not make a later map callback panic.
         let cancelled = core.start_rgba8_readback(&texture, width, height).unwrap();
         drop(cancelled);
@@ -397,6 +390,9 @@ mod boot_feature_tests {
 /// surface's swapchain without re-rendering. (Multi-window: one device, N surfaces.)
 pub struct RenderCore {
     renderer: Renderer,
+    loss: Arc<DeviceLossMonitor>,
+    recovery_owner: Mutex<Weak<SharedRenderCore>>,
+    recipe: CoreBootRecipe,
 }
 
 impl RenderCore {
@@ -459,9 +455,56 @@ impl RenderCore {
         handles: netrender::WgpuHandles,
         options: NetrenderOptions,
     ) -> Result<Self, String> {
+        let recipe = CoreBootRecipe::from_options(&options);
         let renderer = netrender::create_netrender_instance(handles, options)
             .map_err(|e| format!("netrender init failed: {e:?}"))?;
-        Ok(Self { renderer })
+        let generation = recovery::next_generation();
+        let loss = Arc::new(DeviceLossMonitor::new(generation));
+        let callback = loss.clone();
+        renderer
+            .wgpu_device
+            .core
+            .device
+            .set_device_lost_callback(move |reason, message| {
+                callback.notify_loss(DeviceLossNotice {
+                    generation,
+                    reason,
+                    message,
+                });
+            });
+        Ok(Self {
+            renderer,
+            loss,
+            recovery_owner: Mutex::new(Weak::new()),
+            recipe,
+        })
+    }
+
+    pub fn generation(&self) -> CoreGeneration {
+        self.loss.generation
+    }
+    pub fn loss_notice(&self) -> Option<DeviceLossNotice> {
+        self.loss.notice()
+    }
+    pub fn device_failure(&self) -> Option<DeviceLossNotice> {
+        self.loss.pending_notice()
+    }
+    pub fn shared_recovery(self: &Arc<Self>) -> Arc<SharedRenderCore> {
+        let recipe = self.recipe;
+        SharedRenderCore::with_factory(
+            self.clone(),
+            Arc::new(move || {
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    Self::boot(recipe.options()).map(Arc::new)
+                }
+                #[cfg(target_arch = "wasm32")]
+                {
+                    let _ = recipe;
+                    Err("browser device replacement requires an asynchronous host factory".into())
+                }
+            }),
+        )
     }
 
     /// Create + configure a swapchain surface for `target` at `(width, height)`,
@@ -478,6 +521,9 @@ impl RenderCore {
         width: u32,
         height: u32,
     ) -> Result<WindowSurface, String> {
+        if let Some(loss) = self.device_failure() {
+            return Err(format!("surface creation refused: DeviceLost({loss:?})"));
+        }
         self.create_surface_with_transparency(target, width, height, false)
     }
 
@@ -495,12 +541,18 @@ impl RenderCore {
         height: u32,
         transparent: bool,
     ) -> Result<WindowSurface, String> {
+        if let Some(loss) = self.device_failure() {
+            return Err(format!("surface creation refused: DeviceLost({loss:?})"));
+        }
         let core = &self.renderer.wgpu_device.core;
         let surface = core
             .instance
             .create_surface(target)
             .map_err(|e| format!("create_surface failed: {e}"))?;
         let caps = surface.get_capabilities(&core.adapter);
+        if caps.formats.is_empty() || caps.alpha_modes.is_empty() {
+            return Err("adapter offers no compatible surface format or alpha mode".into());
+        }
         // Prefer the NON-srgb surface format. The vello rasterizer writes
         // display-referred (sRGB-encoded) bytes into the Rgba8Unorm layer
         // textures and the compose pass samples them raw, so an sRGB
@@ -545,6 +597,11 @@ impl RenderCore {
             view_formats: vec![],
         };
         surface.configure(&core.device, &surface_config);
+        if let Some(loss) = self.device_failure() {
+            return Err(format!(
+                "surface configuration refused: DeviceLost({loss:?})"
+            ));
+        }
         Ok(WindowSurface {
             surface,
             surface_config,
@@ -589,15 +646,8 @@ impl RenderCore {
         // Compatibility for offscreen/CLI callers. Event-loop hosts should use
         // start_rgba8_readback and poll it on later turns instead of waiting.
         pending
-            .device
-            .poll(wgpu::PollType::Wait {
-                submission_index: Some(pending.submission.clone()),
-                timeout: Some(Duration::from_secs(5)),
-            })
-            .map_err(|error| format!("RGBA readback poll failed: {error}"))?;
-        pending
-            .collect()
-            .unwrap_or_else(|| Err("RGBA readback mapping did not complete".into()))
+            .wait_for_completion()
+            .map_err(|error| error.to_string())
     }
 
     /// Queue an RGBA8 copy and mapping without waiting for GPU completion.
@@ -609,6 +659,10 @@ impl RenderCore {
         width: u32,
         height: u32,
     ) -> Result<PendingRgbaReadback, String> {
+        let _operation = self
+            .loss
+            .begin_operation()
+            .map_err(|loss| format!("readback refused: DeviceLost({loss:?})"))?;
         let width = width.max(1);
         let height = height.max(1);
         let unpadded = width
@@ -659,16 +713,16 @@ impl RenderCore {
                 // Cancellation drops the receiver; a late callback is harmless.
                 let _ = send.send(result);
             });
-        Ok(PendingRgbaReadback {
-            device: self.device().clone(),
+        Ok(PendingRgbaReadback::new(
+            self.device().clone(),
             buffer,
             mapped,
             submission,
             width,
             height,
             padded,
-            completed: false,
-        })
+            &self.loss,
+        ))
     }
 
     /// Rasterize `scene` into a fresh `(w, h)` `Rgba8Unorm` texture, cleared to
@@ -719,6 +773,27 @@ impl RenderCore {
             .render_vello_scaled_for(surface, scene, &view, clear, scale);
         self.log_raster_spans(w, h);
         (tex, view)
+    }
+
+    /// Host-owned drawing refuses a notified lost generation before and after
+    /// rasterization. Surface acquisition still checks again before present.
+    pub fn try_rasterize_scaled_for(
+        &self,
+        surface: u64,
+        scene: &Scene,
+        w: u32,
+        h: u32,
+        clear: ColorLoad,
+        scale: f32,
+    ) -> Result<(wgpu::Texture, wgpu::TextureView), DeviceLossNotice> {
+        if let Some(loss) = self.device_failure() {
+            return Err(loss);
+        }
+        let output = self.rasterize_scaled_for(surface, scene, w, h, clear, scale);
+        if let Some(loss) = self.device_failure() {
+            return Err(loss);
+        }
+        Ok(output)
     }
 
     /// Like [`rasterize`](Self::rasterize) but for a scene laid out in **logical**
@@ -861,6 +936,9 @@ impl WindowSurface {
     /// Reconfigure the surface for a new size (clamped to ≥ 1), via the shared
     /// core's device.
     pub fn resize(&mut self, core: &RenderCore, width: u32, height: u32) {
+        if core.device_failure().is_some() {
+            return;
+        }
         self.surface_config.width = width.max(1);
         self.surface_config.height = height.max(1);
         self.surface.configure(core.device(), &self.surface_config);
@@ -871,16 +949,40 @@ impl WindowSurface {
     /// lost or otherwise unavailable, so the caller simply skips the frame. Stays
     /// non-blocking so a slow window never stalls another on the shared loop.
     pub fn acquire(&self, core: &RenderCore) -> Option<wgpu::SurfaceTexture> {
+        match self.acquire_status(core) {
+            SurfaceAcquire::Frame(frame) => Some(frame),
+            _ => None,
+        }
+    }
+    pub fn acquire_status(&self, core: &RenderCore) -> SurfaceAcquire {
+        if let Some(loss) = core.device_failure() {
+            return SurfaceAcquire::DeviceLost(loss);
+        }
         match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame)
-            | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => Some(frame),
-            wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
+            | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => SurfaceAcquire::Frame(frame),
+            wgpu::CurrentSurfaceTexture::Outdated => {
+                if let Some(loss) = core.device_failure() {
+                    return SurfaceAcquire::DeviceLost(loss);
+                }
                 self.surface.configure(core.device(), &self.surface_config);
-                None
+                SurfaceAcquire::Unavailable {
+                    reason: "surface outdated; reconfigured same device".into(),
+                }
+            },
+            wgpu::CurrentSurfaceTexture::Lost => {
+                if let Some(loss) = core.device_failure() {
+                    return SurfaceAcquire::DeviceLost(loss);
+                }
+                SurfaceAcquire::SurfaceLost
             },
             other => {
-                eprintln!("[genet-render-host] surface acquire skipped: {other:?}");
-                None
+                if let Some(loss) = core.device_failure() {
+                    return SurfaceAcquire::DeviceLost(loss);
+                }
+                SurfaceAcquire::Unavailable {
+                    reason: format!("surface acquire skipped: {other:?}"),
+                }
             },
         }
     }

@@ -34,8 +34,9 @@ use std::time::Duration;
 mod readback;
 mod recovery;
 pub use recovery::{
-    CoreGeneration, DeviceLossMonitor, DeviceLossNotice, RecoveryStatus, RecoverySubscription,
-    ReplacementFactory, SharedRenderCore,
+    AsyncReplacementFactory, CoreGeneration, DeviceLossMonitor, DeviceLossNotice,
+    PendingReplacement, RecoveryStatus, RecoverySubscription, ReplacementCompletionError,
+    ReplacementExpiry, ReplacementFactory, ReplacementFuture, SharedRenderCore,
 };
 
 /// A rendering refusal on the actual host device. Provider errors do not
@@ -517,20 +518,22 @@ impl RenderCore {
     }
     pub fn shared_recovery(self: &Arc<Self>) -> Arc<SharedRenderCore> {
         let recipe = self.recipe;
-        SharedRenderCore::with_factory(
-            self.clone(),
-            Arc::new(move || {
-                #[cfg(not(target_arch = "wasm32"))]
-                {
-                    Self::boot(recipe.options()).map(Arc::new)
-                }
-                #[cfg(target_arch = "wasm32")]
-                {
-                    let _ = recipe;
-                    Err("browser device replacement requires an asynchronous host factory".into())
-                }
-            }),
-        )
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            SharedRenderCore::with_factory(
+                self.clone(),
+                Arc::new(move || Self::boot(recipe.options()).map(Arc::new)),
+            )
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            SharedRenderCore::with_async_factory(
+                self.clone(),
+                Arc::new(move || {
+                    Box::pin(async move { Self::boot_async(recipe.options()).await.map(Arc::new) })
+                }),
+            )
+        }
     }
 
     /// Create + configure a swapchain surface for `target` at `(width, height)`,

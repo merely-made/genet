@@ -1,0 +1,24 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--offline",
+    "--config",
+    "/Users/markik/Code/output/vello-production-fixes-20261011/candidate-patches.toml",
+    "-p",
+    "genet-render-host",
+    "--lib",
+    "admitted_raster_tests",
+    "-j2",
+    "--",
+    "--ignored",
+    "--test-threads=1"
+  ],
+  "cwd": "/Users/markik/Code/worktrees/genet-vello-release-adoption",
+  "deadline_seconds": 180,
+  "elapsed_seconds": 6.319,
+  "exit_code": 0,
+  "timed_out": false,
+  "disk_refused": false,
+  "log": "/Users/markik/Code/output/vello-production-fixes-20261011/checks/checked-raster-admission-and-provider-gpu.log"
+}

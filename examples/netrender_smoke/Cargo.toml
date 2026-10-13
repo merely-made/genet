@@ -22,13 +22,13 @@ path = "src/main.rs"
 # netrender lives in the sibling netrender/ workspace. Git dep (not a path dep)
 # so this standalone example clones-and-builds anywhere; a local netrender
 # checkout is picked up via the gitignored `.cargo/config.toml` `paths` override.
-netrender = { git = "https://github.com/merely-made/netrender.git", rev = "46606610cd387e2e6956d8a3ebbcf442eab210d9" }
+netrender = { git = "https://github.com/merely-made/netrender.git", rev = "c74b7cb28090c28b1c6d80b08dcdea18aff48d3e" }
 wgpu = "30"
 pollster = "0.4"
 
 # Match the root's Classic 0.11 provider and encoding/shader source. Patches
 # are per-workspace-root and are not inherited from the Netrender dependency.
 [patch.crates-io]
-netrender-vello = { git = "https://github.com/mark-ik/vello", rev = "5862bba26c8a9f56f6a5fdc8ea6966b360a5d63a" }
-vello_encoding = { git = "https://github.com/mark-ik/vello", rev = "5862bba26c8a9f56f6a5fdc8ea6966b360a5d63a" }
-vello_shaders = { git = "https://github.com/mark-ik/vello", rev = "5862bba26c8a9f56f6a5fdc8ea6966b360a5d63a" }
+netrender-vello = { git = "https://github.com/mark-ik/vello", rev = "2eae6243881d5b24c984d5ee35dde509ca5db782" }
+vello_encoding = { git = "https://github.com/mark-ik/vello", rev = "2eae6243881d5b24c984d5ee35dde509ca5db782" }
+vello_shaders = { git = "https://github.com/mark-ik/vello", rev = "2eae6243881d5b24c984d5ee35dde509ca5db782" }

@@ -1,0 +1,19 @@
+    Finished `test` profile [unoptimized] target(s) in 0.44s
+     Running unittests src/lib.rs (/Users/markik/Code/targets/mere-s2s3/debug/deps/genet_render_host-9af9cc9eb8ac4200)
+
+running 12 tests
+test admitted_raster_tests::actual_device_destroy_after_raster_admission_is_typed_and_does_not_panic ... ignored, actual device destruction; coordinator executes serialized GPU gate
+test admitted_raster_tests::finite_huge_curve_returns_provider_error_and_valid_raster_recovers_on_same_core ... ignored, actual healthy-device curve refusal; coordinator executes serialized GPU gate
+test admitted_raster_tests::native_scope_captures_actual_renderer_errors_after_final_precheck_loss ... ignored, actual destruction after final native precheck; coordinator executes serialized GPU gate
+test boot_feature_tests::optional_features_reach_the_device_when_the_adapter_offers_them ... ok
+test ordered_external_texture_tests::composition_preserves_external_texture_scene_boundary ... ok
+test pending_readback_tests::pending_capture_keeps_original_rows_while_shared_device_draws_again ... ok
+test recovery::tests::admitted_readback_creation_delays_loss_readiness_until_resources_are_registered ... ok
+test recovery::tests::concurrently_registered_cancellation_finishes_before_loss_is_ready ... ok
+test recovery::tests::detached_owner_waits_for_all_hosts_and_failed_factory_is_once ... ok
+test recovery::tests::foreign_subscription_cannot_acknowledge_and_cancellation_is_once ... ok
+test recovery::tests::monitor_rejects_stale_and_duplicate_notices_and_wakes_without_locks ... ok
+test rgba_frame_tests::transparent_frames_are_blank_but_opaque_black_is_content ... ok
+
+test result: ok. 9 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 1.46s
+

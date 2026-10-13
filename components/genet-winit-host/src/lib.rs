@@ -193,6 +193,12 @@ impl SurfaceHost {
     pub fn acquire(&self) -> Option<wgpu::SurfaceTexture> {
         self.surface.acquire(&self.core)
     }
+
+    /// Preserve device loss, surface loss and temporary unavailability so a
+    /// participating host can apply the shared recovery protocol.
+    pub fn acquire_status(&self) -> genet_render_host::SurfaceAcquire {
+        self.surface.acquire_status(&self.core)
+    }
 }
 
 /// Device px per wheel "line" step, for `MouseScrollDelta::LineDelta` events

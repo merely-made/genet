@@ -5,7 +5,8 @@ license = "MPL-2.0"
 authors = ["Mark AB (markik)"]
 repository = "https://github.com/merely-made/genet"
 edition.workspace = true
-rust-version.workspace = true
+
+rust-version = "1.97.1"
 description = "Engine-facing document contracts: retained session traits, the accessibility projection, document capabilities, page capture, and the engine-id namespace. The half of inker an engine implements."
 keywords = ["genet", "engine", "session", "accessibility", "contract"]
 categories = ["web-programming", "api-bindings"]

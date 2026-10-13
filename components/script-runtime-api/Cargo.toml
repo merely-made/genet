@@ -6,6 +6,7 @@
 # arena) — a DOM dep, still no engine dep.
 # See docs/2026-05-26_pluggable_engines_testharness_plan.md.
 [package]
+rust-version = "1.97.1"
 name = "script-runtime-api"
 version = "0.0.0"
 edition = "2021"

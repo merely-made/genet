@@ -1,4 +1,5 @@
 [package]
+rust-version = "1.97.1"
 name = "buckram"
 version = "0.0.3"
 edition = "2024"

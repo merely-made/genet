@@ -3,6 +3,7 @@
 # docs/2026-05-20_genet_script_engine_plan.md). No engine dependency: this crate
 # names only capabilities; engine-native types stay inside the backend crates.
 [package]
+rust-version = "1.97.1"
 name = "script-engine-api"
 version = "0.1.0"
 repository = "https://github.com/merely-made/genet"

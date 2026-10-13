@@ -7,6 +7,7 @@
 # prototypes, ephemeron marking, and standard ArrayBuffer transfer. Local path
 # overrides are development-only.
 [package]
+rust-version = "1.97.1"
 name = "script-engine-nova"
 version = "0.0.0"
 edition = "2021"

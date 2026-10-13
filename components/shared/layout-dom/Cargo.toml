@@ -6,7 +6,8 @@ publish = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
-rust-version.workspace = true
+
+rust-version = "1.97.1"
 description = "Profile-neutral DOM trait consumed by Livery/Buckram and other read-only DOM walkers (reader mode, serialization, selectors)."
 
 [lib]

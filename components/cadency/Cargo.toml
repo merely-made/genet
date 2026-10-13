@@ -1,4 +1,5 @@
 [package]
+rust-version = "1.97.1"
 name = "cadency"
 version = "0.0.1"
 edition = "2024"

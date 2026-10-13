@@ -42,7 +42,7 @@ use genet_scripted_dom::{NodeId, ScriptedDom};
 use layout_dom_api::{LayoutDom, LocalName, Namespace};
 
 mod projection;
-pub use projection::matching_with_projection;
+pub use projection::{matching_prefer_exact_with_projection, matching_with_projection};
 
 /// One retained cambium surface the driver can search and hit-test: its DOM,
 /// where it sits in the window (`[x, y, w, h]`, window-space), and the sheet it

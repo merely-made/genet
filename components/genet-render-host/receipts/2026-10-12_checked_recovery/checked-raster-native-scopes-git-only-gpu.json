@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "genet-render-host",
+    "--lib",
+    "admitted_raster_tests",
+    "-j2",
+    "--",
+    "--ignored",
+    "--test-threads=1"
+  ],
+  "cwd": "/Users/markik/Code/worktrees/genet-vello-release-adoption",
+  "deadline_seconds": 240,
+  "elapsed_seconds": 7.786,
+  "exit_code": 0,
+  "timed_out": false,
+  "disk_refused": false,
+  "log": "/Users/markik/Code/output/vello-production-fixes-20261011/checks/checked-raster-native-scopes-git-only-gpu.log"
+}

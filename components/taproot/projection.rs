@@ -58,6 +58,41 @@ pub fn matching_with_projection(
     result
 }
 
+/// Prefer an exact owner-computed name among projected role matches.
+///
+/// This is an opt-in selection policy: [`matching_with_projection`] and the
+/// legacy DOM matcher keep their substring and document-order contracts. For a
+/// role selector with text, return the exact-name subset if it is nonempty;
+/// otherwise retain every original match. Class selectors and roles without
+/// text or with empty text are unchanged. All role, hidden-state and attribute filters are applied
+/// before this preference. Duplicate exact names retain their document order.
+/// The host still supplies geometry and owns click delivery.
+pub fn matching_prefer_exact_with_projection(
+    dom: &ScriptedDom,
+    sel: &Selector,
+    projection: &DocumentA11yProjection,
+) -> Vec<NodeId> {
+    let matched = matching_with_projection(dom, sel, projection);
+    let (Match::Role(_), Some(text)) = (&sel.matcher, &sel.text) else {
+        return matched;
+    };
+    if text.is_empty() {
+        return matched;
+    }
+    let exact_names: BTreeMap<_, _> = projection
+        .nodes()
+        .iter()
+        .filter(|node| node.name.as_deref() == Some(text.as_str()))
+        .map(|node| (node.id.get(), ()))
+        .collect();
+    let exact: Vec<_> = matched
+        .iter()
+        .copied()
+        .filter(|node| exact_names.contains_key(&dom.opaque_id(*node)))
+        .collect();
+    if exact.is_empty() { matched } else { exact }
+}
+
 // This is a spelling adapter for the neutral role vocabulary, not DOM role
 // inference. In particular Unknown must not resurrect an unprojected ARIA role.
 fn role_matches(role: DocumentA11yRole, requested: &str) -> bool {
@@ -383,4 +418,204 @@ mod tests {
         );
         assert!(matching(&dom, &Selector::role("button").containing("[Save]")).is_empty());
     }
+
+    #[test]
+    fn exact_projected_role_name_wins_over_an_earlier_prefix_collision() {
+        let mut dom = ScriptedDom::new();
+        let root = dom.document();
+        let workbench = element(&mut dom, root, "button", &[], "Open selected in workbench");
+        let detail = element(&mut dom, root, "button", &[], "Open selected");
+        let projection = project(&dom);
+        let selector = Selector::role("button").containing("Open selected");
+        assert_eq!(
+            matching_with_projection(&dom, &selector, &projection),
+            [workbench, detail]
+        );
+        assert_eq!(
+            matching_prefer_exact_with_projection(&dom, &selector, &projection),
+            [detail]
+        );
+        assert_eq!(matching(&dom, &selector), [workbench, detail]);
+    }
+
+    #[test]
+    fn exact_name_preference_preserves_partial_class_unlabelled_and_duplicate_order() {
+        let mut dom = ScriptedDom::new();
+        let root = dom.document();
+        let first = element(
+            &mut dom,
+            root,
+            "button",
+            &[("class", "open")],
+            "Open selected",
+        );
+        let second = element(
+            &mut dom,
+            root,
+            "button",
+            &[("class", "open")],
+            "Open selected",
+        );
+        let projection = project(&dom);
+        for selector in [
+            Selector::role("button").containing("Open selected"),
+            Selector::role("button").containing("Open"),
+            Selector::role("button"),
+            Selector::class("open").containing("Open"),
+        ] {
+            assert_eq!(
+                matching_prefer_exact_with_projection(&dom, &selector, &projection),
+                [first, second]
+            );
+        }
+        assert!(
+            matching_prefer_exact_with_projection(
+                &dom,
+                &Selector::role("button").containing("Missing"),
+                &projection
+            )
+            .is_empty()
+        );
+        // An empty filter retains the legacy vector even if an owner supplies
+        // an empty computed name for one of the controls.
+        let mut nodes = projection.nodes().to_vec();
+        nodes
+            .iter_mut()
+            .find(|node| node.id.get() == dom.opaque_id(first))
+            .unwrap()
+            .name = Some(String::new());
+        let empty_name = DocumentA11yProjection::new(
+            5,
+            projection.support().clone(),
+            projection.root(),
+            nodes,
+        );
+        assert_eq!(
+            matching_prefer_exact_with_projection(
+                &dom,
+                &Selector::role("button").containing(""),
+                &empty_name,
+            ),
+            [first, second]
+        );
+    }
+
+    #[test]
+    fn exact_name_preference_uses_owner_names_and_keeps_attribute_filters() {
+        let mut dom = ScriptedDom::new();
+        let root = dom.document();
+        let prefix = element(
+            &mut dom,
+            root,
+            "button",
+            &[("data-key", "prefix")],
+            "Open selected in workbench",
+        );
+        element(
+            &mut dom,
+            root,
+            "span",
+            &[("id", "detail-name")],
+            "Open selected",
+        );
+        let exact = element(
+            &mut dom,
+            root,
+            "button",
+            &[
+                ("aria-labelledby", "detail-name"),
+                ("aria-label", "Wrong raw name"),
+                ("data-key", "exact"),
+            ],
+            "Wrong raw text",
+        );
+        let projection = project(&dom);
+        let selector = Selector::role("button").containing("Open selected");
+        assert_eq!(
+            matching_prefer_exact_with_projection(&dom, &selector, &projection),
+            [exact]
+        );
+        assert_eq!(
+            matching_prefer_exact_with_projection(
+                &dom,
+                &selector.clone().with_attr("data-key", "prefix"),
+                &projection
+            ),
+            [prefix]
+        );
+        assert!(
+            matching_prefer_exact_with_projection(
+                &dom,
+                &Selector::role("button").containing("Wrong raw name"),
+                &projection
+            )
+            .is_empty()
+        );
+    }
+
+    #[test]
+    fn exact_name_preference_never_resurrects_missing_or_hidden_owner_nodes() {
+        let mut dom = ScriptedDom::new();
+        let root = dom.document();
+        let prefix = element(&mut dom, root, "button", &[], "Open selected in workbench");
+        let exact = element(&mut dom, root, "button", &[], "Open selected");
+        let projection = project(&dom);
+        let selector = Selector::role("button").containing("Open selected");
+        let empty =
+            DocumentA11yProjection::new(2, projection.support().clone(), projection.root(), vec![]);
+        assert!(matching_prefer_exact_with_projection(&dom, &selector, &empty).is_empty());
+        let mut nodes = projection.nodes().to_vec();
+        nodes
+            .iter_mut()
+            .find(|node| node.id.get() == dom.opaque_id(exact))
+            .unwrap()
+            .state
+            .hidden = true;
+        let hidden =
+            DocumentA11yProjection::new(3, projection.support().clone(), projection.root(), nodes);
+        assert_eq!(
+            matching_prefer_exact_with_projection(&dom, &selector, &hidden),
+            [prefix]
+        );
+    }
+
+    #[test]
+    fn a_held_partial_target_stops_matching_when_an_exact_target_appears() {
+        let mut dom = ScriptedDom::new();
+        let root = dom.document();
+        let held = element(&mut dom, root, "button", &[], "Open selected in workbench");
+        let selector = Selector::role("button").containing("Open selected");
+        let before = project(&dom);
+        assert!(matching_prefer_exact_with_projection(&dom, &selector, &before).contains(&held));
+        let exact = element(&mut dom, root, "button", &[], "Open selected");
+        let after = project(&dom);
+        assert!(matching_with_projection(&dom, &selector, &after).contains(&held));
+        let preferred = matching_prefer_exact_with_projection(&dom, &selector, &after);
+        assert_eq!(preferred, [exact]);
+        assert!(!preferred.contains(&held));
+    }
+
+    #[test]
+    fn exact_name_preference_does_not_cross_requested_roles() {
+        let mut dom = ScriptedDom::new();
+        let root = dom.document();
+        element(&mut dom, root, "button", &[], "Open selected");
+        let field = element(
+            &mut dom,
+            root,
+            "input",
+            &[("aria-label", "Open selected notes")],
+            "",
+        );
+        let projection = project(&dom);
+        assert_eq!(
+            matching_prefer_exact_with_projection(
+                &dom,
+                &Selector::role("textbox").containing("Open selected"),
+                &projection
+            ),
+            [field]
+        );
+    }
+
 }

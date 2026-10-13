@@ -1,5 +1,7 @@
 # genet Documentation Index
 
+Rust policy (2026-10-13): working toolchain 1.99.0 and shared MSRV 1.97.1, qualified separately. Canonical policy: `mere/design_docs/2026-08-12_family_composition_thesis_brief.md`, section "Shared Rust toolchain and minimum version".
+
 The canonical index for `genet/design_docs/`, per [`DOC_POLICY.md`](DOC_POLICY.md)
 §6. If any other index disagrees with this file, this file wins.
 

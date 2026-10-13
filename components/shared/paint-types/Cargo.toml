@@ -6,7 +6,8 @@ publish = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
-rust-version.workspace = true
+
+rust-version = "1.97.1"
 description = "Shared paint-tier types for the genet engine family: the vocabulary the paint and observables layers exchange (rects, colors, image keys) without a renderer dependency."
 
 [lib]

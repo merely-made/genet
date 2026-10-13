@@ -6,6 +6,7 @@
 # host-fns, and native-data reflectors. The host-promise bridge is a documented
 # deviation (Lua has no Promise) deferred to a later pass.
 [package]
+rust-version = "1.97.1"
 name = "script-engine-piccolo"
 version = "0.0.0"
 edition = "2021"

@@ -6,7 +6,8 @@ publish = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
-rust-version.workspace = true
+
+rust-version = "1.97.1"
 description = "Raw engine host contracts for Genet: engine profiles, capabilities, resource fetching, and href resolution."
 keywords = ["genet", "host", "engine", "contract"]
 categories = ["gui", "api-bindings"]

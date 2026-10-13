@@ -1,4 +1,5 @@
 [package]
+rust-version = "1.97.1"
 name = "livery"
 version = "0.0.5"
 edition = "2024"

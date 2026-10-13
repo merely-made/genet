@@ -1,4 +1,5 @@
 [package]
+rust-version = "1.97.1"
 name = "netrender-smoke"
 version = "0.1.0"
 edition = "2024"
@@ -32,3 +33,6 @@ pollster = "0.4"
 netrender-vello = { git = "https://github.com/mark-ik/vello", rev = "2eae6243881d5b24c984d5ee35dde509ca5db782" }
 vello_encoding = { git = "https://github.com/mark-ik/vello", rev = "2eae6243881d5b24c984d5ee35dde509ca5db782" }
 vello_shaders = { git = "https://github.com/mark-ik/vello", rev = "2eae6243881d5b24c984d5ee35dde509ca5db782" }
+
+[workspace.package]
+rust-version = "1.97.1"

@@ -7,11 +7,18 @@
 //! One recovery owner per shared core, with an explicit host-detachment barrier.
 use crate::RenderCore;
 use std::collections::{BTreeMap, BTreeSet};
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, Weak};
+use std::task::{Context, Poll, Waker};
 
 pub type CoreGeneration = u64;
 pub type ReplacementFactory = Arc<dyn Fn() -> Result<Arc<RenderCore>, String> + Send + Sync>;
+/// The factory itself is shareable; the returned browser future need not be Send.
+pub type ReplacementFuture =
+    Pin<Box<dyn Future<Output = Result<Arc<RenderCore>, String>> + 'static>>;
+pub type AsyncReplacementFactory = Arc<dyn Fn() -> ReplacementFuture + Send + Sync>;
 type Wake = Arc<dyn Fn() + Send + Sync>;
 
 pub(crate) fn next_generation() -> CoreGeneration {
@@ -271,11 +278,187 @@ enum State {
         loss: DeviceLossNotice,
         pending: BTreeSet<u64>,
     },
-    Recovering(DeviceLossNotice),
+    Recovering {
+        loss: DeviceLossNotice,
+        attempt: u64,
+        waker: Option<Waker>,
+    },
     Failed {
         loss: DeviceLossNotice,
         error: String,
     },
+}
+
+enum Factory {
+    Sync(ReplacementFactory),
+    Async(AsyncReplacementFactory),
+}
+
+/// Refusal to complete a replacement that no longer owns this transition.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReplacementCompletionError {
+    OwnerDropped,
+    ForeignOwner,
+    StaleTransition,
+}
+impl std::fmt::Display for ReplacementCompletionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "replacement completion refused: {self:?}")
+    }
+}
+impl std::error::Error for ReplacementCompletionError {}
+
+struct ReplacementClaim {
+    owner: Weak<SharedRenderCore>,
+    loss: DeviceLossNotice,
+    attempt: u64,
+    active: bool,
+}
+impl Drop for ReplacementClaim {
+    fn drop(&mut self) {
+        if self.active {
+            if let Some(owner) = self.owner.upgrade() {
+                let _ = owner.fail_attempt(
+                    self.loss.generation,
+                    self.attempt,
+                    "replacement task was abandoned".into(),
+                );
+            }
+        }
+    }
+}
+
+/// An independent deadline handle. It retains no core or future. Expiry is
+/// sticky; late task completion cannot overwrite it or start another attempt.
+#[derive(Clone)]
+pub struct ReplacementExpiry {
+    owner: Weak<SharedRenderCore>,
+    generation: CoreGeneration,
+    attempt: u64,
+}
+impl ReplacementExpiry {
+    pub fn expire(&self) -> Result<RecoveryStatus, ReplacementCompletionError> {
+        self.owner
+            .upgrade()
+            .ok_or(ReplacementCompletionError::OwnerDropped)?
+            .fail_attempt(
+                self.generation,
+                self.attempt,
+                "asynchronous replacement deadline expired".into(),
+            )
+    }
+}
+
+/// One claimed asynchronous replacement. The host must poll/await this local
+/// future and impose a finite deadline with `with_deadline()` and `expiry()`.
+/// The predicate rejects late readiness even when a JS timer is delayed;
+/// the independent expiry wake interrupts a stalled promise. Dropping it cancels the
+/// attempt after dropping its in-flight future, and wakes subscribers outside
+/// locks. A factory or completion failure is terminal for this loss transition.
+#[must_use = "await replacement or drop it to refuse the claimed transition"]
+pub struct PendingReplacement {
+    future: Option<ReplacementFuture>,
+    claim: Option<ReplacementClaim>,
+    deadline_expired: Option<Box<dyn Fn() -> bool + 'static>>,
+}
+impl PendingReplacement {
+    /// Supply the host's local monotonic clock/deadline predicate. It runs
+    /// outside owner locks before acquisition polling and again before a ready
+    /// result can install a core. The closure need not be Send; retain only
+    /// clock/deadline facts, never old GPU resources. Also arm `expiry()` to
+    /// wake the task if its acquisition promise does not settle.
+    pub fn with_deadline(mut self, is_expired: impl Fn() -> bool + 'static) -> Self {
+        self.deadline_expired = Some(Box::new(is_expired));
+        self
+    }
+    fn deadline_is_expired(&self) -> bool {
+        self.deadline_expired.as_ref().is_some_and(|check| check())
+    }
+    fn refuse_deadline(&mut self) -> Result<RecoveryStatus, ReplacementCompletionError> {
+        // Disposal precedes the failed-state wake, even when the acquisition
+        // was ready during a long final poll before an overdue timer could run.
+        drop(self.future.take());
+        let mut claim = self.claim.take().expect("replacement already collected");
+        claim.active = false;
+        claim
+            .owner
+            .upgrade()
+            .ok_or(ReplacementCompletionError::OwnerDropped)
+            .and_then(|owner| {
+                owner.fail_attempt(
+                    claim.loss.generation,
+                    claim.attempt,
+                    "asynchronous replacement deadline expired".into(),
+                )
+            })
+    }
+    pub fn loss(&self) -> &DeviceLossNotice {
+        &self
+            .claim
+            .as_ref()
+            .expect("replacement already collected")
+            .loss
+    }
+    pub fn expiry(&self) -> ReplacementExpiry {
+        let claim = self.claim.as_ref().expect("replacement already collected");
+        ReplacementExpiry {
+            owner: claim.owner.clone(),
+            generation: claim.loss.generation,
+            attempt: claim.attempt,
+        }
+    }
+}
+impl Future for PendingReplacement {
+    type Output = Result<RecoveryStatus, ReplacementCompletionError>;
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+        let claim = this.claim.as_ref().expect("replacement already collected");
+        let admitted = claim
+            .owner
+            .upgrade()
+            .ok_or(ReplacementCompletionError::OwnerDropped)
+            .and_then(|owner| owner.poll_attempt(claim, cx.waker()));
+        if let Err(error) = admitted {
+            drop(this.future.take());
+            if let Some(mut claim) = this.claim.take() {
+                claim.active = false;
+            }
+            return Poll::Ready(Err(error));
+        }
+        if this.deadline_is_expired() {
+            return Poll::Ready(this.refuse_deadline());
+        }
+        let result = match this
+            .future
+            .as_mut()
+            .expect("replacement already collected")
+            .as_mut()
+            .poll(cx)
+        {
+            Poll::Pending => return Poll::Pending,
+            Poll::Ready(result) => result,
+        };
+        // A completed/aborted factory future must release its handles before
+        // completion can publish a core or wake any host.
+        drop(this.future.take());
+        if this.deadline_is_expired() {
+            drop(result);
+            return Poll::Ready(this.refuse_deadline());
+        }
+        let mut claim = this.claim.take().expect("replacement already collected");
+        let result = claim
+            .owner
+            .upgrade()
+            .ok_or(ReplacementCompletionError::OwnerDropped)
+            .and_then(|owner| owner.complete_attempt(&mut claim, result));
+        Poll::Ready(result)
+    }
+}
+impl Drop for PendingReplacement {
+    fn drop(&mut self) {
+        drop(self.future.take());
+        drop(self.claim.take());
+    }
 }
 
 /// The replacement recipe belongs to this ownership group, not to whichever
@@ -283,12 +466,24 @@ enum State {
 pub struct SharedRenderCore {
     state: Mutex<State>,
     hub: Arc<WakeHub>,
-    factory: ReplacementFactory,
+    factory: Factory,
+    next_attempt: AtomicU64,
 }
 impl SharedRenderCore {
     /// First attachment wins. Reattaching an already-owned core returns its
     /// owner; it cannot establish a second replacement factory for that device.
     pub fn with_factory(core: Arc<RenderCore>, factory: ReplacementFactory) -> Arc<Self> {
+        Self::attach(core, Factory::Sync(factory))
+    }
+    /// Attach a deferred factory without storing a future or old GPU handles.
+    /// As with native attachment, an existing owner always wins.
+    pub fn with_async_factory(
+        core: Arc<RenderCore>,
+        factory: AsyncReplacementFactory,
+    ) -> Arc<Self> {
+        Self::attach(core, Factory::Async(factory))
+    }
+    fn attach(core: Arc<RenderCore>, factory: Factory) -> Arc<Self> {
         let mut association = core
             .recovery_owner
             .lock()
@@ -300,6 +495,7 @@ impl SharedRenderCore {
             state: Mutex::new(State::Ready(core.clone())),
             hub: Arc::new(WakeHub::default()),
             factory,
+            next_attempt: AtomicU64::new(1),
         });
         *association = Arc::downgrade(&owner);
         drop(association);
@@ -310,6 +506,16 @@ impl SharedRenderCore {
     /// entrance for testing the real failed-factory/host handling path, without
     /// pretending a GPU core was created or destroyed.
     pub fn from_detached_loss(loss: DeviceLossNotice, factory: ReplacementFactory) -> Arc<Self> {
+        Self::detached(loss, Factory::Sync(factory))
+    }
+    /// The same actual owner/barrier entrance for deferred replacement controls.
+    pub fn from_detached_loss_async(
+        loss: DeviceLossNotice,
+        factory: AsyncReplacementFactory,
+    ) -> Arc<Self> {
+        Self::detached(loss, Factory::Async(factory))
+    }
+    fn detached(loss: DeviceLossNotice, factory: Factory) -> Arc<Self> {
         Arc::new(Self {
             state: Mutex::new(State::Waiting {
                 loss,
@@ -317,6 +523,7 @@ impl SharedRenderCore {
             }),
             hub: Arc::new(WakeHub::default()),
             factory,
+            next_attempt: AtomicU64::new(1),
         })
     }
     pub fn subscribe(&self, wake: Wake) -> RecoverySubscription {
@@ -362,7 +569,7 @@ impl SharedRenderCore {
                     remaining_hosts: pending.len(),
                 }
             },
-            State::Recovering(loss) => RecoveryStatus::Recovering { loss: loss.clone() },
+            State::Recovering { loss, .. } => RecoveryStatus::Recovering { loss: loss.clone() },
             State::Failed { loss, error } => RecoveryStatus::Failed {
                 loss: loss.clone(),
                 error: error.clone(),
@@ -414,50 +621,211 @@ impl SharedRenderCore {
         }
         changed
     }
-    pub fn recover(self: &Arc<Self>) -> RecoveryStatus {
+    fn begin_attempt(self: &Arc<Self>) -> Result<ReplacementClaim, RecoveryStatus> {
         self.status();
-        let loss = {
+        let mut state = self.state.lock().expect("recovery owner poisoned");
+        match &*state {
+            State::Waiting { loss, pending } if pending.is_empty() => {
+                let loss = loss.clone();
+                let attempt = self
+                    .next_attempt
+                    .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+                    .expect("replacement attempt identity exhausted");
+                *state = State::Recovering {
+                    loss: loss.clone(),
+                    attempt,
+                    waker: None,
+                };
+                Ok(ReplacementClaim {
+                    owner: Arc::downgrade(self),
+                    loss,
+                    attempt,
+                    active: true,
+                })
+            },
+            _ => {
+                drop(state);
+                Err(self.status())
+            },
+        }
+    }
+    /// Claim the asynchronous factory once, after all hosts have detached.
+    /// Ordinary `recover()` never invokes an asynchronous factory or fails it
+    /// just because the browser task has not been launched yet.
+    pub fn begin_async_replacement(self: &Arc<Self>) -> Result<PendingReplacement, RecoveryStatus> {
+        let Factory::Async(factory) = &self.factory else {
+            return Err(self.status());
+        };
+        let claim = self.begin_attempt()?;
+        // Factory invocation is outside the owner lock; no Send bound is
+        // imposed on the future returned for the browser event loop.
+        let future = factory();
+        Ok(PendingReplacement {
+            future: Some(future),
+            claim: Some(claim),
+            deadline_expired: None,
+        })
+    }
+    fn poll_attempt(
+        &self,
+        claim: &ReplacementClaim,
+        waker: &Waker,
+    ) -> Result<(), ReplacementCompletionError> {
+        let replacement_waker = waker.clone();
+        let retired;
+        {
             let mut state = self.state.lock().expect("recovery owner poisoned");
-            match &*state {
-                State::Waiting { loss, pending } if pending.is_empty() => {
-                    let loss = loss.clone();
-                    *state = State::Recovering(loss.clone());
-                    loss
+            match &mut *state {
+                State::Recovering {
+                    loss,
+                    attempt,
+                    waker: stored,
+                } if claim.active
+                    && loss.generation == claim.loss.generation
+                    && *attempt == claim.attempt =>
+                {
+                    retired = if stored
+                        .as_ref()
+                        .is_none_or(|stored| !stored.will_wake(waker))
+                    {
+                        stored.replace(replacement_waker)
+                    } else {
+                        Some(replacement_waker)
+                    };
                 },
                 _ => {
                     drop(state);
-                    return self.status();
+                    return Err(ReplacementCompletionError::StaleTransition);
                 },
             }
-        };
-        let replacement = (self.factory)().and_then(|core| {
-            if core.generation() == loss.generation || core.device_failure().is_some() {
+        }
+        drop(retired);
+        Ok(())
+    }
+    fn complete_attempt(
+        self: &Arc<Self>,
+        claim: &mut ReplacementClaim,
+        replacement: Result<Arc<RenderCore>, String>,
+    ) -> Result<RecoveryStatus, ReplacementCompletionError> {
+        if !Weak::ptr_eq(&claim.owner, &Arc::downgrade(self)) {
+            return Err(ReplacementCompletionError::ForeignOwner);
+        }
+        let mut replacement = replacement.and_then(|core| {
+            if core.generation() == claim.loss.generation || core.device_failure().is_some() {
                 return Err("replacement factory returned a stale or lost core".into());
             }
-            let mut association = core
-                .recovery_owner
-                .lock()
-                .expect("core association poisoned");
-            if association
-                .upgrade()
-                .is_some_and(|owner| !Arc::ptr_eq(&owner, self))
-            {
-                return Err("replacement core belongs to another recovery owner".into());
-            }
-            *association = Arc::downgrade(self);
-            drop(association);
-            core.loss.bind_hub(self.hub.clone());
             Ok(core)
         });
+        let mut retired = None;
+        let mut foreign_owner = None;
+        let retired_waker;
+        let monitor;
         {
             let mut state = self.state.lock().expect("recovery owner poisoned");
+            if !claim.active
+                || !matches!(&*state, State::Recovering { loss, attempt, .. } if loss.generation == claim.loss.generation && *attempt == claim.attempt)
+            {
+                claim.active = false;
+                drop(state);
+                // A late successful future drops its new core outside locks.
+                drop(replacement);
+                return Err(ReplacementCompletionError::StaleTransition);
+            }
+            let foreign = if let Ok(core) = &replacement {
+                let mut association = core
+                    .recovery_owner
+                    .lock()
+                    .expect("core association poisoned");
+                let associated = association.upgrade();
+                if associated
+                    .as_ref()
+                    .is_some_and(|owner| !Arc::ptr_eq(owner, self))
+                {
+                    foreign_owner = associated;
+                    true
+                } else {
+                    *association = Arc::downgrade(self);
+                    false
+                }
+            } else {
+                false
+            };
+            if foreign {
+                retired = std::mem::replace(
+                    &mut replacement,
+                    Err("replacement core belongs to another recovery owner".into()),
+                )
+                .ok();
+            }
+            monitor = replacement.as_ref().ok().map(|core| core.loss.clone());
+            retired_waker = match &mut *state {
+                State::Recovering { waker, .. } => waker.take(),
+                _ => None,
+            };
             *state = match replacement {
                 Ok(core) => State::Ready(core),
-                Err(error) => State::Failed { loss, error },
+                Err(error) => State::Failed {
+                    loss: claim.loss.clone(),
+                    error,
+                },
             };
+            claim.active = false;
+        }
+        drop(retired);
+        drop(foreign_owner);
+        drop(retired_waker);
+        // Binding can wake synchronously; never do it under the owner lock.
+        // A monitor clone retains no renderer/device during reentrant wakes.
+        if let Some(monitor) = monitor {
+            monitor.bind_hub(self.hub.clone());
         }
         self.hub.wake_all();
-        self.status()
+        Ok(self.status())
+    }
+    fn fail_attempt(
+        &self,
+        generation: CoreGeneration,
+        attempt: u64,
+        error: String,
+    ) -> Result<RecoveryStatus, ReplacementCompletionError> {
+        let waker;
+        {
+            let mut state = self.state.lock().expect("recovery owner poisoned");
+            let State::Recovering {
+                loss,
+                attempt: current,
+                waker: pending,
+            } = &mut *state
+            else {
+                return Err(ReplacementCompletionError::StaleTransition);
+            };
+            if loss.generation != generation || *current != attempt {
+                return Err(ReplacementCompletionError::StaleTransition);
+            }
+            waker = pending.take();
+            *state = State::Failed {
+                loss: loss.clone(),
+                error,
+            };
+        }
+        // Expiry also wakes a pending local future, which drops its acquisition
+        // future instead of waiting for a browser promise that may never settle.
+        if let Some(waker) = waker {
+            waker.wake();
+        }
+        self.hub.wake_all();
+        Ok(self.status())
+    }
+    pub fn recover(self: &Arc<Self>) -> RecoveryStatus {
+        let Factory::Sync(factory) = &self.factory else {
+            return self.status();
+        };
+        let Ok(mut claim) = self.begin_attempt() else {
+            return self.status();
+        };
+        let replacement = factory();
+        self.complete_attempt(&mut claim, replacement)
+            .unwrap_or_else(|_| self.status())
     }
 }
 
@@ -471,6 +839,321 @@ mod tests {
             reason: wgpu::DeviceLostReason::Unknown,
             message: "injected actual notice seam".into(),
         }
+    }
+    struct CountWake(AtomicUsize);
+    impl std::task::Wake for CountWake {
+        fn wake(self: Arc<Self>) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+        fn wake_by_ref(self: &Arc<Self>) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    struct LocalAcquisition {
+        // A genuinely !Send acquisition future is accepted by the public API.
+        _local: std::rc::Rc<()>,
+        drops: Arc<AtomicUsize>,
+    }
+    impl Future for LocalAcquisition {
+        type Output = Result<Arc<RenderCore>, String>;
+        fn poll(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Self::Output> {
+            Poll::Pending
+        }
+    }
+    impl Drop for LocalAcquisition {
+        fn drop(&mut self) {
+            self.drops.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    fn deferred_owner(
+        generation: u64,
+        calls: Arc<AtomicUsize>,
+        drops: Arc<AtomicUsize>,
+    ) -> Arc<SharedRenderCore> {
+        SharedRenderCore::from_detached_loss_async(
+            notice(generation),
+            Arc::new(move || {
+                calls.fetch_add(1, Ordering::SeqCst);
+                Box::pin(LocalAcquisition {
+                    _local: std::rc::Rc::new(()),
+                    drops: drops.clone(),
+                })
+            }),
+        )
+    }
+    #[test]
+    fn async_owner_requires_all_detachments_and_claims_once_without_sync_failure() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let drops = Arc::new(AtomicUsize::new(0));
+        let owner = deferred_owner(41, calls.clone(), drops.clone());
+        let first = owner.subscribe(Arc::new(|| {}));
+        let second = owner.subscribe(Arc::new(|| {}));
+        assert!(owner.acknowledge_detached(&first, 41));
+        assert!(matches!(
+            owner.begin_async_replacement(),
+            Err(RecoveryStatus::Waiting {
+                remaining_hosts: 1,
+                ..
+            })
+        ));
+        assert!(matches!(
+            owner.recover(),
+            RecoveryStatus::Waiting {
+                remaining_hosts: 1,
+                ..
+            }
+        ));
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        // A closed host removes itself from the actual barrier.
+        drop(second);
+        assert!(matches!(
+            owner.recover(),
+            RecoveryStatus::Waiting {
+                remaining_hosts: 0,
+                ..
+            }
+        ));
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        let pending = owner.begin_async_replacement().unwrap();
+        assert_eq!(pending.loss().generation, 41);
+        assert!(matches!(
+            owner.begin_async_replacement(),
+            Err(RecoveryStatus::Recovering { .. })
+        ));
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        drop(pending);
+        assert_eq!(drops.load(Ordering::SeqCst), 1);
+        assert!(matches!(owner.recover(), RecoveryStatus::Failed { .. }));
+        assert!(matches!(
+            owner.begin_async_replacement(),
+            Err(RecoveryStatus::Failed { .. })
+        ));
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+    #[test]
+    fn dropping_async_task_releases_future_before_reentrant_failure_wake() {
+        let drops = Arc::new(AtomicUsize::new(0));
+        let owner = deferred_owner(42, Arc::new(AtomicUsize::new(0)), drops.clone());
+        let weak = Arc::downgrade(&owner);
+        let seen = Arc::new(AtomicUsize::new(0));
+        let observed = seen.clone();
+        let dropped = drops.clone();
+        let host = owner.subscribe(Arc::new(move || {
+            let owner = weak.upgrade().unwrap();
+            if matches!(owner.status(), RecoveryStatus::Failed { .. }) {
+                assert_eq!(dropped.load(Ordering::SeqCst), 1);
+                assert!(matches!(owner.recover(), RecoveryStatus::Failed { .. }));
+                observed.fetch_add(1, Ordering::SeqCst);
+            }
+        }));
+        assert!(owner.acknowledge_detached(&host, 42));
+        drop(owner.begin_async_replacement().unwrap());
+        assert_eq!(seen.load(Ordering::SeqCst), 1);
+    }
+    #[test]
+    fn async_expiry_wakes_pending_task_and_rejects_late_completion() {
+        let drops = Arc::new(AtomicUsize::new(0));
+        let owner = deferred_owner(43, Arc::new(AtomicUsize::new(0)), drops.clone());
+        let mut pending = owner.begin_async_replacement().unwrap();
+        let expiry = pending.expiry();
+        let wake = Arc::new(CountWake(AtomicUsize::new(0)));
+        let waker = Waker::from(wake.clone());
+        let mut cx = Context::from_waker(&waker);
+        assert!(Pin::new(&mut pending).poll(&mut cx).is_pending());
+        assert!(matches!(expiry.expire(), Ok(RecoveryStatus::Failed { .. })));
+        assert_eq!(wake.0.load(Ordering::SeqCst), 1);
+        assert!(matches!(
+            Pin::new(&mut pending).poll(&mut cx),
+            Poll::Ready(Err(ReplacementCompletionError::StaleTransition))
+        ));
+        assert_eq!(drops.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            expiry.expire(),
+            Err(ReplacementCompletionError::StaleTransition)
+        );
+        assert!(matches!(owner.recover(), RecoveryStatus::Failed { .. }));
+    }
+    struct DeadlineAcquisition {
+        expired: Arc<AtomicBool>,
+        polls: Arc<AtomicUsize>,
+        drops: Arc<AtomicUsize>,
+    }
+    impl Future for DeadlineAcquisition {
+        type Output = Result<Arc<RenderCore>, String>;
+        fn poll(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Self::Output> {
+            self.polls.fetch_add(1, Ordering::SeqCst);
+            // Model a final acquisition poll crossing the monotonic deadline
+            // before the browser has delivered its independent timeout task.
+            self.expired.store(true, Ordering::Release);
+            Poll::Ready(Err("late factory response".into()))
+        }
+    }
+    impl Drop for DeadlineAcquisition {
+        fn drop(&mut self) {
+            self.drops.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    fn deadline_owner(
+        generation: u64,
+        expired: Arc<AtomicBool>,
+        polls: Arc<AtomicUsize>,
+        drops: Arc<AtomicUsize>,
+    ) -> Arc<SharedRenderCore> {
+        SharedRenderCore::from_detached_loss_async(
+            notice(generation),
+            Arc::new(move || {
+                Box::pin(DeadlineAcquisition {
+                    expired: expired.clone(),
+                    polls: polls.clone(),
+                    drops: drops.clone(),
+                })
+            }),
+        )
+    }
+    #[test]
+    fn monotonic_deadline_refuses_before_acquisition_is_polled() {
+        let expired = Arc::new(AtomicBool::new(true));
+        let polls = Arc::new(AtomicUsize::new(0));
+        let drops = Arc::new(AtomicUsize::new(0));
+        let owner = deadline_owner(47, expired.clone(), polls.clone(), drops.clone());
+        let mut pending = owner
+            .begin_async_replacement()
+            .unwrap()
+            .with_deadline(move || expired.load(Ordering::Acquire));
+        let waker = Waker::from(Arc::new(CountWake(AtomicUsize::new(0))));
+        let mut cx = Context::from_waker(&waker);
+        assert!(
+            matches!(Pin::new(&mut pending).poll(&mut cx), Poll::Ready(Ok(RecoveryStatus::Failed { error, .. })) if error == "asynchronous replacement deadline expired")
+        );
+        assert_eq!(polls.load(Ordering::SeqCst), 0);
+        assert_eq!(drops.load(Ordering::SeqCst), 1);
+        assert!(matches!(
+            owner.begin_async_replacement(),
+            Err(RecoveryStatus::Failed { .. })
+        ));
+    }
+    #[test]
+    fn late_ready_acquisition_cannot_beat_delayed_timer_or_install_a_core() {
+        let expired = Arc::new(AtomicBool::new(false));
+        let polls = Arc::new(AtomicUsize::new(0));
+        let drops = Arc::new(AtomicUsize::new(0));
+        let owner = deadline_owner(48, expired.clone(), polls.clone(), drops.clone());
+        let weak = Arc::downgrade(&owner);
+        let released = drops.clone();
+        let host = owner.subscribe(Arc::new(move || {
+            if matches!(
+                weak.upgrade().unwrap().status(),
+                RecoveryStatus::Failed { .. }
+            ) {
+                assert_eq!(released.load(Ordering::SeqCst), 1);
+            }
+        }));
+        owner.acknowledge_detached(&host, 48);
+        let mut pending = owner
+            .begin_async_replacement()
+            .unwrap()
+            .with_deadline(move || expired.load(Ordering::Acquire));
+        let expiry = pending.expiry();
+        let waker = Waker::from(Arc::new(CountWake(AtomicUsize::new(0))));
+        let mut cx = Context::from_waker(&waker);
+        // No independent timer callback is delivered before this ready result.
+        assert!(
+            matches!(Pin::new(&mut pending).poll(&mut cx), Poll::Ready(Ok(RecoveryStatus::Failed { error, .. })) if error == "asynchronous replacement deadline expired")
+        );
+        assert_eq!(polls.load(Ordering::SeqCst), 1);
+        assert_eq!(drops.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            expiry.expire(),
+            Err(ReplacementCompletionError::StaleTransition)
+        );
+        assert!(matches!(
+            owner.current(),
+            Err(RecoveryStatus::Failed { .. })
+        ));
+    }
+    #[test]
+    fn dropped_owner_refuses_pending_completion_and_releases_local_future() {
+        let drops = Arc::new(AtomicUsize::new(0));
+        let owner = deferred_owner(46, Arc::new(AtomicUsize::new(0)), drops.clone());
+        let mut pending = owner.begin_async_replacement().unwrap();
+        let expiry = pending.expiry();
+        drop(owner);
+        assert_eq!(
+            expiry.expire(),
+            Err(ReplacementCompletionError::OwnerDropped)
+        );
+        let waker = Waker::from(Arc::new(CountWake(AtomicUsize::new(0))));
+        let mut cx = Context::from_waker(&waker);
+        assert!(matches!(
+            Pin::new(&mut pending).poll(&mut cx),
+            Poll::Ready(Err(ReplacementCompletionError::OwnerDropped))
+        ));
+        assert_eq!(drops.load(Ordering::SeqCst), 1);
+    }
+    #[test]
+    fn foreign_completion_and_stale_deadline_do_not_mutate_live_transition() {
+        let first = deferred_owner(
+            44,
+            Arc::new(AtomicUsize::new(0)),
+            Arc::new(AtomicUsize::new(0)),
+        );
+        let second = deferred_owner(
+            44,
+            Arc::new(AtomicUsize::new(0)),
+            Arc::new(AtomicUsize::new(0)),
+        );
+        let mut claim = first.begin_attempt().unwrap();
+        assert_eq!(
+            second.complete_attempt(&mut claim, Err("foreign".into())),
+            Err(ReplacementCompletionError::ForeignOwner)
+        );
+        assert!(matches!(first.status(), RecoveryStatus::Recovering { .. }));
+        assert!(matches!(second.status(), RecoveryStatus::Waiting { .. }));
+        assert_eq!(
+            first.fail_attempt(43, claim.attempt, "stale generation".into()),
+            Err(ReplacementCompletionError::StaleTransition)
+        );
+        assert_eq!(
+            first.fail_attempt(44, claim.attempt + 1, "stale attempt".into()),
+            Err(ReplacementCompletionError::StaleTransition)
+        );
+        assert!(
+            matches!(first.complete_attempt(&mut claim, Err("actual failure".into())), Ok(RecoveryStatus::Failed { error, .. }) if error == "actual failure")
+        );
+        assert_eq!(
+            first.complete_attempt(&mut claim, Err("duplicate".into())),
+            Err(ReplacementCompletionError::StaleTransition)
+        );
+    }
+    #[test]
+    fn async_factory_and_failed_completion_are_reentrant_and_once() {
+        let holder = Arc::new(Mutex::new(Weak::<SharedRenderCore>::new()));
+        let factory_owner = holder.clone();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let counted = calls.clone();
+        let owner = SharedRenderCore::from_detached_loss_async(
+            notice(45),
+            Arc::new(move || {
+                let owner = factory_owner.lock().unwrap().upgrade().unwrap();
+                assert!(matches!(owner.status(), RecoveryStatus::Recovering { .. }));
+                counted.fetch_add(1, Ordering::SeqCst);
+                Box::pin(std::future::ready(Err("async boot refused".into())))
+            }),
+        );
+        *holder.lock().unwrap() = Arc::downgrade(&owner);
+        let weak = Arc::downgrade(&owner);
+        let host = owner.subscribe(Arc::new(move || {
+            let _ = weak.upgrade().unwrap().status();
+        }));
+        owner.acknowledge_detached(&host, 45);
+        let mut pending = owner.begin_async_replacement().unwrap();
+        let waker = Waker::from(Arc::new(CountWake(AtomicUsize::new(0))));
+        let mut cx = Context::from_waker(&waker);
+        assert!(
+            matches!(Pin::new(&mut pending).poll(&mut cx), Poll::Ready(Ok(RecoveryStatus::Failed { error, .. })) if error == "async boot refused")
+        );
+        assert!(matches!(owner.recover(), RecoveryStatus::Failed { .. }));
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
     #[test]
     fn detached_owner_waits_for_all_hosts_and_failed_factory_is_once() {

@@ -645,6 +645,22 @@ same session; links out of it are rewritten for its new depth.
 
 ## Working principles
 
+- **Bounded shared browser replacement (2026-10-14):** the stored asynchronous
+  recipe waits for the same all-host detachment barrier and admits one branded,
+  deadline-bound local claim. Two full Workshop mounts passed controlled owned
+  device destruction and complete producer/root recovery in browser R6. Keep that
+  consumer receipt separate from browser current-frame scopes/counters, final
+  canvas handoff, physical driver reset and OS AT. See
+  [the shared recovery contract](../components/genet-render-host/DEVICE_RECOVERY.md#browser-controlled-shared-replacement-r6).
+
+- **Explicit retained font resources (2026-10-13):** a named family alias does
+  not establish a CSS generic, and native system-font success does not supply
+  browser faces. Keep host-selected generic bindings in the retained document
+  ledger, validate replacements before admission, and preserve authored family
+  and session authority through reconstruction. Select production faces by
+  actual role/coverage; fixture delivery does not prove typography fidelity.
+  See [Genet Livery's resource contract](../components/genet-livery/README.md#explicit-host-generic-resources).
+
 - **Qualify renderer dependencies at each workspace root.** Genet's standalone
   host checks and consuming applications must each patch `netrender-vello`,
   `vello_encoding` and `vello_shaders` to the same maintained revision. Root

@@ -231,9 +231,10 @@ gates; physical AT and browser-hosted interaction remain open.
 
 Taproot selectors can explicitly name a host surface family with
 `surface:contributed role:button Calculate` or `Selector::on_surface`.
-Unscoped ordering and class/text/attribute meanings remain unchanged. An
-unknown family, or a host-computed Hit naming a different family, is refused
-before the mutating click hook. Miss/Unsupported may still reach a host's
+Unscoped ordering and class/text/attribute meanings remain unchanged. A
+host-computed Hit naming a different family is refused before the mutating
+click hook. Without a matching authoritative Hit, an unknown probe family is
+also refused. Miss/Unsupported may still reach a known family's host
 deferred click hook; that host owns target identity, scrolling and refusal.
 
 Genet-render publicly exposes `accesskit_tree_from_projection`, lowering the
@@ -389,3 +390,57 @@ found `visibility:hidden` and `aria-hidden` measurement probes by
     `rustfmt --check` is clean for every hunk changed here. The two diffs it
     still reports predate this change: `a11y/name.rs:248`, and the order of
     `genet-render/src/lib.rs`'s `pub use` blocks.
+
+## Scoped host-owned hits without probe inventory (2026-10-14)
+
+**Status (2026-10-14): implemented and verified.** This corrects the September 30 preflight
+for hosts whose current geometry is authoritative but whose shared-window DOM
+cannot be exposed as an independent per-family probe surface.
+
+### Findings
+
+Turnstone's A4 composition supplies a current `SelectorTarget::Hit` attributed
+to the requested pane family. `AutomatableExt::resolve` and `click` checked
+`with_surfaces` before honoring that answer, refusing the selector despite a
+matching physical target. A fabricated per-pane probe over the shared DOM would
+cross owner boundaries. The supplier needs no additional host API.
+
+### Implementation and done-conditions
+
+Resolve honors a matching authoritative Hit before the legacy DOM fallback.
+Scoped click validates a host Hit's family before its mutable hook; a matching
+Hit does not require probe inventory. Miss and Unsupported retain the existing
+inventory preflight for scoped hook admission. A known-family Miss may still
+enter the deferred reveal hook, but resolution never falls back to stale DOM
+geometry after an authoritative Miss.
+
+Done when focused native tests demonstrate scoped resolution and actual
+press/release without probe inventory, preserved hook admission for a matching
+Hit, refusal of a mismatched Hit before mutation, and refusal of missing-family
+Miss/Unsupported hooks. Existing known-family deferred reveal controls must
+continue to pass. Exact commands, source hashes and control logs belong to
+[`receipts/2026-10-14_taproot_owned_hits/`](receipts/2026-10-14_taproot_owned_hits/).
+Turnstone's physical consumer and Mere's dependency adoption are separate gates.
+
+### Progress and verification
+
+The tests-only pre-fix control on `1ec5d08d16e78f936e9ab366af9f36b7d6abc044`
+failed both matching-hit controls: scoped resolution returned `None`, and the
+host hook was never admitted. The three other scoped tests passed. After the
+repair, all **42 Taproot library tests passed, with zero failures or ignores**.
+This includes existing known-family deferred Miss/Unsupported hook controls,
+authoritative Miss without stale fallback, and unscoped physical delivery.
+
+Both runs used Rust 1.99.0 from the Code root, committed sibling dependency
+declarations, the same offline-generated lock, `--locked --offline -j 1`, and
+`CARGO_PROFILE_DEV_DEBUG=0`, `CARGO_PROFILE_TEST_DEBUG=0`.
+`CARGO_TARGET_DIR=C:/t/cargo-targets/genet` and
+`CARGO_BUILD_BUILD_DIR=C:/t/cargo-targets/genet/build` reused the stable target.
+The manifest was `worktrees/genet-taproot-owned-hits/Cargo.toml`; the command
+was `cargo +1.99.0 test --manifest-path <manifest> -p taproot --lib --locked
+--offline -j 1`, adding `scoped_` only for the pre-fix control. Rustfmt and
+`git diff --check` passed. Source hashes, exact commands, ignored lock copy,
+and raw logs are retained in the linked receipt. No isolated target or Cargo
+home was created. The worktree isolates the primary checkout's unrelated Forms
+work. These are native supplier tests; downstream Wasm, browser-hosted and
+physical Turnstone interaction remain consumer gates.

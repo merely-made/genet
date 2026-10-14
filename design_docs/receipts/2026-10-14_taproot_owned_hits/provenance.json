@@ -1,0 +1,55 @@
+{
+  "base": "1ec5d08d16e78f936e9ab366af9f36b7d6abc044",
+  "scope": "Taproot scoped authoritative Hit admission without legacy probe inventory",
+  "toolchain": "1.99.0-x86_64-pc-windows-msvc",
+  "working_directory": "C:/Users/mark_/Code",
+  "manifest": "C:/Users/mark_/Code/worktrees/genet-taproot-owned-hits/Cargo.toml",
+  "environment": {
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_BUILD_BUILD_DIR": "C:/t/cargo-targets/genet/build",
+    "CARGO_TARGET_DIR": "C:/t/cargo-targets/genet",
+    "CARGO_PROFILE_DEV_DEBUG": "0"
+  },
+  "lock": {
+    "generated": "cargo +1.99.0 generate-lockfile --manifest-path C:/Users/mark_/Code/worktrees/genet-taproot-owned-hits/Cargo.toml --offline",
+    "preserved": "Cargo.lock",
+    "source": "published manifests without sibling path overrides"
+  },
+  "pre_fix": {
+    "command": "cargo +1.99.0 test --manifest-path C:/Users/mark_/Code/worktrees/genet-taproot-owned-hits/Cargo.toml -p taproot --lib --locked --offline -j 1 scoped_",
+    "ignored": 0,
+    "source_lib_sha256": "6e59bc7b265fb59e14b8098a5072cee9a1cf2928bd06aff8a07e68f5a35b1d21",
+    "passed": 3,
+    "failed": 2,
+    "log": "pre-fix-native.log",
+    "qualifications": "New tests with original extension ordering; two matching-Hit failures are expected.",
+    "exit_code": 101
+  },
+  "native": {
+    "ignored": 0,
+    "exit_code": 0,
+    "log": "native.log",
+    "passed": 42,
+    "failed": 0,
+    "command": "cargo +1.99.0 test --manifest-path C:/Users/mark_/Code/worktrees/genet-taproot-owned-hits/Cargo.toml -p taproot --lib --locked --offline -j 1"
+  },
+  "formatting": {
+    "exit_code": 0,
+    "command": "rustfmt +1.99.0 --check --edition 2024 --config skip_children=true components/taproot/lib.rs"
+  },
+  "source_sha256": {
+    "components/taproot/lib.rs": "2949580b0154bc411eb5af46d85a1db37a598738ddb86e150df1e05e5c193d6c",
+    "components/taproot/projection.rs": "b16b4db81d7d06a962035905833f3e766834760799ce04e051cb761e12a1c9f5",
+    "components/taproot/scenario.rs": "c2c1fcf7f39ab3157e60885a327bfaf99f6cd29a13bef9ec9fab5c9637570689",
+    "components/taproot/Cargo.toml": "1b843d0616a10edda38f9fa88be560ef8c9e6f7697cd21545b12d274f890103d",
+    "Cargo.lock": "fb80c7277384d9966e00637d19a17becce52bce22ec03b25d5af6a8081f596d2"
+  },
+  "test_binary": {
+    "path": "C:/t/cargo-targets/genet/build/debug/deps/taproot-f6efe223a12d4126.exe",
+    "sha256": "6cc6b5f879300c3ad28e961969539c428e1835cfc1fa93f5d95494df46706935"
+  },
+  "limits": [
+    "Native supplier qualification only; consumer repins and physical/browser-hosted/Wasm interaction are separate gates.",
+    "Existing dependency deprecation warnings are preserved in raw logs."
+  ]
+}

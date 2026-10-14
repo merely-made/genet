@@ -76,7 +76,8 @@ pub enum Match {
 /// principle — a target is only findable through identity the DOM carries.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Selector {
-    /// Optional host surface family, matched exactly against [`ProbeSurface::name`].
+    /// Optional host surface family, matched exactly against [`Hit::surface`]
+    /// or the legacy [`ProbeSurface::name`].
     /// This scopes attribution, not pane instance identity or accessible labels.
     pub surface: Option<String>,
     pub matcher: Match,
@@ -373,7 +374,8 @@ pub trait Automatable {
 
     /// Resolve a selector against host-owned layout when the host has an
     /// authoritative answer. The default leaves resolution to retained probe
-    /// surfaces for existing consumers.
+    /// surfaces for existing consumers. A matching host Hit does not require
+    /// a corresponding probe surface in [`Self::with_surfaces`].
     fn selector_target(&self, _sel: &Selector) -> SelectorTarget {
         SelectorTarget::Unsupported
     }
@@ -441,17 +443,6 @@ pub trait Automatable {
 pub trait AutomatableExt: Automatable {
     /// Resolve `sel` to a window point across this app's surfaces.
     fn resolve(&self, sel: &Selector) -> Option<Hit> {
-        // Older single-surface hooks do not inspect scope. A missing family is
-        // still authoritative, and a host answer cannot escape the named family.
-        if sel.surface.is_some()
-            && !self.with_surfaces(|surfaces| {
-                surfaces
-                    .iter()
-                    .any(|surface| sel.matches_surface(surface.name))
-            })
-        {
-            return None;
-        }
         match self.selector_target(sel) {
             SelectorTarget::Unsupported => self.with_surfaces(|surfaces| resolve(surfaces, sel)),
             SelectorTarget::Miss => None,
@@ -462,23 +453,24 @@ pub trait AutomatableExt: Automatable {
     /// Resolve `sel` and click it (press+release at its centre). `true` if it
     /// hit; `false` is the driver's attributable miss.
     fn click(&mut self, sel: &Selector) -> bool {
-        if sel.surface.is_some()
-            && !self.with_surfaces(|surfaces| {
-                surfaces
-                    .iter()
-                    .any(|surface| sel.matches_surface(surface.name))
-            })
-        {
-            return false;
-        }
-        // A host Hit identifies the family before a hook can mutate it.
-        // Miss may describe an offscreen target which the hook will reveal;
-        // Unsupported preserves hooks whose host does not provide geometry.
-        if sel.surface.is_some()
-            && matches!(self.selector_target(sel),
-                SelectorTarget::Hit(hit) if !sel.matches_surface(hit.surface))
-        {
-            return false;
+        if sel.surface.is_some() {
+            // Host geometry identifies the family without a legacy probe DOM,
+            // and a mismatched Hit must be refused before the mutable hook.
+            match self.selector_target(sel) {
+                SelectorTarget::Hit(hit) if !sel.matches_surface(hit.surface) => return false,
+                SelectorTarget::Hit(_) => {},
+                // Miss may describe an offscreen target the hook can reveal.
+                // Unsupported retains legacy hooks; both still need known scope.
+                SelectorTarget::Miss | SelectorTarget::Unsupported => {
+                    if !self.with_surfaces(|surfaces| {
+                        surfaces
+                            .iter()
+                            .any(|surface| sel.matches_surface(surface.name))
+                    }) {
+                        return false;
+                    }
+                },
+            }
         }
         if let Some(handled) = self.click_target(sel) {
             return handled;
@@ -853,6 +845,7 @@ mod tests {
 
     struct HostSelectorApp {
         dom: ScriptedDom,
+        probe_inventory: bool,
         target: SelectorTarget,
         click_result: Option<bool>,
         click_calls: usize,
@@ -862,6 +855,9 @@ mod tests {
 
     impl Automatable for HostSelectorApp {
         fn with_surfaces<R>(&self, f: impl FnOnce(&[ProbeSurface<'_>]) -> R) -> R {
+            if !self.probe_inventory {
+                return f(&[]);
+            }
             f(&[ProbeSurface {
                 name: "strip",
                 dom: &self.dom,
@@ -924,6 +920,7 @@ mod tests {
     fn scope_blocks_unknown_hook_delivery_and_wrong_surface_host_answers() {
         let mut app = HostSelectorApp {
             dom: strip_dom(),
+            probe_inventory: true,
             target: SelectorTarget::Hit(Hit {
                 surface: "different",
                 point: (37.0, 91.0),
@@ -967,6 +964,7 @@ mod tests {
     fn a_host_selector_target_supplies_the_click_point() {
         let mut app = HostSelectorApp {
             dom: strip_dom(),
+            probe_inventory: true,
             target: SelectorTarget::Hit(Hit {
                 surface: "host-canvas",
                 point: (37.0, 91.0),
@@ -989,6 +987,7 @@ mod tests {
             // return (620, 22). A host layout miss must not use that stale
             // surface geometry.
             dom: strip_dom(),
+            probe_inventory: true,
             target: SelectorTarget::Miss,
             click_result: None,
             click_calls: 0,
@@ -1008,6 +1007,7 @@ mod tests {
         for accepted in [true, false] {
             let mut app = HostSelectorApp {
                 dom: strip_dom(),
+                probe_inventory: true,
                 target: SelectorTarget::Unsupported,
                 click_result: Some(accepted),
                 click_calls: 0,
@@ -1020,6 +1020,100 @@ mod tests {
             );
             assert_eq!(app.pressed, None);
             assert_eq!(app.released, None);
+        }
+    }
+
+    #[test]
+    fn scoped_host_hit_without_probe_inventory_resolves_and_delivers_pointer() {
+        let hit = Hit {
+            surface: "roster",
+            point: (1276.0, 77.0),
+        };
+        let mut app = HostSelectorApp {
+            dom: strip_dom(),
+            probe_inventory: false,
+            target: SelectorTarget::Hit(hit),
+            click_result: None,
+            click_calls: 0,
+            pressed: None,
+            released: None,
+        };
+        let selector = Selector::class("tab")
+            .containing("Links")
+            .on_surface("roster");
+
+        assert_eq!(app.resolve(&selector), Some(hit));
+        assert!(app.click(&selector));
+        assert_eq!(app.click_calls, 1);
+        assert_eq!(app.pressed, Some(hit.point));
+        assert_eq!(app.released, Some(hit.point));
+    }
+
+    #[test]
+    fn scoped_host_hit_without_probe_inventory_preserves_delivery_hook() {
+        let mut app = HostSelectorApp {
+            dom: strip_dom(),
+            probe_inventory: false,
+            target: SelectorTarget::Hit(Hit {
+                surface: "roster",
+                point: (1276.0, 77.0),
+            }),
+            click_result: Some(true),
+            click_calls: 0,
+            pressed: None,
+            released: None,
+        };
+
+        assert!(app.click(&Selector::class("tab").on_surface("roster")));
+        assert_eq!(app.click_calls, 1);
+        assert_eq!(app.pressed, None);
+        assert_eq!(app.released, None);
+    }
+
+    #[test]
+    fn scoped_wrong_family_hit_without_probe_inventory_refuses_mutating_hook() {
+        let mut app = HostSelectorApp {
+            dom: strip_dom(),
+            probe_inventory: false,
+            target: SelectorTarget::Hit(Hit {
+                surface: "chrome",
+                point: (1276.0, 77.0),
+            }),
+            click_result: Some(true),
+            click_calls: 0,
+            pressed: None,
+            released: None,
+        };
+        let selector = Selector::class("tab").on_surface("roster");
+
+        assert_eq!(app.resolve(&selector), None);
+        assert!(!app.click(&selector));
+        assert_eq!(app.click_calls, 0);
+        assert_eq!(app.pressed, None);
+        assert_eq!(app.released, None);
+    }
+
+    #[test]
+    fn scoped_missing_probe_family_still_refuses_miss_and_legacy_hooks() {
+        for probe_inventory in [false, true] {
+            for target in [SelectorTarget::Miss, SelectorTarget::Unsupported] {
+                let mut app = HostSelectorApp {
+                    dom: strip_dom(),
+                    probe_inventory,
+                    target,
+                    click_result: Some(true),
+                    click_calls: 0,
+                    pressed: None,
+                    released: None,
+                };
+                let selector = Selector::class("tab").on_surface("roster");
+
+                assert_eq!(app.resolve(&selector), None);
+                assert!(!app.click(&selector));
+                assert_eq!(app.click_calls, 0);
+                assert_eq!(app.pressed, None);
+                assert_eq!(app.released, None);
+            }
         }
     }
 }

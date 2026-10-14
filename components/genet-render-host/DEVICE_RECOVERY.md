@@ -16,17 +16,25 @@ wake/cancellation callbacks happen outside their protecting locks. Readback
 creation admitted before loss holds the barrier until its cancellation is
 registered.
 
-Native hosts use the retained recipe. Browser device acquisition needs an
-asynchronous host factory; the default synchronous factory reports a typed
-failure. Surface Lost requests recreation on the healthy device and Outdated
-only reconfigures. Neither is itself a request to replace every device.
+Native hosts use the retained synchronous boot recipe. On Wasm,
+`RenderCore::shared_recovery` stores an asynchronous boot recipe. After the same
+all-host detachment barrier, the browser adapter claims
+`begin_async_replacement` once and polls its local, non-Send future outside host
+borrows and owner locks. Ordinary synchronous `recover()` leaves that strategy
+pending; it does not invoke a synchronous failure. The claim is branded by owner,
+lost generation and attempt. Drop, expiry, stale or foreign completion cannot
+install a core. A monotonic deadline is checked before factory polling and before
+Ready installation, even if the browser timeout callback runs late. Failure is
+terminal for that transition. Surface Lost requests recreation on the healthy
+device and Outdated only reconfigures; neither replaces every device.
 
 The production Cambium owner gate uses two actual hosts, installed callback
 notification after Device::destroy, one replacement generation, byte-identical
 registered reader images, exact-once capture/readback refusal and a later failed
 factory. Its headless distinct-leaf-key scope and fresh native presentation are
 recorded separately in Mere's recovery receipt. Controlled destruction does not
-claim physical driver-reset recovery or browser automatic replacement.
+claim physical driver-reset recovery. Browser automatic replacement has the
+separate controlled two-mount R6 qualification described below.
 
 The checked raster API returns `RasterizeFailure`: an installed loss notice has
 priority over the original provider error. Admission holds the replacement
@@ -60,3 +68,36 @@ requires CurveFlatteningLimit before a successful checked target could escape,
 then zero pending counters and a valid render on the same healthy device.
 Browser current-frame shader-counter qualification also requires an async host
 seam and remains separate from the native completion guarantee.
+
+## Browser controlled shared replacement R6
+
+The accepted browser R6 consumer uses Genet
+`5618326d287e7f7ef0c1cc3545587d64cedb22a7`, Mere
+`4682ba99040c234c6410d73125e5dc9b1f91cc03`, Netrender `c74b7cb28090c28b1c6d80b08dcdea18aff48d3e`
+and provider `2eae6243881d5b24c984d5ee35dde509ca5db782`. Two actual full Workshop
+mounts use identical local preview keys with distinct physical images. Actual
+owned `Device::destroy` emits generation 2's Destroyed notice; the production
+async owner detaches both hosts and installs shared generation 3 on their same
+canvases. One host is application-hidden within a visible browser document.
+Runner/source identity, authored state, focus/selection/zoom and subsequent
+logical input/resize survive. Typed captures/readback refuse once; both mount
+lifetimes and exclusively owned devices complete their distinct cleanup.
+
+Twelve complete root/Reader/Stylesheet image copies and six before/after pairs
+pass the unchanged uniform RGB 3 / alpha 2 / mean RGBA 1 limits. Maximum observed
+RGB difference is 1, alpha 0 and mean 1.9501730778606602e-5; equality is not
+claimed. All twelve PNGs were reviewed. The fixture explicitly maps its checked-in
+Roboto bytes to sans-serif, system-ui, serif and monospace in the outer Host and
+both retained producer documents. This qualifies face delivery and retention,
+not production serif, fixed-width or script coverage. Native shared R2 evidence
+uses the earlier G09b/Mcc65 source and does not requalify these font changes.
+
+The compact consumer record is Mere's
+`design_docs/cambium_docs/testing/receipts/2026-10-12_flattening_and_device_recovery/browser-r6/`.
+Its provenance retains the actual compiler cone/local override, source/package
+and driver seals, external raw hashes, numeric/visual review and owned-process
+closure. Later immutable-pin integration is a separate coherence check.
+Current-frame asynchronous shader counters, GPU error scopes and final canvas
+clear/blit remain unqualified: R6 records pending Some((3, 96)) and both current-frame
+qualification flags false. Physical driver reset, OS assistive actions and
+sustained performance remain outside this controlled replacement receipt.

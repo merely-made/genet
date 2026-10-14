@@ -18,13 +18,12 @@ path = "src/lib.rs"
 [features]
 default = ["hyper-transport", "h3", "websocket"]
 # The default transport: hyper 1 (h1/h2) over rustls, one process-wide pool.
-hyper-transport = ["dep:hyper", "dep:hyper-util", "dep:hyper-rustls", "dep:rustls", "dep:http", "dep:http-body-util"]
-# The HTTP/3 lane the default transport tries first when Alt-Svc advertised it.
-h3 = ["hyper-transport", "dep:quinn", "dep:h3", "dep:h3-quinn", "dep:webpki-roots"]
-# WebSocket (`ws://` / `wss://`), a separate protocol from fetch.
-websocket = ["dep:tokio-tungstenite"]
+hyper-transport = ["dep:murm-wire", "murm-wire/http"]
+h3 = ["hyper-transport", "murm-wire/h3"]
+websocket = ["dep:tokio-tungstenite", "dep:murm-wire", "murm-wire/websocket"]
 
 [dependencies]
+murm-wire = { git = "https://github.com/merely-made/murm.git", rev = "80d9959000fcd913634fd223538dfdbbec1f5e4f", version = "0.1.0", default-features = false, optional = true }
 url = "2.5"
 bytes = "1"
 
@@ -32,16 +31,6 @@ bytes = "1"
 # (meerkat) installs the subscriber. The library never depends on the app.
 tracing = "0.1"
 
-# Transport: hyper 1.x (h1/h2) + the hyper-util legacy client (connection pool).
-hyper = { version = "1", features = ["client", "http1", "http2"], optional = true }
-hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1", "http2", "tokio"], optional = true }
-http = { version = "1", optional = true }
-http-body-util = { version = "0.1", optional = true }
-
-# TLS: rustls 0.23 via hyper-rustls; ring provider + webpki-roots trust anchors
-# (routed through hyper-rustls's own feature so we don't pin webpki-roots's major).
-hyper-rustls = { version = "0.27", default-features = false, features = ["webpki-roots", "http1", "http2", "ring", "tls12"], optional = true }
-rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"], optional = true }
 # Subresource Integrity: SHA-2 digests + base64 of the expected hashes. ring is
 # a crypto primitive, not a transport, so it stays with the semantics.
 ring = "0.17"
@@ -63,13 +52,6 @@ httpdate = "1"
 # at eTLD edges (e.g. *.github.io), replacing the last-two-labels approximation.
 psl = "2"
 
-# HTTP/3 (increment 4): QUIC (quinn) + h3. Native-only (UDP sockets); a wasm build
-# excludes this module. h3 is pre-1.0 (0.0.x) — API churn expected.
-quinn = { version = "0.11", optional = true }
-h3 = { version = "0.0.8", optional = true }
-h3-quinn = { version = "0.0.10", optional = true }
-webpki-roots = { version = "1", optional = true }
-
 # WebSocket (increment 5): native-only (tokio + rustls for wss://).
 tokio-tungstenite = { version = "0.29", features = ["rustls-tls-webpki-roots"], optional = true }
 
@@ -77,5 +59,3 @@ tokio-tungstenite = { version = "0.29", features = ["rustls-tls-webpki-roots"], 
 mockito = "1"
 # Used only to build gzip fixtures in tests; decode itself is async-compression.
 flate2 = "1"
-# Self-signed cert for the in-process h3 test server.
-rcgen = "0.14"

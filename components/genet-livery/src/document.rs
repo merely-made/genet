@@ -214,6 +214,7 @@ where
     nested_scroll: HashMap<D::NodeId, (f32, f32)>,
     image_sources: HashMap<String, Vec<u8>>,
     font_sources: HashMap<String, Vec<u8>>,
+    generic_font_sources: HashMap<String, Vec<u8>>,
     selection_anchor: Option<(D::NodeId, usize)>,
     selection_range: Option<TextRange<D::NodeId>>,
 }
@@ -333,6 +334,7 @@ where
             nested_scroll: HashMap::new(),
             image_sources: HashMap::new(),
             font_sources: HashMap::new(),
+            generic_font_sources: HashMap::new(),
             selection_anchor: None,
             selection_range: None,
         }

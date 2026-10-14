@@ -252,6 +252,20 @@ struct ChMetricKey {
     font_style: u8,
 }
 
+/// Refusal to bind an explicit host face to a CSS generic family.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GenericFontError {
+    InvalidGeneric,
+    InvalidFont,
+}
+
+impl std::fmt::Display for GenericFontError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+impl std::error::Error for GenericFontError {}
+
 impl Default for TextSystem {
     fn default() -> Self {
         Self::new()
@@ -294,6 +308,46 @@ impl TextSystem {
         self.ch_advances.clear();
         self.space_advances.clear();
         self.box_metrics.clear();
+    }
+
+    /// Bind a host-supplied face to one CSS generic, without changing authored
+    /// family requests or installing a global/system fallback. Invalid bytes
+    /// leave the existing generic mapping intact. Returns registered families.
+    pub fn register_generic_font_bytes(
+        &mut self,
+        bytes: Vec<u8>,
+        generic: &str,
+    ) -> Result<usize, GenericFontError> {
+        let generic = match generic {
+            "sans-serif" => GenericFamily::SansSerif,
+            "serif" => GenericFamily::Serif,
+            "monospace" => GenericFamily::Monospace,
+            "system-ui" => GenericFamily::SystemUi,
+            _ => return Err(GenericFontError::InvalidGeneric),
+        };
+        let bytes = normalized_font_bytes(bytes).ok_or(GenericFontError::InvalidFont)?;
+        let mut families = self
+            .font_context
+            .collection
+            .register_fonts(parley::fontique::Blob::new(Arc::new(bytes)), None);
+        if families.is_empty() {
+            return Err(GenericFontError::InvalidFont);
+        }
+        families.sort_by_key(|(id, _)| {
+            self.font_context
+                .collection
+                .family_name(*id)
+                .unwrap_or("")
+                .to_owned()
+        });
+        let count = families.len();
+        self.font_context
+            .collection
+            .set_generic_families(generic, families.into_iter().map(|(id, _)| id));
+        self.ch_advances.clear();
+        self.space_advances.clear();
+        self.box_metrics.clear();
+        Ok(count)
     }
 
     /// Register one host-resolved `@font-face` source under its authored CSS
@@ -6062,6 +6116,61 @@ fn content_key(bytes: &[u8], index: u32) -> FontInstanceKey {
 mod tests {
     use super::*;
     use livery::values::FontSize as CssFontSize;
+
+    #[test]
+    fn explicit_generic_font_shapes_without_system_and_invalid_replace_preserves_face() {
+        let bytes = include_bytes!("../../../tests/wpt/tests/fonts/Ahem.ttf").to_vec();
+        let mut system = TextSystem::new();
+        system.font_context.collection =
+            parley::fontique::Collection::new(parley::fontique::CollectionOptions {
+                shared: false,
+                system_fonts: false,
+            });
+        assert!(system.shape_native_overlay("real text", 300.0).is_none());
+        assert_eq!(
+            system.register_generic_font_bytes(bytes.clone(), "sans-serif"),
+            Ok(1)
+        );
+        let shaped = system
+            .shape_native_overlay("real text", 300.0)
+            .expect("explicit generic must shape");
+        assert!(!shaped.runs.is_empty());
+        assert!(
+            shaped
+                .runs
+                .iter()
+                .all(|run| !run.glyphs.is_empty() && run.font.data.as_slice() == bytes)
+        );
+        assert_eq!(
+            system.register_generic_font_bytes(vec![0, 1], "sans-serif"),
+            Err(GenericFontError::InvalidFont)
+        );
+        assert_eq!(
+            system.register_generic_font_bytes(bytes.clone(), "invented-generic"),
+            Err(GenericFontError::InvalidGeneric)
+        );
+        let again = system
+            .shape_native_overlay("real text", 300.0)
+            .expect("prior mapping survived refusal");
+        assert!(
+            again
+                .runs
+                .iter()
+                .all(|run| run.font.data.as_slice() == bytes)
+        );
+        assert_eq!(
+            system.register_generic_font_bytes(bytes.clone(), "sans-serif"),
+            Ok(1)
+        );
+        assert!(
+            system
+                .shape_native_overlay("real text", 300.0)
+                .unwrap()
+                .runs
+                .iter()
+                .all(|run| run.font.data.as_slice() == bytes)
+        );
+    }
 
     #[test]
     fn native_validation_overlay_preserves_custom_whitespace() {

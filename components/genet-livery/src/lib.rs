@@ -116,7 +116,7 @@ pub use style::{
     AuthorStylesheet, CssomImportOwner, CssomImportRule, StylePlane, StyleSet, UsedValueContext,
     resolve_styles, resolve_styles_with_presentational_hints,
 };
-pub use text::{TextRange, TextRect, TextSelection, TextSystem};
+pub use text::{GenericFontError, TextRange, TextRect, TextSelection, TextSystem};
 pub use text_fragment::{
     NavigationFragment, TextDirective, parse_fragment_directive, parse_text_directive,
 };

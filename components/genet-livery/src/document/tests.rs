@@ -3716,3 +3716,45 @@ fn a_line_ending_in_a_break_has_height_even_when_empty() {
         assert_near(block[0].3, expected, &format!("the height of {body:?}"));
     }
 }
+
+#[test]
+fn generic_font_ledger_survives_rebuild_and_invalid_batch_is_atomic() {
+    let bytes = include_bytes!("../../../../tests/wpt/tests/fonts/Ahem.ttf").to_vec();
+    let dom =
+        ScriptedDom::from_serialized_document("<html><body><p>Real generic text</p></body></html>");
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&["p { font:16px sans-serif; }"]),
+        Device::screen(300.0, 100.0),
+    );
+    document
+        .replace_generic_font_resources([("sans-serif".into(), bytes.clone())])
+        .unwrap();
+    let glyph_fonts = |list: &LiveryPaintList| {
+        assert!(list.commands().iter().any(
+            |op| matches!(op, paint_list_api::PaintCmd::DrawText(run) if !run.glyphs.is_empty())
+        ));
+        assert!(
+            list.fonts()
+                .iter()
+                .any(|face| face.data.as_slice() == bytes)
+        );
+    };
+    glyph_fonts(&document.frame(300, 100).unwrap());
+    document.set_font_resource("unrelated-face", bytes.clone()); // actual text-context rebuild
+    glyph_fonts(&document.frame(280, 120).unwrap());
+    let accepted = document.generic_font_sources.clone();
+    assert_eq!(
+        document.replace_generic_font_resources([
+            ("serif".into(), bytes.clone()),
+            ("sans-serif".into(), vec![0])
+        ]),
+        Err(crate::GenericFontError::InvalidFont)
+    );
+    assert_eq!(document.generic_font_sources, accepted);
+    glyph_fonts(&document.frame(300, 100).unwrap());
+    document
+        .replace_generic_font_resources([("sans-serif".into(), bytes.clone())])
+        .unwrap();
+    glyph_fonts(&document.frame(300, 100).unwrap());
+}

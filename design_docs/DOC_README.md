@@ -36,6 +36,8 @@ preserve raw comparisons and rows inside ERROR records separately.
 > inventory or a migration. The split is deliberate, and migration remains
 > open, unscheduled work. New documents go here.
 
+Netfetcher wire adoption (2026-10-14): [receiving plan](2026-10-14_netfetcher_wire_adoption_plan.md) keeps Fetch/WebSocket policy and public package identity in Genet while delegating raw carriage to Murm's independent wire workspace. Canonical migration: `murm/design_docs/2026-10-13_murm_family_move_plan.md`, MOVE5.
+
 ## Required reading order
 
 1. The root [`README.md`](../README.md) — what genet is.

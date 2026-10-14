@@ -50,7 +50,7 @@ mod manifest;
 mod render;
 mod test262;
 mod testdriver;
-#[cfg(test)]
+#[cfg(all(test, feature = "webgl-tests"))]
 mod webgl_conformance;
 
 // The upstream WPT checkout lives under `tests/wpt/tests/`

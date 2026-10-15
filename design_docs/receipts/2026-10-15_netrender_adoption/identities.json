@@ -77,5 +77,6 @@
     "components/genet-render-host/Cargo.toml": "5cc971336d52d3622fefa60680a35acaa3483c25cce332ffb20303d04b237aab",
     "examples/netrender_smoke/Cargo.toml": "b921124fabc6f94ed6ba6db196b3aba0926e164b96d26741698af081200a6773"
   },
-  "standalone_lock_sha256": "fb8f01ec0049c4ae27f931a3a90b843cbc8a6a78cdb1bb8528561e89841e4593"
+  "standalone_lock_sha256": "fb8f01ec0049c4ae27f931a3a90b843cbc8a6a78cdb1bb8528561e89841e4593",
+  "archive_tag_status": "Removed locally and remotely on 2026-10-15 at owner clarification; published qualified Phase B supersedes the older local snapshot."
 }

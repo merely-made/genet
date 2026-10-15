@@ -6,11 +6,11 @@ Source basis: Genet `8649c0c3200` plus the three manifest changes hashed in
 `276b46648c08f3d2062e70559afa999842e1873c`. Each of the four renderer crates
 resolves once from the canonical `github.com/merely-made/netrender.git` URL.
 
-The Windows Forms B snapshot `b5813e22291ba8530d323adacd4bdf70eae15bf0`
-is preserved locally and remotely as
-`archive/local-forms-phase-b-b5813e22291`. Main already contains qualified
-Phase B `a0d95ebd6e2` and later fixes, so the older snapshot was not replayed.
-Forms C and three-lanes worktrees were not edited or merged.
+The older Windows Forms B snapshot `b5813e22291` is superseded by qualified
+Phase B `a0d95ebd6e2` and later fixes already published on main. It was not
+replayed. The temporary duplicate archive tag was removed locally and remotely
+at Mark's clarification; the primary checkout follows published main. Forms C
+and three-lanes worktrees were not edited or merged.
 
 ## Gates
 

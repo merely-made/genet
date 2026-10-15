@@ -68,11 +68,11 @@ section "Coordinated supplier adoption, 2026-10-15".
 
 ## Working notes
 
-- Windows source reconciliation, 2026-10-15: the clean primary checkout's
-  older Forms B snapshot `b5813e22291` is preserved locally and on the remote
-  as `archive/local-forms-phase-b-b5813e22291`. Main was moved to `8649c0c3200`,
-  which already contains qualified Phase B `a0d95ebd6e2` and later fixes.
-  The older snapshot was not replayed. Forms C and three-lanes were untouched.
+- Windows source reconciliation, 2026-10-15: the older local Forms B snapshot
+  `b5813e22291` is superseded by qualified Phase B `a0d95ebd6e2` and its later
+  fixes already on main. The temporary duplicate archive tag was removed at
+  Mark's clarification; the primary checkout follows published main without
+  replaying the older snapshot. Forms C and three-lanes were untouched.
 
 - Work directly on `main`; no PRs; no `Co-Authored-By` trailer. Main moves often
   (Codex Forms lane), so rebase right before pushing.

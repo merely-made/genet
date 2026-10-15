@@ -16,8 +16,9 @@ still live (below). Everything here is pushed.
 - `ae3d9f5` **`without-classic-vello`** on `genet-render-host`: an opt-out for wasm
   viewer artifacts. Boot refuses, and every `RenderCore` method starts
   unreachable, so classic Vello, wgpu boot and composition drop out of the
-  build. It does not forward to Netrender's feature of the same name, so
-  consumers enable both. `compile_error!` off wasm.
+  build. That initial commit required consumers to enable Netrender's matching
+  feature too; coordinated adoption below adds forwarding. `compile_error!`
+  off wasm.
 - `45e1b81` **Linux test triage**: the nine Livery tests that failed on Linux
   were one real float-band bug (fixed) and eight platform font differences
   (made deterministic). `cargo test --no-fail-fast -p genet-livery` passes on
@@ -37,25 +38,41 @@ still live (below). Everything here is pushed.
 - `worktrees/genet-three-lanes` (`codex/three-lanes-upstream-20261010`): already
   contained in main. Codex may still be using it; prune with Phase C.
 
-## Open, roughly in order
+## Coordinated Netrender adoption, 2026-10-15
 
-1. **Coordinated Netrender adoption.** Genet pins Netrender `12b18970`. Mere
-   bridges to Netrender main (`f4f9c0d87`: shadow repair, WebGL2 sparse, pen
-   collapse, classic gate) with a `[patch]` marked "retire after coordinated
-   Genet supplier adoption". Repin Genet to current Netrender main and run the
-   render, render-host and Livery suites. Then `genet-render-host`'s feature can
-   forward to `netrender/without-classic-vello`, and Mere can drop its bridge.
-2. **Viewer size headroom (options, not tasks).** Mere's viewer artifacts sit at
+Genet selects Netrender `f4f9c0d87` (shadow repair, WebGL2 sparse, pen
+collapse, classic gate) and its Vello provider `276b46648`. The render-host
+opt-out forwards to `netrender/without-classic-vello`; the standalone renderer
+smoke uses the same sources.
+
+Fresh Windows gates pass: 746 native tests, zero failures, 13 existing ignores;
+wasm opt-out compilation; the expected native opt-out rejection; and standalone
+smoke compilation. [Source identities, locks and raw logs](receipts/2026-10-15_netrender_adoption/README.md)
+retain the actual gate basis. Browser runtime and delivery size were not rerun.
+
+Mere's receiving adoption and retirement of its four temporary bridge tables
+are owned by `mere/design_docs/mere_docs/implementation_strategy/2026-10-13_browser_presentation_tenants_plan.md`,
+section "Coordinated supplier adoption, 2026-10-15".
+
+## Remaining options and cleanup
+
+1. **Viewer size headroom (options, not tasks).** Mere's viewer artifacts sit at
    3,359,746 (WebGPU) and 3,322,097 (WebGL2) gzip against Mark's 3,460,300 cap,
    and fat-LTO layout has swung about 95 KB between builds. Genet levers if it
    creeps back: gate Genet's recent browser-capture and accessibility additions
    out of the read-only viewer cone (about 97 KB came with that pin), and align
    `genet-parley`/`genet-fontique` (with harfrust and skrifa) onto one
    `read-fonts` (0.39 and 0.41 both link, about 49 KB raw).
-3. **Small cleanups.** `genet-render-host` uses the deprecated
+2. **Small cleanups.** `genet-render-host` uses the deprecated
    `AtomicU64::fetch_update` (4 warnings); buckram has 3 old clippy lints.
 
 ## Working notes
+
+- Windows source reconciliation, 2026-10-15: the clean primary checkout's
+  older Forms B snapshot `b5813e22291` is preserved locally and on the remote
+  as `archive/local-forms-phase-b-b5813e22291`. Main was moved to `8649c0c3200`,
+  which already contains qualified Phase B `a0d95ebd6e2` and later fixes.
+  The older snapshot was not replayed. Forms C and three-lanes were untouched.
 
 - Work directly on `main`; no PRs; no `Co-Authored-By` trailer. Main moves often
   (Codex Forms lane), so rebase right before pushing.

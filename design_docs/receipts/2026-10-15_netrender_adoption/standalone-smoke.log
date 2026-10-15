@@ -1,0 +1,61 @@
+     Locking 156 packages to highest Rust 1.97.1 compatible versions
+      Adding pollster v0.4.0 (available: v1.0.1)
+   Compiling unicode-ident v1.0.27
+   Compiling zerocopy v0.8.63
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling syn v2.0.119
+   Compiling syn v3.0.9
+   Compiling thiserror-impl v2.0.21
+   Compiling bytemuck_derive v1.12.1
+    Checking bytemuck v1.25.2
+    Checking equivalent v1.0.3
+   Compiling zerocopy-derive v0.8.63
+    Checking smallvec v1.16.3
+   Compiling windows-interface v0.59.3
+   Compiling windows-implement v0.60.2
+   Compiling khronos_api v3.1.0
+    Checking windows-core v0.62.2
+    Checking thiserror v2.0.21
+    Checking indexmap v2.14.2
+   Compiling xml-rs v0.8.29
+    Checking naga-types v30.0.1
+   Compiling gl_generator v0.14.0
+   Compiling naga v30.0.1
+    Checking windows-future v0.3.2
+   Compiling glutin_wgl_sys v0.6.1
+    Checking parking_lot_core v0.9.12
+    Checking windows-numerics v0.3.1
+    Checking windows-collections v0.3.2
+   Compiling khronos-egl v6.0.0
+    Checking half v2.7.1
+    Checking wgpu-types v30.0.1
+    Checking hashbrown v0.16.1
+    Checking windows v0.62.2
+    Checking parking_lot v0.12.5
+    Checking libc v0.2.190
+   Compiling wgpu-hal v30.0.1
+    Checking wgpu-naga-bridge v30.0.1
+    Checking gpu-allocator v0.28.0
+    Checking glow v0.17.0
+    Checking font-types v0.12.6
+   Compiling wgpu-core v30.0.1
+   Compiling litrs v1.0.1
+   Compiling document-features v0.2.12
+    Checking wgpu-core-deps-windows-linux-android v30.0.1
+    Checking read-fonts v0.41.0
+    Checking kurbo v0.13.1
+   Compiling wgpu v30.0.1
+    Checking peniko v0.6.1
+    Checking skrifa v0.44.0
+   Compiling vello_shaders v0.11.0 (https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b4664)
+    Checking vello_encoding v0.11.0 (https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b4664)
+    Checking futures-intrusive v0.5.0
+   Compiling tracing-attributes v0.1.31
+    Checking tracing v0.1.44
+    Checking pollster v0.4.0
+    Checking netrender_device v0.1.2 (https://github.com/merely-made/netrender.git?rev=f4f9c0d87e6a6030b61075a45118055dfe6a12df#f4f9c0d8)
+    Checking netrender-vello v0.11.0 (https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b4664)
+    Checking netrender v0.1.2 (https://github.com/merely-made/netrender.git?rev=f4f9c0d87e6a6030b61075a45118055dfe6a12df#f4f9c0d8)
+    Checking netrender-smoke v0.1.0 (C:\Users\mark_\Code\repos\genet\examples\netrender_smoke)
+    Finished `dev` profile [unoptimized] target(s) in 1m 57s

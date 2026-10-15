@@ -1,0 +1,1430 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling cfg-if v1.0.5
+   Compiling autocfg v1.5.1
+   Compiling syn v3.0.6
+   Compiling syn v2.0.119
+   Compiling libm v0.2.16
+   Compiling smallvec v1.16.2
+   Compiling windows-link v0.2.1
+   Compiling num-traits v0.2.19
+   Compiling log v0.4.34
+   Compiling serde_derive v1.0.229
+   Compiling foldhash v0.2.0
+   Compiling serde_core v1.0.229
+   Compiling thiserror-impl v2.0.21
+   Compiling serde v1.0.229
+   Compiling scopeguard v1.2.0
+   Compiling bytemuck_derive v1.12.1
+   Compiling stable_deref_trait v1.2.1
+   Compiling arrayvec v0.7.8
+   Compiling bytemuck v1.25.2
+   Compiling lock_api v0.4.14
+   Compiling equivalent v1.0.2
+   Compiling thiserror v2.0.21
+   Compiling parking_lot_core v0.9.12
+   Compiling bitflags v2.13.2
+   Compiling synstructure v0.14.0
+   Compiling parking_lot v0.12.5
+   Compiling siphasher v1.0.4
+   Compiling zerofrom-derive v0.1.8
+   Compiling phf_shared v0.13.1
+   Compiling windows-result v0.4.1
+   Compiling windows-strings v0.5.1
+   Compiling windows-implement v0.60.2
+   Compiling windows-interface v0.59.3
+   Compiling zerofrom v0.1.8
+   Compiling yoke-derive v0.8.4
+   Compiling windows-core v0.62.2
+   Compiling hashbrown v0.17.1
+   Compiling fastrand v2.5.0
+   Compiling phf_generator v0.13.1
+   Compiling yoke v0.8.3
+   Compiling getrandom v0.4.3
+   Compiling windows-threading v0.2.1
+   Compiling zerovec-derive v0.11.6
+   Compiling memchr v2.8.3
+   Compiling windows-future v0.3.2
+   Compiling zerovec v0.11.8
+   Compiling windows-numerics v0.3.1
+   Compiling windows-collections v0.3.2
+   Compiling displaydoc v0.2.7
+   Compiling profiling-procmacros v1.0.18
+   Compiling profiling v1.0.18
+   Compiling windows v0.62.2
+   Compiling jobserver v0.1.35
+   Compiling allocator-api2 v0.2.21
+   Compiling shlex v2.0.1
+   Compiling writeable v0.6.4
+   Compiling find-msvc-tools v0.1.14
+   Compiling cc v1.6.0
+   Compiling hashbrown v0.16.1
+   Compiling euclid v0.22.14
+   Compiling new_debug_unreachable v1.0.6
+   Compiling tinystr v0.8.4
+   Compiling phf_macros v0.13.1
+   Compiling litemap v0.8.3
+   Compiling simd-adler32 v0.3.10
+   Compiling icu_locale_core v2.3.0
+   Compiling phf v0.13.1
+   Compiling potential_utf v0.1.6
+   Compiling zerotrie v0.2.5
+   Compiling crossbeam-utils v0.8.23
+   Compiling linebender_resource_handle v0.1.1
+   Compiling crc32fast v1.5.2
+   Compiling adler2 v2.0.1
+   Compiling icu_provider v2.3.1
+   Compiling string_cache_codegen v0.6.1
+   Compiling phf_codegen v0.13.1
+   Compiling crossbeam-epoch v0.9.21
+   Compiling utf8_iter v1.0.4
+   Compiling icu_collections v2.3.0
+   Compiling web_atoms v0.2.6
+   Compiling miniz_oxide v0.9.1
+   Compiling precomputed-hash v0.1.1
+   Compiling icu_properties_data v2.3.0
+   Compiling crossbeam-deque v0.8.8
+   Compiling libc v0.2.190
+   Compiling string_cache v0.9.0
+   Compiling flate2 v1.1.10
+   Compiling miniz_oxide v0.8.9
+   Compiling fdeflate v0.3.7
+   Compiling equator-macro v0.4.2
+   Compiling object v0.39.1
+   Compiling rayon-core v1.13.0
+   Compiling icu_normalizer_data v2.3.0
+   Compiling equator v0.4.2
+   Compiling png v0.18.1
+   Compiling tendril v0.5.1
+   Compiling num-integer v0.1.47
+   Compiling anyhow v1.0.104
+   Compiling either v1.19.0
+   Compiling num-bigint v0.4.8
+   Compiling markup5ever v0.39.0
+   Compiling icu_properties v2.3.0
+   Compiling aligned-vec v0.6.4
+   Compiling icu_normalizer v2.3.0
+   Compiling v_frame v0.3.9
+   Compiling rayon v1.12.0
+   Compiling num-rational v0.4.2
+   Compiling ar_archive_writer v0.5.3
+   Compiling font-types v0.11.3
+   Compiling as-slice v0.2.1
+   Compiling paste v1.0.15
+   Compiling vcpkg v0.2.15
+   Compiling winnow v1.0.4
+   Compiling icu_locale_fallback_data v2.3.0
+   Compiling pkg-config v0.3.34
+   Compiling rustversion v1.0.23
+   Compiling av-scenechange v0.14.1
+   Compiling built v0.8.1
+   Compiling libz-sys v1.1.29
+   Compiling rav1e v0.8.1
+   Compiling toml_parser v1.1.4+spec-1.1.0
+   Compiling aligned v0.4.3
+   Compiling read-fonts v0.39.2
+   Compiling psm v0.1.32
+   Compiling toml_datetime v1.1.2+spec-1.1.0
+   Compiling serde_spanned v1.1.2
+   Compiling nom v8.0.0
+   Compiling no_std_io2 v0.9.4
+   Compiling arg_enum_proc_macro v0.3.4
+   Compiling dtoa v1.0.11
+   Compiling wuff-capi v0.2.0
+   Compiling y4m v0.8.0
+   Compiling toml_writer v1.1.3+spec-1.1.0
+   Compiling pastey v0.1.1
+   Compiling alloc-no-stdlib v2.0.4
+   Compiling icu_segmenter_data v2.3.0
+   Compiling brotli-decompressor v5.0.3
+   Compiling toml v1.1.7+spec-1.1.0
+   Compiling dtoa-short v0.3.5
+   Compiling bitstream-io v4.10.0
+   Compiling av1-grain v0.2.5
+   Compiling maybe-rayon v0.1.1
+   Compiling layout-dom-api v0.1.1 (C:\Users\mark_\Code\repos\genet\components\shared\layout-dom)
+   Compiling itertools v0.14.0
+   Compiling stacker v0.1.25
+   Compiling cssparser-macros v0.7.1
+   Compiling num-derive v0.4.2
+   Compiling simd_helpers v0.1.0
+   Compiling imgref v1.12.3
+   Compiling quick-error v2.0.1
+   Compiling itoa v1.0.18
+   Compiling glob v0.3.4
+   Compiling bytes v1.12.1
+   Compiling noop_proc_macro v0.3.0
+   Compiling wuff v0.2.9
+   Compiling fontsan v0.7.0
+   Compiling cssparser v0.37.0
+   Compiling loop9 v0.1.5
+   Compiling livery v0.0.5 (C:\Users\mark_\Code\repos\genet\components\livery)
+   Compiling encoding_rs v0.8.42
+   Compiling icu_locale_fallback v2.3.0
+   Compiling idna_adapter v1.2.2
+   Compiling avif-serialize v0.8.9
+   Compiling app_units v0.7.8
+   Compiling windows-sys v0.61.2
+   Compiling weezl v0.1.12
+   Compiling byteorder-lite v0.1.0
+   Compiling parlance v0.1.0
+   Compiling color_quant v1.1.0
+   Compiling rgb v0.8.53
+   Compiling memmap2 v0.9.11
+   Compiling percent-encoding v2.3.2
+   Compiling pxfm v0.1.30
+   Compiling zune-core v0.5.3
+   Compiling zune-jpeg v0.5.15
+   Compiling form_urlencoded v1.2.2
+   Compiling genet-fontique v0.10.0 (C:\Users\mark_\Code\repos\genet\support\patches\fontique)
+   Compiling moxcms v0.8.1
+   Compiling ravif v0.13.0
+   Compiling gif v0.14.2
+   Compiling image-webp v0.2.4
+   Compiling genet-paint-types v0.2.0 (C:\Users\mark_\Code\repos\genet\components\shared\paint-types)
+   Compiling icu_segmenter v2.3.0
+   Compiling idna v1.1.0
+   Compiling cadency v0.0.1 (C:\Users\mark_\Code\repos\genet\components\cadency)
+   Compiling harfrust v0.8.4
+   Compiling skrifa v0.42.1
+   Compiling parley_data v0.10.0
+   Compiling html5ever v0.39.0
+   Compiling xml5ever v0.39.0
+   Compiling paint_list_api v0.1.2 (https://github.com/merely-made/netrender.git?rev=f4f9c0d87e6a6030b61075a45118055dfe6a12df#f4f9c0d8)
+   Compiling genet-taffy v0.14.0 (C:\Users\mark_\Code\repos\genet\support\patches\taffy)
+   Compiling simdutf8 v0.1.5
+   Compiling genet-host-api v0.2.0 (C:\Users\mark_\Code\repos\genet\components\genet-host-api)
+   Compiling multiversion_no_op v1.0.0
+   Compiling semver v1.0.28
+   Compiling core_detect v1.0.0
+   Compiling rustc_version v0.4.1
+   Compiling genet-document-resources v0.2.1 (C:\Users\mark_\Code\repos\genet\components\genet-document-resources)
+   Compiling buckram v0.0.3 (C:\Users\mark_\Code\repos\genet\components\buckram)
+   Compiling genet-static-dom v0.1.1 (C:\Users\mark_\Code\repos\genet\components\genet-static-dom)
+   Compiling genet-parley v0.10.0 (C:\Users\mark_\Code\repos\genet\support\patches\parley)
+warning: use of deprecated method `icu_properties::props::BidiClass::to_icu4c_value`: please comment on https://github.com/unicode-org/icu4x/issues/6067 if you need this
+   --> support\patches\parley\src\bidi.rs:893:13
+    |
+893 |     1 << (t.to_icu4c_value() as u32)
+    |             ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: `genet-parley` (lib) generated 1 warning
+   Compiling url v2.5.8
+   Compiling engine-observables-api v0.2.0 (C:\Users\mark_\Code\repos\genet\components\shared\engine-observables-api)
+   Compiling image v0.25.10
+   Compiling regress v0.11.1 (C:\Users\mark_\Code\repos\genet\support\patches\regress-0.11.1)
+   Compiling data-url v0.3.2
+   Compiling genet-scripted-dom v0.1.2 (C:\Users\mark_\Code\repos\genet\components\genet-scripted-dom)
+   Compiling heapless v0.7.17
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+  --> components\genet-scripted-dom\forms_submission.rs:98:14
+   |
+98 |             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+   |              ^^^^^^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+   |
+98 -             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+98 +             .try_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+   |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+   --> components\genet-scripted-dom\lib.rs:158:10
+    |
+158 |         .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+    |          ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+158 -         .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+158 +         .try_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+    |
+
+   Compiling byteorder v1.5.0
+   Compiling hash32 v0.2.1
+   Compiling genet-livery v0.0.4 (C:\Users\mark_\Code\repos\genet\components\genet-livery)
+warning: `genet-scripted-dom` (lib) generated 2 warnings (run `cargo fix --lib -p genet-scripted-dom` to apply 2 suggestions)
+   Compiling spin v0.9.9
+   Compiling cobs v0.3.0
+   Compiling postcard v1.1.3
+   Compiling base64 v0.22.1
+   Compiling cfg_aliases v0.2.2
+   Compiling zerocopy v0.8.62
+   Compiling zerocopy-derive v0.8.62
+   Compiling rustc-hash v1.1.0
+   Compiling once_cell v1.21.4
+   Compiling unicode-width v0.2.2
+   Compiling bit-vec v0.9.1
+   Compiling bit-set v0.10.0
+   Compiling codespan-reporting v0.13.1
+   Compiling indexmap v2.14.2
+   Compiling naga-types v30.0.1
+   Compiling naga v30.0.1
+   Compiling ash v0.38.0+1.3.281
+   Compiling spirv v0.4.0+sdk-1.4.341.0
+   Compiling half v2.7.1
+   Compiling libloading v0.8.9
+   Compiling static_assertions v1.1.0
+   Compiling raw-window-handle v0.6.2
+   Compiling wgpu-types v30.0.1
+   Compiling wgpu-hal v30.0.1
+   Compiling presser v0.3.1
+   Compiling gpu-allocator v0.28.0 (C:\Users\mark_\Code\repos\genet\support\patches\gpu-allocator)
+   Compiling wgpu-naga-bridge v30.0.1
+   Compiling ordered-float v5.5.0
+   Compiling renderdoc-sys v1.1.0
+   Compiling range-alloc v0.1.5
+   Compiling wgpu-core v30.0.1
+   Compiling font-types v0.12.6
+   Compiling polycool v0.4.0
+   Compiling litrs v1.0.0
+   Compiling wgpu-core-deps-windows-linux-android v30.0.1
+   Compiling document-features v0.2.12
+   Compiling kurbo v0.13.1
+   Compiling read-fonts v0.41.0
+   Compiling wgpu v30.0.1
+   Compiling svg_fmt v0.4.5
+   Compiling color v0.3.3
+   Compiling peniko v0.6.1
+   Compiling guillotiere v0.7.0
+   Compiling skrifa v0.44.0
+   Compiling vello_shaders v0.11.0 (https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b4664)
+   Compiling vello_encoding v0.11.0 (https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b4664)
+   Compiling futures-core v0.3.34
+   Compiling futures-intrusive v0.5.0
+   Compiling tracing-core v0.1.36
+   Compiling tracing-attributes v0.1.31
+   Compiling pollster v1.0.1
+   Compiling pin-project-lite v0.2.17
+   Compiling netrender_device v0.1.2 (https://github.com/merely-made/netrender.git?rev=f4f9c0d87e6a6030b61075a45118055dfe6a12df#f4f9c0d8)
+   Compiling tracing v0.1.44
+   Compiling netrender-vello v0.11.0 (https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b4664)
+   Compiling uuid v1.27.0
+   Compiling enumn v0.1.14
+   Compiling netrender v0.1.2 (https://github.com/merely-made/netrender.git?rev=f4f9c0d87e6a6030b61075a45118055dfe6a12df#f4f9c0d8)
+   Compiling accesskit v0.24.1
+   Compiling paint_list_render v0.1.2 (https://github.com/merely-made/netrender.git?rev=f4f9c0d87e6a6030b61075a45118055dfe6a12df#f4f9c0d8)
+   Compiling document-session-api v0.1.0 (C:\Users\mark_\Code\repos\genet\components\shared\document-session-api)
+   Compiling genet-render-host v0.2.0 (C:\Users\mark_\Code\repos\genet\components\genet-render-host)
+   Compiling genet-render v0.2.0 (C:\Users\mark_\Code\repos\genet\components\genet-render)
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+  --> components\genet-render-host\src\recovery.rs:26:10
+   |
+26 |     NEXT.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+   |          ^^^^^^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+   |
+26 -     NEXT.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+26 +     NEXT.try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+   |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+  --> components\genet-render-host\src\recovery.rs:98:14
+   |
+98 |             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+   |              ^^^^^^^^^^^^
+   |
+help: replace the use of the deprecated method
+   |
+98 -             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+98 +             .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+   |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+   --> components\genet-render-host\src\recovery.rs:214:14
+    |
+214 |             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+    |              ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+214 -             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+214 +             .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+    |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+   --> components\genet-render-host\src\recovery.rs:632:22
+    |
+632 |                     .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+    |                      ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+632 -                     .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+632 +                     .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+    |
+
+warning: `genet-render-host` (lib) generated 4 warnings (run `cargo fix --lib -p genet-render-host` to apply 4 suggestions)
+warning: `genet-render-host` (lib test) generated 4 warnings (4 duplicates)
+    Finished `test` profile [unoptimized] target(s) in 14m 16s
+     Running unittests src\lib.rs (C:\t\cargo-targets\genet\build\debug\deps\genet_livery-665837b3cc1c18a7.exe)
+
+running 341 tests
+test box_tree::tests::computed_paint_containment_captures_absolute_and_fixed_descendants_in_buckram ... ok
+test box_tree::tests::an_inline_block_keeps_a_block_level_table_child ... ok
+test document::line_scroll_tests::line_scroll_later_font_fragment_can_extend_beyond_lines ... ok
+test document::line_scroll_tests::line_scroll_clipped_descendant_does_not_leak_its_lines ... ok
+test document::line_scroll_tests::line_scroll_partial_inline_groups_keep_formatting_owner ... ok
+test box_tree::tests::generated_tree_applies_suppression_contents_and_comment_rules ... ok
+test box_tree::tests::table_display_vocabulary_and_html_ua_roles_reach_buckram ... ok
+test document::line_scroll_tests::line_scroll_normal_single_and_empty_break_lines ... ok
+test document::retained_motion_tests::retained_motion_preserves_wrapped_edges_with_negative_leading ... ok
+test box_tree::tests::generated_boxes_carry_inherited_writing_mode_and_direction ... ok
+test box_tree::tests::computed_transform_captures_absolute_and_fixed_descendants_in_buckram ... ok
+test document::line_scroll_tests::line_scroll_two_tall_lines_preserve_twelve_pixel_offset ... ok
+test document::tests::a_percentage_child_of_an_auto_inline_block_settles_in_one_pass ... ok
+test document::line_scroll_tests::line_scroll_retained_frame_translation_and_replacement ... ok
+test document::tests::a_percentage_top_inset_takes_the_containing_blocks_height ... ok
+test document::tests::a_percentage_height_on_an_atom_needs_a_definite_containing_height ... ok
+test document::line_scroll_tests::line_scroll_retained_motion_and_reformat_keep_bounds_current ... ok
+test document::tests::a_percentage_width_on_an_atomic_inline_takes_its_containing_block ... ok
+test document::tests::a_buttons_declared_size_includes_its_padding ... ok
+test document::retained_motion_tests::retained_motion_reuses_labelled_boxes_and_reorders_paint_and_input ... ok
+test document::tests::a_row_of_fitting_buttons_needs_no_basis_pass ... ok
+test document::tests::a_float_keeps_the_contribution_of_its_percentage_inline_block ... ok
+test document::retained_motion_tests::retained_motion_rejects_resources_viewport_and_active_animation ... ok
+test document::retained_motion_tests::retained_motion_does_not_hide_earlier_text_or_structure_batches ... ok
+test document::tests::atoms_in_a_flex_item_and_a_table_cell_take_their_own_block ... ok
+test document::tests::accessible_pointer_target_uses_the_visible_clipped_hit_descendant ... ok
+test document::tests::empty_live_input_projects_placeholder_instead_of_default_value ... ok
+test document::tests::css_checked_reads_live_checkbox_state_instead_of_the_default_attribute ... ok
+test document::tests::an_inline_block_paints_its_border_once_around_its_box ... ok
+test document::tests::background_color_mutation_repaints_without_a_geometry_pass ... ok
+test document::tests::accessible_reveal_unwinds_active_nested_scrollports_inside_out ... ok
+test document::tests::hidden_ancestor_suppresses_virtual_control_text ... ok
+test document::tests::an_inline_block_in_a_block_wider_than_the_viewport_reaches_its_max_content ... ok
+test document::tests::dom_mutation_records_its_nearest_formatting_context_root ... ok
+test document::tests::css_validation_selectors_track_candidate_and_user_validity ... ok
+test document::tests::an_auto_inline_block_wraps_within_its_column ... ok
+test document::tests::live_control_text_updates_after_hiding_and_showing_with_a_retained_neighbor ... ok
+test document::tests::generic_font_ledger_survives_rebuild_and_invalid_batch_is_atomic ... ok
+test document::tests::live_input_text_is_clipped_to_its_content_box_and_uses_only_current_value ... ok
+test document::tests::live_input_value_paints_without_replacing_its_default_attribute ... ok
+test document::tests::live_textarea_value_projects_multiline_text_and_preserves_author_children ... ok
+test document::tests::geometry_mutation_rejects_the_paint_only_reuse_path ... ok
+test document::tests::percentage_padding_on_an_inline_block_takes_the_containing_width ... ok
+test document::tests::password_input_masks_character_clusters_without_retaining_secret_text ... ok
+test document::tests::non_form_id_blocker_restyles_external_form_association ... ok
+test document::tests::moving_selected_placeholder_option_restyles_select_without_selectedness_change ... ok
+test document::tests::option_selectedness_restyles_the_external_select_form_owner ... ok
+test document::tests::positioned_leaf_resize_updates_nested_scroll_range ... ok
+test document::tests::positioned_inset_reuse_updates_nested_scroll_range ... ok
+test document::tests::positioned_descendant_extends_its_scroll_container_range ... ok
+test document::tests::radio_group_membership_restyles_peer_without_form_or_fieldset ... ok
+test document::tests::positioned_text_leaf_resize_reformats_instead_of_reusing_shaped_text ... ok
+test document::tests::positioned_children_do_not_widen_a_flex_item ... ok
+test document::tests::positioned_leaf_geometry_mutation_resizes_the_retained_fragment ... ok
+test document::tests::radio_group_validity_restyles_separate_fieldset_and_group_attributes ... ok
+test document::tests::positioned_inset_mutation_over_a_fixed_box_keeps_it_on_the_viewport ... ok
+test document::tests::retained_flex_root_splice_accepts_an_inserted_child_box ... ok
+test document::tests::retained_document_uses_intrinsic_positioned_width_between_insets ... ok
+test document::retained_motion_tests::retained_motion_rejects_geometry_clip_generated_and_context_changes ... ok
+test document::tests::retained_layout_borrows_the_completed_frame_without_relayout ... ok
+test document::tests::a_line_ending_in_a_break_has_height_even_when_empty ... ok
+test document::tests::retained_root_formatter_promotes_a_changed_size_to_its_block_parent ... ok
+test document::tests::positioned_inset_mutation_reuses_a_stable_fragment_subtree ... ok
+test document::tests::retained_relayout_keeps_unrelated_and_table_generated_ids_after_sibling_insertion ... ok
+test document::tests::retained_grid_root_splice_accepts_an_inserted_child_box ... ok
+test document::tests::retained_disjoint_formatting_roots_publish_atomically ... ok
+test document::tests::retained_formatting_root_splice_refreshes_descendants_and_keeps_outside_identity ... ok
+test document::tests::retained_root_formatter_promotes_through_a_changed_parent_to_a_stable_ancestor ... ok
+test document::tests::retained_mutation_paints_like_a_fresh_final_document ... ok
+test document::tests::retained_root_formatter_updates_fixed_root_overflow ... ok
+test document::tests::retained_root_formatter_replaces_a_fixed_size_table_and_its_paint_plane ... ok
+test document::tests::retained_root_formatter_reflows_a_text_free_grid_subtree ... ok
+test document::tests::retained_table_root_keeps_an_unrelated_table_paint_plane_live ... ok
+test document::tests::retained_root_formatter_replaces_a_captioned_fixed_size_table ... ok
+test document::tests::retained_root_formatter_adds_its_first_text_source_in_dom_order ... ok
+test document::tests::retained_text_position_query_is_frame_backed_and_selection_free ... ok
+test document::tests::sticky_table_caption_uses_its_wrapper_scroll_extent_without_relayout ... ok
+test document::tests::sticky_table_cell_uses_its_nested_scrollport_without_relayout ... ok
+test document::tests::sticky_scrolls_its_retained_fragment_without_relayout ... ok
+test document::tests::text_inside_an_inline_block_has_caret_hit_and_selection_geometry ... ok
+test document::tests::text_inside_an_inline_block_paints_once ... ok
+test image_decode::tests::decodes_size_and_pixels_with_the_feature ... ok
+test layout::tests::absolute_grid_static_position_uses_content_edges_when_the_containing_block_is_elsewhere ... ok
+test layout::tests::absolute_flex_and_grid_children_keep_their_native_static_rectangles ... ok
+test layout::tests::absolute_grid_static_position_uses_the_placed_area_when_the_grid_is_its_containing_block ... ok
+test layout::tests::absolute_grid_self_end_uses_the_grid_content_end ... ok
+test document::tests::sticky_uses_the_nearest_nested_scrollport_offset ... ok
+test layout::tests::absolute_static_position_in_a_block_split_from_inline_includes_margins ... ok
+test document::tests::retained_root_splice_keeps_an_unrelated_table_paint_plane_live ... ok
+test document::tests::sticky_table_footer_group_uses_the_scrollport_end_without_relayout ... ok
+test document::tests::sticky_table_header_group_moves_its_row_subtree_without_relayout ... ok
+test layout::tests::absolute_non_leaf_percentage_block_size_uses_the_initial_containing_block ... ok
+test layout::tests::absolute_nonleaf_reformats_at_buckrams_resolved_inline_size ... ok
+test layout::tests::absolute_static_position_keeps_its_formatting_source_and_k5a_containing_block ... ok
+test document::tests::transferred_subtree_pending_mutations_damage_both_retained_documents ... ok
+test layout::tests::absolute_empty_leaf_uses_buckrams_resolved_border_box ... ok
+test layout::tests::absolute_auto_inline_size_fills_between_definite_insets_from_buckram_inputs ... ok
+test document::tests::a_blockified_span_that_starts_a_stacking_context_paints_its_text ... ok
+test layout::tests::a_root_element_table_with_a_negative_margin_cell_does_not_panic ... ok
+test document::tests::sticky_table_row_group_moves_its_row_subtree_without_relayout ... ok
+test layout::tests::b3_row_group_height_reaches_the_buckram_table_route ... ok
+test document::tests::sticky_table_row_moves_its_cell_subtree_without_relayout ... ok
+test layout::tests::absolute_table_caption_uses_shared_k5d_wrapper_geometry ... ok
+test layout::tests::border_line_height_alignment_and_overflow_converters_follow_their_css_tables ... ok
+test layout::tests::absolute_position_converts_between_vertical_static_and_containing_flows ... ok
+test layout::tests::absolute_table_root_uses_shared_k5d_wrapper_geometry ... ok
+test document::tests::retained_root_formatter_drops_retired_text_sources ... ok
+test layout::tests::auto_align_self_resolves_parent_self_edges_against_the_subject_flow ... ok
+test layout::tests::absolute_table_track_parts_use_zero_track_static_anchors ... ok
+test layout::tests::flex_axis_projects_logical_direction_matrix_to_taffy ... ok
+test layout::tests::fixed_table_track_parts_use_zero_track_static_anchors ... ok
+test layout::tests::absolute_siblings_in_one_inline_keep_an_empty_first_fragment ... ok
+test layout::tests::contained_root_keeps_body_writing_mode_local_to_body_content ... ok
+test layout::tests::css_display_tables_do_not_consume_html_span_attributes ... ok
+test layout::tests::flex_child_style_projection_excludes_non_element_provenance ... ok
+test layout::tests::fixed_position_uses_a_transform_fixed_containing_block ... ok
+test layout::tests::fixed_table_caption_uses_shared_k5d_initial_geometry ... ok
+test layout::tests::container_alignment_normal_reaches_taffy_as_unset_and_every_other_keyword_passes_through ... ok
+test layout::tests::horizontal_direction_changes_keep_shape_constraints_for_atomic_lines ... ok
+test layout::tests::hit_test_with_scroll_shifts_the_descendants_of_a_scrolled_container ... ok
+test layout::tests::b3_inline_table_uses_its_first_table_baseline ... ok
+test layout::tests::fixed_leaf_percentage_block_size_uses_the_initial_containing_block ... ok
+test layout::tests::flex_cross_axis_projects_logical_start_and_wrap_reversal ... ok
+test layout::tests::html_align_descendants_adjusts_used_margins_without_rewriting_computed_css ... ok
+test layout::tests::html_column_and_column_group_spans_are_bounded_at_the_adapter ... ok
+test layout::tests::grid_item_order_changes_the_topmost_hit_target ... ok
+test layout::tests::flex_child_align_self_projects_parent_cross_axis_and_subject_flow ... ok
+test layout::tests::flex_justify_content_start_and_end_follow_the_logical_main_axis ... ok
+test layout::tests::inline_block_min_content_excludes_hanging_trailing_space ... ignored, known defect: an inline-block's min-content width counts the line's hanging trailing space
+test layout::tests::dimension_converters_tag_percentage_bearing_calc_for_the_basis_and_pass_the_rest_through ... ok
+test layout::tests::grid_static_self_alignment_uses_the_subject_writing_mode ... ok
+test layout::tests::k4c5b_automatic_shrink_to_fit_is_buckram_owned ... ok
+test layout::tests::b3_auto_row_group_does_not_repeat_the_table_height ... ok
+test layout::tests::k4c5b_automatic_explicit_width_is_distributed_and_painted ... ok
+test layout::tests::inline_origin_absolute_position_uses_the_line_fragment_as_its_static_source ... ok
+test layout::tests::inline_replaced_auto_width_is_intrinsic_whatever_its_display ... ok
+test layout::tests::html_table_spans_are_normalized_before_buckram_receives_them ... ok
+test layout::tests::b3_vertical_caption_side_uses_the_wrappers_logical_block_axis ... ok
+test layout::tests::inline_origin_fixed_auto_width_refits_to_the_k5d_inline_size ... ok
+test layout::tests::k4c5b_fixed_border_spacing_distribution_is_painted ... ok
+test layout::tests::k4d1_cell_formatter_formats_contents_at_exact_inline_sizes ... ok
+test layout::tests::k4d2_row_minima_follow_from_formatted_cell_contents ... ok
+test layout::tests::k4c5b_text_path_automatic_tables_are_buckram_owned ... ok
+test layout::tests::k4c5b_text_path_fixed_tables_are_buckram_owned ... ok
+test layout::tests::k4c5b_fixed_table_columns_are_buckram_owned ... ok
+test layout::tests::inline_origin_absolute_auto_width_refits_to_the_k5d_inline_size ... ok
+test layout::tests::k4d5_cell_contents_return_baselines_directly ... ok
+test layout::tests::k4e1_a_percentage_table_skips_the_wrapper_it_would_otherwise_wait_on ... ok
+test layout::tests::k4d4c_cell_min_and_max_height_are_ignored ... ok
+test layout::tests::k4e1_a_table_flex_item_is_the_wrapper_and_keeps_the_grids_width ... ok
+test layout::tests::k4c5b_tables_inside_atomic_inline_subtrees_are_buckram_owned ... ok
+test layout::tests::k4e1_the_wrapper_takes_the_margin_and_the_grid_keeps_its_own_box ... ok
+test layout::tests::k4d6_rows_groups_and_columns_have_their_own_fragments ... ok
+test layout::tests::k4e4_used_height_of_a_captioned_table_is_the_grids ... ok
+test layout::tests::k4e2_an_auto_width_wrapper_measures_the_grid_instead_of_filling ... ok
+test layout::tests::k4e2_auto_margins_centre_a_table ... ok
+test layout::tests::k4e4_an_inline_table_sits_in_the_text_line ... ok
+test layout::tests::k4d6b_row_heights_reach_the_painted_rows ... ok
+test layout::tests::live_block_bfcs_narrow_beside_a_float_or_move_below_it ... ok
+test layout::tests::k4e3_a_caption_widens_the_grid_and_its_columns ... ok
+test layout::tests::live_block_flow_keeps_collapsed_margin_chains_in_buckram ... ok
+test layout::tests::live_bfc_fragments_expose_text_flex_grid_and_atomic_baselines ... ok
+test layout::tests::k4e3_a_captioned_table_no_longer_defers ... ok
+test layout::tests::live_bfc_places_blockified_floats_and_direct_clearance_in_buckram ... ok
+test layout::tests::k4f_a_collapsed_column_group_gives_its_width_back ... ok
+test layout::tests::k4e3_a_captions_margins_count_toward_what_it_contributes ... ok
+test layout::tests::k4g4_consumes_projected_metrics_on_both_table_axes ... ok
+test layout::tests::live_empty_clearance_keeps_its_following_margin_chain_in_buckram ... ok
+test layout::tests::k4e3_caption_side_moves_the_caption_without_changing_the_table ... ok
+test layout::tests::live_flex_and_grid_bfcs_use_buckram_float_placement ... ok
+test layout::tests::live_bfc_auto_margins_fit_or_move_below_floats_in_both_directions ... ok
+test layout::tests::k4f_a_collapsed_row_gives_its_space_back_to_the_table ... ok
+test layout::tests::live_flex_projects_rtl_rows_and_sideways_lr_rows_to_physical_axes ... ok
+test layout::tests::live_auto_float_width_clamps_retained_inline_intrinsics ... ok
+test layout::tests::live_generated_block_roots_translate_nested_float_state ... ok
+test layout::tests::live_inline_lines_in_an_ordinary_wrapper_share_outer_float_exclusions ... ok
+test layout::tests::live_shape_outside_keeps_forced_break_lines_in_the_selected_float_band ... ok
+test layout::tests::live_unbreakable_line_retries_inside_a_rounded_bottom_contour ... ok
+test layout::tests::live_nonlinear_shape_radius_retains_buckram_and_the_default_margin_area ... ok
+test layout::tests::live_nested_float_state_crosses_ordinary_wrappers_but_stops_at_bfcs ... ok
+test layout::tests::live_shape_outside_reference_boxes_change_lines_but_not_float_placement ... ok
+test layout::tests::livery_box_tree_preserves_split_inline_float_provenance ... ok
+test layout::tests::live_nowrap_nested_inline_content_uses_float_bands_in_both_directions ... ok
+test layout::tests::livery_lowers_only_definite_auto_multicol_inputs ... ok
+test layout::tests::live_two_level_orthogonal_flow_uses_the_inner_line_block_contribution ... ok
+test layout::tests::live_multi_child_float_and_atomic_inline_use_intrinsic_subtrees ... ok
+test layout::tests::live_flex_shorthands_reach_taffy_and_change_wrap_geometry ... ok
+test layout::tests::live_rounded_shape_boxes_shift_left_and_right_line_edges ... ok
+test layout::tests::non_flex_vertical_style_does_not_receive_flex_direction_lowering ... ok
+test layout::tests::ordinary_live_block_flow_uses_buckram_without_backend_dispatch ... ok
+test layout::tests::partial_inline_groups_do_not_share_one_box_intrinsic_cache_entry ... ok
+test layout::tests::live_orthogonal_normal_flow_preserves_logical_fragment_geometry_and_baseline ... ok
+test layout::tests::positioned_child_uses_the_positioned_ancestor_padding_box ... ok
+test layout::tests::order_modified_children_reorders_only_flex_and_grid_containers ... ok
+test layout::tests::ordinary_block_flow_keeps_an_absolute_subtree_out_of_its_cursor ... ok
+test layout::tests::positioned_child_of_a_split_inline_uses_first_and_last_content_edges ... ok
+test layout::tests::nonlinear_corner_radius_falls_back_only_when_shape_outside_consumes_it ... ok
+test layout::tests::positioned_child_of_inline_split_by_a_block_uses_all_continuations ... ok
+test layout::tests::ph2_table_width_hint_reaches_buckram_through_computed_css ... ok
+test layout::tests::ph3_rules_attribute_reaches_k4g_collapsed_border_resolution ... ok
+test layout::tests::nested_absolute_card_keeps_its_editor_in_the_card_region ... ok
+test layout::tests::nested_multicol_build_admits_only_the_outer_algorithm_node ... ok
+test layout::tests::positioned_descendant_paints_above_its_stacking_context_background ... ok
+test layout::tests::positioned_replaced_leaf_keeps_its_hint_size_between_definite_insets ... ok
+test layout::tests::relative_position_moves_its_fragment_subtree_without_reflowing_siblings ... ok
+test layout::tests::relative_table_parts_move_their_retained_fragment_subtree ... ok
+test layout::tests::percentage_bearing_calc_resolves_against_the_same_basis_as_a_bare_percentage ... ok
+test layout::tests::relative_zero_height_wrapper_retains_its_floated_descendant ... ok
+test layout::tests::percentage_height_chain_uses_initial_containing_block_height ... ok
+test layout::tests::replaced_auto_width_is_intrinsic_in_flow_and_stretchable_in_flex_and_grid ... ok
+test layout::tests::positioned_hit_test_respects_stacking_level_and_ancestor_clip ... ok
+test layout::tests::tables_dispatch_through_buckram_without_a_grid_bridge ... ok
+test layout::tests::vertical_absolute_nonleaf_reformats_at_buckrams_resolved_inline_size ... ok
+test layout::tests::replaced_element_as_table_cell_lays_out_like_a_cell_around_it ... ok
+test legacy_color::tests::accepts_named_shorthand_and_legacy_garbage_forms ... ok
+test legacy_color::tests::rejects_only_the_algorithms_explicit_failures ... ok
+test layout::tests::replaced_min_max_follows_css21_10_4_for_every_box_sizing_replaced_case ... ok
+test layout::tests::vertical_flex_transposes_logical_gap_components ... ok
+test layout::tests::stacking_paint_children_applies_order_first_and_stacking_level_second ... ok
+test layout::tests::static_block_z_index_keeps_normal_hit_order ... ok
+test layout::tests::z_index_stacking_level_exists_only_where_css_lets_z_index_establish_a_context ... ok
+test paint::collapsed_border_paint_tests::collapsed_table_paints_atomic_winners_once_without_generic_cell_borders ... ok
+test paint::frame_slot_tests::a_specified_width_does_not_transfer_to_the_frames_height ... ok
+test paint::frame_slot_tests::a_frame_with_no_child_scene_splices_nothing ... ok
+test paint::frame_slot_tests::splicing_a_child_clips_and_translates_it_into_the_content_box ... ok
+test paint::frame_slot_tests::a_display_none_frame_records_no_slot ... ok
+test paint::frame_slot_tests::a_default_frame_records_a_three_hundred_by_one_fifty_content_box ... ok
+test layout::tests::retained_inline_format_is_not_shaped_again_for_paint ... ok
+test layout::tests::split_inline_continuations_format_their_own_box_children ... ok
+test paint::frame_slot_tests::frame_fallback_content_generates_no_boxes ... ok
+test paint::collapsed_border_paint_tests::collapsed_outer_edge_stays_inside_the_cell_foreground_coverage ... ok
+test paint::collapsed_border_paint_tests::collapsed_outer_edge_covers_block_foreground_in_the_later_table_phase ... ok
+test paint::native_validation_overlay_tests::native_validation_overlay_stays_within_narrow_viewport ... ok
+test paint::collapsed_border_style_tests::collapsed_border_styles_lower_to_rectangles_or_styled_strokes ... ok
+test layout::tests::positioned_grid_area_transforms_from_flow_relative_tracks_to_physical_insets ... ok
+test paint::positioned_paint_tests::grid_items_paint_in_order_modified_document_order ... ok
+test phase::tests::a_disabled_recorder_records_nothing ... ok
+test paint::positioned_paint_tests::flex_items_paint_in_order_modified_document_order ... ok
+test phase::tests::phase_names_are_stable_receipt_keys ... ok
+test paint::positioned_paint_tests::static_grid_item_z_indices_wrap_the_normal_paint_phase ... ok
+test paint::positioned_paint_tests::static_flex_item_z_indices_wrap_the_normal_paint_phase ... ok
+test paint::positioned_paint_tests::custom_leaf_stays_below_a_later_stacking_overlay_and_inside_its_clip ... ok
+test phase::tests::enabled_spans_accumulate_per_phase_and_drain ... ok
+test presentational_hints::tests::cellpadding_attribute_mutation_restyles_the_table_subtree ... ok
+test presentational_hints::tests::caller_provider_is_a_real_cascade_input_not_a_stylesheet ... ok
+test presentational_hints::tests::border_attribute_distinguishes_zero_prefixes_from_errors ... ok
+test presentational_hints::tests::center_div_and_paragraph_alignment_project_text_align ... ok
+test presentational_hints::tests::deepest_applicable_alignment_owner_selects_descendant_used_margin_policy ... ok
+test layout::tests::replaced_html_dimensions_use_computed_css_and_canvas_intrinsics ... ok
+test layout::tests::vertical_grid_static_alignment_uses_the_placed_area_block_end ... ok
+test paint::positioned_paint_tests::absolute_card_subtree_translates_its_shaped_text_with_its_fragment ... ok
+test paint::positioned_paint_tests::one_overflow_scope_wraps_a_run_of_flattened_items ... ok
+test paint::positioned_paint_tests::relative_subtree_translates_its_shaped_text_with_its_fragment ... ok
+test presentational_hints::tests::author_css_overrides_replaced_presentational_hints ... ok
+test presentational_hints::tests::author_css_overrides_ph3_hints_and_ua_rule_colors ... ok
+test presentational_hints::tests::html_dimension_parser_keeps_legacy_prefix_and_percentage_rules ... ok
+test presentational_hints::tests::html_integer_parser_keeps_signed_prefixes_for_frameborder ... ok
+test presentational_hints::tests::legacy_font_size_parser_keeps_html_relative_and_clamping_rules ... ok
+test presentational_hints::tests::dimension_and_alignment_attribute_mutations_restyle_computed_css ... ok
+test paint::collapsed_border_paint_tests::hidden_collapsed_winner_suppresses_its_atomic_edge ... ok
+test presentational_hints::tests::html_non_negative_integer_parser_keeps_its_legacy_acceptance ... ok
+test presentational_hints::tests::invalid_html_values_are_diagnosed_without_css_parsing ... ok
+test presentational_hints::tests::html_dir_hint_inherits_and_author_css_can_override_it ... ok
+test presentational_hints::tests::provider_rejects_important_declarations ... ok
+test presentational_hints::tests::ph5_flow_page_font_and_horizontal_rule_hints_project_typed_css ... ok
+test presentational_hints::tests::ph5_first_body_margin_source_and_author_precedence_are_preserved ... ok
+test presentational_hints::tests::replaced_and_embedded_attributes_project_typed_css ... ok
+test paint::positioned_paint_tests::positioned_numeric_z_indices_wrap_the_normal_paint_phase ... ok
+test presentational_hints::tests::failed_legacy_colors_are_diagnosed_without_declarations ... ok
+test presentational_hints::tests::ph3_attribute_mutation_restyles_table_and_cells_without_stale_rules ... ok
+test presentational_hints::tests::ph5_attribute_mutation_restyles_the_same_computed_style_path ... ok
+test presentational_hints::tests::table_color_border_frame_and_rules_project_typed_css ... ok
+test paint::frame_slot_tests::the_slot_is_inset_by_the_frames_own_border_and_padding ... ok
+test paint::positioned_paint_tests::positioned_stacking_item_keeps_its_overflow_clip ... ok
+test presentational_hints::tests::group_rules_target_column_and_row_groups_on_logical_axes ... ok
+test presentational_hints::tests::table_dimensions_preserve_percentages_and_author_css_wins ... ok
+test presentational_hints::tests::table_dimensions_follow_the_element_specific_zero_rules ... ok
+test presentational_hints::tests::table_part_alignment_projects_text_align_without_changing_table_align ... ok
+test presentational_hints::tests::table_alignment_uses_float_or_logical_centering_margins ... ok
+test presentational_hints::tests::table_spacing_and_cell_padding_project_at_the_hint_origin ... ok
+test presentational_hints::tests::table_part_valign_and_cell_nowrap_reach_computed_css ... ok
+test presentational_hints::tests::logical_table_rules_follow_the_cells_writing_mode ... ok
+test presentational_hints::tests::replaced_attribute_mutation_restyles_one_computed_style_path ... ok
+test presentational_hints::tests::outer_table_rules_do_not_cross_a_nested_table_boundary ... ok
+test table_sizing::tests::logical_edges_follow_writing_direction_before_buckram_receives_them ... ok
+test table_sizing::tests::percentage_padding_is_carried_unresolved_and_math_stays_unreduced ... ok
+test table_wrapper::tests::the_wrapper_takes_the_properties_css_2_1_section_17_4_names ... ok
+test table_sizing::tests::computed_size_constraints_preserve_affine_percentages_and_box_sizing ... ok
+test table_sizing::tests::fixed_track_lowering_preserves_k4b_order_and_box_identity ... ok
+test table_wrapper::tests::the_grid_sees_those_properties_unset_rather_than_zeroed ... ok
+test table_wrapper::tests::everything_off_the_list_stays_on_the_grid ... ok
+test table_sizing::tests::automatic_track_lowering_preserves_k4b_order_and_box_identity ... ok
+test table_wrapper::tests::a_percentage_table_width_resolves_against_the_wrappers_containing_block ... ok
+test table_sizing::tests::collapsed_border_lowering_maps_physical_sides_once_and_reverses_only_the_rtl_tie ... ok
+test table_wrapper::tests::an_inline_table_wrapper_is_an_inline_block ... ok
+test text::tests::adjacent_atoms_break_the_middle_edge_despite_outer_glue ... ok
+test text::tests::boundary_index_timing_matches_reference_semantics ... ignored, manual bounded timing observation; comparison-count scaling is the enforced gate
+test text::tests::boundary_index_matches_scan_for_ties_gaps_overlaps_and_atoms ... ok
+test text::tests::atomic_line_break_anywhere_uses_the_common_owner_after_nowrap_gate ... ok
+test style::tests::flattened_font_faces_keep_sheet_relative_sources_while_cssom_stays_authored ... ok
+test text::tests::atomic_marker_uses_icu_gl_wj_zwj_rules_with_nbsp_compatibility ... ok
+test text::tests::atomic_boundaries_use_the_common_ancestor_white_space ... ok
+test text::tests::atomic_inline_adds_regular_breaks_by_punctuation_and_nbsp_exception ... ok
+test text::tests::break_spaces_adds_an_opportunity_after_each_preserved_space ... ok
+test text::tests::boundary_index_lookup_comparisons_scale_logarithmically_per_edge ... ok
+test style::tests::logical_properties_map_to_the_winning_physical_axis_and_side ... ok
+test table_sizing::tests::vertical_align_collapses_to_the_four_table_cell_behaviors ... ok
+test table_wrapper::tests::a_percentage_survives_an_indefinite_containing_block ... ok
+test text::tests::adjacent_atoms_use_each_others_owner_chain_in_logical_order ... ok
+test text::tests::adjacent_inline_text_nodes_do_not_create_a_collapsed_space ... ok
+test text::tests::boundary_style_uses_deepest_common_inline_owner ... ok
+test text::tests::disappearing_space_uses_its_direct_white_space_owner ... ok
+test paint::frame_slot_tests::wrapping_the_list_keeps_the_slot_pointing_at_the_same_command ... ok
+test text::tests::explicit_generic_font_shapes_without_system_and_invalid_replace_preserves_face ... ok
+test text::tests::malformed_woff2_is_rejected_before_font_registration ... ok
+test text::tests::glue_and_joiner_boundaries_are_not_generic_whitespace_candidates ... ok
+test text::tests::icu_candidate_boundaries_are_utf8_aligned_and_emergency_rules_are_observable ... ok
+test text::tests::manual_soft_hyphen_breaks_survive_while_hyphens_none_removes_them ... ok
+test text::tests::forced_line_break_is_not_collapsed_to_a_space ... ok
+test text::tests::css_complex_script_fallback_adds_regular_grapheme_boundaries ... ok
+test text::tests::text_directive_matches_contextual_range_across_retained_sources ... ok
+test text::tests::native_validation_overlay_preserves_custom_whitespace ... ok
+test text::tests::sfnt_font_bytes_keep_their_existing_identity ... ok
+test text::tests::synthetic_inline_edges_do_not_hide_text_or_replace_the_nca_owner ... ok
+test text::tests::selected_break_mapping_uses_logical_ranges_and_atom_insertion_order ... ok
+test text::tests::text_directive_skips_occurrences_without_the_required_context ... ok
+test text::tests::t1_shaped_60px_nowrap_inline_box_edges_have_a_failing_control ... ok
+test text_fragment::tests::rejects_malformed_text_directives ... ok
+test text_fragment::tests::parses_text_directive_shapes_and_percent_decodes_utf8 ... ok
+test text_fragment::tests::preserves_element_fragment_and_hides_directive_from_scripts ... ok
+test text::tests::wpt_031_text_before_atomic_inline_uses_common_ancestor_white_space ... ok
+test text::tests::wpt_032_atomic_inline_before_text_uses_common_ancestor_white_space ... ok
+test text::tests::shaped_stream_retains_tabs_and_trailing_hanging_space_metadata ... ok
+test text::tests::shaped_stream_keeps_utf8_source_ranges_and_permits_selected_breaks ... ok
+test text::tests::retained_forced_break_cluster_keeps_finite_hard_flag ... ok
+test text::tests::valid_woff2_is_decoded_to_sfnt_with_its_nko_glyph ... ok
+test text::tests::forced_break_boundary_is_a_regular_candidate ... ok
+test text::tests::correct_today_css_text_and_line_box_breaks_are_candidates ... ok
+test text::tests::ideographic_space_fixture_keeps_its_opportunity_class ... ok
+test text::tests::boundary_index_matches_shaped_rtl_and_ligature_cluster_edges ... ok
+test text::tests::correct_today_css_text_contexts_keep_current_breaks_and_prohibitions ... ok
+
+test result: ok. 339 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 6.37s
+
+     Running tests\anonymous_boxes.rs (C:\t\cargo-targets\genet\build\debug\deps\anonymous_boxes-e686266d8c6421ac.exe)
+
+running 12 tests
+test list_item_generates_a_marker_box_with_owner_provenance ... ok
+test live_layout_exposes_buckram_box_and_fragment_identity ... ok
+test inline_split_around_block_produces_continuation_boxes_and_fragments ... ok
+test display_contents_has_no_principal_box_and_promotes_its_child ... ok
+test block_flow_whitespace_does_not_change_sibling_placement ... ok
+test fixed_table_layout_sizes_columns_from_the_first_row ... ok
+test whitespace_between_flex_items_generates_no_item ... ok
+test auto_table_layout_does_not_use_the_fixed_algorithm ... ok
+test whitespace_between_grid_items_generates_no_item ... ok
+test a_no_break_space_still_generates_a_line_box ... ok
+test preserved_whitespace_still_generates_its_box ... ok
+test table_grid_places_cells_from_buckram_tracks ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests\anonymous_tables.rs (C:\t\cargo-targets\genet\build\debug\deps\anonymous_tables-ad18aa281e22168c.exe)
+
+running 4 tests
+test generated_table_grid_sizes_its_absolute_wrapper ... ok
+test overlapping_absolute_tables_keep_the_earlier_text_run ... ok
+test generated_table_grid_reaches_table_layout_in_flow ... ok
+test html_column_backgrounds_paint_in_an_absolute_table ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests\block_admission.rs (C:\t\cargo-targets\genet\build\debug\deps\block_admission-b52b12c306a57aa4.exe)
+
+running 4 tests
+test a_deferred_flow_root_does_not_defer_its_block_ancestors ... ok
+test a_table_under_nested_blocks_keeps_every_block_ancestor_on_buckram ... ok
+test a_caption_is_as_wide_as_the_table_wrapper ... ok
+test an_auto_margin_table_is_centered_by_its_grid_width ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests\cambium_lane.rs (C:\t\cargo-targets\genet\build\debug\deps\cambium_lane-0eb6fa99c609ff93.exe)
+
+running 15 tests
+test geometry_properties_reach_taffy ... ok
+test grid_tracks_and_placements_reach_taffy ... ok
+test standalone_layout_consumes_livery_values_without_stylo ... ok
+test viewport_units_resolve_from_the_current_device_before_layout ... ok
+test hidden_attribute_generates_no_box ... ok
+test flex_order_reorders_layout_items ... ok
+test cambium_catalog_resolves_through_the_layout_dom_boundary ... ok
+test host_state_and_inline_style_enter_the_same_cascade ... ok
+test flex_properties_reach_taffy ... ok
+test container_type_applies_physical_size_containment ... ok
+test inherited_relative_font_sizes_are_computed_once ... ok
+test html_presentational_hints_reach_cssom_and_layout_through_one_style_plane ... ok
+test logical_units_follow_vertical_writing_and_container_axes ... ok
+test named_container_queries_recascade_from_laid_out_sizes ... ok
+test container_units_select_axes_independently_and_use_content_box_sizes ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests\collapsed_border_mutation.rs (C:\t\cargo-targets\genet\build\debug\deps\collapsed_border_mutation-2cd8542730a45143.exe)
+
+running 2 tests
+test retained_document_rebuilds_collapsed_geometry_and_paint_from_one_mutation_batch ... ok
+test retained_document_rebuilds_every_dynamic_collapsed_candidate_field ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests\color_context.rs (C:\t\cargo-targets\genet\build\debug\deps\color_context-1319d1e880824069.exe)
+
+running 1 test
+test style_plane_uses_the_elements_scheme_without_changing_host_preference ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests\contextual_consumers.rs (C:\t\cargo-targets\genet\build\debug\deps\contextual_consumers-f55c74dc8b47de50.exe)
+
+running 6 tests
+test cssom_distinguishes_direct_and_inherited_system_colors ... ok
+test contrast_color_uses_each_elements_foreground_without_a_fallback ... ok
+test scheme_and_palette_changes_invalidate_cssom_and_paint ... ok
+test contextual_transition_interpolates_numeric_endpoints ... ok
+test inherited_currentcolor_re_resolves_for_cssom_and_every_paint_consumer ... ok
+test style_plane_cssom_uses_the_retained_element_context ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests\css_text_lane.rs (C:\t\cargo-targets\genet\build\debug\deps\css_text_lane-b28349405960a7bd.exe)
+
+running 17 tests
+test preserved_tabs_advance_to_tab_stops ... ok
+test first_opening_punctuation_hangs_by_its_shaped_advance ... ok
+test forced_line_break_keeps_both_lines_in_the_block_height ... ok
+test overflow_wrap_and_word_break_wrap_unbreakable_words ... ok
+test percentage_letter_and_word_spacing_resolve_against_font_size ... ok
+test pre_line_preserves_segment_breaks_and_collapses_spaces ... ok
+test text_indent_offsets_the_selected_lines ... ok
+test tab_stops_include_letter_and_word_spacing ... ok
+test hyphens_none_suppresses_soft_hyphen_breaks ... ok
+test text_align_last_aligns_the_final_line ... ok
+test text_align_start_and_end_follow_direction ... ok
+test nowrap_inline_inside_a_wrapping_block ... ok
+test justify_all_and_text_justify_none ... ok
+test text_align_places_non_wrapping_lines ... ok
+test ideographic_space_hangs_before_an_emergency_wrap ... ok
+test word_break_keep_all_keeps_cjk_runs_together ... ok
+test text_transform_maps_text_before_shaping ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.75s
+
+     Running tests\cssom.rs (C:\t\cargo-targets\genet\build\debug\deps\cssom-0d6364797bdf2d2f.exe)
+
+running 12 tests
+test computed_transform_resolves_percentages_against_a_definite_box ... ok
+test computed_style_resolves_without_a_prior_frame ... ok
+test computed_transform_serializes_as_a_resolved_2d_matrix ... ok
+test inherited_column_width_keeps_the_parent_font_basis ... ok
+test computed_style_serializes_border_lengths_and_box_shorthands ... ok
+test computed_style_serializes_longhands_and_custom_properties ... ok
+test inserted_media_rules_respect_the_device ... ok
+test computed_style_serializes_flex_shorthands_from_longhands ... ok
+test insert_and_delete_author_rules_restyle_the_retained_document ... ok
+test computed_style_serializes_k6a_columns_and_fragmentation_values ... ok
+test rule_mutation_errors_surface_and_leave_the_document_intact ... ok
+test retained_k6a_mutation_matches_a_fresh_final_document ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+     Running tests\deep_nesting.rs (C:\t\cargo-targets\genet\build\debug\deps\deep_nesting-48e45b7885bd7fdd.exe)
+
+running 2 tests
+test eight_levels_lay_out_on_a_small_stack ... ok
+test sixty_four_levels_lay_out_on_a_small_stack ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running tests\flex_automatic_minimum.rs (C:\t\cargo-targets\genet\build\debug\deps\flex_automatic_minimum-aaf98a070b8e5558.exe)
+
+running 1 test
+test nested_wrapped_column_uses_the_sum_of_intrinsic_item_heights_for_auto_minimum ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests\flex_basis_content.rs (C:\t\cargo-targets\genet\build\debug\deps\flex_basis_content-392b666181d0927b.exe)
+
+running 2 tests
+test taffy_flex_basis_helpers_keep_auto_and_numeric_construction_distinct ... ok
+test flex_basis_content_bypasses_the_preferred_main_size_in_rows_and_columns ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests\flex_basis_content_repro.rs (C:\t\cargo-targets\genet\build\debug\deps\flex_basis_content_repro-368960475692ddde.exe)
+
+running 6 tests
+test column_content_basis_sizes_direct_canvas_and_nested_flex ... ok
+test column_content_basis_uses_fit_content_width_and_formats_float_line ... ok
+test content_basis_uses_an_inline_subtree_max_content_width ... ok
+test column_auto_basis_with_a_definite_cross_size_keeps_its_content_height ... ok
+test content_basis_uses_the_cross_sized_canvas_ratio_before_space_between ... ok
+test flex_basis_content_geometry_covers_each_content_family ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running tests\flex_vertical_cross_axis.rs (C:\t\cargo-targets\genet\build\debug\deps\flex_vertical_cross_axis-ebac82aee48041c4.exe)
+
+running 6 tests
+test horizontal_block_flow_sizes_vertical_rl_row_wrap_reverse_by_its_flex_cross_size ... ok
+test rtl_vertical_columns_project_explicit_align_self_across_wrap_states ... ok
+test anonymous_flex_item_does_not_reuse_its_owners_self_alignment ... ok
+test flex_self_start_uses_the_subject_writing_mode ... ok
+test rtl_vertical_rl_column_wrap_uses_the_bottom_cross_start ... ok
+test vertical_rl_row_wrap_reverse_keeps_logical_start_and_reverses_flex_lines ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests\form_control_hit.rs (C:\t\cargo-targets\genet\build\debug\deps\form_control_hit-a396d85cc3790b25.exe)
+
+running 6 tests
+test each_control_is_hit_at_its_layout_centre ... ok
+test non_exact_rotations_are_hit_where_paint_places_them ... ok
+test scrolled_controls_are_hit_where_paint_places_them_and_clip_outside ... ok
+test transformed_controls_are_hit_where_paint_places_them ... ok
+test author_zero_size_keeps_the_half_open_containment_fix ... ok
+test default_controls_are_no_longer_zero_extent ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+
+     Running tests\form_control_sizing.rs (C:\t\cargo-targets\genet\build\debug\deps\form_control_sizing-e1cc43eb082de12f.exe)
+
+running 13 tests
+test border_box_text_controls_keep_their_padding_and_border ... ok
+test size_zero_is_invalid_and_falls_back_to_the_default ... ok
+test display_block_input_does_not_collapse_to_a_line ... ok
+test checkbox_and_radio_are_a_thirteen_pixel_square ... ok
+test a_button_in_a_shrinking_flex_column_keeps_its_content_height ... ok
+test textarea_defaults_to_twenty_columns_and_two_rows ... ok
+test hidden_inputs_stay_boxless ... ok
+test select_is_one_line_with_a_non_zero_width ... ok
+test button_like_controls_have_a_non_zero_shrink_to_fit_minimum ... ok
+test size_cols_rows_never_reach_computed_style ... ok
+test image_input_keeps_its_natural_size_path_untouched ... ok
+test author_width_and_height_win_over_every_default_and_hint ... ok
+test text_entry_types_are_non_zero_and_default_to_twenty_characters ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+     Running tests\generated_counters.rs (C:\t\cargo-targets\genet\build\debug\deps\generated_counters-e6de1125ba2b178f.exe)
+
+running 8 tests
+test reset_increment_set_defaults_duplicates_and_negative_values ... ok
+test same_named_parent_and_sibling_instances_keep_their_creator_identity ... ok
+test no_box_suppression_missing_counter_and_saturation ... ok
+test nested_counters_restore_outer_scope_and_sibling_resets_replace ... ok
+test content_instantiates_a_missing_counter_only_in_its_scope ... ok
+test previous_descendant_values_and_before_after_order_are_used ... ok
+test counters_paint_like_literal_text_and_preserve_dom_selection ... ok
+test partial_restyle_refreshes_later_counter_users_and_matches_fresh ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+     Running tests\generated_text.rs (C:\t\cargo-targets\genet\build\debug\deps\generated_text-691aba52c3afabc2.exe)
+
+running 6 tests
+test hidden_generated_text_keeps_layout_but_is_not_named_or_visible ... ok
+test contents_owner_keeps_text_but_suppressed_owner_does_not ... ok
+test attr_and_rule_mutations_refresh_generated_text ... ok
+test generated_text_paints_like_literal_text_and_does_not_change_dom ... ok
+test pseudo_cascade_does_not_leak_to_owner_and_none_suppresses ... ok
+test pseudo_only_text_and_wrapping_match_literal_references ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s
+
+     Running tests\grid_abspos.rs (C:\t\cargo-targets\genet\build\debug\deps\grid_abspos-7e339d54adfbc2df.exe)
+
+running 2 tests
+test probe_positioned_grid_items ... ok
+test static_grid_parent_uses_content_static_rectangle_unless_it_is_the_containing_block ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\host_ch_lengths.rs (C:\t\cargo-targets\genet\build\debug\deps\host_ch_lengths-e77f227c6ab8e4bf.exe)
+
+running 2 tests
+test host_layout_resolves_ch_and_mixed_calc_from_registered_zero_advance ... ok
+test host_layout_refreshes_ch_after_font_registration_font_size_and_viewport_changes ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.65s
+
+     Running tests\host_content_geometry.rs (C:\t\cargo-targets\genet\build\debug\deps\host_content_geometry-a630ce731455d687.exe)
+
+running 10 tests
+test flattened_stacking_leaf_keeps_scroll_between_transformed_clip_ancestors ... ok
+test nested_transform_with_noncentral_origins_matches_all_four_content_edges ... ok
+test rotated_aabb_corner_does_not_steal_a_pointer ... ok
+test singular_and_nonfinite_input_refuse_mapping_without_losing_content_size ... ok
+test plain_retained_leaf_keeps_zero_clip_and_layer_depth ... ok
+test overflow_clips_at_padding_edge_and_document_scroll_is_caller_owned ... ok
+test border_padding_and_own_scroll_keep_the_producer_in_its_content_box ... ok
+test used_foreground_keeps_encoded_channels_alpha_palette_and_element_scheme ... ok
+test display_none_and_hidden_ancestors_suspend_geometry_and_pointer_hits ... ok
+test transformed_and_translucent_contexts_keep_descendants_below_later_dom_overlay ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running tests\interaction.rs (C:\t\cargo-targets\genet\build\debug\deps\interaction-1eccdb91b847709f.exe)
+
+running 25 tests
+test css_transition_border_bottom_color_uses_the_retained_clock ... ok
+test css_transition_border_left_and_right_colors_use_the_retained_clock ... ok
+test css_transition_explicit_pair_animates_opacity_and_background_color ... ok
+test css_transition_background_position_uses_the_retained_clock ... ok
+test css_transition_background_repeat_switches_at_the_retained_midpoint ... ok
+test css_transition_opacity_uses_the_retained_clock ... ok
+test css_transition_box_shadow_uses_the_retained_clock ... ok
+test css_transition_color_uses_the_retained_clock ... ok
+test css_transition_all_animates_opacity_and_background_color ... ok
+test css_transition_background_image_interpolates_gradient_stops ... ok
+test css_transition_border_top_color_uses_the_retained_clock ... ok
+test css_transition_border_widths_use_the_retained_clock ... ok
+test css_keyframes_opacity_use_the_retained_clock ... ok
+test css_transition_border_radius_uses_the_retained_clock ... ok
+test css_transition_border_styles_switches_at_the_retained_midpoint ... ok
+test polygon_clip_path_excludes_the_tile_rectangle_corners ... ok
+test css_transition_three_property_list_shares_the_retained_clock ... ok
+test hit_test_skips_pointer_events_none_overlays ... ok
+test retained_document_focuses_controls ... ok
+test css_transition_transform_resolves_percentage_translation_at_paint ... ok
+test css_transition_transform_uses_the_retained_clock ... ok
+test nested_scroll_chains_into_paint_and_then_the_viewport ... ok
+test css_transition_transform_decomposes_mismatched_function_lists ... ok
+test retained_document_routes_scroll_fragment_and_links ... ok
+test retained_opacity_clock_paints_intermediate_frames ... ok
+
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.73s
+
+     Running tests\invalidation.rs (C:\t\cargo-targets\genet\build\debug\deps\invalidation-1b13e7ae1097b225.exe)
+
+running 5 tests
+test class_snapshot_restyles_one_branch_and_preserves_sibling_matching ... ok
+test interaction_state_restyles_only_the_stateful_subtree ... ok
+test class_invalidation_recomputes_k6a_fragmentation_values ... ok
+test structural_selector_restyles_its_parent_after_insert_and_remove ... ok
+test stylesheet_generation_makes_document_wide_work_explicit ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests\invalidation_work.rs (C:\t\cargo-targets\genet\build\debug\deps\invalidation_work-a28d37be275ac73e.exe)
+
+running 4 tests
+test disjoint_html_hint_mutations_use_current_document_facts ... ok
+test disjoint_shadow_roots_share_facts_without_sharing_scopes ... ok
+test batched_ancestor_descendant_and_duplicate_hints_keep_full_cascade_results ... ok
+test moving_siblings_do_not_repeat_document_and_sibling_walks ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.90s
+
+     Running tests\k5d_aspect_ratio.rs (C:\t\cargo-targets\genet\build\debug\deps\k5d_aspect_ratio-836070934b306652.exe)
+
+running 3 tests
+test size_contained_abspos_uses_its_contain_intrinsic_size_before_ratio_clamping ... ok
+test abspos_max_height_transfers_through_the_aspect_ratio_to_the_inline_size ... ok
+test abspos_single_line_field_uses_contained_intrinsic_width_with_descendants ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.91s
+
+     Running tests\k5d_font_feature_resolution.rs (C:\t\cargo-targets\genet\build\debug\deps\k5d_font_feature_resolution-8efa524c6d509a54.exe)
+
+running 4 tests
+test font_feature_precedence_reaches_parley_with_authored_face_aliases ... ok
+test common_symbols_use_their_own_system_fallback_queries ... ok
+test join_controls_and_presentation_ligatures_keep_the_face_line_metrics ... ok
+test common_script_fallback_diagnostic_records_effective_script_and_selected_faces ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests\k5d_nested_inline_positioning.rs (C:\t\cargo-targets\genet\build\debug\deps\k5d_nested_inline_positioning-b1f53f7a265e8bbb.exe)
+
+running 1 test
+test nested_inline_wrappers_preserve_the_positioned_ancestors_line_rectangle ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests\k5d_pre_wrap_leading_spaces.rs (C:\t\cargo-targets\genet\build\debug\deps\k5d_pre_wrap_leading_spaces-6a2b072402bc6e3f.exe)
+
+running 1 test
+test pre_wrap_leading_space_keeps_its_break_before_a_full_width_word ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests\k6_fragmentation_contracts.rs (C:\t\cargo-targets\genet\build\debug\deps\k6_fragmentation_contracts-ce39d136e01cccde.exe)
+
+running 6 tests
+test continued_block_root_resumes_across_two_columns ... ignored, K6: block continuation kernel not implemented
+test continued_inline_root_resumes_its_lines_in_the_next_column ... ignored, K6: inline continuation kernel not implemented
+test continued_table_root_repeats_its_header_and_footer_in_each_column ... ignored, K6: table continuation kernel not implemented
+test document_session_hosts_a_continued_block_root ... ignored, K6: fragmented block session consumers not implemented
+test document_session_hosts_a_continued_inline_root ... ignored, K6: fragmented inline session consumers not implemented
+test document_session_hosts_a_continued_table_root ... ignored, K6: fragmented table session consumers not implemented
+
+test result: ok. 0 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\line_box_model.rs (C:\t\cargo-targets\genet\build\debug\deps\line_box_model-3e302bd90c8d9dcd.exe)
+
+running 3 tests
+test quirks_mode_line_boxes_match_chromium ... ok
+test standards_mode_line_boxes_match_chromium ... ok
+test atom_baselines_match_chromium ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s
+
+     Running tests\list_marker_regressions.rs (C:\t\cargo-targets\genet\build\debug\deps\list_marker_regressions-18e15956391757bd.exe)
+
+running 3 tests
+test decimal_markers_follow_html_ordinals_and_marker_only_block_children ... ok
+test quoted_inside_string_markers_match_literal_glyphs_and_cached_frames ... ok
+test rtl_marker_only_nested_decimal_lists_match_literal_frames ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s
+
+     Running tests\logical_insets.rs (C:\t\cargo-targets\genet\build\debug\deps\logical_insets-0ff3818efe86bd0f.exe)
+
+running 9 tests
+test margin_block_end_maps_to_the_block_end_side ... ok
+test shape_reference_shape_places_each_box_distinctly ... ok
+test block_size_maps_to_the_block_axis ... ok
+test inset_inline_start_follows_direction ... ok
+test inset_block_start_matches_top_in_horizontal_tb ... ok
+test a_later_physical_declaration_wins_over_an_earlier_logical_one ... ok
+test inset_block_start_follows_writing_mode ... ok
+test auto_margins_centre_under_inset_zero_for_every_block_size ... ok
+test inset_shorthand_expands_to_four_sides ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests\out_of_flow_placement.rs (C:\t\cargo-targets\genet\build\debug\deps\out_of_flow_placement-0383e51c4f486b21.exe)
+
+running 4 tests
+test percentage_padded_inline_blocks_shrink_to_fit_in_both_entries ... ok
+test out_of_flow_children_leave_shrink_to_fit_widths_alone ... ok
+test fixed_boxes_inside_absolute_ones_match_chromium ... ok
+test relative_and_sticky_children_size_their_shrink_to_fit_parent ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+     Running tests\paint.rs (C:\t\cargo-targets\genet\build\debug\deps\paint-e69cc25f9e9933d8.exe)
+
+running 78 tests
+test backgrounds_and_borders_follow_dom_paint_order ... ok
+test a_cell_spanning_a_collapsed_column_gets_an_exact_content_clip ... ok
+test background_size_preserves_ratio_and_cover_uses_the_positioning_area ... ok
+test background_origin_and_clip_use_the_requested_css_boxes ... ok
+test collapsed_table_caption_paints_once ... ok
+test a_tables_opacity_layer_wraps_its_caption ... ok
+test bidi_runs_paint_in_parley_visual_order ... ok
+test blockified_flex_item_does_not_reenter_inline_paint_layout ... ok
+test a_tables_background_paints_on_the_grid_and_spares_the_caption ... ok
+test border_radii_clip_background_fills ... ok
+test background_position_and_no_repeat_place_the_intrinsic_image ... ok
+test border_radii_reach_the_neutral_border_primitive ... ok
+test box_shadow_reaches_the_neutral_shadow_primitive ... ok
+test collapsed_whitespace_crosses_inline_element_boundaries ... ok
+test background_round_and_space_have_distinct_axis_tiling ... ok
+test body_background_propagates_to_the_canvas_and_not_its_offset_box ... ok
+test flattened_positioned_descendants_replay_ancestor_clips ... ok
+test display_none_root_keeps_the_canvas_background_transparent ... ok
+test display_none_subtrees_and_transparent_boxes_emit_nothing ... ok
+test data_uri_background_image_reaches_neutral_image_side_table ... ok
+test external_canvas_uses_content_box_and_inherits_element_opacity_layer ... ok
+test four_inset_absolute_background_fills_its_containing_block ... ok
+test formatting_whitespace_does_not_shift_following_block_flow ... ok
+test hidden_visibility_keeps_layout_space_but_suppresses_paint ... ok
+test host_image_resource_resolves_a_non_data_background_url ... ok
+test host_image_resource_resolves_a_remote_url_without_engine_fetching ... ok
+test containment_on_html_or_body_disables_body_background_propagation ... ok
+test individual_rotate_and_scale_reach_the_paint_transform ... ok
+test inline_host_resolved_image_uses_intrinsic_size ... ok
+test inline_background_uses_the_shaped_line_fragment ... ok
+test empty_cells_hide_suppresses_an_actual_blank_cells_ink ... ok
+test inline_blocks_occupy_atomic_space_in_the_text_line ... ok
+test linear_gradient_background_reaches_neutral_primitive ... ok
+test linear_gradient_layers_over_background_fill ... ok
+test page_zoom_scales_an_emitted_frame_into_the_presentation_viewport ... ok
+test inline_replaced_image_negative_margin_collapses_the_line_box ... ok
+test negative_delay_keyframe_rotate_reaches_the_paint_transform ... ok
+test inline_positioned_contexts_retain_shaping_and_compete_by_z_index ... ok
+test opacity_creates_an_atomic_level_zero_context_and_compositing_layer ... ok
+test inline_horizontal_edges_occupy_text_advance ... ok
+test matrix_and_skew_functions_reach_the_paint_transform ... ok
+test inherited_text_styles_and_font_keys_are_stable ... ok
+test inline_table_atoms_keep_their_structural_background_layers ... ok
+test overflow_clips_only_the_non_visible_axis ... ok
+test negative_delay_keyframe_background_color_reaches_the_canvas ... ok
+test overflow_clips_wrap_descendants_and_nest ... ok
+test inline_replaced_image_uses_the_shaped_line_fragment ... ok
+test paint_output_crosses_the_neutral_envelope ... ok
+test percentage_translation_uses_the_fragment_border_box ... ok
+test paused_keyframe_opacity_freezes_progress_across_a_later_pump ... ok
+test polygon_clip_path_establishes_a_stacking_context ... ok
+test paused_keyframe_rotate_freezes_progress_across_a_later_pump ... ok
+test polygon_clip_path_scopes_its_box_and_descendants ... ok
+test positioned_descendants_flatten_into_the_nearest_stacking_context ... ok
+test replaced_img_uses_intrinsic_size_and_paints_a_neutral_image ... ok
+test retained_opacity_clock_samples_and_settles ... ok
+test positioned_children_paint_in_stable_z_index_order ... ok
+test replaced_img_width_preserves_intrinsic_ratio ... ok
+test transform_origin_uses_border_box_keywords_lengths_and_percentages ... ok
+test separated_table_backgrounds_follow_table_phase_and_cell_dom_order ... ok
+test transform_creates_an_atomic_level_zero_coordinate_space ... ok
+test retained_replaced_img_uses_host_resolved_bytes_for_intrinsic_size ... ok
+test retained_document_reuses_complete_frames_and_font_allocations ... ok
+test shared_inline_group_height_contains_its_painted_lines ... ok
+test transform_wraps_opacity_layer_in_coordinate_space ... ok
+test shaped_text_height_moves_the_following_block ... ok
+test table_shadow_uses_the_grid_while_overflow_clips_the_wrapper ... ok
+test table_row_and_group_backgrounds_paint ... ok
+test separated_table_background_fills_single_sized_border_spacing_gaps ... ok
+test root_text_background_clip_is_ignored_for_canvas_propagation ... ok
+test text_background_clip_projects_a_flat_color_into_glyph_paint ... ok
+test text_nodes_emit_positioned_glyphs_with_font_resources ... ok
+test text_alignment_and_spacing_reach_parley ... ok
+test zero_delay_running_keyframe_rotate_applies_at_progress_zero ... ok
+test vertical_inline_edges_paint_outside_the_line_box ... ok
+test wrapped_inline_borders_use_slice_edges ... ok
+test wrapped_inline_spans_paint_one_fragment_per_line ... ok
+test vertical_writing_inline_block_edges_do_not_widen_the_line_box ... ok
+
+test result: ok. 78 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.86s
+
+     Running tests\positioned_block_children.rs (C:\t\cargo-targets\genet\build\debug\deps\positioned_block_children-422c581735878922.exe)
+
+running 12 tests
+test absolute_block_after_an_in_flow_sibling_honors_top_zero ... ok
+test plain_in_flow_table_block_algorithm_census ... ok
+test absolute_box_before_a_table_keeps_its_static_position_above_the_table ... ok
+test absolute_block_honors_a_top_inset_that_differs_from_its_static_position ... ok
+test document_session_places_an_absolute_block_after_an_in_flow_sibling_at_top_zero ... ok
+test relative_caption_moves_by_its_inset ... ok
+test absolute_block_takes_no_flow_space_whatever_it_contains ... ok
+test relative_table_parts_move_their_positioned_descendants ... ok
+test relative_block_percentage_insets_resolve_only_against_a_specified_height ... ok
+test document_session_probe_bisection_for_top_zero_after_a_sibling ... ok
+test document_session_gives_an_absolute_block_no_flow_space_whatever_it_contains ... ok
+test document_session_paints_the_text_of_a_moved_absolute_block_inside_its_fragment ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+
+     Running tests\reftest.rs (C:\t\cargo-targets\genet\build\debug\deps\reftest-b4e83d52cf42954d.exe)
+
+running 1 test
+test equivalent_inline_and_stylesheet_cases_share_a_native_paint_receipt ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests\replaced_image.rs (C:\t\cargo-targets\genet\build\debug\deps\replaced_image-0148821761b7d1cd.exe)
+
+running 2 tests
+test authored_auto_axis_uses_the_decoded_natural_ratio_not_the_attribute_ratio ... ok
+test html_image_dimensions_reach_paint_through_computed_css ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests\rtl_root_body_geometry.rs (C:\t\cargo-targets\genet\build\debug\deps\rtl_root_body_geometry-811a711a44cc4074.exe)
+
+running 5 tests
+test authored_full_inline_size_still_overflows_by_default_margins ... ok
+test auto_body_border_and_padding_shrink_inside_default_margins ... ok
+test ltr_root_keeps_auto_body_and_nested_blocks_inside_default_margins ... ok
+test rtl_root_keeps_auto_body_and_nested_blocks_inside_default_margins ... ok
+test vertical_root_keeps_auto_body_inside_default_inline_margins ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests\selector_index.rs (C:\t\cargo-targets\genet\build\debug\deps\selector_index-8c41d8bc6080eda5.exe)
+
+running 8 tests
+test the_id_bucket_follows_case_sensitive_id_matching ... ok
+test the_key_is_the_rightmost_compound_not_the_leftmost ... ok
+test an_uppercase_type_selector_still_matches_a_lowercase_element ... ok
+test a_rule_is_reachable_through_every_key_in_its_selector_list ... ok
+test a_narrowed_compound_is_bucketed_on_the_name_it_carries ... ok
+test the_ua_sheet_is_bucketed_with_the_rest_and_still_applies ... ok
+test equal_specificity_rules_in_different_buckets_keep_source_order ... ok
+test compounds_naming_nothing_indexable_still_reach_every_element ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests\shadow_flat_tree.rs (C:\t\cargo-targets\genet\build\debug\deps\shadow_flat_tree-7d71e6416f9d747b.exe)
+
+running 6 tests
+test declarative_template_becomes_a_shadow_root_with_slot_assignment ... ok
+test flat_children_splice_the_shadow_tree_in_and_the_light_dom_out ... ok
+test a_shadow_tree_styles_itself_and_the_document_does_not_reach_in ... ok
+test exportparts_renames_a_part_for_the_outer_scope ... ok
+test inheritance_follows_the_flat_tree ... ok
+test slotted_content_and_fallback_content_both_get_boxes ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests\table_sibling_blocks.rs (C:\t\cargo-targets\genet\build\debug\deps\table_sibling_blocks-2ef0fa513292e415.exe)
+
+running 6 tests
+test nested_table_cell_does_not_change_constrained_column_distribution ... ignored, known defect: constrained outer-table column distribution changes when a cell holds a nested display:table
+test consecutive_tables_match_between_block_and_shrink_to_fit_containers ... ok
+test inferred_cell_block_child_matches_sibling_html_table_glyphs ... ok
+test nowrap_spanning_cell_does_not_steal_width_from_percentage_column ... ok
+test inferred_cells_with_nested_tables_match_html_table_glyphs ... ok
+test inherited_nowrap_aligns_sibling_table_glyphs_with_block_rows ... ok
+
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+     Running tests\text_fragment_line_box.rs (C:\t\cargo-targets\genet\build\debug\deps\text_fragment_line_box-80ac18841757bcce.exe)
+
+running 6 tests
+test normal_text_fragments_stay_inside_their_line_boxes ... ok
+test arial::explicit_height_keeps_font_content_bounds ... ok
+test arial::wrapped_decorations_use_font_content_bounds ... ok
+test arial::normal_arial_text_fragments_match_chromium ... ok
+test arial::decorated_edges_follow_their_own_aligned_baseline ... ok
+test arial::arial_ground_truth_rows_match_chromium ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.69s
+
+     Running tests\text_paint_slots.rs (C:\t\cargo-targets\genet\build\debug\deps\text_paint_slots-9af8a35c544ce19f.exe)
+
+running 5 tests
+test equal_index_frame_and_leaf_slots_keep_owner_phase_order_in_either_splice_order ... ok
+test field_after_content_precedes_its_positive_z_descendant_and_external_overlay ... ok
+test normal_field_selection_and_caret_stay_beneath_later_overlay ... ok
+test positioned_scrolled_field_keeps_text_paint_inside_clip_and_transform ... ok
+test text_slots_survive_frame_and_host_leaf_splices_and_skip_hidden_fields ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests\transforms_3d.rs (C:\t\cargo-targets\genet\build\debug\deps\transforms_3d-3393149562d429d4.exe)
+
+running 8 tests
+test a_three_d_transform_reaches_the_paint_matrix_as_a_full_four_by_four ... ok
+test individual_properties_apply_before_transform_in_the_spec_order ... ok
+test orthographic_three_d_is_exact_in_the_projected_cells ... ok
+test an_individual_rotate_moves_alone_while_the_parent_matrix_is_unchanged ... ok
+test a_preserve_3d_context_paints_its_boxes_in_transformed_depth_order ... ok
+test a_perspective_divide_is_reported_as_a_named_gap_and_approximated ... ok
+test backface_visibility_hidden_culls_a_box_whose_normal_turned_away ... ok
+test a_flat_parent_flattens_its_child_instead_of_composing_in_three_d ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests\tree_counting.rs (C:\t\cargo-targets\genet\build\debug\deps\tree_counting-db36c51f6e337ae7.exe)
+
+running 4 tests
+test non_element_siblings_do_not_shift_the_ordinals ... ok
+test removing_a_sibling_recounts_the_group_incrementally ... ok
+test the_root_element_counts_itself_as_the_only_sibling ... ok
+test tree_counting_functions_resolve_from_the_element_position ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running unittests src\lib.rs (C:\t\cargo-targets\genet\build\debug\deps\genet_render-ce371e9403e4d1e4.exe)
+
+running 51 tests
+test a11y::name::tests::hidden_content_is_excluded_unless_directly_referenced ... ok
+test a11y::name::tests::image_alternatives_preserve_empty_alt_and_nested_button_text ... ok
+test a11y::tests::a_malformed_value_is_left_unset ... ok
+test a11y::tests::a_progress_bar_carries_its_value ... ok
+test a11y::name::tests::button_input_names_yield_to_aria_and_labels_and_title_stays_a_description ... ok
+test a11y::name::tests::button_inputs_are_named_by_value_alt_title_then_a_default ... ok
+test a11y::name::tests::labels_use_tree_order_and_exclude_the_named_control_value ... ok
+test a11y::name::tests::ordered_references_outrank_aria_label_and_skip_duplicates_and_missing_ids ... ok
+test a11y::name::tests::duplicate_ids_use_first_in_tree_order_and_preserve_nonbreaking_spaces ... ok
+test a11y::name::tests::explicit_for_prevents_accidental_wrapping_association ... ok
+test a11y::name::tests::deliberately_wrong_button_input_expectation_fails - should panic ... ok
+test a11y::name::tests::descriptions_obey_precedence_and_do_not_duplicate_title_names ... ok
+test a11y::name::tests::self_reference_and_reference_cycles_terminate_without_chaining ... ok
+test a11y::tests::a_button_in_an_open_shadow_root_reaches_the_projection ... ok
+test a11y::name::tests::valid_empty_reference_blocks_fallback_but_invalid_reference_does_not ... ok
+test a11y::tests::a_light_dom_button_reaches_the_projection ... ok
+test a11y::tests::a_read_only_document_keeps_its_document_semantics ... ok
+test a11y::tests::a_refusal_projects_as_an_alert ... ok
+test a11y::tests::disabled_nested_controls_do_not_advertise_scroll_into_view ... ok
+test a11y::tests::aria_pressed_and_bounds_are_projected_without_inference ... ok
+test a11y::tests::aria_widget_roles_and_states_reach_accesskit ... ok
+test a11y::tests::generated_inline_text_enters_names_but_does_not_override_author_labels ... ok
+test a11y::tests::contenteditable_nodes_are_clickable_and_focusable ... ok
+test a11y::tests::css_generated_names_use_retained_text_without_changing_dom ... ok
+test a11y::tests::controls_advertise_click_and_focus_separately ... ok
+test a11y::tests::css_hidden_content_leaves_the_styled_projection_and_names ... ok
+test a11y::tests::id_references_resolve_within_their_own_tree ... ok
+test a11y::tests::decimal_counter_names_reach_native_accessibility ... ok
+test a11y::tests::hidden_controls_do_not_enter_the_tree ... ok
+test a11y::tests::landmarks_and_status_reach_the_reader ... ok
+test a11y::tests::live_regions_and_disabled_controls_keep_their_state ... ok
+test a11y::tests::name_and_description_reach_accesskit_separately ... ok
+test a11y::tests::names_from_content_include_shadow_and_slotted_text ... ok
+test a11y::tests::neutral_projection_keeps_semantic_roles_and_states ... ok
+test inspect::tests::report_reads_structure ... ok
+test a11y::tests::native_form_state_drives_accessible_value_and_checkedness ... ok
+test a11y::tests::neutral_projection_preserves_wrapping_label_names ... ok
+test a11y::tests::platform_lowering_preserves_owner_attached_semantics_and_bounds ... ok
+test a11y::tests::readonly_disabled_and_non_text_inputs_do_not_advertise_set_value ... ok
+test inspect::tests::empty_document_reports_empty ... ok
+test a11y::tests::nested_scroll_offsets_bounds_and_withholds_descendant_click ... ok
+test a11y::tests::native_input_children_do_not_replace_live_value_or_label ... ok
+test a11y::tests::native_links_project_link_semantics_only_when_navigable ... ok
+test tests::hit_test_recovers_live_node_in_subtree ... ok
+test a11y::tests::nested_scroll_withholds_text_control_set_value ... ok
+test a11y::tests::writable_text_controls_project_values_and_set_value ... ok
+test tests::retained_livery_session_translates_and_appends_focus_overlay ... ok
+test a11y::tests::shadow_and_slotted_content_follow_their_flat_tree_scroll_container ... ok
+test a11y::tests::slotted_children_project_once_at_their_slot_in_flat_tree_order ... ok
+test tests::scripted_dom_counter_renders_end_to_end ... ok
+test tests::cascade_is_deterministic_off_thread_and_concurrent ... ok
+
+test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.54s
+
+     Running unittests src\lib.rs (C:\t\cargo-targets\genet\build\debug\deps\genet_render_host-f6c5630f5ddc40f4.exe)
+
+running 21 tests
+test admitted_raster_tests::actual_device_destroy_after_raster_admission_is_typed_and_does_not_panic ... ignored, actual device destruction; coordinator executes serialized GPU gate
+test admitted_raster_tests::finite_huge_curve_returns_provider_error_and_valid_raster_recovers_on_same_core ... ignored, actual healthy-device curve refusal; coordinator executes serialized GPU gate
+test admitted_raster_tests::native_scope_captures_actual_renderer_errors_after_final_precheck_loss ... ignored, actual destruction after final native precheck; coordinator executes serialized GPU gate
+test admitted_raster_tests::round_cap_shader_quality_refuses_current_frame_before_checked_raster_success ... ignored, actual current-frame shader refusal; coordinator executes serialized GPU gate
+test recovery::tests::dropped_owner_refuses_pending_completion_and_releases_local_future ... ok
+test recovery::tests::dropping_async_task_releases_future_before_reentrant_failure_wake ... ok
+test recovery::tests::async_factory_and_failed_completion_are_reentrant_and_once ... ok
+test recovery::tests::async_owner_requires_all_detachments_and_claims_once_without_sync_failure ... ok
+test recovery::tests::late_ready_acquisition_cannot_beat_delayed_timer_or_install_a_core ... ok
+test recovery::tests::monitor_rejects_stale_and_duplicate_notices_and_wakes_without_locks ... ok
+test recovery::tests::detached_owner_waits_for_all_hosts_and_failed_factory_is_once ... ok
+test recovery::tests::monotonic_deadline_refuses_before_acquisition_is_polled ... ok
+test recovery::tests::admitted_readback_creation_delays_loss_readiness_until_resources_are_registered ... ok
+test recovery::tests::async_expiry_wakes_pending_task_and_rejects_late_completion ... ok
+test recovery::tests::foreign_completion_and_stale_deadline_do_not_mutate_live_transition ... ok
+test recovery::tests::foreign_subscription_cannot_acknowledge_and_cancellation_is_once ... ok
+test rgba_frame_tests::transparent_frames_are_blank_but_opaque_black_is_content ... ok
+test recovery::tests::concurrently_registered_cancellation_finishes_before_loss_is_ready ... ok
+test boot_feature_tests::optional_features_reach_the_device_when_the_adapter_offers_them ... ok
+test pending_readback_tests::pending_capture_keeps_original_rows_while_shared_device_draws_again ... ok
+test ordered_external_texture_tests::composition_preserves_external_texture_scene_boundary ... ok
+
+test result: ok. 17 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 5.93s
+
+   Doc-tests genet_livery
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests genet_render
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests genet_render_host
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

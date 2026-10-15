@@ -1,0 +1,98 @@
+   Compiling syn v3.0.6
+    Checking windows-link v0.2.1
+    Checking libm v0.2.16
+    Checking cfg-if v1.0.5
+    Checking num-traits v0.2.19
+   Compiling thiserror-impl v2.0.21
+   Compiling bytemuck_derive v1.12.1
+    Checking once_cell v1.21.4
+    Checking foldhash v0.2.0
+    Checking bytemuck v1.25.2
+    Checking arrayvec v0.7.8
+    Checking smallvec v1.16.2
+    Checking equivalent v1.0.2
+    Checking windows-strings v0.5.1
+    Checking windows-result v0.4.1
+    Checking hashbrown v0.17.1
+    Checking windows-core v0.62.2
+    Checking thiserror v2.0.21
+    Checking bitflags v2.13.2
+    Checking indexmap v2.14.2
+    Checking log v0.4.34
+    Checking rustc-hash v1.1.0
+    Checking zerocopy v0.8.62
+    Checking naga-types v30.0.1
+    Checking windows-threading v0.2.1
+    Checking bit-vec v0.9.1
+    Checking unicode-width v0.2.2
+    Checking scopeguard v1.2.0
+    Checking lock_api v0.4.14
+    Checking codespan-reporting v0.13.1
+    Checking bit-set v0.10.0
+    Checking windows-future v0.3.2
+    Checking parking_lot_core v0.9.12
+    Checking spirv v0.4.0+sdk-1.4.341.0
+    Checking windows-collections v0.3.2
+    Checking half v2.7.1
+    Checking windows-numerics v0.3.1
+    Checking libloading v0.8.9
+    Checking raw-window-handle v0.6.2
+    Checking allocator-api2 v0.2.21
+    Checking unicode-ident v1.0.26
+    Checking static_assertions v1.1.0
+    Checking wgpu-types v30.0.1
+    Checking hashbrown v0.16.1
+    Checking naga v30.0.1
+    Checking ash v0.38.0+1.3.281
+    Checking windows v0.62.2
+    Checking parking_lot v0.12.5
+    Checking presser v0.3.1
+    Checking wgpu-naga-bridge v30.0.1
+    Checking ordered-float v5.5.0
+    Checking renderdoc-sys v1.1.0
+    Checking range-alloc v0.1.5
+    Checking profiling v1.0.18
+    Checking simd-adler32 v0.3.10
+    Checking font-types v0.12.6
+    Checking polycool v0.4.0
+    Checking adler2 v2.0.1
+    Checking gpu-allocator v0.28.0 (C:\Users\mark_\Code\repos\genet\support\patches\gpu-allocator)
+    Checking wgpu-hal v30.0.1
+    Checking wgpu-core-deps-windows-linux-android v30.0.1
+    Checking kurbo v0.13.1
+    Checking read-fonts v0.41.0
+    Checking euclid v0.22.14
+    Checking linebender_resource_handle v0.1.1
+    Checking svg_fmt v0.4.5
+    Checking color v0.3.3
+    Checking peniko v0.6.1
+    Checking guillotiere v0.7.0
+   Compiling vello_shaders v0.11.0 (https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b4664)
+    Checking wgpu-core v30.0.1
+    Checking skrifa v0.44.0
+    Checking crc32fast v1.5.2
+    Checking miniz_oxide v0.9.1
+    Checking flate2 v1.1.10
+    Checking vello_encoding v0.11.0 (https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b4664)
+    Checking miniz_oxide v0.8.9
+    Checking fdeflate v0.3.7
+    Checking wgpu v30.0.1
+    Checking futures-core v0.3.34
+    Checking futures-intrusive v0.5.0
+    Checking png v0.18.1
+    Checking tracing-core v0.1.36
+    Checking pin-project-lite v0.2.17
+    Checking pollster v1.0.1
+    Checking tracing v0.1.44
+    Checking netrender_device v0.1.2 (https://github.com/merely-made/netrender.git?rev=f4f9c0d87e6a6030b61075a45118055dfe6a12df#f4f9c0d8)
+    Checking netrender-vello v0.11.0 (https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b4664)
+    Checking netrender v0.1.2 (https://github.com/merely-made/netrender.git?rev=f4f9c0d87e6a6030b61075a45118055dfe6a12df#f4f9c0d8)
+error: netrender's `without-classic-vello` is only for wasm32 browser artifacts; native hosts present through Classic Vello
+  --> C:\Users\mark_\.cargo\git\checkouts\netrender-a79f0762881dec01\f4f9c0d\netrender\src\lib.rs:40:1
+   |
+40 | / compile_error!(
+41 | |     "netrender's `without-classic-vello` is only for wasm32 browser artifacts; native hosts present through Classic Vello"
+42 | | );
+   | |_^
+
+error: could not compile `netrender` (lib) due to 1 previous error

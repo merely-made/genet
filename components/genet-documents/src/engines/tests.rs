@@ -3570,7 +3570,58 @@ fn t5_scripted_about_visible_address_not_fallback<E:script_engine_api::ScriptEng
     assert_eq!(s.links()[0].url,"https://assets.test/root/next");assert_eq!(t5_address_absent(&*s),Some("about:blank".into()));
     let clip=s.clip().unwrap();assert_eq!(clip.source_url,"about:blank");assert_eq!(clip.links,["https://assets.test/root/next"]);
 }
+// F12: subresources of a document installed by a top-level submission resolve
+// against that document's own URL, not the initiating document's.
+#[cfg(feature="scripted")]
+#[derive(Clone)]
+struct T5SubresourceFetch { inner:T5ScriptFetch, seen:std::sync::Arc<std::sync::Mutex<Vec<String>>> }
+#[cfg(feature="scripted")]
+impl ResourceFetcher for T5SubresourceFetch {
+    fn fetch(&self,url:&str)->Option<Vec<u8>> {self.fetch_response(url).map(|r|r.bytes)}
+    fn fetch_response(&self,url:&str)->Option<genet_host_api::ResourceResponse> {
+        self.seen.lock().unwrap().push(url.to_owned());
+        match url {
+            "https://forms.test/final/proof.css"=>Some(genet_host_api::ResourceResponse::new(url,b"p{color:rgb(11,22,33)}".to_vec()).with_content_type("text/css")),
+            _=>self.inner.fetch_response(url),
+        }
+    }
+    fn fetch_request(&self,r:&genet_host_api::ResourceRequest)->Option<genet_host_api::ResourceFetchResponse> {self.inner.fetch_request(r)}
+}
+#[cfg(feature="scripted")]
+fn t5_scripted_redirected_subresource_base<E:script_engine_api::ScriptEngine+'static>() {
+    let inner=T5ScriptFetch{initial:"<form action='/send' method='post'><button id='b' style='display:block;width:180px;height:32px'>send</button></form><p>OLD</p>".into(),
+        final_url:"https://forms.test/final/index.html".into(),
+        final_body:"<link rel=stylesheet href='proof.css'><p>FINAL</p><img src='proof.png' style='width:24px;height:24px'>".into(),requests:Default::default()};
+    let fetch=T5SubresourceFetch{inner,seen:Default::default()};
+    let engine=ScriptedSessionEngine::<E,_>::new("chosen.scripted.fixture",fetch.clone());
+    let mut s=engine.spawn(&SessionSpawnRequest::new("https://forms.test/source").with_body(&fetch.inner.initial).with_viewport(480,480)).unwrap();
+    t5_script_drain(&mut *s);fetch.seen.lock().unwrap().clear();
+    t5_script_click::<E>(&mut s,"b",[6.0,6.0]);t5_script_drain(&mut *s);
+    assert_eq!(fetch.inner.requests.lock().unwrap().len(),1,"one submission transport");
+    assert!(s.clip().unwrap().text.contains("FINAL"));
+    assert_eq!(t5_address_absent(&*s),Some("https://forms.test/final/index.html".into()));
+    let seen=fetch.seen.lock().unwrap().clone();
+    for wrong in ["https://forms.test/proof.png","https://forms.test/proof.css"] {
+        assert!(!seen.iter().any(|u|u==wrong),"subresource resolved against the initiating document: {seen:?}");
+    }
+    for right in ["https://forms.test/final/proof.png","https://forms.test/final/proof.css"] {
+        assert!(seen.iter().any(|u|u==right),"subresource not requested from the installed document's URL: {seen:?}");
+    }
+    let scene=s.frame(480,480);
+    assert!(scene.ops.iter().any(|op|matches!(op,netrender::SceneOp::GlyphRun(run) if run.color==[11.0/255.0,22.0/255.0,33.0/255.0,1.0])),
+        "the installed document's own stylesheet styles its text");
+}
 // Both-engine wrappers are generated as literal Rust test functions below.
+
+#[cfg(feature="scripted")]
+#[test]
+#[ignore = "F12 repro: expected to fail until the fix lands; not yet compiled or run (paused 2026-10-15)"]
+fn boa_phase_c_t5_scripted_redirected_subresource_base() {t5_scripted_redirected_subresource_base::<script_engine_boa::BoaEngine>();}
+
+#[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
+#[test]
+#[ignore = "F12 repro: expected to fail until the fix lands; not yet compiled or run (paused 2026-10-15)"]
+fn nova_phase_c_t5_scripted_redirected_subresource_base() {t5_scripted_redirected_subresource_base::<script_engine_nova::NovaEngine>();}
 
 #[cfg(feature="scripted")]
 #[test]

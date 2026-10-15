@@ -163,7 +163,9 @@ completed corpus census or bounded slice does not close its enclosing feature.
   receipt remains separate. Native activation and host submission routes have
   scoped pre-integration Documents (135) and runtime (1,064) results. Mark
   requested progress publication and upstream integration on 2026-10-11;
-  final host/WPT qualification and Checkpoint C remain pending.
+  final host/WPT qualification and Checkpoint C remain pending. F11-F14 (2026-10-15) move qualification to the Windows box under Rust 1.99.1
+  and bring the scripted post-redirect subresource fix (F12) into Phase C; the
+  lane is paused with the work left listed in the plan.
 
 ## WPT census — the web platform beyond CSS
 

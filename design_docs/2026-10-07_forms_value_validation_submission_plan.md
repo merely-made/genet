@@ -1942,3 +1942,61 @@ downloaded), SHA256 `36934732b27f96da2e0bd1ea2e50bbdffce8c840e76e743d1b56b254915
 Evidence: `Code/testing/genet/forms/phase-c-windows-20261015/`. Of the 56
 Phase C product paths, only `ports/genet-wpt/src/{harness,main}.rs` and
 `ports/ortet/Cargo.toml` changed on main after `2b84478e836`.
+
+### Paused 2026-10-15
+
+Mark paused this lane on 2026-10-15 to protect the weekly budget. Checkpoint C
+is **not** reached. No covering gate, matched capture, live native run or
+browser check ran on Windows.
+
+Done on branch `forms-phase-c` (from `636da6bbc65`, not pushed):
+
+- F11-F14 and the ThinkPad R19-R26 history recorded (`2f387790779`).
+- Rust 1.99.1 installed (minimal, with `wasm32-unknown-unknown`); the offline
+  lock above is saved as `candidate.Cargo.lock` in the evidence folder.
+- F12 repro test written in `components/genet-documents/src/engines/tests.rs`:
+  `{boa,nova}_phase_c_t5_scripted_redirected_subresource_base`. A top-level
+  POST from `https://forms.test/source` installs
+  `https://forms.test/final/index.html`, whose `proof.css` and `proof.png`
+  must be requested from `/final/`, not from the initiating document's
+  directory. **It has never compiled or run.** The RED build was stopped
+  during dependency compilation when the lane paused (`f12-red.log`). Both
+  tests carry `#[ignore]` so the branch cannot turn the Documents gate red;
+  run them with `-- --ignored` for RED, then remove the attribute with the fix.
+- The ThinkPad native live-run tool (`server.py`, SHA256 `34093d86…`, the
+  same tool as the 2026-10-14 run) is copied to `native-tool/` in the
+  evidence folder.
+
+*Reading, not verified:* the F12 defect is the scripted host's live
+stylesheet/image source. `LiveryCssom::install_live` stores the document URL
+once in `LiveStylesheetSource::document_url`
+(`components/genet-scripted/livery.rs`), and `synchronize_live_styles`
+resolves every later stylesheet and image against it. A top-level navigation
+inside the scripted runtime installs a new top host and arena. The document
+keeps painting through its original `self.cssom`, so the new document's
+subresources resolve against the first document's URL. Links are unaffected
+because they read `host.document_base_url()`, which explains the
+current-address/links fixtures passing. The candidate fix is to resolve
+against the host's current `document_base_url()` and to re-resolve and
+invalidate when the arena changes. It is not written yet.
+
+Left for Checkpoint C, in order:
+
+1. Run the F12 tests RED (Boa and Nova), write the fix, then GREEN plus the
+   Documents and scripted suites it touches.
+2. Build the control. Its worktree is `Code/worktrees/genet-forms-c-control`
+   (branch `forms-phase-c-control`, clean at `636da6bbc65`; delete it if the
+   lane is abandoned). Plain `git revert` of the six Phase C commits stops at
+   the first one: `d7b524140a7` conflicts in this plan and in
+   `ports/ortet/Cargo.toml`. The reversal needs manual resolution limited to
+   the 56 product paths, documentation untouched. The attempt was aborted.
+3. Run the 15 covering gates on the candidate under `cargo +1.99.1 --release
+   --locked -j1`, with zero Livery failures allowed on Windows (F11).
+4. Build control and candidate `genet-wpt --features netfetch` runners in
+   separate target dirs (R24/R25). Capture both engines on the 33
+   form-submission and 584 encoding variants, the eight Phase B maps, the 16
+   CSS slices and the original/corrected 20 controls. Attribute every
+   movement; any lost earlier pass is a stop-and-report.
+5. Run the native live submission on Livery, Boa and Nova.
+6. Run the live Chrome submission check under wasm-bindgen 0.2.129 (F13).
+7. Whole-change review, Checkpoint C report, ledger and DOC_README rows.

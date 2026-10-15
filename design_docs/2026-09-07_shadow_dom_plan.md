@@ -528,6 +528,23 @@ Named, not silently deferred:
     changes (see below), but no Ortet fixture exercises a shadow tree; per
     [Ortet O5](2026-09-03_ortet_founding_plan.md) the headed gate for scripted
     behavior stays open.
+11. **The accessibility projection does not enter shadow trees** (added
+    2026-10-14; Mere app composition brief, ruling AC8, at
+    `mere/design_docs/cambium_docs/research/2026-10-06_app_composition_brief.md`
+    §12). `projection_walk` in `components/genet-render/src/a11y.rs` (line 774
+    at `b6bfbeb5`) recurses through `dom_children`, and so does
+    `descendant_text` (line 214). A shadow root is not a DOM child of its
+    host. So shadow-tree content never reaches the AccessKit tree, and names
+    built from descendant text miss it. This lane moved style, boxes and hit
+    testing onto `flat_children`, but the accessibility walk was not on its
+    list. This comes from reading the code and has not been confirmed by a run.
+    Mark ruled a fix lane, on branch `shadow-a11y-walk`. The test comes first:
+    a button inside an open shadow root must reach the projection, and the
+    same button in light DOM is the control that passes today. Then the walk
+    moves to the flat tree. *Reading, not ruled:* reading order should follow
+    the flat tree, as rendering does. That differs from Fleece's DOM-order
+    decision for extraction (§5). If the lane finds a reason to differ, it
+    brings the ordering back as a fork.
 
 ## Progress
 
@@ -540,3 +557,7 @@ pass, `<template>.content` in its shared inert document, and the
 explained pass-to-fail, one explained fail-to-error, one baseline repinned
 forward. Receipts under
 `Code/testing/genet/wpt-ledger/2026-09-07_shadow_dom/`.
+
+**2026-10-14 — residual 11 recorded.** The accessibility walk skips shadow
+trees. Mere's app composition brief made a shadow root the boundary for a
+forest mount (AC7) and authorised a fix lane for this walk (AC8).

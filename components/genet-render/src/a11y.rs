@@ -1024,6 +1024,45 @@ mod tests {
         document_a11y_projection(&dom, &fragments, None, 7)
     }
 
+    /// `projection_for` after the declarative shadow pass a parsed page gets,
+    /// so `<template shadowrootmode>` becomes a real shadow root.
+    fn shadow_projection_for(html: &str) -> document_session_api::DocumentA11yProjection {
+        let mut dom = ScriptedDom::new();
+        let root = dom.document();
+        dom.set_inner_html(root, html);
+        let realized = dom.realize_declarative_shadow_roots(root);
+        assert_eq!(
+            realized.len(),
+            html.matches("shadowrootmode").count(),
+            "every declarative template became a shadow root"
+        );
+        let fragments = fragments_from_scripted_dom(&dom, SHEET, 400, 300).expect("layout");
+        document_a11y_projection(&dom, &fragments, None, 7)
+    }
+
+    fn button_names(projection: &document_session_api::DocumentA11yProjection) -> Vec<String> {
+        projection
+            .nodes()
+            .iter()
+            .filter(|node| node.role == DocumentA11yRole::Button)
+            .map(|node| node.name.clone().unwrap_or_default())
+            .collect()
+    }
+
+    #[test]
+    fn a_light_dom_button_reaches_the_projection() {
+        let projection = shadow_projection_for("<div><button>Mount action</button></div>");
+        assert_eq!(button_names(&projection), ["Mount action"]);
+    }
+
+    #[test]
+    fn a_button_in_an_open_shadow_root_reaches_the_projection() {
+        let projection = shadow_projection_for(
+            "<div><template shadowrootmode=\"open\"><button>Mount action</button></template></div>",
+        );
+        assert_eq!(button_names(&projection), ["Mount action"]);
+    }
+
     #[test]
     fn platform_lowering_preserves_owner_attached_semantics_and_bounds() {
         let projection = projection_for("<button>Raw DOM label</button>");

@@ -449,3 +449,102 @@ and raw logs are retained in the linked receipt. No isolated target or Cargo
 home was created. The worktree isolates the primary checkout's unrelated Forms
 work. These are native supplier tests; downstream Wasm, browser-hosted and
 physical Turnstone interaction remain consumer gates.
+
+## WPT `get_computed_label` hook (2026-10-14)
+
+**Status (2026-10-14): in progress, on branch `computed-label` (not merged).**
+Mark asked for this after the Shadow DOM residual 11 fix
+([Shadow DOM plan](2026-09-07_shadow_dom_plan.md#residuals), rulings
+11.1–11.3). Until now, that fix had unit tests only. genet-wpt's testdriver
+backend (`ports/genet-wpt/src/harness.rs`, `TESTDRIVER_VENDOR_JS`) implemented
+only `action_sequence`, so every AccName WPT test threw at its first
+`test_driver.get_computed_label` call. This lane adds the hook, runs `accname/`
+before and after, and records the baseline.
+
+### Findings
+
+- **The corpus is 19 files, not 183.** `tests/wpt/tests/accname/` holds 183
+  files. 164 of them are `-manual` tests, the `foo.jpg` they use, and
+  `META.yml`. 19 are automated: 2 at the top level, 15 under `name/` and 2
+  under `name/shadowdom/` (`basic.html`, `slot.html`). 18 of the 19 go through
+  `AriaUtils.verifyLabelsBySelector` (`wai-aria/scripts/aria-utils.js:136`).
+  It compares the label, ASCII-whitespace-collapsed, against
+  `data-expectedlabel`. One file calls the hook directly. None uses
+  `get_computed_role`.
+- **The role hook is used elsewhere.** `get_computed_role` helpers appear in
+  html-aam (12 files), wai-aria (28), svg-aam (4), core-aam (1) and
+  graphics-aria (1).
+- **The crossing.** The vendor JS queues a request and returns a pending
+  promise. Each drive loop drains the queue with `rt.eval`, does the work on
+  the host, and settles the promise. `__nodeRawId(el.__ref)` returns
+  `NodeId::raw()`. That is what `ScriptedDom::opaque_id` returns
+  (`genet-scripted-dom/lib.rs:1619`) and what the projection keys each node
+  by (`neutral_node_id`, `genet-render/src/a11y.rs:670`). No translation is
+  needed.
+- **One production projection call.** genet-documents' scripted session
+  (`engines/scripted.rs:217`) builds the projection with
+  `document_a11y_projection_with_style` over
+  `with_retained_styled_frame_and_dom`. genet-wpt holds the same
+  `LiveryCssom`, so it can make the same call. The AccessKit lowering copies
+  the neutral name into the label word for word (`a11y.rs:559`).
+- **The projection covers rendered elements only.** `projection_walk` makes a
+  node for every element that has a fragment and is visibly rendered,
+  whatever its role. It skips `aria-hidden` subtrees and leaves out
+  CSS-hidden elements.
+- **Stale hashes in the residual 11 record.** The fix landed on main rebased,
+  as `42cabb5a886` (failing-first test) and `bd5f7ca0994` (fix).
+  `690cf560c04` and `c9d8faf7663`, cited in the Shadow DOM plan, are not
+  ancestors of main.
+
+### Rulings (2026-10-14)
+
+1. **The role hook.** *Question:* should `get_computed_role` land in the same
+   pass? AccName uses it in 0 files, and it needs a table mapping the 55
+   neutral roles to ARIA role strings, with judgment calls. *Options:* label
+   only, with roles as their own lane; or both now, running the AAM
+   directories too. Mark: **"Label only (Recommended)"**. *Follows:* this
+   lane implements `get_computed_label` only. `get_computed_role` keeps its
+   throwing default, and its table comes to Mark as its own design round.
+2. **The label source.** *Question:* which projection should the label come
+   from? *Options:* the neutral projection
+   (`document_a11y_projection_with_style`); the AccessKit lowering; or a new
+   direct name query that runs on any element. Mark: **"Neutral projection
+   (Recommended)"**. *Follows:* the hook makes the same call as the
+   production scripted session, generated text and CSS visibility included,
+   so WPT checks the names a host sees. genet-wpt needs no AccessKit feature.
+3. **An element absent from the projection.** *Question:* what should the
+   hook do for an element the projection leaves out (`display: none`,
+   `visibility: hidden`, `aria-hidden`, no fragment)? *Options:* reject with
+   a distinct message; or resolve `""`. Mark: **"Reject, distinct msg
+   (Recommended)"**. *Follows:* the hook rejects with "element not in
+   accessibility projection". The ledger counts these as their own family,
+   separate from wrong-name failures.
+4. **The dependency edge.** *Question:* may genet-wpt take a path dependency
+   on the in-workspace `genet-render`? *Options:* add it with default
+   features off; or route a name query through `genet-scripted` instead.
+   Mark: **"Add the path dep (Recommended)"**. *Follows:* `genet-render` with
+   `default-features = false, features = ["livery"]`. `image-decode` is
+   forwarded through genet-wpt's existing feature.
+
+### Phases and done-conditions
+
+1. **Design.** Done 2026-10-14. The rulings are above.
+2. **Implement, failing first.** A genet-wpt test page calls
+   `get_computed_label`. Before the hook it rejects. After it, the call
+   resolves to the AccName-correct string for an element whose name is known
+   (the control). A deliberately wrong expected string must still fail, and
+   an element absent from the projection must reject with the ruling 3
+   message.
+3. **Baseline.** Run `accname/` before and after, recording per-subdirectory
+   pass counts. `name/shadowdom/basic.html` and `slot.html` are named
+   explicitly. Each failure family is listed with a representative test,
+   with harness failures kept apart from name-computation failures.
+   Receipts go under `Code/testing/genet/wpt-ledger/`.
+4. **Record.** Findings and the baseline go here and into DOC_README's row.
+   The stale residual 11 hashes are corrected with dated annotations. Bugs
+   the run finds in name computation are reported as a ranked list, not
+   fixed here.
+
+### Progress
+
+**2026-10-14.** Phase 1 done: design reported, four rulings recorded.

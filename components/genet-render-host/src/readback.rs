@@ -29,6 +29,10 @@ struct Resources {
     mapped: Receiver<Result<(), wgpu::BufferAsyncError>>,
     submission: wgpu::SubmissionIndex,
 }
+#[cfg(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"))]
+impl Drop for Resources {
+    fn drop(&mut self) { self.buffer.unmap(); }
+}
 struct State {
     resources: Option<Resources>,
     loss: Option<DeviceLossNotice>,
@@ -133,6 +137,12 @@ impl PendingRgbaReadback {
             _local: local,
         }
     }
+    #[cfg(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"))]
+    pub(crate) fn cancel(&mut self) {
+        let resources={ self.state.lock().expect("readback state poisoned").resources.take() };
+        self.completed=true;
+        drop(resources); // unmap/device drop can reenter loss outside the lock.
+    }
     pub fn generation(&self) -> u64 {
         self.generation
     }
@@ -197,10 +207,16 @@ impl PendingRgbaReadback {
                 .get_mapped_range()
                 .map_err(|error| ReadbackFailure::Gpu(format!("RGBA map failed: {error}")))?;
             let unpadded = self.width as usize * 4;
-            let mut rgba = Vec::with_capacity(unpadded * self.height as usize);
+            let bytes=unpadded.checked_mul(self.height as usize)
+                .ok_or_else(|| ReadbackFailure::Gpu("RGBA mapped row size overflow".into()))?;
+            let mut rgba=Vec::new();
+            rgba.try_reserve_exact(bytes)
+                .map_err(|error|ReadbackFailure::Gpu(format!("RGBA CPU reservation failed: {error}")))?;
             for row in 0..self.height as usize {
                 let start = row * self.padded as usize;
-                rgba.extend_from_slice(&data[start..start + unpadded]);
+                let bytes=data.get(start..start + unpadded)
+                    .ok_or_else(||ReadbackFailure::Gpu("mapped buffer is shorter than its row layout".into()))?;
+                rgba.extend_from_slice(bytes);
             }
             drop(data);
             resources.buffer.unmap();

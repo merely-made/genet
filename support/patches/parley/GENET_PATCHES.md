@@ -43,10 +43,27 @@ Retire this fork when an upstream Parley release makes default-ignorable join
 controls non-covering during fallback selection while retaining them in the
 shaping buffer.
 
+## Line-break data reports the line's trailing whitespace
+
+`LineBreakData` carries `advance`, which includes trailing whitespace that
+hangs past the line's end edge. A caller that places lines beside floats has to
+compare only the content that must fit, but the yielded data hid the split, so
+a line whose content exactly filled the band beside a float (20 monospace
+glyphs in a 120px band) was measured as 126px by its hanging space and moved
+below the float. The patch adds `trailing_whitespace: f32` (the line's own
+`LineMetrics::trailing_whitespace`) to `LineBreakData`; `advance` is unchanged.
+Livery's float-band retry in `text.rs` now compares `advance - trailing_whitespace`.
+
+Retire this field when upstream Parley yields line metrics (or the hanging
+advance) with its line-break data.
+
 ## Receipts
 
 - `support/patches/parley/tests/join_controls.rs` proves ZWNJ keeps the selected
   face and receives no letter spacing.
+- `genet-livery`'s `live_shape_outside_reference_boxes_change_lines_but_not_float_placement`
+  and `live_inline_lines_in_an_ordinary_wrapper_share_outer_float_exclusions`
+  fail without the field's use and pass with it, on bundled Ahem metrics.
 - `components/genet-livery/tests/k5d_font_feature_resolution.rs` proves that
   `fi`, `f<ZWNJ>i`, and the U+FB01 presentation ligature keep one authored
   face's line metrics, and proves join controls do not add letter spacing.

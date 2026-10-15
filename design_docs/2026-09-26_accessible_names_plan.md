@@ -548,3 +548,16 @@ before and after, and records the baseline.
 ### Progress
 
 **2026-10-14.** Phase 1 done: design reported, four rulings recorded.
+
+**2026-10-14.** Phases 2 and 3 done on `computed-label`. Failing first: all
+four subtests of `test_driver_get_computed_label_reads_the_projection` threw
+`TypeError: not a callable function` before the hook. After it, both known
+names resolve, the wrong expectation fails on the name, and the hidden element
+rejects with the ruling 3 message. One harness change was needed beyond the
+hook. In the virtual-clock drive loop, a turn that settles a label no longer
+advances the clock: the next `promise_test`'s request would otherwise meet its
+own timeout first. genet-wpt: 72 passed, 2 ignored. `accname/`: **0/405 →
+352/405** subtests, 0 → 5 all-pass files; `name/shadowdom/basic.html` 2/2,
+`slot.html` 2/4. The receipt and failure families are in
+`Code/testing/genet/wpt-ledger/2026-10-14_computed_label/results.md`. Phase 4
+(recording the baseline and families here) waits for Mark.

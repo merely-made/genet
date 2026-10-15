@@ -564,13 +564,14 @@ pub(crate) fn commit_table_block<S, Context, Source>(
             }
         }
     }
+    // The table's own position stays the parent's decision; the backend
+    // overwrites it when it places this node.
+    let position = tree.unrounded_layout(table_node);
     tree.set_layout(
         table_node,
         AlgorithmLayout {
-            // The table's own position stays the parent's decision; the
-            // backend overwrites it when it places this node.
-            x: tree.unrounded_layout(table_node).x,
-            y: tree.unrounded_layout(table_node).y,
+            x: position.x,
+            y: position.y,
             width: inline.used_grid_inline_size,
             height: layout.sizing.used_table_block_size,
         },

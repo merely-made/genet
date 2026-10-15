@@ -25,6 +25,9 @@
 //! core.queue().present(frame);
 //! ```
 
+// Without classic Vello every RenderCore method begins unreachable on purpose.
+#![cfg_attr(feature = "without-classic-vello", allow(unreachable_code, unused_variables))]
+
 use netrender::{ColorLoad, NetrenderOptions, Renderer, Scene};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, Weak};
@@ -435,6 +438,9 @@ mod boot_feature_tests {
 /// surface's swapchain without re-rendering. (Multi-window: one device, N surfaces.)
 pub struct RenderCore {
     renderer: Renderer,
+    /// Present only in builds without classic Vello, where no core can exist.
+    #[cfg(feature = "without-classic-vello")]
+    unavailable: Unavailable,
     loss: Arc<DeviceLossMonitor>,
     recovery_owner: Mutex<Weak<SharedRenderCore>>,
     recipe: CoreBootRecipe,
@@ -442,12 +448,35 @@ pub struct RenderCore {
     browser_frame_gate: Arc<browser_frame::FrameGate>,
 }
 
+/// A browser artifact that presents only through Netrender's WebGL2 backend
+/// leaves classic Vello out of its build (2026-10-15, the Graphshell viewer's
+/// WebGL2 bundle). Its boot refuses, so no `RenderCore` exists and every method
+/// below begins unreachable; the linker then drops the classic raster, wgpu
+/// boot and composition code those methods reach. The feature is subtractive,
+/// so it is refused off wasm, where it could unify into a native host's graph.
+#[cfg(all(feature = "without-classic-vello", not(target_arch = "wasm32")))]
+compile_error!("without-classic-vello is only for wasm viewer artifacts that never boot classic Vello");
+
+#[cfg(feature = "without-classic-vello")]
+enum Unavailable {}
+
+#[cfg(feature = "without-classic-vello")]
+const CLASSIC_UNAVAILABLE: &str = "classic Vello is not compiled into this build";
+
 impl RenderCore {
+    #[cfg(feature = "without-classic-vello")]
+    #[inline(always)]
+    fn unavailable(&self) -> ! {
+        match self.unavailable {}
+    }
+
     /// Boot wgpu + a netrender [`Renderer`] (native blocking). The device is shared;
     /// create per-target surfaces with [`create_surface`](Self::create_surface). On
     /// wasm the WebGPU device request is async, so use [`boot_async`](Self::boot_async).
     #[cfg(not(target_arch = "wasm32"))]
     pub fn boot(options: NetrenderOptions) -> Result<Self, String> {
+        #[cfg(feature = "without-classic-vello")]
+        return Err(CLASSIC_UNAVAILABLE.into());
         // `options.backends` lets a host force a backend (e.g. D3D12 for same-API
         // system-WebView import); `None` honors `WGPU_BACKEND`, else all available.
         // Limit bucketing and optional features are host calls that ride on
@@ -477,6 +506,8 @@ impl RenderCore {
     /// Async boot: awaits netrender's `boot_async`. The only boot path on wasm
     /// (WebGPU device acquisition is asynchronous); works on every target.
     pub async fn boot_async(options: NetrenderOptions) -> Result<Self, String> {
+        #[cfg(feature = "without-classic-vello")]
+        return Err(CLASSIC_UNAVAILABLE.into());
         let needs = netrender::TenantNeeds {
             apply_limit_buckets: options.apply_limit_buckets,
             optional_features: options.optional_features,
@@ -498,6 +529,15 @@ impl RenderCore {
         Self::from_handles(handles, options)
     }
 
+    #[cfg(feature = "without-classic-vello")]
+    fn from_handles(
+        _handles: netrender::WgpuHandles,
+        _options: NetrenderOptions,
+    ) -> Result<Self, String> {
+        Err(CLASSIC_UNAVAILABLE.into())
+    }
+
+    #[cfg(not(feature = "without-classic-vello"))]
     fn from_handles(
         handles: netrender::WgpuHandles,
         options: NetrenderOptions,
@@ -530,15 +570,23 @@ impl RenderCore {
     }
 
     pub fn generation(&self) -> CoreGeneration {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         self.loss.generation
     }
     pub fn loss_notice(&self) -> Option<DeviceLossNotice> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         self.loss.notice()
     }
     pub fn device_failure(&self) -> Option<DeviceLossNotice> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         self.loss.pending_notice()
     }
     pub fn shared_recovery(self: &Arc<Self>) -> Arc<SharedRenderCore> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         let recipe = self.recipe;
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -572,6 +620,8 @@ impl RenderCore {
         width: u32,
         height: u32,
     ) -> Result<WindowSurface, String> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         if let Some(loss) = self.device_failure() {
             return Err(format!("surface creation refused: DeviceLost({loss:?})"));
         }
@@ -585,6 +635,8 @@ impl RenderCore {
     pub fn create_surface_for_readback_diagnostics(
         &self, target:impl Into<wgpu::SurfaceTarget<'static>>,width:u32,height:u32,
     ) -> Result<WindowSurface,String> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         if self.device().as_webgpu().is_none() { return Err("surface readback diagnostics requires actual WebGPU".into()); }
         let mut surface=self.create_surface(target,width,height)?;
         let advertised=surface.surface.get_capabilities(&self.renderer.wgpu_device.core.adapter).usages.bits();
@@ -610,6 +662,8 @@ impl RenderCore {
         height: u32,
         transparent: bool,
     ) -> Result<WindowSurface, String> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         if let Some(loss) = self.device_failure() {
             return Err(format!("surface creation refused: DeviceLost({loss:?})"));
         }
@@ -685,6 +739,8 @@ impl RenderCore {
     /// it to composite rasterized layers onto a surface's backbuffer.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn renderer(&self) -> &Renderer {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         &self.renderer
     }
 
@@ -692,6 +748,8 @@ impl RenderCore {
     /// The access guard holds ownership and refuses another frame's Renderer.
     #[cfg(target_arch = "wasm32")]
     pub fn renderer(&self) -> RendererAccess<'_> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         self.try_renderer().expect("checked renderer access refused")
     }
 
@@ -699,6 +757,8 @@ impl RenderCore {
     /// is replaced in place. The next [`rasterize_for`](Self::rasterize_for)
     /// call rebuilds the surface from the complete current scene.
     pub fn invalidate_surface(&self, surface: u64) -> bool {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         #[cfg(target_arch = "wasm32")]
         let _renderer_access = self.try_renderer().expect("checked renderer access refused");
         self.renderer.invalidate_surface_tiles(surface)
@@ -706,11 +766,15 @@ impl RenderCore {
 
     /// The shared wgpu device backing the renderer.
     pub fn device(&self) -> &wgpu::Device {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         &self.renderer.wgpu_device.core.device
     }
 
     /// The shared wgpu queue (e.g. for external-texture import).
     pub fn queue(&self) -> &wgpu::Queue {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         &self.renderer.wgpu_device.core.queue
     }
 
@@ -725,6 +789,8 @@ impl RenderCore {
         width: u32,
         height: u32,
     ) -> Result<RgbaFrame, String> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         let mut pending = self.start_rgba8_readback(texture, width, height)?;
         // Compatibility for offscreen/CLI callers. Event-loop hosts should use
         // start_rgba8_readback and poll it on later turns instead of waiting.
@@ -742,6 +808,8 @@ impl RenderCore {
         width: u32,
         height: u32,
     ) -> Result<PendingRgbaReadback, String> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         let _operation = self
             .loss
             .begin_operation()
@@ -819,6 +887,8 @@ impl RenderCore {
         h: u32,
         clear: ColorLoad,
     ) -> (wgpu::Texture, wgpu::TextureView) {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         self.rasterize_scaled(scene, w, h, clear, 1.0)
     }
 
@@ -837,6 +907,8 @@ impl RenderCore {
         h: u32,
         clear: ColorLoad,
     ) -> (wgpu::Texture, wgpu::TextureView) {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         self.rasterize_scaled_for(surface, scene, w, h, clear, 1.0)
     }
 
@@ -851,6 +923,8 @@ impl RenderCore {
         clear: ColorLoad,
         scale: f32,
     ) -> (wgpu::Texture, wgpu::TextureView) {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         #[cfg(target_arch = "wasm32")]
         let _renderer_access = self.try_renderer().expect("checked renderer access refused");
         let (tex, view) = self.scene_target(w, h);
@@ -872,6 +946,8 @@ impl RenderCore {
         clear: ColorLoad,
         scale: f32,
     ) -> Result<(wgpu::Texture, wgpu::TextureView), RasterizeFailure> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         self.rasterize_scaled_for_admitted(surface, scene, w, h, clear, scale, || {})
     }
 
@@ -888,6 +964,8 @@ impl RenderCore {
         scale: f32,
         after_admission: impl FnOnce(),
     ) -> Result<(wgpu::Texture, wgpu::TextureView), RasterizeFailure> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         #[cfg(not(target_arch = "wasm32"))]
         {
             self.rasterize_scaled_for_scoped(
@@ -946,6 +1024,8 @@ impl RenderCore {
         after_admission: impl FnOnce(),
         before_renderer: impl FnOnce(),
     ) -> ScopedRasterResult {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         let _operation = match self.loss.begin_operation() {
             Ok(operation) => operation,
             Err(loss) => {
@@ -1049,6 +1129,8 @@ impl RenderCore {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn qualify_native_raster(&self, deadline: std::time::Instant) -> Result<(), RasterizeFailure> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         loop {
             if let Some(loss) = self.device_failure() {
                 return Err(RasterizeFailure::DeviceLost(loss));
@@ -1113,6 +1195,8 @@ impl RenderCore {
         clear: ColorLoad,
         scale: f32,
     ) -> (wgpu::Texture, wgpu::TextureView) {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         #[cfg(target_arch = "wasm32")]
         let _renderer_access = self.try_renderer().expect("checked renderer access refused");
         let (tex, view) = self.scene_target(w, h);
@@ -1138,6 +1222,8 @@ impl RenderCore {
         _scale: f32,
         external_textures: &[netrender::ExternalTextureComposite<'_>],
     ) -> (wgpu::Texture, wgpu::TextureView) {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         #[cfg(target_arch = "wasm32")]
         let _renderer_access = self.try_renderer().expect("checked renderer access refused");
         let mut compositor = CaptureMasterCompositor::default();
@@ -1175,6 +1261,8 @@ impl RenderCore {
     }
 
     fn scene_target(&self, w: u32, h: u32) -> (wgpu::Texture, wgpu::TextureView) {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         let device = self.device();
         let tex = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("genet-render-host scene"),
@@ -1206,6 +1294,8 @@ impl RenderCore {
     /// frame's raster cost decomposes without a debugger. Debug level; an idle
     /// app renders no frames, so there is no idle log cost.
     fn log_raster_spans(&self, w: u32, h: u32) {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         if tracing::enabled!(target: "genet_render_host::raster", tracing::Level::DEBUG) {
             if let Some(t) = self.renderer.last_frame_timings() {
                 let us = |n: &str| t.span(n).map(|d| d.as_micros() as u64).unwrap_or(0);

@@ -40,6 +40,8 @@ impl Drop for RendererAccess<'_> {
 }
 impl RenderCore {
     pub fn try_renderer(&self) -> Result<RendererAccess<'_>, RasterizeFailure> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         if let Some(loss) = self.device_failure() { return Err(RasterizeFailure::DeviceLost(loss)); }
         self.browser_frame_gate.acquire_legacy()?;
         Ok(RendererAccess { core:self })
@@ -48,12 +50,18 @@ impl RenderCore {
     /// Owned-resource cleanup submits no work and observes no quality FIFO.
     /// It is also valid after loss, unlike acquiring a live renderer accessor.
     pub fn retire_owned_external_image(&self, key:netrender::ImageKey) {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         self.renderer.unregister_external_image(key);
     }
     pub fn retire_owned_image(&self, key:netrender::ImageKey) {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         self.renderer.unregister_image_vello(key);
     }
     pub fn retire_owned_fragment(&self, id:u64) {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         self.renderer.remove_fragment(id);
     }
 }
@@ -243,12 +251,16 @@ impl BrowserFrameCommands<'_> {
 }
 impl RenderCore {
     pub fn try_begin_browser_frame(self: &Arc<Self>) -> Result<BrowserFrameSubmission, BrowserFrameStartError> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         if let Some(loss) = self.device_failure() { return Err(BrowserFrameStartError::Refused(RasterizeFailure::DeviceLost(loss))); }
         self.browser_frame_gate.state.compare_exchange(IDLE, OWNED, Ordering::AcqRel, Ordering::Acquire)
             .map_err(|state| if state == OWNED || state == LEGACY { BrowserFrameStartError::Busy } else { BrowserFrameStartError::Refused(unavailable("shared Core quality outcome is unavailable")) })?;
         self.begin_browser_frame_owned().map_err(BrowserFrameStartError::Refused)
     }
     fn begin_browser_frame_owned(self: &Arc<Self>) -> Result<BrowserFrameSubmission, RasterizeFailure> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         let operation = match self.loss.begin_operation() {
             Ok(operation) => operation,
             Err(loss) => { self.browser_frame_gate.state.store(IDLE, Ordering::Release); return Err(RasterizeFailure::DeviceLost(loss)); }

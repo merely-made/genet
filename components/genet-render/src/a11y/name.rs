@@ -27,6 +27,17 @@ fn attr<'a, D: LayoutDom>(dom: &'a D, node: D::NodeId, name: &str) -> Option<&'a
     dom.attribute(node, &Namespace::default(), &LocalName::from(name))
 }
 
+/// Name of a button input with no `value`, `alt` or `title`. English only:
+/// localizing these strings is unfinished (Mark, 2026-10-15).
+fn default_button_name(kind: &str) -> &'static str {
+    match kind {
+        "submit" => "Submit",
+        "reset" => "Reset",
+        "image" => "Submit Query",
+        _ => "",
+    }
+}
+
 fn flat(text: &str) -> String {
     text.split_ascii_whitespace().collect::<Vec<_>>().join(" ")
 }
@@ -86,6 +97,17 @@ impl<'a, D: LayoutDom> Names<'a, D> {
 
     fn tag(&self, node: D::NodeId) -> Option<&str> {
         self.dom.element_name(node).map(|name| name.local.as_ref())
+    }
+
+    /// The lowercased `type` of an `input` that is a push button or image button.
+    fn button_input(&self, node: D::NodeId) -> Option<&'static str> {
+        if self.tag(node) != Some("input") {
+            return None;
+        }
+        let kind = attr(self.dom, node, "type")?;
+        ["button", "submit", "reset", "image"]
+            .into_iter()
+            .find(|k| kind.eq_ignore_ascii_case(k))
     }
 
     fn labelable(&self, node: D::NodeId) -> bool {
@@ -280,6 +302,17 @@ impl<'a, D: LayoutDom> Names<'a, D> {
                 return Some(alt.to_owned());
             }
         }
+        if let Some(kind) = self.button_input(node) {
+            let source = |name: &str| attr(self.dom, node, name).filter(|s| !flat(s).is_empty());
+            let native = if kind == "image" { source("alt") } else { None };
+            if let Some(text) = native.or_else(|| source("value")) {
+                return Some(text.to_owned());
+            }
+            if let Some(title) = source("title") {
+                return (!suppress_title).then(|| title.to_owned());
+            }
+            return Some(default_button_name(kind).to_owned());
+        }
         // Native text fields get names from labels, never their editable value.
         let content = if matches!(self.tag(node), Some("input" | "textarea" | "select"))
             || super::document_role(self.dom, node) == document_session_api::DocumentA11yRole::TextField
@@ -430,5 +463,44 @@ mod tests {
             Some("Visible")
         );
         assert_eq!(alternatives("<span id=hidden hidden>Hidden label</span><button id=target aria-labelledby=hidden></button>").0.as_deref(), Some("Hidden label"));
+    }
+
+    #[test]
+    fn button_inputs_are_named_by_value_alt_title_then_a_default() {
+        let name = |html: &str| alternatives(html).0;
+        // Control: a native button already names itself from content.
+        assert_eq!(name("<button id=target>Save</button>").as_deref(), Some("Save"));
+        for kind in ["button", "submit", "reset"] {
+            let got = name(&format!("<input id=target type={kind} value='{kind} label'>"));
+            assert_eq!(got, Some(format!("{kind} label")));
+        }
+        assert_eq!(name("<input id=target type=IMAGE alt='image label' value=Wrong>").as_deref(), Some("image label"));
+        // Fallbacks: image alt, then value, then title, then the default.
+        assert_eq!(name("<input id=target type=image alt='' value=Value title=Tip>").as_deref(), Some("Value"));
+        assert_eq!(name("<input id=target type=image title=Tip>").as_deref(), Some("Tip"));
+        assert_eq!(name("<input id=target type=image>").as_deref(), Some("Submit Query"));
+        assert_eq!(name("<input id=target type=submit>").as_deref(), Some("Submit"));
+        assert_eq!(name("<input id=target type=reset value=''>").as_deref(), Some("Reset"));
+        assert_eq!(name("<input id=target type=reset title=Tip>").as_deref(), Some("Tip"));
+        // A plain button input has no default.
+        assert_eq!(name("<input id=target type=button>").as_deref(), Some(""));
+    }
+
+    #[test]
+    fn button_input_names_yield_to_aria_and_labels_and_title_stays_a_description() {
+        let both = |html| alternatives(html);
+        assert_eq!(both("<input id=target type=submit value=V aria-label=Aria>").0.as_deref(), Some("Aria"));
+        assert_eq!(both("<span id=l>Ref</span><input id=target type=submit value=V aria-labelledby=l aria-label=Aria>").0.as_deref(), Some("Ref"));
+        assert_eq!(both("<label for=target>Label</label><input id=target type=submit value=V>").0.as_deref(), Some("Label"));
+        let (name, description) = both("<input id=target type=submit value=V title=Tip>");
+        assert_eq!((name.as_deref(), description.as_deref()), (Some("V"), Some("Tip")));
+        // Title that names the control is not repeated as its description.
+        assert_eq!(both("<input id=target type=reset title=Tip>").1, None);
+    }
+
+    #[test]
+    #[should_panic(expected = "assertion `left == right` failed")]
+    fn deliberately_wrong_button_input_expectation_fails() {
+        assert_eq!(alternatives("<input id=target type=submit value=Real>").0.as_deref(), Some("Wrong"));
     }
 }

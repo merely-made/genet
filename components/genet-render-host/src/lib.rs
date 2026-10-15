@@ -31,6 +31,24 @@ use std::sync::{Arc, Mutex, Weak};
 #[cfg(test)]
 use std::time::Duration;
 
+#[cfg(target_arch = "wasm32")]
+mod browser_frame;
+#[cfg(target_arch = "wasm32")]
+pub use browser_frame::{AcceptedBrowserFrame, BrowserFrameCommands, BrowserFrameStartError, BrowserFrameSubmission, PendingBrowserFrame, RendererAccess};
+
+#[cfg(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"))]
+mod browser_surface_readback;
+#[cfg(any(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"),
+          all(test, feature = "browser-surface-readback-diagnostics")))]
+mod surface_capture_layout;
+#[cfg(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"))]
+pub use browser_surface_readback::{AcquiredSurfaceFrame, AcquiredSurfaceMetadata, AcceptedSurfaceReadback,
+    BrowserFrameScopeObservation,BrowserFrameQualityObservation,
+    PendingSurfaceReadback, SurfaceCaptureCancellation, SurfaceCaptureConfiguration, SurfaceCapturePreparation, SurfaceCaptureFrameIdentity,
+    SurfaceReadbackFailure};
+#[cfg(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"))]
+pub use surface_capture_layout::{SurfaceCaptureBudget, SurfaceCaptureLayout, SurfaceCaptureLimit, SurfaceCaptureReservation};
+
 mod readback;
 mod recovery;
 pub use recovery::{
@@ -420,6 +438,8 @@ pub struct RenderCore {
     loss: Arc<DeviceLossMonitor>,
     recovery_owner: Mutex<Weak<SharedRenderCore>>,
     recipe: CoreBootRecipe,
+    #[cfg(target_arch = "wasm32")]
+    browser_frame_gate: Arc<browser_frame::FrameGate>,
 }
 
 impl RenderCore {
@@ -504,6 +524,8 @@ impl RenderCore {
             loss,
             recovery_owner: Mutex::new(Weak::new()),
             recipe,
+            #[cfg(target_arch = "wasm32")]
+            browser_frame_gate: Arc::new(browser_frame::FrameGate::default()),
         })
     }
 
@@ -554,6 +576,24 @@ impl RenderCore {
             return Err(format!("surface creation refused: DeviceLost({loss:?})"));
         }
         self.create_surface_with_transparency(target, width, height, false)
+    }
+
+    /// Explicit diagnostic request for actual WebGPU surface readback.
+    /// COPY_SRC is configured later inside the frame owner's scopes; advertised
+    /// RENDER_ATTACHMENT-only caps are recorded, never relabeled as COPY_SRC.
+    #[cfg(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"))]
+    pub fn create_surface_for_readback_diagnostics(
+        &self, target:impl Into<wgpu::SurfaceTarget<'static>>,width:u32,height:u32,
+    ) -> Result<WindowSurface,String> {
+        if self.device().as_webgpu().is_none() { return Err("surface readback diagnostics requires actual WebGPU".into()); }
+        let mut surface=self.create_surface(target,width,height)?;
+        let advertised=surface.surface.get_capabilities(&self.renderer.wgpu_device.core.adapter).usages.bits();
+        surface.surface_config.usage=wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC;
+        SurfaceCaptureConfiguration::from_window(advertised,&surface.surface_config)
+            .map_err(|error|format!("surface capture configuration refused: {error:?}"))?;
+        surface.readback_diagnostics=Some(advertised);
+        surface.readback_configuration_pending.set(true);
+        Ok(surface)
     }
 
     /// Create and configure a presentation surface, requiring composited alpha
@@ -634,19 +674,33 @@ impl RenderCore {
         Ok(WindowSurface {
             surface,
             surface_config,
+            #[cfg(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"))]
+            readback_diagnostics:None,
+            #[cfg(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"))]
+            readback_configuration_pending:std::cell::Cell::new(false),
         })
     }
 
     /// The netrender renderer — call `compose_external_texture` (and friends) on
     /// it to composite rasterized layers onto a surface's backbuffer.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn renderer(&self) -> &Renderer {
         &self.renderer
+    }
+
+    /// Browser compatibility getter; checked callers use try_renderer.
+    /// The access guard holds ownership and refuses another frame's Renderer.
+    #[cfg(target_arch = "wasm32")]
+    pub fn renderer(&self) -> RendererAccess<'_> {
+        self.try_renderer().expect("checked renderer access refused")
     }
 
     /// Retire one keyed surface's retained tile state after its content source
     /// is replaced in place. The next [`rasterize_for`](Self::rasterize_for)
     /// call rebuilds the surface from the complete current scene.
     pub fn invalidate_surface(&self, surface: u64) -> bool {
+        #[cfg(target_arch = "wasm32")]
+        let _renderer_access = self.try_renderer().expect("checked renderer access refused");
         self.renderer.invalidate_surface_tiles(surface)
     }
 
@@ -797,6 +851,8 @@ impl RenderCore {
         clear: ColorLoad,
         scale: f32,
     ) -> (wgpu::Texture, wgpu::TextureView) {
+        #[cfg(target_arch = "wasm32")]
+        let _renderer_access = self.try_renderer().expect("checked renderer access refused");
         let (tex, view) = self.scene_target(w, h);
         self.renderer
             .render_vello_scaled_for(surface, scene, &view, clear, scale);
@@ -852,6 +908,7 @@ impl RenderCore {
             // asynchronous. This existing synchronous API does not qualify
             // either; an async host seam remains open. Do not block JS or
             // drop a promise and claim native completion guarantees here.
+            let _renderer_access = self.try_renderer()?;
             let _operation = self
                 .loss
                 .begin_operation()
@@ -1056,6 +1113,8 @@ impl RenderCore {
         clear: ColorLoad,
         scale: f32,
     ) -> (wgpu::Texture, wgpu::TextureView) {
+        #[cfg(target_arch = "wasm32")]
+        let _renderer_access = self.try_renderer().expect("checked renderer access refused");
         let (tex, view) = self.scene_target(w, h);
         self.renderer
             .render_vello_scaled(scene, &view, clear, scale);
@@ -1079,6 +1138,8 @@ impl RenderCore {
         _scale: f32,
         external_textures: &[netrender::ExternalTextureComposite<'_>],
     ) -> (wgpu::Texture, wgpu::TextureView) {
+        #[cfg(target_arch = "wasm32")]
+        let _renderer_access = self.try_renderer().expect("checked renderer access refused");
         let mut compositor = CaptureMasterCompositor::default();
         let base_color = match clear {
             ColorLoad::Clear(color) => netrender::peniko::Color::new([
@@ -1172,9 +1233,30 @@ impl RenderCore {
 pub struct WindowSurface {
     surface: wgpu::Surface<'static>,
     surface_config: wgpu::SurfaceConfiguration,
+    #[cfg(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"))]
+    readback_diagnostics:Option<u32>,
+    #[cfg(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"))]
+    readback_configuration_pending:std::cell::Cell<bool>,
 }
 
 impl WindowSurface {
+    /// Run inside phase1 owner's synchronous closure BEFORE snapshotting the
+    /// host surface configuration stamp. Never configure this request unscoped.
+    #[cfg(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"))]
+    pub fn prepare_readback_diagnostics(
+        &self, core:&RenderCore, commands:&BrowserFrameCommands<'_>,
+    ) -> Result<SurfaceCapturePreparation,SurfaceReadbackFailure> {
+        if !commands.matches_core(core) { return Err(SurfaceReadbackFailure::WrongFrame); }
+        if let Some(loss)=core.device_failure() { return Err(SurfaceReadbackFailure::DeviceLost(loss)); }
+        if core.device().as_webgpu().is_none() { return Err(SurfaceReadbackFailure::Unsupported("actual WebGPU only")); }
+        let advertised=self.readback_diagnostics.ok_or(SurfaceReadbackFailure::Unsupported("ordinary surface did not opt in"))?;
+        let configuration=SurfaceCaptureConfiguration::from_window(advertised,&self.surface_config)?;
+        let did_configure=self.readback_configuration_pending.replace(false);
+        if did_configure { self.surface.configure(commands.device(),&self.surface_config); }
+        if let Some(loss)=core.device_failure() { return Err(SurfaceReadbackFailure::DeviceLost(loss)); }
+        Ok(SurfaceCapturePreparation::new(configuration,did_configure))
+    }
+
     /// The surface's texture format (pass to `compose_external_texture`).
     pub fn format(&self) -> wgpu::TextureFormat {
         self.surface_config.format
@@ -1188,6 +1270,11 @@ impl WindowSurface {
         }
         self.surface_config.width = width.max(1);
         self.surface_config.height = height.max(1);
+        #[cfg(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"))]
+        if self.readback_diagnostics.is_some() {
+            self.readback_configuration_pending.set(true);
+            return;
+        }
         self.surface.configure(core.device(), &self.surface_config);
     }
 
@@ -1204,6 +1291,10 @@ impl WindowSurface {
     pub fn acquire_status(&self, core: &RenderCore) -> SurfaceAcquire {
         if let Some(loss) = core.device_failure() {
             return SurfaceAcquire::DeviceLost(loss);
+        }
+        #[cfg(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"))]
+        if self.readback_configuration_pending.get() {
+            return SurfaceAcquire::Unavailable { reason:"diagnostic surface awaits scoped configuration".into() };
         }
         match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame)

@@ -114,7 +114,12 @@ local path overrides are not an adoption receipt.
 
 Complete role rules, computed visibility, shadow scope and flat-tree traversal,
 embedded controls, generated block spacing, WPT coverage and a headed physical
-screen-reader receipt remain explicit future work. Static Livery session wiring
+screen-reader receipt remain explicit future work.
+*(2026-10-14: shadow scope and flat-tree traversal are fixed on branch
+`shadow-a11y-walk`, not yet merged. Name from content follows AccName 2F's
+rendered child nodes, and ID references resolve within the referring node's
+own tree. See residual 11 and rulings 11.1–11.3 in
+[the Shadow DOM plan](2026-09-07_shadow_dom_plan.md#residuals).)* Static Livery session wiring
 uses the retained provider. At this September 26 receipt the scripted session
 exposed fragments without styles; the September 29 provider closes that gap.
 No new worktree, isolated

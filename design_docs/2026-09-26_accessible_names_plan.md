@@ -7,7 +7,8 @@ published and recorded below. Full AccName/HTML-AAM conformance and
 headed assistive-technology acceptance remain open.
 *(2026-10-14: AccName WPT now runs through genet-wpt's `get_computed_label`
 hook on branch `computed-label`. The baseline is 352/405 subtests; see
-"WPT `get_computed_label` hook" below.)*
+"WPT `get_computed_label` hook" below. 2026-10-15: family B, role-gated names, is fixed on branch
+`role-gated-names`, not merged: 356/405 to 365/405; see "Role-gated names".)*
 
 ## Sources and ownership
 
@@ -714,3 +715,122 @@ The four `input[type=button|image|reset|submit]` subtests moved fail to pass.
 There were no other transitions. Receipts:
 `Code/testing/genet/wpt-ledger/2026-10-15_input_value_names/`
 (`transitions.txt`).
+
+## Role-gated names (family B, 2026-10-15)
+
+**Status (2026-10-15): implemented and measured on branch `role-gated-names`,
+not merged.** Mark asked for this lane: family B, ranked #2 in the Baseline
+above, using the AccName run as the before/after instrument.
+
+### Findings
+
+- `Names::compute_inner` (`components/genet-render/src/a11y/name.rs`) had no
+  role test. Name from content was the default for every role, apart from
+  inputs, the document, and the tags `html body main article nav form` when
+  not referenced. `alertdialog` is not in the neutral `DocumentA11yRole`. There
+  was no caption step and no heading step.
+- AccName 2F lets a node take content when its role allows it, or when it is
+  referenced or inside a content traversal. So the gate applies to the node
+  whose name is asked for, not to its descendants. A barred role inside a
+  `<button>` still contributes its text. The code threads a `descendant` flag
+  for this.
+- **Names are Genet's only text channel.** `projection_walk` visits elements
+  only, and Genet never emits `StaticText` nodes. The AccessKit lowering copies
+  the name into the label, and Taproot's `containing` filter matches the name.
+  So for paragraphs, generics, list items and live regions, the name is how a
+  host gets the visible text. A full ARIA allowlist would blank it. This is why
+  ruling 1 is a denylist, and why a full allowlist waits for projected text
+  nodes.
+- None of the 18 running AccName files expects a plain div, span or paragraph
+  to take a content name, so WPT cannot distinguish the options. The cost sits
+  on the host side.
+- **`<dialog open>` is absent from the projection** because
+  `CAMBIUM_UA_DEFAULTS` (`components/genet-livery/src/lib.rs:128`) has no
+  `dialog` rule, so a dialog is `display:inline`. An inline box holding only
+  whitespace and block children gets no fragment: `<dialog open><h2>x</h2>`
+  projects, `<dialog open>\n  <h2>x</h2>` rejects. Probed with temporary pages
+  (not committed). By reading the sheet, a closed `<dialog>` renders its
+  contents inline today; that was not rendered here.
+- html-aam has no `get_computed_label` tests. Only `accname/` covers this.
+- The AccName and HTML-AAM wording was taken from memory. No local copy of the
+  spec was read, and nothing was downloaded.
+
+### Rulings (2026-10-15)
+
+1. **Role gate.** *Question:* which roles stop taking content. *Options:* a
+   denylist (group, dialog, alertdialog, article, table); the full ARIA
+   allowlist; the denylist plus the other author-named containers. Mark:
+   **"Denylist (Recommended)"**. *Follows:* `group`, `dialog`, `alertdialog`,
+   `article` and `table`, native and ARIA, stop taking content. Everything else
+   is unchanged. `alertdialog` is read from the raw `role` attribute in
+   `name.rs` only, not added to the shared enum. *Reading, not ruled:* the
+   attribute is compared whole, trimmed and case-folded, as `document_role`
+   does.
+2. **Heading rule.** *Question:* implement the `.tentative` name-from-heading
+   rule? *Options:* both roles and native elements; roles only; no rule. Mark:
+   **"Implement, both (Recommended)"**. *Follows:* role `dialog`, `alertdialog`
+   and `article`, and native `<dialog>` and `<article>`, take the first heading:
+   DFS pre-order in flat-tree document order, any depth, hidden subtrees
+   skipped, after `aria-labelledby` and `aria-label`, before `title`. No heading
+   falls back to `title`, then to no name. **Native `<article>` now gets a
+   heading name, which a host sees.** *Reading, not ruled:* a heading is
+   anything `document_role` calls a heading (`h1`–`h6` or `role=heading`); a
+   heading whose own name is empty falls through; the heading's name is its
+   normal computation.
+3. **Table and abbr.** *Options:* caption and `abbr` only; also the `summary`
+   attribute; all generics title-first. Mark: **"Caption; abbr only
+   (Recommended)"**. *Follows:* a native `<table>` takes its first `<caption>`
+   child's text after `aria-labelledby` and `aria-label`; an empty caption falls
+   through to `title`; cell text is never used. Only `<abbr>` becomes
+   title-first (`title`, then content as today). No change to other generics.
+   *Reading, not ruled:* the caption and `abbr` steps, like the gate, apply to
+   the root of the computation only. Inside a content traversal an `abbr`
+   contributes its content. An `abbr` whose `title` names it does not repeat
+   the title as its description.
+4. **The dialog gap.** *Options:* a separate lane; add the two display rules
+   here; project fragment-less inline elements. Mark: **"Separate lane
+   (Recommended)"**. *Follows:* the UA stylesheet and layout are untouched. The
+   native `<dialog open>` subtest remains a projection rejection, and this lane
+   tops out at 9 of 10 reachable subtests.
+
+### Open gates
+
+- **Dialog display rules** (own lane, ruling 4): `dialog { display: block }`
+  and `dialog:not([open]) { display: none }` in `CAMBIUM_UA_DEFAULTS`, then top
+  layer and centering. It changes layout and paint, so it needs the layout and
+  reftest gate. After it, `comp_name_from_heading.tentative.html` should reach
+  6/6. `abbr`, `summary`, `details`, `fieldset` and `legend` also have no
+  display rule; not examined.
+- **Full ARIA allowlist** for name from content: waits until the projection
+  carries text nodes (`StaticText`). Until then the other author-named
+  containers (region, form, navigation, menu, toolbar, tablist and the like)
+  still take content.
+- **Block children are joined with no space** in names (`<h2>A</h2><p>p</p>`
+  gives `Ap`). Family E territory.
+- **`document_role` lacks** `option`, `summary`, `legend`, `abbr`, tooltip,
+  `alertdialog`, `columnheader` and `rowheader`.
+- Still open from the earlier ranking: E, K, A, I, H, G, D, C.
+
+### Result
+
+Failing first: `roles_that_forbid_content_take_no_name_from_it`,
+`dialogs_and_articles_are_named_by_their_first_heading_depth_first` and
+`tables_take_their_caption_never_their_cells_and_abbr_prefers_its_title`
+failed before the fix. Their controls pass on both sides: a `<button>` with
+content, a barred role inside a button, a cell, `<p>`, `<div>`, `role=alert`,
+and a `<span title>`. `deliberately_wrong_group_expectation_fails`
+(`#[should_panic]`) did not panic before the fix and does after.
+AccName WPT, dev-profile genet-wpt on Boa, `testharness accname --jobs 1`:
+
+| | Before (`636da6bbc65`) | After |
+|---|---:|---:|
+| Subtests | 356/405 | **365/405** |
+| All-pass files | 5 | 8 |
+
+Nine subtests moved fail to pass and nothing else moved: `comp_name_from_heading.tentative.html`
+alertdialog, article, dialog, group and DFS (5); `comp_tooltip.html` abbr and
+`div[role=group][title]` (2); `comp_host_language_label.html` `table > caption`
+(1); `comp_labeledby_non_standard.html` group (1). There were no pass-to-fail
+transitions. `comp_name_from_content.html` still dies on the buckram panic and
+holds no gated role. Receipts:
+`Code/testing/genet/wpt-ledger/2026-10-15_role_gated_names/` (`transitions.txt`).

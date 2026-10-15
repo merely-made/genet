@@ -7,6 +7,8 @@
 //! (`with_rendered`). Name from content follows the flat tree (AccName's
 //! "rendered child nodes"); ID references resolve only within the referring
 //! node's own tree. Embedded control values remain open.
+//! A node that is neither referenced nor part of a content traversal takes
+//! no name from content when its role bars it (see [`Names::content_barred`]).
 
 use std::collections::{HashMap, HashSet};
 
@@ -110,6 +112,50 @@ impl<'a, D: LayoutDom> Names<'a, D> {
             .find(|k| kind.eq_ignore_ascii_case(k))
     }
 
+    /// Whether `node`'s role forbids name from content, with whether it takes
+    /// the first heading instead. `alertdialog` is read from the `role`
+    /// attribute here: the neutral role enum does not model it.
+    fn content_barred(&self, node: D::NodeId) -> Option<bool> {
+        use document_session_api::DocumentA11yRole as Role;
+        if attr(self.dom, node, "role")
+            .is_some_and(|r| r.trim().eq_ignore_ascii_case("alertdialog"))
+        {
+            return Some(true);
+        }
+        match super::document_role(self.dom, node) {
+            Role::Dialog | Role::Article => Some(true),
+            Role::Group | Role::Table => Some(false),
+            _ => None,
+        }
+    }
+
+    /// The first heading below `node` in flat-tree document order (depth
+    /// first, any depth), skipping hidden subtrees.
+    fn first_heading(&self, node: D::NodeId) -> Option<D::NodeId> {
+        for child in self.dom.flat_children(node) {
+            if self.dom.kind(child) != NodeKind::Element || self.hidden(child) {
+                continue;
+            }
+            if matches!(
+                super::document_role(self.dom, child),
+                document_session_api::DocumentA11yRole::Heading { .. }
+            ) {
+                return Some(child);
+            }
+            if let Some(heading) = self.first_heading(child) {
+                return Some(heading);
+            }
+        }
+        None
+    }
+
+    /// A table's first `caption` child.
+    fn caption(&self, table: D::NodeId) -> Option<D::NodeId> {
+        self.dom
+            .dom_children(table)
+            .find(|child| self.tag(*child) == Some("caption"))
+    }
+
     fn labelable(&self, node: D::NodeId) -> bool {
         match self.tag(node) {
             Some("input") => {
@@ -157,7 +203,7 @@ impl<'a, D: LayoutDom> Names<'a, D> {
     }
 
     pub(super) fn name(&self, node: D::NodeId) -> Option<String> {
-        self.compute(node, false, false, false, &mut HashSet::new())
+        self.compute(node, false, false, false, false, &mut HashSet::new())
             .map(|s| flat(&s))
     }
 
@@ -173,6 +219,7 @@ impl<'a, D: LayoutDom> Names<'a, D> {
                             true,
                             false,
                             self.hidden(target),
+                            false,
                             &mut HashSet::new(),
                         )
                         .unwrap_or_default()
@@ -188,7 +235,7 @@ impl<'a, D: LayoutDom> Names<'a, D> {
         // Title is available for description only when a higher-priority name
         // source was used. Suppress title during that independent calculation.
         if self
-            .compute(node, false, true, false, &mut HashSet::new())
+            .compute(node, false, true, false, false, &mut HashSet::new())
             .is_some()
         {
             return attr(self.dom, node, "title").map(flat);
@@ -214,6 +261,7 @@ impl<'a, D: LayoutDom> Names<'a, D> {
         referenced: bool,
         suppress_title: bool,
         include_hidden: bool,
+        descendant: bool,
         visited: &mut HashSet<D::NodeId>,
     ) -> Option<String> {
         // A directly referenced hidden subtree may contribute. In the normal
@@ -224,7 +272,14 @@ impl<'a, D: LayoutDom> Names<'a, D> {
         if !visited.insert(node) {
             return None;
         }
-        let result = self.compute_inner(node, referenced, suppress_title, include_hidden, visited);
+        let result = self.compute_inner(
+            node,
+            referenced,
+            suppress_title,
+            include_hidden,
+            descendant,
+            visited,
+        );
         visited.remove(&node);
         result
     }
@@ -235,6 +290,7 @@ impl<'a, D: LayoutDom> Names<'a, D> {
         referenced: bool,
         suppress_title: bool,
         include_hidden: bool,
+        descendant: bool,
         visited: &mut HashSet<D::NodeId>,
     ) -> Option<String> {
         if self.dom.kind(node) == NodeKind::Text {
@@ -256,10 +312,18 @@ impl<'a, D: LayoutDom> Names<'a, D> {
                                     true,
                                     suppress_title,
                                     self.hidden(target),
+                                    false,
                                     visited,
                                 )
                             } else {
-                                self.compute(target, true, false, self.hidden(target), visited)
+                                self.compute(
+                                    target,
+                                    true,
+                                    false,
+                                    self.hidden(target),
+                                    false,
+                                    visited,
+                                )
                             }
                             .unwrap_or_default()
                         })
@@ -289,12 +353,37 @@ impl<'a, D: LayoutDom> Names<'a, D> {
                     labels
                         .into_iter()
                         .map(|label| {
-                            self.compute(label, true, false, self.hidden(label), visited)
+                            self.compute(label, true, false, self.hidden(label), false, visited)
                                 .unwrap_or_default()
                         })
                         .collect::<Vec<_>>()
                         .join(" "),
                 );
+            }
+        }
+        // The role-gated sources apply to the node whose name is being asked
+        // for. A node reached through a reference or inside a content
+        // traversal contributes its text whatever its role (AccName 2F).
+        let root = !referenced && !descendant;
+        let barred = root.then(|| self.content_barred(node)).flatten();
+        if root && self.tag(node) == Some("table") {
+            if let Some(caption) = self.caption(node) {
+                let text = self
+                    .compute(caption, true, false, false, false, visited)
+                    .unwrap_or_default();
+                if !flat(&text).is_empty() {
+                    return Some(text);
+                }
+            }
+        }
+        if barred == Some(true) {
+            if let Some(heading) = self.first_heading(node) {
+                let text = self
+                    .compute(heading, false, false, false, false, visited)
+                    .unwrap_or_default();
+                if !flat(&text).is_empty() {
+                    return Some(text);
+                }
             }
         }
         if self.tag(node) == Some("img") {
@@ -313,8 +402,15 @@ impl<'a, D: LayoutDom> Names<'a, D> {
             }
             return Some(default_button_name(kind).to_owned());
         }
+        // An abbreviation's `title` is its name; its content is the fallback.
+        if root && self.tag(node) == Some("abbr") {
+            if let Some(title) = attr(self.dom, node, "title").filter(|s| !flat(s).is_empty()) {
+                return (!suppress_title).then(|| title.to_owned());
+            }
+        }
         // Native text fields get names from labels, never their editable value.
-        let content = if matches!(self.tag(node), Some("input" | "textarea" | "select"))
+        let content = if barred.is_some()
+            || matches!(self.tag(node), Some("input" | "textarea" | "select"))
             || super::document_role(self.dom, node) == document_session_api::DocumentA11yRole::TextField
             || self.dom.kind(node) == NodeKind::Document
             || (!referenced
@@ -331,7 +427,7 @@ impl<'a, D: LayoutDom> Names<'a, D> {
                 .dom
                 .flat_children(node)
                 .map(|child| {
-                    self.compute(child, referenced, false, include_hidden, visited)
+                    self.compute(child, referenced, false, include_hidden, true, visited)
                         .unwrap_or_default()
                 })
                 .collect::<String>();
@@ -496,6 +592,79 @@ mod tests {
         assert_eq!((name.as_deref(), description.as_deref()), (Some("V"), Some("Tip")));
         // Title that names the control is not repeated as its description.
         assert_eq!(both("<input id=target type=reset title=Tip>").1, None);
+    }
+
+    #[test]
+    fn roles_that_forbid_content_take_no_name_from_it() {
+        let name = |html: &str| alternatives(html).0;
+        // Controls: roles that allow name from content still take it, and a
+        // barred role inside a content traversal still contributes its text.
+        assert_eq!(name("<button id=target>Save <b>it</b></button>").as_deref(), Some("Save it"));
+        assert_eq!(name("<button id=target>Go <div role=group>there</div></button>").as_deref(), Some("Go there"));
+        assert_eq!(name("<div role=group id=target>Text</div>").as_deref(), None);
+        assert_eq!(name("<div role=group><div role=group><h3>No</h3></div><h2>Nor</h2>Content</div><div role=group id=target><div role=group>Not this</div></div>").as_deref(), None);
+        assert_eq!(name("<div role=group id=target title=Tip>Text</div>").as_deref(), Some("Tip"));
+        assert_eq!(name("<div role=group id=target aria-label=Own>Text</div>").as_deref(), Some("Own"));
+        // A misspelled labelledby is no labelledby.
+        assert_eq!(name("<h2 id=h>first</h2><div role=group id=target aria-labeledby=h><p>inside</p></div>").as_deref(), None);
+        // Referenced, the barred node's content does count (AccName 2F).
+        assert_eq!(name("<div role=group id=g>Referred text</div><button id=target aria-labelledby=g></button>").as_deref(), Some("Referred text"));
+        // Layout-independent roles that stay text carriers are unchanged.
+        assert_eq!(name("<p id=target>Para</p>").as_deref(), Some("Para"));
+        assert_eq!(name("<div id=target>Plain</div>").as_deref(), Some("Plain"));
+        assert_eq!(name("<div role=alert id=target>Warn</div>").as_deref(), Some("Warn"));
+    }
+
+    #[test]
+    fn dialogs_and_articles_are_named_by_their_first_heading_depth_first() {
+        let name = |html: &str| alternatives(html).0;
+        for role in ["dialog", "alertdialog", "article"] {
+            let html = format!("<div role={role} id=target><h2>{role} heading</h2><p>More</p></div>");
+            assert_eq!(name(&html), Some(format!("{role} heading")), "{role}");
+        }
+        // Depth first in document order: the h3 inside the group precedes the h2.
+        assert_eq!(name("<div role=article id=target><div role=group><h3>deep first</h3></div><h2>later</h2></div>").as_deref(), Some("deep first"));
+        // Hidden headings are skipped; role=heading counts.
+        assert_eq!(name("<div role=dialog id=target><h2 hidden>No</h2><div role=heading>Yes</div></div>").as_deref(), Some("Yes"));
+        // Native article and dialog take the heading too.
+        assert_eq!(name("<article id=target><h2>Native article</h2><p>text</p></article>").as_deref(), Some("Native article"));
+        assert_eq!(name("<dialog open id=target><h2>Native dialog</h2><p>text</p></dialog>").as_deref(), Some("Native dialog"));
+        // Order: aria-label first; no heading falls back to title, then to nothing.
+        assert_eq!(name("<div role=dialog id=target aria-label=Own><h2>H</h2></div>").as_deref(), Some("Own"));
+        assert_eq!(name("<div role=dialog id=target title=Tip><p>no heading</p></div>").as_deref(), Some("Tip"));
+        assert_eq!(name("<div role=dialog id=target><p>no heading</p></div>").as_deref(), None);
+        // A group never takes a heading.
+        assert_eq!(name("<div role=group id=target><h2>H</h2></div>").as_deref(), None);
+        // A heading name that names the dialog is not repeated as a description.
+        assert_eq!(alternatives("<div role=dialog id=target title=Tip><h2>H</h2></div>"), (Some("H".into()), Some("Tip".into())));
+    }
+
+    #[test]
+    fn tables_take_their_caption_never_their_cells_and_abbr_prefers_its_title() {
+        let name = |html: &str| alternatives(html).0;
+        assert_eq!(name("<table id=target><caption>Caption label</caption><tr><th>a</th><td>1</td></tr></table>").as_deref(), Some("Caption label"));
+        assert_eq!(name("<table id=target><tr><th>a</th><td>1</td></tr></table>").as_deref(), None);
+        assert_eq!(name("<table id=target title=Tip><caption></caption><tr><td>1</td></tr></table>").as_deref(), Some("Tip"));
+        assert_eq!(name("<table id=target aria-label=Own><caption>Cap</caption><tr><td>1</td></tr></table>").as_deref(), Some("Own"));
+        assert_eq!(name("<div role=table id=target><div role=row><div role=cell>cell</div></div></div>").as_deref(), None);
+        // Control: a cell is still named from its content.
+        assert_eq!(name("<table><tr><td id=target>cell</td></tr></table>").as_deref(), Some("cell"));
+        assert_eq!(name("<abbr id=target title='Web Platform Tests'>WPT</abbr>").as_deref(), Some("Web Platform Tests"));
+        assert_eq!(name("<abbr id=target>WPT</abbr>").as_deref(), Some("WPT"));
+        assert_eq!(name("<abbr id=target title='' >WPT</abbr>").as_deref(), Some("WPT"));
+        assert_eq!(name("<abbr id=target aria-label=Own title=Tip>WPT</abbr>").as_deref(), Some("Own"));
+        // Inside a content traversal the abbr contributes its content.
+        assert_eq!(name("<button id=target><abbr title='Long form'>WPT</abbr> run</button>").as_deref(), Some("WPT run"));
+        // The title that names an abbr is not repeated as its description.
+        assert_eq!(alternatives("<abbr id=target title=Tip>WPT</abbr>").1, None);
+        // Other generics are unchanged: content first, title only as fallback.
+        assert_eq!(name("<span id=target title=Tip>Text</span>").as_deref(), Some("Text"));
+    }
+
+    #[test]
+    #[should_panic(expected = "assertion `left == right` failed")]
+    fn deliberately_wrong_group_expectation_fails() {
+        assert_eq!(alternatives("<div role=group id=target>Text</div>").0.as_deref(), Some("Text"));
     }
 
     #[test]

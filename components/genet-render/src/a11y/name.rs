@@ -4,7 +4,9 @@
 
 //! Bounded DOM text alternatives, following AccName 1.2 (2026-09-23).
 //! CSS rendering counts as hidden only when the style owner supplies it
-//! (`with_rendered`). Flat-tree traversal and embedded control values remain open.
+//! (`with_rendered`). Name from content follows the flat tree (AccName's
+//! "rendered child nodes"); ID references resolve only within the referring
+//! node's own tree. Embedded control values remain open.
 
 use std::collections::{HashMap, HashSet};
 
@@ -12,8 +14,11 @@ use layout_dom_api::{LayoutDom, LocalName, Namespace, NodeKind};
 
 pub(super) struct Names<'a, D: LayoutDom> {
     dom: &'a D,
-    ids: HashMap<String, D::NodeId>,
-    labels: Vec<D::NodeId>,
+    /// IDs per node tree, keyed by the tree's root (the document or a shadow
+    /// root). A reference never crosses a shadow boundary.
+    ids: HashMap<D::NodeId, HashMap<String, D::NodeId>>,
+    /// Every `<label>` in tree order within its own tree, with that tree's root.
+    labels: Vec<(D::NodeId, D::NodeId)>,
     generated: Option<&'a dyn Fn(D::NodeId) -> (String, String)>,
     rendered: Option<&'a dyn Fn(D::NodeId) -> bool>,
 }
@@ -35,16 +40,31 @@ impl<'a, D: LayoutDom> Names<'a, D> {
             generated: None,
             rendered: None,
         };
-        let mut pending = vec![dom.document()];
-        while let Some(node) = pending.pop() {
+        // Each tree is walked in its own DOM order; a host's shadow root starts
+        // a new tree, walked after the host's light-DOM subtree. Each tree is
+        // still visited contiguously, so tree order holds within every tree.
+        let mut pending = vec![(dom.document(), dom.document())];
+        while let Some((node, tree)) = pending.pop() {
             if let Some(id) = attr(dom, node, "id") {
-                names.ids.entry(id.to_owned()).or_insert(node);
+                names
+                    .ids
+                    .entry(tree)
+                    .or_default()
+                    .entry(id.to_owned())
+                    .or_insert(node);
             }
             if names.tag(node) == Some("label") {
-                names.labels.push(node);
+                names.labels.push((node, tree));
+            }
+            if let Some(root) = dom
+                .has_shadow_trees()
+                .then(|| dom.shadow_root(node))
+                .flatten()
+            {
+                pending.push((root, root));
             }
             let children: Vec<_> = dom.dom_children(node).collect();
-            pending.extend(children.into_iter().rev());
+            pending.extend(children.into_iter().rev().map(|child| (child, tree)));
         }
         names
     }
@@ -90,12 +110,26 @@ impl<'a, D: LayoutDom> Names<'a, D> {
         None
     }
 
+    /// The root of `node`'s own tree, the scope its ID references resolve in.
+    fn tree(&self, node: D::NodeId) -> D::NodeId {
+        if self.dom.has_shadow_trees() {
+            self.dom.node_tree_root(node)
+        } else {
+            self.dom.document()
+        }
+    }
+
+    fn element_by_id(&self, tree: D::NodeId, id: &str) -> Option<D::NodeId> {
+        self.ids.get(&tree)?.get(id).copied()
+    }
+
     fn references(&self, node: D::NodeId, attribute: &str) -> Vec<D::NodeId> {
         let mut seen = HashSet::new();
+        let tree = self.tree(node);
         attr(self.dom, node, attribute)
             .unwrap_or("")
             .split_ascii_whitespace()
-            .filter_map(|id| self.ids.get(id).copied())
+            .filter_map(|id| self.element_by_id(tree, id))
             .filter(|id| seen.insert(*id))
             .collect()
     }
@@ -219,14 +253,14 @@ impl<'a, D: LayoutDom> Names<'a, D> {
             let labels: Vec<_> = self
                 .labels
                 .iter()
-                .copied()
-                .filter(|label| {
+                .filter(|(label, tree)| {
                     if let Some(target) = attr(self.dom, *label, "for") {
-                        self.ids.get(target) == Some(&node)
+                        self.element_by_id(*tree, target) == Some(node)
                     } else {
                         self.first_control(*label) == Some(node)
                     }
                 })
+                .map(|(label, _)| *label)
                 .collect();
             if !labels.is_empty() {
                 return Some(
@@ -258,9 +292,11 @@ impl<'a, D: LayoutDom> Names<'a, D> {
             String::new()
         } else {
             let (before, after) = self.generated.map(|f| f(node)).unwrap_or_default();
+            // AccName 2F's rendered child nodes: a host's shadow root, a
+            // slot's assigned nodes, otherwise the node's own children.
             let children = self
                 .dom
-                .dom_children(node)
+                .flat_children(node)
                 .map(|child| {
                     self.compute(child, referenced, false, include_hidden, visited)
                         .unwrap_or_default()
@@ -291,7 +327,9 @@ mod tests {
         let mut dom = ScriptedDom::new();
         dom.set_inner_html(dom.document(), html);
         let names = Names::new(&dom);
-        let node = names.ids["target"];
+        let node = names
+            .element_by_id(dom.document(), "target")
+            .expect("target");
         (names.name(node), names.description(node))
     }
 

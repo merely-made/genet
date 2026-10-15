@@ -832,5 +832,5 @@ alertdialog, article, dialog, group and DFS (5); `comp_tooltip.html` abbr and
 `div[role=group][title]` (2); `comp_host_language_label.html` `table > caption`
 (1); `comp_labeledby_non_standard.html` group (1). There were no pass-to-fail
 transitions. `comp_name_from_content.html` still dies on the buckram panic and
-holds no gated role. Receipts:
+holds no gated role. Rerun after the final rebase onto origin/main (`273431eff73`): still 365/405, 9 transitions against the baseline, none against the pre-rebase run. Tests: genet-render 55 (3 new behaviour tests, 1 wrong-expectation control), taproot 42, genet-documents 9 and genet-wpt 72 (2 ignored) all pass; genet-documents and genet-render were rerun after the rebase. Receipts:
 `Code/testing/genet/wpt-ledger/2026-10-15_role_gated_names/` (`transitions.txt`).

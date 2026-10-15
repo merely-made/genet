@@ -7,7 +7,7 @@
 [CmdletBinding()]
 param(
     [string]$Wasm64Toolchain = "nightly-2026-06-22",
-    [string]$StableToolchain = "1.95.0",
+    [string]$StableToolchain = "1.99.0",
     [string]$OutputDirectory = "dist/scripted-workers"
 )
 
@@ -19,11 +19,11 @@ $target = $metadata.target_directory
 
 $wasmBindgen = Get-Command wasm-bindgen -ErrorAction SilentlyContinue
 if (-not $wasmBindgen) {
-    throw "wasm-bindgen CLI 0.2.126 is required: cargo install wasm-bindgen-cli --version 0.2.126 --locked"
+    throw "wasm-bindgen CLI 0.2.129 is required: cargo install wasm-bindgen-cli --version 0.2.129 --locked"
 }
 $version = & $wasmBindgen.Source --version
-if ($version -notmatch "0\.2\.126$") {
-    throw "wasm-bindgen CLI must be 0.2.126; found: $version"
+if ($version -notmatch "0\.2\.129$") {
+    throw "wasm-bindgen CLI must be 0.2.129; found: $version"
 }
 
 rustup run $Wasm64Toolchain rustc --version | Out-Null

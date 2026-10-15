@@ -637,3 +637,80 @@ Instrument notes:
 
 **2026-10-14.** Phase 4 done. Rulings 5 and 6 are recorded, the baseline and
 ranked gates are above, and the residual 11 record is annotated.
+
+## Input button and image names (family F, 2026-10-15)
+
+**Status (2026-10-15): implemented and measured on branch
+`input-value-names`, not merged.** Mark asked for this lane: family F, ranked
+#1 in the Baseline above, using the AccName run as the before/after
+instrument.
+
+### Findings
+
+- `Names::compute_inner` (`components/genet-render/src/a11y/name.rs`) had no
+  host-language step for `input`. Its name-from-content branch blanks every
+  `input`, so `value` was never read, and the `alt` step was gated on
+  `tag == "img"`. Only `title` remained, so all four WPT inputs got `""`.
+- Not fixed here, reported: `document_role` (`a11y.rs:115`) maps every
+  `<input>` other than checkbox and radio to `TextField`. That includes
+  `button`, `submit`, `reset` and `image`, so a host announces "Submit, text
+  field". It belongs with the `get_computed_role` design round (ruling 1 of the
+  hook section).
+- `value` is exposed as the control value only for text-like types
+  (`text_control_value`, `a11y.rs:130`), so the four types never expose it
+  twice.
+- No automated test besides `comp_host_language_label.html` covers these
+  inputs. Manual AccName case 543 expects "Reset" for a bare `input[type=reset]`.
+- The HTML-AAM order was taken from memory and the spec text was not checked
+  locally. Treat the fallback order as unverified against the spec.
+
+### Rulings (2026-10-15)
+
+Mark: **"i accept the recommendations"**, on the five forks as put (the first
+option of each).
+
+1. **Default for submit and reset with no `value`.** *Options:* English
+   "Submit" and "Reset"; return `""` and build a localization hook first;
+   "Submit Query" for submit. Mark: recommendation 1(a). *Follows:* "Submit"
+   and "Reset", English, in one function, `default_button_name`.
+2. **Image input fallback order.** *Options:* alt, value, title, then
+   "Submit Query"; alt, title, then "Submit Query"; alt, title only. Mark:
+   recommendation 2(a). *Follows:* an empty `alt` or `value` counts as absent.
+3. **Precedence.** *Options:* `aria-labelledby`, `aria-label`, `<label>`, then
+   value or alt; or skip `<label>` for these types. Mark: recommendation 3(a).
+   *Follows:* the existing label step stays ahead of value and alt.
+4. **Value exposure.** *Options:* name only; or also expose as the value.
+   Mark: recommendation 4(a). *Follows:* no change to value exposure.
+5. **Scope.** *Options:* name only; or also map the four types to `Button`.
+   Mark: recommendation 5(a). *Follows:* the role bug is a separate lane.
+6. **Localization.** Mark: **"But note the localization step as unfinished"**.
+   *Follows:* the default strings are English only. This is open work, noted
+   at `default_button_name` in code and below.
+
+### Open
+
+- **Localization of "Submit", "Reset" and "Submit Query" is unfinished.**
+  There is no localization table in genet-render; the strings need a hook once
+  one exists.
+- The `TextField` role for button-like inputs, above.
+- The fallback order is to be verified against HTML-AAM.
+- Title is the name for a button input with no value or alt, and so is not
+  repeated as its description.
+
+### Result
+
+Failing first: `button_inputs_are_named_by_value_alt_title_then_a_default` and
+`button_input_names_yield_to_aria_and_labels_and_title_stays_a_description`
+failed before the fix (a `<button>` control and a deliberately wrong string,
+`#[should_panic]`, are in the same module). AccName WPT, dev-profile
+genet-wpt on Boa, `testharness accname --jobs 1`:
+
+| | Before | After |
+|---|---:|---:|
+| Subtests | 352/405 | **356/405** |
+| `comp_host_language_label.html` | 83/88 | 87/88 |
+
+The four `input[type=button|image|reset|submit]` subtests moved fail to pass.
+There were no other transitions. Receipts:
+`Code/testing/genet/wpt-ledger/2026-10-15_input_value_names/`
+(`transitions.txt`).

@@ -28,6 +28,10 @@ tracing = "0.1"
 [features]
 # Explicit actual-WebGPU acquired-surface diagnostics; ordinary hosts unchanged.
 browser-surface-readback-diagnostics = []
+# Wasm viewer artifacts that present only through Netrender's WebGL2 backend:
+# boot refuses and every RenderCore path is unreachable, so classic Vello,
+# wgpu boot and composition drop out of the build. Refused off wasm.
+without-classic-vello = []
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)', 'cfg(llvm_pgo)'] }

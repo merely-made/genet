@@ -1,7 +1,9 @@
 # Shadow DOM
 
 **Status: landed 2026-09-07/08; residual 11 (the accessibility walk) fixed
-2026-10-14 on branch `shadow-a11y-walk`, not yet merged.** Promoted from the Shadow DOM section of
+2026-10-14 on branch `shadow-a11y-walk`, not yet merged.**
+*(2026-10-14, the `get_computed_label` lane: the fix is on main, rebased as `42cabb5a886` (failing-first test) and `bd5f7ca0994` (fix), recorded by `85252e20bee`. The hashes `690cf560c04` and `c9d8faf7663` below are the pre-rebase branch commits and are not ancestors of main.)*
+Promoted from the Shadow DOM section of
 [`2026-09-07_deferred_web_platform_lanes_scoping.md`](2026-09-07_deferred_web_platform_lanes_scoping.md#shadow-dom)
 under Mark's three decisions for the lane (below). Genet commit at start:
 `14e7b0200c8`. Residuals are named in **Residuals**; the regression manifest is
@@ -571,7 +573,9 @@ Named, not silently deferred:
     extraction (§5). If the lane finds a reason to differ, it brings the
     ordering back as a fork.
 
-    **Fixed 2026-10-14 on `shadow-a11y-walk`, not merged.** Confirmed by a run
+    **Fixed 2026-10-14 on `shadow-a11y-walk`, not merged.** *(Annotated
+    2026-10-14: merged; on main as `42cabb5a886` and `bd5f7ca0994`.)*
+    Confirmed by a run
     first (`690cf560c04`): the light-DOM control projected `["Mount action"]`
     and the shadow case projected `[]`. Fixed in `c9d8faf7663`. The reading
     above held: AccName 1.2's Name From Content step (2F) has a "Determine
@@ -663,6 +667,18 @@ and `slot.html`. They read names through `test_driver.get_computed_label`,
 and genet-wpt's testdriver hook (`ports/genet-wpt/src/harness.rs`,
 `TESTDRIVER_VENDOR_JS`) does not implement it, so they cannot run here until
 it does.
+*(2026-10-14: they now run. See the progress entry below.)*
 Mere's mount probe (AC7) is the first downstream consumer and still has to
 pass "the guest's button is in the AccessKit tree" against a Genet revision
 that contains `c9d8faf7663`.
+
+**2026-10-14 — residual 11 under WPT.** genet-wpt now implements
+`test_driver.get_computed_label` on branch `computed-label`, not merged
+([accessible names plan](2026-09-26_accessible_names_plan.md), section "WPT
+`get_computed_label` hook"). Against main `bbb466f8f36`, which contains the fix,
+`accname/name/shadowdom/basic.html` passes 2/2 and `slot.html` passes 2/4.
+Before the hook, both files failed every subtest. The two `slot.html`
+failures are a new finding, ranked as family I in that plan: `aria-label`
+on a `<slot>` replaces its slotted content (`foo slotted bar` → `foo label
+bar`). They are not fixed in that lane (its ruling 5). Receipt:
+`Code/testing/genet/wpt-ledger/2026-10-14_computed_label/results.md`.

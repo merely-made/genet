@@ -990,6 +990,77 @@ fn process_testdriver_actions<E: ScriptEngine>(
     1
 }
 
+/// Rejection for an element the projection leaves out (accessible names plan,
+/// ruling 3): hidden, `aria-hidden`, or without a box.
+const LABEL_ABSENT: &str = "element not in accessibility projection";
+
+/// Answer every queued `test_driver.get_computed_label` request from the
+/// neutral accessibility projection, built with the same style queries a
+/// scripted host session uses. Returns how many requests were settled.
+fn process_testdriver_labels<E: ScriptEngine>(
+    rt: &mut Runtime<E>,
+    render: &RenderSession,
+) -> usize {
+    let json = match rt.eval("String(typeof __tdTakeLabels === 'function' ? __tdTakeLabels() : '')")
+    {
+        Ok(v) => rt.value_to_string(&v).unwrap_or_default(),
+        Err(_) => return 0,
+    };
+    if json.is_empty() {
+        return 0;
+    }
+    let batch: Vec<(u64, String)> = serde_json::from_str(&json).unwrap_or_default();
+    // Names must reflect mutations made since the last turn.
+    let _ = render.cssom.frame(rt, VIEWPORT_W as u32, VIEWPORT_H as u32);
+    let answers: Vec<(u64, Result<String, &str>)> = {
+        let host = rt.host().borrow();
+        let dom = &host.dom;
+        render
+            .cssom
+            .with_retained_styled_frame(|styles, fragments, _, _| {
+                let projection = genet_render::document_a11y_projection_with_style(
+                    dom,
+                    fragments,
+                    None,
+                    0,
+                    None,
+                    &genet_render::A11yStyleQueries {
+                        generated: &|node| genet_livery::rendered_generated_text(dom, styles, node),
+                        rendered: &|node| genet_livery::rendered_visible(dom, styles, node),
+                    },
+                );
+                batch
+                    .iter()
+                    .map(|(seq, id)| {
+                        let node = id.parse::<u64>().ok().and_then(|raw| {
+                            projection.nodes().iter().find(|node| node.id.get() == raw)
+                        });
+                        let name = node
+                            .map(|node| node.name.clone().unwrap_or_default())
+                            .ok_or(LABEL_ABSENT);
+                        (*seq, name)
+                    })
+                    .collect()
+            })
+            .unwrap_or_else(|| {
+                batch
+                    .iter()
+                    .map(|(seq, _)| (*seq, Err("no rendered frame")))
+                    .collect()
+            })
+    };
+    for (seq, answer) in &answers {
+        let (ok, value) = match answer {
+            Ok(name) => (true, name.as_str()),
+            Err(message) => (false, *message),
+        };
+        let value = serde_json::to_string(value).unwrap_or_else(|_| "\"\"".into());
+        let _ = rt.eval(&format!("__tdSettleLabel({seq}, {ok}, {value})"));
+    }
+    rt.run_microtasks();
+    answers.len()
+}
+
 /// Map one interpreter [`InputEvent`] onto DOM events at the hit-tested node.
 ///
 /// Touch and wheel go through the **typed** bridges
@@ -1161,7 +1232,8 @@ fn drive_virtual<E: ScriptEngine>(rt: &mut Runtime<E>, render: &RenderSession) -
         rt.run_microtasks();
         let fired = rt.run_timers(TIMER_BUDGET, now_ms);
         let rendered = render.turn(rt, now_ms);
-        let acted = process_testdriver_actions(rt, render, &mut now_ms, true);
+        let labelled = process_testdriver_labels(rt, render);
+        let acted = process_testdriver_actions(rt, render, &mut now_ms, true) + labelled;
         // Dedicated workers: answer their resource requests and deliver their
         // messages. A worker that has not reported idle can still speak, so it
         // holds the loop open the way a pending timer does.
@@ -1195,7 +1267,11 @@ fn drive_virtual<E: ScriptEngine>(rt: &mut Runtime<E>, render: &RenderSession) -
         // timer while frames are wanted, else straight to the next timer. A turn
         // that did work but scheduled nothing time-based loops once more at the
         // same instant and then quiesces.
-        let step = if has_raf || animating {
+        // A settled label resumes script that may ask for the next one; answer
+        // it at this instant, before the jump can fire a test's timeout.
+        let step = if labelled > 0 {
+            0.0
+        } else if has_raf || animating {
             match next_timer {
                 Some(d) if d < FRAME_MS => d.max(0.0),
                 _ => FRAME_MS,
@@ -1268,7 +1344,8 @@ fn drive_wall<E: ScriptEngine>(
         // Wall-clock drive: tick durations are collapsed, not slept (the
         // interpreter reports them; a headed consumer would pace real frames).
         let mut wall_now = clock;
-        let acted = process_testdriver_actions(rt, render, &mut wall_now, false);
+        let acted = process_testdriver_actions(rt, render, &mut wall_now, false)
+            + process_testdriver_labels(rt, render);
         let worked = rt.pump_workers();
         let workers_live = rt.has_worker_work();
         let has_raf = rt.has_animation_frame_callbacks();
@@ -1545,8 +1622,11 @@ fn is_testdriver_vendor_src(src: &str) -> bool {
 /// element-reference format carrying the node's raw ref (only the host can
 /// resolve geometry), queues the transaction, and returns a Promise the drive
 /// loop settles after running the ticks through the shared interpreter
-/// (`crate::testdriver::webdriver_actions::interpret_actions`). Commands beyond
-/// `action_sequence` keep their spec-honest throwing defaults;
+/// (`crate::testdriver::webdriver_actions::interpret_actions`).
+/// `get_computed_label` queues the node's raw id the same way and the drive
+/// loop answers from the accessibility projection
+/// ([`process_testdriver_labels`]). Other commands keep their spec-honest
+/// throwing defaults;
 /// `in_automation = true` makes them throw instead of waiting forever for a
 /// human.
 const TESTDRIVER_VENDOR_JS: &str = r#"
@@ -1587,6 +1667,32 @@ const TESTDRIVER_VENDOR_JS: &str = r#"
     });
     return new Promise(function(resolve, reject) {
       globalThis.__tdQueue.push({ actions: fixed, resolve: resolve, reject: reject });
+    });
+  };
+  // Label requests carry a sequence number so concurrent promise_tests each
+  // settle their own promise; the host answers a whole batch per drive turn.
+  globalThis.__tdLabelSeq = 0;
+  globalThis.__tdLabelQueue = [];
+  globalThis.__tdLabelPending = {};
+  globalThis.__tdTakeLabels = function() {
+    if (globalThis.__tdLabelQueue.length === 0) { return ''; }
+    var batch = globalThis.__tdLabelQueue;
+    globalThis.__tdLabelQueue = [];
+    return JSON.stringify(batch);
+  };
+  globalThis.__tdSettleLabel = function(seq, ok, value) {
+    var p = globalThis.__tdLabelPending[seq];
+    delete globalThis.__tdLabelPending[seq];
+    if (!p) { return; }
+    if (ok) { p.resolve(value); } else { p.reject(new Error(value)); }
+  };
+  window.test_driver_internal.get_computed_label = function(element) {
+    var ref = element && element.__ref;
+    var id = ref === undefined ? '' : String(__nodeRawId(ref));
+    return new Promise(function(resolve, reject) {
+      var seq = ++globalThis.__tdLabelSeq;
+      globalThis.__tdLabelPending[seq] = { resolve: resolve, reject: reject };
+      globalThis.__tdLabelQueue.push([seq, id]);
     });
   };
 })();
@@ -1979,6 +2085,72 @@ async_test(function(t) {
         assert!(
             results[0].passed(),
             "the synthesized click should complete the async_test: {results:?}"
+        );
+    }
+
+    /// `test_driver.get_computed_label` reads the element's name from the
+    /// neutral accessibility projection (accessible names plan, rulings 2-3).
+    /// Two known names resolve; a deliberately wrong expectation must still
+    /// fail; an element the projection leaves out rejects with its own message.
+    #[test]
+    fn test_driver_get_computed_label_reads_the_projection() {
+        let wpt = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/wpt");
+        let testharness_js =
+            fs::read_to_string(wpt.join("tests/resources/testharness.js")).expect("harness");
+        let tests_root = wpt.join("tests");
+        let base_dir = tests_root.join("accname");
+        let loader = DiskLoader::new(base_dir.as_path(), tests_root.as_path());
+        let html = r#"<!DOCTYPE html>
+<script src="/resources/testdriver.js"></script>
+<script src="/resources/testdriver-vendor.js"></script>
+<button id="labelled" aria-label="Known name">ignored</button>
+<button id="content">Save <span>draft</span></button>
+<div id="hidden" style="display:none" aria-label="Hidden name"></div>
+<script>
+function label(id) {
+  return test_driver.get_computed_label(document.getElementById(id));
+}
+promise_test(async () => {
+  assert_equals(await label('labelled'), 'Known name');
+}, 'aria-label');
+promise_test(async () => {
+  assert_equals(await label('content'), 'Save draft');
+}, 'name from content');
+promise_test(async () => {
+  assert_equals(await label('labelled'), 'Wrong name');
+}, 'wrong expectation');
+promise_test(async () => {
+  let message = 'resolved';
+  try { await label('hidden'); } catch (e) { message = String(e && e.message); }
+  assert_equals(message, 'element not in accessibility projection');
+}, 'absent element');
+</script>"#;
+        let results = unwrap_ran(run_test(
+            &testharness_js,
+            html,
+            &loader,
+            None,
+            None,
+            None,
+            Engine::Boa,
+        ));
+        let outcome = |name: &str| {
+            results
+                .iter()
+                .find(|r| r.name == name)
+                .unwrap_or_else(|| panic!("no subtest {name}: {results:?}"))
+        };
+        assert!(outcome("aria-label").passed(), "{results:?}");
+        assert!(outcome("name from content").passed(), "{results:?}");
+        assert!(outcome("absent element").passed(), "{results:?}");
+        let wrong = outcome("wrong expectation");
+        assert!(
+            !wrong.passed(),
+            "a wrong expected name must fail: {wrong:?}"
+        );
+        assert!(
+            format!("{wrong:?}").contains("Known name"),
+            "it fails on the name, not on the hook: {wrong:?}"
         );
     }
 

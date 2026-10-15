@@ -29,6 +29,9 @@ layout_dom_api = { workspace = true }
 # the drive loop, which parses it with the pinned protocol types and runs it
 # through the shared tick interpreter (embedder_traits::webdriver_actions).
 webdriver = { workspace = true }
+# `test_driver_internal.get_computed_label` reads names from the neutral
+# accessibility projection (accessible names plan, rulings 2 and 4).
+genet-render = { path = "../../components/genet-render", default-features = false, features = ["livery"] }
 keyboard-types = { workspace = true }
 bitflags = { workspace = true }
 # MANIFEST.json reader (harness-exactness H1): the upstream WPT manifest is JSON.
@@ -79,7 +82,7 @@ default = ["image-decode"]
 webgl-tests = ["dep:webgl_wgpu", "dep:pollster"]
 netfetch = ["dep:netfetcher", "dep:tokio", "dep:bytes", "dep:url"]
 # Forwards genet-livery's image decoding; see its `image-decode` feature.
-image-decode = ["genet-livery/image-decode", "genet-scripted/image-decode"]
+image-decode = ["genet-livery/image-decode", "genet-scripted/image-decode", "genet-render/image-decode"]
 
 [dev-dependencies]
 # Offline mock server for the fetch()->netfetcher integration test.

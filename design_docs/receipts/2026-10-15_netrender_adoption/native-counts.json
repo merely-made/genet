@@ -1,0 +1,17 @@
+{
+  "genet-livery": {
+    "passed": 678,
+    "failed": 0,
+    "ignored": 9
+  },
+  "genet-render": {
+    "passed": 51,
+    "failed": 0,
+    "ignored": 0
+  },
+  "genet-render-host": {
+    "passed": 17,
+    "failed": 0,
+    "ignored": 4
+  }
+}

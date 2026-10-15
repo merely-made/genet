@@ -1,0 +1,15 @@
+{
+  "command": [
+    "cargo",
+    "+1.99.0",
+    "check",
+    "--manifest-path",
+    "repos/genet/examples/netrender_smoke/Cargo.toml",
+    "--offline",
+    "-j2"
+  ],
+  "exit_code": 0,
+  "expected_rejection": false,
+  "passed": true,
+  "elapsed_seconds": 118.0
+}

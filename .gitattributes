@@ -9,3 +9,5 @@ support/openharmony/**/*.ets linguist-language=ts
 
 # Archived census scripts are hashed as exact execution/reproduction inputs.
 design_docs/receipts/2026-09-29_vano_wpt_census/*.py -text -whitespace
+# Preserve native compiler/test receipts byte-for-byte, including final blank lines.
+design_docs/receipts/2026-10-15_netrender_adoption/*.log -text -whitespace

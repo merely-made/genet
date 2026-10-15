@@ -1,0 +1,44 @@
+    Updating git repository `https://github.com/mark-ik/vello`
+    Updating crates.io index
+    Updating git repository `https://github.com/merely-made/netrender.git`
+    Updating git repository `https://github.com/merely-made/murm.git`
+     Locking 18 packages to highest compatible versions
+      Adding gloo-timers v0.3.0 (available: v0.4.0)
+    Updating js-sys v0.3.104 -> v0.3.106
+      Adding murm-wire v0.1.0 (https://github.com/merely-made/murm.git?rev=80d9959000fcd913634fd223538dfdbbec1f5e4f#80d99590)
+      Adding netrender v0.1.2 (https://github.com/merely-made/netrender.git?rev=f4f9c0d87e6a6030b61075a45118055dfe6a12df#f4f9c0d8)
+      Adding netrender-vello v0.11.0 (https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b4664)
+      Adding netrender_device v0.1.2 (https://github.com/merely-made/netrender.git?rev=f4f9c0d87e6a6030b61075a45118055dfe6a12df#f4f9c0d8)
+      Adding paint_list_api v0.1.2 (https://github.com/merely-made/netrender.git?rev=f4f9c0d87e6a6030b61075a45118055dfe6a12df#f4f9c0d8)
+      Adding paint_list_render v0.1.2 (https://github.com/merely-made/netrender.git?rev=f4f9c0d87e6a6030b61075a45118055dfe6a12df#f4f9c0d8)
+      Adding pollster v1.0.1
+      Adding regress v0.11.1 (C:\Users\mark_\Code\repos\genet\support\patches\regress-0.11.1)
+      Adding vello_encoding v0.11.0 (https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b4664)
+      Adding vello_shaders v0.11.0 (https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b4664)
+    Updating wasm-bindgen v0.2.127 -> v0.2.129
+    Updating wasm-bindgen-futures v0.4.77 -> v0.4.79
+    Updating wasm-bindgen-macro v0.2.127 -> v0.2.129
+    Updating wasm-bindgen-macro-support v0.2.127 -> v0.2.129
+    Updating wasm-bindgen-shared v0.2.127 -> v0.2.129
+    Updating web-sys v0.3.104 -> v0.3.106
+ Downloading crates ...
+  Downloaded cfg-expr v0.20.10
+  Downloaded glib v0.22.10
+  Downloaded gstreamer v0.25.4
+  Downloaded gstreamer-audio-sys v0.25.4
+  Downloaded gstreamer-app-sys v0.25.4
+  Downloaded gstreamer-audio v0.25.4
+  Downloaded gstreamer-base v0.25.4
+  Downloaded gstreamer-base-sys v0.25.4
+  Downloaded gstreamer-gl-egl-sys v0.25.4
+  Downloaded gstreamer-sdp-sys v0.25.4
+  Downloaded gstreamer-webrtc-sys v0.25.4
+  Downloaded gstreamer-video v0.25.4
+  Downloaded gstreamer-play-sys v0.25.4
+  Downloaded gstreamer-sys v0.25.4
+  Downloaded gstreamer-webrtc v0.25.4
+  Downloaded gstreamer-video-sys v0.25.4
+  Downloaded gstreamer-sdp v0.25.3
+  Downloaded gstreamer-gl-sys v0.25.4
+  Downloaded gstreamer-gl v0.25.4
+  Downloaded kstring v2.0.5

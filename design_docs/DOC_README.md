@@ -47,7 +47,7 @@ Netfetcher wire adoption (2026-10-14): [receiving plan](2026-10-14_netfetcher_wi
    the last three moved to mere with their code on 2026-09-03, and active
    plans sit flat in `design_docs/`.
 
-- [Genet lane handoff, 2026-10-15](2026-10-15_genet_lane_handoff.md): what landed (ValueEngine, Buckram context-free core, without-classic-vello, Linux test triage), live Codex worktrees not to touch, and open work starting with coordinated Netrender adoption.
+- [Genet lane handoff, 2026-10-15](2026-10-15_genet_lane_handoff.md): what landed (ValueEngine, Buckram context-free core, without-classic-vello, Linux test triage), protected Codex worktrees, completed Genet Netrender adoption with fresh Windows/wasm gates, and remaining viewer options and warning cleanup; Mere receiving status lives in its browser presentation plan.
 
 ## Current engine work (2026-09-07)
 

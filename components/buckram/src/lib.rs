@@ -96,6 +96,7 @@ pub use table::{
     size_table_rows, spanned_cell_content_inline_size,
 };
 pub use taffy_adapter::{
-    AlgorithmAvailableSpace, AlgorithmKind, AlgorithmLayout, AlgorithmNodeId, AlgorithmSize,
-    AlgorithmStyle, AlgorithmTree, BlockAlgorithm, FragmentationDispatch, FragmentationOutput,
+    AlgorithmAvailableSpace, AlgorithmCore, AlgorithmKind, AlgorithmLayout, AlgorithmNodeId,
+    AlgorithmSize, AlgorithmStyle, AlgorithmTree, BlockAlgorithm, FragmentationDispatch,
+    FragmentationOutput,
 };

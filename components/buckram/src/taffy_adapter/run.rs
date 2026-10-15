@@ -21,23 +21,25 @@ use super::*;
 /// closure: fourteen copies in graphshell-web alone, ~44k functions, and the
 /// DWARF that crashed the wasm linker. Behind `dyn` there is one copy per
 /// `(Context, Source)` pair, for an indirect call per leaf measure.
-pub(in crate::taffy_adapter) type MeasureFn<'m, Context> = dyn FnMut(
+///
+/// The caller's measure context is looked up by the erasing closure, so the
+/// run is also independent of the `(Context, Source)` pair (2026-10-14): one
+/// copy per style type.
+pub(in crate::taffy_adapter) type MeasureFn<'m> = dyn FnMut(
         AlgorithmSize<Option<f32>>,
         AlgorithmSize<AlgorithmAvailableSpace>,
         AlgorithmNodeId,
-        Option<&mut Context>,
         Option<&FloatLineConstraints>,
     ) -> AlgorithmSize<f32>
     + 'm;
 
-pub(in crate::taffy_adapter) struct AlgorithmRun<'a, S, Context, Source> {
-    pub(in crate::taffy_adapter) tree: &'a mut AlgorithmTree<S, Context, Source>,
-    pub(in crate::taffy_adapter) measure: &'a mut MeasureFn<'a, Context>,
+pub(in crate::taffy_adapter) struct AlgorithmRun<'a, S> {
+    pub(in crate::taffy_adapter) tree: &'a mut AlgorithmCore<S>,
+    pub(in crate::taffy_adapter) measure: &'a mut MeasureFn<'a>,
     pub(in crate::taffy_adapter) line_constraints: Option<FloatLineConstraints>,
     pub(in crate::taffy_adapter) nested_float_state: Option<FloatContextState>,
     pub(in crate::taffy_adapter) resolved_shrink_to_fit: Option<AlgorithmNodeId>,
     pub(in crate::taffy_adapter) fixed_leaf_intrinsics_enabled: bool,
-    pub(in crate::taffy_adapter) marker: PhantomData<&'a mut Context>,
 }
 
 #[derive(Clone, Copy)]
@@ -65,7 +67,7 @@ pub(in crate::taffy_adapter) struct PendingBlockChildLayout {
     static_position: bool,
 }
 
-impl<S, Context, Source> AlgorithmRun<'_, S, Context, Source>
+impl<S> AlgorithmRun<'_, S>
 where
     S: AlgorithmStyle,
 {
@@ -308,7 +310,7 @@ where
 
     fn has_line_boxes_in_same_bfc(&self, node: AlgorithmNodeId) -> bool {
         let node = &self.tree.nodes[node.index()];
-        node.context.is_some()
+        node.has_context
             || node.children.iter().copied().any(|child| {
                 let child_node = &self.tree.nodes[child.index()];
                 let style = child_node.block_style;
@@ -320,7 +322,7 @@ where
 
     fn accepts_float_line_constraints_in_same_bfc(&self, node: AlgorithmNodeId) -> bool {
         let node = &self.tree.nodes[node.index()];
-        if node.context.is_some() && !node.float_line_constraints_enabled {
+        if node.has_context && !node.float_line_constraints_enabled {
             return false;
         }
         node.children.iter().copied().all(|child| {
@@ -443,12 +445,13 @@ where
             IntrinsicSizeKind::MinContent => AlgorithmAvailableSpace::MinContent,
             IntrinsicSizeKind::MaxContent => AlgorithmAvailableSpace::MaxContent,
         };
-        let context = self.tree.nodes[node.index()].context.as_mut()?;
+        if !self.tree.nodes[node.index()].has_context {
+            return None;
+        }
         let measured = (self.measure)(
             AlgorithmSize::new(None, None),
             AlgorithmSize::new(available_width, AlgorithmAvailableSpace::MaxContent),
             node,
-            Some(context),
             None,
         );
         Some(measured.width)
@@ -483,7 +486,7 @@ where
                 AlgorithmKind::Hidden | AlgorithmKind::Table => {
                     IntrinsicSizes::new(0.0, 0.0).expect("zero intrinsic sizes are valid")
                 },
-                AlgorithmKind::Leaf if self.tree.nodes[node.index()].context.is_none() => {
+                AlgorithmKind::Leaf if !self.tree.nodes[node.index()].has_context => {
                     IntrinsicSizes::new(0.0, 0.0).expect("zero intrinsic sizes are valid")
                 },
                 AlgorithmKind::Leaf => {
@@ -823,7 +826,7 @@ where
         // own children lie inside the border box it returned; only an empty
         // box with no block-axis separator collapses through.
         let child_size_logical = child_style.containing_flow.logical_size(child_size);
-        let child_has_line_boxes = child_node.context.is_some();
+        let child_has_line_boxes = child_node.has_context;
         let child_collapses_through = child_style.can_collapse_through(
             containing_inline_size,
             containing_block_size,
@@ -1792,7 +1795,6 @@ where
                 AlgorithmKind::Leaf => {
                     let node = &mut tree.tree.nodes[node_index];
                     let style = sealed::AlgorithmStyle::as_taffy_style(&node.style);
-                    let context = node.context.as_mut();
                     let measure = &mut tree.measure;
                     let line_constraints = tree.line_constraints.as_ref();
                     compute_leaf_layout(
@@ -1807,7 +1809,6 @@ where
                                     from_taffy_available(available.height),
                                 ),
                                 AlgorithmNodeId::from_taffy(node_id),
-                                context,
                                 line_constraints,
                             );
                             taffy::Size {
@@ -1985,7 +1986,7 @@ pub(in crate::taffy_adapter) fn intrinsic_definite_inline_content_size(
     Ok(Some(content_size))
 }
 
-impl<S, Context, Source> TraversePartialTree for AlgorithmRun<'_, S, Context, Source>
+impl<S> TraversePartialTree for AlgorithmRun<'_, S>
 where
     S: AlgorithmStyle,
 {
@@ -2014,12 +2015,9 @@ where
     }
 }
 
-impl<S, Context, Source> TraverseTree for AlgorithmRun<'_, S, Context, Source> where
-    S: AlgorithmStyle
-{
-}
+impl<S> TraverseTree for AlgorithmRun<'_, S> where S: AlgorithmStyle {}
 
-impl<S, Context, Source> LayoutPartialTree for AlgorithmRun<'_, S, Context, Source>
+impl<S> LayoutPartialTree for AlgorithmRun<'_, S>
 where
     S: AlgorithmStyle,
 {
@@ -2048,7 +2046,7 @@ where
     }
 }
 
-impl<S, Context, Source> CacheTree for AlgorithmRun<'_, S, Context, Source>
+impl<S> CacheTree for AlgorithmRun<'_, S>
 where
     S: AlgorithmStyle,
 {
@@ -2071,7 +2069,7 @@ where
     }
 }
 
-impl<S, Context, Source> LayoutBlockContainer for AlgorithmRun<'_, S, Context, Source>
+impl<S> LayoutBlockContainer for AlgorithmRun<'_, S>
 where
     S: AlgorithmStyle,
 {
@@ -2102,7 +2100,7 @@ where
     }
 }
 
-impl<S, Context, Source> LayoutFlexboxContainer for AlgorithmRun<'_, S, Context, Source>
+impl<S> LayoutFlexboxContainer for AlgorithmRun<'_, S>
 where
     S: AlgorithmStyle,
 {
@@ -2124,7 +2122,7 @@ where
     }
 }
 
-impl<S, Context, Source> LayoutGridContainer for AlgorithmRun<'_, S, Context, Source>
+impl<S> LayoutGridContainer for AlgorithmRun<'_, S>
 where
     S: AlgorithmStyle,
 {
@@ -2234,7 +2232,7 @@ where
     }
 }
 
-impl<S, Context, Source> RoundTree for AlgorithmRun<'_, S, Context, Source>
+impl<S> RoundTree for AlgorithmRun<'_, S>
 where
     S: AlgorithmStyle,
 {

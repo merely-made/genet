@@ -5,6 +5,9 @@ text implemented, including scripted sessions on Boa and Vano. Focused joint
 semantic and native lowering gates pass. Cambium's exact-pin adoption is
 published and recorded below. Full AccName/HTML-AAM conformance and
 headed assistive-technology acceptance remain open.
+*(2026-10-14: AccName WPT now runs through genet-wpt's `get_computed_label`
+hook on branch `computed-label`. The baseline is 352/405 subtests; see
+"WPT `get_computed_label` hook" below.)*
 
 ## Sources and ownership
 
@@ -116,7 +119,9 @@ Complete role rules, computed visibility, shadow scope and flat-tree traversal,
 embedded controls, generated block spacing, WPT coverage and a headed physical
 screen-reader receipt remain explicit future work.
 *(2026-10-14: shadow scope and flat-tree traversal are fixed on branch
-`shadow-a11y-walk`, not yet merged. Name from content follows AccName 2F's
+`shadow-a11y-walk`, not yet merged. Corrected 2026-10-14 by the
+`get_computed_label` lane: the fix is on main, rebased as `42cabb5a886` and
+`bd5f7ca0994`. Name from content follows AccName 2F's
 rendered child nodes, and ID references resolve within the referring node's
 own tree. See residual 11 and rulings 11.1–11.3 in
 [the Shadow DOM plan](2026-09-07_shadow_dom_plan.md#residuals).)* Static Livery session wiring
@@ -452,7 +457,8 @@ physical Turnstone interaction remain consumer gates.
 
 ## WPT `get_computed_label` hook (2026-10-14)
 
-**Status (2026-10-14): in progress, on branch `computed-label` (not merged).**
+**Status (2026-10-14): implemented and baselined on branch `computed-label`,
+not merged.**
 Mark asked for this after the Shadow DOM residual 11 fix
 ([Shadow DOM plan](2026-09-07_shadow_dom_plan.md#residuals), rulings
 11.1–11.3). Until now, that fix had unit tests only. genet-wpt's testdriver
@@ -525,6 +531,19 @@ before and after, and records the baseline.
    Mark: **"Add the path dep (Recommended)"**. *Follows:* `genet-render` with
    `default-features = false, features = ["livery"]`. `image-decode` is
    forwarded through genet-wpt's existing feature.
+5. **Name bugs the run finds.** *Question:* does any of the 52
+   name-computation failures belong in this lane? The candidates put were
+   the input value and alt names (family F) and `aria-label` on a `<slot>`
+   (family I). *Options:* none, report only; fix F here; fix I here; fix
+   both. Mark: **"None, report only (Recommended)"**. *Follows:* this lane
+   ends at the baseline. The ranked list below is open work, and each fix
+   gets its own lane, with this AccName run as its before/after instrument.
+6. **Recording.** *Question:* should phase 4 also correct the residual 11
+   record, whose hashes and merge status are stale? *Options:* record
+   everything with dated annotations; or record the baseline only. Mark:
+   **"Record all, annotate (Recommended)"**. *Follows:* dated annotations in
+   the Shadow DOM plan, this plan's "Remaining gates" note, and DOC_README's
+   two rows. The original wording is kept.
 
 ### Phases and done-conditions
 
@@ -561,3 +580,60 @@ own timeout first. genet-wpt: 72 passed, 2 ignored. `accname/`: **0/405 →
 `slot.html` 2/4. The receipt and failure families are in
 `Code/testing/genet/wpt-ledger/2026-10-14_computed_label/results.md`. Phase 4
 (recording the baseline and families here) waits for Mark.
+
+### Baseline (2026-10-14)
+
+From `Code/testing/genet/wpt-ledger/2026-10-14_computed_label/`, with the
+dev-profile genet-wpt binary on Boa, `testharness accname --jobs 1`. 178
+files are enumerated; 159 manual files are skipped and 19 run.
+
+| Directory | Files | Before | After | All-pass after |
+|---|---:|---:|---:|---:|
+| `accname/` (top level) | 2 | 0/11 | 8/11 | 1 |
+| `accname/name/` | 15 | 0/388 | 340/388 | 3 |
+| `accname/name/shadowdom/` | 2 | 0/6 | 4/6 | 1 |
+| Total | 19 | 0/405 | 352/405 | 5 |
+
+Residual 11's pair: `shadowdom/basic.html` 2/2, `slot.html` 2/4 (family I
+below). One subtest is a projection failure, not a wrong name:
+`<dialog open>` is not in the projection and rejects
+(`comp_name_from_heading.tentative.html`). One file errors on both sides
+with a buckram layout panic (`comp_name_from_content.html`, 79
+`data-expectedlabel` cases, not counted in the 405): `atomic root … was
+formatted against AtomicBasis { width: 67.58594 } but sits in
+AtomicBasis { width: 64.38594 }`.
+
+The 52 wrong-name subtests are open name-computation gates (ruling 5),
+ranked by how often real pages would meet them, then by count:
+
+1. **F.** `input[type=button/submit/reset]` value and `input[type=image]`
+   alt are not used (4). `comp_host_language_label.html`.
+2. **B.** Name from content is used for roles that forbid it (group, dialog,
+   alertdialog, article, table, abbr), so heading, caption or `title` is
+   never reached (9). `comp_name_from_heading.tentative.html`,
+   `comp_tooltip.html`, `comp_labeledby_non_standard.html`.
+3. **E.** Whitespace across nested inline elements is dropped (5):
+   `button label` → `buttonlabel`. `comp_text_node.html`.
+4. **K.** The layout panic above, which hides a whole file.
+5. **A.** An embedded control's value inside a label is not used (13).
+   `comp_embedded_control.html`.
+6. **I.** `aria-label` on a `<slot>` replaces its slotted content in name
+   from content (2). `shadowdom/slot.html`. This is a follow-up to residual
+   11.
+7. **H.** Hidden-content edges (2): a visible child of a `visibility:hidden`
+   parent is dropped, and a hidden `aria-labelledby` target does not fall
+   back to `aria-label`.
+8. **G.** `aria-owns` is not supported (3). `aria-owns.html`.
+9. **D.** CSS `content` alt text (`content: "" / counter(seq)`) is ignored
+   (6).
+10. **C.** `::marker` text is missing from names (8; the tests are
+    tentative).
+
+Instrument notes:
+- The hook answers from the same projection call a scripted host makes, so
+  these results are what a host would see, not a separate name query.
+- `get_computed_role` still throws (ruling 1), so the AAM directories
+  remain unmeasured.
+
+**2026-10-14.** Phase 4 done. Rulings 5 and 6 are recorded, the baseline and
+ranked gates are above, and the residual 11 record is annotated.

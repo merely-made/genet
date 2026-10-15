@@ -204,6 +204,74 @@ the same notice as an assertive accessible alert, including child-frame reports.
 Static `checkValidity()` keeps its existing event/boolean behavior. Submission
 and new select/checkbox interaction widgets remain outside Checkpoint B.
 
+### F11: qualify Checkpoint C on the Windows box, 2026-10-15
+
+Question as put: "Where to qualify. (a) This Windows box: a fresh matched
+before/after on current main, with 'before' = main with the 56 Phase C files
+reversed (a three-file merge). The Linux Checkpoint B numbers are cited for
+reference only. (b) Resume the ThinkPad harness: the same platform as B, but
+its tooling is frozen at an older main and another session is using that
+machine." Options: (a) recommended, (b).
+
+Mark's answer, verbatim: "This Windows box (Recommended)".
+
+Consequence: candidate is current main; the control is current main with the
+Phase C product changes of the six Phase C commits reversed. Both are built
+and captured on the Windows box with the same toolchain, providers and
+policies. Linux Checkpoint B and pre-integration numbers are reference only.
+The six Linux Livery baseline failures are not an allowance here: any Livery
+failure on Windows is a regression to investigate.
+
+### F12: fix the scripted post-redirect base URL inside Phase C, 2026-10-15
+
+Question as put: "The Boa redirect-address bug: (a) reproduce it here, add a
+failing test, fix it inside Phase C (the plan already requires that the final
+address after a redirect becomes the document's address), or (b) record it as
+a limitation." The finding: the ThinkPad native live run of 2026-10-14 loaded
+the post-307 page on Boa, but requested its relative `proof.png` as
+`/case/boa/proof.png` (404) rather than `/case/boa/final/proof.png`; Livery
+was correct and Nova was not run.
+
+Mark's answer, verbatim: "Reproduce, test, fix (Recommended)".
+
+Consequence: reproduce on Windows, add a failing test before the fix, fix it
+as Phase C work and run the live case on Livery, Boa and Nova.
+
+### F13: newest wasm-bindgen, live browser check in Checkpoint C, 2026-10-15
+
+Question as put: "The live browser (Wasm) submission check: (a) leave it out
+of Checkpoint C as a named limitation (blocked on 2026-10-14 for want of a
+WebGPU browser; the ThinkPad package pinned wasm-bindgen 0.2.127 and this box
+has 0.2.129), or (b) run it in Chrome on this machine."
+
+Mark's answer, verbatim: "pin the newest wasm-bindgen".
+
+*Reading, not ruled:* pin the newest released wasm-bindgen with a matching
+wasm-bindgen-cli, then run the live browser submission check in Chrome on this
+box as part of Checkpoint C; stop and report if WebGPU is blocked for a reason
+unrelated to the version. Checked 2026-10-15: crates.io's newest wasm-bindgen
+and wasm-bindgen-cli are 0.2.129 (published 2026-09-25), which main already
+pins exactly (`genet-render-host`, `genet-scripted-worker`, `ortet`,
+`support/build-scripted-workers.ps1`) and this box has installed. No pin
+change is needed.
+
+### F14: Rust 1.99.1, and the ThinkPad lane's rulings R19-R26, 2026-10-15
+
+Question as put: "The R19-R26 rulings in the ThinkPad lane's notes (e.g.
+'qualify with Rust 1.99', 'a toolchain change needs a new matched
+before/after'): copy them into the plan as dated history labelled 'agent
+rulings, not Mark's', or confirm them as his."
+
+Mark's answer, verbatim: "1.99.1 just dropped, which we should adopt. tells ya
+how i felt about 1.99 too, huh".
+
+*Reading, not ruled:* qualify under Rust 1.99.1 (released 2026-10-13,
+installed minimal with the wasm32 target on 2026-10-15) via explicit
+`cargo +1.99.1`. R19-R26 are recorded below as the ThinkPad lane's rulings,
+with R19's toolchain amended by this ruling. The repository's
+`rust-toolchain.toml` (channel 1.99.0) is not changed here; a family-wide
+toolchain bump is decided separately.
+
 ## Phases and done-conditions
 
 ### A: one live control value
@@ -1820,3 +1888,57 @@ Two defects found during triage are recorded with `#[ignore]`d repro tests, not 
 - `table_sibling_blocks::nested_table_cell_does_not_change_constrained_column_distribution`: when table content exceeds its container, a nested `display:table` in an inferred cell changes the outer columns (196px against 261px for plain cells or an HTML table). Separately, the HTML-table case there is 784px wide in a layer whose content box is 782px.
 
 Linux result at this change: `cargo test --no-fail-fast -p genet-livery` passes 663 with 0 failures and 9 ignored across 47 targets. The Livery "six known failures" baseline above no longer applies to Linux, and a Livery failure on this platform is now a regression to investigate. The parley field needs a `genet-parley` republish before the next `genet-livery` publish. The Windows suite was not re-run here.
+
+### 2026-10-13/14, ThinkPad qualification attempt (recorded 2026-10-15)
+
+This work was not written into the repository at the time. Its evidence is at
+`thinkpad-l14-f:~/Code/testing/genet/forms/thinkpad` (`phase-c-20261013-*`,
+`phase-c-20261014-*`), with the lane's own record in
+`phase-c-20261013-resume-ledger-v1.md` and `phase-c-20261014-continuation-v1.md`.
+R19-R26 are that lane's rulings, not Mark's; F14 amends R19.
+
+- **R19:** qualify then-current main `2b84478e836` with installed Rust 1.99.0
+  and committed renderer pins; earlier receipts keep their 1.98.1 identities.
+  *Amended by F14: Rust 1.99.1.*
+- **R20:** exact-match WPT accounting needs identical providers and toolchain
+  on both sides, so a renderer or toolchain change needs a new matched control
+  epoch. The original B and C-before captures are preserved, not reused.
+- **R21:** the provider helper verifies Git modes, tracked blobs and gitlinks,
+  allowing only Cargo's `.cargo-ok` marker inside Test262.
+- **R22:** fresh epoch tooling binds both lock snapshots, all Cargo
+  configuration locations, all 15 covering-gate rows and kernel-resource
+  receipts.
+- **R23:** four render-host hardware fault tests, added after `4bc7558` and
+  declared ignored upstream, are accounted by name; no hardware fault
+  qualification is claimed.
+- **R24:** a candidate native build failed after the control build replaced
+  a shared Cargo artifact; control builds must use their own target dirs.
+- **R25:** control runner v1 was refused as a baseline because
+  `document-session-api` was not compiled from control source; the control
+  was rebuilt in isolated target/build dirs compiling all eight changed
+  dependencies.
+- **R26:** a rebuilt, cached control binds the exact raw Git status before
+  Cargo; only its artifact audit qualifies as the matched baseline.
+
+Results on `2b84478e836`, source freeze `ad7e87c4`, Rust 1.99.0: all 15
+covering gates passed with no new failure (native-only 25, scripted 145,
+Livery 323 with the six Linux failures and one ignore, render 42, WPT unit 80
+with three ignores, Boa adapter 26, Nova adapter 9, Ortet 55, resources 18,
+Documents 135, runtime 1,064, session API 22, native DOM 187, netfetcher
+redirect 3, render-host 9 with the four R23 ignores). The control and
+candidate runners were built and the capture configs hydrated, but **no
+matched capture ran**. The last run, the native live submission v3 of
+2026-10-14, passed on Livery, failed network verification on Boa (the
+post-redirect relative image was requested from the pre-redirect directory;
+F12) and never reached Nova. The live browser leg was blocked for want of a
+WebGPU browser. The lane stopped there; the ThinkPad later rebooted.
+
+### 2026-10-15, Windows qualification begins
+
+F11-F14 are ruled above. Worktree `Code/worktrees/genet-forms-c`, branch
+`forms-phase-c`, from origin/main `636da6bbc65`. Rust 1.99.1 installed; the
+lock is generated offline from the cargo cache (`--offline`, nothing
+downloaded), SHA256 `36934732b27f96da2e0bd1ea2e50bbdffce8c840e76e743d1b56b254915bb37c`.
+Evidence: `Code/testing/genet/forms/phase-c-windows-20261015/`. Of the 56
+Phase C product paths, only `ports/genet-wpt/src/{harness,main}.rs` and
+`ports/ortet/Cargo.toml` changed on main after `2b84478e836`.

@@ -116,10 +116,7 @@ fn livery_lowers_only_definite_auto_multicol_inputs() {
         super::build_block::lower_sequential_multicol(
             styles.get(node).expect("computed style"),
             BlockStyle {
-                flow: FlowAxes::new(
-                    buckram::WritingMode::VerticalRl,
-                    buckram::Direction::Ltr,
-                ),
+                flow: FlowAxes::new(buckram::WritingMode::VerticalRl, buckram::Direction::Ltr,),
                 ..BlockStyle::default()
             },
         )
@@ -5075,6 +5072,20 @@ fn live_empty_clearance_keeps_its_following_margin_chain_in_buckram() {
     assert_eq!(algorithms.taffy, 0);
 }
 
+/// A text system whose CSS generics all resolve to Ahem, so a test's line
+/// geometry does not depend on which fonts the host platform maps `serif`,
+/// `sans-serif` or `monospace` to. Ahem's em box is its content area and every
+/// glyph advances exactly one em.
+fn ahem_text_system() -> TextSystem {
+    let ahem = include_bytes!("../../../../tests/wpt/tests/fonts/Ahem.ttf");
+    let mut text = TextSystem::new();
+    for generic in ["serif", "sans-serif", "monospace", "system-ui"] {
+        text.register_generic_font_bytes(ahem.to_vec(), generic)
+            .expect("Ahem binds to every generic family");
+    }
+    text
+}
+
 #[test]
 fn live_inline_lines_in_an_ordinary_wrapper_share_outer_float_exclusions() {
     fn by_id(
@@ -5105,13 +5116,13 @@ fn live_inline_lines_in_an_ordinary_wrapper_share_outer_float_exclusions() {
         &StyleSet::cambium(&[
             "html, body, div, span { margin: 0; padding: 0; border: 0; }\
              #host { width: 200px; overflow-x: hidden; overflow-y: hidden;\
-                     font-family: monospace; font-size: 10px; line-height: 20px; }\
+                     font-family: monospace; font-size: 6px; line-height: 20px; }\
              #float { float: left; width: 80px; height: 40px; }",
         ]),
         &Device::screen(320.0, 240.0),
         &InteractionStates::default(),
     );
-    let mut text = TextSystem::new();
+    let mut text = ahem_text_system();
     let (_, layout) = layout_with_text_system(
         &dom,
         &styles,
@@ -5189,7 +5200,7 @@ fn live_shape_outside_reference_boxes_change_lines_but_not_float_placement() {
         &StyleSet::cambium(&[
             "html, body, div, span { margin: 0; padding: 0; border: 0; }\
              .host { width: 200px; overflow-x: hidden; overflow-y: hidden;\
-                     font-family: monospace; font-size: 10px; line-height: 20px; }\
+                     font-family: monospace; font-size: 6px; line-height: 20px; }\
              .float { float: left; width: 50px; height: 80px; margin-right: 20px;\
                       padding-right: 10px; border-right: 20px solid; }\
              .margin { shape-outside: margin-box; }\
@@ -5201,7 +5212,7 @@ fn live_shape_outside_reference_boxes_change_lines_but_not_float_placement() {
         &Device::screen(320.0, 600.0),
         &InteractionStates::default(),
     );
-    let mut text = TextSystem::new();
+    let mut text = ahem_text_system();
     let (_, layout) = layout_with_text_system(
         &dom,
         &styles,
@@ -5272,7 +5283,7 @@ fn live_shape_outside_keeps_forced_break_lines_in_the_selected_float_band() {
         &Device::screen(400.0, 300.0),
         &InteractionStates::default(),
     );
-    let mut text = TextSystem::new();
+    let mut text = ahem_text_system();
     let (_, layout) = layout_with_text_system(
         &dom,
         &styles,
@@ -6194,6 +6205,42 @@ fn live_auto_float_width_clamps_retained_inline_intrinsics() {
     assert_eq!(algorithms.taffy, 0);
 }
 
+/// Recorded defect, found while making the intrinsic-subtree test
+/// font-independent. A line's trailing space hangs, so an inline-block's
+/// min-content width is its longest word ("aaaa", 40px in 10px Ahem), not the
+/// word plus the space that follows it ("aaaa ", 50px). Shrink-to-fit in a 45px
+/// container is therefore 45px, but the measured layout width includes the
+/// space and yields 50px.
+#[test]
+#[ignore = "known defect: an inline-block's min-content width counts the line's hanging trailing space"]
+fn inline_block_min_content_excludes_hanging_trailing_space() {
+    let dom =
+        StaticDocument::parse("<html><body><span id=\"atomic\">aaaa aaaa</span></body></html>");
+    let styles = resolve_styles(
+        &dom,
+        &StyleSet::cambium(&["html, body, span { margin: 0; padding: 0; border: 0; }\
+             span { display: inline-block; font-family: monospace; font-size: 10px; }"]),
+        &Device::screen(45.0, 240.0),
+        &InteractionStates::default(),
+    );
+    let mut text = ahem_text_system();
+    let (_, layout) = layout_with_text_system(
+        &dom,
+        &styles,
+        45.0,
+        240.0,
+        ViewportSizes::uniform(45.0, 240.0),
+        &mut text,
+        &HashMap::new(),
+    )
+    .expect("layout");
+    let atomic = node_by_id(&dom, dom.document(), "atomic").expect("atomic node");
+    assert_eq!(
+        layout.get(atomic).expect("fragment").physical_rect().width,
+        45.0
+    );
+}
+
 #[test]
 fn live_multi_child_float_and_atomic_inline_use_intrinsic_subtrees() {
     fn by_id(
@@ -6227,13 +6274,13 @@ fn live_multi_child_float_and_atomic_inline_use_intrinsic_subtrees() {
         &StyleSet::cambium(&["html, body, div { margin: 0; padding: 0; border: 0; }\
              .host { overflow-x: hidden; overflow-y: hidden; }\
              #narrow { width: 80px; } #wide { width: 200px; }\
-             .float { float: left; font-family: monospace; font-size: 10px;\
+             .float { float: left; font-family: monospace; font-size: 5px;\
                       line-height: 20px; }\
              .clear { clear: both; height: 1px; }"]),
         &Device::screen(320.0, 240.0),
         &InteractionStates::default(),
     );
-    let mut text = TextSystem::new();
+    let mut text = ahem_text_system();
     let (_, layout) = layout_with_text_system(
         &dom,
         &styles,
@@ -6269,12 +6316,12 @@ fn live_multi_child_float_and_atomic_inline_use_intrinsic_subtrees() {
         let styles = resolve_styles(
             &dom,
             &StyleSet::cambium(&["html, body, span { margin: 0; padding: 0; border: 0; }\
-                 span { display: inline-block; font-family: monospace; font-size: 10px;\
+                 span { display: inline-block; font-family: monospace; font-size: 5px;\
                         line-height: 20px; }"]),
             &Device::screen(viewport_width, 240.0),
             &InteractionStates::default(),
         );
-        let mut text = TextSystem::new();
+        let mut text = ahem_text_system();
         let (_, layout) = layout_with_text_system(
             &dom,
             &styles,
@@ -6295,7 +6342,8 @@ fn live_multi_child_float_and_atomic_inline_use_intrinsic_subtrees() {
 
     assert_eq!(atomic_inline_width(30.0), 30.0);
     assert_eq!(atomic_inline_width(80.0), 80.0);
-    assert!((atomic_inline_width(200.0) - 104.462_89).abs() <= 0.01);
+    // Max-content: nineteen 5px Ahem advances.
+    assert_eq!(atomic_inline_width(200.0), 95.0);
 }
 
 #[test]

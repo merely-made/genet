@@ -165,7 +165,18 @@ fn counters_paint_like_literal_text_and_preserve_dom_selection() {
         "body {counter-reset:n} span::before {counter-increment:n;content:counter(n) '. '}",
     );
     let mut literal = document("<span>1. First</span> <span>2. Second</span>", "");
-    assert_eq!(painted(&mut generated), painted(&mut literal));
+    // Generated and literal text shape as different runs, so their glyph
+    // origins are sums of the same advances in a different order and can
+    // differ in the last float bits; only glyph identity must match exactly.
+    let (generated_glyphs, literal_glyphs) = (painted(&mut generated), painted(&mut literal));
+    assert_eq!(generated_glyphs.len(), literal_glyphs.len());
+    for (generated, literal) in generated_glyphs.iter().zip(&literal_glyphs) {
+        assert_eq!(generated.0, literal.0, "glyph identity");
+        assert!(
+            (generated.1 - literal.1).abs() <= 1e-3 && (generated.2 - literal.2).abs() <= 1e-3,
+            "glyph origin: generated={generated:?}, literal={literal:?}"
+        );
+    }
     let owner = find(generated.dom(), generated.dom().document(), "a");
     let children: Vec<_> = generated.dom().dom_children(owner).collect();
     assert_eq!(children.len(), 1);

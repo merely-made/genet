@@ -17,6 +17,19 @@ fn by_id(dom: &ScriptedDom, id: &str) -> NodeId {
     find_id(dom, dom.document(), id).expect("fixture node")
 }
 
+/// Resolve every CSS generic family to Ahem, so geometry that depends on a
+/// document's default or generic text does not vary with the host platform's
+/// font mapping. Ahem's content area is exactly one em.
+fn bind_ahem_generics(document: &mut LiveryDocument<ScriptedDom>) {
+    let ahem = include_bytes!("../../../../tests/wpt/tests/fonts/Ahem.ttf");
+    document
+        .replace_generic_font_resources(
+            ["serif", "sans-serif", "monospace", "system-ui"]
+                .map(|generic| (generic.to_owned(), ahem.to_vec())),
+        )
+        .expect("Ahem binds to every generic family");
+}
+
 fn generated_ids(
     document: &LiveryDocument<ScriptedDom>,
     node: NodeId,
@@ -1866,12 +1879,14 @@ fn positioned_inset_reuse_updates_nested_scroll_range() {
     let styles = || {
         StyleSet::cambium(&["html, body, div { margin: 0; padding: 0; } \
              #scroller { position: relative; width: 100px; height: 80px; overflow-y: auto; } \
-             #positioned { position: absolute; left: 0; top: 200px; width: 100px; height: 20px; }"])
+             #positioned { position: absolute; left: 0; top: 200px; width: 100px; height: 20px; \
+             font-size: 8px; }"])
     };
     let mut dom = ScriptedDom::from_serialized_document(initial);
     let mut initial_mutations = Vec::new();
     dom.drain_mutations(&mut initial_mutations);
     let mut retained = LiveryDocument::new(dom, styles(), Device::screen(160.0, 120.0));
+    bind_ahem_generics(&mut retained);
     retained.frame(160, 120).expect("initial frame");
     let positioned = by_id(retained.dom(), "positioned");
     let scroller = by_id(retained.dom(), "scroller");
@@ -1892,6 +1907,7 @@ fn positioned_inset_reuse_updates_nested_scroll_range() {
     let mut fresh_mutations = Vec::new();
     fresh_dom.drain_mutations(&mut fresh_mutations);
     let mut fresh = LiveryDocument::new(fresh_dom, styles(), Device::screen(160.0, 120.0));
+    bind_ahem_generics(&mut fresh);
     fresh.frame(160, 120).expect("fresh final frame");
     let fresh_scroller = by_id(fresh.dom(), "scroller");
     let fresh_layout = fresh.layout.as_ref().expect("fresh final layout");
@@ -2318,9 +2334,11 @@ fn positioned_descendant_extends_its_scroll_container_range() {
         dom,
         StyleSet::cambium(&["html, body { margin: 0; padding: 0; } \
              #scroller { position: relative; width: 100px; height: 80px; overflow-y: auto; } \
-             #positioned { position: absolute; top: 200px; width: 100px; height: 20px; }"]),
+             #positioned { position: absolute; top: 200px; width: 100px; height: 20px; \
+             font-size: 8px; }"]),
         Device::screen(160.0, 120.0),
     );
+    bind_ahem_generics(&mut document);
     document.frame(160, 120).expect("positioned overflow frame");
     let scroller = by_id(document.dom(), "scroller");
     let layout = document.layout.as_ref().expect("retained layout");

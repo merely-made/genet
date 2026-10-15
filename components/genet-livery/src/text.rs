@@ -187,11 +187,14 @@ fn break_inline_lines(
                     continue;
                 }
 
-                if line.advance > available.inline_size + 0.01
+                // Trailing whitespace hangs, so it never has to fit beside a
+                // float; only the content ahead of it does.
+                let content_advance = line.advance - line.trailing_whitespace;
+                if content_advance > available.inline_size + 0.01
                     && let Some(next_top) = constraints.next_wider_block_start(
                         line_top,
                         line.line_height.max(0.0),
-                        line.advance,
+                        content_advance,
                     )
                     && breaker.revert()
                 {

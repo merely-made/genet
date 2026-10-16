@@ -115,3 +115,33 @@ between final gates. The initial broad scripted run timed out and remains
 unqualified. Independent source review approved. Exact hashes, logs and resource
 limits are in the audit receipt. Journal gaps still reset acquisition; I4/I5/L3
 and broader host/input findings remain open.
+
+## I5 mutation journal ownership
+
+**Status:** implemented and verified locally, 2026-10-16. Baseline `bcc46a093d4`.
+
+Capture currently drains the same pending facts used by retained rendering and
+resource reconciliation. Remove recorder drain authority. Keep one compaction
+boundary for the rendering path and publish/observe every capture batch before
+it is discarded. Capture baseline and repeat flushes must not change the live
+journal, duplicate records, or silently omit mutations. Retain the conservative
+fallback for genuinely missing history. Preserve wire discriminants, identity
+translation, replay and the render-free document path.
+
+Done conditions: capture enabled/disabled produces equal incremental decisions
+and rendered output; unrelated mutations do not reacquire resources; frame-time
+mutations and repeated flush/frame ordering preserve capture batches. Relevant
+existing capture/replay and resource-retention tests pass after the cut. Cheaper
+implementation workers do not build; parent serializes gates with the shared
+lock, one job, serial tests, 5 GiB memory, zero swap, 150% CPU and nice 10.
+
+I5 final gates: 22 distinct tests passed, zero failed/ignored. The three new
+regressions establish capture-on/off restyle and scene-operation parity,
+unchanged acquisitions, frame-time callback capture, exact-once observation,
+headless compaction after successful/throwing scripts, and explicit gap/arena
+refusal. Nine existing capture/replay cases, nine resource-retention cases and
+the retained missing-history fallback passed. Independent review approved.
+Only two unused imports changed after the first gate; subsequent gates compiled
+the frozen source. Exact source/log hashes and resource limits are in the audit
+receipt. Complete replay fidelity, child-realm capture, browser/wasm and Forms
+acceptance remain outside this cut.

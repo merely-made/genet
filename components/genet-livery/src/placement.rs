@@ -206,9 +206,7 @@ impl PlacementState {
                     next.clips.push(GeometryClip { inverse, clip });
                 }
                 let border_clip_count = next.clips.len();
-                let paints_as_inline =
-                    matches!(style.display, Display::Inline | Display::InlineBlock)
-                        && !paint::is_blockified_item(fragments, id);
+                let paints_as_inline = paint::paints_as_inline_box(fragments, id, style);
                 if !paints_as_inline {
                     let viewport = DeviceIntSize::new(
                         fragments.viewport.0 as i32,

@@ -2931,13 +2931,8 @@ where
             && attribute.name.local.as_ref().eq_ignore_ascii_case("src"))
         .then_some(attribute.value)
     })?;
-    let bytes = if let Ok(data_url) = data_url::DataUrl::process(source) {
-        data_url.decode_to_vec().ok()?.0
-    } else {
-        image_sources.get_document(source)?.clone()
-    };
-    let (width, height) = crate::image_decode::decode(&bytes)?.dimensions();
-    Some((width as f32, height as f32))
+    let image = image_sources.decoded_document(source)?;
+    Some((image.width as f32, image.height as f32))
 }
 
 fn canvas_intrinsic_dimension<D>(dom: &D, id: D::NodeId, attribute: &str, default: f32) -> f32

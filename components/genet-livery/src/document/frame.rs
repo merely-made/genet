@@ -588,9 +588,46 @@ where
             &self.image_sources,
             self.style_set.document_base_url(),
         );
+        self.retain_active_data_urls(&styles);
         self.cached = Some(((width, height), list.clone()));
         self.style_only_damage = true;
         Ok(list.translated(-self.scroll.0, -self.scroll.1))
+    }
+
+    fn retain_active_data_urls(&self, styles: &StylePlane<D::NodeId>) {
+        if !self.image_sources.has_data_urls() {
+            return;
+        }
+        let mut active = styles
+            .background_image_urls()
+            .filter(|url| crate::image_resources::is_data_url(url))
+            .map(str::to_owned)
+            .collect::<HashSet<_>>();
+        let mut nodes = vec![self.dom.document()];
+        while let Some(node) = nodes.pop() {
+            nodes.extend(self.dom.flat_children(node));
+            if !self
+                .dom
+                .element_name(node)
+                .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case("img"))
+            {
+                continue;
+            }
+            if let Some(source) = self.dom.attributes(node).find_map(|attribute| {
+                (attribute.name.ns.as_ref().is_empty()
+                    && attribute.name.local.as_ref().eq_ignore_ascii_case("src"))
+                .then_some(attribute.value)
+            }) {
+                let key = crate::image_resources::document_image_key(
+                    self.style_set.document_base_url(),
+                    source,
+                );
+                if crate::image_resources::is_data_url(&key) {
+                    active.insert(key);
+                }
+            }
+        }
+        self.image_sources.retain_data_urls(&active);
     }
 
     pub(in crate::document) fn sticky_layout(

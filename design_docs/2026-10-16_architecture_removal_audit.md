@@ -1,5 +1,65 @@
 # Genet architecture and removal audit
 
+
+## L3 image sharing and remaining L4 paint repairs, 2026-10-16
+
+**All three residuals from the previous L4 cut are repaired locally.** This
+section supersedes the L3-open, contents-parent and positioned-inline statuses
+in the historical sections below. Other audit findings remain independently open.
+
+The retained document owns encoded source versions and lazy decoded rasters.
+Layout and paint share the same decoded allocation. Equal-byte replacements
+retain it; changed or removed resources invalidate it; decode failures are cached.
+Finished paint lists carry shared pixels without copying the encoded source map.
+NetRender's `ImageResource.data` now uses `Arc<Vec<u8>>`, shared through frame
+absorption, layer rekeying and renderer Blob ingestion. Serialized pixels retain
+their inline-byte shape. Blob identity is still newly assigned during translation;
+this cut establishes allocation sharing, not cross-frame atlas identity reuse.
+
+Decoded data URLs are retired after successful paint against current flat-tree
+image sources and sampled ordinary/generated background styles. Review rejected
+a full-layout-only sweep because local formatting and repaint paths could bypass
+it. Regressions cover cache cardinality, current draw pixels, hidden intrinsic
+images, cached/scroll frames, source replacement/removal and frame absorption.
+The local-formatting witness batches an image source change with an inert change
+to its enclosing flex root and asserts that exact damage root and a retained-root
+generation increment. A standalone empty image has an Inline formatting context
+and still follows the existing full-layout fallback. Earlier fixture failures
+and their source diagnosis remain in the receipt; no production layout capability
+was broadened to satisfy the test.
+
+Perspective and preserve-3d traversal now use generated-box parents, including
+owned anonymous table wrappers, through `display: contents`. Decoration, overflow
+clip transfer and hit placement use the generated outside-display classification.
+Positioned inline spans paint their blockified backgrounds; the previous explicit
+block fixture workaround is removed. Review also caught and fixed caption wrapper
+ownership and clipping for hoisted positioned descendants.
+
+Final Genet gates passed **506 tests, zero failures, two existing ignores**:
+344 library, 130 integration, 11 scripted retention/identity, 18 native document,
+and three image-decode feature-off checks. Supplier gates passed **49 tests**,
+including an actual CPU draw with exact opaque red and half-alpha blue pixels.
+One supplier corpus border-command mismatch remains; a freshly compiled pristine
+`f4f9c0d87` control reproduced it. The first attempted control reused a shared
+artifact and is excluded from baseline evidence. Existing affine perspective
+approximation limits remain. These gates do not establish fresh GPU, browser,
+Windows, Wasm or Forms acceptance.
+
+NetRender supplier commit `e8cda06efc11c11595f2fa1bb30bce7e72979537` is local and
+unpublished. Genet pins all four supplier crates to it in `Cargo.toml`, with the
+ignored lock snapshot preserved externally. Validation imported that local Git
+object into Cargo's cache and ran offline; external cold fetch needs supplier
+publication first. Mere remains on its older supplier and needs its three
+Vec-valued image-resource constructors migrated when it adopts this API.
+
+All gates used the shared heavy-work lock, one Cargo job, serial tests, a 5 GiB
+memory limit, zero swap allowance, 150% CPU quota and nice 10. The temporary
+baseline worktree was removed after preserving evidence. Active worktrees and
+shared caches remain; about 471 GiB free made further deletion unnecessary.
+Final source/review/log hashes, local dependency provenance, failure history and
+bounds are in `image_sharing_and_paint_followups` in the
+[audit receipt](receipts/2026-10-16_architecture_post_cut_audit.json).
+
 ## L4 transform/context ownership, 2026-10-16
 
 **L4's containing-block/paint predicate mismatch is repaired locally.** A shared

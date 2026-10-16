@@ -226,3 +226,65 @@ changed after the first run. The review and receipt record exact source hashes,
 limits and failure history. No new GPU/browser or Forms acceptance is claimed.
 L3 supplier sharing, contents perspective-parent traversal and positioned-inline
 decoration remain open with the source boundaries above.
+
+## L3 image sharing and remaining L4 paint boundaries
+
+**Status:** locally implemented and verified, 2026-10-16. Genet baseline `2bf6ff015aa`; NetRender
+baseline `f4f9c0d87`. User authorized continuing through all three remaining
+items. Supplier work is isolated at
+`/home/markik/Code/worktrees/netrender-image-sharing-20261016`.
+
+1. Replace DOM-parent transform traversal and computed-inline decoration checks
+   with generated-box ownership. Preserve perspective gap reporting and table
+   wrappers; prove contents/no-contents equivalence, restored positioned-span
+   draw witnesses, and hit testing.
+2. Change supplier ImageResource pixel storage to shared `Arc<Vec<u8>>`, matching
+   peniko Blob's backing so frame clones, rekeying and renderer registration
+   share the allocation. Preserve serialized byte shape and renderer identity.
+3. Give the retained document one versioned encoded/decoded image owner. Layout
+   and paint share lazy decoded metadata/pixels; remove the output's encoded
+   ledger. Preserve equal-byte entries on replacement, invalidate changed or
+   removed resources, bound data-URL cache lifetime, and cache decode failure.
+
+Done conditions: meaningful sharing/decode-count witnesses through intrinsic
+layout, new paint, cached frames, scroll, replacement/removal, data URLs and frame
+composition; retained draw data and supplier renderer ingestion remain correct.
+Run relevant existing suites and feature-off checks after cuts. Parent alone
+runs heavy gates with the shared lock, one Cargo job, serial tests, 5 GiB memory,
+zero swap, 150% CPU and nice 10. Keep shared build caches and other worktrees.
+Local supplier/consumer commits and exact lock provenance are required; publication
+is not implied by local verification. No push is included in this continuation.
+
+Supplier `e8cda06efc11c11595f2fa1bb30bce7e72979537` is committed locally.
+The manifest now pins all four NetRender crates to that exact revision because
+Cargo.lock is intentionally ignored here. The local lock was updated offline
+from supplier Git objects imported into Cargo's cache; no path patch or remote
+publication is implied. Supplier gates passed 46 focused tests including an
+actual CPU image draw; corpus has three passes and one existing border-command
+mismatch. A freshly compiled pristine `f4f9c0d87` control reproduced that mismatch.
+The temporary control worktree was removed after saving source/log/dependency
+provenance. The first control attempt reused a shared artifact and is explicitly
+not counted as baseline evidence.
+
+L4 review found and fixed anonymous table-wrapper ownership for captions and
+overflow-clip transfer for hoisted descendants of positioned inline boxes.
+L3 review found full-layout-only data-URL retirement insufficient: repeated
+repaint-only image changes could retain old rasters indefinitely. Retirement now uses
+current DOM/computed-style image references after successful paint, replacing
+the begin/cancel full-layout sweep machinery.
+
+
+Final source review and post-cut validation passed 506 Genet tests, zero failed,
+two existing ignored. Supplier validation passed 49 tests including actual CPU
+raster pixels, with one baseline-reproduced corpus border mismatch retained.
+Final gates cover library, transform/paint/layout, images, shadow flat tree,
+scripted identity/retention, native document sessions and feature-off decoding.
+The new retained-root fixture needed parser mutation draining and a supported
+flex ancestor mutation batch: empty image roots have Inline context and are
+excluded by the existing local formatter. Its final exact damage, generation,
+cache and pixel assertions pass; production layout admission was not changed.
+Compile failures and intermediate fixture failures are preserved in the receipt.
+Both source reviews are complete. No supplier/consumer publication, renderer
+atlas-identity reuse, fresh GPU/browser qualification or Forms acceptance claimed.
+See `image_sharing_and_paint_followups` in the maintained post-cut receipt for
+source hashes, exact commands, results, resource limits and dependency provenance.

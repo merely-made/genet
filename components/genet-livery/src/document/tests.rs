@@ -9,6 +9,233 @@ use genet_scripted_dom::{NodeId, ScriptedDom};
 use layout_dom_api::{LayoutDomMut, QualName};
 use paint_list_api::PaintList;
 
+#[cfg(feature = "image-decode")]
+#[test]
+fn retained_image_layout_and_paint_share_pixels_across_frames() {
+    use crate::ImageSourceLookup as _;
+    use std::sync::Arc;
+
+    let blue = image::RgbaImage::from_pixel(2, 3, image::Rgba([0, 0, 255, 255]));
+    let mut png = Vec::new();
+    blue.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .expect("encode image fixture");
+    let mut document = LiveryDocument::new(
+        ScriptedDom::from_serialized_document(
+            "<html><body><div style='height:400px'><img src='shared.png'></div></body></html>",
+        ),
+        StyleSet::cambium(&["body { margin: 0; }"]),
+        Device::screen(160.0, 120.0),
+    );
+    document.set_image_resource("shared.png", png.clone());
+    let first = document.frame(160, 120).expect("first frame");
+    let first_pixels = &first.images()[0].data;
+    let layout_pixels = document
+        .image_sources
+        .decoded("shared.png")
+        .expect("layout decode");
+    assert_eq!((layout_pixels.width, layout_pixels.height), (2, 3));
+    assert!(Arc::ptr_eq(first_pixels, &layout_pixels.data));
+
+    let cached = document.frame(160, 120).expect("cached frame");
+    assert!(Arc::ptr_eq(first_pixels, &cached.images()[0].data));
+    assert!(document.scroll_by(0.0, 25.0));
+    assert!(document.scroll().1 > 0.0);
+    let scrolled = document.frame(160, 120).expect("scrolled cached frame");
+    assert!(Arc::ptr_eq(first_pixels, &scrolled.images()[0].data));
+    let mut parent = LiveryPaintList::new(paint_list_api::DeviceIntSize::new(160, 120), 1);
+    let absorbed = parent.absorb_frame_commands(&first);
+    assert!(!absorbed.is_empty());
+    assert!(Arc::ptr_eq(first_pixels, &parent.images()[0].data));
+    document.replace_image_resources([("shared.png".into(), png)]);
+    let unchanged = document.frame(160, 120).expect("unchanged resource frame");
+    assert!(Arc::ptr_eq(first_pixels, &unchanged.images()[0].data));
+
+    let red = image::RgbaImage::from_pixel(1, 1, image::Rgba([255, 0, 0, 255]));
+    let mut replacement = Vec::new();
+    red.write_to(
+        &mut std::io::Cursor::new(&mut replacement),
+        image::ImageFormat::Png,
+    )
+    .expect("encode replacement");
+    document.replace_image_resources([("shared.png".into(), replacement)]);
+    let changed = document.frame(160, 120).expect("replacement frame");
+    assert_eq!(
+        (changed.images()[0].width, changed.images()[0].height),
+        (1, 1)
+    );
+    assert!(!Arc::ptr_eq(first_pixels, &changed.images()[0].data));
+
+    document.replace_image_resources(std::iter::empty());
+    let removed = document.frame(160, 120).expect("removed resource frame");
+    assert!(removed.images().is_empty());
+}
+
+#[cfg(feature = "image-decode")]
+#[test]
+fn retained_data_url_layout_and_paint_use_one_cached_raster() {
+    use crate::ImageSourceLookup as _;
+    use base64::Engine as _;
+    use std::sync::Arc;
+
+    let image = image::RgbaImage::from_pixel(2, 3, image::Rgba([0, 0, 255, 255]));
+    let mut png = Vec::new();
+    image
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .expect("encode data image");
+    let url = format!(
+        "data:image/png;base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(png)
+    );
+    let dom = ScriptedDom::from_serialized_document(&format!(
+        "<html><body><img src='{url}'></body></html>"
+    ));
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&["body { margin: 0; }"]),
+        Device::screen(160.0, 120.0),
+    );
+    let list = document.frame(160, 120).expect("data image frame");
+    let cached = document
+        .image_sources
+        .decoded(&url)
+        .expect("cached data image");
+    assert_eq!((cached.width, cached.height), (2, 3));
+    assert!(Arc::ptr_eq(&list.images()[0].data, &cached.data));
+    let next = document.frame(160, 120).expect("cached frame");
+    assert!(Arc::ptr_eq(&list.images()[0].data, &next.images()[0].data));
+}
+
+#[cfg(feature = "image-decode")]
+#[test]
+fn changing_background_data_urls_retires_old_pixels_but_keeps_hidden_img() {
+    use crate::ImageSourceLookup as _;
+    use base64::Engine as _;
+    use std::sync::Arc;
+
+    let data_url = |color: [u8; 4]| {
+        let image = image::RgbaImage::from_pixel(2, 3, image::Rgba(color));
+        let mut png = Vec::new();
+        image
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .expect("encode data image");
+        format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(png)
+        )
+    };
+    let hidden_url = data_url([0, 0, 255, 255]);
+    let first_background = data_url([255, 0, 0, 255]);
+    let html = format!(
+        "<html><body><img src='{hidden_url}' style='visibility:hidden'><div id=bg style=\"width:20px;height:20px;background-image:url({first_background})\"></div></body></html>"
+    );
+    let mut document = LiveryDocument::new(
+        ScriptedDom::from_serialized_document(&html),
+        StyleSet::cambium(&["body { margin: 0; }"]),
+        Device::screen(160.0, 120.0),
+    );
+    document.frame(160, 120).expect("initial image frame");
+    let hidden_pixels = document
+        .image_sources
+        .decoded(&hidden_url)
+        .expect("hidden image cached");
+    let background = by_id(document.dom(), "bg");
+    for color in [[0, 255, 0, 255], [255, 255, 0, 255], [0, 255, 255, 255]] {
+        let url = data_url(color);
+        let style = format!("width:20px;height:20px;background-image:url({url})");
+        document.mutate_dom(|dom| dom.set_attribute(background, attr("style"), &style));
+        let list = document.frame(160, 120).expect("changed background frame");
+        assert_eq!(document.image_sources.cached_data_url_count(), 2);
+        assert!(
+            list.commands()
+                .iter()
+                .filter_map(|command| match command {
+                    paint_list_api::PaintCmd::DrawImage(image) => list
+                        .images()
+                        .iter()
+                        .find(|resource| resource.key == image.image_key),
+                    _ => None,
+                })
+                .any(|resource| resource.data.starts_with(&color)),
+            "current background paints decoded pixels"
+        );
+        let retained_hidden = document
+            .image_sources
+            .decoded(&hidden_url)
+            .expect("active hidden image");
+        assert!(Arc::ptr_eq(&hidden_pixels.data, &retained_hidden.data));
+    }
+    document
+        .mutate_dom(|dom| dom.set_attribute(background, attr("style"), "width:20px;height:20px"));
+    document.frame(160, 120).expect("background removed frame");
+    assert_eq!(document.image_sources.cached_data_url_count(), 1);
+}
+
+#[cfg(feature = "image-decode")]
+#[test]
+fn retained_root_img_src_changes_retire_prior_data_urls() {
+    use base64::Engine as _;
+
+    let data_url = |color: [u8; 4]| {
+        let image = image::RgbaImage::from_pixel(2, 3, image::Rgba(color));
+        let mut png = Vec::new();
+        image
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .expect("encode image");
+        format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(png)
+        )
+    };
+    let first_url = data_url([255, 0, 0, 255]);
+    let html = format!(
+        "<html><body><div id=scope><img id=target src='{first_url}'></div><div id=outside>outside</div></body></html>"
+    );
+    let mut dom = ScriptedDom::from_serialized_document(&html);
+    dom.drain_mutations(&mut Vec::new());
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&[
+            "body { margin: 0; } #scope { display: flex; width: 100px; } #outside { width: 80px; }",
+        ]),
+        Device::screen(160.0, 120.0),
+    );
+    document.frame(160, 120).expect("first image frame");
+    let target = by_id(document.dom(), "target");
+    let scope = by_id(document.dom(), "scope");
+    for (revision, color) in [[0, 255, 0, 255], [0, 0, 255, 255]].into_iter().enumerate() {
+        let url = data_url(color);
+        let previous_relayout = document.retained_root_relayout_generation;
+        // The empty image's own Inline context cannot be a retained root.
+        // A same-batch inert ancestor change selects the supported Flex root.
+        document.mutate_dom(|dom| {
+            dom.set_attribute(target, attr("src"), &url);
+            dom.set_attribute(scope, attr("data-revision"), &revision.to_string());
+        });
+        assert_eq!(
+            document.last_layout_damage(),
+            Some(&LayoutDamage {
+                kind: LayoutDamageKind::Dom,
+                roots: vec![scope],
+                full_document: false,
+            })
+        );
+        let list = document
+            .frame(160, 120)
+            .expect("retained image replacement");
+        assert_eq!(
+            document.retained_root_relayout_generation,
+            previous_relayout + 1,
+            "src replacement uses retained-root formatting"
+        );
+        assert_eq!(document.image_sources.cached_data_url_count(), 1);
+        assert!(
+            list.images()
+                .iter()
+                .any(|resource| resource.data.starts_with(&color))
+        );
+    }
+}
+
 fn attr(name: &str) -> QualName {
     QualName::new(None, Namespace::from(""), LocalName::from(name))
 }

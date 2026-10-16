@@ -228,6 +228,9 @@ impl WebOrtet {
                         web_sys::console::warn_1(&JsValue::from_str("[ortet] encoded submission unavailable"));
                     },
                 }
+                // Focus changes can retire the old hit-test layout. Keep the
+                // source interactive while its navigation is still pending.
+                self.render();
             },
             SessionEffect::Handled | SessionEffect::Cancelled => self.render(),
             SessionEffect::Ignored => {},
@@ -291,7 +294,9 @@ fn launch_pending_navigation(host: &Rc<RefCell<WebOrtet>>) {
     })() else { return; };
     let host = host.clone();
     spawn_local(async move {
-        match load_session_request(&address, width, height, limits, request.as_ref()).await {
+        match load_session_request(&address, width, height, limits, request.as_ref(), || {
+            host.borrow().navigation_generation == generation
+        }).await {
             Ok(loaded) => {
                 let mut host = host.borrow_mut();
                 if host.navigation_generation != generation { return; }
@@ -313,11 +318,16 @@ async fn load_session(
     height: u32,
     limits: BrowserResourceLimits,
 ) -> Result<LoadedSession, JsValue> {
-    load_session_request(address, width, height, limits, None).await
+    load_session_request(address, width, height, limits, None, || true).await
 }
 
 async fn load_session_request(address: &str, width: u32, height: u32,
-    limits: BrowserResourceLimits, outbound: Option<&SessionDocumentRequest>) -> Result<LoadedSession, JsValue> {
+    limits: BrowserResourceLimits, outbound: Option<&SessionDocumentRequest>,
+    is_current: impl Fn() -> bool) -> Result<LoadedSession, JsValue> {
+    let check_current = || if is_current() { Ok(()) } else {
+        Err(JsValue::from_str("superseded browser navigation"))
+    };
+    check_current()?;
     let request = SessionSpawnRequest::new(address).with_viewport(width, height);
     let engine = LiverySessionEngine::new(LocalFetcher);
     if !is_remote_http(address) {
@@ -335,6 +345,9 @@ async fn load_session_request(address: &str, width: u32, height: u32,
         return Err(JsValue::from_str("browser resource count limit exceeded"));
     }
     let source_response = fetch_browser_request(address, outbound, &limits, &mut total_bytes).await?;
+    // A held source may finish after a newer navigation has already won.
+    // Refuse it before preparing or fetching any of its dependencies.
+    check_current()?;
     let navigation_address = redirected_navigation_address(address, &source_response.final_url);
     let mut staged =
         LiveryResourcePreparation::new(&request, source_response, ResourceLimits::default());
@@ -345,6 +358,7 @@ async fn load_session_request(address: &str, width: u32, height: u32,
             break;
         }
         for request in pending {
+            check_current()?;
             resources = resources.saturating_add(1);
             if resources > limits.max_resources as usize {
                 return Err(JsValue::from_str("browser resource count limit exceeded"));
@@ -547,7 +561,10 @@ fn install_dom_events(host: &Rc<RefCell<WebOrtet>>) -> Result<(), JsValue> {
             let Some(event) = event.dyn_ref::<PointerEvent>() else {
                 return;
             };
-            let _ = host.borrow().canvas.focus();
+            // Focusing synchronously invokes our focus listener, which needs
+            // a mutable host borrow of its own.
+            let canvas = { host.borrow().canvas.clone() };
+            let _ = canvas.focus();
             {
                 let mut state = host.borrow_mut();
                 state.cursor = state.pointer_position(event);

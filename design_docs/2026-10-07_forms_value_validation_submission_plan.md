@@ -15,10 +15,22 @@ regressions, existing validation/FormData checks, and all original 285 affected
 native/scripted occurrences. The private native hook is deleted on both engines.
 [Windows repair receipt](receipts/2026-10-16_forms_submission_review_windows.json).
 
-Fresh Windows covering gates, all-three-host transport/visual runs, browser
-submission, matched WPT/guard maps and final Checkpoint C reporting remain open.
-The earlier ThinkPad native Livery/Boa/Nova transport and final visual checks
-remain bounded Linux evidence.
+Fresh O-PC native Livery, Boa and Nova transport, final accessibility and visual
+checks pass, including the redirected relative image. The script-free invalid
+notice also paints and exposes an assertive alert. The actual Chrome browser
+submission run passes all 20 cases and the separate editing-only control under
+the unchanged evidence checker, with zero uncaught JavaScript exceptions.
+
+That browser run found and qualified three host repairs: release the canvas
+borrow before synchronous focus callbacks; repaint the retained source after
+submission so its hit-test layout remains usable; and reject superseded source
+responses before fetching their dependencies. The browser checks bind the exact
+Wasm artifact, trusted input, request bytes, response timing and painted proof
+markers. They do not qualify general browser text rendering. See the
+[Windows host receipt](receipts/2026-10-16_forms_native_browser_windows.json).
+
+Windows covering gates, matched WPT/guard maps and final Checkpoint C reporting
+remain open. Earlier ThinkPad receipts retain their recorded Linux scope.
 
 The dated status paragraphs below record earlier qualification stages.
 

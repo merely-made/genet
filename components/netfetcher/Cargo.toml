@@ -23,7 +23,7 @@ h3 = ["hyper-transport", "murm-wire/h3"]
 websocket = ["dep:tokio-tungstenite", "dep:murm-wire", "murm-wire/websocket"]
 
 [dependencies]
-murm-wire = { git = "https://github.com/merely-made/murm.git", rev = "80d9959000fcd913634fd223538dfdbbec1f5e4f", version = "0.1.0", default-features = false, optional = true }
+murm-wire = { git = "https://github.com/merely-made/murm.git", branch = "main", version = "0.1.0", default-features = false, optional = true }
 url = "2.5"
 bytes = "1"
 

@@ -7779,11 +7779,13 @@ fn z_index_stacking_level_exists_only_where_css_lets_z_index_establish_a_context
         &Device::screen(320.0, 240.0),
         &InteractionStates::default(),
     );
+    let fragments = layout(&dom, &styles, 320.0, 240.0).expect("layout");
     let level = |id| {
+        let node = node_by_id(&dom, dom.document(), id).expect(id);
         z_index_stacking_level(
-            &dom,
             &styles,
-            node_by_id(&dom, dom.document(), id).expect(id),
+            node,
+            crate::paint::is_blockified_item(&fragments, node),
         )
     };
 
@@ -7851,8 +7853,9 @@ fn stacking_paint_children_applies_order_first_and_stacking_level_second() {
 
     // `order` yields b, c, a; the stable sort by stacking level then lifts b
     // (level 5) past the two level-0 items without reordering them.
+    let fragments = layout(&dom, &styles, 320.0, 240.0).expect("layout");
     assert_eq!(
-        hit_testing::stacking_paint_children(&dom, &styles, node("flex")),
+        hit_testing::stacking_paint_children(&dom, &styles, &fragments, node("flex")),
         vec![node("c"), node("a"), node("b")]
     );
 }

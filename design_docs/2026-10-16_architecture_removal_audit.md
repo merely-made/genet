@@ -1,5 +1,57 @@
 # Genet architecture and removal audit
 
+## L4 transform/context ownership, 2026-10-16
+
+**L4's containing-block/paint predicate mismatch is repaired locally.** A shared
+`TransformContextFacts` owns supported applicability and exposes distinct own
+matrix, perspective, preserve-3d, stacking and positioned-containing-block facts.
+Box generation, paint, depth ordering and hit placement consume those facts.
+Identity individual transforms establish context. Non-replaced inline boxes are
+excluded; replaced inline and blockified boxes are admitted. Flex/grid items
+through `display: contents` keep their containing-block and numeric stacking
+ownership. Supported transform/context properties belong to the table wrapper
+and are unset on the grid. This section supersedes the historical L4 mismatch
+status below, but does not close every transform rendering limitation.
+
+The applicability and context rules follow [CSS Transforms 1](https://www.w3.org/TR/css-transforms-1/#transformable-element)
+and [CSS Transforms 2](https://www.w3.org/TR/css-transforms-2/).
+[CSS Tables 3](https://www.w3.org/TR/css-tables-3/#table-style-overrides) explicitly
+assigns transform-prefixed properties and perspective to the wrapper; applying
+that ownership to individual translate/rotate/scale is an inference from their
+transform semantics and the wrapper reference box.
+
+Final post-cut gates: **453 passed, zero failed, two existing ignored**. The
+335 library tests include retained motion, hit testing and the new wrapper split
+regression; 109 existing integration tests cover paint, 3D transforms, out-of-flow
+placement, grid, tables and nested inline positioning. Nine new integration tests
+exercise absolute/fixed descendants, identity and nonidentity individual
+transforms, retained none/value/none changes, perspective/preserve-3d, replaced
+and non-replaced inline applicability, and paint/hit order through contents.
+These inspect emitted drawing commands, transformed positions and hit results;
+this cut does not claim a fresh GPU raster/readback or browser conformance run.
+
+The first regression run passed six tests and failed three at missing colored
+rectangles, after their geometry checks passed. Source inspection traced this
+to `begin_node` selecting inline decoration for positioned spans. The fixtures
+now explicitly use block-level positioned children while preserving their tested
+inline parent. Their draw assertions remain. **Positioned-inline decoration is
+still an open defect**, not repaired or ignored by this cut. Paint also still
+uses the immediate DOM parent for perspective/preserve-3d traversal, so a
+`display: contents` intermediary does not forward the generated parent. Existing
+affine projection limits remain. Forms acceptance stays separate.
+
+All gates used the shared lock, one Cargo job, serial tests, 5 GiB memory cap,
+zero swap allowance, 150% CPU quota and nice 10. Maximum process RSS was 783,236
+KiB; all gates reported zero swaps. Existing caches and worktrees were preserved;
+472 GiB free storage made cleanup unnecessary. Source/review/log hashes and the
+initial failed run are retained in `transform_context_repair` in the
+[audit receipt](receipts/2026-10-16_architecture_post_cut_audit.json).
+
+**L3 remains open.** Its complete pixel-sharing cut crosses the pinned NetRender
+`paint_list_api::ImageResource.data: Vec<u8>` contract and frame absorption copies.
+A Genet-only decode cache would leave that ownership unresolved; no L3 production
+change is included here.
+
 ## I4 source-relative image identity, 2026-10-16
 
 **I4's authored image aliases are removed from retained native and scripted

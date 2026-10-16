@@ -22,15 +22,13 @@ use livery::{
 /// Properties used on the table wrapper box and not on the table grid box.
 ///
 /// The first group is CSS 2.1 section 17.4 verbatim. The second is CSS
-/// Tables 3 section 3.6.1, narrowed to what Livery computes: `clip`,
-/// `clip-path`, `filter`, `isolation`, `mask-*`, `mix-blend-mode`,
-/// `perspective`, and the `transform-*` longhands past `transform` are all
-/// `[[unimplemented]]` in `properties.toml`, so they have no computed value
-/// to move. They belong on this list the day Livery grows them.
+/// Tables 3 section 3.6.1, narrowed to what Livery computes. The supported
+/// individual transforms, their origins, `transform-style`, and `perspective`
+/// belong to the wrapper with `transform`; the grid gets their initial values.
+/// Other grouping properties remain outside this supported list.
 ///
-/// `opacity` and `transform` are on it now but are not yet observable: paint
-/// reads both from the style plane by DOM node, not from either box. K4e4
-/// owns making that selection explicit.
+/// Paint reads the table element's style by DOM node and anchors these effects
+/// to its outer wrapper fragment, which also contains its captions.
 const WRAPPER_PROPERTIES: &[PropertyId] = &[
     // CSS 2.1 section 17.4.
     PropertyId::Position,
@@ -48,6 +46,13 @@ const WRAPPER_PROPERTIES: &[PropertyId] = &[
     PropertyId::OverflowY,
     PropertyId::Opacity,
     PropertyId::Transform,
+    PropertyId::Translate,
+    PropertyId::Rotate,
+    PropertyId::Scale,
+    PropertyId::TransformOrigin,
+    PropertyId::TransformStyle,
+    PropertyId::Perspective,
+    PropertyId::PerspectiveOrigin,
 ];
 
 /// The wrapper's half of a table element's computed values.
@@ -167,6 +172,36 @@ mod tests {
         assert_eq!(grid.padding_top, source.padding_top);
         assert_eq!(wrapper.width, ComputedValues::default().width);
         assert_eq!(wrapper.padding_top, ComputedValues::default().padding_top);
+    }
+
+    #[test]
+    fn supported_transform_context_properties_belong_to_the_wrapper() {
+        let mut source = table();
+        source.translate = "10px 20px".parse().expect("translate");
+        source.rotate = "45deg".parse().expect("rotate");
+        source.scale = "2".parse().expect("scale");
+        source.transform_origin = "25% 10%".parse().expect("transform origin");
+        source.transform_style = "preserve-3d".parse().expect("transform style");
+        source.perspective = "400px".parse().expect("perspective");
+        source.perspective_origin = "10% 20%".parse().expect("perspective origin");
+
+        let wrapper = wrapper_style(&source);
+        let grid = grid_style(&source, (None, None));
+        let unset = ComputedValues::default();
+        assert_eq!(wrapper.translate, source.translate);
+        assert_eq!(wrapper.rotate, source.rotate);
+        assert_eq!(wrapper.scale, source.scale);
+        assert_eq!(wrapper.transform_origin, source.transform_origin);
+        assert_eq!(wrapper.transform_style, source.transform_style);
+        assert_eq!(wrapper.perspective, source.perspective);
+        assert_eq!(wrapper.perspective_origin, source.perspective_origin);
+        assert_eq!(grid.translate, unset.translate);
+        assert_eq!(grid.rotate, unset.rotate);
+        assert_eq!(grid.scale, unset.scale);
+        assert_eq!(grid.transform_origin, unset.transform_origin);
+        assert_eq!(grid.transform_style, unset.transform_style);
+        assert_eq!(grid.perspective, unset.perspective);
+        assert_eq!(grid.perspective_origin, unset.perspective_origin);
     }
 
     #[test]

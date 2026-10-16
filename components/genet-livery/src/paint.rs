@@ -19,8 +19,7 @@ use livery::{
         BackgroundSizeComponent, BorderCollapse, BorderStyle as CssBorderStyle,
         BoxShadow as CssBoxShadow, ComputedColor, Display, EmptyCells, FontSize, Length,
         LengthPercentage, LengthUnit, Matrix3D, Overflow as CssOverflow, Position, Radius,
-        RepeatStyle, Rotate as CssRotate, Scale as CssScale, TransformStyle,
-        Translate as CssTranslate, Visibility,
+        RepeatStyle, Visibility,
     },
 };
 use paint_list_api::{
@@ -36,11 +35,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     LiveryLayout, StylePlane,
+    box_tree::is_replaced_element,
     layout::{
         Fragment, TablePaintModel, border_width_px, length_percentage_px, order_modified_children,
         z_index_stacking_level,
     },
     text::{NativeOverlayText, TextFrame, TextSystem},
+    transform_context::TransformContextFacts,
 };
 use buckram::{
     BoxId, DisplayInside, DisplayOutside, FragmentId, GridEdgeOrientation, PhysicalSize,
@@ -541,10 +542,8 @@ impl LiveryPaintList {
     }
 
     fn document_image_key_for(&mut self, authored: &str) -> Option<ImageKey> {
-        let key = crate::image_resources::document_image_key(
-            self.document_base_url.as_deref(),
-            authored,
-        );
+        let key =
+            crate::image_resources::document_image_key(self.document_base_url.as_deref(), authored);
         self.image_key_for(&key)
     }
 
@@ -799,7 +798,9 @@ where
 /// Emit with the document base used by `<img src>`. CSS backgrounds already
 /// have source-resolved keys in their computed values.
 #[allow(clippy::too_many_arguments)]
-pub fn emit_paint_list_with_text_system_scrolled_with_images_and_external_textures_with_document_base<D>(
+pub fn emit_paint_list_with_text_system_scrolled_with_images_and_external_textures_with_document_base<
+    D,
+>(
     dom: &D,
     styles: &StylePlane<D::NodeId>,
     fragments: &LiveryLayout<D::NodeId>,
@@ -819,12 +820,8 @@ where
     // element scheme and host palette. Keep `styles` contextual for cascade
     // and CSSOM, but never let paint reach the old light-palette fallback.
     let styles = styles.with_used_colors();
-    let mut list = LiveryPaintList::with_image_sources(
-        viewport,
-        generation,
-        image_sources,
-        document_base_url,
-    );
+    let mut list =
+        LiveryPaintList::with_image_sources(viewport, generation, image_sources, document_base_url);
     let mut text_frame = fragments
         .text_frame()
         .cloned()
@@ -886,10 +883,11 @@ fn emit_node<D>(
         .and_then(|style| {
             fragments.get(id).and_then(|fragment| {
                 let parent = transform_parent(dom, styles, fragments, id);
-                if let Some((_, unflattened)) = element_matrix(style, fragment, parent) {
+                let context = transform_context_for_node(dom, styles, fragments, id)?;
+                if let Some((_, unflattened)) = element_matrix(style, fragment, parent, context) {
                     record_transform_gap(&unflattened, fragment, list);
                 }
-                transform_spec(style, fragment, parent)
+                transform_spec(style, fragment, parent, context)
             })
         });
     if let Some(transform) = &transform {
@@ -2697,9 +2695,8 @@ fn sort_preserve_3d_runs<D>(
 {
     let context = |id: D::NodeId| {
         dom.parent(id).filter(|parent| {
-            styles
-                .get(*parent)
-                .is_some_and(|style| style.transform_style == TransformStyle::Preserve3d)
+            transform_context_for_node(dom, styles, fragments, *parent)
+                .is_some_and(TransformContextFacts::preserves_3d)
         })
     };
     let mut start = 0;
@@ -2820,7 +2817,9 @@ fn collect_stacking_items<D>(
         // A numeric positioned or flex/grid item starts a local context. Its
         // descendants are collected when that context is emitted, keeping it
         // atomic here.
-        if let Some(level) = stacking_level(dom, styles, child) {
+        if let Some(level) =
+            stacking_level(dom, styles, child, is_blockified_item(fragments, child))
+        {
             items.push(StackingItem {
                 id: child,
                 level,
@@ -3205,32 +3204,34 @@ pub(crate) fn stacking_level<D>(
     dom: &D,
     styles: &StylePlane<D::NodeId>,
     id: D::NodeId,
+    flex_grid_item: bool,
 ) -> Option<i32>
 where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
     let style = styles.get(id)?;
-    if let Some(level) = z_index_stacking_level(dom, styles, id) {
+    if let Some(level) = z_index_stacking_level(styles, id, flex_grid_item) {
         return Some(level);
     }
+    let context =
+        TransformContextFacts::for_box(style, is_replaced_element(dom, id), flex_grid_item);
     (style.opacity.value() < 1.0
-        || establishes_transform_context(style)
+        || context.establishes_stacking_context()
         || !style.clip_path.is_none())
     .then_some(0)
 }
 
-fn establishes_transform_context(style: &ComputedValues) -> bool {
-    style.display != Display::Inline
-        && (!style.transform.is_none()
-            || style.rotate != CssRotate::None
-            || style.scale != CssScale::None
-            || style.translate != CssTranslate::None)
-}
-
 /// The perspective an element establishes for its children, in the document
 /// coordinates every fragment already uses.
-fn perspective_matrix(style: &ComputedValues, fragment: &Fragment) -> Option<Matrix3D> {
+fn perspective_matrix(
+    style: &ComputedValues,
+    fragment: &Fragment,
+    context: TransformContextFacts,
+) -> Option<Matrix3D> {
+    if !context.provides_perspective() {
+        return None;
+    }
     let em = used_font_size(style);
     let depth = style.perspective.depth_px(em)?;
     let (x, y) = style
@@ -3246,8 +3247,8 @@ fn perspective_matrix(style: &ComputedValues, fragment: &Fragment) -> Option<Mat
 }
 
 /// Whether a parent extends its 3D rendering context to its children.
-fn extends_3d_context(parent: Option<(&ComputedValues, &Fragment)>) -> bool {
-    parent.is_some_and(|(style, _)| style.transform_style == TransformStyle::Preserve3d)
+fn extends_3d_context(parent: Option<TransformParent<'_>>) -> bool {
+    parent.is_some_and(|(_, _, context)| context.preserves_3d())
 }
 
 /// Whether this element's own matrix is projected into its parent's plane
@@ -3259,10 +3260,10 @@ fn extends_3d_context(parent: Option<(&ComputedValues, &Fragment)>) -> bool {
 /// 3D context nor sits inside one is the boundary, and everything above and
 /// below it keeps composing in 3D.
 fn flattens_own_matrix(
-    style: &ComputedValues,
-    parent: Option<(&ComputedValues, &Fragment)>,
+    context: TransformContextFacts,
+    parent: Option<TransformParent<'_>>,
 ) -> bool {
-    style.transform_style != TransformStyle::Preserve3d && !extends_3d_context(parent)
+    !context.preserves_3d() && !extends_3d_context(parent)
 }
 
 /// The element's own accumulated 4x4 in document coordinates: the parent's
@@ -3275,9 +3276,10 @@ fn flattens_own_matrix(
 pub(crate) fn element_matrix(
     style: &ComputedValues,
     fragment: &Fragment,
-    parent: Option<(&ComputedValues, &Fragment)>,
+    parent: Option<TransformParent<'_>>,
+    context: TransformContextFacts,
 ) -> Option<(LayoutPoint, Matrix3D)> {
-    if !establishes_transform_context(style) {
+    if !context.paints_own_transform() {
         return None;
     }
     let em = used_font_size(style);
@@ -3307,7 +3309,7 @@ pub(crate) fn element_matrix(
         .multiply(&authored)
         .multiply(&Matrix3D::translation(-origin.x, -origin.y, -origin_z));
     if let Some(perspective) =
-        parent.and_then(|(style, fragment)| perspective_matrix(style, fragment))
+        parent.and_then(|(style, fragment, context)| perspective_matrix(style, fragment, context))
     {
         matrix = perspective.multiply(&matrix);
     }
@@ -3342,13 +3344,14 @@ fn scroll_spec(offset: (f32, f32)) -> Option<TransformSpec> {
 pub(crate) fn transform_spec(
     style: &ComputedValues,
     fragment: &Fragment,
-    parent: Option<(&ComputedValues, &Fragment)>,
+    parent: Option<TransformParent<'_>>,
+    context: TransformContextFacts,
 ) -> Option<TransformSpec> {
-    let (origin, matrix) = element_matrix(style, fragment, parent)?;
+    let (origin, matrix) = element_matrix(style, fragment, parent, context)?;
     // CSS Transforms 2: a box that is not part of a 3D rendering context has
     // its transform flattened. The renderer composes the pushed 4x4s, so the
     // flattening has to happen here rather than at rasterization.
-    let matrix = if flattens_own_matrix(style, parent) {
+    let matrix = if flattens_own_matrix(context, parent) {
         Matrix3D::from(matrix.to_affine_2d())
     } else {
         matrix
@@ -3385,9 +3388,8 @@ where
             // Only the transforms inside the element's own 3D rendering
             // context count; the walk stops at the flat boundary above it.
             MatrixScope::RenderingContext => parent.filter(|parent| {
-                styles
-                    .get(*parent)
-                    .is_some_and(|style| style.transform_style == TransformStyle::Preserve3d)
+                transform_context_for_node(dom, styles, fragments, *parent)
+                    .is_some_and(TransformContextFacts::preserves_3d)
             }),
         };
     }
@@ -3402,8 +3404,11 @@ where
         };
         let fragment: &Fragment = fragment;
         let parent = transform_parent(dom, styles, fragments, node);
-        if let Some((_, matrix)) = element_matrix(style, fragment, parent) {
-            let matrix = if flattens_own_matrix(style, parent) {
+        let Some(context) = transform_context_for_node(dom, styles, fragments, node) else {
+            continue;
+        };
+        if let Some((_, matrix)) = element_matrix(style, fragment, parent, context) {
+            let matrix = if flattens_own_matrix(context, parent) {
                 Matrix3D::from(matrix.to_affine_2d())
             } else {
                 matrix
@@ -3424,13 +3429,34 @@ pub(crate) enum MatrixScope {
     RenderingContext,
 }
 
+/// Supported transform facts for the node's normalized generated box.
+pub(crate) fn transform_context_for_node<D>(
+    dom: &D,
+    styles: &StylePlane<D::NodeId>,
+    fragments: &LiveryLayout<D::NodeId>,
+    id: D::NodeId,
+) -> Option<TransformContextFacts>
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    let style = styles.get(id)?;
+    Some(TransformContextFacts::for_box(
+        style,
+        is_replaced_element(dom, id),
+        is_blockified_item(fragments, id),
+    ))
+}
+
 /// The parent style and fragment a transform needs for its perspective.
+type TransformParent<'a> = (&'a ComputedValues, &'a Fragment, TransformContextFacts);
+
 pub(crate) fn transform_parent<'a, D>(
     dom: &D,
     styles: &'a StylePlane<D::NodeId>,
     fragments: &'a LiveryLayout<D::NodeId>,
     id: D::NodeId,
-) -> Option<(&'a ComputedValues, &'a Fragment)>
+) -> Option<TransformParent<'a>>
 where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
@@ -3439,7 +3465,9 @@ where
     // `fragments.get` yields a tree fragment; the deref is the physical rect
     // every transform helper here reads.
     let fragment: &Fragment = fragments.get(parent)?;
-    Some((styles.get(parent)?, fragment))
+    let style = styles.get(parent)?;
+    let context = transform_context_for_node(dom, styles, fragments, parent)?;
+    Some((style, fragment, context))
 }
 
 /// Whether `backface-visibility: hidden` culls this box.

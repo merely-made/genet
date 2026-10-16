@@ -1,14 +1,15 @@
 # Accessible names and descriptions
 
-**Status (2026-09-29):** bounded DOM names/descriptions and retained generated
+**Status (2026-10-15):** bounded DOM names/descriptions and retained generated
 text implemented, including scripted sessions on Boa and Vano. Focused joint
 semantic and native lowering gates pass. Cambium's exact-pin adoption is
 published and recorded below. Full AccName/HTML-AAM conformance and
 headed assistive-technology acceptance remain open.
-*(2026-10-15: the `get_computed_label` hook and families F and B are merged
-to main. Family E nested whitespace is implemented and qualified locally on
-ThinkPad: both engines move 365/405 to 370/405, with zero prior-pass loss.
-The known layout-panic file remains separate. Mark approved publication on 2026-10-15.
+*(2026-10-15: the `get_computed_label` hook and families F, B and E are
+merged to main. Family K layout admission is qualified locally on ThinkPad:
+both engines move 370/405 to 424/484, exposing all 79 formerly hidden cases
+(54 pass, 25 fail) with every prior assertion unchanged. The matched CSS
+guards retain all 248 prior passes. Publication awaits Mark's approval.
 Earlier branch-status notes describe their original qualification stage.)*
 
 ## Sources and ownership
@@ -605,8 +606,10 @@ with a buckram layout panic (`comp_name_from_content.html`, 79
 formatted against AtomicBasis { width: 67.58594 } but sits in
 AtomicBasis { width: 64.38594 }`.
 
-The 52 wrong-name subtests are open name-computation gates (ruling 5),
-ranked by how often real pages would meet them, then by count:
+The original October 14 ranking below describes 52 wrong-name gates and the
+separate layout panic. F, B and E have since shipped; K is qualified locally
+as recorded below. The current maps contain 60 wrong-name assertions, including
+25 newly exposed by K. The original priority order was:
 
 1. **F.** `input[type=button/submit/reset]` value and `input[type=image]`
    alt are not used (4). `comp_host_language_label.html`.
@@ -793,6 +796,91 @@ lockfile and both runners remain in
 short-deadline Nova diagnostic is preserved alongside the accepted longer
 pair. Forms C, the other AccName families, the layout panic and human
 assistive-technology qualification retain their separate scopes.
+
+## Layout admission (family K, 2026-10-15)
+
+**Status (2026-10-15): implemented and qualified locally on ThinkPad,
+based on main `27ec5cd5a92`; publication awaits Mark's approval.**
+Mark asked the standards lane to proceed after publishing family E. This
+slice removes the layout panic that prevented the 79 cases in
+`comp_name_from_content.html` from reporting. All 79 now report; 25 retain
+name-computation failures. Forms C remains separate. Ask before pushing.
+
+### Findings
+
+- The cached baseline build is byte-identical to family E's qualified runner.
+  The full WPT file fails in script-free layout too. Reducing it to 34
+  sections leaves two failing sections; reducing those to 20 tiny variants
+  leaves four failures, all a plain `a` or `span` wrapping an inline-block
+  with horizontal margins. Margin-free controls and `button`, `h3` and `div`
+  wrappers pass.
+- The baseline `ContainingBlockState::for_children` in `buckram/src/box_tree.rs`
+  set `normal_flow` to every parent, including a non-atomic inline. Consequently
+  `genet-livery`'s atomic basis pass sizes against the inline wrapper's text
+  fragment instead of its enclosing block, and its second layout changes that
+  spurious basis. The existing assertion correctly exposes the mismatch.
+- [CSS 2.2 section 10.1](https://www.w3.org/TR/CSS22/visudet.html#containing-block-details)
+  assigns static/relative elements to their nearest block container or
+  formatting-context ancestor. A positioned inline can still establish an
+  absolute containing block. Those two chains must remain distinct.
+
+### Progress
+
+- The full red Buckram suite preserves 271 old passes and fails the two new
+  ancestry regressions. Both numeric Livery regressions fail with the original
+  atomic-basis panic. Positive controls cover inline-table wrappers and natural
+  canvas sizes under both inline and inline-block display.
+- Candidate Buckram, Livery (including integrations), render and WPT-runner
+  suites pass 1,072 tests with zero failures and 11 existing ignores. All six
+  new structural/numeric regressions pass; four were observed failing before
+  the production fix, while inline-table and replaced-size checks are positive
+  controls.
+- Boa and Nova now report identical **424/484** results: all 405 prior
+  assertions are unchanged, and the formerly panicking file reports all 79
+  cases (54 pass, 25 fail). Neither engine reports an AccName file error;
+  159 manual skips remain. The newly visible failures cover CSS generated
+  content (15), child-box spacing (6), text transforms (3), and a nested
+  `aria-labelledby`/image case (1). These are separate name-computation gates.
+- The final fresh-context read-only review found no actionable issue in the
+  graph fix or evidence interpretation. The matched CSS comparison is complete:
+  all ten groups have identical maps, all 248 previously passing named
+  assertions survive, and none are missing. Existing failures, errors and
+  skips are unchanged.
+- The fresh unmodified runner is byte-identical to family E's accepted runner;
+  the exact frozen lock and corpus also match. The accepted 370/405 maps are
+  reused as before evidence, with their original source/commands/digests
+  retained in `accname-baseline-reuse.json`. This avoids rerunning identical
+  artifacts. New CSS guards get their own before captures.
+
+### Acceptance receipt
+
+[Source-bound receipt](receipts/2026-10-15_accname_layout_panic.json).
+Raw maps, commands, stdout/stderr, exact lock, binary identities, reduction
+fixtures, resource logs and named-assertion comparison are retained under
+`Code/testing/genet/wpt-ledger/2026-10-15_accname_layout_panic/`.
+The baseline AccName maps reuse family E's accepted artifacts only after a
+fresh current-main build proved byte-identical and the lock/corpus matched.
+CSS guards use Boa testharness; existing failures, errors, timeout/not-run
+assertions and reftest skips are not passes. These checks do not qualify GPU,
+visual, full CSS, full AccName/HTML-AAM or human AT behavior. Forms C stays
+separate and paused.
+
+### Implementation and done-conditions
+
+1. Add failing-first structural box-graph and numeric layout regressions for
+   inline wrappers, margins and percentage widths. Preserve inline-block and
+   inline-table containers, normal parent links, and absolute/fixed ancestry.
+2. Correct the normal-flow graph at materialization. Keep the two-pass sizing
+   model and its stability assertion; do not add settling loops or silence
+   the panic.
+3. Run Buckram, Livery, render and WPT-runner tests. Compare frozen before/after
+   AccName maps on both engines and bounded CSS sizing/normal-flow guards.
+   Done means the formerly errored file completes and reports its named cases,
+   every previous pass survives, and newly exposed name failures are recorded
+   as separate work rather than quietly folded into this fix.
+4. Review the complete change, retain source/lock/runner identities and raw
+   results under `Code/testing/genet/wpt-ledger/2026-10-15_accname_layout_panic/`,
+   update the canonical index, and commit locally before asking to push.
 
 ## Role-gated names (family B, 2026-10-15)
 

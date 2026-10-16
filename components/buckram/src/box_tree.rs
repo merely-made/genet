@@ -1230,8 +1230,24 @@ impl ContainingBlockState {
         containing.map_or(ContainingBlock::Initial, ContainingBlock::Box)
     }
 
-    fn for_children(mut self, box_id: BoxId, establishment: ContainingBlockEstablishment) -> Self {
-        self.normal_flow = Some(box_id);
+    fn for_children(
+        mut self,
+        box_id: BoxId,
+        display: DisplayRole,
+        replaced: bool,
+        establishment: ContainingBlockEstablishment,
+    ) -> Self {
+        // CSS 2.2 10.1: ordinary inline boxes do not establish the normal-flow
+        // containing block. Keep their parent links and their independent
+        // absolute/fixed triggers. Atomic inlines and table wrappers retain
+        // their own containing-block role.
+        let non_atomic_inline = display.outside == Some(DisplayOutside::Inline)
+            && display.inside == Some(DisplayInside::Flow)
+            && display.internal_table.is_none()
+            && !replaced;
+        if !non_atomic_inline {
+            self.normal_flow = Some(box_id);
+        }
         if establishment.absolute {
             self.absolute = Some(box_id);
         }
@@ -1280,8 +1296,12 @@ where
         parent,
         proto.principal,
     );
-    let child_containing_blocks =
-        containing_blocks.for_children(id, proto.containing_block_establishment);
+    let child_containing_blocks = containing_blocks.for_children(
+        id,
+        proto.display,
+        proto.replaced,
+        proto.containing_block_establishment,
+    );
     for child in children {
         materialize(tree, child, Some(id), child_containing_blocks);
     }
@@ -2502,6 +2522,102 @@ mod tests {
             Some(AnonymousBoxKind::TableCell)
         );
         assert_eq!(tree.origin_node(tree[inner_cell].children()[0]), Some(4));
+    }
+
+    #[test]
+    fn normal_flow_containing_blocks_skip_non_atomic_inline_ancestors() {
+        let atom = DisplayRole {
+            inside: Some(DisplayInside::FlowRoot),
+            ..DisplayRole::INLINE_FLOW
+        };
+        let tree = generate_box_tree([input(
+            BoxOrigin::Element(1),
+            DisplayRole::BLOCK_FLOW,
+            vec![input(
+                BoxOrigin::Element(2),
+                DisplayRole::INLINE_FLOW,
+                vec![input(
+                    BoxOrigin::Element(3),
+                    DisplayRole::INLINE_FLOW,
+                    vec![input(BoxOrigin::Element(4), atom, vec![text(5, false)])],
+                )],
+            )],
+        )]);
+        let block = tree.principal_box(1).unwrap();
+        let outer = tree.principal_box(2).unwrap();
+        let inner = tree.principal_box(3).unwrap();
+        let atom = tree.principal_box(4).unwrap();
+        assert_eq!(tree[inner].parent(), Some(outer));
+        assert_eq!(tree[atom].parent(), Some(inner));
+        for node in [outer, inner, atom] {
+            assert_eq!(tree[node].containing_block, ContainingBlock::Box(block));
+        }
+        assert_eq!(
+            tree[tree[atom].children()[0]].containing_block,
+            ContainingBlock::Box(atom),
+            "the inline-block remains a container for its own content"
+        );
+    }
+
+    #[test]
+    fn inline_table_wrappers_remain_normal_flow_containers() {
+        let table = DisplayRole {
+            inside: Some(DisplayInside::Table),
+            ..DisplayRole::INLINE_FLOW
+        };
+        let tree = generate_box_tree([input(BoxOrigin::Element(1), table, Vec::new())]);
+        let grid = tree.principal_box(1).unwrap();
+        let wrapper = tree[grid].parent().unwrap();
+        assert_eq!(
+            tree[grid].containing_block,
+            ContainingBlock::Box(wrapper),
+            "the inline-table grid still resolves against its atomic wrapper"
+        );
+    }
+
+    #[test]
+    fn positioned_inline_ancestors_capture_absolute_but_not_normal_flow_children() {
+        let child = |id, position| {
+            BoxTreeInput::new(
+                BoxOrigin::Element(id),
+                DisplayRole::INLINE_FLOW,
+                FlowAxes::HORIZONTAL_LTR,
+                position,
+                false,
+                vec![text(id + 10, false)],
+            )
+        };
+        let positioned = BoxTreeInput::new(
+            BoxOrigin::Element(2),
+            DisplayRole::INLINE_FLOW,
+            FlowAxes::HORIZONTAL_LTR,
+            PositioningScheme::Relative,
+            false,
+            vec![
+                child(3, PositioningScheme::Static),
+                child(4, PositioningScheme::Absolute),
+                child(5, PositioningScheme::Fixed),
+            ],
+        );
+        let tree = generate_box_tree([input(
+            BoxOrigin::Element(1),
+            DisplayRole::BLOCK_FLOW,
+            vec![positioned],
+        )]);
+        let block = tree.principal_box(1).unwrap();
+        let inline = tree.principal_box(2).unwrap();
+        assert_eq!(
+            tree[tree.principal_box(3).unwrap()].containing_block,
+            ContainingBlock::Box(block)
+        );
+        assert_eq!(
+            tree[tree.principal_box(4).unwrap()].containing_block,
+            ContainingBlock::Box(inline)
+        );
+        assert_eq!(
+            tree[tree.principal_box(5).unwrap()].containing_block,
+            ContainingBlock::Initial
+        );
     }
 
     #[test]

@@ -3468,6 +3468,61 @@ fn assert_near(actual: f32, expected: f32, what: &str) {
     );
 }
 
+/// Ordinary inline ancestors are not sizing containers for an atomic child.
+#[test]
+fn a_margined_atom_inside_a_plain_inline_uses_the_enclosing_block() {
+    for wrapper in ["span", "a href='#'"] {
+        let tag = wrapper.split_ascii_whitespace().next().unwrap();
+        let before = crate::layout::basis_passes();
+        let rects = atomic_rects(
+            &format!(
+                "<div style='width:200px'><{wrapper}><span id=atom \
+                 style='display:inline-block;margin:0 2px'>this is an </span>\
+                 <dfn>example</dfn></{tag}></div>"
+            ),
+            "",
+            800.0,
+            &["atom"],
+        );
+        assert!(rects[0].2 < 196.0, "the short atom fits its column");
+        assert_eq!(
+            crate::layout::basis_passes(),
+            before,
+            "a fitting atom does not resolve against its inline wrapper"
+        );
+    }
+}
+
+#[test]
+fn replaced_atoms_inside_inline_wrappers_keep_their_natural_size() {
+    for display in ["inline", "inline-block"] {
+        let rects = atomic_rects(
+            &format!(
+                "<span><canvas id=atom width=80 height=30 \
+                 style='display:{display}'></canvas></span>"
+            ),
+            "",
+            800.0,
+            &["atom"],
+        );
+        assert_near(rects[0].2, 80.0, "the canvas's natural width");
+        assert_near(rects[0].3, 30.0, "the canvas's natural height");
+    }
+}
+
+#[test]
+fn a_percentage_atom_looks_through_nested_positioned_inlines() {
+    let rects = atomic_rects(
+        "<div style='width:200px'><a href='#' style='position:relative'>prefix\
+         <span><span id=atom style='display:inline-block;width:50%;height:10px'>\
+         x</span></span>suffix</a></div>",
+        "",
+        800.0,
+        &["atom"],
+    );
+    assert_near(rects[0].2, 100.0, "half the block's 200px content width");
+}
+
 /// Buckram K7: an atomic inline box's percentage width resolves against its
 /// containing block, not the viewport the atomic pre-pass starts from.
 #[test]

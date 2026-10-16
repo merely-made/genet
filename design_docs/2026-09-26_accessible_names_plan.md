@@ -5,10 +5,11 @@ text implemented, including scripted sessions on Boa and Vano. Focused joint
 semantic and native lowering gates pass. Cambium's exact-pin adoption is
 published and recorded below. Full AccName/HTML-AAM conformance and
 headed assistive-technology acceptance remain open.
-*(2026-10-14: AccName WPT now runs through genet-wpt's `get_computed_label`
-hook on branch `computed-label`. The baseline is 352/405 subtests; see
-"WPT `get_computed_label` hook" below. 2026-10-15: family B, role-gated names, is fixed on branch
-`role-gated-names`, not merged: 356/405 to 365/405; see "Role-gated names".)*
+*(2026-10-15: the `get_computed_label` hook and families F and B are merged
+to main. Family E nested whitespace is implemented and qualified locally on
+ThinkPad: both engines move 365/405 to 370/405, with zero prior-pass loss.
+The known layout-panic file remains separate. Mark approved publication on 2026-10-15.
+Earlier branch-status notes describe their original qualification stage.)*
 
 ## Sources and ownership
 
@@ -715,6 +716,83 @@ The four `input[type=button|image|reset|submit]` subtests moved fail to pass.
 There were no other transitions. Receipts:
 `Code/testing/genet/wpt-ledger/2026-10-15_input_value_names/`
 (`transitions.txt`).
+
+## Nested whitespace (family E, 2026-10-15)
+
+**Status (2026-10-15): implemented and qualified on ThinkPad main;
+Mark approved publication.** Mark assigned this bounded standards slice
+separately from Forms C. The baseline starts at `e37762d752e`, including the
+published family F and B changes.
+Mark authorizes pulling and committing this slice; ask before pushing.
+
+### Implementation and done-conditions
+
+1. Build an unmodified runner in a lane-owned target/build directory, retain
+   its dependency lock and source/binary identities, and capture the complete
+   `accname` directory on Boa and Nova with one worker and matched settings.
+   Confirm the five deeply nested whitespace assertions in
+   `accname/name/comp_text_node.html`; record other failures, errors and skips
+   separately.
+2. Add failing-first regressions in `genet-render/src/a11y/name.rs` for
+   whitespace-only descendants, including referenced labels/descriptions.
+   Preserve existing unspaced inline concatenation, nonbreaking spaces,
+   hidden-content exclusion and root tooltip fallback. Fix the recursive
+   accumulator rather than inserting spaces between every element.
+3. Run the full render and WPT runner unit suites, rebuild with the same lock,
+   and repeat the matched AccName captures. Done means the five assertions
+   pass and no previous passing assertion is lost, with missing/duplicate
+   assertions and file outcomes accounted separately. Review the complete
+   diff and record evidence here and in the index before publication.
+
+### Findings and progress
+
+- 2026-10-15: `Names::compute_inner` returns content only when `flat(content)`
+  is nonempty. It therefore discards an inline subtree containing only a
+  space before the parent's raw concatenation can use that space. Text nodes
+  themselves already return their original contents. AccName 1.2's
+  [text-equivalent steps](https://www.w3.org/TR/2026/WD-accname-1.2-20261012/#computation-steps)
+  return text-node contents and accumulate child results. The fix must retain
+  meaningful separators through descendant recursion, leaving final
+  flattening and existing root fallback behavior intact.
+- 2026-10-15: the previous Forms owner released this dispatch without edits,
+  payloads or shared locks. Forms remains a separate paused lane. Evidence:
+  `Code/testing/genet/wpt-ledger/2026-10-15_accname_whitespace/`.
+- 2026-10-15: fresh baseline Boa reports 365/405; Nova reports 365/405 with
+  a 60-second drive deadline and 90-second worker timeout. The initial Nova
+  15/30-second diagnostic is retained separately (323/362, two incomplete
+  files); it is not the primary matched baseline. Both primary runs enumerate
+  178 files: 8 all-pass, 10 with failures, 1 layout panic, 159 manual skips.
+- 2026-10-15: all four added regressions fail against unchanged production
+  code, while the existing 55 render tests pass. The observed wrong strings
+  are `buttonlabel`, `Savefile`, `Openpanel` and `buttonWronglabel` (a nested
+  tooltip substituted for a whitespace separator). The fix preserves raw
+  nonempty descendant content; root flattening and tooltip fallback stay
+  unchanged. Read-only review found no actionable issue.
+
+### Result
+
+Both engines move **365/405 to 370/405**, with exactly the five deeply nested
+space assertions changing fail to pass. `comp_text_node.html` moves 45/50 to
+50/50. Every earlier passing assertion is preserved; there are no added or
+missing assertions and no other named transitions. Each final run has 9
+all-pass files, 9 files with failures, the same 1 layout-panic file, and 159
+manual skips. The 79 cases hidden by `comp_name_from_content.html`'s existing
+layout panic remain outside the 405 reported assertions.
+
+Fixed-code gates pass: **59 render tests, 72 WPT-runner unit tests and 1
+integration test**, zero failures. The WPT runner's two existing ignores
+remain explicit (`real_manifest_enumerates_sanely`, `real_test262_parses`).
+The same lock, providers, compiler, corpus and per-engine settings were used
+on each side. All build and runtime jobs held the shared heavy lock under
+kernel memory/swap limits and completed with zero memory pressure/OOM events.
+
+The [source identities, comparison and gate receipt](receipts/2026-10-15_accname_whitespace.json)
+record exact runner/map/log digests and commands. Raw maps, logs, the frozen
+lockfile and both runners remain in
+`Code/testing/genet/wpt-ledger/2026-10-15_accname_whitespace/`. The initial
+short-deadline Nova diagnostic is preserved alongside the accepted longer
+pair. Forms C, the other AccName families, the layout panic and human
+assistive-technology qualification retain their separate scopes.
 
 ## Role-gated names (family B, 2026-10-15)
 

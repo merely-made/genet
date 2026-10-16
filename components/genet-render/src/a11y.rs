@@ -1104,6 +1104,17 @@ mod tests {
     }
 
     #[test]
+    fn nested_whitespace_in_shadow_and_slot_content_separates_words() {
+        for html in [
+            "<button>Open<span><template shadowrootmode=open><span><slot> </slot></span></template></span>panel</button>",
+            "<button>Open<span><template shadowrootmode=open><span><slot></slot></span></template> </span>panel</button>",
+        ] {
+            let projection = shadow_projection_for(html);
+            assert_eq!(button_names(&projection), ["Open panel"]);
+        }
+    }
+
+    #[test]
     fn id_references_resolve_within_their_own_tree() {
         // Each tree has its own `lbl` and `f`. The shadow references must
         // find the shadow targets, and the light ones the light targets.

@@ -1,0 +1,221 @@
+{
+  "schema": "genet-forms-f12-local-repair-v1",
+  "status": "repair verified locally; final Checkpoint C acceptance open",
+  "base_head": "9258e01d8e73c3dadea8bd8a07b15331658fa6dc",
+  "toolchain": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "files": {
+    "components/genet-scripted/livery.rs": "599006a31a3aad630bfc9181f552be81348658a980c4dc2b739813fe6136d276",
+    "components/genet-documents/src/engines/tests.rs": "487f4f5d2102a78fdb8a0115f942faa42ce0b731495ee671d56613875cf2174e",
+    "Cargo.lock": "75a0a55e3241f794661e2c5d390005e1d56229700d6cbd54f9e05b7034b50381",
+    "Cargo.toml": "18f7ee802df4cc9cd591b26c6350ea52eddc4fe364af193c93fc46c69384ccef",
+    "rust-toolchain.toml": "6b49400fdc050152657558a28bcc97d24b1fd20a85883b240e0f0e3d36db826f"
+  },
+  "raw_evidence": "/home/markik/Code/testing/genet/forms/thinkpad/phase-c-20261016-f12",
+  "candidate_product_patch_sha256": "b3aa1a439a34a3e2a25c739637ab87439bd458b2fae319bf0246a77548931456",
+  "review": {
+    "result": "no actionable findings",
+    "scope": "F12 source only; read-only reviewer ran no builds/tests",
+    "record_sha256": "8d96c8812026c573b6ab1072c64f3b84ad9a08def27c451c711a724c1a802a71"
+  },
+  "gates": {
+    "red-f12": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "+1.99.1",
+        "test",
+        "--release",
+        "--locked",
+        "-p",
+        "genet-documents",
+        "--features",
+        "scripted-nova",
+        "--lib",
+        "phase_c_t5_scripted_redirected_subresource_base",
+        "-j1",
+        "--",
+        "--ignored",
+        "--test-threads=1"
+      ],
+      "status": "complete",
+      "exit_code": 101,
+      "stdout_sha256": "c1d85052df62dfb1568a7a05d4c84fc476248fbf4efedc8208d68e7b242d0864",
+      "stderr_sha256": "33b6e54cf1696b8506a5a275273b6442dfc9700f05843a88cb8400d63e7d9501",
+      "resource_sha256": "d6a8f1bc24519d0c648eb436e66876872283471652bc4708e09b9f3b3fe8bc50",
+      "memory_events": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "0",
+        "oom_group_kill": "0",
+        "sock_throttled": "0"
+      },
+      "minimum_available_ram_bytes": 9668812800,
+      "observed": "Both inherited Boa/Nova redirected CSS/image tests fail on baseline product source"
+    },
+    "red-cache-control": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "+1.99.1",
+        "test",
+        "--release",
+        "--locked",
+        "-p",
+        "genet-scripted",
+        "--features",
+        "scripted-nova",
+        "--lib",
+        "live_cssom_retires_a_replaced_arena",
+        "-j1",
+        "--",
+        "--test-threads=1"
+      ],
+      "status": "complete",
+      "exit_code": 101,
+      "stdout_sha256": "86bb4c44f3b9db6898ac0a592e00d132f526d95612b8036d392ffadd0ff4be4f",
+      "stderr_sha256": "a86e56ad6e43bce76c5e74c8b57d6846a6d1300a3a01d6568946dc8e01ea194d",
+      "resource_sha256": "41bb78b5fc4f0f692133d1fd5ad1768d9b892825e627f2dee17eac31fefde609",
+      "memory_events": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "0",
+        "oom_group_kill": "0",
+        "sock_throttled": "0"
+      },
+      "minimum_available_ram_bytes": 10172444672,
+      "observed": "New equal-mutation-count, replacement-arena control fails before product fix"
+    },
+    "green-documents-scripted": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "+1.99.1",
+        "test",
+        "--release",
+        "--locked",
+        "-p",
+        "genet-documents",
+        "-p",
+        "genet-scripted",
+        "--features",
+        "genet-documents/scripted-nova,genet-scripted/scripted-nova",
+        "-j1",
+        "--",
+        "--test-threads=1"
+      ],
+      "status": "complete",
+      "exit_code": 0,
+      "stdout_sha256": "c8dc73f3cce0b5572706bed62a2ba87539d9e0935259a031f1f7a0b71798cba7",
+      "stderr_sha256": "76051968d0899b690fbd36f3e0e785d8ec91480f15a301587fcadc83c3aa58a2",
+      "resource_sha256": "84e66fc5bcac4d761c70fdd756da59f5f7ae27336f92045b5e7279cbfc80f796",
+      "memory_events": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "0",
+        "oom_group_kill": "0",
+        "sock_throttled": "0"
+      },
+      "minimum_available_ram_bytes": 10129879040,
+      "observed": "137 Documents + 146 scripted + 2 integration pass, zero failures or ignores; all three RED tests pass"
+    },
+    "native-build": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "+1.99.1",
+        "build",
+        "--release",
+        "--locked",
+        "-p",
+        "ortet",
+        "--bin",
+        "ortet",
+        "--features",
+        "scripted-nova",
+        "-j1"
+      ],
+      "status": "complete",
+      "exit_code": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "42fd9bd8f864b4433f8d1a7f562974ebd7ed02b9ee149b91de2f0a3436bc8c96",
+      "resource_sha256": "69659ee6598487fb6d89159589faf62b40b52ad1474c651b9e53db84d4dea68e",
+      "memory_events": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "0",
+        "oom_group_kill": "0",
+        "sock_throttled": "0"
+      },
+      "minimum_available_ram_bytes": 9350729728
+    },
+    "native-live-run": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "python3",
+        "-B",
+        "/home/markik/Code/testing/genet/forms/thinkpad/phase-c-20261016-f12/native_run.py"
+      ],
+      "status": "complete",
+      "exit_code": 0,
+      "stdout_sha256": "16af1fc84c5caea82f7fe649151d2efb7db3acb641f85072abda7692ca7872f4",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "resource_sha256": "7db2f639badddf39c6932a9c84c53241969fffa53115b037a27ea40743b83765",
+      "memory_events": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "0",
+        "oom_group_kill": "0",
+        "sock_throttled": "0"
+      },
+      "minimum_available_ram_bytes": 9799745536
+    }
+  },
+  "checkpoint_c_complete": false,
+  "acceptance_platform": "F11 Windows requirement retained pending explicit clarification",
+  "remaining": [
+    "Windows qualification requirement retained pending explicit platform clarification",
+    "browser submission and controls",
+    "matched 33 submission + 584 encoding records per engine and candidate/control, prior validation/value and CSS guards",
+    "full covering gates, whole-change review and Checkpoint C report"
+  ],
+  "native_build": {
+    "binding_sha256": "c8a6da7b61ca12c16fd46a24b50111525bc23b20e4c9509a5d81333a4b49f5bd",
+    "binary_sha256": "e3e0ec0da29ad50f5d7812b7056c396e6cc015f9fa12e145051617450921075f",
+    "exit_code": 0
+  },
+  "native_live": {
+    "receipt_sha256": "d85f732afb3ac205cc21349768623fa68909ce584bd724878f3c74d81f19036f",
+    "review_sha256": "b570ae019c8104e022f29c52e385b8f130dd8a9e91408d67233bae0d60719639",
+    "journal_sha256": "f0f195942c42064e50ecc6b46d4d86c14e013ff4f730f990156b27647571926f",
+    "all_three_host_and_network_exits_zero": true,
+    "screenshots_byte_identical": true,
+    "visual_and_semantic_review": "pass",
+    "routes": [
+      "livery",
+      "boa",
+      "nova"
+    ],
+    "scope": "single native redirect submission fixture on Linux"
+  },
+  "inherited_capture_inventory_sha256": "843eccc0c0c57346f928875e37fd1c18894fc7a4ffd155070ee1ed594f9a7757"
+}

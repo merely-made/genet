@@ -149,23 +149,18 @@ completed corpus census or bounded slice does not close its enclosing feature.
   in their own plan.
 
 - [HTML forms](2026-10-07_forms_value_validation_submission_plan.md)
-  (**Phases A and B published, 2026-10-09**): native value/validity shared by
-  script, editing and selectors, with owner-routed notices, configurable messages
-  and an accessible Alert projection. Phase B passes 963 tests with exactly six
-  allowed Livery failures; both engines gain 924 matched Forms assertions and
-  preserve every old pass, including partial errors. All 2,731 CSS results are
-  unchanged. F10 records the native-only matcher correction and the separately
-  corrected 20/20 probe. The plan preserves the invalid original probe, timeout
-  limit, source identities and receipts. Phase C is in progress: request-aware
-  navigation, native encoders and document encoding are committed. FormData and
-  submission bindings at `5c45bdf0a75` pass 212 focused, 187 native and 1,062
-  full runtime tests with every earlier pass preserved. The interrupted compile
-  receipt remains separate. Native activation and host submission routes have
-  scoped pre-integration Documents (135) and runtime (1,064) results. Mark
-  requested progress publication and upstream integration on 2026-10-11;
-  final host/WPT qualification and Checkpoint C remain pending. F11-F14 (2026-10-15) move qualification to the Windows box under Rust 1.99.1
-  and bring the scripted post-redirect subresource fix (F12) into Phase C; the
-  lane is paused with the work left listed in the plan.
+  (**A/B qualified and published; C acceptance open, 2026-10-16**): Phase C's
+  submission implementation and native activation are published. The remaining
+  work is real host submission, browser submission, matched WPT/guard maps and
+  complete-change review. F12's scripted post-redirect resource-base failure is
+  reproduced on both engines and repaired locally; 285 affected package and
+  integration tests pass under Rust 1.99.1. Fresh native Livery/Boa/Nova runs
+  pass the unchanged network fixture and final visual/semantic review. F11's
+  Windows qualification choice remains in force while Mark
+  clarifies the platform; ThinkPad repair evidence does not close Checkpoint C.
+  Earlier A/B results, source identities, invalid original probe and corrected
+  controls remain in the plan. The old Linux Livery failure allowance is
+  historical, not an allowance for fresh acceptance.
 
 ## WPT census — the web platform beyond CSS
 

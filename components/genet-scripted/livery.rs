@@ -818,6 +818,8 @@ impl LiveryCssom {
         push_selection_overlay(&mut displayed, &state);
         drop(state);
 
+        // This is the rendered document's journal compaction boundary. The
+        // document capture observer reads its suffix before entering this frame.
         let mut drained = Vec::new();
         host.dom.drain_mutations(&mut drained);
         Ok(displayed)

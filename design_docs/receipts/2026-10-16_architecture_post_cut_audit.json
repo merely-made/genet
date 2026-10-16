@@ -751,5 +751,161 @@
     ],
     "storage": "472 GiB available after gates started; shared build caches, active worktrees and receipts preserved.",
     "result": "45 distinct relevant tests passed across focused runs: 9 new integration, 18 resource unit, 17 unchanged CSSOM plus 1 corrected CSSOM test. Production unchanged between final gates; broad scripted suite not qualified."
+  },
+  "mutation_journal_repair": {
+    "baseline_commit": "bcc46a093d423463f736c27fda3df84527b9c162",
+    "scope": "I5: read-only capture cursor, rendered document publication before Livery compaction, headless owner compaction after observation. Existing missing-history rendering fallback retained.",
+    "source_files": [
+      {
+        "path": "components/genet-scripted/capture.rs",
+        "sha256": "03645ad2db0ef4efec5f5ec24400538f1a8caa0c65c010ace9066f4c66635bd1"
+      },
+      {
+        "path": "components/genet-scripted/document.rs",
+        "sha256": "528fea750600c39a896df802f8eab1b58ddd453b11de18caac1715c88251c114"
+      },
+      {
+        "path": "components/genet-scripted/livery.rs",
+        "sha256": "a163abe020f243a5da7581086f49acae25f7abdc10db01fd0f5607f12cac313a"
+      },
+      {
+        "path": "components/genet-scripted/journal_tests.rs",
+        "sha256": "97df6c28a614378d05e6149eda7937c39396574f37d9b6b3bc4c625b985916d3"
+      }
+    ],
+    "review": {
+      "verdict": "approved for exact production and test sources",
+      "artifact": {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/journal-ownership/review.md",
+        "sha256": "a9b4ab4b8302e6624c19e890c99e444b2c22155025eb0587f5f00795328e9661"
+      },
+      "boundary": "Independent source/spec/quality review only. Test results below belong to parent gates."
+    },
+    "limits": {
+      "lock": "/home/markik/Code/testing/machine-heavy.lock",
+      "cargo_jobs": 1,
+      "test_threads": 1,
+      "memory_max_bytes": 5368709120,
+      "swap_max_bytes": 0,
+      "cpu_quota_percent": 150,
+      "nice": 10,
+      "timeout_seconds": 240,
+      "offline": true,
+      "locked": true,
+      "target_directory": "/home/markik/Code/target",
+      "runner": {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/journal-ownership/run-gate.sh",
+        "sha256": "c243a08eead815f630b9d52d928790aaaba8a39066e6c3b333696ca3fce0b499"
+      }
+    },
+    "gates": [
+      {
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-scripted --lib document::journal_tests -- --test-threads=1",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "tests": [
+          "document::journal_tests::capture_preserves_livery_incremental_frame_and_resource_decisions",
+          "document::journal_tests::headless_script_turns_compact_the_journal_with_or_without_capture",
+          "document::journal_tests::recorder_rejects_missing_history_and_a_different_arena"
+        ],
+        "max_process_rss_kib": 770576,
+        "swaps": 0,
+        "elapsed": "0:33.32",
+        "log": {
+          "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/journal-ownership/journal-a.log",
+          "sha256": "9479df6551e6b0ee7b6bfaa4cd5f99a3f0af560f5eac6bafc848e03fc82db202"
+        },
+        "source_note": "Before removal of two unused imports only. Remaining gates compile final frozen source; no behavioral edits followed this run."
+      },
+      {
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-scripted --lib capture -- --test-threads=1",
+        "passed": 11,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "tests": [
+          "capture::tests::control_capture_roundtrip_preserves_live_value_and_selection",
+          "capture::tests::historical_control_payload_still_decodes_byte_for_byte",
+          "capture::tests::recorder_captures_insert_position_and_removed_liveness",
+          "capture::tests::recorder_records_an_adopted_node_and_replay_resolves_the_same_live_node",
+          "capture::tests::recorder_refuses_exported_readback_without_consuming_source_journal",
+          "capture::tests::recorder_writes_snapshot_then_replayable_batches",
+          "capture::tests::replay_refuses_a_serial_from_an_unregistered_arena",
+          "capture::tests::validation_capture_records_native_interaction_options_and_custom_messages",
+          "document::journal_tests::capture_preserves_livery_incremental_frame_and_resource_decisions",
+          "document::journal_tests::headless_script_turns_compact_the_journal_with_or_without_capture",
+          "document::tests::livery_render_tests::adopted_node_capture_replays_to_the_same_live_node_on_boa"
+        ],
+        "max_process_rss_kib": 775120,
+        "swaps": 0,
+        "elapsed": "0:31.66",
+        "log": {
+          "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/journal-ownership/capture-b.log",
+          "sha256": "6bf6b350fae69809847e10f9ed4e766dc223661a33b56f80610022a66cff735d"
+        }
+      },
+      {
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-scripted --test live_resource_retention -- --test-threads=1",
+        "passed": 9,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "tests": [
+          "moving_an_image_into_and_out_of_shadow_dom_updates_resource_ledger",
+          "relevant_url_changes_fetch_new_dependencies_and_update_the_ledger",
+          "removed_owner_is_evicted_and_same_url_reintroduction_refetches",
+          "reordering_existing_inline_sheets_updates_cascade_without_fetching",
+          "replacing_redirected_root_reacquires_nested_imports_at_the_same_final_urls",
+          "same_link_owner_reinserted_after_parent_text_replacement_refetches_dependencies",
+          "same_link_owner_removed_and_reinserted_in_one_turn_refetches_dependencies",
+          "unrelated_dom_work_reuses_successes_and_negative_results",
+          "uppercase_html_style_created_with_namespace_is_retained_and_edited"
+        ],
+        "max_process_rss_kib": 756392,
+        "swaps": 0,
+        "elapsed": "0:48.77",
+        "log": {
+          "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/journal-ownership/retained-c.log",
+          "sha256": "b4a212ade88d90d48d1d3c2e04d7cb3db0cd9514e3118fb8a0586b58e86324e5"
+        }
+      },
+      {
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-scripted --lib livery::tests::scripted_style_read_recovers_when_layout_drained_an_unseen_batch -- --exact --test-threads=1",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "tests": [
+          "livery::tests::scripted_style_read_recovers_when_layout_drained_an_unseen_batch"
+        ],
+        "max_process_rss_kib": 114048,
+        "swaps": 0,
+        "elapsed": "0:04.73",
+        "log": {
+          "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/journal-ownership/fallback-d.log",
+          "sha256": "b1a84a83b37ce2f1146ab49e2fdb3bf51419e17170303880468f4d56dc07b9f1"
+        }
+      }
+    ],
+    "observed_cgroup_peak_bytes": {
+      "journal-a": 811110400,
+      "capture-b": 770002944,
+      "retained-c": 643133440
+    },
+    "boundaries": [
+      "Native Boa/Livery scene-operation parity, not fresh GPU pixel or browser/wasm qualification.",
+      "Capture remains top-document and current-value based; no claim of complete historical replay fidelity or child-realm recording.",
+      "No general multi-consumer history service; missing history still triggers conservative rendering recovery and explicit capture refusal.",
+      "Full scripted suite and Forms acceptance not qualified."
+    ],
+    "storage": "472 GiB available; no low-space condition. Shared caches, receipts and active worktrees preserved.",
+    "result": {
+      "distinct_tests_passed": 22,
+      "failed": 0,
+      "ignored": 0,
+      "note": "3 new journal tests; capture-filter run passes 11 including two repeated new tests and nine existing capture/replay tests; 9 resource-retention integration tests; 1 existing missing-history fallback test."
+    }
   }
 }

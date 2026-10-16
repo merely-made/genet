@@ -13,7 +13,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use genet_scripted_dom::{CapturedNodeId, NodeId, NodeIdentityError, ScriptedDom};
 use layout_dom_api::{
     CapturedQualName, DomMutation, FormControlInteractionState, FormControlState, LayoutDom,
-    LayoutDomMut, SelectOptionState,
+    SelectOptionState,
 };
 use serde::{Deserialize, Serialize};
 
@@ -74,6 +74,8 @@ pub(crate) struct DomCaptureRecorder {
     stylesheets: Vec<String>,
     layout_width: u32,
     layout_height: u32,
+    arena_id: u32,
+    mutation_cursor: u64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -377,7 +379,7 @@ impl RecordedMutation {
 
 impl DomCaptureRecorder {
     pub(crate) fn from_env(
-        dom: &mut ScriptedDom,
+        dom: &ScriptedDom,
         stylesheets: &[String],
     ) -> io::Result<Option<Self>> {
         let Some(dir) = capture_dir() else {
@@ -386,7 +388,7 @@ impl DomCaptureRecorder {
         Self::open_in_dir(dir, dom, stylesheets).map(Some)
     }
 
-    fn open_in_dir(dir: &Path, dom: &mut ScriptedDom, stylesheets: &[String]) -> io::Result<Self> {
+    fn open_in_dir(dir: &Path, dom: &ScriptedDom, stylesheets: &[String]) -> io::Result<Self> {
         fs::create_dir_all(dir)?;
         let path = dir.join(session_file_name());
         Self::open_at_path(&path, dom, stylesheets)
@@ -394,15 +396,19 @@ impl DomCaptureRecorder {
 
     pub(crate) fn open_at_path(
         path: &Path,
-        dom: &mut ScriptedDom,
+        dom: &ScriptedDom,
         stylesheets: &[String],
     ) -> io::Result<Self> {
         let (layout_width, layout_height) = capture_viewport_seed()?;
+        let (base, pending) = dom.pending_mutations();
         let mut recorder = Self {
             writer: BufWriter::new(File::create(path)?),
             stylesheets: stylesheets.to_vec(),
             layout_width,
             layout_height,
+            arena_id: dom.arena_id(),
+            // The snapshot already contains every mutation through this point.
+            mutation_cursor: base.saturating_add(pending.len() as u64),
         };
         recorder.write_record(&DomCaptureRecord::SessionStart {
             snapshot_html: dom.inner_html(dom.document()),
@@ -410,27 +416,34 @@ impl DomCaptureRecorder {
             layout_width: recorder.layout_width,
             layout_height: recorder.layout_height,
         })?;
-        // The initial snapshot is post-parse DOM state, so the bootstrap clone
-        // mutations are baseline, not replayable deltas.
-        let mut bootstrap = Vec::new();
-        dom.drain_mutations(&mut bootstrap);
         Ok(recorder)
     }
 
-    pub(crate) fn record_pending(&mut self, dom: &mut ScriptedDom) -> io::Result<usize> {
-        // Validate the entire batch before consuming its mutation journal or
-        // writing any record. Imported identities require a capture translation
-        // protocol; refuse them through the recorder's ordinary disable path.
-        let (_, pending) = dom.pending_mutations();
-        if pending.is_empty() {
+    pub(crate) fn record_pending(&mut self, dom: &ScriptedDom) -> io::Result<usize> {
+        // Livery owns compaction for rendered documents; the headless document
+        // owns its own. A missing suffix cannot be reconstructed from the
+        // current DOM, so disable capture rather than write a gap.
+        let (base, pending) = dom.pending_mutations();
+        let end = base.saturating_add(pending.len() as u64);
+        if dom.arena_id() != self.arena_id
+            || self.mutation_cursor < base
+            || self.mutation_cursor > end
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "dom capture mutation history is unavailable",
+            ));
+        }
+        let unseen = &pending[(self.mutation_cursor - base) as usize..];
+        if unseen.is_empty() {
             return Ok(0);
         }
-        let mutations = pending
+        // Validate the entire batch before writing any record. Imported
+        // identities require capture translation through their origin arena.
+        let mutations = unseen
             .iter()
             .map(|m| RecordedMutation::capture(dom, m))
             .collect::<io::Result<Vec<_>>>()?;
-        let mut pending = Vec::new();
-        dom.drain_mutations(&mut pending);
         // Layout parity capture (a shadow `genet_layout::IncrementalLayout` kept
         // beside the recorder, applying each batch to record fragment-digest +
         // viewport alongside the DOM mutations) was retired with the
@@ -441,7 +454,8 @@ impl DomCaptureRecorder {
         // format for backward-compatible deserialization of old captures.
         let layout = None;
         self.write_record(&DomCaptureRecord::MutationBatch { mutations, layout })?;
-        Ok(pending.len())
+        self.mutation_cursor = end;
+        Ok(unseen.len())
     }
 
     fn write_record(&mut self, record: &DomCaptureRecord) -> io::Result<()> {

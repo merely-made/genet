@@ -1,5 +1,46 @@
 # Genet architecture and removal audit
 
+## I5 capture observation and journal compaction, 2026-10-16
+
+**I5's recorder drain authority is removed.** This section supersedes its open
+status in the historical snapshots below. Capture now reads through an absolute
+cursor tied to the DOM arena. Opening a snapshot establishes a capture baseline
+without consuming rendering facts; recording observes only the unseen suffix
+and advances after a successful write. A missing suffix or replaced arena is
+reported through capture's disable path, never silently skipped.
+
+Livery retains the rendered document's compaction boundary. Its document wrapper
+observes pending changes before each frame drain and after media/frame callbacks.
+The render-free document compacts after observation, including when capture is
+disabled or fails, so its journal stays bounded between script turns. Script
+errors still return errors while publishing any mutations made before failure;
+the prior success-only microtask policy is preserved. The recorder's wire enums,
+identity translation and historical replay fields are unchanged.
+
+The focused gates passed **22 distinct tests, zero failed or ignored**: three
+new journal regressions, nine existing capture/replay tests, nine retained-resource
+integration tests and the existing missing-history fallback test. The capture
+filter also reran two of the new tests. Capture enabled/disabled produced equal
+incremental restyle statistics and rendered scene operations, with no stylesheet
+reacquisition for unrelated edits. Real media-query callbacks were recorded once
+while their mutations remained available to the following frame. Headless
+success/error turns compacted in both capture modes; gaps and arena replacement
+were explicitly refused. Historical payload decoding and adopted-node replay
+passed. Two unused imports were removed after the first gate; no behavioral
+changes followed it.
+
+Independent source/spec review approved the exact frozen code. Gates used the
+shared lock, one Cargo job, serial tests, 5 GiB memory maximum, zero swap
+allowance, 150% CPU quota and nice 10. Observed cgroup peaks stayed below 1 GiB;
+every gate reported zero swaps. Storage remained at 472 GiB available, and shared
+caches, other worktrees and receipts were preserved.
+
+The conservative rendering fallback remains for genuinely unavailable history.
+This cut does not establish a general multi-consumer journal service, full replay
+fidelity for every DOM operation, browser/wasm qualification or Forms acceptance.
+Exact source and test evidence is recorded in `mutation_journal_repair` in the
+[audit receipt](receipts/2026-10-16_architecture_post_cut_audit.json).
+
 ## I3 retained resource acquisition, 2026-10-16
 
 **The bounded I3 ownership cut is implemented.** This section supersedes I3's

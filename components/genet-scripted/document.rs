@@ -40,7 +40,7 @@
 //! plan was waiting on. `LiveryScriptedDocument` drives the analogous
 //! script/layout split against its own retained viewport scroll.
 
-use layout_dom_api::{LayoutDom, LocalName, Namespace};
+use layout_dom_api::{LayoutDom, LayoutDomMut, LocalName, Namespace};
 
 use engine_observables_api::DomArenaStats;
 #[cfg(feature = "livery")]
@@ -338,8 +338,8 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
             rt.set_webgl_factory(webgl);
         }
         let mut capture = {
-            let mut host = rt.host().borrow_mut();
-            DomCaptureRecorder::from_env(&mut host.dom, &sheets)
+            let host = rt.host().borrow();
+            DomCaptureRecorder::from_env(&host.dom, &sheets)
                 .map_err(|e| format!("dom capture init: {e}"))?
         };
 
@@ -352,11 +352,14 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         rt.parse_document_interleaved(html, &DocumentScriptLoader { loader });
         rt.run_microtasks();
         if let Some(recorder) = capture.as_mut() {
-            let mut host = rt.host().borrow_mut();
+            let host = rt.host().borrow();
             recorder
-                .record_pending(&mut host.dom)
+                .record_pending(&host.dom)
                 .map_err(|e| format!("dom capture write: {e}"))?;
         }
+        // This route has no renderer to compact the journal. The parse result
+        // is a baseline snapshot, whether capture is enabled or not.
+        rt.host().borrow_mut().dom.drain_mutations(&mut Vec::new());
 
         Ok(Self {
             rt,
@@ -414,40 +417,39 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
     /// Evaluate a classic script against the live document and settle its
     /// microtasks. This is the engine-neutral operation used by worker hosts.
     pub fn evaluate(&mut self, source: &str) -> Result<(), String> {
-        self.rt
-            .eval(source)
-            .map_err(|e| format!("script evaluation: {e:?}"))?;
-        self.rt.run_microtasks();
+        let result = self.rt.eval(source);
+        if result.is_ok() {
+            self.rt.run_microtasks();
+        }
         self.flush_dom_capture();
-        Ok(())
+        result
+            .map(|_| ())
+            .map_err(|e| format!("script evaluation: {e:?}"))
     }
 
     /// Evaluate a module without an external import loader. Imported modules are
     /// rejected until a host supplies the worker's fetch/resolve capability.
     pub fn evaluate_module(&mut self, source: &str, base_url: &str) -> Result<(), String> {
         let mut unavailable = |_referrer: &str, _specifier: &str| None;
-        match self
-            .rt
-            .eval_module(source, base_url, &mut unavailable)
-            .map_err(|e| format!("module evaluation: {e:?}"))?
-        {
-            Some(_) => {
+        match self.rt.eval_module(source, base_url, &mut unavailable) {
+            Ok(Some(_)) => {
                 self.rt.run_microtasks();
                 self.flush_dom_capture();
                 Ok(())
             },
-            None => Err("selected script engine does not support modules".to_string()),
+            Ok(None) => Err("selected script engine does not support modules".to_string()),
+            Err(e) => {
+                self.flush_dom_capture();
+                Err(format!("module evaluation: {e:?}"))
+            },
         }
     }
 
     /// Dispatch an event at a raw DOM node id and settle listener microtasks.
     pub fn dispatch_event(&mut self, raw_node_id: u64, event_type: &str) -> Result<bool, String> {
-        let proceed = self
-            .rt
-            .dispatch_event(raw_node_id, event_type)
-            .map_err(|e| format!("event dispatch: {e:?}"))?;
+        let result = self.rt.dispatch_event(raw_node_id, event_type);
         self.flush_dom_capture();
-        Ok(proceed)
+        result.map_err(|e| format!("event dispatch: {e:?}"))
     }
 
     /// Serialize the live document root's children for backend-neutral comparison.
@@ -458,6 +460,7 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
 
     /// Force the engine/reflector collection cadence used by worker idle ticks.
     pub fn collect_garbage(&mut self) -> (usize, usize) {
+        self.flush_dom_capture();
         self.rt.collect_garbage()
     }
 
@@ -570,17 +573,16 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
     }
 
     fn flush_dom_capture(&mut self) {
-        let Some(mut recorder) = self.capture.take() else {
-            return;
-        };
-        let result = {
-            let mut host = self.rt.host().borrow_mut();
-            recorder.record_pending(&mut host.dom)
-        };
-        match result {
-            Ok(_) => self.capture = Some(recorder),
-            Err(err) => eprintln!("[pelt-scripted] dom capture disabled: {err}"),
+        let mut host = self.rt.host().borrow_mut();
+        if let Some(mut recorder) = self.capture.take() {
+            match recorder.record_pending(&host.dom) {
+                Ok(_) => self.capture = Some(recorder),
+                Err(err) => eprintln!("[pelt-scripted] dom capture disabled: {err}"),
+            }
         }
+        // Headless documents own journal compaction. Bound it on every script
+        // turn, including when capture is disabled or a write failed.
+        host.dom.drain_mutations(&mut Vec::new());
     }
 }
 
@@ -979,14 +981,14 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             })
             .unwrap_or_default();
         let mut capture = {
-            let mut host = rt.host().borrow_mut();
-            DomCaptureRecorder::from_env(&mut host.dom, &capture_sheets)
+            let host = rt.host().borrow();
+            DomCaptureRecorder::from_env(&host.dom, &capture_sheets)
                 .map_err(|error| format!("dom capture init: {error}"))?
         };
         if let Some(recorder) = capture.as_mut() {
-            let mut host = rt.host().borrow_mut();
+            let host = rt.host().borrow();
             recorder
-                .record_pending(&mut host.dom)
+                .record_pending(&host.dom)
                 .map_err(|error| format!("dom capture write: {error}"))?;
         }
 
@@ -1088,6 +1090,10 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         } else {
             self.cssom.scroll_to(requested_scroll.0, requested_scroll.1);
         }
+        // Livery compacts the journal after painting. Publish every unseen
+        // mutation, including script work performed since the last host turn,
+        // before that compaction boundary.
+        self.flush_dom_capture();
         let mut list = match self.cssom.frame(&mut self.rt, width, height) {
             Ok(list) => list,
             Err(error) => {
@@ -1107,6 +1113,7 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             }
             // Reframe retained geometry only. The source bytes were fetched and
             // the live DOM built before this navigation-time activation.
+            self.flush_dom_capture();
             list = match self.cssom.frame(&mut self.rt, width, height) {
                 Ok(list) => list,
                 Err(error) => {
@@ -1140,6 +1147,9 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             .retain(|realm, _| reachable.contains(realm));
         self.composite_child_realms(self.rt.top_realm(), &mut list);
         self.drain_validation_reports();
+        // Media-query and frame callbacks can mutate after the paint drain.
+        // Record them now; Livery will consume them on the next frame.
+        self.flush_dom_capture();
         if let Some(notice) = &mut self.validation_notice {
             let message = notice.message.clone();
             notice.bounds = self.cssom.push_validation_notice(&mut list, &message);
@@ -1487,13 +1497,15 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
     }
 
     pub fn evaluate(&mut self, source: &str) -> Result<(), String> {
-        self.rt
-            .eval(source)
-            .map_err(|error| format!("script evaluation: {error:?}"))?;
-        self.rt.run_microtasks();
-        self.drain_validation_reports();
+        let result = self.rt.eval(source);
+        if result.is_ok() {
+            self.rt.run_microtasks();
+            self.drain_validation_reports();
+        }
         self.flush_dom_capture();
-        Ok(())
+        result
+            .map(|_| ())
+            .map_err(|error| format!("script evaluation: {error:?}"))
     }
 
     pub fn dom_snapshot(&self) -> String {
@@ -1524,8 +1536,8 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             return;
         };
         let result = {
-            let mut host = self.rt.host().borrow_mut();
-            recorder.record_pending(&mut host.dom)
+            let host = self.rt.host().borrow();
+            recorder.record_pending(&host.dom)
         };
         match result {
             Ok(_) => self.capture = Some(recorder),
@@ -1550,6 +1562,10 @@ impl<E: ScriptEngine> Drop for LiveryScriptedDocument<E> {
         self.bridge.close();
     }
 }
+
+#[cfg(all(test, feature = "livery"))]
+#[path = "journal_tests.rs"]
+mod journal_tests;
 
 #[cfg(all(test, feature = "livery"))]
 mod livery_text_fragment_tests {

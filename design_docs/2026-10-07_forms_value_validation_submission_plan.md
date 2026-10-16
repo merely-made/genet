@@ -1,5 +1,17 @@
 # HTML forms: value state, validation and submission
 
+**Current status, 2026-10-16:** Phases A and B are qualified and published.
+Phase C's implementation is published, including native activation, but final
+acceptance remains open. Mark has reopened Forms work in this standards lane.
+F12's scripted post-redirect resource-base repair passes 285 affected package
+tests under Rust 1.99.1 on ThinkPad. Fresh live submission passes all three
+native routes, including network verification and final visual/semantic review.
+Matched WPT, browser submission and whole-change acceptance remain unfinished.
+F11's Windows platform choice awaits explicit clarification; these Linux
+outcomes qualify the local repair and do not close the Windows acceptance gate.
+
+The dated status paragraphs below record earlier qualification stages.
+
 **Status, 2026-10-08:** Genet's Forms value model and F4 repair at
 `e84f9c7f9aec23320c539784961d1465f8a53a9b` are published on main, as is Mere's
 permanent repin at `632c1d29` through published integration `eafb8643`. Fresh
@@ -14,7 +26,7 @@ Cleromancy's current public-pin integration passes 23 ThinkPad tests at
 Phase B and C retain separate checkpoints, and sibling adoption of Mere's new
 Forms dependency family remains distinct from F5 mechanical compatibility.
 
-**Current checkpoint, 2026-10-09:** Phase B is qualified and published on main
+**Checkpoint note, 2026-10-09:** Phase B is qualified and published on main
 at `a0d95ebd6e20220e3430870365112a608b4f83ff`. Mark approved proceeding with
 Phase C after its publication report. Submission work is in progress under
 C5, with builds and matched gates on ThinkPad. The Phase C execution section
@@ -1942,6 +1954,60 @@ downloaded), SHA256 `36934732b27f96da2e0bd1ea2e50bbdffce8c840e76e743d1b56b254915
 Evidence: `Code/testing/genet/forms/phase-c-windows-20261015/`. Of the 56
 Phase C product paths, only `ports/genet-wpt/src/{harness,main}.rs` and
 `ports/ortet/Cargo.toml` changed on main after `2b84478e836`.
+
+### 2026-10-16, F12 work resumes on ThinkPad
+
+Mark reopened Forms work in the standards lane after the published AccName
+slices. Current main is `9258e01d8e7`; the fresh implementer owns the repair.
+The old owner remains a context resource and must not start another build.
+The inherited F12 test design is already committed on main by `273431eff73`;
+its earlier compile interruption is not RED evidence.
+
+Rust 1.99.1 minimal plus the wasm32 target are installed here, without changing
+the repository-wide toolchain pin. A fresh isolated release target and exact
+lock snapshot are under
+`Code/testing/genet/forms/thinkpad/phase-c-20261016-f12/`. The inherited Boa/Nova
+ignored tests were run with `cargo +1.99.1 test --release --locked -j1`
+under the shared heavy lock and kernel memory guard. Both failed: Boa and
+Nova requested `https://forms.test/proof.css` and `/proof.png` instead of
+the new document's `/final/` resources. A separate retained-CSSOM control
+also failed when replacement and original DOM mutation counters matched.
+
+The repair in `components/genet-scripted/livery.rs` reads the current host's
+document base URL and tracks DOM arena identity. A replacement arena forces
+resource/style reconciliation and invalidates retained layout and paint even
+when mutation counters or resource ledgers match. The two inherited redirect
+tests are enabled. The fresh release suites pass 137 Documents tests, 146
+scripted tests and two integration tests, with zero failures or ignores.
+All three observed RED tests pass in those suites. Independent read-only
+review found no actionable F12 issue.
+
+The fresh Ortet release build and live native rerun also pass. Livery, Boa and
+Nova each exit zero and pass the unchanged network verifier: exactly four
+requests per route, `q=é` encoded as `713de90d0a`, a 307-preserved POST to the
+final address and the relative image requested from `/final/proof.png`.
+All three screenshots are byte-identical and were individually inspected:
+the final heading, green marker and green relative image paint correctly;
+their final accessibility projections expose the final address, heading and
+image. No stale source button remains in those final projections or images.
+The historical failing receipt is unchanged. The compact source-bound
+[local repair receipt](receipts/2026-10-16_forms_redirect_base.json) records
+the raw log, compiler, exact lock, binary and review identities. All five
+owned runs completed with zero OOM or memory-limit events.
+
+F11's Windows final-qualification choice remains in force pending Mark's
+answer to the explicit platform clarification; local repair work does not
+close Checkpoint C. Source identities, RED and GREEN logs and resource
+receipts are in the new evidence directory above. The paused Windows notes
+below are historical and do not supersede these fresh local outcomes.
+
+The six inherited capture configs were inspected: all their configured output
+directories are absent. They describe the older `2b84478e836` source epoch;
+their binaries are not fresh qualification for this repair. The original
+56-path control projection also predates `273431eff73` and this F12 patch.
+Constructing a fresh pre-C control must account for the later C repair/tests
+on those same paths while preserving unrelated main changes; reversing only
+the old six commits without auditing the resulting source is insufficient.
 
 ### Paused 2026-10-15
 

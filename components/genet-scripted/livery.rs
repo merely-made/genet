@@ -132,6 +132,7 @@ struct LiveFrame {
 
 struct LiveStylesheetSource {
     document_url: String,
+    arena_id: u32,
     fetcher: Rc<dyn ResourceFetcher>,
     limits: ResourceLimits,
     resources: ResolvedDocumentResources,
@@ -216,17 +217,23 @@ fn synchronize_live_styles(host: &HostState, state: &mut LiveryState) {
     }
     let (base, pending) = host.dom.pending_mutations();
     let end = base.saturating_add(pending.len() as u64);
-    let (resources, changed) = {
+    let (resources, changed, arena_changed) = {
         let live = state
             .live_sheets
             .as_mut()
             .expect("checked live stylesheet source");
-        if live.mutation_cursor >= base && live.mutation_cursor == end {
+        let arena_id = host.dom.arena_id();
+        let arena_changed = live.arena_id != arena_id;
+        if !arena_changed && live.mutation_cursor >= base && live.mutation_cursor == end {
             return;
         }
+        // A navigation can replace the DOM while this CSSOM handle survives.
+        // The constructor's URL is only a fallback for hosts without a URL.
+        let document_url = host.document_base_url()
+            .unwrap_or_else(|| live.document_url.clone());
         let resources = ResolvedDocumentResources::resolve_with_limits(
             &host.dom,
-            Some(&live.document_url),
+            Some(&document_url),
             live.fetcher.as_ref(),
             live.limits,
         );
@@ -242,13 +249,19 @@ fn synchronize_live_styles(host: &HostState, state: &mut LiveryState) {
             live.resources = resources.clone();
         }
         live.mutation_cursor = end;
-        (resources, changed)
+        live.arena_id = arena_id;
+        (resources, changed, arena_changed)
     };
-    if changed {
+    if changed || arena_changed {
         replace_resource_ledger(state, &resources);
         state.styles.replace_author_sheets(&resources.stylesheets);
         state.document_sheets = state.styles.document_sheet_indexes();
         state.session.invalidate();
+        if arena_changed {
+            // Sequence numbers are local to a DOM, so an equal cursor cannot
+            // carry retained styles or geometry across document identities.
+            state.mutation_cursor = base;
+        }
         state.invalidate_frame();
     }
 }
@@ -428,7 +441,7 @@ impl LiveryCssom {
         resource_sink: Option<Rc<RefCell<dyn LiveResourceSink>>>,
     ) -> Self {
         let document_url = document_url.into();
-        let (resources, mutation_cursor) = {
+        let (resources, mutation_cursor, arena_id) = {
             let host = host.borrow();
             let resources = ResolvedDocumentResources::resolve_with_limits(
                 &host.dom,
@@ -437,7 +450,7 @@ impl LiveryCssom {
                 limits,
             );
             let (base, pending) = host.dom.pending_mutations();
-            (resources, base.saturating_add(pending.len() as u64))
+            (resources, base.saturating_add(pending.len() as u64), host.dom.arena_id())
         };
         let styles = StyleSet::cambium_resources(&resources.stylesheets);
         if let Some(sink) = &resource_sink {
@@ -466,6 +479,7 @@ impl LiveryCssom {
             selection_range: None,
             live_sheets: Some(LiveStylesheetSource {
                 document_url,
+                arena_id,
                 fetcher,
                 limits,
                 resources: resources.clone(),
@@ -2063,6 +2077,42 @@ mod tests {
             "removed cells cannot retain prior winner geometry"
         );
         assert_eq!(runtime.host().borrow().console, vec!["rgb(255, 0, 0)"]);
+    }
+
+    #[test]
+    fn live_cssom_retires_a_replaced_arena_with_the_same_mutation_count() {
+        let url = "https://forms.test/same/index.html";
+        let mut original = Runtime::<BoaEngine>::new().expect("original runtime");
+        original.set_base_url(url).unwrap();
+        original.load_dom(&StaticDocument::parse(
+            "<html><body><div id=target style='width:20px;height:10px'>old</div></body></html>",
+        ));
+        let cssom = LiveryCssom::install_live(
+            &mut original, NoResourceFetch, url, ResourceLimits::default(),
+            Device::screen(200.0, 100.0),
+        );
+        let before = cssom.frame(&mut original, 200, 100).unwrap();
+        let original_end = {
+            let host = original.host().borrow();
+            let (base, pending) = host.dom.pending_mutations();
+            base + pending.len() as u64
+        };
+        let mut replacement = Runtime::<BoaEngine>::new().expect("replacement runtime");
+        replacement.set_base_url(url).unwrap();
+        replacement.load_dom(&StaticDocument::parse(
+            "<html><body><div id=target style='width:80px;height:10px'>new</div></body></html>",
+        ));
+        let target = {
+            let host = replacement.host().borrow();
+            let (base, pending) = host.dom.pending_mutations();
+            assert_eq!(base + pending.len() as u64, original_end,
+                "the replacement deliberately collides with the old cursor");
+            find_element_id(&host.dom, host.dom.document(), "target").unwrap()
+        };
+        let after = cssom.frame(&mut replacement, 200, 100).unwrap();
+        let rect = cssom.fragment_rect(target).expect("new document fragment");
+        assert!((rect[2] - 80.0).abs() < 0.01, "new document's own width: {rect:?}");
+        assert_ne!(after.generation_id(), before.generation_id());
     }
 
     #[test]

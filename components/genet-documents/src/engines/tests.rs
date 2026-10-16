@@ -3615,12 +3615,10 @@ fn t5_scripted_redirected_subresource_base<E:script_engine_api::ScriptEngine+'st
 
 #[cfg(feature="scripted")]
 #[test]
-#[ignore = "F12 repro: expected to fail until the fix lands; not yet compiled or run (paused 2026-10-15)"]
 fn boa_phase_c_t5_scripted_redirected_subresource_base() {t5_scripted_redirected_subresource_base::<script_engine_boa::BoaEngine>();}
 
 #[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
 #[test]
-#[ignore = "F12 repro: expected to fail until the fix lands; not yet compiled or run (paused 2026-10-15)"]
 fn nova_phase_c_t5_scripted_redirected_subresource_base() {t5_scripted_redirected_subresource_base::<script_engine_nova::NovaEngine>();}
 
 #[cfg(feature="scripted")]

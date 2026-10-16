@@ -436,7 +436,11 @@ impl<'a, D: LayoutDom> Names<'a, D> {
             // of this provider's contract.
             format!("{before}{children}{after}")
         };
-        if !flat(&content).is_empty() {
+        // A whitespace-only descendant may separate its parent's words.
+        // Keep that raw content through recursion; the public name and
+        // description entry points flatten it. Root tooltip fallback stays
+        // available when the complete content is only whitespace.
+        if (descendant && !content.is_empty()) || !flat(&content).is_empty() {
             return Some(content);
         }
         if !suppress_title {
@@ -497,6 +501,85 @@ mod tests {
                 .0
                 .as_deref(),
             Some("Message")
+        );
+    }
+
+    #[test]
+    fn nested_whitespace_separates_content_words() {
+        for (element, word) in [
+            ("span role=button", "button"),
+            ("div role=heading", "heading"),
+            ("button", "button"),
+            ("h3", "heading"),
+            ("a href='#'", "link"),
+        ] {
+            let tag = element.split_ascii_whitespace().next().unwrap();
+            for separator in [" ", "\t", "\r\n"] {
+                let html = format!(
+                    "<{element} id=target>{word}<span><span><span><span><span><span><span>\
+                     {separator}</span></span></span></span></span></span></span>label</{tag}>"
+                );
+                assert_eq!(
+                    alternatives(&html).0,
+                    Some(format!("{word} label")),
+                    "{element}, separator {separator:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn nested_whitespace_separates_referenced_labels_and_descriptions() {
+        assert_eq!(
+            alternatives(
+                "<label for=target>Save<span><span> </span></span>file</label><input id=target>"
+            )
+            .0
+            .as_deref(),
+            Some("Save file")
+        );
+        assert_eq!(
+            alternatives("<span id=label hidden>Save<span><span> </span></span>file</span><button id=target aria-labelledby=label></button>")
+                .0.as_deref(),
+            Some("Save file")
+        );
+        assert_eq!(
+            alternatives("<span id=help>Use<span><span> </span></span>carefully</span><input id=target aria-describedby=help>")
+                .1.as_deref(),
+            Some("Use carefully")
+        );
+    }
+
+    #[test]
+    fn content_spacing_preserves_empty_hidden_and_nonbreaking_separators() {
+        for html in [
+            "<button id=target>button<span></span>label</button>",
+            "<button id=target>button<!-- no separator -->label</button>",
+            "<button id=target>button<span hidden><span> </span></span>label</button>",
+        ] {
+            assert_eq!(alternatives(html).0.as_deref(), Some("buttonlabel"));
+        }
+        assert_eq!(
+            alternatives(
+                "<button id=target>button<span><span>&nbsp;&nbsp;</span></span>label</button>"
+            )
+            .0
+            .as_deref(),
+            Some("button\u{a0}\u{a0}label")
+        );
+        assert_eq!(
+            alternatives("<button id=target title=Tooltip><span> </span></button>")
+                .0
+                .as_deref(),
+            Some("Tooltip")
+        );
+        assert_eq!(
+            alternatives(
+                "<button id=target>button<span title=Wrong><span> </span></span>label</button>"
+            )
+            .0
+            .as_deref(),
+            Some("button label")
         );
     }
 

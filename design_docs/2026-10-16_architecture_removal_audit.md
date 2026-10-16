@@ -1,5 +1,47 @@
 # Genet architecture and removal audit
 
+## I3 retained resource acquisition, 2026-10-16
+
+**The bounded I3 ownership cut is implemented.** This section supersedes I3's
+open status in the historical snapshots below. The document-resource component
+now owns acquisition results, including misses, for the current document's
+reachable dependencies. Live CSSOM consumes its reconciled ledger instead of
+starting a fresh acquisition on every mutation suffix. Dependency facts still
+require a DOM scan; this is not a claim of constant-time synchronization.
+
+Unrelated edits, repeated style reads and retained frames reuse resources.
+Changes to resource URLs, stylesheet text/imports, owner lifetimes and document
+base update acquisition and the visible ledger. Stylesheet order and media
+changes can update projections without fetching again. Redirected imports use
+their final source bases. Removed dependencies are evicted; replacement documents
+start fresh. The owner uses the existing resolver and its tree/case rules.
+
+This was selected ahead of I1/I2/H3 as a bounded removal of repeated acquisition
+from generic synchronization. Those findings require a broader host input and
+lifecycle contract. I4 image aliases, I5 journal ownership and L3 payload copying
+remain open. In particular, unavailable journal history conservatively resets
+acquisition; capture can still cause that fallback. This result does not qualify
+browser/wasm, all scripted execution, or Forms acceptance.
+
+Verification and exact source hashes are recorded in the `retained_resource_repair`
+entry of the [audit receipt](receipts/2026-10-16_architecture_post_cut_audit.json).
+The focused gates passed **45 distinct tests**: nine new Boa/Livery regressions,
+18 resource unit tests and 18 existing CSSOM tests. One existing test initially
+required the removed behavior (reload on an unrelated body attribute change).
+It now checks retention first, then actual owner reinsertion and resource-sink
+updates; its focused rerun passed. The other 17 CSSOM cases passed before that
+test-only edit. Production code was unchanged between these gates.
+
+An initial broad scripted run timed out at the 240-second cap after spending
+186 seconds building dependencies; it is incomplete, not a passing full suite.
+All gates held the shared lock, used one Cargo job and serial tests, with 5 GiB
+memory maximum, zero swap allowance, 150% CPU quota and nice 10. The largest
+observed cgroup peak was about 3 GiB during the initial build. Storage remained
+at 472 GiB available; shared caches and other worktrees were preserved.
+
+Independent source review approved after correcting case/tree-scope mismatches,
+retired journal-node handling and owner reinsertion after subtree replacement.
+
 ## W1/W2 repair and verification, 2026-10-16
 
 **W1 and W2 are repaired in the retained native shader path.** This follow-up

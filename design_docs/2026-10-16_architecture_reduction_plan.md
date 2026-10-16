@@ -83,3 +83,35 @@ W1/W2 final gate: 582 passed, zero failed/ignored across the full ESSL and wgpu
 crates, including native Vulkan draw/readback regressions. Independent review
 approved after fixing unused-bool indexing. The audit receipt records source
 hashes, resource caps, raw logs and adapter identity. Other lanes remain open.
+
+## I3 retained resource acquisition
+
+**Status:** implemented and verified locally, 2026-10-16. Baseline `95ebacf2a4e`.
+
+Selected as the next highest-value bounded ownership cut: unrelated DOM changes
+currently let computed-style/frame synchronization reacquire all resources.
+I1/I2/H3 remain important but need a broader host input/lifecycle contract.
+
+The existing document-resource owner will retain acquisition results, including
+misses, under document/dependency identity. Live CSSOM consumes reconciled
+resources and deltas. Preserve redirect/import bases, dependency replacement,
+negative results and navigation reset; evict dead dependencies. Do not replace
+the resolver's grammar with a CSSOM-specific parser or add a permanent URL cache.
+
+Done conditions: a counting fetcher through real Boa/Livery CSSOM proves no
+additional fetches for unrelated edits/style reads/frames; relevant dependency
+changes update resource ledgers and computed styles, removed owners can reload,
+and replacement documents cannot reuse stale acquisitions. Run retained-path
+regressions and relevant existing suites after implementation, with the shared
+lock, one Cargo job, serial tests, 5 GiB memory, zero swap, 150% CPU, nice 10.
+Workers edit disjoint production/test files and do not launch builds. Parent
+reviews the integrated ownership/invalidation contract and records exact results.
+
+I3 final focused gates: 45 distinct tests passed across nine new retained-path
+regressions, 18 resource unit tests and 18 CSSOM tests. One old CSSOM assertion
+required the removed reacquisition behavior; updated retention and explicit
+owner-reinsertion assertions passed on rerun. Production code did not change
+between final gates. The initial broad scripted run timed out and remains
+unqualified. Independent source review approved. Exact hashes, logs and resource
+limits are in the audit receipt. Journal gaps still reset acquisition; I4/I5/L3
+and broader host/input findings remain open.

@@ -4,19 +4,10 @@
 
 //! ESSL → WGSL via the standalone `webgl-essl` frontend.
 //!
-//! The narrow `Canonical{Vertex,Fragment}Info` parsers + naga
-//! `glsl-in` pipeline that used to live here have been switched
-//! out for `webgl-essl::compile`. The pair-interface check
-//! (varying name + kind agreement) is re-implemented over
-//! `webgl-essl::reflect` so a vertex-output / fragment-input
-//! mismatch still surfaces as `UnsupportedCanonicalPair`. The
-//! narrow [`ProgramReflection`] shape stays — its consumers
-//! (`webgl/pipeline.rs`, `webgl/programs.rs`, `webgl/draw.rs`)
-//! still want `position_attribute` / `color_attribute` /
-//! `texcoord_attribute` etc. — but its binding numbers now
-//! mirror what `webgl-essl` actually decorates the WGSL with
-//! (uniform Block at `@binding(0)`; sampler image at
-//! `@binding(1)`, sampler at `@binding(2)`).
+//! The pair-interface check uses `webgl-essl::reflect` so a
+//! vertex-output / fragment-input mismatch surfaces as
+//! `UnsupportedCanonicalPair`. Program reflection carries all
+//! attributes, uniforms, and samplers with their WGSL bindings.
 
 use super::*;
 use webgl_essl::ast::TypeKind as EsslTypeKind;
@@ -32,7 +23,7 @@ pub(crate) fn translate_canonical_essl_pair(
     let (fragment_wgsl, fragment_refl) =
         compile_with_reflection(fragment_source, EsslStage::Fragment)?;
     check_pair_interface(&vertex_refl, &fragment_refl)?;
-    let reflection = narrow_reflection(&vertex_refl, &fragment_refl, fragment_source)?;
+    let reflection = build_program_reflection(&vertex_refl, &fragment_refl, fragment_source)?;
     Ok(TranslatedProgram {
         vertex_wgsl,
         fragment_wgsl,
@@ -120,15 +111,9 @@ fn check_pair_interface(
     Ok(())
 }
 
-/// Derive the wider [`ProgramReflection`] webgl-wgpu now
-/// exposes from `webgl-essl`'s reflection. Carries every
-/// vertex attribute, every Block uniform with its std140 byte
-/// offset, and every sampler. Also populates the narrow
-/// `position_attribute` / `color_attribute` / `texcoord_attribute`
-/// / `fragment_color_uniform` / `fragment_texture_uniform`
-/// views that the pre-widening pipeline / draw path still
-/// reads.
-fn narrow_reflection(
+/// Derive [`ProgramReflection`] from `webgl-essl`'s reflection,
+/// including every vertex attribute, Block uniform, and sampler.
+fn build_program_reflection(
     vertex: &EsslReflection,
     fragment: &EsslReflection,
     fragment_source: &str,
@@ -142,28 +127,9 @@ fn narrow_reflection(
                 .ok_or(ShaderTranslationError::UnsupportedCanonicalPair)?,
         });
     }
-    let position_attribute = attributes
-        .first()
-        .cloned()
-        .ok_or(ShaderTranslationError::UnsupportedCanonicalPair)?;
-    let color_attribute = attributes
-        .get(1)
-        .filter(|a| a.kind == VertexAttributeKind::Float32x4)
-        .cloned();
-    let texcoord_attribute = attributes
-        .get(1)
-        .filter(|a| a.kind == VertexAttributeKind::Float32x2)
-        .cloned();
-
-    // Uniform Block draws from both stages. In production
-    // shader pairs the same uniform is either (a) declared
-    // only in the stage that reads it, or (b) declared
-    // identically in both (matching source order so each
-    // stage's emitted Block layout agrees). The dedup-by-name
-    // here preserves both shapes; cross-stage layout drift
-    // would only surface for shaders that declare overlapping
-    // names with different kinds, which webgl-essl rejects
-    // earlier as a link mismatch.
+    // CPU reflection unions both stages, but each stage is still lowered
+    // independently. This does not reconcile stage offsets or reject conflicting
+    // uniform kinds; the architecture audit's W1 linker defect remains open.
     let mut uniforms: Vec<UniformReflection> = Vec::new();
     let mut block_cursor: u32 = 0;
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -224,21 +190,6 @@ fn narrow_reflection(
         });
     }
 
-    let fragment_color_uniform = uniforms
-        .iter()
-        .find(|u| u.kind == UniformKind::Float32x4)
-        .cloned();
-    let fragment_texture_uniform = samplers
-        .iter()
-        .find(|s| s.kind == UniformKind::Sampler2D)
-        .map(|s| UniformReflection {
-            name: s.name.clone(),
-            binding: s.image_binding,
-            kind: UniformKind::Sampler2D,
-            member_index: 0,
-            block_offset: 0,
-            block_size: 0,
-        });
     let fragment_float_precision =
         extract_fragment_float_precision(fragment_source).unwrap_or(WebGlPrecision::Medium);
     Ok(ProgramReflection {
@@ -246,11 +197,6 @@ fn narrow_reflection(
         uniforms,
         samplers,
         uniform_block_size,
-        position_attribute,
-        color_attribute,
-        texcoord_attribute,
-        fragment_color_uniform,
-        fragment_texture_uniform,
         fragment_float_precision,
     })
 }
@@ -289,7 +235,7 @@ fn uniform_kind_from_essl(kind: EsslTypeKind) -> Option<UniformKind> {
 }
 
 /// Scan the fragment source for a `precision <qualifier> float;`
-/// declaration so the narrow reflection can carry it through.
+/// declaration so program reflection can carry it through.
 /// `webgl-essl`'s validator handles the actual precision rules;
 /// this is just a surface-level scrape for the public field.
 fn extract_fragment_float_precision(source: &str) -> Option<WebGlPrecision> {

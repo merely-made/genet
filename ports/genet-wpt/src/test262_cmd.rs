@@ -11,160 +11,141 @@
 use super::*;
 
 /// One test262 outcome.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum T262 {
     Pass,
     Fail,
     Skip,
+    Unsupported,
+    Error,
 }
 
-/// Run one test262 test on engine `E` and classify it.
-///
-/// **module** (`flags: [module]`) installs the harness preamble as a script, then
-/// evaluates the test as a module (imports resolved against the test's directory).
-/// Otherwise it assembles (harness + includes + test) for each strict variant and
-/// evals. A positive test passes iff it does not throw; a negative test passes iff it
-/// throws an error of the expected type (matched against the thrown value's toString).
-/// `async` tests report completion through `$DONE`; `module` tests run as ES modules.
+/// Run every required variant through the shared routing and outcome policy.
 pub(crate) fn run_262<E: ScriptEngine>(
     hns: &test262::Harness,
     test_src: &str,
     meta: &test262::Test262Meta,
     path: &Path,
 ) -> T262 {
-    if meta.flags.r#async {
-        return run_262_async::<E>(hns, test_src, meta);
-    }
-    if meta.flags.module {
-        return run_262_module::<E>(hns, test_src, meta, path);
-    }
-    let negative = meta.negative.as_ref();
-    for &strict in &test262::strict_variants(&meta.flags) {
-        let Ok(script) = hns.assemble(test_src, meta, strict) else {
-            return T262::Skip; // a missing include file
-        };
-        // Ok(()) = ran without throwing; Err(desc) = threw, with the error's toString.
-        let outcome = std::panic::catch_unwind(AssertUnwindSafe(|| -> Result<(), String> {
-            let mut rt = script_runtime_api::Runtime::<E>::new().map_err(|_| String::new())?;
-            match rt.eval(&script) {
-                Ok(_) => Ok(()),
-                Err(e) => Err(rt.describe_error(&e)),
-            }
+    let Ok(preamble) = hns.preamble(meta) else {
+        return T262::Skip; // a missing include file
+    };
+    for route in test262::body_routes(&meta.flags) {
+        let observation = std::panic::catch_unwind(AssertUnwindSafe(|| {
+            observe_262::<E>(&preamble, test_src, route, path)
         }));
-        let ran = match outcome {
-            Ok(r) => r,
-            Err(_) => return T262::Fail, // the engine panicked on this source
+        let observation = match observation {
+            Ok(value) => value,
+            Err(_) => return T262::Error,
         };
-        let ok = match (negative, ran) {
-            (None, Ok(())) => true,     // positive: must not throw
-            (None, Err(_)) => false,    // positive: threw
-            (Some(_), Ok(())) => false, // negative: must throw
-            (Some(neg), Err(desc)) => negative_matches(&desc, neg), // negative: right type
+        let result = match test262::classify(meta.negative.as_ref(), &observation) {
+            test262::Outcome::Pass => T262::Pass,
+            test262::Outcome::Fail => T262::Fail,
+            test262::Outcome::Unsupported => T262::Unsupported,
+            test262::Outcome::Error => T262::Error,
         };
-        if !ok {
-            return T262::Fail;
+        if result != T262::Pass {
+            return result;
         }
     }
     T262::Pass
 }
 
-/// Whether a thrown error's description satisfies a `negative:` expectation. Both
-/// engines name the JS constructor (e.g. "TypeError") in the thrown value's `toString`;
-/// Nova additionally reports a parse failure as the literal "parse error", so a
-/// parse-phase negative also matches that.
-pub(crate) fn negative_matches(desc: &str, neg: &test262::Negative) -> bool {
-    desc.contains(&neg.error_type)
-        || (matches!(neg.phase.as_str(), "parse" | "early") && desc.contains("parse error"))
-}
-
-/// Module test: evaluate the harness preamble as a sloppy script (so its globals
-/// land on `globalThis`), then run the test as a module. Imports resolve against the
-/// importing file's directory (the entry module's referrer is its own path).
-pub(crate) fn run_262_module<E: ScriptEngine>(
-    hns: &test262::Harness,
+/// Set up the harness separately from the body so setup failures cannot satisfy
+/// a negative test. The common VM API does not prove error phase or type.
+fn observe_262<E: ScriptEngine>(
+    preamble: &str,
     test_src: &str,
-    meta: &test262::Test262Meta,
+    route: test262::BodyRoute,
     path: &Path,
-) -> T262 {
-    let Ok(preamble) = hns.preamble(meta) else {
-        return T262::Skip; // a missing include file
+) -> test262::Observation {
+    use test262::{BodyRoute, Observation};
+    let Ok(mut rt) = script_runtime_api::Runtime::<E>::new() else {
+        return Observation::SetupError;
     };
-    let negative = meta.negative.is_some();
-    let base = path.to_string_lossy().into_owned();
-    let test_src = test_src.to_string();
-    let outcome = std::panic::catch_unwind(AssertUnwindSafe(move || {
-        let Ok(mut rt) = script_runtime_api::Runtime::<E>::new() else {
-            return true;
-        };
-        if rt.eval(&preamble).is_err() {
-            return true; // the harness itself failed to load
+    let completion = match route {
+        BodyRoute::Script { completion, .. } | BodyRoute::Module { completion } => completion,
+    };
+    if completion {
+        // The harness may print a diagnostic, but print is not completion authority.
+        if rt.eval("globalThis.print=function(_s){};").is_err() {
+            return Observation::SetupError;
         }
-        let mut resolve = |specifier: &str, referrer: &str| -> Option<(String, String)> {
-            let target = Path::new(referrer).parent()?.join(specifier);
-            let src = std::fs::read_to_string(&target).ok()?;
-            Some((target.to_string_lossy().into_owned(), src))
-        };
-        rt.eval_module(&test_src, &base, &mut resolve).is_err()
-    }));
-    let threw = match outcome {
-        Ok(t) => t,
-        Err(_) => return T262::Fail,
-    };
-    if threw != negative {
-        T262::Fail
-    } else {
-        T262::Pass
     }
-}
-
-/// Async test: the test signals completion through `$DONE`, which the harness's
-/// `doneprintHandle.js` reports via `print`. We shim `print` into a JS buffer, run the
-/// test, drive the event loop to settle promise/timer jobs, then read the buffer back
-/// and scan for the `Test262:AsyncTestComplete` sentinel (absent or `…Failure` = fail).
-///
-/// Re-enabled once per-test worker-subprocess isolation existed: each async test runs
-/// in its own reaped process bounded by `--timeout`, so a non-settling test is a clean
-/// timeout, not the cross-test memory blow-up that forced the earlier in-process revert.
-pub(crate) fn run_262_async<E: ScriptEngine>(
-    hns: &test262::Harness,
-    test_src: &str,
-    meta: &test262::Test262Meta,
-) -> T262 {
-    let Ok(preamble) = hns.preamble(meta) else {
-        return T262::Skip; // a missing include file
-    };
-    let negative = meta.negative.is_some();
-    // `print` is defined before `$DONE` is invoked; `doneprintHandle.js` (in the
-    // preamble) calls it on completion. The host captures `console`, but the test262
-    // async harness uses `print`, so route it into a buffer we can read back.
-    let script = format!(
-        "globalThis.__262log='';globalThis.print=function(s){{__262log+=String(s)+'\\n';}};\n{preamble}{test_src}"
-    );
-    let outcome = std::panic::catch_unwind(AssertUnwindSafe(move || -> bool {
-        let Ok(mut rt) = script_runtime_api::Runtime::<E>::new() else {
-            return true;
-        };
-        if rt.eval(&script).is_err() {
-            return true; // threw synchronously before completing
+    if !preamble.is_empty() && rt.eval(preamble).is_err() {
+        return Observation::SetupError;
+    }
+    // ScriptEngine::Value is a rooted handle across engine calls. This callable
+    // lives only in Rust; no author-visible global can change its closure state.
+    let completion_poll = if completion {
+        match rt.eval(include_str!("test262_completion.js")) {
+            Ok(poll) => Some(poll),
+            Err(_) => return Observation::SetupError,
         }
-        let _ = rt.run_event_loop(1024); // settle promise/timer jobs (breaks when idle)
-        let log = rt
-            .eval("__262log")
-            .ok()
-            .and_then(|v| rt.value_to_string(&v).ok())
-            .unwrap_or_default();
-        let passed =
-            log.contains("Test262:AsyncTestComplete") && !log.contains("Test262:AsyncTestFailure");
-        !passed // threw-style: true = did not pass
-    }));
-    let threw = match outcome {
-        Ok(t) => t,
-        Err(_) => return T262::Fail,
-    };
-    if threw != negative {
-        T262::Fail
     } else {
-        T262::Pass
+        None
+    };
+    match route {
+        BodyRoute::Script { strict, .. } => {
+            let source = if strict {
+                format!("\"use strict\";\n{test_src}")
+            } else {
+                test_src.to_string()
+            };
+            if rt.eval(&source).is_err() {
+                return Observation::TestError;
+            }
+        },
+        BodyRoute::Module { .. } => {
+            let base = path.to_string_lossy();
+            let mut resolver_io_error = false;
+            let mut resolve = |specifier: &str, referrer: &str| -> Option<(String, String)> {
+                let Some(parent) = Path::new(referrer).parent() else {
+                    resolver_io_error = true;
+                    return None;
+                };
+                let target = parent.join(specifier);
+                match std::fs::read_to_string(&target) {
+                    Ok(src) => Some((target.to_string_lossy().into_owned(), src)),
+                    Err(_) => {
+                        resolver_io_error = true;
+                        None
+                    },
+                }
+            };
+            let evaluated = rt.eval_module(test_src, &base, &mut resolve);
+            if resolver_io_error {
+                return Observation::SetupError;
+            }
+            match evaluated {
+                Ok(Some(_)) => {},
+                Ok(None) => return Observation::Unsupported,
+                Err(_) if completion => return Observation::Unsupported,
+                Err(_) => {
+                    return Observation::TestError;
+                },
+            }
+        },
     }
+    if completion {
+        if rt.run_event_loop(1024).is_err() {
+            return Observation::SetupError;
+        }
+        let poll = completion_poll.as_ref().expect("async route has poll");
+        let Ok(value) = rt.engine_mut().call_function(poll, poll, &[]) else {
+            return Observation::SetupError;
+        };
+        let Ok(status) = rt.value_to_string(&value) else {
+            return Observation::SetupError;
+        };
+        return match status.as_str() {
+            "1" => Observation::Completed,
+            "2" => Observation::CompletionFailure,
+            "0" => Observation::Incomplete,
+            _ => Observation::SetupError,
+        };
+    }
+    Observation::Completed
 }
 
 /// Dispatch [`run_262`] to the concrete engine, mirroring `harness::run_test`.
@@ -189,13 +170,13 @@ pub(crate) fn run_262_on(
 /// hanging test (the engines cannot be step-metered) kills only this process.
 pub(crate) fn test262_one(args: &Args) {
     use std::io::Write;
-    // A panicking test is caught by run_262's catch_unwind (→ Fail); silence the hook.
+    // A panicking test is caught by run_262's catch_unwind (→ Error); silence the hook.
     panic::set_hook(Box::new(|_| {}));
 
     let t262_root = Path::new(&args.tests_root).join("third_party/test262");
     let hns = match test262::Harness::load(&t262_root.join("harness")) {
         Ok(h) => h,
-        Err(_) => std::process::exit(2), // parent sees no output → counts as skip
+        Err(_) => std::process::exit(2), // parent sees no output → counts as error
     };
     let path = t262_root.join("test").join(&args.subset);
     let Ok(src) = fs::read_to_string(&path) else {
@@ -218,18 +199,23 @@ pub(crate) fn t262_word(t: &T262) -> &'static str {
         T262::Pass => "pass",
         T262::Fail => "fail",
         T262::Skip => "skip",
+        T262::Unsupported => "unsupported",
+        T262::Error => "error",
     }
 }
 
-/// Parse a `<engine> <pass|fail|skip>` line from a worker's output. `None` if the
+/// Parse a worker result line. `None` if the
 /// engine never reported (it hung, or the worker died before reaching it).
 pub(crate) fn parse_engine_result(out: &str, engine: &str) -> Option<T262> {
     for line in out.lines() {
-        if let Some(rest) = line.strip_prefix(engine) {
+        if let Some(rest) = line.strip_prefix(engine).and_then(|s| s.strip_prefix(' ')) {
             return Some(match rest.trim() {
                 "pass" => T262::Pass,
                 "fail" => T262::Fail,
-                _ => T262::Skip,
+                "skip" => T262::Skip,
+                "unsupported" => T262::Unsupported,
+                "error" => T262::Error,
+                _ => return None,
             });
         }
     }
@@ -306,9 +292,12 @@ pub(crate) fn test262_cmd(args: &Args) {
         boa_only: u64,
         nova_only: u64,
         skipped: u64,
+        unsupported: u64,
+        error: u64,
         timeout: u64,
         worklist: Vec<String>,
         timeouts: Vec<String>,
+        excluded: Vec<(String, T262, T262)>,
     }
 
     let jobs = std::thread::available_parallelism().map_or(4, |n| n.get());
@@ -361,7 +350,8 @@ pub(crate) fn test262_cmd(args: &Args) {
                             .stderr(std::process::Stdio::null())
                             .spawn();
                         let Ok(mut child) = spawned else {
-                            t.skipped += 1;
+                            t.error += 1;
+                            t.excluded.push((name, T262::Error, T262::Error));
                             continue;
                         };
 
@@ -399,14 +389,23 @@ pub(crate) fn test262_cmd(args: &Args) {
                         }
                         let (b, n) = match (boa, nova) {
                             (Some(b), Some(n)) => (b, n),
-                            (Some(b), None) => (b, T262::Fail), // nova crashed mid-test
-                            (None, Some(n)) => (T262::Fail, n), // boa crashed mid-test
+                            (Some(b), None) => (b, T262::Error), // nova crashed mid-test
+                            (None, Some(n)) => (T262::Error, n), // boa crashed mid-test
                             (None, None) => {
-                                t.skipped += 1; // worker produced nothing (load/early crash)
+                                t.error += 1; // worker produced nothing (load/early crash)
+                                t.excluded.push((name, T262::Error, T262::Error));
                                 continue;
                             },
                         };
                         match (b, n) {
+                            (T262::Error, _) | (_, T262::Error) => {
+                                t.error += 1;
+                                t.excluded.push((name, b, n));
+                            },
+                            (T262::Unsupported, _) | (_, T262::Unsupported) => {
+                                t.unsupported += 1;
+                                t.excluded.push((name, b, n));
+                            },
                             (T262::Skip, _) | (_, T262::Skip) => t.skipped += 1,
                             (T262::Pass, T262::Pass) => t.both_pass += 1,
                             (T262::Fail, T262::Fail) => t.both_fail += 1,
@@ -432,9 +431,12 @@ pub(crate) fn test262_cmd(args: &Args) {
             total.boa_only += t.boa_only;
             total.nova_only += t.nova_only;
             total.skipped += t.skipped;
+            total.unsupported += t.unsupported;
+            total.error += t.error;
             total.timeout += t.timeout;
             total.worklist.extend(t.worklist);
             total.timeouts.extend(t.timeouts);
+            total.excluded.extend(t.excluded);
         }
         total
     });
@@ -443,15 +445,19 @@ pub(crate) fn test262_cmd(args: &Args) {
     nova_worklist.sort();
     let mut timeouts = tally.timeouts;
     timeouts.sort();
+    let mut excluded = tally.excluded;
+    excluded.sort_by(|a, b| a.0.cmp(&b.0));
     println!(
         "\ntest262 compare [{subset_label}]: both-pass={} both-fail={} boa-only={} (Nova gap) \
-         nova-only={} timeout={} skipped={} (module/async/missing)",
+         nova-only={} timeout={} skipped={} unsupported-excluded={} error-excluded={}",
         tally.both_pass,
         tally.both_fail,
         tally.boa_only,
         tally.nova_only,
         tally.timeout,
         tally.skipped,
+        tally.unsupported,
+        tally.error,
     );
     if !timeouts.is_empty() {
         println!(
@@ -465,6 +471,21 @@ pub(crate) fn test262_cmd(args: &Args) {
         }
         if timeouts.len() > 40 {
             println!("  … and {} more", timeouts.len() - 40);
+        }
+    }
+    if !excluded.is_empty() {
+        println!(
+            "\nExcluded outcomes (test-level; boa and nova preserved) — {} test(s):",
+            excluded.len()
+        );
+        for (name, boa, nova) in excluded.iter().take(40) {
+            println!("  {name} boa={} nova={}", t262_word(boa), t262_word(nova));
+        }
+        if excluded.len() > 40 {
+            println!(
+                "  … and {} more in the worklist artifact",
+                excluded.len() - 40
+            );
         }
     }
     if !nova_worklist.is_empty() {
@@ -484,13 +505,15 @@ pub(crate) fn test262_cmd(args: &Args) {
         use std::io::Write;
         let mut buf = format!(
             "# test262 worklist [{subset_label}]\n\
-             # both-pass={} both-fail={} boa-only={} nova-only={} timeout={} skipped={}\n",
+             # both-pass={} both-fail={} boa-only={} nova-only={} timeout={} skipped={} unsupported-excluded={} error-excluded={}\n",
             tally.both_pass,
             tally.both_fail,
             tally.boa_only,
             tally.nova_only,
             tally.timeout,
             tally.skipped,
+            tally.unsupported,
+            tally.error,
         );
         buf.push_str(&format!(
             "\n## Timeouts (hang or pathological slowness; engine) — {}\n",
@@ -499,6 +522,17 @@ pub(crate) fn test262_cmd(args: &Args) {
         for t in &timeouts {
             buf.push_str(t);
             buf.push('\n');
+        }
+        buf.push_str(&format!(
+            "\n## Excluded outcomes (test-level; boa and nova preserved) — {}\n",
+            excluded.len()
+        ));
+        for (name, boa, nova) in &excluded {
+            buf.push_str(&format!(
+                "{name} boa={} nova={}\n",
+                t262_word(boa),
+                t262_word(nova)
+            ));
         }
         buf.push_str(&format!(
             "\n## Nova gaps (pass on Boa, fail on Nova) — {}\n",

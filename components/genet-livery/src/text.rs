@@ -18,10 +18,12 @@ use buckram::{
     BoxId, BoxOrigin, CssBoxTree, DisplayInside, DisplayOutside, FloatLineConstraints,
     FormattingContextKind, InternalTableRole, IntrinsicSizeKind, IntrinsicSizes,
 };
+#[cfg(test)]
 use icu_properties::{
     CodePointMapData,
     props::{GeneralCategory, GeneralCategoryGroup, LineBreak},
 };
+#[cfg(test)]
 use icu_segmenter::LineSegmenter;
 use layout_dom_api::{LayoutDom, LocalName, Namespace, NodeKind, QuirksMode};
 use livery::{
@@ -618,7 +620,6 @@ impl TextSystem {
 
         let Shaped {
             items,
-            break_stream,
             break_lines,
             baselines,
             ..
@@ -671,7 +672,6 @@ impl TextSystem {
                 }),
                 baselines,
                 items,
-                _break_stream: break_stream,
                 text,
                 text_sources,
             })
@@ -682,7 +682,6 @@ impl TextSystem {
                 line_bounds: None,
                 baselines: None,
                 items,
-                _break_stream: break_stream,
                 text,
                 text_sources,
             })
@@ -1518,19 +1517,20 @@ impl TextSystem {
             });
         }
         let mut layout = builder.build(text);
-        // Keep the shaped logical sequence and its CSS candidate boundaries
-        // alongside the existing Parley path. S1.1 records this model only;
-        // the line loop remains owned by Parley until S1.2.
-        let mut unbounded_projection = layout.clone();
-        unbounded_projection.break_all_lines(None);
-        let mut break_stream = logical_break_stream(
-            text,
-            &unbounded_projection,
-            spans,
-            inline_boxes,
-            inline_styles,
-            root_style,
-        );
+        // Preserve the prospective break model for its unit tests only.
+        #[cfg(test)]
+        let mut break_stream = {
+            let mut unbounded_projection = layout.clone();
+            unbounded_projection.break_all_lines(None);
+            logical_break_stream(
+                text,
+                &unbounded_projection,
+                spans,
+                inline_boxes,
+                inline_styles,
+                root_style,
+            )
+        };
         let font_size = super::paint::used_font_size(root_style);
         let text_indent = root_style
             .text_indent
@@ -1550,53 +1550,56 @@ impl TextSystem {
             root_style.text_wrap_mode == TextWrapMode::Wrap,
             line_constraints,
         );
-        // The unbounded clone supplies the full logical clusters before the
-        // finite breaker chooses lines. Refresh only the break flags from
-        // the matching finite-layout clusters; retain the original glyph,
-        // source, font, and coordinate metadata.
-        let mut retained_cluster_indices = HashMap::new();
-        for (index, item) in break_stream.items.iter().enumerate() {
-            if let LogicalBreakItem::Cluster { text_range, .. } = item {
-                // Keep the former first-match rule if ranges repeat.
-                retained_cluster_indices
-                    .entry((text_range.start, text_range.end))
-                    .or_insert(index);
+        #[cfg(test)]
+        {
+            // The unbounded clone supplies the full logical clusters before the
+            // finite breaker chooses lines. Refresh only the break flags from
+            // the matching finite-layout clusters; retain the original glyph,
+            // source, font, and coordinate metadata.
+            let mut retained_cluster_indices = HashMap::new();
+            for (index, item) in break_stream.items.iter().enumerate() {
+                if let LogicalBreakItem::Cluster { text_range, .. } = item {
+                    // Keep the former first-match rule if ranges repeat.
+                    retained_cluster_indices
+                        .entry((text_range.start, text_range.end))
+                        .or_insert(index);
+                }
             }
-        }
-        for line in layout.lines() {
-            for run in line.runs() {
-                for cluster in run.clusters() {
-                    let text_range = cluster.text_range();
-                    if let Some(LogicalBreakItem::Cluster {
-                        soft_break,
-                        hard_break,
-                        ..
-                    }) = retained_cluster_indices
-                        .get(&(text_range.start, text_range.end))
-                        .and_then(|index| break_stream.items.get_mut(*index))
-                    {
-                        *soft_break = cluster.is_soft_line_break();
-                        *hard_break = cluster.is_hard_line_break();
+            for line in layout.lines() {
+                for run in line.runs() {
+                    for cluster in run.clusters() {
+                        let text_range = cluster.text_range();
+                        if let Some(LogicalBreakItem::Cluster {
+                            soft_break,
+                            hard_break,
+                            ..
+                        }) = retained_cluster_indices
+                            .get(&(text_range.start, text_range.end))
+                            .and_then(|index| break_stream.items.get_mut(*index))
+                        {
+                            *soft_break = cluster.is_soft_line_break();
+                            *hard_break = cluster.is_hard_line_break();
+                        }
                     }
                 }
             }
-        }
-        for (line_index, line) in layout.lines().enumerate() {
-            let kind = match line.break_reason() {
-                parley::BreakReason::Regular => SelectedBreakKind::Regular,
-                parley::BreakReason::Emergency => SelectedBreakKind::Emergency,
-                parley::BreakReason::None | parley::BreakReason::Explicit => continue,
-            };
-            let range = line.text_range();
-            let line_atoms = positioned_atom_orders(line.clone());
-            let next_atoms = layout
-                .get(line_index + 1)
-                .map(positioned_atom_orders)
-                .unwrap_or_default();
-            if let Some(selected) =
-                selected_break_position(range, kind, &line_atoms, &next_atoms, &break_stream.items)
-            {
-                break_stream.selected_breaks.push(selected);
+            for (line_index, line) in layout.lines().enumerate() {
+                let kind = match line.break_reason() {
+                    parley::BreakReason::Regular => SelectedBreakKind::Regular,
+                    parley::BreakReason::Emergency => SelectedBreakKind::Emergency,
+                    parley::BreakReason::None | parley::BreakReason::Explicit => continue,
+                };
+                let range = line.text_range();
+                let line_atoms = positioned_atom_orders(line.clone());
+                let next_atoms = layout
+                    .get(line_index + 1)
+                    .map(positioned_atom_orders)
+                    .unwrap_or_default();
+                if let Some(selected) =
+                    selected_break_position(range, kind, &line_atoms, &next_atoms, &break_stream.items)
+                {
+                    break_stream.selected_breaks.push(selected);
+                }
             }
         }
         let alignment = text_alignment(
@@ -2059,6 +2062,7 @@ impl TextSystem {
         append_positioned_inline_start_markers(&mut result, inline_boxes);
         Shaped {
             items: result,
+            #[cfg(test)]
             break_stream,
             #[cfg(test)]
             finite_break_flags,
@@ -2186,7 +2190,6 @@ pub(crate) struct InlineLayout<Source> {
     line_bounds: Option<Fragment>,
     baselines: Option<(f32, f32)>,
     items: Vec<ShapedItem<Source>>,
-    _break_stream: LogicalBreakStream<Source>,
     text: String,
     text_sources: Vec<TextSource<Source>>,
 }
@@ -3253,6 +3256,7 @@ struct InlineAtom<Id> {
 /// What shaping one inline formatting context produced.
 struct Shaped<Id> {
     items: Vec<ShapedItem<Id>>,
+    #[cfg(test)]
     break_stream: LogicalBreakStream<Id>,
     #[cfg(test)]
     finite_break_flags: Vec<(Range<usize>, bool, bool)>,
@@ -3265,14 +3269,15 @@ struct Shaped<Id> {
     baselines: Option<(f32, f32)>,
 }
 
-/// The dormant S1.1 view of a paragraph before Parley's finite-width breaker
+/// Test-only view of a paragraph before Parley's finite-width breaker
 /// selects lines. Byte ranges refer to the exact transformed/collapsed input
 /// passed to Parley; `span_range` is local to its transformed source span.
 #[derive(Clone, Debug)]
 #[allow(
     dead_code,
-    reason = "dormant S1.1 stream; the S1.2 breaker consumes this model"
+    reason = "test-only prospective break diagnostics"
 )]
+#[cfg(test)]
 struct LogicalBreakStream<Id> {
     paragraph_text: String,
     items: Vec<LogicalBreakItem<Id>>,
@@ -3283,6 +3288,7 @@ struct LogicalBreakStream<Id> {
     selected_breaks: Vec<SelectedBreak>,
 }
 
+#[cfg(test)]
 impl<Id> LogicalBreakStream<Id> {
     #[cfg(test)]
     fn selected_breaks_are_permitted(&self) -> bool {
@@ -3347,6 +3353,7 @@ impl<Id> LogicalBreakStream<Id> {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg(test)]
 struct SelectedBreak {
     byte_index: usize,
     kind: SelectedBreakKind,
@@ -3354,12 +3361,14 @@ struct SelectedBreak {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg(test)]
 enum SelectedBreakKind {
     Regular,
     Emergency,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg(test)]
 enum SelectedBreakLocation {
     Text,
     BeforeInline(usize),
@@ -3373,8 +3382,9 @@ enum SelectedBreakLocation {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[allow(
     dead_code,
-    reason = "dormant S1.1 stream; the S1.2 breaker consumes this model"
+    reason = "test-only prospective break diagnostics"
 )]
+#[cfg(test)]
 struct AtomicOpportunity {
     byte_index: usize,
     insertion_order: usize,
@@ -3385,8 +3395,9 @@ struct AtomicOpportunity {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[allow(
     dead_code,
-    reason = "dormant S1.1 stream; the S1.2 breaker consumes this model"
+    reason = "test-only prospective break diagnostics"
 )]
+#[cfg(test)]
 enum AtomicOpportunitySide {
     Before,
     After,
@@ -3395,8 +3406,9 @@ enum AtomicOpportunitySide {
 #[derive(Clone, Debug)]
 #[allow(
     dead_code,
-    reason = "dormant S1.1 stream; the S1.2 breaker consumes this model"
+    reason = "test-only prospective break diagnostics"
 )]
+#[cfg(test)]
 enum LogicalBreakItem<Id> {
     Cluster {
         text_range: Range<usize>,
@@ -3428,8 +3440,9 @@ enum LogicalBreakItem<Id> {
 #[derive(Clone, Debug)]
 #[allow(
     dead_code,
-    reason = "dormant S1.1 stream; the S1.2 breaker consumes this model"
+    reason = "test-only prospective break diagnostics"
 )]
+#[cfg(test)]
 struct SourceSlice<Id> {
     text_range: Range<usize>,
     source: Option<Id>,
@@ -3439,6 +3452,7 @@ struct SourceSlice<Id> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg(test)]
 struct BreakStyle {
     white_space_collapse: WhiteSpaceCollapse,
     text_wrap_mode: TextWrapMode,
@@ -3447,6 +3461,7 @@ struct BreakStyle {
     overflow_wrap: CssOverflowWrap,
 }
 
+#[cfg(test)]
 impl From<&ComputedValues> for BreakStyle {
     fn from(style: &ComputedValues) -> Self {
         Self {
@@ -3459,6 +3474,7 @@ impl From<&ComputedValues> for BreakStyle {
     }
 }
 
+#[cfg(test)]
 fn logical_break_stream<Id>(
     text: &str,
     layout: &parley::Layout<Brush>,
@@ -3709,6 +3725,7 @@ where
     }
 }
 
+#[cfg(test)]
 fn positioned_atom_orders(line: parley::Line<'_, Brush>) -> Vec<usize> {
     line.items()
         .filter_map(|item| match item {
@@ -3720,6 +3737,7 @@ fn positioned_atom_orders(line: parley::Line<'_, Brush>) -> Vec<usize> {
         .collect()
 }
 
+#[cfg(test)]
 fn selected_break_position<Id>(
     range: Range<usize>,
     kind: SelectedBreakKind,
@@ -3766,6 +3784,7 @@ fn selected_break_position<Id>(
     })
 }
 
+#[cfg(test)]
 fn adjacent_character(text: &str, offset: usize, before: bool) -> Option<char> {
     let adjacent = if before {
         text.get(..offset)
@@ -3776,6 +3795,7 @@ fn adjacent_character(text: &str, offset: usize, before: bool) -> Option<char> {
     adjacent
 }
 
+#[cfg(test)]
 fn atomic_side_opportunity<Id: Copy + Eq + Hash>(
     text: &str,
     atom: &InlineAtom<Id>,
@@ -3825,6 +3845,7 @@ fn atomic_side_opportunity<Id: Copy + Eq + Hash>(
     }
 }
 
+#[cfg(test)]
 fn atom_side_text_neighbor<Id>(
     text: &str,
     atom: &InlineAtom<Id>,
@@ -3857,6 +3878,7 @@ fn atom_side_text_neighbor<Id>(
     }
 }
 
+#[cfg(test)]
 fn inline_marker_text<Id>(text: &str, inline_boxes: &[InlineAtom<Id>]) -> String {
     let mut atoms = inline_boxes
         .iter()
@@ -3882,6 +3904,7 @@ fn inline_marker_text<Id>(text: &str, inline_boxes: &[InlineAtom<Id>]) -> String
     marked
 }
 
+#[cfg(test)]
 fn is_hard_break_boundary(text: &str, offset: usize) -> bool {
     text.get(..offset)
         .and_then(|prefix| prefix.chars().next_back())
@@ -3893,6 +3916,7 @@ fn is_hard_break_boundary(text: &str, offset: usize) -> bool {
         })
 }
 
+#[cfg(test)]
 fn preserved_space_opportunity(text: &str, offset: usize, style: BreakStyle) -> bool {
     if style.white_space_collapse != WhiteSpaceCollapse::BreakSpaces || offset == 0 {
         return false;
@@ -3902,6 +3926,7 @@ fn preserved_space_opportunity(text: &str, offset: usize, style: BreakStyle) -> 
         .is_some_and(|character| matches!(character, ' ' | '\t' | '\u{000c}'))
 }
 
+#[cfg(test)]
 fn icu_line_candidates(
     text: &str,
     line_break: CssLineBreak,
@@ -3944,6 +3969,7 @@ fn icu_line_candidates(
     (candidates, emergency)
 }
 
+#[cfg(test)]
 fn complex_context_fallback_boundaries(text: &str) -> impl Iterator<Item = usize> + '_ {
     let graphemes = icu_segmenter::GraphemeClusterSegmenter::new()
         .segment_str(text)
@@ -3971,6 +3997,7 @@ fn complex_context_fallback_boundaries(text: &str) -> impl Iterator<Item = usize
         .into_iter()
 }
 
+#[cfg(test)]
 fn common_style<'a, Id: Copy + Eq + Hash>(
     left: &[Id],
     right: &[Id],
@@ -3989,6 +4016,7 @@ fn common_style<'a, Id: Copy + Eq + Hash>(
 /// Owners are borrowed, not copied per opportunity. Sorting includes the logical
 /// item ordinal to preserve the scan's last-equal left / first-equal right rules,
 /// including gaps, overlapping ranges and bidi runs. Atoms do not own text edges.
+#[cfg(test)]
 struct BoundaryIndex<'a, Id> {
     starts: Vec<(usize, usize, &'a [Id])>,
     ends: Vec<(usize, usize, &'a [Id])>,
@@ -3997,6 +4025,7 @@ struct BoundaryIndex<'a, Id> {
     comparisons: std::cell::Cell<usize>,
 }
 
+#[cfg(test)]
 impl<'a, Id> BoundaryIndex<'a, Id> {
     fn new(text: &str, items: &'a [LogicalBreakItem<Id>]) -> Self {
         let mut starts = Vec::new();
@@ -4072,6 +4101,7 @@ impl<'a, Id> BoundaryIndex<'a, Id> {
     }
 }
 
+#[cfg(test)]
 impl<Id: Copy + Eq + Hash> BoundaryIndex<'_, Id> {
     fn style(
         &self,
@@ -4135,6 +4165,7 @@ fn adjacent_cluster_owners<Id: Copy>(
     }
 }
 
+#[cfg(test)]
 fn logical_item_owners<Id>(item: &LogicalBreakItem<Id>, preceding: bool) -> &[Id] {
     match item {
         LogicalBreakItem::Cluster {
@@ -4152,6 +4183,7 @@ fn logical_item_owners<Id>(item: &LogicalBreakItem<Id>, preceding: bool) -> &[Id
     }
 }
 
+#[cfg(test)]
 fn is_logical_neighbor<Id>(item: &LogicalBreakItem<Id>) -> bool {
     match item {
         LogicalBreakItem::Cluster { .. } => true,
@@ -4223,6 +4255,7 @@ fn disappearing_space_owner_style<Id>(
     })
 }
 
+#[cfg(test)]
 fn atom_side_style<'a, Id: Copy + Eq + Hash>(
     atom: &InlineAtom<Id>,
     insertion_order: usize,

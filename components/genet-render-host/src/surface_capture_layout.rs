@@ -1,5 +1,5 @@
-// Output-only, unapplied and uncompiled proposal. No GPU operations.
-// This is proposed for a diagnostics-gated Genet module, not a standalone gate.
+// Checked buffer layout and reservation accounting for surface-readback diagnostics.
+// Compiled with browser-surface-readback-diagnostics; this module issues no GPU work.
 use std::sync::{Arc, atomic::{AtomicU64, Ordering}};
 
 const FRAME_LIMIT: u64 = 32 * 1024 * 1024;

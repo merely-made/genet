@@ -5156,5 +5156,426 @@
       "Existing affine projection and used-value 3D grouping limits; no fresh GPU raster/browser/Forms qualification."
     ],
     "storage": "472 GiB free before gates; no cleanup needed; caches and worktrees preserved."
+  },
+  "image_sharing_and_paint_followups": {
+    "date": "2026-10-16",
+    "scope": "L3 document/supplier pixel ownership and the two remaining L4 generated ancestry and positioned-inline decoration defects. Scoped source review, not a renewed whole-repository semantic audit.",
+    "genet_baseline": "2bf6ff015aa8a18ebde55039c99df932ce8eec8d",
+    "supplier": {
+      "commit": "e8cda06efc11c11595f2fa1bb30bce7e72979537",
+      "source_sha256": {
+        "netrender-notes/2026-10-11_complete_producer_resources.md": "0fdb61a9f9dab4dcbe27cde9cfa33333abc3fbc4cb80d851dcce2dba0c4b8754",
+        "netrender-notes/PROGRESS.md": "573aef1626b8f03e15287196214bb23c8d75ffccb24c7561c6b97957ccc0dafe",
+        "paint_list_api/src/lib.rs": "b02b9bc76f429efeab8afc95b7e22cd74efe145f37802683884de37f1548bc5f",
+        "paint_list_render/src/composite.rs": "bd49906f1248c5b6752258ac7979e4eeeb1e2c671004a14933dfb247a18f56df",
+        "paint_list_render/src/tests.rs": "36967241f54971d4b32ef2ca5e723b37f245da6284e1b9628e49e40517ab9637"
+      }
+    },
+    "genet_source_sha256": {
+      "Cargo.toml": "472595ed000d621b5a2311cd3ccd1ef7dc8654fb2b22d0311e11b2ea77544d61",
+      "components/genet-livery/src/document.rs": "cee87630df20613a86fc3e08665ed7e1da143fea84665f1af306daeb9b34fe6f",
+      "components/genet-livery/src/document/frame.rs": "097b708a26973fd2c94477ddb626ab8e3317b85c29225a33fcfb3120977d0c51",
+      "components/genet-livery/src/document/resources.rs": "56c6b4f486ecd34e031b95875ad064434718c6164dbad2a4e3a258cf8da2acbd",
+      "components/genet-livery/src/document/tests.rs": "caef12cda56f2821d146676b64ac5e6b5fd7f7ad68f19c47fe5ab0a797f6f740",
+      "components/genet-livery/src/image_decode.rs": "433b72082d19811b3447facbfc1b9e0765b2f9526b01f54eaec19fbe116cfe89",
+      "components/genet-livery/src/image_resources.rs": "2a10d340a34a408cbac5c3da04ca5270dabb3746f12ccbaf3dc7ff74caa8eac8",
+      "components/genet-livery/src/layout.rs": "87ca3139639204d3b1711858f7ec543aac4bd226d9b76932ec9e852a351fbe39",
+      "components/genet-livery/src/lib.rs": "364c286c306af3f2731fdbc557d399bb5e1e97020d4e67c9027c379c22f41b26",
+      "components/genet-livery/src/paint.rs": "9d7b9e0bdf879af61dd4a982ee53a5ce5ff592722aae98828a384bc8a6889761",
+      "components/genet-livery/src/placement.rs": "383ec471fa5d495a72a0bab1f517baf1e6066713eeb6ba26f222cbfd52039438",
+      "components/genet-livery/src/style.rs": "754a7ed7ef26bbd26b30712a905bdc5e1743ec58eaac7a0414753446280d58b5",
+      "components/genet-livery/tests/transform_context.rs": "f9b85c395c44b9ab331eaeb5addbbe3fc95fae343978d88454cfef13168f690f"
+    },
+    "reviews": [
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/followups/review-images.md",
+        "sha256": "7249bd1ea86b2e14e48354a86d6fb243b0a0fa22748dc8707744efdeac5294f9"
+      },
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/followups/review-l4.md",
+        "sha256": "bdadf8b77d29913820ae9a44c9f58dd6dafca33526fb3d1abe23686922e792a4"
+      }
+    ],
+    "review_scope_note": "L4 review predates final image-only paint-builder signature adjustments; final image review covers those changes and all final source hashes.",
+    "genet_final_gates": [
+      {
+        "label": "genet-library-verified",
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-livery --lib -- --test-threads=1",
+        "results": [
+          {
+            "passed": 344,
+            "failed": 0,
+            "ignored": 2
+          }
+        ],
+        "exit_status": 0,
+        "max_process_rss_kib": 111132,
+        "process_swaps": 0,
+        "log": {
+          "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/followups/genet-library-verified.log",
+          "sha256": "3df13bae40c2de3885840e97c0e61e253b865d24d33ec1af78d36e1ae4f66ed0"
+        }
+      },
+      {
+        "label": "genet-integrations",
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-livery --test paint --test transforms_3d --test out_of_flow_placement --test grid_abspos --test positioned_block_children --test anonymous_tables --test k5d_nested_inline_positioning --test replaced_image --test image_source_animation --test shadow_flat_tree --test transform_context -- --test-threads=1",
+        "results": [
+          {
+            "passed": 4,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "passed": 4,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "passed": 78,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "passed": 12,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "passed": 6,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "passed": 12,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "passed": 8,
+            "failed": 0,
+            "ignored": 0
+          }
+        ],
+        "exit_status": 0,
+        "max_process_rss_kib": 427112,
+        "process_swaps": 0,
+        "log": {
+          "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/followups/genet-integrations.log",
+          "sha256": "194734a52d274b686f2fb1a4cbbeb9747c14a0e1a8f6eba8fe5af9c83e9d2c19"
+        }
+      },
+      {
+        "label": "genet-scripted",
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-scripted --test image_resource_identity --test live_resource_retention -- --test-threads=1",
+        "results": [
+          {
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "passed": 9,
+            "failed": 0,
+            "ignored": 0
+          }
+        ],
+        "exit_status": 0,
+        "max_process_rss_kib": 756032,
+        "process_swaps": 0,
+        "log": {
+          "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/followups/genet-scripted.log",
+          "sha256": "62f401823a4f4010132bfd6d261b40bd897abfa8a40812ca011dadc4403e22a0"
+        }
+      },
+      {
+        "label": "genet-native",
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-documents --features livery --lib engines::tests::livery_session -- --test-threads=1",
+        "results": [
+          {
+            "passed": 18,
+            "failed": 0,
+            "ignored": 0
+          }
+        ],
+        "exit_status": 0,
+        "max_process_rss_kib": 570804,
+        "process_swaps": 0,
+        "log": {
+          "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/followups/genet-native.log",
+          "sha256": "765e0a8e0459609bd38d2318ad7d672835511718648b1e5b40d7b1b5ef1a7584"
+        }
+      },
+      {
+        "label": "genet-feature-off",
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-livery --no-default-features --lib image_ -- --test-threads=1",
+        "results": [
+          {
+            "passed": 3,
+            "failed": 0,
+            "ignored": 0
+          }
+        ],
+        "exit_status": 0,
+        "max_process_rss_kib": 752420,
+        "process_swaps": 0,
+        "log": {
+          "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/followups/genet-feature-off.log",
+          "sha256": "60eb0acf9f46742cb9345585ff08c0d1d05f781723df905cc7737bab11367981"
+        }
+      }
+    ],
+    "genet_totals": {
+      "passed": 506,
+      "failed": 0,
+      "existing_ignored": 2
+    },
+    "supplier_gates": [
+      {
+        "label": "supplier-libs",
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p paint_list_api -p paint_list_render --features paint_list_render/replay-cpu,paint_list_render/resource-bundle --lib -- --test-threads=1",
+        "results": [
+          {
+            "passed": 8,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "passed": 17,
+            "failed": 0,
+            "ignored": 0
+          }
+        ],
+        "exit_status": 0,
+        "max_process_rss_kib": 884980,
+        "process_swaps": 0,
+        "log": {
+          "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/followups/supplier-libs.log",
+          "sha256": "07bbee0d07a98391744d731a1e9b17977e6dac4699f259315c685272f31d7112"
+        }
+      },
+      {
+        "label": "supplier-bundle",
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p paint_list_render --features replay-cpu,resource-bundle --test resource_bundle -- --test-threads=1",
+        "results": [
+          {
+            "passed": 21,
+            "failed": 0,
+            "ignored": 0
+          }
+        ],
+        "exit_status": 0,
+        "max_process_rss_kib": 54956,
+        "process_swaps": 0,
+        "log": {
+          "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/followups/supplier-bundle.log",
+          "sha256": "f71105c7f259469291a18e794c8a8e7837237ea401b5e0160c226aebb2701bd8"
+        }
+      },
+      {
+        "label": "supplier-wire",
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p paint_list_render --features replay-cpu,resource-bundle --test resource_bundle --test pcorpus_replay -- --test-threads=1",
+        "results": [
+          {
+            "passed": 3,
+            "failed": 1,
+            "ignored": 0
+          }
+        ],
+        "exit_status": 101,
+        "max_process_rss_kib": 299488,
+        "process_swaps": 0,
+        "log": {
+          "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/followups/supplier-wire.log",
+          "sha256": "a2dd1ab025b34b62605a7753790cbe9b8cb15947b2ced35f3697fc2d0b01231e"
+        }
+      }
+    ],
+    "supplier_totals": {
+      "passed": 49,
+      "baseline_reproduced_failed": 1,
+      "ignored": 0
+    },
+    "actual_draw": "Supplier replay-cpu shared_image_payload_rasters_distinct_opaque_and_translucent_pixels verifies exact premultiplied red and half-alpha blue output [255,0,0,255,0,0,128,128]. Genet tests inspect retained draw commands, geometry and hit results; no fresh GPU/browser qualification.",
+    "control": {
+      "gate": {
+        "label": "supplier-control-corpus",
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p paint_list_render --features replay-cpu,resource-bundle --test pcorpus_replay translation_matches_recorded_ops -- --exact --test-threads=1",
+        "results": [
+          {
+            "passed": 0,
+            "failed": 1,
+            "ignored": 0
+          }
+        ],
+        "exit_status": 101,
+        "max_process_rss_kib": 437020,
+        "process_swaps": 0,
+        "log": {
+          "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/followups/supplier-control-corpus.log",
+          "sha256": "64be4c8ef6fd23b3c827e0d24c65960c418f035c851cc1d89ae1cba68af69359"
+        }
+      },
+      "source": {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/followups/supplier-control.json",
+        "sha256": "40791351c0cf22e7f90d32401d24509869d1a092859193a1a6aced81fde15fe2"
+      },
+      "dep_info": {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/followups/supplier-control-dep-info.txt",
+        "sha256": "e02238a18ffd1ff82470ab8af876b9c18f2fb5e04500eeea08ce0f321c1bf0ab"
+      },
+      "baseline": "f4f9c0d87e6a6030b61075a45118055dfe6a12df",
+      "finding": "translation_matches_recorded_ops reproduces livery_article_card border Stroke-versus-Shape mismatch after fresh compilation of all four local supplier crates. Initial supplier-baseline-corpus attempt reused changed artifact and is excluded as baseline evidence."
+    },
+    "initial_failures": [
+      {
+        "label": "genet-focused",
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-livery --lib --test transform_context -- --test-threads=1",
+        "results": [],
+        "exit_status": 101,
+        "max_process_rss_kib": 357124,
+        "process_swaps": 0,
+        "log": {
+          "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/followups/genet-focused.log",
+          "sha256": "9e31907aa519fdbf5f260de4661a244d57f63e4b1c6d1e11c19c7cdc84bb6fef"
+        }
+      },
+      {
+        "label": "genet-focused-fixed",
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-livery --lib --test transform_context -- --test-threads=1",
+        "results": [],
+        "exit_status": 101,
+        "max_process_rss_kib": 537588,
+        "process_swaps": 0,
+        "log": {
+          "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/followups/genet-focused-fixed.log",
+          "sha256": "1fdf48fafcd14f4251a2bd24fb482392369314a98458d748b3ebabd778a7fc5f"
+        }
+      },
+      {
+        "label": "genet-focused-final",
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-livery --lib --test transform_context -- --test-threads=1",
+        "results": [
+          {
+            "passed": 343,
+            "failed": 1,
+            "ignored": 2
+          }
+        ],
+        "exit_status": 101,
+        "max_process_rss_kib": 802880,
+        "process_swaps": 0,
+        "log": {
+          "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/followups/genet-focused-final.log",
+          "sha256": "1c8204fb83640035c932d71a4cfe46feb5d022f78c024b53b5d7c27215b566b0"
+        }
+      },
+      {
+        "label": "genet-library-final",
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-livery --lib -- --test-threads=1",
+        "results": [
+          {
+            "passed": 343,
+            "failed": 1,
+            "ignored": 2
+          }
+        ],
+        "exit_status": 101,
+        "max_process_rss_kib": 800504,
+        "process_swaps": 0,
+        "log": {
+          "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/followups/genet-library-final.log",
+          "sha256": "06c3ba6f76af55d433fd66cadd5bef0980c0f97a3bd951696409015258e1faca"
+        }
+      },
+      {
+        "label": "genet-retirement-route",
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-livery --lib document::tests::retained_root_img_src_changes_retire_prior_data_urls -- --exact --test-threads=1",
+        "results": [
+          {
+            "passed": 0,
+            "failed": 1,
+            "ignored": 0
+          }
+        ],
+        "exit_status": 101,
+        "max_process_rss_kib": 799200,
+        "process_swaps": 0,
+        "log": {
+          "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/followups/genet-retirement-route.log",
+          "sha256": "acb95627ff1a0453c07fdc942013aed06b222996edb29c9c36826e595f9a6515"
+        }
+      }
+    ],
+    "focused_resolution": {
+      "label": "genet-retirement-batched",
+      "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-livery --lib document::tests::retained_root_img_src_changes_retire_prior_data_urls -- --exact --test-threads=1",
+      "results": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "exit_status": 0,
+      "max_process_rss_kib": 801160,
+      "process_swaps": 0,
+      "log": {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/followups/genet-retirement-batched.log",
+        "sha256": "b4e80b25340d2b6c5c5e75b014e725f5daaa8e346cd6f739bced1893e0804eb0"
+      }
+    },
+    "failure_resolution": "Fixed PaintBuilder deref borrow conflicts by capturing slot indices/order before pushes; pure collapsed-border helpers retain LiveryPaintList input. Initial image mutation fixture did not reach a supported retained root: parser mutations needed draining, and empty image has Inline context rejected by retained_root_box. Final fixture batches src with inert enclosing flex data-revision mutation, asserts coalesced scope damage, retained-root generation increment, cache cardinality and current pixels. Production was not widened to make the fixture pass.",
+    "dependency_provenance": {
+      "manifest": "Four NetRender crates pinned to exact supplier commit; Cargo.lock remains ignored by repository policy.",
+      "local_lock": {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/followups/genet-Cargo.lock",
+        "sha256": "8351fe7e8e613b37eb00717b45aab04246be44e75ba6c255c4a5d0e000ebb0f3"
+      },
+      "adoption": "Supplier object imported into Cargo Git cache, lock updated offline. No path override. Neither checkout pushed; external cold fetch requires publishing supplier first."
+    },
+    "limits": [
+      "Shared Arc pixel allocation does not preserve Blob identity across translations; atlas reuse not claimed.",
+      "Standalone img src change still follows existing full-layout fallback for its Inline context.",
+      "Existing affine projection/perspective and used-value 3D limits remain.",
+      "Mere stays on old supplier; its three Vec-valued ImageResource constructors require migration on adoption.",
+      "No fresh GPU, browser, Windows, Wasm or Forms acceptance.",
+      "Feature-off test build emits an unused test-only cache-count helper warning."
+    ],
+    "resources": {
+      "lock": "/home/markik/Code/testing/machine-heavy.lock",
+      "cargo_jobs": 1,
+      "test_threads": 1,
+      "memory_max": "5G",
+      "swap_max": 0,
+      "cpu_quota": "150%",
+      "nice": 10,
+      "timeout_seconds": 240,
+      "kill_after_seconds": 10,
+      "runner": {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/followups/run-gate.sh",
+        "sha256": "d35ffe380fce0255ea11810de9d9ea62d40724e423caabd490209208fc59661a"
+      },
+      "cleanup": "Pristine baseline control worktree removed after preserving provenance. Active worktrees and shared build caches preserved. Approximately 471 GiB free after builds; no further deletion needed."
+    }
   }
 }

@@ -8,17 +8,17 @@
 //! and paint. A non-`none` individual property establishes that context even
 //! when its matrix is the identity.
 
-use genet_livery::{Device, LiveryDocument, LiveryPaintList, StyleSet};
+use genet_livery::{Device, LiveryDocument, LiveryPaintList, StyleSet, TransformGapKind};
 use genet_scripted_dom::{NodeId, ScriptedDom};
 use layout_dom_api::{LayoutDom, LayoutDomMut, LocalName, Namespace, NodeKind, QualName};
-use paint_list_api::{ColorF, LayoutTransform, PaintCmd, PaintList};
+use paint_list_api::{ClipKind, ColorF, LayoutTransform, PaintCmd, PaintList};
 
 // Positioned span children opt into block display so their CSS backgrounds
 // produce DrawRect commands. The applicability subject remains the parent.
 const CSS: &str = "html, body { margin: 0; padding: 0; } \
     #stage { padding-left: 100px; padding-top: 80px; } \
     #anchor { width: 120px; height: 90px; transform-origin: 0 0; } \
-    #absolute, #fixed { display: block; width: 10px; height: 10px; } \
+    #absolute, #fixed { width: 10px; height: 10px; } \
     #absolute { position: absolute; left: 10px; top: 15px; background: red; } \
     #fixed { position: fixed; left: 20px; top: 25px; background: blue; }";
 
@@ -345,8 +345,8 @@ fn non_replaced_inline_transform_values_do_not_capture_positioned_descendants() 
 
 #[test]
 fn non_replaced_inline_perspective_and_preserve_3d_do_not_change_child_matrix() {
-    // The rotated child is block-displayed for an observable background; the
-    // parent remains a non-replaced inline for the applicability decision.
+    // The positioned span is blockified by box generation, while its parent
+    // remains a non-replaced inline for transform applicability.
     let render = |style: &str| {
         let html = format!(
             "<html><body><div id=stage><span id=anchor style=\"{style}\">host\
@@ -355,7 +355,7 @@ fn non_replaced_inline_perspective_and_preserve_3d_do_not_change_child_matrix() 
         let mut dom = ScriptedDom::from_serialized_document(&html);
         dom.drain_mutations(&mut Vec::new());
         let css = "html, body { margin: 0; } #stage { padding: 80px 0 0 100px; } \
-            #child { display: block; position: absolute; left: 20px; top: 30px; width: 40px; height: 40px; \
+            #child { position: absolute; left: 20px; top: 30px; width: 40px; height: 40px; \
                      transform-origin: 0 0; rotate: x 45deg; background: red; }";
         let mut retained =
             LiveryDocument::new(dom, StyleSet::cambium(&[css]), Device::screen(320.0, 240.0));
@@ -387,6 +387,168 @@ fn non_replaced_inline_perspective_and_preserve_3d_do_not_change_child_matrix() 
             &format!("{style} child paint"),
         );
     }
+}
+
+#[test]
+fn contents_does_not_interrupt_parent_perspective_or_preserve_3d() {
+    let capture = |parent_style: &str, through_contents: bool| {
+        let open = if through_contents {
+            "<div id=contents style='display:contents'>"
+        } else {
+            ""
+        };
+        let close = if through_contents { "</div>" } else { "" };
+        let html = format!(
+            "<html><body><div id=stage><div id=parent>{open}\
+             <span id=child></span>{close}</div></div></body></html>"
+        );
+        let mut dom = ScriptedDom::from_serialized_document(&html);
+        dom.drain_mutations(&mut Vec::new());
+        let css = format!(
+            "html, body {{ margin: 0; }} \
+             #stage {{ padding-left: 100px; padding-top: 80px; }} \
+             #parent {{ position: relative; width: 120px; height: 90px; {parent_style} }} \
+             #child {{ position: absolute; left: 20px; top: 30px; width: 40px; height: 40px; \
+                       transform-origin: 0 0; rotate: x 45deg; background: red; }}"
+        );
+        let mut retained = LiveryDocument::new(
+            dom,
+            StyleSet::cambium(&[&css]),
+            Device::screen(320.0, 240.0),
+        );
+        let frame = retained.frame(320, 240).expect("3D frame");
+        let matrices = frame
+            .commands()
+            .iter()
+            .filter_map(|cmd| match cmd {
+                PaintCmd::PushTransform(spec) => Some((spec.transform, spec.origin)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(matrices.len(), 1, "only the child has its own transform");
+        let painted = painted_origin(&frame, ColorF::new(1.0, 0.0, 0.0, 1.0));
+        let child = by_id(retained.dom(), "child");
+        let hit_child = retained.hit_test(painted.0 + 5.0, painted.1 + 5.0) == Some(child);
+        (matrices, painted, hit_child)
+    };
+
+    let without_context = capture("", false);
+    for style in [
+        "perspective: 400px; perspective-origin: 0 0;",
+        "transform-style: preserve-3d;",
+    ] {
+        let direct = capture(style, false);
+        let through_contents = capture(style, true);
+        assert_ne!(direct.0, without_context.0, "{style}: context witness");
+        assert_eq!(through_contents.0, direct.0, "{style}: paint matrix");
+        close(
+            through_contents.1,
+            direct.1,
+            &format!("{style} painted origin"),
+        );
+        assert!(direct.2, "{style}: the rotated child must be hittable");
+        assert_eq!(through_contents.2, direct.2, "{style}: hit testing");
+    }
+}
+
+#[test]
+fn table_caption_uses_its_wrapper_owners_3d_context() {
+    let capture = |table_style: &str, caption_style: &str| {
+        let html = "<html><body><table id=table><caption id=caption>Caption</caption>\
+                    <tr><td>Cell</td></tr></table></body></html>";
+        let mut dom = ScriptedDom::from_serialized_document(html);
+        dom.drain_mutations(&mut Vec::new());
+        let css = format!(
+            "html, body {{ margin: 0; }} \
+             #table {{ width: 120px; {table_style} }} \
+             #caption {{ transform-origin: 0 0; rotate: x 45deg; \
+                         background: red; {caption_style} }}"
+        );
+        let mut retained = LiveryDocument::new(
+            dom,
+            StyleSet::cambium(&[&css]),
+            Device::screen(320.0, 240.0),
+        );
+        let frame = retained.frame(320, 240).expect("caption frame");
+        let caption = by_id(retained.dom(), "caption");
+        assert!(
+            retained.fragment_rect(caption).is_some(),
+            "caption box exists"
+        );
+        let matrices = frame
+            .commands()
+            .iter()
+            .filter_map(|cmd| match cmd {
+                PaintCmd::PushTransform(spec) => Some(spec.transform),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(matrices.len(), 1, "only the caption is transformed");
+        (matrices[0], frame.transform_gaps().to_vec())
+    };
+
+    let flat_perspective = capture("", "transform-style: preserve-3d;");
+    let with_perspective = capture(
+        "perspective: 400px; perspective-origin: 0 0;",
+        "transform-style: preserve-3d;",
+    );
+    assert_ne!(with_perspective.0, flat_perspective.0);
+    assert!(
+        with_perspective
+            .1
+            .iter()
+            .any(|gap| gap.kind == TransformGapKind::PerspectiveDivide),
+        "the existing affine perspective gap remains reported"
+    );
+
+    let flat_preserve = capture("", "");
+    let with_preserve = capture("transform-style: preserve-3d;", "");
+    assert_ne!(with_preserve.0, flat_preserve.0);
+}
+
+#[test]
+fn positioned_inline_clip_encloses_hoisted_child_paint_and_hit() {
+    let html = "<html><body><div id=stage><span id=clip>\
+                <span id=overlay></span></span></div></body></html>";
+    let mut dom = ScriptedDom::from_serialized_document(html);
+    dom.drain_mutations(&mut Vec::new());
+    let css = "html, body { margin: 0; } #stage { position: relative; } \
+               #clip { position: absolute; left: 0; top: 0; width: 50px; height: 50px; \
+                       overflow: hidden; } \
+               #overlay { position: absolute; left: 40px; top: 0; width: 30px; height: 30px; \
+                          z-index: 1; background: red; }";
+    let mut retained =
+        LiveryDocument::new(dom, StyleSet::cambium(&[css]), Device::screen(320.0, 240.0));
+    let frame = retained.frame(320, 240).expect("clipped frame");
+    let overlay = by_id(retained.dom(), "overlay");
+    let red = frame
+        .commands()
+        .iter()
+        .position(|cmd| matches!(cmd, PaintCmd::DrawRect(rect) if rect.color == ColorF::new(1.0, 0.0, 0.0, 1.0)))
+        .expect("positioned inline child paints");
+    let clip = frame.commands()[..red]
+        .iter()
+        .rposition(|cmd| matches!(cmd, PaintCmd::PushClip(_)))
+        .expect("the hoisted child keeps its ancestor clip");
+    let PaintCmd::PushClip(spec) = &frame.commands()[clip] else {
+        unreachable!();
+    };
+    let ClipKind::Rect(rect) = &spec.kind else {
+        panic!("overflow hidden uses a rectangular clip");
+    };
+    close(
+        (rect.width(), rect.height()),
+        (50.0, 50.0),
+        "positioned inline clip size",
+    );
+    assert!(
+        frame.commands()[red + 1..]
+            .iter()
+            .any(|cmd| matches!(cmd, PaintCmd::PopClip)),
+        "the clip closes after the child paint"
+    );
+    assert_eq!(retained.hit_test(45.0, 5.0), Some(overlay));
+    assert_ne!(retained.hit_test(60.0, 5.0), Some(overlay));
 }
 
 #[test]

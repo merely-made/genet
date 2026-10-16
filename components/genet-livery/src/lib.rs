@@ -89,8 +89,8 @@ pub use document::{
     rendered_generated_text, rendered_visible,
 };
 pub use dom::{ElementRef, InteractionStates, SelectorTree};
+pub use image_resources::{DocumentImageSources, ImagePixels, ImageSourceLookup};
 pub use invalidation::{AttributeSnapshot, ElementSnapshot, IncrementalStyle, RestyleStats};
-pub use image_resources::{DocumentImageSources, ImageSourceLookup};
 pub use layout::{
     BlockAlgorithmCounts, LayoutError, LiveryLayout, content_box_size, hit_test,
     hit_test_with_scroll, layout, layout_with_text_system, resolve_container_query_styles,

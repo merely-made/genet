@@ -9,6 +9,7 @@
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
+    ops::{Deref, DerefMut},
 };
 
 use layout_dom_api::{LayoutDom, LocalName, Namespace, NodeKind};
@@ -44,8 +45,8 @@ use crate::{
     transform_context::TransformContextFacts,
 };
 use buckram::{
-    BoxId, DisplayInside, DisplayOutside, FragmentId, GridEdgeOrientation, PhysicalSize,
-    TableBorderStyle, TableFragmentRole,
+    AnonymousBoxKind, BoxId, BoxOrigin, DisplayInside, DisplayOutside, FragmentId,
+    GridEdgeOrientation, PhysicalSize, TableBorderStyle, TableFragmentRole,
 };
 
 /// Genet paint output produced by the Livery CSS/layout path.
@@ -56,12 +57,6 @@ pub struct LiveryPaintList {
     commands: Vec<PaintCmd>,
     fonts: Vec<FontResource>,
     images: Vec<ImageResource>,
-    #[serde(skip)]
-    image_keys: HashMap<String, ImageKey>,
-    #[serde(skip)]
-    image_sources: HashMap<String, Vec<u8>>,
-    #[serde(skip)]
-    document_base_url: Option<String>,
     #[serde(skip)]
     host_leaf_slots: Vec<HostLeafSlot>,
     #[serde(skip)]
@@ -168,7 +163,7 @@ struct TextPaintSlot {
 
 impl LiveryPaintList {
     pub fn new(viewport: DeviceIntSize, generation: u64) -> Self {
-        Self::with_image_sources(viewport, generation, &HashMap::new(), None)
+        Self::empty(viewport, generation)
     }
 
     /// The named transform-lowering gaps this paint list carries.
@@ -497,54 +492,19 @@ impl LiveryPaintList {
         ));
     }
 
-    fn with_image_sources(
-        viewport: DeviceIntSize,
-        generation: u64,
-        image_sources: &HashMap<String, Vec<u8>>,
-        document_base_url: Option<&str>,
-    ) -> Self {
+    fn empty(viewport: DeviceIntSize, generation: u64) -> Self {
         Self {
             viewport,
             generation,
             commands: Vec::new(),
             fonts: Vec::new(),
             images: Vec::new(),
-            image_keys: HashMap::new(),
-            image_sources: image_sources.clone(),
-            document_base_url: document_base_url.map(str::to_owned),
             host_leaf_slots: Vec::new(),
             frame_slots: Vec::new(),
             text_paint_slots: Vec::new(),
             next_slot_order: 0,
             transform_gaps: Vec::new(),
         }
-    }
-
-    fn image_key_for(&mut self, url: &str) -> Option<ImageKey> {
-        if let Some(key) = self.image_keys.get(url) {
-            return Some(*key);
-        }
-        let bytes = if let Ok(data_url) = data_url::DataUrl::process(url) {
-            data_url.decode_to_vec().ok()?.0
-        } else {
-            self.image_sources.get(url)?.clone()
-        };
-        let (width, height, data) = crate::image_decode::decode(&bytes)?.into_rgba8();
-        let key = ImageKey::new(IdNamespace(0), self.images.len() as u32 + 1);
-        self.images.push(ImageResource {
-            key,
-            width,
-            height,
-            data,
-        });
-        self.image_keys.insert(url.to_owned(), key);
-        Some(key)
-    }
-
-    fn document_image_key_for(&mut self, authored: &str) -> Option<ImageKey> {
-        let key =
-            crate::image_resources::document_image_key(self.document_base_url.as_deref(), authored);
-        self.image_key_for(&key)
     }
 
     fn image_size(&self, key: ImageKey) -> Option<(f32, f32)> {
@@ -594,6 +554,52 @@ impl LiveryPaintList {
         self.commands.push(PaintCmd::PopTransform);
         self.shift_slots_after(0, 1, None);
         self
+    }
+}
+
+/// The source lookup is borrowed only while emitting. The finished list owns
+/// shared decoded pixels, never a copy of the document's encoded byte ledger.
+struct PaintBuilder<'a> {
+    list: LiveryPaintList,
+    image_keys: HashMap<String, ImageKey>,
+    image_sources: &'a dyn crate::ImageSourceLookup,
+    document_base_url: Option<&'a str>,
+}
+
+impl Deref for PaintBuilder<'_> {
+    type Target = LiveryPaintList;
+
+    fn deref(&self) -> &Self::Target {
+        &self.list
+    }
+}
+
+impl DerefMut for PaintBuilder<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.list
+    }
+}
+
+impl PaintBuilder<'_> {
+    fn image_key_for(&mut self, url: &str) -> Option<ImageKey> {
+        if let Some(key) = self.image_keys.get(url) {
+            return Some(*key);
+        }
+        let image = self.image_sources.decoded(url)?;
+        let key = ImageKey::new(IdNamespace(0), self.images.len() as u32 + 1);
+        self.images.push(ImageResource {
+            key,
+            width: image.width,
+            height: image.height,
+            data: image.data,
+        });
+        self.image_keys.insert(url.to_owned(), key);
+        Some(key)
+    }
+
+    fn document_image_key_for(&mut self, authored: &str) -> Option<ImageKey> {
+        let key = crate::image_resources::document_image_key(self.document_base_url, authored);
+        self.image_key_for(&key)
     }
 }
 
@@ -696,7 +702,7 @@ where
         generation,
         text,
         scroll_offsets,
-        &HashMap::new(),
+        &HashMap::<String, Vec<u8>>::new(),
     )
 }
 
@@ -712,7 +718,7 @@ pub fn emit_paint_list_with_text_system_scrolled_with_images<D>(
     generation: u64,
     text: &mut TextSystem,
     scroll_offsets: &HashMap<D::NodeId, (f32, f32)>,
-    image_sources: &HashMap<String, Vec<u8>>,
+    image_sources: &dyn crate::ImageSourceLookup,
 ) -> LiveryPaintList
 where
     D: LayoutDom,
@@ -741,7 +747,7 @@ pub fn emit_paint_list_with_text_system_scrolled_with_images_and_document_base<D
     generation: u64,
     text: &mut TextSystem,
     scroll_offsets: &HashMap<D::NodeId, (f32, f32)>,
-    image_sources: &HashMap<String, Vec<u8>>,
+    image_sources: &dyn crate::ImageSourceLookup,
     document_base_url: Option<&str>,
 ) -> LiveryPaintList
 where
@@ -774,7 +780,7 @@ pub fn emit_paint_list_with_text_system_scrolled_with_images_and_external_textur
     generation: u64,
     text: &mut TextSystem,
     scroll_offsets: &HashMap<D::NodeId, (f32, f32)>,
-    image_sources: &HashMap<String, Vec<u8>>,
+    image_sources: &dyn crate::ImageSourceLookup,
     external_textures: &HashMap<D::NodeId, u64>,
 ) -> LiveryPaintList
 where
@@ -808,7 +814,7 @@ pub fn emit_paint_list_with_text_system_scrolled_with_images_and_external_textur
     generation: u64,
     text: &mut TextSystem,
     scroll_offsets: &HashMap<D::NodeId, (f32, f32)>,
-    image_sources: &HashMap<String, Vec<u8>>,
+    image_sources: &dyn crate::ImageSourceLookup,
     external_textures: &HashMap<D::NodeId, u64>,
     document_base_url: Option<&str>,
 ) -> LiveryPaintList
@@ -820,8 +826,12 @@ where
     // element scheme and host palette. Keep `styles` contextual for cascade
     // and CSSOM, but never let paint reach the old light-palette fallback.
     let styles = styles.with_used_colors();
-    let mut list =
-        LiveryPaintList::with_image_sources(viewport, generation, image_sources, document_base_url);
+    let mut list = PaintBuilder {
+        list: LiveryPaintList::empty(viewport, generation),
+        image_keys: HashMap::new(),
+        image_sources,
+        document_base_url,
+    };
     let mut text_frame = fragments
         .text_frame()
         .cloned()
@@ -844,7 +854,7 @@ where
         external_textures,
     );
     list.fonts = text.fonts_for(&text_frame);
-    list
+    list.list
 }
 
 struct PaintText<'a, Id> {
@@ -860,7 +870,7 @@ fn emit_node<D>(
     id: D::NodeId,
     inherited: Option<&ComputedValues>,
     text: &mut PaintText<'_, D::NodeId>,
-    list: &mut LiveryPaintList,
+    list: &mut PaintBuilder<'_>,
     scroll_offsets: &HashMap<D::NodeId, (f32, f32)>,
     canvas_background_source: Option<D::NodeId>,
     external_textures: &HashMap<D::NodeId, u64>,
@@ -995,7 +1005,7 @@ fn record_host_leaf_slot<D>(
     styles: &StylePlane<D::NodeId>,
     fragments: &LiveryLayout<D::NodeId>,
     id: D::NodeId,
-    list: &mut LiveryPaintList,
+    list: &mut PaintBuilder<'_>,
 ) where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
@@ -1008,14 +1018,16 @@ fn record_host_leaf_slot<D>(
         if width <= 0.0 || height <= 0.0 {
             return;
         }
+        let command_index = list.commands.len();
+        let order = list.next_slot_order;
         list.host_leaf_slots.push(HostLeafSlot {
             key,
-            command_index: list.commands.len(),
+            command_index,
             content_rect: LayoutRect::new(
                 LayoutPoint::new(x, y),
                 LayoutPoint::new(x + width, y + height),
             ),
-            order: list.next_slot_order,
+            order,
         });
         list.next_slot_order += 1;
     }
@@ -1025,16 +1037,18 @@ fn record_text_paint_slot<D>(
     dom: &D,
     id: D::NodeId,
     phase: TextPaintPhase,
-    list: &mut LiveryPaintList,
+    list: &mut PaintBuilder<'_>,
 ) where
     D: LayoutDom,
 {
     if dom.kind(id) == NodeKind::Element {
+        let command_index = list.commands.len();
+        let order = list.next_slot_order;
         list.text_paint_slots.push(TextPaintSlot {
             owner_node: dom.opaque_id(id),
             phase,
-            command_index: list.commands.len(),
-            order: list.next_slot_order,
+            command_index,
+            order,
         });
         list.next_slot_order += 1;
     }
@@ -1084,7 +1098,7 @@ fn record_frame_slot<D>(
     styles: &StylePlane<D::NodeId>,
     fragments: &LiveryLayout<D::NodeId>,
     id: D::NodeId,
-    list: &mut LiveryPaintList,
+    list: &mut PaintBuilder<'_>,
 ) where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
@@ -1103,14 +1117,16 @@ fn record_frame_slot<D>(
     if width <= 0.0 || height <= 0.0 {
         return;
     }
+    let command_index = list.commands.len();
+    let order = list.next_slot_order;
     list.frame_slots.push(FrameSlot {
         owner_node: dom.opaque_id(id),
         content_rect: LayoutRect::new(
             LayoutPoint::new(x, y),
             LayoutPoint::new(x + width, y + height),
         ),
-        command_index: list.commands.len(),
-        order: list.next_slot_order,
+        command_index,
+        order,
     });
     list.next_slot_order += 1;
 }
@@ -1133,6 +1149,55 @@ where
                 Some(DisplayInside::Flex | DisplayInside::Grid)
             )
         })
+}
+
+/// The generated box decides whether an inline element owns line decorations.
+/// Positioned, floated, and flex/grid item boxes have already been blockified
+/// here, even when their computed `display` is still `inline`.
+pub(crate) fn paints_as_inline_box<Id>(
+    fragments: &LiveryLayout<Id>,
+    id: Id,
+    style: &ComputedValues,
+) -> bool
+where
+    Id: Copy + Eq + Hash,
+{
+    if !matches!(style.display, Display::Inline | Display::InlineBlock) {
+        return false;
+    }
+    let boxes = fragments.boxes();
+    boxes
+        .principal_box(id)
+        .is_some_and(|box_id| boxes[box_id].display.outside == Some(DisplayOutside::Inline))
+}
+
+/// Nearest ancestor element in the generated flat box tree. Most anonymous
+/// fixup boxes carry no style; the owned table wrapper carries its table's
+/// transform context around both the grid and captions. `display: contents`
+/// contributes no box at all.
+fn generated_parent_node<Id>(fragments: &LiveryLayout<Id>, id: Id) -> Option<Id>
+where
+    Id: Copy + Eq + Hash,
+{
+    let boxes = fragments.boxes();
+    let mut cursor = boxes
+        .principal_box(id)
+        .and_then(|box_id| boxes[box_id].parent());
+    while let Some(box_id) = cursor {
+        let owner = match boxes[box_id].origin {
+            BoxOrigin::Element(owner)
+            | BoxOrigin::Anonymous {
+                owner: Some(owner),
+                kind: AnonymousBoxKind::TableWrapper,
+            } => Some(owner),
+            _ => None,
+        };
+        if let Some(owner) = owner.filter(|owner| *owner != id) {
+            return Some(owner);
+        }
+        cursor = boxes[box_id].parent();
+    }
+    None
 }
 
 /// Whether `id`'s principal box is an inline box, which owns the text under
@@ -1158,7 +1223,7 @@ fn begin_node<'a, D>(
     id: D::NodeId,
     scope: PaintScope<'a, D::NodeId>,
     text: &mut PaintText<'_, D::NodeId>,
-    list: &mut LiveryPaintList,
+    list: &mut PaintBuilder<'_>,
 ) -> Option<(Option<&'a ComputedValues>, usize)>
 where
     D: LayoutDom,
@@ -1186,8 +1251,7 @@ where
             text.system
                 .prepare_inline_children(text.frame, dom, styles, fragments, id, style);
             let background_propagated = scope.canvas_background_source == Some(id);
-            let paints_as_inline = matches!(style.display, Display::Inline | Display::InlineBlock)
-                && !is_blockified_item(fragments, id);
+            let paints_as_inline = paints_as_inline_box(fragments, id, style);
             if paints_as_inline {
                 if !background_propagated && !fragments.table_paint_manages_node(id) {
                     emit_inline_element_decoration(text.frame, fragments, id, style, list);
@@ -1315,7 +1379,7 @@ fn emit_canvas_external_texture<D>(
     id: D::NodeId,
     style: &ComputedValues,
     trusted: &HashMap<D::NodeId, u64>,
-    list: &mut LiveryPaintList,
+    list: &mut PaintBuilder<'_>,
 ) where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
@@ -1372,7 +1436,7 @@ fn emit_table_backgrounds<D>(
     styles: &StylePlane<D::NodeId>,
     fragments: &LiveryLayout<D::NodeId>,
     table: &TablePaintModel,
-    list: &mut LiveryPaintList,
+    list: &mut PaintBuilder<'_>,
 ) where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
@@ -2665,12 +2729,12 @@ impl<'a> DeferredCollapsedBorders<'a> {
         &mut self,
         styles: &StylePlane<Id>,
         fragments: &LiveryLayout<Id>,
-        list: &mut LiveryPaintList,
+        list: &mut PaintBuilder<'_>,
     ) where
         Id: Copy + Eq + Hash,
     {
         if !self.emitted {
-            emit_collapsed_table_borders(styles, fragments, self.table, list);
+            emit_collapsed_table_borders(styles, fragments, self.table, &mut list.list);
             self.emitted = true;
         }
     }
@@ -2694,7 +2758,7 @@ fn sort_preserve_3d_runs<D>(
     D::NodeId: Copy + Eq + Hash,
 {
     let context = |id: D::NodeId| {
-        dom.parent(id).filter(|parent| {
+        generated_parent_node(fragments, id).filter(|parent| {
             transform_context_for_node(dom, styles, fragments, *parent)
                 .is_some_and(TransformContextFacts::preserves_3d)
         })
@@ -2726,7 +2790,7 @@ fn emit_children_in_stacking_order<D>(
     parent: D::NodeId,
     inherited: Option<&ComputedValues>,
     text: &mut PaintText<'_, D::NodeId>,
-    list: &mut LiveryPaintList,
+    list: &mut PaintBuilder<'_>,
     scroll_offsets: &HashMap<D::NodeId, (f32, f32)>,
     canvas_background_source: Option<D::NodeId>,
     external_textures: &HashMap<D::NodeId, u64>,
@@ -2836,9 +2900,7 @@ fn collect_stacking_items<D>(
                 if style.display == Display::None || style.visibility != Visibility::Visible {
                     continue;
                 }
-                if matches!(style.display, Display::Inline | Display::InlineBlock)
-                    && !is_blockified_item(fragments, child)
-                {
+                if paints_as_inline_box(fragments, child, style) {
                     None
                 } else {
                     fragments
@@ -2888,7 +2950,7 @@ fn emit_stacking_items<'items, D>(
     fragments: &LiveryLayout<D::NodeId>,
     items: impl Iterator<Item = &'items StackingItem<D::NodeId>>,
     text: &mut PaintText<'_, D::NodeId>,
-    list: &mut LiveryPaintList,
+    list: &mut PaintBuilder<'_>,
     scroll_offsets: &HashMap<D::NodeId, (f32, f32)>,
     canvas_background_source: Option<D::NodeId>,
     external_textures: &HashMap<D::NodeId, u64>,
@@ -2956,7 +3018,7 @@ fn emit_normal_node<'a, D>(
     id: D::NodeId,
     scope: PaintScope<'a, D::NodeId>,
     text: &mut PaintText<'_, D::NodeId>,
-    list: &mut LiveryPaintList,
+    list: &mut PaintBuilder<'_>,
     scroll_offsets: &HashMap<D::NodeId, (f32, f32)>,
     mut deferred_collapsed: Option<&mut DeferredCollapsedBorders<'_>>,
 ) where
@@ -3039,7 +3101,7 @@ fn emit_normal_children<'a, D>(
     parent: D::NodeId,
     scope: PaintScope<'a, D::NodeId>,
     text: &mut PaintText<'_, D::NodeId>,
-    list: &mut LiveryPaintList,
+    list: &mut PaintBuilder<'_>,
     scroll_offsets: &HashMap<D::NodeId, (f32, f32)>,
     mut deferred_collapsed: Option<&mut DeferredCollapsedBorders<'_>>,
 ) where
@@ -3382,7 +3444,7 @@ where
     let mut cursor = Some(id);
     while let Some(node) = cursor {
         chain.push(node);
-        let parent = dom.parent(node);
+        let parent = generated_parent_node(fragments, node);
         cursor = match scope {
             MatrixScope::Document => parent,
             // Only the transforms inside the element's own 3D rendering
@@ -3461,7 +3523,7 @@ where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
-    let parent = dom.parent(id)?;
+    let parent = generated_parent_node(fragments, id)?;
     // `fragments.get` yields a tree fragment; the deref is the physical rect
     // every transform helper here reads.
     let fragment: &Fragment = fragments.get(parent)?;
@@ -3521,7 +3583,7 @@ where
 }
 
 /// Record the affine approximation of a non-affine matrix as a named gap.
-fn record_transform_gap(matrix: &Matrix3D, fragment: &Fragment, list: &mut LiveryPaintList) {
+fn record_transform_gap(matrix: &Matrix3D, fragment: &Fragment, list: &mut PaintBuilder<'_>) {
     if matrix.is_affine() {
         return;
     }
@@ -3605,7 +3667,7 @@ fn emit_inline_group<'a, D>(
     roots: &[D::NodeId],
     scope: PaintScope<'a, D::NodeId>,
     text: &mut PaintText<'_, D::NodeId>,
-    list: &mut LiveryPaintList,
+    list: &mut PaintBuilder<'_>,
     scroll_offsets: &HashMap<D::NodeId, (f32, f32)>,
     mut deferred_collapsed: Option<&mut DeferredCollapsedBorders<'_>>,
 ) where
@@ -3688,7 +3750,7 @@ fn emit_inline_descendant_decorations<D>(
     stacking_roots: Option<&HashSet<D::NodeId>>,
     first_line: f32,
     frame: &mut TextFrame<D::NodeId>,
-    list: &mut LiveryPaintList,
+    list: &mut PaintBuilder<'_>,
 ) where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
@@ -3733,7 +3795,7 @@ fn emit_inline_element_decoration<Id>(
     fragments: &LiveryLayout<Id>,
     id: Id,
     style: &ComputedValues,
-    list: &mut LiveryPaintList,
+    list: &mut PaintBuilder<'_>,
 ) where
     Id: Copy + Eq + Hash,
 {
@@ -3774,7 +3836,7 @@ fn emit_inline_replaced_image<D>(
     frame: &TextFrame<D::NodeId>,
     fragments: &LiveryLayout<D::NodeId>,
     id: D::NodeId,
-    list: &mut LiveryPaintList,
+    list: &mut PaintBuilder<'_>,
 ) where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
@@ -3810,7 +3872,7 @@ fn emit_inline_replaced_image<D>(
 
 fn emit_replaced_image<D>(
     dom: &D,
-    list: &mut LiveryPaintList,
+    list: &mut PaintBuilder<'_>,
     id: D::NodeId,
     style: &ComputedValues,
     fragment: &Fragment,
@@ -3964,7 +4026,7 @@ fn emit_canvas_background<D>(
     dom: &D,
     styles: &StylePlane<D::NodeId>,
     fragments: &LiveryLayout<D::NodeId>,
-    list: &mut LiveryPaintList,
+    list: &mut PaintBuilder<'_>,
 ) -> Option<D::NodeId>
 where
     D: LayoutDom,
@@ -4049,7 +4111,7 @@ fn has_background(style: &ComputedValues) -> bool {
         || resolve_color(&style.background_color).a > 0.0
 }
 
-fn emit_background(list: &mut LiveryPaintList, style: &ComputedValues, fragment: &Fragment) {
+fn emit_background(list: &mut PaintBuilder<'_>, style: &ComputedValues, fragment: &Fragment) {
     if style.background_clip == BackgroundBox::Text {
         return;
     }
@@ -4102,7 +4164,7 @@ fn emit_background(list: &mut LiveryPaintList, style: &ComputedValues, fragment:
 }
 
 fn emit_background_image_in(
-    list: &mut LiveryPaintList,
+    list: &mut PaintBuilder<'_>,
     style: &ComputedValues,
     positioning_rect: LayoutRect,
     painting_rect: LayoutRect,
@@ -4415,7 +4477,7 @@ fn tile_count(first: f32, max: f32, tile: f32, repeated: bool) -> usize {
     ((max - first) / tile).ceil().max(0.0) as usize
 }
 
-fn emit_shadow(list: &mut LiveryPaintList, style: &ComputedValues, fragment: &Fragment) {
+fn emit_shadow(list: &mut PaintBuilder<'_>, style: &ComputedValues, fragment: &Fragment) {
     let CssBoxShadow::Value(shadow) = &style.box_shadow else {
         return;
     };
@@ -4437,12 +4499,12 @@ fn emit_shadow(list: &mut LiveryPaintList, style: &ComputedValues, fragment: &Fr
     }));
 }
 
-fn emit_border(list: &mut LiveryPaintList, style: &ComputedValues, fragment: &Fragment) {
+fn emit_border(list: &mut PaintBuilder<'_>, style: &ComputedValues, fragment: &Fragment) {
     emit_inline_border(list, style, fragment, true, true);
 }
 
 fn emit_inline_border(
-    list: &mut LiveryPaintList,
+    list: &mut PaintBuilder<'_>,
     style: &ComputedValues,
     fragment: &Fragment,
     paint_left: bool,

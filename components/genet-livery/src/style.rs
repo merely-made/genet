@@ -21,8 +21,7 @@ use livery::{
     ComputedValues, PropertyId, PropertyValue, ShorthandId,
     cascade::{
         CascadeLayer, ColorComputeContext, DeclarationError, MatchedCustomDeclaration,
-        MatchedDeclaration, Origin, Specificity,
-        cascade_with_custom_context_and_image_resolver,
+        MatchedDeclaration, Origin, Specificity, cascade_with_custom_context_and_image_resolver,
         parse_declaration_block,
     },
     custom::CustomProperties,
@@ -461,12 +460,16 @@ impl StyleSet {
         self.rules.extend(self.ua.reindexed_rules(0));
         self.rule_sheets.resize(self.rules.len(), None);
         self.font_faces.extend(self.ua.font_faces().iter().cloned());
-        self.keyframes.extend(self.ua.keyframes().iter().cloned().map(|rule| {
-            SourcedKeyframes {
-                rule,
-                source_url: None,
-            }
-        }));
+        self.keyframes.extend(
+            self.ua
+                .keyframes()
+                .iter()
+                .cloned()
+                .map(|rule| SourcedKeyframes {
+                    rule,
+                    source_url: None,
+                }),
+        );
         let mut source_order = 0_u64;
         for (index, author) in self.authors.iter().enumerate() {
             self.diagnostics.extend_from_slice(author.diagnostics());
@@ -478,12 +481,17 @@ impl StyleSet {
                 .source_url()
                 .or(self.document_base_url.as_deref())
                 .map(str::to_owned);
-            self.keyframes.extend(author.keyframes().iter().cloned().map(|rule| {
-                SourcedKeyframes {
-                    rule,
-                    source_url: source_url.clone(),
-                }
-            }));
+            self.keyframes
+                .extend(
+                    author
+                        .keyframes()
+                        .iter()
+                        .cloned()
+                        .map(|rule| SourcedKeyframes {
+                            rule,
+                            source_url: source_url.clone(),
+                        }),
+                );
         }
         self.index = SelectorIndex::build(&self.rules);
         self.generation = self.generation.saturating_add(1);
@@ -699,7 +707,8 @@ impl StyleSet {
     }
 
     pub(crate) fn keyframes(&self, name: &str) -> Option<&Keyframes> {
-        self.keyframes_with_source(name).map(|(keyframes, _)| keyframes)
+        self.keyframes_with_source(name)
+            .map(|(keyframes, _)| keyframes)
     }
 
     pub(crate) fn keyframes_with_source(&self, name: &str) -> Option<(&Keyframes, Option<&str>)> {
@@ -758,6 +767,18 @@ where
 {
     pub fn get(&self, id: Id) -> Option<&ComputedValues> {
         self.values.get(&id)
+    }
+
+    /// Current computed background sources, including generated boxes. The
+    /// retained image cache uses these to release removed data URLs.
+    pub(crate) fn background_image_urls(&self) -> impl Iterator<Item = &str> {
+        self.values
+            .values()
+            .chain(self.generated.values().map(|(style, _)| style))
+            .filter_map(|style| match &style.background_image {
+                BackgroundImage::Url(url) => Some(url.as_ref()),
+                _ => None,
+            })
     }
 
     /// Resolved, admitted inline generated text; shared by layout and AccName.

@@ -212,7 +212,7 @@ where
     transitions: Vec<PropertyTransition<D::NodeId>>,
     keyframe_animation: Option<KeyframeAnimation<D::NodeId>>,
     nested_scroll: HashMap<D::NodeId, (f32, f32)>,
-    image_sources: HashMap<String, Vec<u8>>,
+    image_sources: crate::image_resources::ImageResources,
     font_sources: HashMap<String, Vec<u8>>,
     generic_font_sources: HashMap<String, Vec<u8>>,
     selection_anchor: Option<(D::NodeId, usize)>,
@@ -332,7 +332,7 @@ where
             transitions: Vec::new(),
             keyframe_animation: None,
             nested_scroll: HashMap::new(),
-            image_sources: HashMap::new(),
+            image_sources: crate::image_resources::ImageResources::default(),
             font_sources: HashMap::new(),
             generic_font_sources: HashMap::new(),
             selection_anchor: None,
@@ -346,7 +346,11 @@ where
 
     /// Append the shared host validation overlay using this document's retained
     /// font system. Bounds are in CSS viewport coordinates.
-    pub fn push_validation_notice(&mut self, list: &mut LiveryPaintList, message: &str) -> Option<[f32; 4]> {
+    pub fn push_validation_notice(
+        &mut self,
+        list: &mut LiveryPaintList,
+        message: &str,
+    ) -> Option<[f32; 4]> {
         let bounds = list.push_native_text_overlay(&mut self.text, message)?;
         Some([bounds.min.x, bounds.min.y, bounds.width(), bounds.height()])
     }

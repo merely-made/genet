@@ -49,6 +49,93 @@ pub use ast::TranslationUnit;
 pub use error::{Error, ErrorKind};
 pub use span::Span;
 
+/// Compile a shader pair under one interface and uniform layout owner.
+pub fn compile_linked(
+    vertex_source: &str,
+    fragment_source: &str,
+) -> Result<LinkedCompileResult, LinkedCompileError> {
+    let vertex = parse_source(vertex_source).map_err(LinkedCompileError::Parse)?;
+    let fragment = parse_source(fragment_source).map_err(LinkedCompileError::Parse)?;
+    for tu in [&vertex, &fragment] {
+        let checked = check::check(tu);
+        if !checked.diagnostics.is_empty() {
+            return Err(LinkedCompileError::Check(checked.diagnostics));
+        }
+    }
+    let plan = reflect::LinkedProgramPlan::build(&vertex, &fragment)
+        .map_err(|_| LinkedCompileError::Link("stage interface or uniform type conflict".into()))?;
+    let vv = validate::validate(&vertex, vertex_source, validate::ShaderStage::Vertex);
+    let fv = validate::validate(&fragment, fragment_source, validate::ShaderStage::Fragment);
+    if vv.num_errors() > 0 || fv.num_errors() > 0 {
+        return Err(LinkedCompileError::Validate(format!(
+            "vertex: {}\nfragment: {}",
+            vv.info_log, fv.info_log
+        )));
+    }
+    let vertex_wgsl =
+        lower::lower_to_wgsl_with_plan(&vertex, validate::ShaderStage::Vertex, Some(&plan))
+            .map_err(LinkedCompileError::Lower)?;
+    let fragment_wgsl =
+        lower::lower_to_wgsl_with_plan(&fragment, validate::ShaderStage::Fragment, Some(&plan))
+            .map_err(LinkedCompileError::Lower)?;
+    let (vertex_layout, vertex_block_size) =
+        lower::reflect_emitted_uniform_layout(&vertex_wgsl).map_err(LinkedCompileError::Lower)?;
+    let (fragment_layout, fragment_block_size) =
+        lower::reflect_emitted_uniform_layout(&fragment_wgsl).map_err(LinkedCompileError::Lower)?;
+    if vertex_layout != fragment_layout || vertex_block_size != fragment_block_size {
+        return Err(LinkedCompileError::Link(
+            "linked stages emitted different uniform layouts".into(),
+        ));
+    }
+    let vertex_reflection = reflect::reflect(&vertex, validate::ShaderStage::Vertex);
+    let fragment_reflection = reflect::reflect(&fragment, validate::ShaderStage::Fragment);
+    let mut uniforms = Vec::new();
+    for uniform in plan.uniforms.iter().filter(|u| u.member_index.is_some()) {
+        let member_index = uniform.member_index.expect("filtered linked block member");
+        let (offset, size, matrix_stride) = vertex_layout
+            .get(member_index as usize)
+            .copied()
+            .ok_or_else(|| {
+                LinkedCompileError::Link("emitted uniform block does not match linked plan".into())
+            })?;
+        uniforms.push(reflect::LinkedUniformLayout {
+            name: uniform.name.clone(),
+            kind: uniform.kind,
+            member_index,
+            byte_offset: offset,
+            byte_size: size,
+            matrix_stride,
+        });
+    }
+    Ok(LinkedCompileResult {
+        vertex_wgsl,
+        fragment_wgsl,
+        reflection: reflect::LinkedProgramReflection {
+            attributes: vertex_reflection.inputs,
+            uniforms,
+            uniform_block_size: vertex_block_size,
+            varyings: plan.varyings,
+            samplers: fragment_reflection.samplers,
+        },
+    })
+}
+
+#[derive(Debug, Clone)]
+pub struct LinkedCompileResult {
+    pub vertex_wgsl: String,
+    pub fragment_wgsl: String,
+    pub reflection: reflect::LinkedProgramReflection,
+}
+
+#[derive(Debug)]
+pub enum LinkedCompileError {
+    Parse(Error),
+    Check(Vec<check::TypeDiagnostic>),
+    Validate(String),
+    Lower(lower::LoweringError),
+    Link(String),
+}
+
 /// Production-shaped entry: run the full ESSL → WGSL pipeline on
 /// `source`. Stops at the first failing stage. Source text is
 /// threaded through to the validator so info-log lines render with

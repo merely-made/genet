@@ -207,3 +207,162 @@ fn webgl_context_link_failure_reports_program_info_log() {
     context.use_program(Some(program));
     assert_eq!(context.get_error(), WebGlError::InvalidOperation);
 }
+
+#[test]
+fn linked_varyings_keep_name_locations_when_fragment_declarations_are_reordered() {
+    let mut context = make_context(32, 32);
+    let vertex = r#"
+attribute vec2 a_position;
+varying vec4 v_red;
+varying vec4 v_green;
+void main() {
+    v_red = vec4(1.0, 0.0, 0.0, 1.0);
+    v_green = vec4(0.0, 1.0, 0.0, 1.0);
+    gl_Position = vec4(a_position, 0.0, 1.0);
+}
+"#;
+    let fragment = r#"
+precision mediump float;
+varying vec4 v_green;
+varying vec4 v_red;
+void main() {
+    gl_FragColor = vec4(v_red.r, v_green.g, 0.0, 1.0);
+}
+"#;
+    let program = context
+        .create_program_from_essl(vertex, fragment)
+        .expect("reordered varying declarations link by name");
+    context.use_program(Some(program));
+
+    let vertices = context.create_buffer();
+    context.bind_buffer(BufferTarget::ArrayBuffer, Some(vertices));
+    context.buffer_data_f32(
+        BufferTarget::ArrayBuffer,
+        &[-0.8, -0.8, 0.8, -0.8, 0.0, 0.8],
+        BufferUsage::StaticDraw,
+    );
+    let position = context.get_attrib_location(program, "a_position") as u32;
+    context.enable_vertex_attrib_array(position);
+    context.vertex_attrib_pointer_f32(position, 2, false, 0, 0);
+    context.draw_arrays(PrimitiveMode::Triangles, 0, 3);
+
+    let center = context.read_pixels(16, 16, 1, 1).expect("center read");
+    assert_eq!(&center[0..4], &[255, 255, 0, 255]);
+    assert_eq!(context.get_error(), WebGlError::NoError);
+}
+
+#[test]
+fn linked_uniforms_share_one_layout_across_reordered_stage_declarations() {
+    let mut context = make_context(32, 32);
+    let vertex = r#"
+attribute vec2 a_position;
+varying float v_from_vertex;
+uniform vec4 u_shared;
+uniform float u_vertex_only;
+void main() {
+    v_from_vertex = u_vertex_only + u_shared.r;
+    gl_Position = vec4(a_position, 0.0, 1.0);
+}
+"#;
+    let fragment = r#"
+precision mediump float;
+varying float v_from_vertex;
+uniform float u_fragment_only;
+uniform vec4 u_shared;
+void main() {
+    gl_FragColor = vec4(u_shared.b, u_fragment_only, v_from_vertex, 1.0);
+}
+"#;
+    let program = context
+        .create_program_from_essl(vertex, fragment)
+        .expect("shared and stage-local uniforms link");
+    context.use_program(Some(program));
+    let shared = context
+        .get_uniform_location(program, "u_shared")
+        .expect("u_shared uniform location");
+    let vertex_only = context
+        .get_uniform_location(program, "u_vertex_only")
+        .expect("u_vertex_only uniform location");
+    let fragment_only = context
+        .get_uniform_location(program, "u_fragment_only")
+        .expect("u_fragment_only uniform location");
+    context.uniform4f(shared, 0.25, 0.0, 0.75, 1.0);
+    context.uniform1f(vertex_only, 0.25);
+    context.uniform1f(fragment_only, 0.125);
+
+    let vertices = context.create_buffer();
+    context.bind_buffer(BufferTarget::ArrayBuffer, Some(vertices));
+    context.buffer_data_f32(
+        BufferTarget::ArrayBuffer,
+        &[-0.8, -0.8, 0.8, -0.8, 0.0, 0.8],
+        BufferUsage::StaticDraw,
+    );
+    let position = context.get_attrib_location(program, "a_position") as u32;
+    context.enable_vertex_attrib_array(position);
+    context.vertex_attrib_pointer_f32(position, 2, false, 0, 0);
+    context.draw_arrays(PrimitiveMode::Triangles, 0, 3);
+
+    let center = context.read_pixels(16, 16, 1, 1).expect("center read");
+    assert_eq!(&center[0..4], &[191, 32, 128, 255]);
+    assert_eq!(context.get_error(), WebGlError::NoError);
+}
+
+#[test]
+fn linked_uniform_name_with_different_stage_types_fails_to_link() {
+    let vertex = r#"
+attribute vec2 a_position;
+uniform float u_conflict;
+void main() {
+    gl_Position = vec4(a_position * u_conflict, 0.0, 1.0);
+}
+"#;
+    let fragment = r#"
+precision mediump float;
+uniform vec2 u_conflict;
+void main() {
+    gl_FragColor = vec4(u_conflict, 0.0, 1.0);
+}
+"#;
+    let mut context = make_context(4, 4);
+    assert!(context.create_program_from_essl(vertex, fragment).is_none());
+    assert_eq!(context.get_error(), WebGlError::InvalidOperation);
+}
+
+#[test]
+fn unused_vertex_varying_output_does_not_prevent_link_or_draw() {
+    let mut context = make_context(32, 32);
+    let vertex = r#"
+attribute vec2 a_position;
+varying vec4 v_unused;
+void main() {
+    v_unused = vec4(1.0, 0.0, 1.0, 1.0);
+    gl_Position = vec4(a_position, 0.0, 1.0);
+}
+"#;
+    let fragment = r#"
+precision mediump float;
+void main() {
+    gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0);
+}
+"#;
+    let program = context
+        .create_program_from_essl(vertex, fragment)
+        .expect("unused vertex output does not block linking");
+    context.use_program(Some(program));
+
+    let vertices = context.create_buffer();
+    context.bind_buffer(BufferTarget::ArrayBuffer, Some(vertices));
+    context.buffer_data_f32(
+        BufferTarget::ArrayBuffer,
+        &[-0.8, -0.8, 0.8, -0.8, 0.0, 0.8],
+        BufferUsage::StaticDraw,
+    );
+    let position = context.get_attrib_location(program, "a_position") as u32;
+    context.enable_vertex_attrib_array(position);
+    context.vertex_attrib_pointer_f32(position, 2, false, 0, 0);
+    context.draw_arrays(PrimitiveMode::Triangles, 0, 3);
+
+    let center = context.read_pixels(16, 16, 1, 1).expect("center read");
+    assert_eq!(&center[0..4], &[0, 255, 0, 255]);
+    assert_eq!(context.get_error(), WebGlError::NoError);
+}

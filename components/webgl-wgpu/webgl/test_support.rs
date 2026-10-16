@@ -15,6 +15,11 @@ pub(super) fn make_device() -> (wgpu::Device, wgpu::Queue) {
         apply_limit_buckets: false,
     }))
     .expect("wgpu adapter");
+    let info = adapter.get_info();
+    eprintln!(
+        "webgl-wgpu test adapter: {} (vendor {}, device {}, {:?}, {:?})",
+        info.name, info.vendor, info.device, info.device_type, info.backend
+    );
     pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         label: Some("webgl-wgpu test device"),
         required_features: wgpu::Features::empty(),

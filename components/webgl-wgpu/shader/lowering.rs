@@ -10,23 +10,20 @@
 //! attributes, uniforms, and samplers with their WGSL bindings.
 
 use super::*;
+use webgl_essl::CompileError;
 use webgl_essl::ast::TypeKind as EsslTypeKind;
-use webgl_essl::reflect::ProgramReflection as EsslReflection;
 use webgl_essl::validate::ShaderStage as EsslStage;
-use webgl_essl::{self, CompileError};
 
 pub(crate) fn translate_canonical_essl_pair(
     vertex_source: &str,
     fragment_source: &str,
 ) -> Result<TranslatedProgram, ShaderTranslationError> {
-    let (vertex_wgsl, vertex_refl) = compile_with_reflection(vertex_source, EsslStage::Vertex)?;
-    let (fragment_wgsl, fragment_refl) =
-        compile_with_reflection(fragment_source, EsslStage::Fragment)?;
-    check_pair_interface(&vertex_refl, &fragment_refl)?;
-    let reflection = build_program_reflection(&vertex_refl, &fragment_refl, fragment_source)?;
+    let linked = webgl_essl::compile_linked(vertex_source, fragment_source)
+        .map_err(map_linked_compile_error)?;
+    let reflection = build_program_reflection(&linked.reflection, fragment_source)?;
     Ok(TranslatedProgram {
-        vertex_wgsl,
-        fragment_wgsl,
+        vertex_wgsl: linked.vertex_wgsl,
+        fragment_wgsl: linked.fragment_wgsl,
         reflection,
     })
 }
@@ -34,92 +31,55 @@ pub(crate) fn translate_canonical_essl_pair(
 pub(crate) fn validate_canonical_vertex_source(
     vertex_source: &str,
 ) -> Result<(), ShaderTranslationError> {
-    compile_with_reflection(vertex_source, EsslStage::Vertex).map(|_| ())
+    webgl_essl::compile(vertex_source, EsslStage::Vertex)
+        .map(|_| ())
+        .map_err(Into::into)
 }
 
 pub(crate) fn validate_canonical_fragment_source(
     fragment_source: &str,
 ) -> Result<(), ShaderTranslationError> {
-    compile_with_reflection(fragment_source, EsslStage::Fragment).map(|_| ())
+    webgl_essl::compile(fragment_source, EsslStage::Fragment)
+        .map(|_| ())
+        .map_err(Into::into)
 }
 
 pub(crate) fn canonical_essl_cache_key(
     vertex_source: &str,
     fragment_source: &str,
-) -> Result<ProgramCacheKey, ShaderTranslationError> {
-    let (_, vertex_refl) = compile_with_reflection(vertex_source, EsslStage::Vertex)?;
-    let (_, fragment_refl) = compile_with_reflection(fragment_source, EsslStage::Fragment)?;
-    check_pair_interface(&vertex_refl, &fragment_refl)?;
-    Ok(ProgramCacheKey {
+) -> ProgramCacheKey {
+    ProgramCacheKey {
         vertex: vertex_source.to_string(),
         fragment: fragment_source.to_string(),
-    })
+    }
 }
 
-fn compile_with_reflection(
-    source: &str,
-    stage: EsslStage,
-) -> Result<(String, EsslReflection), ShaderTranslationError> {
-    let tu = webgl_essl::parse_source(source)
-        .map_err(|error| ShaderTranslationError::Parse(format!("{error:?}")))?;
-    let check_result = webgl_essl::check::check(&tu);
-    if !check_result.diagnostics.is_empty() {
-        return Err(ShaderTranslationError::Validate(format!(
-            "{} typecheck diagnostic(s)",
-            check_result.diagnostics.len()
-        )));
+fn map_linked_compile_error(error: webgl_essl::LinkedCompileError) -> ShaderTranslationError {
+    match error {
+        webgl_essl::LinkedCompileError::Parse(error) => {
+            ShaderTranslationError::Parse(format!("{error:?}"))
+        },
+        webgl_essl::LinkedCompileError::Check(diagnostics) => ShaderTranslationError::Validate(
+            format!("{} typecheck diagnostic(s)", diagnostics.len()),
+        ),
+        webgl_essl::LinkedCompileError::Validate(message) => {
+            ShaderTranslationError::Validate(message)
+        },
+        webgl_essl::LinkedCompileError::Lower(error) => {
+            ShaderTranslationError::Emit(format!("{error}"))
+        },
+        webgl_essl::LinkedCompileError::Link(_) => ShaderTranslationError::UnsupportedCanonicalPair,
     }
-    let validation = webgl_essl::validate::validate(&tu, source, stage);
-    if validation.num_errors() > 0 {
-        return Err(ShaderTranslationError::Validate(validation.info_log));
-    }
-    let wgsl = webgl_essl::lower::lower_to_wgsl(&tu, stage)
-        .map_err(|error| ShaderTranslationError::Emit(format!("{error}")))?;
-    let reflection = webgl_essl::reflect::reflect(&tu, stage);
-    Ok((wgsl, reflection))
-}
-
-/// Verify that every varying the vertex shader writes has a
-/// matching input declaration in the fragment shader (same name,
-/// same kind). Returns `UnsupportedCanonicalPair` on the first
-/// mismatch — production WebGL surfaces this as a link error.
-fn check_pair_interface(
-    vertex: &EsslReflection,
-    fragment: &EsslReflection,
-) -> Result<(), ShaderTranslationError> {
-    for vertex_output in &vertex.outputs {
-        let Some(fragment_input) = fragment
-            .inputs
-            .iter()
-            .find(|input| input.name == vertex_output.name)
-        else {
-            return Err(ShaderTranslationError::UnsupportedCanonicalPair);
-        };
-        if fragment_input.kind != vertex_output.kind {
-            return Err(ShaderTranslationError::UnsupportedCanonicalPair);
-        }
-    }
-    for fragment_input in &fragment.inputs {
-        if !vertex
-            .outputs
-            .iter()
-            .any(|output| output.name == fragment_input.name)
-        {
-            return Err(ShaderTranslationError::UnsupportedCanonicalPair);
-        }
-    }
-    Ok(())
 }
 
 /// Derive [`ProgramReflection`] from `webgl-essl`'s reflection,
 /// including every vertex attribute, Block uniform, and sampler.
 fn build_program_reflection(
-    vertex: &EsslReflection,
-    fragment: &EsslReflection,
+    linked: &webgl_essl::reflect::LinkedProgramReflection,
     fragment_source: &str,
 ) -> Result<ProgramReflection, ShaderTranslationError> {
-    let mut attributes = Vec::with_capacity(vertex.inputs.len());
-    for input in &vertex.inputs {
+    let mut attributes = Vec::with_capacity(linked.attributes.len());
+    for input in &linked.attributes {
         attributes.push(VertexAttributeReflection {
             name: input.name.clone(),
             location: input.location,
@@ -127,59 +87,27 @@ fn build_program_reflection(
                 .ok_or(ShaderTranslationError::UnsupportedCanonicalPair)?,
         });
     }
-    // CPU reflection unions both stages, but each stage is still lowered
-    // independently. This does not reconcile stage offsets or reject conflicting
-    // uniform kinds; the architecture audit's W1 linker defect remains open.
     let mut uniforms: Vec<UniformReflection> = Vec::new();
-    let mut block_cursor: u32 = 0;
-    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
-    let push_uniform = |u: &webgl_essl::reflect::UniformBinding,
-                        uniforms: &mut Vec<UniformReflection>,
-                        block_cursor: &mut u32,
-                        seen: &mut std::collections::HashSet<String>|
-     -> Result<(), ShaderTranslationError> {
-        if seen.contains(&u.name) {
-            return Ok(());
-        }
-        seen.insert(u.name.clone());
+    for u in &linked.uniforms {
         let kind = uniform_kind_from_essl(u.kind)
             .ok_or(ShaderTranslationError::UnsupportedCanonicalPair)?;
-        let alignment = kind.block_alignment();
-        if alignment > 0 {
-            *block_cursor = align_up(*block_cursor, alignment);
-        }
-        let size = kind.block_size();
-        let member_index = uniforms.len() as u32;
         uniforms.push(UniformReflection {
             name: u.name.clone(),
             binding: 0,
             kind,
-            member_index,
-            block_offset: *block_cursor,
-            block_size: size,
+            member_index: u.member_index,
+            block_offset: u.byte_offset,
+            block_size: u.byte_size,
+            matrix_stride: u.matrix_stride,
         });
-        *block_cursor += size;
-        Ok(())
-    };
-    for u in &vertex.uniforms {
-        push_uniform(u, &mut uniforms, &mut block_cursor, &mut seen)?;
     }
-    for u in &fragment.uniforms {
-        push_uniform(u, &mut uniforms, &mut block_cursor, &mut seen)?;
-    }
-    // The Block buffer itself must be sized to a 16-byte
-    // multiple (wgpu requires UNIFORM buffers be ≥ 16 aligned).
-    let uniform_block_size = if uniforms.is_empty() {
-        0
-    } else {
-        align_up(block_cursor, 16)
-    };
+    let uniform_block_size = linked.uniform_block_size;
 
     // Samplers only come from the fragment stage today
     // (texture sampling is fragment-only in ESSL 1.00; ESSL
     // 3.00 vertex texture is feature-flagged out for now).
-    let mut samplers = Vec::with_capacity(fragment.samplers.len());
-    for s in &fragment.samplers {
+    let mut samplers = Vec::with_capacity(linked.samplers.len());
+    for s in &linked.samplers {
         let kind = uniform_kind_from_essl(s.kind)
             .ok_or(ShaderTranslationError::UnsupportedCanonicalPair)?;
         samplers.push(SamplerReflection {
@@ -199,13 +127,6 @@ fn build_program_reflection(
         uniform_block_size,
         fragment_float_precision,
     })
-}
-
-fn align_up(offset: u32, alignment: u32) -> u32 {
-    if alignment <= 1 {
-        return offset;
-    }
-    (offset + alignment - 1) & !(alignment - 1)
 }
 
 fn vertex_kind_from_essl(kind: EsslTypeKind) -> Option<VertexAttributeKind> {

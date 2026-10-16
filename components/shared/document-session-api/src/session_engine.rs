@@ -488,6 +488,11 @@ impl SessionEffect {
     pub fn is_handled(&self) -> bool {
         !matches!(self, Self::Ignored)
     }
+
+    /// Whether the host may apply a keyboard scroll default after this input.
+    pub fn allows_default_scroll(&self, editable: bool) -> bool {
+        !self.is_handled() && !editable
+    }
 }
 
 /// Complete result of one input dispatch, including presentation requests
@@ -1566,6 +1571,34 @@ mod tests {
             SessionEffect::Navigate(_) => 2, SessionEffect::Submit(_) => 3,
             SessionEffect::Cancelled => 4 };
         assert_eq!((tag, cursor, capture, editable), (1, Some(SessionCursor::Text), Some(false), true));
+    }
+    #[test]
+    fn key_default_scroll_respects_effect_and_effective_editable_focus() {
+        let cases = [
+            (SessionEffect::Ignored, false, true),
+            (SessionEffect::Ignored, true, false),
+            (SessionEffect::Handled, false, false),
+            (SessionEffect::Cancelled, false, false),
+            (SessionEffect::Navigate("https://example.test/next".into()), false, false),
+            (SessionEffect::Submit(SessionFormSubmission::default()), false, false),
+        ];
+        for (effect, editable, expected) in cases {
+            assert_eq!(effect.allows_default_scroll(editable), expected, "{effect:?}, editable={editable}");
+        }
+
+        // A native navigation can install a new session during dispatch. Its
+        // editable focus, rather than the outgoing result's flag, decides the
+        // next default action without consuming the typed input result.
+        let result = SessionInputResult {
+            effect: SessionEffect::Ignored,
+            cursor: Some(SessionCursor::Text),
+            capture: Some(false),
+            editable: false,
+        };
+        assert!(result.effect.allows_default_scroll(result.editable));
+        assert!(!result.effect.allows_default_scroll(true));
+        assert_eq!(result.cursor, Some(SessionCursor::Text));
+        assert_eq!(result.capture, Some(false));
     }
     #[test]
     fn phase_c_t5_api_legacy_spawn_unicode_body() {

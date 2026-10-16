@@ -14,60 +14,64 @@ param(
 $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent $PSScriptRoot
 $out = Join-Path $repo $OutputDirectory
-$metadata = cargo metadata --manifest-path (Join-Path $repo "Cargo.toml") --format-version 1 --no-deps | ConvertFrom-Json
+. (Join-Path $PSScriptRoot 'checked-native.ps1')
+$metadata = Invoke-CheckedNative -Description 'cargo metadata' -FilePath 'cargo' -Arguments @(
+    'metadata', '--manifest-path', (Join-Path $repo 'Cargo.toml'), '--format-version', '1', '--no-deps'
+) | ConvertFrom-Json
 $target = $metadata.target_directory
 
 $wasmBindgen = Get-Command wasm-bindgen -ErrorAction SilentlyContinue
 if (-not $wasmBindgen) {
     throw "wasm-bindgen CLI 0.2.129 is required: cargo install wasm-bindgen-cli --version 0.2.129 --locked"
 }
-$version = & $wasmBindgen.Source --version
-if ($version -notmatch "0\.2\.129$") {
+$version = Invoke-CheckedNative -Description 'wasm-bindgen version' -FilePath $wasmBindgen.Source -Arguments @('--version')
+if ($version -notmatch '^wasm-bindgen 0\.2\.129$') {
     throw "wasm-bindgen CLI must be 0.2.129; found: $version"
 }
 
-rustup run $Wasm64Toolchain rustc --version | Out-Null
-rustup component add rust-src --toolchain $Wasm64Toolchain | Out-Null
+Invoke-CheckedNative -Description 'wasm64 rustc version' -FilePath 'rustup' -Arguments @(
+    'run', $Wasm64Toolchain, 'rustc', '--version'
+) | Out-Null
+Invoke-CheckedNative -Description 'wasm64 rust-src installation' -FilePath 'rustup' -Arguments @(
+    'component', 'add', 'rust-src', '--toolchain', $Wasm64Toolchain
+) | Out-Null
 
 $previousRustFlags = $env:RUSTFLAGS
 try {
     $env:RUSTFLAGS = '--cfg getrandom_backend="wasm_js"'
-    rustup run $Wasm64Toolchain cargo build `
-        --manifest-path (Join-Path $repo "Cargo.toml") `
-        --release `
-        --package genet-scripted-worker `
-        --no-default-features `
-        --features engine-nova `
-        --target wasm64-unknown-unknown `
-        -Z build-std=std,panic_abort
+    Invoke-CheckedNative -Description 'Nova wasm64 build' -FilePath 'rustup' -Arguments @(
+        'run', $Wasm64Toolchain, 'cargo', 'build',
+        '--manifest-path', (Join-Path $repo 'Cargo.toml'),
+        '--release', '--package', 'genet-scripted-worker',
+        '--no-default-features', '--features', 'engine-nova',
+        '--target', 'wasm64-unknown-unknown', '-Z', 'build-std=std,panic_abort'
+    )
 } finally {
     $env:RUSTFLAGS = $previousRustFlags
 }
 
-rustup run $StableToolchain cargo build `
-    --manifest-path (Join-Path $repo "Cargo.toml") `
-    --release `
-    --package genet-scripted-worker `
-    --no-default-features `
-    --features engine-boa `
-    --target wasm32-unknown-unknown
+Invoke-CheckedNative -Description 'Boa wasm32 build' -FilePath 'rustup' -Arguments @(
+    'run', $StableToolchain, 'cargo', 'build',
+    '--manifest-path', (Join-Path $repo 'Cargo.toml'),
+    '--release', '--package', 'genet-scripted-worker',
+    '--no-default-features', '--features', 'engine-boa',
+    '--target', 'wasm32-unknown-unknown'
+)
 
 $novaOut = Join-Path $out "nova"
 $boaOut = Join-Path $out "boa"
 New-Item -ItemType Directory -Force -Path $novaOut | Out-Null
 New-Item -ItemType Directory -Force -Path $boaOut | Out-Null
 
-& $wasmBindgen.Source `
-    (Join-Path $target "wasm64-unknown-unknown/release/genet_scripted_worker.wasm") `
-    --target web `
-    --out-dir $novaOut `
-    --out-name genet-scripted-nova-wasm64
+Invoke-CheckedNative -Description 'Nova wasm-bindgen' -FilePath $wasmBindgen.Source -Arguments @(
+    (Join-Path $target 'wasm64-unknown-unknown/release/genet_scripted_worker.wasm'),
+    '--target', 'web', '--out-dir', $novaOut, '--out-name', 'genet-scripted-nova-wasm64'
+)
 
-& $wasmBindgen.Source `
-    (Join-Path $target "wasm32-unknown-unknown/release/genet_scripted_worker.wasm") `
-    --target web `
-    --out-dir $boaOut `
-    --out-name genet-scripted-boa-wasm32
+Invoke-CheckedNative -Description 'Boa wasm-bindgen' -FilePath $wasmBindgen.Source -Arguments @(
+    (Join-Path $target 'wasm32-unknown-unknown/release/genet_scripted_worker.wasm'),
+    '--target', 'web', '--out-dir', $boaOut, '--out-name', 'genet-scripted-boa-wasm32'
+)
 
 Copy-Item (Join-Path $repo "components/genet-scripted-worker/loader.mjs") $out -Force
 Copy-Item (Join-Path $repo "components/genet-scripted-worker/worker-bootstrap.mjs") $out -Force

@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-//! C4 — `ServoCompositor` and `StubCompositor`.
+//! OS presentation and master-texture capture backends.
 //!
 //! Implements [`netrender_device::compositor::Compositor`], the trait
 //! `netrender::Renderer::render_with_compositor` invokes once per frame
@@ -10,7 +10,7 @@
 //!
 //! ## What's here
 //!
-//! - [`StubCompositor`] — single-fullscreen-surface fallback. Doesn't
+//! - [`WgpuMasterCaptureBackend`] — single-fullscreen-surface capture. Doesn't
 //!   talk to the OS compositor; just stashes the master texture from
 //!   the most recent `present_frame` call. The `composite_texture`
 //!   path on `Paint` reads from this for the wgpu-shared-device
@@ -61,8 +61,6 @@ use crate::interop::{HostWgpuContext, InteropBackend, SyncMechanism};
 /// on Windows; `MacosCALayerBackend` on macOS;
 /// `WaylandSubsurfaceBackend` on Linux).
 ///
-/// Renamed from `StubCompositor`; the old name is retained as a
-/// deprecated alias.
 pub struct WgpuMasterCaptureBackend {
     /// Per-surface world bounds; updated on `declare_surface`.
     surfaces: FxHashMap<SurfaceKey, [f32; 4]>,
@@ -70,16 +68,6 @@ pub struct WgpuMasterCaptureBackend {
     /// `wgpu::Texture` is `Arc`-shared internally so cloning is cheap.
     last_master: Option<Texture>,
 }
-
-/// Deprecated alias for [`WgpuMasterCaptureBackend`]. Retained for
-/// source-compat with code written before the rename. Existing call
-/// sites (tests, embedder smokes) continue to work; new code should
-/// prefer the descriptive name.
-#[deprecated(
-    since = "0.2.0",
-    note = "renamed to WgpuMasterCaptureBackend; this alias will be removed in a follow-up"
-)]
-pub type StubCompositor = WgpuMasterCaptureBackend;
 
 impl WgpuMasterCaptureBackend {
     pub fn new() -> Self {
@@ -266,9 +254,6 @@ pub type BoxedBackendError = Box<dyn std::error::Error + Send + Sync + 'static>;
 /// destination-texture pool. `present_frame` blits from the master
 /// into the destination textures, then hands native handles to the
 /// backend.
-///
-/// **C4 milestone:** trait shape only; the blit machinery lands with
-/// the per-backend impls.
 pub struct ServoCompositor<B: OsCompositorBackend> {
     host: HostWgpuContext,
     destinations: HashMap<SurfaceKey, Texture>,

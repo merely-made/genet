@@ -14,13 +14,11 @@
 //! `flags:` (raw / onlyStrict / noStrict / module / async), `negative:`
 //! (expected error), and `features:`. Running it means assembling the harness
 //! (`assert.js` + `sta.js`, unless `raw`) + the declared includes + the test,
-//! optionally under `"use strict"`, then evaluating it: a positive test passes
-//! iff it does not throw; a negative test passes iff it throws the declared error.
+//! optionally under `"use strict"`, then evaluating it. A negative test can pass
+//! only with structured proof of its declared error type and phase.
 //!
-//! This module is the engine-independent core (parse + assemble); the run path
-//! (eval + pass/fail, per-engine) wires it in [`crate::main`].
-
-#![allow(dead_code)] // run path + `test262` command land in the next slice.
+//! This module is the engine-independent core for parsing, routing, and outcome
+//! classification. The run path wires it in [`crate::main`].
 
 use std::fs;
 use std::io;
@@ -35,7 +33,7 @@ pub struct Flags {
     pub only_strict: bool,
     /// Run only in sloppy mode.
     pub no_strict: bool,
-    /// An ES module (different eval entry); deferred by the v1 run path.
+    /// An ES module (different eval entry).
     pub module: bool,
     /// Async: completion is signalled via `$DONE` (needs `doneprintHandle.js`).
     pub r#async: bool,
@@ -201,12 +199,12 @@ impl Harness {
     }
 
     /// The harness preamble *without* the test body (`assert.js` + `sta.js` +
-    /// `doneprintHandle.js` if async + the includes). Used by the module + async run
-    /// paths, which evaluate this as a sloppy script to install the harness globals
-    /// (`assert`, `Test262Error`, …) and then run the test separately (a module, or a
-    /// script whose `$DONE` the harness reports). No strict prefix: the globals must
-    /// land on `globalThis` so the test (module or otherwise) can see them.
+    /// `doneprintHandle.js` if async + the includes). It runs as a sloppy setup
+    /// script before each module or script body. Raw tests have no preamble.
     pub fn preamble(&self, meta: &Test262Meta) -> io::Result<String> {
+        if meta.flags.raw {
+            return Ok(String::new());
+        }
         let mut out = String::new();
         out.push_str(&self.assert_js);
         out.push('\n');
@@ -238,9 +236,161 @@ pub fn strict_variants(flags: &Flags) -> Vec<bool> {
     }
 }
 
+/// The body evaluation entry and whether `$DONE` must finish it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BodyRoute {
+    Script { strict: bool, completion: bool },
+    Module { completion: bool },
+}
+
+pub fn body_routes(flags: &Flags) -> Vec<BodyRoute> {
+    if flags.module {
+        return vec![BodyRoute::Module {
+            completion: flags.r#async,
+        }];
+    }
+    strict_variants(flags)
+        .into_iter()
+        .map(|strict| BodyRoute::Script {
+            strict,
+            completion: flags.r#async,
+        })
+        .collect()
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Observation {
+    Completed,
+    TestError,
+    CompletionFailure,
+    Incomplete,
+    SetupError,
+    Unsupported,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Outcome {
+    Pass,
+    Fail,
+    Unsupported,
+    Error,
+}
+
+/// A diagnostic string alone does not establish either error field.
+pub fn classify(negative: Option<&Negative>, observation: &Observation) -> Outcome {
+    match observation {
+        Observation::SetupError => Outcome::Error,
+        Observation::Unsupported => Outcome::Unsupported,
+        Observation::Completed => {
+            if negative.is_none() {
+                Outcome::Pass
+            } else {
+                Outcome::Fail
+            }
+        },
+        // Neither backend exposes trustworthy phase/constructor identity here.
+        Observation::TestError => {
+            if negative.is_some() {
+                Outcome::Unsupported
+            } else {
+                Outcome::Fail
+            }
+        },
+        Observation::CompletionFailure => {
+            if negative.is_some() {
+                Outcome::Unsupported
+            } else {
+                Outcome::Fail
+            }
+        },
+        Observation::Incomplete => Outcome::Fail,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn route_module_async_as_one_module_body_with_completion() {
+        let flags = Flags {
+            module: true,
+            r#async: true,
+            ..Flags::default()
+        };
+        assert_eq!(
+            body_routes(&flags),
+            vec![BodyRoute::Module { completion: true }]
+        );
+    }
+
+    #[test]
+    fn route_script_strict_variants_and_raw_source() {
+        assert_eq!(
+            body_routes(&Flags::default()),
+            vec![
+                BodyRoute::Script {
+                    strict: false,
+                    completion: false
+                },
+                BodyRoute::Script {
+                    strict: true,
+                    completion: false
+                },
+            ]
+        );
+        assert_eq!(
+            body_routes(&Flags {
+                raw: true,
+                ..Flags::default()
+            }),
+            vec![BodyRoute::Script {
+                strict: false,
+                completion: false
+            },]
+        );
+    }
+
+    #[test]
+    fn negative_body_errors_are_unsupported_without_vm_error_identity() {
+        let negative = Negative {
+            phase: "parse".into(),
+            error_type: "SyntaxError".into(),
+        };
+        assert_eq!(
+            classify(Some(&negative), &Observation::TestError),
+            Outcome::Unsupported
+        );
+        assert_eq!(classify(None, &Observation::TestError), Outcome::Fail);
+    }
+
+    #[test]
+    fn setup_and_completion_failures_never_satisfy_negative() {
+        let negative = Negative {
+            phase: "runtime".into(),
+            error_type: "TypeError".into(),
+        };
+        assert_eq!(
+            classify(Some(&negative), &Observation::SetupError),
+            Outcome::Error
+        );
+        assert_eq!(
+            classify(Some(&negative), &Observation::Incomplete),
+            Outcome::Fail
+        );
+        assert_eq!(
+            classify(Some(&negative), &Observation::CompletionFailure),
+            Outcome::Unsupported
+        );
+        assert_eq!(
+            classify(Some(&negative), &Observation::Completed),
+            Outcome::Fail
+        );
+        assert_eq!(
+            classify(Some(&negative), &Observation::Unsupported),
+            Outcome::Unsupported
+        );
+    }
 
     #[test]
     fn parses_includes_and_features() {
@@ -305,6 +455,7 @@ mod tests {
 
         let raw_meta = parse_meta("/*---\nflags: [raw]\n---*/\ncode;");
         assert_eq!(h.assemble("code;", &raw_meta, false).unwrap(), "code;");
+        assert_eq!(h.preamble(&raw_meta).unwrap(), "");
     }
 
     /// Opt-in: parse a real test262 test (run with `--ignored real_test262`).

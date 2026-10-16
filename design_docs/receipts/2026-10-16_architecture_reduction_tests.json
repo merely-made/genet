@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-16",
+  "base_commit": "7fff6062fc066c122f1977e8a5ab4fc4ef86cb19",
+  "checks": {
+    "cargo_check_genet_wpt_and_webgl": "passed",
+    "genet_livery_lib": {
+      "passed": 334,
+      "failed": 0,
+      "ignored": 2
+    },
+    "webgl_shader_tests": {
+      "passed": 19,
+      "failed": 0,
+      "filtered": 48
+    },
+    "test262_standalone_policy": {
+      "passed": 9,
+      "failed": 0,
+      "ignored": 1
+    },
+    "test262_node_private_completion": "passed",
+    "dependency_gate_unittest": {
+      "passed": 6
+    }
+  },
+  "logs": "/home/markik/Code/testing/audits/genet-architecture-20261016/final-cuts",
+  "aborted_attempts": [
+    "Initial shader test build stopped after wrong artifact directory caused recompilation.",
+    "Combined library test invocation stopped before tests to exclude unrelated GPU tests."
+  ],
+  "fresh_source_audit": "not started; user usage cutoff reached at 41 percent",
+  "limits": [
+    "No GPU draw or browser interaction qualification",
+    "No Forms acceptance",
+    "No push"
+  ],
+  "source_sha256": {
+    "components/genet-compositor/compositor.rs": "f37197e9d869554c5dcb5b896872b36a0558d0ae432ffb3258e87d4ed1a2e91f",
+    "components/genet-compositor/lib.rs": "cd2829cab43e93d722f0f789f506a9113ad1e9b4ad7595767eee9d403bb7db5c",
+    "components/genet-livery/src/document/frame.rs": "ac183296b55a30a4dea58b83788b17b7bfaac61f231e28bcdf84d904ccd3783e",
+    "components/genet-livery/src/invalidation.rs": "9fa6288c0eae6098d58d50e7aaf222e14da7a4e3e313de907848f2033f5ccf98",
+    "components/genet-livery/src/text.rs": "c4586e7cea5c9ef4df3162b01d2ca1dfa29bc2bde5f36a3af46eb0d5332503b5",
+    "components/genet-render-host/src/surface_capture_layout.rs": "d8de8e3e793502e2a4e15e5b0a738225aafe0f9f9825c2009d007aa99bda758f",
+    "components/webgl-wgpu/shader.rs": "69e1c2f2a45f38e7c590c55c7d3d93d9dc59a71e4aa8f627074ee6c7aa394d00",
+    "components/webgl-wgpu/shader/lowering.rs": "e10554f2c78e9dae6d20f7f6d387b2560e7589b713225e9e8a626a9ab1a1a9ae",
+    "components/webgl-wgpu/shader/tests.rs": "5fa9086713949ae1a152ccbabd46ada1dc8cdec15583a7475549fa1665283b25",
+    "ports/genet-wpt/src/test262.rs": "339e52cb3deba9ee0f76cc35dac587c96599f9a0799257fe927902a935a43d46",
+    "ports/genet-wpt/src/test262_cmd.rs": "125898ae4f78a0c20cd98422c02e828cb6f39a220a3eafbc26dec7404e597894",
+    "ports/genet-wpt/src/test262_completion.js": "f6ed93e35490362973f09a6b0b6cb513bc364dd4561bfb48c8c5fbbcaa525649",
+    "support/ci/test_test262_completion.mjs": "2c3d32359e55a6f660d316b0c653b403495b258bc8b33d70b2768a962299e41f"
+  }
+}

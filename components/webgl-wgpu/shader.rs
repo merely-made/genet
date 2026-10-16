@@ -39,10 +39,7 @@ pub(crate) struct ProgramCacheKey {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct ProgramReflection {
-    /// Every vertex attribute the shader declared, in source
-    /// order. `attributes[0]` is the position attribute under
-    /// the WebGL convention; the narrow `position_attribute`
-    /// view below points to it.
+    /// Every vertex attribute the shader declared, in source order.
     pub(crate) attributes: Vec<VertexAttributeReflection>,
     /// Every uniform that lives inside the per-shader `Block`
     /// struct (vec_n / float / int / mat_n), in source order.
@@ -57,17 +54,6 @@ pub(crate) struct ProgramReflection {
     /// Total byte size of the uniform `Block` buffer. `0` when
     /// the program has no non-sampler uniforms.
     pub(crate) uniform_block_size: u32,
-    /// Narrow-shape convenience: the first vertex attribute.
-    /// Always populated.
-    pub(crate) position_attribute: VertexAttributeReflection,
-    /// Narrow-shape convenience: `attributes[1]` if it's vec4.
-    pub(crate) color_attribute: Option<VertexAttributeReflection>,
-    /// Narrow-shape convenience: `attributes[1]` if it's vec2.
-    pub(crate) texcoord_attribute: Option<VertexAttributeReflection>,
-    /// Narrow-shape convenience: the first vec4 uniform.
-    pub(crate) fragment_color_uniform: Option<UniformReflection>,
-    /// Narrow-shape convenience: the first sampler2D.
-    pub(crate) fragment_texture_uniform: Option<UniformReflection>,
     pub(crate) fragment_float_precision: WebGlPrecision,
 }
 

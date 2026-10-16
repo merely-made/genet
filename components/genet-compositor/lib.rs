@@ -21,9 +21,8 @@
 pub mod interop;
 pub mod rendering_context_core;
 
-#[allow(deprecated)]
 pub use crate::compositor::{
-    OsCompositorBackend, PaintCompositor, ServoCompositor, StubCompositor, WgpuMasterCaptureBackend,
+    OsCompositorBackend, PaintCompositor, ServoCompositor, WgpuMasterCaptureBackend,
 };
 #[cfg(target_vendor = "apple")]
 pub use crate::compositor_calayer::{

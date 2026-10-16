@@ -76,7 +76,7 @@ pub(in crate::layout) struct BuildState<'a, D: LayoutDom> {
     pub(in crate::layout) styles: &'a StylePlane<D::NodeId>,
     pub(in crate::layout) boxes: &'a GeneratedBoxTree<D::NodeId>,
     pub(in crate::layout) tree: AlgorithmTree<Style, TextMeasure, Option<BoxId>>,
-    pub(in crate::layout) image_sources: &'a ImageSources,
+    pub(in crate::layout) image_sources: &'a dyn crate::ImageSourceLookup,
     pub(in crate::layout) text: Option<&'a mut TextSystem>,
     pub(in crate::layout) table_shadow: TableShadowLedger,
     pub(in crate::layout) pending_tables: Vec<PendingTable<D::NodeId>>,

@@ -60,8 +60,6 @@ use taffy::{
     },
 };
 
-type ImageSources = HashMap<String, Vec<u8>>;
-
 use crate::{
     InteractionStates, LegacyDescendantAlignment, StylePlane, StyleSet, TextSystem,
     box_tree::GeneratedBoxTree,
@@ -890,7 +888,7 @@ where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
-    resolve_container_relative_styles_with_images(dom, styles, viewport, &ImageSources::new())
+    resolve_container_relative_styles_with_images(dom, styles, viewport, &HashMap::new())
 }
 
 /// Iterate size-query cascade and container-unit resolution until the style
@@ -913,7 +911,7 @@ where
         style_set,
         device,
         interactions,
-        &ImageSources::new(),
+        &HashMap::new(),
     )
 }
 
@@ -925,7 +923,7 @@ pub fn resolve_container_query_styles_with_images<D>(
     style_set: &StyleSet,
     device: &Device,
     interactions: &InteractionStates<D::NodeId>,
-    image_sources: &ImageSources,
+    image_sources: &dyn crate::ImageSourceLookup,
 ) -> Result<StylePlane<D::NodeId>, LayoutError>
 where
     D: LayoutDom,
@@ -1030,7 +1028,7 @@ fn resolve_container_relative_styles_with_images<D>(
     dom: &D,
     styles: &StylePlane<D::NodeId>,
     viewport: ViewportSizes,
-    image_sources: &ImageSources,
+    image_sources: &dyn crate::ImageSourceLookup,
 ) -> Result<StylePlane<D::NodeId>, LayoutError>
 where
     D: LayoutDom,
@@ -1043,7 +1041,7 @@ fn resolve_container_relative_styles_with_text<D>(
     dom: &D,
     styles: &StylePlane<D::NodeId>,
     viewport: ViewportSizes,
-    image_sources: &ImageSources,
+    image_sources: &dyn crate::ImageSourceLookup,
     mut text: Option<&mut TextSystem>,
 ) -> Result<StylePlane<D::NodeId>, LayoutError>
 where
@@ -2638,7 +2636,7 @@ fn apply_replaced_intrinsic_style<D>(
     dom: &D,
     id: D::NodeId,
     computed: &ComputedValues,
-    image_sources: &ImageSources,
+    image_sources: &dyn crate::ImageSourceLookup,
     font_size: f32,
     block_level_flow: bool,
     containing_width: f32,
@@ -2888,7 +2886,7 @@ where
 fn positioned_replaced_input<D>(
     dom: &D,
     id: D::NodeId,
-    image_sources: &ImageSources,
+    image_sources: &dyn crate::ImageSourceLookup,
     style: &BlockStyle,
 ) -> Option<buckram::ReplacedSize>
 where
@@ -2909,7 +2907,7 @@ where
 fn replaced_intrinsic_size<D>(
     dom: &D,
     id: D::NodeId,
-    image_sources: &ImageSources,
+    image_sources: &dyn crate::ImageSourceLookup,
 ) -> Option<(f32, f32)>
 where
     D: LayoutDom,
@@ -2936,7 +2934,7 @@ where
     let bytes = if let Ok(data_url) = data_url::DataUrl::process(source) {
         data_url.decode_to_vec().ok()?.0
     } else {
-        image_sources.get(source)?.clone()
+        image_sources.get_document(source)?.clone()
     };
     let (width, height) = crate::image_decode::decode(&bytes)?.dimensions();
     Some((width as f32, height as f32))

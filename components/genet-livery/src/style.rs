@@ -21,7 +21,8 @@ use livery::{
     ComputedValues, PropertyId, PropertyValue, ShorthandId,
     cascade::{
         CascadeLayer, ColorComputeContext, DeclarationError, MatchedCustomDeclaration,
-        MatchedDeclaration, Origin, Specificity, cascade_with_custom_context,
+        MatchedDeclaration, Origin, Specificity,
+        cascade_with_custom_context_and_image_resolver,
         parse_declaration_block,
     },
     custom::CustomProperties,
@@ -268,6 +269,7 @@ impl SelectorIndex {
 pub struct StyleSet {
     ua: Stylesheet,
     authors: Vec<AuthorStylesheet>,
+    document_base_url: Option<String>,
     rules: Vec<StyleRule>,
     /// `rules` bucketed by rightmost compound. Rebuilt with `rules`; it is a
     /// derived view, so it takes part in `PartialEq` harmlessly.
@@ -277,9 +279,16 @@ pub struct StyleSet {
     /// flattened cascade cannot say which shadow tree a rule belongs to.
     rule_sheets: Vec<Option<usize>>,
     font_faces: Vec<FontFaceRule>,
-    keyframes: Vec<Keyframes>,
+    keyframes: Vec<SourcedKeyframes>,
     diagnostics: Vec<StylesheetDiagnostic>,
     generation: u64,
+}
+
+/// A parsed animation and the URL base of the stylesheet that owns it.
+#[derive(Clone, Debug, PartialEq)]
+struct SourcedKeyframes {
+    rule: Keyframes,
+    source_url: Option<String>,
 }
 
 fn cssom_keys(sheets: &[ResolvedStylesheet]) -> Vec<String> {
@@ -369,6 +378,10 @@ impl StyleSet {
     pub fn parse_resolved(ua_sheet: &str, author_sheets: &[ResolvedStylesheet]) -> Self {
         let mut result = Self {
             ua: Stylesheet::parse(ua_sheet, Origin::UserAgent),
+            document_base_url: author_sheets
+                .iter()
+                .filter(|sheet| sheet.owner == StylesheetOwner::Inline)
+                .find_map(|sheet| sheet.source_url.clone()),
             ..Self::default()
         };
         let cssom_keys = cssom_keys(author_sheets);
@@ -417,6 +430,25 @@ impl StyleSet {
         self.rebuild();
     }
 
+    /// Base for an element's inline `style` attribute and document images.
+    /// Linked and imported rules retain their own final response URLs.
+    pub fn set_document_base_url(&mut self, base_url: Option<&str>) {
+        if self.document_base_url.as_deref() != base_url {
+            self.document_base_url = base_url.map(str::to_owned);
+            self.rebuild();
+        }
+    }
+
+    pub fn document_base_url(&self) -> Option<&str> {
+        self.document_base_url.as_deref()
+    }
+
+    fn source_url_for_rule(&self, position: usize) -> Option<&str> {
+        let sheet = self.rule_sheets.get(position).copied().flatten()?;
+        let author = self.authors.get(sheet)?;
+        author.source_url().or(self.document_base_url.as_deref())
+    }
+
     /// Rebuild the flattened cascade views from the retained sheets, with
     /// author source order running across sheets in document order.
     fn rebuild(&mut self) {
@@ -429,7 +461,12 @@ impl StyleSet {
         self.rules.extend(self.ua.reindexed_rules(0));
         self.rule_sheets.resize(self.rules.len(), None);
         self.font_faces.extend(self.ua.font_faces().iter().cloned());
-        self.keyframes.extend(self.ua.keyframes().iter().cloned());
+        self.keyframes.extend(self.ua.keyframes().iter().cloned().map(|rule| {
+            SourcedKeyframes {
+                rule,
+                source_url: None,
+            }
+        }));
         let mut source_order = 0_u64;
         for (index, author) in self.authors.iter().enumerate() {
             self.diagnostics.extend_from_slice(author.diagnostics());
@@ -437,7 +474,16 @@ impl StyleSet {
             self.rule_sheets.resize(self.rules.len(), Some(index));
             source_order = source_order.saturating_add(author.rules().len() as u64);
             self.font_faces.extend(author.resolved_font_faces());
-            self.keyframes.extend(author.keyframes().iter().cloned());
+            let source_url = author
+                .source_url()
+                .or(self.document_base_url.as_deref())
+                .map(str::to_owned);
+            self.keyframes.extend(author.keyframes().iter().cloned().map(|rule| {
+                SourcedKeyframes {
+                    rule,
+                    source_url: source_url.clone(),
+                }
+            }));
         }
         self.index = SelectorIndex::build(&self.rules);
         self.generation = self.generation.saturating_add(1);
@@ -653,10 +699,15 @@ impl StyleSet {
     }
 
     pub(crate) fn keyframes(&self, name: &str) -> Option<&Keyframes> {
+        self.keyframes_with_source(name).map(|(keyframes, _)| keyframes)
+    }
+
+    pub(crate) fn keyframes_with_source(&self, name: &str) -> Option<(&Keyframes, Option<&str>)> {
         self.keyframes
             .iter()
             .rev()
-            .find(|keyframes| keyframes.name().eq_ignore_ascii_case(name))
+            .find(|entry| entry.rule.name().eq_ignore_ascii_case(name))
+            .map(|entry| (&entry.rule, entry.source_url.as_deref()))
     }
 }
 
@@ -1610,9 +1661,10 @@ where
         if scopes.is_empty() {
             for &position in &rule_candidates {
                 let rule = &style_set.rules[position as usize];
-                matched.extend(
+                matched.extend(with_source_url(
                     rule.matched_declarations_with_containers(&element, device, candidates),
-                );
+                    style_set.source_url_for_rule(position as usize),
+                ));
                 matched_custom.extend(
                     rule.matched_custom_declarations_with_containers(&element, device, candidates),
                 );
@@ -1638,11 +1690,12 @@ where
                     continue;
                 }
                 let host = rule_scope.and_then(|(_, host)| selector_tree.element(host));
-                matched.extend(
+                matched.extend(with_source_url(
                     rule.matched_declarations_scoped(
                         &element, device, candidates, same_scope, host,
                     ),
-                );
+                    style_set.source_url_for_rule(index),
+                ));
                 matched_custom.extend(rule.matched_custom_declarations_scoped(
                     &element, device, candidates, same_scope, host,
                 ));
@@ -1665,6 +1718,7 @@ where
                     layer: CascadeLayer::Unlayered,
                     specificity: Specificity(0),
                     source_order: index as u64,
+                    source_url: None,
                 },
             ));
         }
@@ -1686,6 +1740,7 @@ where
                     layer: CascadeLayer::Unlayered,
                     specificity: Specificity::INLINE,
                     source_order: inline_order.saturating_add(index as u64),
+                    source_url: style_set.document_base_url.clone(),
                 },
             ));
             matched_custom.extend(block.custom.into_iter().enumerate().map(
@@ -1733,13 +1788,16 @@ where
                 let same_scope = rule.origin() == Origin::UserAgent
                     || scope.map(|(root, _)| root) == element_scope;
                 let host = scope.and_then(|(_, host)| selector_tree.element(host));
-                pseudo_matched.extend(rule.matched_declarations_scoped_for_pseudo(
-                    &element,
-                    device,
-                    candidates,
-                    same_scope,
-                    host,
-                    Some(selector_pseudo),
+                pseudo_matched.extend(with_source_url(
+                    rule.matched_declarations_scoped_for_pseudo(
+                        &element,
+                        device,
+                        candidates,
+                        same_scope,
+                        host,
+                        Some(selector_pseudo),
+                    ),
+                    style_set.source_url_for_rule(position as usize),
                 ));
                 pseudo_custom.extend(rule.matched_custom_declarations_scoped_for_pseudo(
                     &element,
@@ -1818,6 +1876,18 @@ where
     }
 }
 
+/// Bind each matched declaration to the sheet that supplied it before the
+/// cascade selects a winner or substitutes custom properties.
+fn with_source_url(
+    mut declarations: Vec<MatchedDeclaration>,
+    source_url: Option<&str>,
+) -> Vec<MatchedDeclaration> {
+    for declaration in &mut declarations {
+        declaration.source_url = source_url.map(str::to_owned);
+    }
+    declarations
+}
+
 /// Resolve generated logical properties after the winning writing mode and
 /// direction are known, while leaving declarations in their ordinary cascade
 /// priority order beside their physical counterparts. Generated logical fields
@@ -1829,12 +1899,13 @@ fn cascade_with_logical_properties(
     matched_custom: Vec<MatchedCustomDeclaration>,
     color_context: ColorComputeContext,
 ) -> (ComputedValues, CustomProperties) {
-    let (logical, _) = cascade_with_custom_context(
+    let (logical, _) = cascade_with_custom_context_and_image_resolver(
         parent,
         parent_custom,
         matched.clone(),
         matched_custom.clone(),
         color_context,
+        |url, base| resolve_url(base, url),
     );
     let logical_values = PropertyId::ALL
         .iter()
@@ -1852,8 +1923,14 @@ fn cascade_with_logical_properties(
         }
         declaration
     });
-    let (mut computed, custom) =
-        cascade_with_custom_context(parent, parent_custom, mapped, matched_custom, color_context);
+    let (mut computed, custom) = cascade_with_custom_context_and_image_resolver(
+        parent,
+        parent_custom,
+        mapped,
+        matched_custom,
+        color_context,
+        |url, base| resolve_url(base, url),
+    );
     for (property, value) in logical_values {
         computed
             .set(property, value)
@@ -2059,6 +2136,7 @@ mod tests {
             layer: CascadeLayer::Unlayered,
             specificity: Specificity::INLINE,
             source_order,
+            source_url: None,
         }
     }
 

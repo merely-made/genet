@@ -22,8 +22,8 @@ use genet_livery::{
     LayoutError, LiveryLayout, LiveryPaintList, RestyleStats, RuleMutationError, StylePlane,
     StyleSet, TextDirective, TextRange, TextSelection, TextSystem, ViewportSizes,
     canonicalize_specified_value, classify_specified_shorthand, content_box_size,
-    emit_paint_list_with_text_system_scrolled_with_images,
-    emit_paint_list_with_text_system_scrolled_with_images_and_external_textures, hit_test,
+    emit_paint_list_with_text_system_scrolled_with_images_and_external_textures_with_document_base,
+    DocumentImageSources, hit_test,
     is_implemented_shorthand, layout, layout_with_text_system, reconstruct_specified_shorthand,
     resolve_container_query_styles, resolve_container_query_styles_with_images, resolve_styles,
     specified_shorthand_longhands, used_value_context as layout_used_value_context,
@@ -182,10 +182,7 @@ fn resource_ledgers(
     for resource in &resources.resources {
         match resource.kind {
             genet_document_resources::ResourceKind::Image => {
-                images.insert(resource.authored_url.clone(), resource.bytes.clone());
-                if resource.resolved_url != resource.authored_url {
-                    images.insert(resource.resolved_url.clone(), resource.bytes.clone());
-                }
+                images.insert(resource.resolved_url.clone(), resource.bytes.clone());
             },
             genet_document_resources::ResourceKind::Font => {
                 fonts.insert(resource.resolved_url.clone(), resource.bytes.clone());
@@ -276,6 +273,9 @@ fn synchronize_live_styles(host: &HostState, state: &mut LiveryState) {
         let resources = resources.expect("changed live resource ledger");
         replace_resource_ledger(state, &resources);
         state.styles.replace_author_sheets(&resources.stylesheets);
+        state
+            .styles
+            .set_document_base_url(resources.document_url.as_deref());
         state.document_sheets = state.styles.document_sheet_indexes();
         state.session.invalidate();
         if arena_changed {
@@ -479,7 +479,8 @@ impl LiveryCssom {
                 host.dom.arena_id(),
             )
         };
-        let styles = StyleSet::cambium_resources(&resources.stylesheets);
+        let mut styles = StyleSet::cambium_resources(&resources.stylesheets);
+        styles.set_document_base_url(resources.document_url.as_deref());
         if let Some(sink) = &resource_sink {
             let initial = resources.resource_delta_from(&ResolvedDocumentResources::default());
             if !initial.is_empty() {
@@ -742,6 +743,7 @@ impl LiveryCssom {
         }
 
         let styles = {
+            let document_base_url = state.styles.document_base_url().map(str::to_owned);
             let LiveryState {
                 styles,
                 device,
@@ -750,22 +752,27 @@ impl LiveryCssom {
                 image_sources,
                 ..
             } = &mut *state;
+            let document_images =
+                DocumentImageSources::new(image_sources, document_base_url.as_deref());
             resolve_container_query_styles_with_images(
                 &host.dom,
                 session.styles(),
                 styles,
                 device,
                 interactions,
-                image_sources,
+                &document_images,
             )?
         };
         let (styles, fragments) = {
+            let document_base_url = state.styles.document_base_url().map(str::to_owned);
             let viewport_sizes = state.device.viewport_sizes;
             let LiveryState {
                 text,
                 image_sources,
                 ..
             } = &mut *state;
+            let document_images =
+                DocumentImageSources::new(image_sources, document_base_url.as_deref());
             layout_with_text_system(
                 &host.dom,
                 &styles,
@@ -773,7 +780,7 @@ impl LiveryCssom {
                 viewport.1 as f32,
                 viewport_sizes,
                 text,
-                image_sources,
+                &document_images,
             )?
         };
         let content_extent = document_content_extent(&host.dom, &fragments);
@@ -788,13 +795,14 @@ impl LiveryCssom {
         state.render_generation = state.render_generation.saturating_add(1);
         let generation = state.render_generation;
         let frame = {
+            let document_base_url = state.styles.document_base_url().map(str::to_owned);
             let external_textures = state.external_textures.clone();
             let LiveryState {
                 text,
                 image_sources,
                 ..
             } = &mut *state;
-            emit_paint_list_with_text_system_scrolled_with_images_and_external_textures(
+            emit_paint_list_with_text_system_scrolled_with_images_and_external_textures_with_document_base(
                 &host.dom,
                 &styles,
                 &fragments,
@@ -804,6 +812,7 @@ impl LiveryCssom {
                 &HashMap::new(),
                 image_sources,
                 &external_textures,
+                document_base_url.as_deref(),
             )
         };
         state.render_cursor = end;

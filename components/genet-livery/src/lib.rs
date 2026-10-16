@@ -16,6 +16,7 @@ mod box_tree;
 mod document;
 mod dom;
 mod image_decode;
+mod image_resources;
 mod invalidation;
 mod layout;
 mod legacy_color;
@@ -88,6 +89,7 @@ pub use document::{
 };
 pub use dom::{ElementRef, InteractionStates, SelectorTree};
 pub use invalidation::{AttributeSnapshot, ElementSnapshot, IncrementalStyle, RestyleStats};
+pub use image_resources::{DocumentImageSources, ImageSourceLookup};
 pub use layout::{
     BlockAlgorithmCounts, LayoutError, LiveryLayout, content_box_size, hit_test,
     hit_test_with_scroll, layout, layout_with_text_system, resolve_container_query_styles,
@@ -105,7 +107,9 @@ pub use livery::{
 pub use paint::{
     LiveryPaintList, TextPaintPhase, TransformGap, TransformGapKind, emit_paint_list,
     emit_paint_list_with_text_system, emit_paint_list_with_text_system_scrolled_with_images,
+    emit_paint_list_with_text_system_scrolled_with_images_and_document_base,
     emit_paint_list_with_text_system_scrolled_with_images_and_external_textures,
+    emit_paint_list_with_text_system_scrolled_with_images_and_external_textures_with_document_base,
 };
 pub use placement::{ElementGeometry, element_geometry};
 pub use presentational_hints::{

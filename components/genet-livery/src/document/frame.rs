@@ -285,7 +285,10 @@ where
             &self.style_set,
             &self.device,
             &self.interactions,
-            &self.image_sources,
+            &crate::DocumentImageSources::new(
+                &self.image_sources,
+                self.style_set.document_base_url(),
+            ),
         )?;
         styles.resolve_ch_lengths(&mut self.text, self.device.viewport_sizes);
         // Animation ownership must be established before any retained
@@ -333,7 +336,10 @@ where
                 layout.fragments.reposition_stable_positioned_subtree(
                     &self.dom,
                     &styles,
-                    &self.image_sources,
+                    &crate::DocumentImageSources::new(
+                        &self.image_sources,
+                        self.style_set.document_base_url(),
+                    ),
                     node,
                     width as f32,
                     height as f32,
@@ -373,7 +379,10 @@ where
                 layout.fragments.resize_positioned_leaf(
                     &self.dom,
                     &styles,
-                    &self.image_sources,
+                    &crate::DocumentImageSources::new(
+                        &self.image_sources,
+                        self.style_set.document_base_url(),
+                    ),
                     node,
                     width as f32,
                     height as f32,
@@ -448,7 +457,10 @@ where
                     &previous_fragments,
                     candidate,
                     &mut self.text,
-                    &self.image_sources,
+                    &crate::DocumentImageSources::new(
+                        &self.image_sources,
+                        self.style_set.document_base_url(),
+                    ),
                 )? {
                     RetainedRootFormatting::Formatted(mut local) => {
                         local.reconcile_identifiers(&previous_fragments);
@@ -506,7 +518,10 @@ where
             height as f32,
             self.device.viewport_sizes,
             &mut self.text,
-            &self.image_sources,
+            &crate::DocumentImageSources::new(
+                &self.image_sources,
+                self.style_set.document_base_url(),
+            ),
         )?;
         let previous = self.identity_source.take();
         if let Some(previous) = previous.as_ref() {
@@ -562,7 +577,7 @@ where
         self.apply_transitions(&mut styles);
         self.apply_keyframe_animation(&mut styles);
         self.apply_sticky_positioning(&mut fragments, &styles);
-        let list = emit_paint_list_with_text_system_scrolled_with_images(
+        let list = emit_paint_list_with_text_system_scrolled_with_images_and_document_base(
             &self.dom,
             &styles,
             &fragments,
@@ -571,6 +586,7 @@ where
             &mut self.text,
             &self.nested_scroll,
             &self.image_sources,
+            self.style_set.document_base_url(),
         );
         self.cached = Some(((width, height), list.clone()));
         self.style_only_damage = true;

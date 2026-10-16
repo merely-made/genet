@@ -24,7 +24,7 @@ pub(crate) fn layout_retained_formatting_root<D>(
     previous: &LiveryLayout<D::NodeId>,
     node: D::NodeId,
     text: &mut TextSystem,
-    image_sources: &ImageSources,
+    image_sources: &dyn crate::ImageSourceLookup,
 ) -> Result<RetainedRootFormatting<D::NodeId>, LayoutError>
 where
     D: LayoutDom,

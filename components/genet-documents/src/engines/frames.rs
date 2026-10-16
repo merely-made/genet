@@ -323,19 +323,17 @@ fn build_document(
     // The child's device is set to the default here and replaced by its used
     // content box on the first composite, which is the only moment the size is
     // known: the parent has to lay out before the frame's used size exists.
+    let mut styles = genet_livery::StyleSet::cambium_resources(&sheets);
+    styles.set_document_base_url(resources.document_url.as_deref());
     let mut document = genet_livery::LiveryDocument::new(
         dom,
-        genet_livery::StyleSet::cambium_resources(&sheets),
+        styles,
         genet_livery::Device::screen(300.0, 150.0),
     );
     for resource in &resources.resources {
         match resource.kind {
             ResourceKind::Image => {
-                document.set_image_resource(resource.authored_url.clone(), resource.bytes.clone());
-                if resource.resolved_url != resource.authored_url {
-                    document
-                        .set_image_resource(resource.resolved_url.clone(), resource.bytes.clone());
-                }
+                document.set_image_resource(resource.resolved_url.clone(), resource.bytes.clone());
             },
             ResourceKind::Font => {
                 document.set_font_resource(resource.resolved_url.clone(), resource.bytes.clone());

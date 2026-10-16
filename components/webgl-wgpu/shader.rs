@@ -84,13 +84,13 @@ pub(crate) struct UniformReflection {
     /// sampler uniform, 1 for the second, ...). Samplers live
     /// outside the Block and carry index `0`.
     pub(crate) member_index: u32,
-    /// Byte offset inside the Block buffer where this member
-    /// starts (std140-style). Samplers carry `0`.
+    /// Byte offset inside the emitted WGSL Block struct. Samplers carry `0`.
     pub(crate) block_offset: u32,
     /// Byte size of this member's contribution inside the
-    /// Block (includes std140 padding for mat3 columns). `0`
-    /// for samplers.
+    /// Naga's emitted WGSL member type size. `0` for samplers.
     pub(crate) block_size: u32,
+    /// Matrix column stride in bytes as emitted by WGSL/Naga.
+    pub(crate) matrix_stride: Option<u32>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -113,36 +113,6 @@ pub(crate) enum UniformKind {
     Int,
     Sampler2D,
     SamplerCube,
-}
-
-impl UniformKind {
-    /// std140-style alignment (matches WGSL's uniform-storage
-    /// rules for the kinds webgl-essl admits). Scalars: 4,
-    /// vec2: 8, vec3 / vec4 / matrices: 16.
-    pub(crate) fn block_alignment(self) -> u32 {
-        match self {
-            Self::Float32 | Self::Int => 4,
-            Self::Float32x2 => 8,
-            Self::Float32x3 | Self::Float32x4 | Self::Matrix2 | Self::Matrix3 | Self::Matrix4 => 16,
-            Self::Sampler2D | Self::SamplerCube => 0,
-        }
-    }
-
-    /// std140-style size: vec3 is 12 (the next member aligns
-    /// up if its alignment exceeds 12). Matrices are stored as
-    /// column-major arrays of vec4-padded columns.
-    pub(crate) fn block_size(self) -> u32 {
-        match self {
-            Self::Float32 | Self::Int => 4,
-            Self::Float32x2 => 8,
-            Self::Float32x3 => 12,
-            Self::Float32x4 => 16,
-            Self::Matrix2 => 32,
-            Self::Matrix3 => 48,
-            Self::Matrix4 => 64,
-            Self::Sampler2D | Self::SamplerCube => 0,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

@@ -519,5 +519,115 @@
   "probe_output": "CASE vec3_then_float\nCPU [UniformReflection { name: \"u_color\", binding: 0, kind: Float32x3, member_index: 0, block_offset: 0, block_size: 12 }, UniformReflection { name: \"u_alpha\", binding: 0, kind: Float32, member_index: 1, block_offset: 12, block_size: 4 }]\nWGSL\nstruct type_18 {\n    member: vec3<f32>,\n    member_1: f32,\n}\n\n@group(0) @binding(0) \nvar<uniform> global: type_18;\nvar<private> global_1: vec4<f32>;\n\nfn function_() {\n    let _e5 = global.member;\n    let _e7 = global.member_1;\n    global_1 = vec4<f32>(_e5, _e7);\n    return;\n}\n\n@fragment \nfn main() -> @location(0) vec4<f32> {\n    function_();\n    let _e1 = global_1;\n    return _e1;\n}\n\nWGSL_VALIDATION Ok(())\nWGSL_UNIFORM_LAYOUT Struct { members: [StructMember { name: Some(\"member\"), ty: [1], binding: None, offset: 0 }, StructMember { name: Some(\"member_1\"), ty: [0], binding: None, offset: 12 }], span: 16 }\nCASE mat2_then_float\nCPU [UniformReflection { name: \"u_matrix\", binding: 0, kind: Matrix2, member_index: 0, block_offset: 0, block_size: 32 }, UniformReflection { name: \"u_alpha\", binding: 0, kind: Float32, member_index: 1, block_offset: 32, block_size: 4 }]\nWGSL\nstruct type_18 {\n    member: mat2x2<f32>,\n    member_1: f32,\n}\n\n@group(0) @binding(0) \nvar<uniform> global: type_18;\nvar<private> global_1: vec4<f32>;\n\nfn function_() {\n    let _e6 = global.member;\n    let _e9 = global.member_1;\n    global_1 = vec4<f32>(_e6[0], _e9, 1f);\n    return;\n}\n\n@fragment \nfn main() -> @location(0) vec4<f32> {\n    function_();\n    let _e1 = global_1;\n    return _e1;\n}\n\nWGSL_VALIDATION Ok(())\nWGSL_UNIFORM_LAYOUT Struct { members: [StructMember { name: Some(\"member\"), ty: [1], binding: None, offset: 0 }, StructMember { name: Some(\"member_1\"), ty: [0], binding: None, offset: 16 }], span: 24 }\n",
   "archive_status": "Archive attempt was interrupted. User subsequently instructed proceed; resumed audit completed without reapplying earlier stop cutoff.",
   "rustc_version": "rustc 1.99.0 (b940084d7 2026-09-28)",
-  "cargo_lock_sha256": "6d486c3a39be0b2a097d0327878951581aa67f3896b6299beca376f711c7bb49"
+  "cargo_lock_sha256": "6d486c3a39be0b2a097d0327878951581aa67f3896b6299beca376f711c7bb49",
+  "linked_shader_repair": {
+    "baseline_commit": "819dc26ffc61fb0d0b07fc9f4012b0a5ad245500",
+    "findings": [
+      "W1",
+      "W2"
+    ],
+    "status": "implemented; full two-crate tests and native Vulkan pixel readbacks passed; independent scoped review approved",
+    "ownership": "ESSL linked plan assigns both stage interfaces and uniform order/types. Naga reflection of both emitted WGSL blocks supplies matching offsets, type sizes, matrix strides and span. Backend copies these facts for uploads; old CPU layout table removed.",
+    "source_files": [
+      {
+        "path": "components/webgl-essl/Cargo.toml",
+        "sha256": "eb8e7c57d2f843f622fc97da06fa13f21b2b22f25e9925a3afd8cbb5e862c23e"
+      },
+      {
+        "path": "components/webgl-essl/lib.rs",
+        "sha256": "87a59cac0452cfb1e58544c5f9220e92b4ea4d762d6bf3071374dcd253cf401d"
+      },
+      {
+        "path": "components/webgl-essl/lower.rs",
+        "sha256": "564ac59a151a2051dce0270e610b97c545d2ac70ee55d40015d7f0df64d817c5"
+      },
+      {
+        "path": "components/webgl-essl/reflect.rs",
+        "sha256": "b2b7c576b49f0cb033029ed0f289e04b1cc84b1c24ba435d7bf1b8fccb02ec68"
+      },
+      {
+        "path": "components/webgl-wgpu/shader.rs",
+        "sha256": "06e0880cbe1360f15dc2a7f211f6a8042b461c64342f10b7c7cfb8c4e6afef66"
+      },
+      {
+        "path": "components/webgl-wgpu/shader/lowering.rs",
+        "sha256": "c3dddc4311f8b2d07137477a9c3473d390a3944d14bbbdf4e620042c245e660f"
+      },
+      {
+        "path": "components/webgl-wgpu/shader/tests.rs",
+        "sha256": "bf5970e1e55392badc1964ffbac5f793b9846eac4857b8f83133279906b85926"
+      },
+      {
+        "path": "components/webgl-wgpu/webgl/programs.rs",
+        "sha256": "0ac4a286395023fcfee73c232591128be89fb3dc0e3b05523d25673f8ab8aaaf"
+      },
+      {
+        "path": "components/webgl-wgpu/webgl/test_support.rs",
+        "sha256": "072b884e59fdd148dbf8d6c47d6c316081d21bc05130493adf4897cd50c671e3"
+      },
+      {
+        "path": "components/webgl-wgpu/webgl/tests_core.rs",
+        "sha256": "d7a278a250c7c2add4d20d49601626c702fb0673b1c423a9a892dd77f0b3f236"
+      },
+      {
+        "path": "components/webgl-wgpu/webgl/tests_widened.rs",
+        "sha256": "d98f020419e6a17c315afdcf2ad9a6bee87dd30284325d4107b71af752441b58"
+      }
+    ],
+    "command": "cargo test --offline --locked -j1 -p servo-webgl-essl -p servo-webgl-wgpu -- --test-threads=1 --nocapture",
+    "results": {
+      "frontend_passed": 492,
+      "backend_library_passed": 78,
+      "backend_integration_passed": 12,
+      "total_passed": 582,
+      "failed": 0,
+      "ignored": 0
+    },
+    "gpu_adapter": "AMD Radeon Graphics (RADV RENOIR), vendor 4098, device 5686, IntegratedGpu, Vulkan",
+    "regressions": [
+      "reordered same-type varyings: yellow pixel",
+      "shared/reordered and stage-local uniforms read by both stages: [191,32,128,255]",
+      "mat2 followed by uploaded scalar: [0,0,159,255], reflected scalar offset 16",
+      "mat3 setter uses reflected column stride: green triangle",
+      "conflicting float/vec2 and float/sampler uniforms reject linking",
+      "unused vertex varying accepted with draw",
+      "unused bool alone and before float do not consume block member indices"
+    ],
+    "resources": {
+      "lock": "/home/markik/Code/testing/machine-heavy.lock",
+      "memory_max_bytes": 5368709120,
+      "memory_swap_max_bytes": 0,
+      "cpu_quota_percent": 150,
+      "cargo_jobs": 1,
+      "test_threads": 1,
+      "nice": 10,
+      "timeout_seconds": 240,
+      "observed_cgroup_memory_peak_bytes_during_run": 803823616,
+      "maximum_process_rss_kib": 389424,
+      "reported_swaps": 0,
+      "elapsed_seconds": 21.86,
+      "cleanup": "Removed 17 MiB disposable standalone probe executable; retained source, output, historical receipts and shared build caches."
+    },
+    "logs": [
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/linked-layout/tests-b.log",
+        "sha256": "b16d013d159e501826afa4b0acd044d9644e3b05ddb30b1f070c9b28e44998f6"
+      },
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/linked-layout/tests-c.log",
+        "sha256": "7cd96e0793cab5f3f9f3abf7f6005d2edf86389068ac3bcc66b5e9f29995aa08"
+      },
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/linked-layout/tests-final.log",
+        "sha256": "c091ffb235f9c4570dae97e074cbc78967a189f52a192025d8eaa585af684098"
+      },
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/linked-layout/tests.log",
+        "sha256": "03c57af85e74b3bd9dca85ab8e5b57040a28fc4078dd0fffc3a5487a149ce47e"
+      }
+    ],
+    "review": "/home/markik/Code/worktrees/genet-audit-reduction-20261016/.superpowers/sdd/w1-w2/review.md",
+    "earlier_attempts": "Two missing-import compile errors corrected. First completed gate had 567 pass / 1 info-log wording failure; preserved interface-validation diagnostic. Independent review found and fixed unsupported unused-uniform indexing before final gate.",
+    "limits": "Native retained path only; does not establish browser/wasm, other GPU backends, full WebGL conformance, broader I11/I13 compiler cleanup, or Forms acceptance."
+  }
 }

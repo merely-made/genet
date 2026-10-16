@@ -1,5 +1,42 @@
 # Genet architecture and removal audit
 
+## W1/W2 repair and verification, 2026-10-16
+
+**W1 and W2 are repaired in the retained native shader path.** This follow-up
+supersedes their open status in the historical post-cut snapshot below. Exact
+source hashes, command, adapter and logs are in the `linked_shader_repair` entry
+of the [audit receipt](receipts/2026-10-16_architecture_post_cut_audit.json).
+
+The ESSL frontend owns a linked plan for varying locations and uniform member
+order/type agreement. Both stages emit from that plan. Naga parses and validates
+the emitted WGSL inside the guarded worker, supplies offsets, sizes, matrix
+column strides and block span, and verifies the stages agree. CPU uploads consume
+those facts. The backend's independent offset/alignment/size table is removed;
+mat3/mat4 serialization uses reflected strides. Source-key lookup no longer
+recompiles shaders. The wider I11 compiled-artifact lifecycle remains open.
+
+The final offline, locked test run passed **492 frontend tests, 78 backend library
+tests and 12 backend integration tests: 582 passed, zero failed or ignored**.
+Actual draw/readback regressions passed on **AMD Radeon Graphics (RADV RENOIR),
+Vulkan** for reordered varying declarations, shared/reordered and disjoint
+uniforms read by both stages, the scalar after a mat2, and reflected mat3 column
+strides. Conflict rejection, unused outputs, and unused uniforms have regressions.
+Existing texture, framebuffer, matrix and compile/validation tests also passed.
+
+Independent review found an unused-bool member-index regression in the draft;
+it was corrected and covered before the final gate. The existing interface-error
+info-log contract was preserved after a test failure. Final scoped review approved
+the implementation. Builds held the shared lock with one job, serial tests,
+5 GiB memory maximum, zero swap allowance and 150% CPU quota. The final run took
+21.86 seconds and reported zero swaps; the observed cgroup peak during the run
+was approximately 767 MiB. A disposable 17 MiB probe executable was removed,
+while its source/results and shared build caches were preserved.
+
+This establishes the named native retained-path behavior. Browser/wasm, other GPU
+backends, full WebGL conformance, unrelated compiler cleanup and Forms acceptance
+remain outside this result. Other audit findings retain their previous status.
+
+
 ## Post-cut re-audit, 2026-10-16
 
 **Current source: `6ab57c124e1`. The bounded cuts are implemented and focused tests passed. The broader architecture is not repaired or qualified.** This section supersedes the original snapshot's status claims below; the original evidence remains historical.

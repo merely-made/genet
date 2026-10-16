@@ -61,3 +61,25 @@ the agreed 41% cutoff; the user then explicitly instructed proceeding. The
 post-cut re-audit is now recorded at the start of the architecture audit,
 including newly reproduced W2 and explicit partial/open dispositions.
 Do not present this bounded reduction as completion of the twelve lanes.
+
+## W1/W2 linked shader layout repair
+
+**Status:** implemented and verified locally, 2026-10-16. Baseline `819dc26ffc6`.
+
+The approved repair gives the ESSL frontend one linked-program contract: shared
+varying locations and uniform member order/types for both stages, followed by
+reflection of the emitted WGSL layout. The wgpu consumer copies those facts
+into its upload descriptors instead of calculating another layout. Preserve the
+single-stage compile entry point and the guarded Naga boundary.
+
+Done conditions: reordered varyings and shared/disjoint uniforms link coherently;
+conflicting uniform types fail linking; the scalar after a mat2 uses the emitted
+offset. Existing frontend/backend tests and added pixel readbacks must pass on
+the retained implementation. Implementation workers do not build. Parent admits
+one capped job at a time, then reviews the combined changes and records actual
+results. This scope does not close unrelated compiler caching or browser gates.
+
+W1/W2 final gate: 582 passed, zero failed/ignored across the full ESSL and wgpu
+crates, including native Vulkan draw/readback regressions. Independent review
+approved after fixing unused-bool indexing. The audit receipt records source
+hashes, resource caps, raw logs and adapter identity. Other lanes remain open.

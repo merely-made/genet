@@ -9,6 +9,7 @@
 
 use super::test_support::{make_context, make_context_with_depth};
 use super::*;
+use crate::CANONICAL_TRIANGLE_VERTEX_SHADER;
 
 #[test]
 fn reflection_carries_full_attribute_list_in_source_order() {
@@ -1015,5 +1016,94 @@ void main() {
 
     // The right setter passes.
     context.uniform3f(location, 0.5, 0.25, 0.75);
+    assert_eq!(context.get_error(), WebGlError::NoError);
+}
+
+#[test]
+fn scalar_after_mat2_uses_emitted_uniform_offset_in_gpu_draw() {
+    let mut context = make_context(32, 32);
+    let fragment = r#"
+precision mediump float;
+uniform mat2 u_matrix;
+uniform float u_alpha;
+void main() {
+    gl_FragColor = vec4(u_matrix[0], u_alpha, 1.0);
+}
+"#;
+    let program = context
+        .create_program_from_essl(CANONICAL_TRIANGLE_VERTEX_SHADER, fragment)
+        .expect("mat2 followed by scalar program links");
+    context.use_program(Some(program));
+    let alpha = context
+        .get_uniform_location(program, "u_alpha")
+        .expect("u_alpha location");
+    // There is no mat2 setter on this WebGL surface. Its zero-initialized
+    // matrix keeps the first two output channels at zero; the scalar upload
+    // must still reach the byte offset the emitted WGSL reads.
+    context.uniform1f(alpha, 0.625);
+
+    let vertices = context.create_buffer();
+    context.bind_buffer(BufferTarget::ArrayBuffer, Some(vertices));
+    context.buffer_data_f32(
+        BufferTarget::ArrayBuffer,
+        &[-0.8, -0.8, 0.8, -0.8, 0.0, 0.8],
+        BufferUsage::StaticDraw,
+    );
+    context.enable_vertex_attrib_array(0);
+    context.vertex_attrib_pointer_f32(0, 2, false, 0, 0);
+    context.draw_arrays(PrimitiveMode::Triangles, 0, 3);
+
+    let center = context.read_pixels(16, 16, 1, 1).expect("center read");
+    assert_eq!(&center[0..4], &[0, 0, 159, 255]);
+    assert_eq!(context.get_error(), WebGlError::NoError);
+}
+
+#[test]
+fn matrix3_uniform_transform_draws_with_reflected_column_stride() {
+    let mut context = make_context(32, 32);
+    let vertex = r#"
+attribute vec2 a_position;
+uniform mat3 u_transform;
+void main() {
+    vec3 transformed = u_transform * vec3(a_position, 1.0);
+    gl_Position = vec4(transformed.xy, 0.0, 1.0);
+}
+"#;
+    let fragment = r#"
+precision mediump float;
+void main() {
+    gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0);
+}
+"#;
+    let program = context
+        .create_program_from_essl(vertex, fragment)
+        .expect("mat3 transform program links");
+    context.use_program(Some(program));
+    let transform = context
+        .get_uniform_location(program, "u_transform")
+        .expect("u_transform location");
+    context.uniform_matrix3fv(
+        transform,
+        &[
+            1.0, 0.0, 0.0, // column 0
+            0.0, 1.0, 0.0, // column 1
+            0.0, 0.0, 1.0, // column 2
+        ],
+    );
+
+    let vertices = context.create_buffer();
+    context.bind_buffer(BufferTarget::ArrayBuffer, Some(vertices));
+    context.buffer_data_f32(
+        BufferTarget::ArrayBuffer,
+        &[-0.8, -0.8, 0.8, -0.8, 0.0, 0.8],
+        BufferUsage::StaticDraw,
+    );
+    let position = context.get_attrib_location(program, "a_position") as u32;
+    context.enable_vertex_attrib_array(position);
+    context.vertex_attrib_pointer_f32(position, 2, false, 0, 0);
+    context.draw_arrays(PrimitiveMode::Triangles, 0, 3);
+
+    let center = context.read_pixels(16, 16, 1, 1).expect("center read");
+    assert_eq!(&center[0..4], &[0, 255, 0, 255]);
     assert_eq!(context.get_error(), WebGlError::NoError);
 }

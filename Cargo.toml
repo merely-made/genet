@@ -349,7 +349,6 @@ zeroize = "1.8"
 # Begin workspace-version dependencies - Don't change this comment, we grep for it in scripts!
 engine_observables_api = { package = "engine-observables-api", version = "=0.2.0", path = "components/shared/engine-observables-api" }
 layout_dom_api = { package = "layout-dom-api", version = "=0.1.1", path = "components/shared/layout-dom" }
-media = { package = "servo-media-thread", version = "=0.2.0", path = "components/media/media-thread" }
 genet-compositor = { version = "=0.2.0", path = "components/genet-compositor" }
 # Moved to the netrender workspace as a neutral, engine-agnostic crate
 # (extraction plan 2026-05-20). genet is now a consumer, not the owner.

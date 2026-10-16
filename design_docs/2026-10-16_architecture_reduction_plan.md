@@ -56,6 +56,8 @@ completion Node regression and six dependency-gate tests passed. See
 [exact source hashes and results](receipts/2026-10-16_architecture_reduction_tests.json).
 These tests do not close W1 shader linking, browser input, or Forms acceptance.
 
-The user requested a fresh source audit after testing. That audit remains
-unperformed: the account meter reached the agreed 41% cutoff after tests.
+The user requested a fresh source audit after testing. Work first stopped at
+the agreed 41% cutoff; the user then explicitly instructed proceeding. The
+post-cut re-audit is now recorded at the start of the architecture audit,
+including newly reproduced W2 and explicit partial/open dispositions.
 Do not present this bounded reduction as completion of the twelve lanes.

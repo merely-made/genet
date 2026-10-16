@@ -1,0 +1,523 @@
+{
+  "source_commit": "6ab57c124e1e21f8db17e441e4b642d756bbe2db",
+  "baseline_commit": "8fa73497952ecda37cf234c4a845354dab1af599",
+  "scope": "Complete core identity reconciliation, production change review, targeted retained finding bodies. Not every-line semantic review; unchanged upstream bodies and historical external runs not rereviewed.",
+  "baseline_receipt": "2026-10-16_architecture_removal_audit.json",
+  "core_identity_counts": {
+    "unchanged": 968,
+    "modified": 23,
+    "removed": 5
+  },
+  "current_core_files": 996,
+  "new_core_files": [
+    {
+      "path": "components/genet-scripted-dom/forms_editing.rs",
+      "sha256": "d98c560adda4176e0fff7ae8a50823628f2bd5039062fed1200ce61cc3aee54e"
+    },
+    {
+      "path": "ports/genet-wpt/src/test262_completion.js",
+      "sha256": "f6ed93e35490362973f09a6b0b6cb513bc364dd4561bfb48c8c5fbbcaa525649"
+    },
+    {
+      "path": "support/checked-native.ps1",
+      "sha256": "9ef00010d88805b8085f29b5440ee3bb19b53d767c1ca64b8d5c6f5e829305ed"
+    },
+    {
+      "path": "support/ci/test_check_dependency_cones.py",
+      "sha256": "decf9f9ddc8d9e61223cc64541d481caa8c03ea0b140f92dea893407eacc0dd3"
+    },
+    {
+      "path": "support/ci/test_checked_native.ps1",
+      "sha256": "2919fe2494e85c7e460fd714df962cc27843c0395fe366315e6361c8c84cb8a8"
+    }
+  ],
+  "changes_from_baseline": [
+    {
+      "path": "components/genet-compositor/compositor.rs",
+      "status": "modified",
+      "old_sha256": "fcc3127c7b304ca90ed72093a7520ad9c7666edff283cd48f8580d4203728f04",
+      "sha256": "f37197e9d869554c5dcb5b896872b36a0558d0ae432ffb3258e87d4ed1a2e91f"
+    },
+    {
+      "path": "components/genet-compositor/lib.rs",
+      "status": "modified",
+      "old_sha256": "ca66342e5b1dd61f4a3843ef48ff38ac1d7707a5d6d20bd001697a48f8ab176b",
+      "sha256": "cd2829cab43e93d722f0f789f506a9113ad1e9b4ad7595767eee9d403bb7db5c"
+    },
+    {
+      "path": "components/genet-compositor/rendering_context_core.rs",
+      "status": "modified",
+      "old_sha256": "0cd540454d3a10ae1da3f2c4f0b660b2a4d9f5e98c629c9e6b0996e6eff69c0f",
+      "sha256": "6623b77f6ac213234b8bb427f7b66934dcbaad0e8425419f71e49aeabc65d1ed"
+    },
+    {
+      "path": "components/genet-documents/Cargo.toml",
+      "status": "modified",
+      "old_sha256": "8a21c7b31e97b16ccd244e456774c311a145164b87c3d6a1e87b59312ba42220",
+      "sha256": "1ac6843df7108eb65b6915ce8f698ff73f1ba339abfcdf043e4e2716f58eb44e"
+    },
+    {
+      "path": "components/genet-documents/src/engines/livery.rs",
+      "status": "modified",
+      "old_sha256": "a8baa0e15bcdba8a4ae4c17a75b86edcfddc90c37339f4e41cfb24d9b41144c6",
+      "sha256": "947dfa7a3c000332d16cb2a95a9a2860c0a60dd8ca51a7f81fa43a617cdbe0ea"
+    },
+    {
+      "path": "components/genet-livery/src/document/frame.rs",
+      "status": "modified",
+      "old_sha256": "0573401a9156683f1d3c8de3c3d6198a9c457f4febd4dd076dd9930ba00c7a56",
+      "sha256": "ac183296b55a30a4dea58b83788b17b7bfaac61f231e28bcdf84d904ccd3783e"
+    },
+    {
+      "path": "components/genet-livery/src/invalidation.rs",
+      "status": "modified",
+      "old_sha256": "abb6b5a6b11313dd888b94ae3af1037414ff63efd35fae86d037761117f88717",
+      "sha256": "9fa6288c0eae6098d58d50e7aaf222e14da7a4e3e313de907848f2033f5ccf98"
+    },
+    {
+      "path": "components/genet-livery/src/text.rs",
+      "status": "modified",
+      "old_sha256": "7a494b41c7eb31e97061d9486b0bacbdd57a7eab1e5d3aa7545ab4e7b3fc0d50",
+      "sha256": "c4586e7cea5c9ef4df3162b01d2ca1dfa29bc2bde5f36a3af46eb0d5332503b5"
+    },
+    {
+      "path": "components/genet-render-host/src/surface_capture_layout.rs",
+      "status": "modified",
+      "old_sha256": "26caac2bad098888020717c8166f4530a5de73abbd09643dd255d8832ecec60c",
+      "sha256": "d8de8e3e793502e2a4e15e5b0a738225aafe0f9f9825c2009d007aa99bda758f"
+    },
+    {
+      "path": "components/genet-scripted-dom/Cargo.toml",
+      "status": "modified",
+      "old_sha256": "21fbf6aac922880384e0f15c79f5321eb95a0fd2e8a0c7d12ef14f92498b81ec",
+      "sha256": "fb2b3f336a65a9f55210dee45d165c390163930ef0f77d7434fce8a5118a231e"
+    },
+    {
+      "path": "components/genet-scripted-dom/forms.rs",
+      "status": "modified",
+      "old_sha256": "6d6e05f583e59e694238400fa911794b804e2f0511a4d6d27cc8b3b559d82139",
+      "sha256": "3aeac690e8917e434b07d464d5a583e3d8cf044527901a83186360079c8176b9"
+    },
+    {
+      "path": "components/genet-scripted-dom/lib.rs",
+      "status": "modified",
+      "old_sha256": "bcf8b2d162b2f908207f2294fdbf6ad23420f705554b866c186105f7100a6e9e",
+      "sha256": "8c09c7b73ac784fee92d047584c4b444d30502bc095da6fc032468931ff1db35"
+    },
+    {
+      "path": "components/media/media-thread/Cargo.toml",
+      "status": "removed",
+      "old_sha256": "78aad5ee9017b1648f6f057fa363985f34aa1c23f11d6d976cd1a9b40fbdb4ae",
+      "sha256": null
+    },
+    {
+      "path": "components/media/media-thread/lib.rs",
+      "status": "removed",
+      "old_sha256": "b3fde508d363807d24384e6253c097cc4e7bc4d8d7fe1dbc27a70bb26ae396dd",
+      "sha256": null
+    },
+    {
+      "path": "components/media/media-thread/media_thread.rs",
+      "status": "removed",
+      "old_sha256": "545e11c82e7a53c344c1180ce35538190edd6d401f1e8e6cdb263098f2d010ba",
+      "sha256": null
+    },
+    {
+      "path": "components/shared/document-session-api/src/session_engine.rs",
+      "status": "modified",
+      "old_sha256": "4d8935ebacb35084148f5107dbc6df71fd2c8b9a8081c0fddca59e340ebe8ffd",
+      "sha256": "0b3db0e1f53bec481cc757a1e1ffe196275eb53c8de47b2aa4b7e47bf536efe8"
+    },
+    {
+      "path": "components/webgl-wgpu/shader.rs",
+      "status": "modified",
+      "old_sha256": "f1d735cef19cdaa0d9344b7bb35a54c9a98cc1d57ff9d08310ced67c26414340",
+      "sha256": "69e1c2f2a45f38e7c590c55c7d3d93d9dc59a71e4aa8f627074ee6c7aa394d00"
+    },
+    {
+      "path": "components/webgl-wgpu/shader/lowering.rs",
+      "status": "modified",
+      "old_sha256": "7fc0281b886d6cd3e2f3c4019c616d6e2dd6f5e7da297f1eec0e18cd28a02b99",
+      "sha256": "e10554f2c78e9dae6d20f7f6d387b2560e7589b713225e9e8a626a9ab1a1a9ae"
+    },
+    {
+      "path": "components/webgl-wgpu/shader/tests.rs",
+      "status": "modified",
+      "old_sha256": "2cdd80d53e8896d384f6fc8a62a9128e310b6093f6283018c192406376187666",
+      "sha256": "5fa9086713949ae1a152ccbabd46ada1dc8cdec15583a7475549fa1665283b25"
+    },
+    {
+      "path": "ports/genet-wpt/src/test262.rs",
+      "status": "modified",
+      "old_sha256": "8bf909abd98089995066dd7c68ea73086894435896217c022e32b595f7e8940d",
+      "sha256": "339e52cb3deba9ee0f76cc35dac587c96599f9a0799257fe927902a935a43d46"
+    },
+    {
+      "path": "ports/genet-wpt/src/test262_cmd.rs",
+      "status": "modified",
+      "old_sha256": "98b1e5d2dd49c2d86b5120dc49aa1db823c4ed1fbe3824878a62c4a304808168",
+      "sha256": "125898ae4f78a0c20cd98422c02e828cb6f39a220a3eafbc26dec7404e597894"
+    },
+    {
+      "path": "ports/ortet/src/shell.rs",
+      "status": "modified",
+      "old_sha256": "083b7ef09a8f07b4c45602c058dac17df0a54324e17f02cd49d45f7f3d48a7e7",
+      "sha256": "aa7d67b3f0c447ef8a7c1f70a9673291e3936177dc872ffb82d0cc401eb4ce3d"
+    },
+    {
+      "path": "ports/ortet/src/web.rs",
+      "status": "modified",
+      "old_sha256": "fa509505fcd3fb5513e908ec035cf27e93fa6cec8981bda4aef26bfe95d7448a",
+      "sha256": "ef3e63d2185984fc10aa637c31f7e482f53fda2e94a80f4fa539b593535e1e1a"
+    },
+    {
+      "path": "support/build-scripted-workers.ps1",
+      "status": "modified",
+      "old_sha256": "7032d29e1b9941bfd883be64f7c8e6f971d4c37272f12a8c5fd8f6bb8e0dde9c",
+      "sha256": "b38f9825514d3c2908e3ba01e09faf6fbeacdb5f7189671c34d14fb0de29a238"
+    },
+    {
+      "path": "support/ci/check_dependency_cones.py",
+      "status": "modified",
+      "old_sha256": "2632f15367b9e67900ffb364b34c0e9e162ff002c8c9a775aeb01290f36b6e58",
+      "sha256": "25c61f22ababd0ef9d82a458e33c84a6b46cafb23dd9d08ff6fd7f31dd9c73c2"
+    },
+    {
+      "path": "support/ci/run_ortet_chromium_receipt.ps1",
+      "status": "modified",
+      "old_sha256": "31368e6831d82c4193d88c8ea7fe6b0d6621c38430530962c71faa5bbeec679e",
+      "sha256": "8872a2cd71f88207566c92861ab0cf97e36bab29bf5a741af5b981a504181941"
+    },
+    {
+      "path": "support/profile-gates/check-static-html.ps1",
+      "status": "removed",
+      "old_sha256": "9edb31ea527a0f075664222f4ec0f45b15ad8c609b20aed507dc2baf1a92e00f",
+      "sha256": null
+    },
+    {
+      "path": "support/profile-gates/check-tiers.sh",
+      "status": "removed",
+      "old_sha256": "ef4f0db0c3cfffc9a25fc43f34932e7e62033311b95909b6799766d4c1dd5b33",
+      "sha256": null
+    }
+  ],
+  "workspace_package_count": 52,
+  "fresh_targeted_reads": [
+    {
+      "path": "components/buckram/src/flow.rs",
+      "sha256": "bb9ea5921b0de12d8f2efa31e7f54229ec11c55c1306521ee4231412e9dea987"
+    },
+    {
+      "path": "components/buckram/src/fragmentation.rs",
+      "sha256": "d77ad01ec501a3e0bef0a6aa53b37dc10e580e80e97470af2fd9c851069e52e2"
+    },
+    {
+      "path": "components/buckram/src/taffy_adapter.rs",
+      "sha256": "488e4378a889b9084176e47a4e15472fea1bcdf368e653eca652ddb016d6cbcb"
+    },
+    {
+      "path": "components/buckram/src/taffy_adapter/run.rs",
+      "sha256": "7b68205ccdac5cc51e99de053fae07067a81ef5f30c20a94fb08c9f8f4fc4c10"
+    },
+    {
+      "path": "components/genet-compositor/compositor.rs",
+      "sha256": "f37197e9d869554c5dcb5b896872b36a0558d0ae432ffb3258e87d4ed1a2e91f"
+    },
+    {
+      "path": "components/genet-compositor/compositor_factory.rs",
+      "sha256": "633f2c6431aa156b4827f9c3c8c55c534033959ce5374c5fd657665252ea981d"
+    },
+    {
+      "path": "components/genet-compositor/compositor_wayland/mod.rs",
+      "sha256": "44061b01284da145c0b85b013ff85b72852256e3ed6834e1eafff477ff412a8e"
+    },
+    {
+      "path": "components/genet-documents/src/engines/livery.rs",
+      "sha256": "947dfa7a3c000332d16cb2a95a9a2860c0a60dd8ca51a7f81fa43a617cdbe0ea"
+    },
+    {
+      "path": "components/genet-documents/src/engines/scripted.rs",
+      "sha256": "d543299ef725d8eacfaa28d2d0cdf0f0124af07f6e0bea3cbef04e1a06c1c13b"
+    },
+    {
+      "path": "components/genet-host-api/lib.rs",
+      "sha256": "1471b17bca3b5e015d0fe0b4a6f527ceb95bd88790eb60994d5bcc287012a393"
+    },
+    {
+      "path": "components/genet-livery/src/box_tree.rs",
+      "sha256": "baf8caa1e5ace30aa5bad0e46bf67247d21a9a452fb518c508f8550c7a4a6cbf"
+    },
+    {
+      "path": "components/genet-livery/src/document/frame.rs",
+      "sha256": "ac183296b55a30a4dea58b83788b17b7bfaac61f231e28bcdf84d904ccd3783e"
+    },
+    {
+      "path": "components/genet-livery/src/invalidation.rs",
+      "sha256": "9fa6288c0eae6098d58d50e7aaf222e14da7a4e3e313de907848f2033f5ccf98"
+    },
+    {
+      "path": "components/genet-livery/src/layout/transaction.rs",
+      "sha256": "1d439bb36d845d9f6c391d16ffe9a10840227d6d6bf944bffc921c430de1afc0"
+    },
+    {
+      "path": "components/genet-livery/src/paint.rs",
+      "sha256": "996638c3b5332ea9de690d9ec19e2562ef6d3ecc47893edb169636601e076313"
+    },
+    {
+      "path": "components/genet-livery/src/table_shadow.rs",
+      "sha256": "b320c78fadbe3eaacd83fd925631dd6ed7d36aaf8cc3918aec8b541468337efb"
+    },
+    {
+      "path": "components/genet-livery/src/text.rs",
+      "sha256": "c4586e7cea5c9ef4df3162b01d2ca1dfa29bc2bde5f36a3af46eb0d5332503b5"
+    },
+    {
+      "path": "components/genet-render-host/src/lib.rs",
+      "sha256": "c5cbd1937afedd23fc7d6aaaf6e8b3998eba9f22f3593b1691d6a0ca78ebd34e"
+    },
+    {
+      "path": "components/genet-scripted-dom/forms_editing.rs",
+      "sha256": "d98c560adda4176e0fff7ae8a50823628f2bd5039062fed1200ce61cc3aee54e"
+    },
+    {
+      "path": "components/genet-scripted/capture.rs",
+      "sha256": "97831b92df0ac83a37f76afeb30f7993e8909b54bf09cede123e702573b9efb4"
+    },
+    {
+      "path": "components/genet-scripted/document.rs",
+      "sha256": "b389d12ba85583cbec8af48bfec00780afe46f3809f259b2be0f6e07f58b8e02"
+    },
+    {
+      "path": "components/genet-scripted/livery.rs",
+      "sha256": "599006a31a3aad630bfc9181f552be81348658a980c4dc2b739813fe6136d276"
+    },
+    {
+      "path": "components/livery/consumed_longhands.toml",
+      "sha256": "6f09dbf6d106e3065082664a096c20e5f7f06f6ac0a41736b1053c4b4f98ea73"
+    },
+    {
+      "path": "components/livery/src/cascade.rs",
+      "sha256": "b36d719c7cecdaeab75b325962ebe01024a78bbfdc7db94da234a571956deedb"
+    },
+    {
+      "path": "components/livery/src/stylesheet.rs",
+      "sha256": "143e1e2b73716bc1d54173f9f5ed8e7dab235108709de7d5ee597a9a7bd46bc9"
+    },
+    {
+      "path": "components/livery/src/values/logical.rs",
+      "sha256": "10bcffd8e3bc03c25b8840f0351f359d644e06be4f196a5d8869413df3d54bd0"
+    },
+    {
+      "path": "components/netfetcher/src/cookie_jar.rs",
+      "sha256": "c882af136706b4f9337e290ee942008050acaca3708676b9a30346e2010062ad"
+    },
+    {
+      "path": "components/netfetcher/src/fetch/cache_phase.rs",
+      "sha256": "1125b72c57f85e0c8c1ef2dcfaeb5de5bdaf838a960b70dfd832385fd0eb8fe4"
+    },
+    {
+      "path": "components/script-engine-api/lib.rs",
+      "sha256": "76603051e2b9bf7ffa4beadd28a9a8156e0dc9793504548fe7f320c4425d1071"
+    },
+    {
+      "path": "components/script-engine-boa/lib.rs",
+      "sha256": "4b117e594a1fe20dc1ba367583107277619f6c619d7b0cb9ddec2868dd156d16"
+    },
+    {
+      "path": "components/script-engine-nova/lib.rs",
+      "sha256": "d450e92fbacd03e0c6c83824694366a5c1b9806013ad0b6719dff1075fedf650"
+    },
+    {
+      "path": "components/script-engine-piccolo/lib.rs",
+      "sha256": "ea1d778405ff4f7a37669e702f6d7d2221e8d5a41f8e50f2badd237746fe06cc"
+    },
+    {
+      "path": "components/script-runtime-api/dom/bootstrap.js",
+      "sha256": "3d137d29dd741ee948d4d1eac1b9eb80e3f1c0d46cdb8dfcbc2da7f37027fba0"
+    },
+    {
+      "path": "components/script-runtime-api/dom/query_traverse.rs",
+      "sha256": "f39d4098086454ce455187fe080b25ef11cfff534af4e5667d86c7eb25c41bf5"
+    },
+    {
+      "path": "components/script-runtime-api/dom/xpath_eval.rs",
+      "sha256": "ff7aa3d8b4b09169b4e2cd9fa3d08a2423bb559aa6fa521ab834d59b7609e1d1"
+    },
+    {
+      "path": "components/script-runtime-api/lib.rs",
+      "sha256": "c5a745ddbb763958a82568f563212f84725cfdf83a80812c5cd0abad82e52127"
+    },
+    {
+      "path": "components/script-runtime-api/parse.rs",
+      "sha256": "164d77482fa58fd1c7acd9db750710e876f9f37bf4a09385704872c9c27088cd"
+    },
+    {
+      "path": "components/script-runtime-api/platform.rs",
+      "sha256": "9f3b7ed1e37ed315e2ccf66d5229b836d80154a6cbf6e65f9630264c0076103d"
+    },
+    {
+      "path": "components/script-runtime-api/selector.rs",
+      "sha256": "4a09f4a7bac1ccb9e32b39cfef5b730b2dfca9f35aa3bc322e4196ccdb9c4804"
+    },
+    {
+      "path": "components/script-runtime-api/timing.rs",
+      "sha256": "b568fde5aa983369f397e5512a77107bc1e1e546f0dbb1a36e32baef68f220e1"
+    },
+    {
+      "path": "components/script-runtime-api/webgl/bootstrap.js",
+      "sha256": "911027bcc6d1c773c4cb60197230eddf368f7d0e8ee4da2fbc5a5b156b4e0fd0"
+    },
+    {
+      "path": "components/script-runtime-api/worker.rs",
+      "sha256": "d3bd5e4b96e27fc3267dad433f0381b5f0fd1069b818f76c7163bcf11e4afcf1"
+    },
+    {
+      "path": "components/shared/browsing-context/lib.rs",
+      "sha256": "753968fa777b34a26314a204625b304f0538765f1484963aebac0e662f86ee13"
+    },
+    {
+      "path": "components/shared/document-session-api/src/session_engine.rs",
+      "sha256": "0b3db0e1f53bec481cc757a1e1ffe196275eb53c8de47b2aa4b7e47bf536efe8"
+    },
+    {
+      "path": "components/taproot/lib.rs",
+      "sha256": "2949580b0154bc411eb5af46d85a1db37a598738ddb86e150df1e05e5c193d6c"
+    },
+    {
+      "path": "components/webgl-essl/lib.rs",
+      "sha256": "fb09766f11c51ab139967cf86b4e16b3d7c8262625b11458b20e799c21fb55a5"
+    },
+    {
+      "path": "components/webgl-essl/lower.rs",
+      "sha256": "dc2e3843de7a07bcc46e1733182f00809ab059e82e3aa1e607b8ffe711194bfb"
+    },
+    {
+      "path": "components/webgl-essl/reflect.rs",
+      "sha256": "63ca624b1987ccccde4f0cd6991926a67bbf20ff7ace2147cc12b996abf42fdd"
+    },
+    {
+      "path": "components/webgl-wgpu/shader.rs",
+      "sha256": "69e1c2f2a45f38e7c590c55c7d3d93d9dc59a71e4aa8f627074ee6c7aa394d00"
+    },
+    {
+      "path": "components/webgl-wgpu/shader/lowering.rs",
+      "sha256": "e10554f2c78e9dae6d20f7f6d387b2560e7589b713225e9e8a626a9ab1a1a9ae"
+    },
+    {
+      "path": "components/webgl-wgpu/shader/tests.rs",
+      "sha256": "5fa9086713949ae1a152ccbabd46ada1dc8cdec15583a7475549fa1665283b25"
+    },
+    {
+      "path": "components/webgl-wgpu/webgl/programs.rs",
+      "sha256": "37ef10d353b2c78c42da28c1de0b16cc56178813fb35c41cca0ac544546b7e9f"
+    },
+    {
+      "path": "ports/genet-wpt/src/test262.rs",
+      "sha256": "339e52cb3deba9ee0f76cc35dac587c96599f9a0799257fe927902a935a43d46"
+    },
+    {
+      "path": "ports/genet-wpt/src/test262_cmd.rs",
+      "sha256": "125898ae4f78a0c20cd98422c02e828cb6f39a220a3eafbc26dec7404e597894"
+    },
+    {
+      "path": "ports/genet-wpt/src/test262_completion.js",
+      "sha256": "f6ed93e35490362973f09a6b0b6cb513bc364dd4561bfb48c8c5fbbcaa525649"
+    },
+    {
+      "path": "ports/ortet/src/fetch.rs",
+      "sha256": "99bc998433e4178727555a69e3dad488642b3342aa9d84d3574e019371665523"
+    },
+    {
+      "path": "ports/ortet/src/shell.rs",
+      "sha256": "aa7d67b3f0c447ef8a7c1f70a9673291e3936177dc872ffb82d0cc401eb4ce3d"
+    },
+    {
+      "path": "ports/ortet/src/web.rs",
+      "sha256": "ef3e63d2185984fc10aa637c31f7e482f53fda2e94a80f4fa539b593535e1e1a"
+    },
+    {
+      "path": "support/build-scripted-workers.ps1",
+      "sha256": "b38f9825514d3c2908e3ba01e09faf6fbeacdb5f7189671c34d14fb0de29a238"
+    },
+    {
+      "path": "support/checked-native.ps1",
+      "sha256": "9ef00010d88805b8085f29b5440ee3bb19b53d767c1ca64b8d5c6f5e829305ed"
+    },
+    {
+      "path": "support/ci/check_dependency_cones.py",
+      "sha256": "25c61f22ababd0ef9d82a458e33c84a6b46cafb23dd9d08ff6fd7f31dd9c73c2"
+    },
+    {
+      "path": "support/ci/run_ortet_chromium_receipt.ps1",
+      "sha256": "8872a2cd71f88207566c92861ab0cf97e36bab29bf5a741af5b981a504181941"
+    },
+    {
+      "path": "support/ci/test_check_dependency_cones.py",
+      "sha256": "decf9f9ddc8d9e61223cc64541d481caa8c03ea0b140f92dea893407eacc0dd3"
+    },
+    {
+      "path": "support/ci/test_checked_native.ps1",
+      "sha256": "2919fe2494e85c7e460fd714df962cc27843c0395fe366315e6361c8c84cb8a8"
+    },
+    {
+      "path": "support/ci/test_test262_completion.mjs",
+      "sha256": "2c3d32359e55a6f660d316b0c653b403495b258bc8b33d70b2768a962299e41f"
+    },
+    {
+      "path": "support/patches/parley/src/font_diagnostic.rs",
+      "sha256": "5048f3180a03cf2416895880441c0766a88e367f4f62e19245fbbe705ee169fa"
+    },
+    {
+      "path": "support/patches/parley/src/shape/mod.rs",
+      "sha256": "5e294d5193522617fef9ebc8ee5535ba470d51f5e82a6a7eaeeeeda84bae5de6"
+    }
+  ],
+  "fresh_read_limit": "A listed file received selected-body or diff review, not necessarily a full-file semantic read. Other baseline files retain historical review depth only.",
+  "addressed_source_findings": [
+    "H1",
+    "H4",
+    "H7",
+    "H8",
+    "H11",
+    "I12",
+    "I14",
+    "I15",
+    "L2"
+  ],
+  "partial_findings": [
+    "I1",
+    "H6",
+    "L6"
+  ],
+  "remaining_original_findings": 43,
+  "new_findings": {
+    "W2": {
+      "status": "isolated translator reproduction; no GPU draw",
+      "case": "mat2 then float in fragment stage, no vertex uniforms",
+      "cpu_float_offset": 32,
+      "emitted_wgsl_float_offset": 16,
+      "predates_cuts": true,
+      "control": "vec3 then float agrees at offset 12",
+      "emitted_wgsl_validation": "Naga validation passed for both defect and control cases"
+    }
+  },
+  "dom_edit_tests": {
+    "passed": 13,
+    "failed": 0,
+    "ignored": 0,
+    "filtered": 187,
+    "command": "cargo test --offline --locked -j1 -p genet-scripted-dom --lib forms_editing::tests -- --test-threads=1"
+  },
+  "evidence_directory": "/home/markik/Code/testing/audits/genet-architecture-20261016/post-cuts",
+  "evidence_files": {
+    "uniform-layout-probe.rs": "6ee09b031ef7df3bcaa3db17737e6f4241f7c20388157763d9597cb4e167865f",
+    "shader.rs": "c6743aa87ee42cb3be198d562a9d654416b8832cae49f21f2db99161014268e4",
+    "uniform-layout-probe.txt": "6c9e9eda8cc4d57a06a8c94803611fa7dcd459aca169466e2128cc262977dde4",
+    "dom-edit-tests.log": "f9e11a5c2d703bd0eaadca84c081795047ab1add35f4523c27dda163c6176d24"
+  },
+  "probe_module_adjustment": "shader.rs copy adds explicit path to production shader/lowering.rs; no logic changes.",
+  "probe_output": "CASE vec3_then_float\nCPU [UniformReflection { name: \"u_color\", binding: 0, kind: Float32x3, member_index: 0, block_offset: 0, block_size: 12 }, UniformReflection { name: \"u_alpha\", binding: 0, kind: Float32, member_index: 1, block_offset: 12, block_size: 4 }]\nWGSL\nstruct type_18 {\n    member: vec3<f32>,\n    member_1: f32,\n}\n\n@group(0) @binding(0) \nvar<uniform> global: type_18;\nvar<private> global_1: vec4<f32>;\n\nfn function_() {\n    let _e5 = global.member;\n    let _e7 = global.member_1;\n    global_1 = vec4<f32>(_e5, _e7);\n    return;\n}\n\n@fragment \nfn main() -> @location(0) vec4<f32> {\n    function_();\n    let _e1 = global_1;\n    return _e1;\n}\n\nWGSL_VALIDATION Ok(())\nWGSL_UNIFORM_LAYOUT Struct { members: [StructMember { name: Some(\"member\"), ty: [1], binding: None, offset: 0 }, StructMember { name: Some(\"member_1\"), ty: [0], binding: None, offset: 12 }], span: 16 }\nCASE mat2_then_float\nCPU [UniformReflection { name: \"u_matrix\", binding: 0, kind: Matrix2, member_index: 0, block_offset: 0, block_size: 32 }, UniformReflection { name: \"u_alpha\", binding: 0, kind: Float32, member_index: 1, block_offset: 32, block_size: 4 }]\nWGSL\nstruct type_18 {\n    member: mat2x2<f32>,\n    member_1: f32,\n}\n\n@group(0) @binding(0) \nvar<uniform> global: type_18;\nvar<private> global_1: vec4<f32>;\n\nfn function_() {\n    let _e6 = global.member;\n    let _e9 = global.member_1;\n    global_1 = vec4<f32>(_e6[0], _e9, 1f);\n    return;\n}\n\n@fragment \nfn main() -> @location(0) vec4<f32> {\n    function_();\n    let _e1 = global_1;\n    return _e1;\n}\n\nWGSL_VALIDATION Ok(())\nWGSL_UNIFORM_LAYOUT Struct { members: [StructMember { name: Some(\"member\"), ty: [1], binding: None, offset: 0 }, StructMember { name: Some(\"member_1\"), ty: [0], binding: None, offset: 16 }], span: 24 }\n",
+  "archive_status": "Archive attempt was interrupted. User subsequently instructed proceed; resumed audit completed without reapplying earlier stop cutoff.",
+  "rustc_version": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "cargo_lock_sha256": "6d486c3a39be0b2a097d0327878951581aa67f3896b6299beca376f711c7bb49"
+}

@@ -1,5 +1,69 @@
 # Genet architecture and removal audit
 
+## Post-cut re-audit, 2026-10-16
+
+**Current source: `6ab57c124e1`. The bounded cuts are implemented and focused tests passed. The broader architecture is not repaired or qualified.** This section supersedes the original snapshot's status claims below; the original evidence remains historical.
+
+The fresh review covered the production changes, their consumers and regression boundaries, then revisited the retained implementations behind the finding register. The complete 996-file core inventory was reconciled by hash: **968 unchanged, 23 modified, 5 removed**, with **5 new core files**. Workspace metadata still reports **52 packages**. Source identity is not semantic review: unchanged files retain their original review depth, and the new receipt explicitly lists the files receiving fresh targeted reads. This is a repository-wide architectural re-audit with selective body reads, not an every-line security or conformance audit. Unchanged upstream vendor bodies and external historical runs were not independently rereviewed.
+
+[Post-cut source and probe receipt](receipts/2026-10-16_architecture_post_cut_audit.json). [Retained-code test receipt](receipts/2026-10-16_architecture_reduction_tests.json).
+
+### Disposition of the original findings
+
+| Disposition | IDs | What the retained source establishes |
+|---|---|---|
+| Named source defect/cut addressed; qualification limits below still apply | H1, H4, H7, H8, H11, I12, I14, I15, L2 | Removed GL stub and deprecated compositor alias; browser scroll defaults consume input outcomes; canonical dependency gate fails on resolution errors; native PowerShell commands are checked; two stale implementation comments corrected; general shader reflection replaces positional fields; orphan media-thread and obsolete launchers removed; prospective break ledger is test-only. |
+| Partial migration | I1 | Native host calls DOM-owned text editing, including current eligibility and selection collapse. Scripted key input still ignores key releases, consumes Tab before page dispatch, and does not use this editor. Text/IME/editable-focus defaults remain unwired there. |
+| Partial migration | H6 | Setup/execution/completion are separated; async modules use the module route; completion is privately retained; failures cannot satisfy negatives merely through diagnostic text. Actual VM errors still lack trustworthy phase/type, so negative tests report Unsupported. This is safer accounting, not complete Test262 qualification. |
+| Partial migration | L6 | Form/radio predicates and affected-owner walks are shared. Style invalidation and formatting damage retain their own mutation switches and root mapping. Broader DOM dependency classification has not been consolidated. |
+| Still open | I2-I11, I13; R1-R15; L1, L3-L5, L7-L13; H2-H3, H5, H9-H10; W1 | Retained implementations still exhibit the recorded mechanisms. No closure follows from unrelated passing tests or removal counts. |
+
+That is **9 addressed source findings, 3 partial, and 43 still open**, plus new W2 below. Supplemental X1 is partial: the old environment script is removed, while the debugger helper remains. No platform cut was made to H9's Wayland synchronization path.
+
+H4 is source-addressed, but the browser callback has not received a fresh wasm/browser interaction test. H8's earlier Windows fake-command result remains dated evidence; it was not rerun on Linux. I12 removes a genuine unused projection and rejection; it does not establish coherent shader linking. The original text gave conflicting ordering for I12 (safe narrow cut versus W1 prerequisite). The precise boundary is: unused-field cleanup may stand independently, while claims of correct linking or subsequent layout optimization require W1/W2 to be resolved.
+
+### W2: CPU uniform layout disagrees with emitted WGSL within one stage
+
+**High priority; isolated current-translator reproduction.** This is additional to W1's cross-stage mismatch and existed before the cuts.
+
+`UniformKind::Matrix2` reserves 32 bytes with 16-byte alignment in [shader.rs](../components/webgl-wgpu/shader.rs). The frontend lowers `mat2` with 8-byte columns and a 16-byte total in [lower.rs](../components/webgl-essl/lower.rs). The CPU reflection independently computes offsets in [shader/lowering.rs](../components/webgl-wgpu/shader/lowering.rs), and [webgl/programs.rs](../components/webgl-wgpu/webgl/programs.rs) writes values at those reflected offsets.
+
+A vertex shader with no uniforms and this fragment shader are accepted by the current translator:
+
+```glsl
+precision mediump float;
+uniform mat2 u_matrix;
+uniform float u_alpha;
+void main() { gl_FragColor = vec4(u_matrix[0], u_alpha, 1.0); }
+```
+
+The CPU reflection places `u_alpha` at byte **32**. Parsing the actual emitted WGSL with the same built Naga reports its second member at byte **16**. Thus a valid scalar write goes to a different byte range from the shader read. This discrepancy does not require disjoint stage uniforms or a matrix upload API. A GPU draw was not run, so the receipt establishes translation/layout disagreement, not a captured pixel outcome.
+
+A control with `vec3 u_color; float u_alpha;` **does agree at byte 12** after WGSL emission. The intermediate SPIR-V offset alone looked suspicious but did not survive emission. Do not file that control as another defect.
+
+The retained probe compiles the current shader module and its production lowering against the already-built frontend; the only copied-source edit is an explicit module path needed by the standalone probe. Its source, hashes, emitted WGSL and Naga layouts are recorded in the receipt and external audit directory. Repair W1/W2 through an authoritative emitted layout/interface contract; copying another table of offsets into the CPU writer would leave the ownership problem intact.
+
+### Retained production blockers rechecked
+
+- **Input and scheduling (I1/I2/H3):** `engines/scripted.rs:387-408` still has no text editing or keyup route. `genet-scripted/document.rs:1434-1463` pumps timers, workers and microtasks but neither runs nor schedules rAF-only work. WPT's separate callback invocation remains in `harness.rs:903`. A working DOM edit helper is not live scripted input parity.
+- **Resources and observation (I3-I5/L3):** `synchronize_live_styles` still resolves the whole resource set on a new mutation suffix; image maps still insert authored aliases; capture still drains the rendering journal. Paint still clones encoded source maps and decodes into each new list. These are retained operations, not inferred performance measurements.
+- **Execution/error ownership (R4-R8/R13-R15):** timer errors still become zero work; parser source/evaluation failures are discarded; module resolution ignores the supplied referrer; bounded eval defaults to unbounded eval; worker shutdown detaches unfinished threads. Resolver cleanup is still manual after lifetime erasure. Registration leaks and the synthetic elapsed clock remain. The unwind reuse issue remains a source-derived risk, not a reproduced unsafe dereference.
+- **Origin/network policy (I7-I9/H5):** invalid explicit ports can still collapse into absent ports; enabled cache accumulation has no decoded-byte counter; native Ortet still buffers `response.bytes()` without its advertised host budget. Cookie storage still omits public-suffix/prefix checks. SameSite retrieval does have code despite the cookie module's stale introductory comment; do not call the whole cookie policy absent.
+- **Parsing and projections (R1-R3/R9-R12/L1/L4-L5):** private selector parsing/count-item traversal, semicolon splitting, quote-blind comment stripping, no-factory context objects, mutable WebGL brands, lossy XPath/history adapters, transform-context disagreement and estimated geometry remain. Their existing preservation boundaries still apply.
+- **Layout and presentation (L7-L13/H2/H9-H10):** retained plane clones, eager aggregate rebuilding, real Taffy fallback, prospective fragmentation, duplicated axis vocabulary and historical census remain. Font diagnostics still allocate before capture admission. Browser renderer access can still panic on checked refusal; Wayland still allocates its dormant timeline and logs presentation errors. Existing platform contracts and ignored continuation fixtures must remain.
+
+The review did not establish a new regression caused by the narrow removals. That statement is limited to the inspected paths. W2 is a newly established pre-existing defect, and the passing shader tests did not cover it.
+
+### Test boundary and next work
+
+Final retained-code results: Livery library **334 passed / 2 existing ignored**; focused shader translation **19 passed**; DOM editing **13 passed**; Test262 policy **9 passed / 1 existing ignored**; private-completion JavaScript regression passed; dependency-gate regressions **6 passed**. Cargo check passed for genet-wpt and servo-webgl-wgpu and their selected dependencies. The DOM-edit run and W2/control probe were added during this review. Tests were not extended for mechanical helper movement.
+
+These results do not establish GPU pixels, browser input, Windows presentation, matched engine comparisons, Forms Checkpoint C, or complete Test262 negatives. The next correctness work is W1/W2 for graphics and I1/I2/H3 for live Forms; origin/cache/worker bounds remain independent serious obligations. There is no basis to delete retained owners wholesale or to call the twelve-lane plan complete.
+
+---
+
+## Original source audit at `8fa73497952`
+
 **Status: repository-wide structural and ownership review, 2026-10-16. Implementation and runtime qualification are separate and unperformed.**
 
 Source snapshot: `8fa73497952ecda37cf234c4a845354dab1af599`. The two local Forms repair commits are included. The cached remote reference was `6186c81ad70`; this audit did not fetch, publish, or change that state.

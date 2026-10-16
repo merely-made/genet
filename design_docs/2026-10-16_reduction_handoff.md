@@ -6,11 +6,14 @@ Pending cuts are finished and tested; see the reduction plan and
 The final changes are committed locally; no push. Primary checkout and controls preserved.
 
 The user requested: finish cuts, test, then fresh source audit, proceeding skeptically.
-The fresh audit is NOT DONE. The agreed account-wide cutoff was 41%, corrected
-by the user from the earlier agent's arbitrary 40%; it was reached after the
-shader tests passed. Stop here. Remaining audit and twelve-lane implementation
-are not qualified by the completed narrow cuts. W1 cross-stage layout is still
-broken; a misleading source comment claiming earlier rejection was corrected.
+After the 41% cutoff, the user explicitly instructed proceeding. The post-cut
+architectural re-audit is now recorded at the start of the original audit and
+in `receipts/2026-10-16_architecture_post_cut_audit.json`. This was targeted
+semantic review plus complete core identity reconciliation, not an every-line
+review. Nine original source findings addressed, three partial, 43 still open.
+New W2 confirms mat2 CPU/emitted-WGSL layout disagreement; the vec3 control agrees.
+No GPU pixel proof or Forms acceptance. The twelve-lane implementation remains open.
+The focused DOM editing suite additionally passed 13 tests on final source.
 
 Build configuration used: CARGO_TARGET_DIR and CARGO_BUILD_BUILD_DIR both
 `/home/markik/Code/target`; CARGO_INCREMENTAL=0; dev/test debug=0; j1;

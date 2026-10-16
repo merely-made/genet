@@ -49,7 +49,7 @@ Netfetcher wire adoption (2026-10-14): [receiving plan](2026-10-14_netfetcher_wi
 
 - [Genet lane handoff, 2026-10-15](2026-10-15_genet_lane_handoff.md): what landed (ValueEngine, Buckram context-free core, without-classic-vello, Linux test triage), protected Codex worktrees, completed Genet Netrender adoption with fresh Windows/wasm gates, and remaining viewer options and warning cleanup; Mere receiving status lives in its browser presentation plan. Adds (2026-10-15, O-PC) the accessibility/AccName lanes (365/405), Forms Phase C's paused state and rulings, and Mark's queued Genet work.
 
-- [Architecture and removal audit, 2026-10-16](2026-10-16_architecture_removal_audit.md): repository-wide ownership decisions, source-backed cuts and migrations, evidence-tool defects, preserved contracts, and per-file review depth for the 52-package workspace; source audit only, not Forms acceptance.
+- [Architecture and removal audit, 2026-10-16](2026-10-16_architecture_removal_audit.md): post-cut architectural re-audit at 6ab57c124e1, completed/partial/open dispositions, new reproduced mat2 layout defect, focused test boundaries and historical 52-package coverage; not Forms acceptance.
 
 - [Architecture reduction implementation plan, 2026-10-16](2026-10-16_architecture_reduction_plan.md): bounded task execution across the audited ownership lanes, with serialized memory-capped validation and preserved Forms acceptance boundaries.
 

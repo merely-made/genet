@@ -32,7 +32,9 @@ impl<E: ScriptEngine> NativeFn<E> for ControlInfo {
                 dom.form_control_implicit_submit_eligible(node.id()),
             )
         });
-        cx.make_string(&format!("{{\"submit\":{submit},\"disabled\":{disabled},\"implicit\":{implicit}}}"))
+        cx.make_string(&format!(
+            "{{\"submit\":{submit},\"disabled\":{disabled},\"implicit\":{implicit}}}"
+        ))
     }
 }
 pub(crate) struct SubmitterCheck;
@@ -84,6 +86,16 @@ impl<E: ScriptEngine> NativeFn<E> for ImplicitDecision {
         }
     }
 }
+pub(crate) struct SubmissionUserValidity;
+impl<E: ScriptEngine> NativeFn<E> for SubmissionUserValidity {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let value = cx.arg(0);
+        if let Some(form) = cx.owned_node(&value)? {
+            form.with_dom(|dom| dom.mark_form_submission_user_validity(form.id()));
+        }
+        Ok(cx.undefined())
+    }
+}
 fn attr(dom: &genet_scripted_dom::ScriptedDom, id: NodeId, key: &str) -> Option<String> {
     dom.attribute(id, &Namespace::from(""), &LocalName::from(key))
         .map(str::to_owned)
@@ -117,8 +129,43 @@ struct Options {
     eligible: bool,
     referrer: String,
     policy: String,
+    resolution_base: Option<String>,
 }
-fn options(node: &adoption::OwnedNode, submitter: Option<NodeId>) -> Options {
+fn options(node: &adoption::OwnedNode, submitter: Option<&adoption::OwnedNode>) -> Options {
+    // Listener mutations may change the captured submitter's type or owner.
+    // Read its current attributes in its actual owning arena, before borrowing
+    // the original form's host. That form still owns the entries and encoding.
+    let (action, method, enctype, target, no_validate, resolution_base) =
+        submitter.unwrap_or(node).with_host(|host| {
+            let resolution_base = host.document_base_url();
+            let dom = &host.dom;
+            let owner = match submitter {
+                Some(button) => dom.form_control_form_owner(button.id()),
+                None => Some(node.id()),
+            };
+            let button = submitter.filter(|button| dom.is_form_submit_button(button.id()));
+            let choose = |key: &str, override_key: &str| {
+                button
+                    .and_then(|button| attr(dom, button.id(), override_key))
+                    .or_else(|| owner.and_then(|owner| attr(dom, owner, key)))
+            };
+            (
+                choose("action", "formaction"),
+                choose("method", "formmethod")
+                    .unwrap_or_default()
+                    .to_ascii_lowercase(),
+                choose("enctype", "formenctype")
+                    .unwrap_or_default()
+                    .to_ascii_lowercase(),
+                choose("target", "formtarget")
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| fallback_target(dom)),
+                owner.is_some_and(|owner| attr(dom, owner, "novalidate").is_some())
+                    || button
+                        .is_some_and(|button| attr(dom, button.id(), "formnovalidate").is_some()),
+                resolution_base,
+            )
+        });
     let realm = node.owner_realm();
     node.with_host(|host| {
         let allowed = host
@@ -127,29 +174,18 @@ fn options(node: &adoption::OwnedNode, submitter: Option<NodeId>) -> Options {
             .is_some_and(|a| a.borrow().frames.form_submission_allowed(realm));
         let eligible = host.is_connected_node(node.id()) && allowed;
         let dom = &host.dom;
-        let choose = |key: &str, override_key: &str| {
-            submitter
-                .and_then(|s| attr(dom, s, override_key))
-                .or_else(|| attr(dom, node.id(), key))
-        };
         let encoding = genet_scripted_dom::form_encoding::select_form_encoding(
             attr(dom, node.id(), "accept-charset").as_deref(),
             dom.document_encoding(dom.document())
                 .map(|e| e.encoding)
                 .unwrap_or(genet_scripted_dom::form_encoding::UTF_8),
         );
-        let method = choose("method", "formmethod")
-            .unwrap_or_default()
-            .to_ascii_lowercase();
-        let enctype = choose("enctype", "formenctype")
-            .unwrap_or_default()
-            .to_ascii_lowercase();
         let base = host
             .base_url
             .clone()
             .unwrap_or_else(|| "about:blank".into());
         Options {
-            action: choose("action", "formaction")
+            action: action
                 .filter(|s| !s.is_empty())
                 .unwrap_or_else(|| base.clone()),
             method: if method == "post" {
@@ -164,13 +200,11 @@ fn options(node: &adoption::OwnedNode, submitter: Option<NodeId>) -> Options {
             } else {
                 "application/x-www-form-urlencoded".into()
             },
-            target: choose("target", "formtarget")
-                .filter(|s| !s.is_empty())
-                .unwrap_or_else(|| fallback_target(dom)),
+            target,
             encoding,
-            no_validate: attr(dom, node.id(), "novalidate").is_some()
-                || submitter.is_some_and(|s| attr(dom, s, "formnovalidate").is_some()),
+            no_validate,
             eligible,
+            resolution_base,
             referrer: base,
             policy: if attr(dom, node.id(), "rel").is_some_and(|s| {
                 s.split_ascii_whitespace()
@@ -191,8 +225,8 @@ impl<E: ScriptEngine> NativeFn<E> for FormMeta {
         let form = cx
             .owned_node(&f)?
             .ok_or_else(|| form_data::type_error::<E>(cx, "Invalid form"))?;
-        let button = cx.owned_node(&b)?.map(|s| s.id());
-        let o = options(&form, button);
+        let button = cx.owned_node(&b)?;
+        let o = options(&form, button.as_ref());
         cx.make_string(&format!(
             "{{\"encoding\":{},\"noValidate\":{},\"eligible\":{}}}",
             crate::js_str(o.encoding.name()),
@@ -217,22 +251,12 @@ impl<E: ScriptEngine> NativeFn<E> for FormSubmissionPlan {
         let form = cx
             .owned_node(&f)?
             .ok_or_else(|| form_data::type_error::<E>(cx, "Invalid form"))?;
-        let button = cx.owned_node(&b)?.map(|s| s.id());
-        let o = options(&form, button);
+        let button = cx.owned_node(&b)?;
+        let o = options(&form, button.as_ref());
         if !o.eligible || o.method == "dialog" {
             return Ok(cx.undefined());
         }
-        if let Some(button) = button {
-            let good = form.with_dom(|dom| {
-                dom.is_form_submit_button(button)
-                    && dom.form_control_form_owner(button) == Some(form.id())
-            });
-            if !good {
-                return Ok(cx.undefined());
-            }
-        }
-        let base = form.with_host(|h| h.document_base_url());
-        let resolved = crate::fetch::resolve_against(base.as_deref(), &o.action);
+        let resolved = crate::fetch::resolve_against(o.resolution_base.as_deref(), &o.action);
         let Ok(mut url) = url::Url::parse(&resolved) else {
             return Ok(cx.undefined());
         };
@@ -271,6 +295,7 @@ pub(crate) fn install<E: ScriptEngine>(
     engine.set_function::<SubmitterCheck>("__formSubmitterCheck", 2)?;
     engine.set_function::<ImplicitDecision>("__formImplicitDecision", 1)?;
     engine.set_function::<FormMeta>("__formMeta", 2)?;
+    engine.set_function::<SubmissionUserValidity>("__formSubmissionUserValidity", 1)?;
     engine.set_function::<FormSubmissionPlan>("__formSubmissionPlan", 4)?;
     Ok(())
 }
@@ -313,12 +338,28 @@ impl<E: ScriptEngine> crate::Runtime<E> {
         Ok(result)
     }
     /// Set the represented realm's private host focus projection.
-    pub fn dispatch_form_focus(&mut self, raw_node_id: u64, focused: bool) -> Result<bool, E::Error> {
+    pub fn dispatch_form_focus(
+        &mut self,
+        raw_node_id: u64,
+        focused: bool,
+    ) -> Result<bool, E::Error> {
         if focused {
-            let Some((_, host)) = adoption::owner_host(&self.host, NodeId::from_raw(raw_node_id)) else { return Ok(false); };
-            if !host.borrow_mut().is_connected_node(NodeId::from_raw(raw_node_id)) { return Ok(false); }
+            let Some((_, host)) = adoption::owner_host(&self.host, NodeId::from_raw(raw_node_id))
+            else {
+                return Ok(false);
+            };
+            if !host
+                .borrow_mut()
+                .is_connected_node(NodeId::from_raw(raw_node_id))
+            {
+                return Ok(false);
+            }
         }
-        self.private_form_host(raw_node_id, "formFocusRaw", if focused { "true" } else { "false" })
+        self.private_form_host(
+            raw_node_id,
+            "formFocusRaw",
+            if focused { "true" } else { "false" },
+        )
     }
     /// Dispatch a trusted pointer click, then its cancellation/default action,
     /// before the host microtask checkpoint. The position is relative to an image.

@@ -5,33 +5,6 @@
 //! script properties are projections, never the authority for current values.
 use super::*;
 
-fn built_in_validation_message(
-    flags: layout_dom_api::ValidityState,
-    catalog: &crate::ValidationMessageCatalog,
-) -> String {
-    let kind = if flags.value_missing {
-        crate::ValidationMessageKind::ValueMissing
-    } else if flags.type_mismatch {
-        crate::ValidationMessageKind::TypeMismatch
-    } else if flags.pattern_mismatch {
-        crate::ValidationMessageKind::PatternMismatch
-    } else if flags.too_long {
-        crate::ValidationMessageKind::TooLong
-    } else if flags.too_short {
-        crate::ValidationMessageKind::TooShort
-    } else if flags.range_underflow {
-        crate::ValidationMessageKind::RangeUnderflow
-    } else if flags.range_overflow {
-        crate::ValidationMessageKind::RangeOverflow
-    } else if flags.step_mismatch {
-        crate::ValidationMessageKind::StepMismatch
-    } else if flags.bad_input {
-        crate::ValidationMessageKind::BadInput
-    } else {
-        return String::new();
-    };
-    catalog.message(kind).to_owned()
-}
 use layout_dom_api::SelectionDirection;
 
 pub(crate) struct FormControlOwner;
@@ -278,19 +251,7 @@ impl<E: ScriptEngine> NativeFn<E> for FormControlValidityGet {
                 .upgrade()
                 .map(|agent| agent.borrow().validation_message_catalog.clone())
                 .unwrap_or_default();
-            let message = node.with_dom(|dom| {
-                let validity = dom.form_control_validity(node.id())?;
-                if !validity.will_validate || validity.flags.valid() {
-                    return Some(String::new());
-                }
-                if validity.flags.custom_error {
-                    return Some(
-                        dom.form_control_custom_validity_message(node.id())
-                            .unwrap_or_default(),
-                    );
-                }
-                Some(built_in_validation_message(validity.flags, &catalog))
-            });
+            let message = node.with_dom(|dom| dom.form_control_validation_message(node.id(), &catalog));
             return match message {
                 Some(message) => cx.make_string(&message),
                 None => Ok(cx.make_null()),

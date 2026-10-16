@@ -268,64 +268,8 @@ impl<E: script_engine_api::ScriptEngine + 'static> ScriptedDocumentSession<E> {
         &self,
         projection: document_session_api::DocumentA11yProjection,
     ) -> document_session_api::DocumentA11yProjection {
-        use document_session_api::{
-            DocumentA11yBounds, DocumentA11yLive, DocumentA11yNode, DocumentA11yNodeId,
-            DocumentA11yProjection, DocumentA11yRole, DocumentA11yState,
-        };
-
-        let Some(notice) = self.doc.validation_notice() else {
-            self.validation_alert_id.set(None);
-            return projection;
-        };
-        let id = self
-            .validation_alert_id
-            .get()
-            .filter(|(sequence, id)| *sequence == notice.sequence && projection.node(*id).is_none())
-            .map(|(_, id)| id)
-            .unwrap_or_else(|| {
-                // Host-only nodes cannot alias any current arena projection.
-                // A repeated report receives a new ID so unchanged text can
-                // still be announced as a new alert.
-                let previous = self.validation_alert_id.get().map(|(_, id)| id);
-                (0..=u64::MAX)
-                    .rev()
-                    .map(DocumentA11yNodeId::new)
-                    .find(|id| Some(*id) != previous && projection.node(*id).is_none())
-                    .expect("a finite document leaves a native alert identity available")
-            });
-        self.validation_alert_id.set(Some((notice.sequence, id)));
-        let root = projection.root();
-        let mut nodes = projection.nodes().to_vec();
-        let Some(root_node) = nodes.iter_mut().find(|node| node.id == root) else {
-            return projection;
-        };
-        root_node.children.push(id);
-        nodes.push(DocumentA11yNode {
-            id,
-            parent: Some(root),
-            children: Vec::new(),
-            role: DocumentA11yRole::Alert,
-            name: Some(notice.message.clone()),
-            description: None,
-            value: None,
-            numeric_value: None,
-            numeric_minimum: None,
-            numeric_maximum: None,
-            bounds: notice
-                .bounds
-                .map(|[x, y, width, height]| DocumentA11yBounds {
-                    x,
-                    y,
-                    width,
-                    height,
-                }),
-            state: DocumentA11yState {
-                live: Some(DocumentA11yLive::Assertive),
-                ..DocumentA11yState::default()
-            },
-            actions: Vec::new(),
-        });
-        DocumentA11yProjection::new(0, projection.support().clone(), root, nodes)
+        super::with_validation_alert(projection, self.doc.validation_notice().map(|notice|
+            (notice.sequence, notice.message.as_str(), notice.bounds)), &self.validation_alert_id)
     }
 
     fn current_accessibility_projection(

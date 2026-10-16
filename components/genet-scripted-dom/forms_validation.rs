@@ -19,6 +19,97 @@ use std::cmp::Ordering;
 
 use crate::{NodeId, ScriptedDom};
 
+/// Built-in constraint-validation message selected for a control's first
+/// failing validity flag. Embedders can replace the English defaults through
+/// the scripted runtime or native session engine catalog setting.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ValidationMessageKind {
+    ValueMissing,
+    TypeMismatch,
+    PatternMismatch,
+    TooLong,
+    TooShort,
+    RangeUnderflow,
+    RangeOverflow,
+    StepMismatch,
+    BadInput,
+}
+
+/// Replaceable built-in validation wording shared by `validationMessage` and
+/// native `reportValidity()` feedback. Author-provided custom validity text is
+/// returned verbatim and does not use this catalog.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ValidationMessageCatalog {
+    pub value_missing: String,
+    pub type_mismatch: String,
+    pub pattern_mismatch: String,
+    pub too_long: String,
+    pub too_short: String,
+    pub range_underflow: String,
+    pub range_overflow: String,
+    pub step_mismatch: String,
+    pub bad_input: String,
+}
+
+impl Default for ValidationMessageCatalog {
+    fn default() -> Self {
+        Self {
+            value_missing: "Please fill out this field.".into(),
+            type_mismatch: "Please enter a valid value.".into(),
+            pattern_mismatch: "Please match the requested format.".into(),
+            too_long: "Please shorten this text.".into(),
+            too_short: "Please lengthen this text.".into(),
+            range_underflow: "Value is below the allowed minimum.".into(),
+            range_overflow: "Value is above the allowed maximum.".into(),
+            step_mismatch: "Please enter a valid value.".into(),
+            bad_input: "Please enter a valid value.".into(),
+        }
+    }
+}
+
+impl ValidationMessageCatalog {
+    pub fn message(&self, kind: ValidationMessageKind) -> &str {
+        match kind {
+            ValidationMessageKind::ValueMissing => &self.value_missing,
+            ValidationMessageKind::TypeMismatch => &self.type_mismatch,
+            ValidationMessageKind::PatternMismatch => &self.pattern_mismatch,
+            ValidationMessageKind::TooLong => &self.too_long,
+            ValidationMessageKind::TooShort => &self.too_short,
+            ValidationMessageKind::RangeUnderflow => &self.range_underflow,
+            ValidationMessageKind::RangeOverflow => &self.range_overflow,
+            ValidationMessageKind::StepMismatch => &self.step_mismatch,
+            ValidationMessageKind::BadInput => &self.bad_input,
+        }
+    }
+}
+
+fn built_in_validation_message(
+    flags: layout_dom_api::ValidityState,
+    catalog: &crate::ValidationMessageCatalog,
+) -> String {
+    let kind = if flags.value_missing {
+        crate::ValidationMessageKind::ValueMissing
+    } else if flags.type_mismatch {
+        crate::ValidationMessageKind::TypeMismatch
+    } else if flags.pattern_mismatch {
+        crate::ValidationMessageKind::PatternMismatch
+    } else if flags.too_long {
+        crate::ValidationMessageKind::TooLong
+    } else if flags.too_short {
+        crate::ValidationMessageKind::TooShort
+    } else if flags.range_underflow {
+        crate::ValidationMessageKind::RangeUnderflow
+    } else if flags.range_overflow {
+        crate::ValidationMessageKind::RangeOverflow
+    } else if flags.step_mismatch {
+        crate::ValidationMessageKind::StepMismatch
+    } else if flags.bad_input {
+        crate::ValidationMessageKind::BadInput
+    } else {
+        return String::new();
+    };
+    catalog.message(kind).to_owned()
+}
 const LISTED: &[&str] = &[
     "input", "textarea", "select", "button", "fieldset", "output", "object",
 ];
@@ -49,6 +140,19 @@ const INPUT_TYPES: &[&str] = &[
 ];
 
 impl ScriptedDom {
+    /// Current validation text, with custom errors taking precedence over the
+    /// host's replaceable built-in wording. Barred and valid controls are silent.
+    pub fn form_control_validation_message(&self, id: NodeId, catalog: &ValidationMessageCatalog) -> Option<String> {
+        let validity = self.form_control_validity(id)?;
+        if !validity.will_validate || validity.flags.valid() {
+            return Some(String::new());
+        }
+        if validity.flags.custom_error {
+            return Some(self.form_control_custom_validity_message(id).unwrap_or_default());
+        }
+        Some(built_in_validation_message(validity.flags, catalog))
+    }
+
     pub(super) fn html_name(&self, id: NodeId) -> Option<&str> {
         let name = self.element_name(id)?;
         (name.ns == ns!(html)).then_some(name.local.as_ref())
@@ -111,6 +215,24 @@ impl ScriptedDom {
                 self.is_listed_control(id) && self.form_control_form_owner(id) == Some(form)
             })
             .collect()
+    }
+
+    /// An attempted submission marks each associated submittable control before
+    /// interactive validation, even when the submitter bypasses validation.
+    /// This does not commit an editor draft or alter its pending change state.
+    pub fn mark_form_submission_user_validity(&mut self, form: NodeId) {
+        for field in self.associated_form_controls(form) {
+            if !matches!(self.html_name(field), Some("input" | "textarea" | "select" | "button" | "object")) {
+                continue;
+            }
+            let Some(state) = self.node_mut(field).form_interaction.as_mut() else {
+                continue;
+            };
+            if !state.user_validity {
+                state.user_validity = true;
+                self.mutations.push(crate::DomMutation::FormControlInteractionStateChanged { node: field });
+            }
+        }
     }
 
     pub fn set_form_control_user_value(

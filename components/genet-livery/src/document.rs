@@ -344,6 +344,13 @@ where
         &self.dom
     }
 
+    /// Append the shared host validation overlay using this document's retained
+    /// font system. Bounds are in CSS viewport coordinates.
+    pub fn push_validation_notice(&mut self, list: &mut LiveryPaintList, message: &str) -> Option<[f32; 4]> {
+        let bounds = list.push_native_text_overlay(&mut self.text, message)?;
+        Some([bounds.min.x, bounds.min.y, bounds.width(), bounds.height()])
+    }
+
     pub fn text_system(&self) -> &TextSystem {
         &self.text
     }

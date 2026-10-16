@@ -50,6 +50,7 @@ pub struct LiverySessionEngine<Fetch> {
     author_css: Vec<String>,
     resource_limits: ResourceLimits,
     decode_options: HtmlDecodeOptions,
+    validation_message_catalog: genet_scripted_dom::ValidationMessageCatalog,
 }
 
 /// One browser-host preparation for a Livery session.  It owns the exact DOM
@@ -156,6 +157,7 @@ impl<Fetch> LiverySessionEngine<Fetch> {
             author_css: Vec::new(),
             resource_limits: ResourceLimits::default(),
             decode_options: HtmlDecodeOptions::default(),
+            validation_message_catalog: Default::default(),
         }
     }
 
@@ -170,11 +172,20 @@ impl<Fetch> LiverySessionEngine<Fetch> {
             author_css: sheets.into_iter().map(Into::into).collect(),
             resource_limits: ResourceLimits::default(),
             decode_options: HtmlDecodeOptions::default(),
+            validation_message_catalog: Default::default(),
         }
     }
 
     pub fn with_html_decode_options(mut self, options: HtmlDecodeOptions) -> Self {
         self.decode_options = options;
+        self
+    }
+    /// Replace the built-in wording used for interactive validation feedback.
+    pub fn with_validation_message_catalog(
+        mut self,
+        catalog: genet_scripted_dom::ValidationMessageCatalog,
+    ) -> Self {
+        self.validation_message_catalog = catalog;
         self
     }
     /// Select bounded recursive stylesheet resolution for sessions made by
@@ -485,6 +496,10 @@ impl<Fetch> LiverySessionEngine<Fetch> {
             pressed_target: None,
             pending_submission: None,
             latest_submission: None,
+            validation_message_catalog: self.validation_message_catalog.clone(),
+            validation_notice: RefCell::new(None),
+            next_validation_notice_sequence: 0,
+            validation_alert_id: Cell::new(None),
             last_error: None,
             resources,
             source_response,
@@ -605,6 +620,10 @@ pub struct LiveryDocumentSession {
     pressed_target: Option<genet_scripted_dom::NodeId>,
     pending_submission: Option<SessionEncodedFormSubmission>,
     latest_submission: Option<SessionFormSubmission>,
+    validation_message_catalog: genet_scripted_dom::ValidationMessageCatalog,
+    validation_notice: RefCell<Option<NativeValidationNotice>>,
+    next_validation_notice_sequence: u64,
+    validation_alert_id: Cell<Option<(u64, DocumentA11yNodeId)>>,
     last_error: Option<String>,
     pub(crate) resources: ResolvedDocumentResources,
     source_response: ResourceResponse,
@@ -621,6 +640,14 @@ pub struct LiveryDocumentSession {
     /// children. The tree above is the identity and policy plane; this is the
     /// retained-document plane, joined by container `opaque_id`.
     frames: Vec<super::frames::ChildFrame>,
+}
+
+#[cfg(feature = "livery")]
+struct NativeValidationNotice {
+    node: genet_scripted_dom::NodeId,
+    sequence: u64,
+    message: String,
+    bounds: Option<[f32; 4]>,
 }
 
 /// Livery's page-zoom bounds — engine policy, matching the range a Chromium
@@ -916,12 +943,33 @@ impl LiveryDocumentSession {
                 node
             })
             .collect();
-        Some(DocumentA11yProjection::new(
+        let projection = DocumentA11yProjection::new(
             0,
             projection.support().clone(),
             projection.root(),
             nodes,
+        );
+        self.retire_validation_notice();
+        let notice = self.validation_notice.borrow();
+        Some(super::with_validation_alert(
+            projection,
+            notice.as_ref().map(|notice|
+                (notice.sequence, notice.message.as_str(), notice.bounds)),
+            &self.validation_alert_id,
         ))
+    }
+
+    fn retire_validation_notice(&self) {
+        let dom = self.doc.dom();
+        let retired = self.validation_notice.borrow().as_ref().is_some_and(|notice| {
+            !dom.is_live(notice.node)
+                || dom.tree_root(notice.node) != Some(dom.document())
+                || !dom.form_control_validity(notice.node)
+                    .is_some_and(|v| v.will_validate && !v.flags.valid())
+        });
+        if retired {
+            self.validation_notice.borrow_mut().take();
+        }
     }
 
     fn current_accessibility_projection(&self) -> Option<DocumentA11yProjection> {
@@ -1322,14 +1370,30 @@ impl LiveryDocumentSession {
                 || dom.form_control_is_disabled(id).unwrap_or(true)) {
             return SessionClick::Handled;
         }
-        let choose = |name: &str, override_name: &str| submitter
-            .and_then(|id| self.attribute(id, override_name)).or_else(|| self.attribute(form, name));
+        self.doc.mutate_dom(|dom| dom.mark_form_submission_user_validity(form));
+        let dom = self.doc.dom();
         let no_validate = self.attribute(form, "novalidate").is_some()
             || submitter.is_some_and(|id| self.attribute(id, "formnovalidate").is_some());
-        if !no_validate && dom.associated_form_controls(form).into_iter().any(|id|
-            dom.form_control_validity(id).is_some_and(|v| v.will_validate && !v.flags.valid())) {
-            return SessionClick::Handled;
+        if !no_validate {
+            let invalid = dom.associated_form_controls(form).into_iter().find(|id|
+                dom.form_control_validity(*id).is_some_and(|v| v.will_validate && !v.flags.valid()));
+            if let Some(node) = invalid {
+                let message = dom.form_control_validation_message(node, &self.validation_message_catalog)
+                    .unwrap_or_default();
+                self.next_validation_notice_sequence = self.next_validation_notice_sequence
+                    .checked_add(1)
+                    .expect("validation notice sequence exhausted");
+                *self.validation_notice.get_mut() = Some(NativeValidationNotice {
+                    node,
+                    sequence: self.next_validation_notice_sequence,
+                    message,
+                    bounds: None,
+                });
+                return SessionClick::Handled;
+            }
         }
+        let choose = |name: &str, override_name: &str| submitter
+            .and_then(|id| self.attribute(id, override_name)).or_else(|| self.attribute(form, name));
         let method = choose("method", "formmethod").unwrap_or("get");
         if method.eq_ignore_ascii_case("dialog") { return SessionClick::Handled; }
         let post = method.eq_ignore_ascii_case("post");
@@ -1920,6 +1984,20 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
                 }
             }
         }
+        self.retire_validation_notice();
+        let zoom = self.zoom();
+        if let Some(notice) = self.validation_notice.get_mut().as_mut() {
+            let mut overlay = genet_livery::LiveryPaintList::new(
+                paint_list_api::DeviceIntSize::new(css_width as i32, css_height as i32),
+                self.doc.generation(),
+            );
+            notice.bounds = self.doc.push_validation_notice(&mut overlay, &notice.message)
+                .map(|[x, y, w, h]| [x * zoom, y * zoom, w * zoom, h * zoom]);
+            let overlay = overlay.scaled_to(zoom, width, height);
+            scene.append_fragment(netrender::SceneFragment::from_scene(
+                paint_list_render::translate_paint_list(&overlay),
+            ));
+        }
         scene
     }
 
@@ -2223,10 +2301,10 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
         self.pressed_target = None;
         self.pressed_submit = None;
         self.editor_drag = None;
-        let Some(editor) = self.editor.as_mut() else {
-            return false;
-        };
-        editor.composition.take().is_some()
+        let dismissed = self.validation_notice.get_mut().take().is_some();
+        let cancelled = self.editor.as_mut()
+            .is_some_and(|editor| editor.composition.take().is_some());
+        dismissed || cancelled
     }
 
     fn editable_focus(&self) -> bool {

@@ -241,6 +241,23 @@ impl ScriptedDom {
         {
             return Err(FormEntryError::InvalidSubmitter);
         }
+        self.form_submission_entries_for_captured_submitter(form, submitter, encoding_name, image_position)
+    }
+
+    /// Construct entries after the caller validated and captured its submitter.
+    /// Submit listeners can subsequently change that element's type or owner;
+    /// collection uses the current controls and the captured identity without
+    /// repeating the requestSubmit/FormData argument checks.
+    pub fn form_submission_entries_for_captured_submitter(
+        &self,
+        form: NodeId,
+        submitter: Option<NodeId>,
+        encoding_name: &str,
+        image_position: (u32, u32),
+    ) -> Result<Vec<FormEntry>, FormEntryError> {
+        if !self.is_live(form) || self.html_name(form) != Some("form") {
+            return Err(FormEntryError::InvalidForm);
+        }
         let mut entries = Vec::new();
         for field in self.associated_form_controls(form) {
             let Some(element) = self.html_name(field) else {

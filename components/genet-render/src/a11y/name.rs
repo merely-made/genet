@@ -6,7 +6,7 @@
 //! CSS rendering counts as hidden only when the style owner supplies it
 //! (`with_rendered`). Name from content follows the flat tree (AccName's
 //! "rendered child nodes"); ID references resolve only within the referring
-//! node's own tree. Embedded control values remain open.
+//! node's own tree. Embedded controls contribute current values during labels.
 //! A node that is neither referenced nor part of a content traversal takes
 //! no name from content when its role bars it (see [`Names::content_barred`]).
 
@@ -255,6 +255,122 @@ impl<'a, D: LayoutDom> Names<'a, D> {
             || (self.dom.kind(node) == NodeKind::Element && !self.rendered(node))
     }
 
+    /// Chosen options belong to this control, not to a nested independent
+    /// control. Native selectedness comes from the DOM owner when available.
+    fn chosen_options(
+        &self,
+        node: D::NodeId,
+        native: bool,
+        combobox: bool,
+        out: &mut Vec<D::NodeId>,
+    ) -> bool {
+        use document_session_api::DocumentA11yRole as Role;
+        let mut has_options = false;
+        for child in self.dom.flat_children(node) {
+            if native {
+                if self.tag(child) == Some("option") {
+                    has_options = true;
+                    let selected = self.dom.option_selected_state(child).map_or_else(
+                        || attr(self.dom, child, "selected").is_some(),
+                        |state| state.selected,
+                    );
+                    if selected {
+                        out.push(child);
+                    }
+                } else if self.tag(child) == Some("optgroup") {
+                    has_options |= self.chosen_options(child, true, false, out);
+                }
+            } else {
+                match super::document_role(self.dom, child) {
+                    Role::ListBoxOption => {
+                        has_options = true;
+                        if attr(self.dom, child, "aria-selected")
+                            .is_some_and(|v| v.eq_ignore_ascii_case("true"))
+                        {
+                            out.push(child);
+                        }
+                    },
+                    Role::ComboBox => {},
+                    Role::ListBox if !combobox => {},
+                    _ => has_options |= self.chosen_options(child, false, combobox, out),
+                }
+            }
+        }
+        has_options
+    }
+
+    fn embedded_value(
+        &self,
+        node: D::NodeId,
+        include_hidden: bool,
+        visited: &mut HashSet<D::NodeId>,
+    ) -> Option<String> {
+        use document_session_api::DocumentA11yRole as Role;
+        let native = self
+            .dom
+            .element_name(node)
+            .is_some_and(|name| name.ns.as_ref() == "http://www.w3.org/1999/xhtml");
+        let mut role = super::document_role(self.dom, node);
+        // Native select/range roles are not yet represented by document_role.
+        // Respect effective overrides, not empty or unrecognized role text.
+        if native {
+            match self.tag(node) {
+                Some("select") if role == Role::Unknown => role = Role::ListBox,
+                Some("input")
+                    if role == Role::TextField
+                        && !attr(self.dom, node, "role")
+                            .is_some_and(|v| v.trim().eq_ignore_ascii_case("textbox"))
+                        && attr(self.dom, node, "type").is_some_and(|v| {
+                            v.eq_ignore_ascii_case("range") || v.eq_ignore_ascii_case("number")
+                        }) =>
+                {
+                    role = Role::Slider
+                },
+                _ => {},
+            }
+        }
+        match role {
+            Role::TextField | Role::ComboBox => {
+                if let Some(value) = super::text_control_value(self.dom, node) {
+                    return Some(value);
+                }
+                if role == Role::TextField {
+                    // Other native input types are not textboxes, despite the
+                    // coarse neutral role. An ARIA textbox uses its text value.
+                    return (self.tag(node) != Some("input"))
+                        .then(|| super::descendant_text(self.dom, node));
+                }
+            },
+            Role::Slider | Role::SpinButton => {
+                return attr(self.dom, node, "aria-valuetext")
+                    .or_else(|| attr(self.dom, node, "aria-valuenow"))
+                    .map(str::to_owned)
+                    .or_else(|| self.dom.form_control_state(node).map(|state| state.value))
+                    .or_else(|| attr(self.dom, node, "value").map(str::to_owned))
+                    .or_else(|| Some(String::new()));
+            },
+            Role::ListBox => {},
+            _ => return None,
+        }
+        let native_select = native && self.tag(node) == Some("select");
+        let mut options = Vec::new();
+        let has_options =
+            self.chosen_options(node, native_select, role == Role::ComboBox, &mut options);
+        if !native_select && !has_options && role == Role::ComboBox {
+            return Some(super::descendant_text(self.dom, node));
+        }
+        Some(
+            options
+                .into_iter()
+                .map(|option| {
+                    self.compute(option, false, false, include_hidden, true, visited)
+                        .unwrap_or_default()
+                })
+                .collect::<Vec<_>>()
+                .join(" "),
+        )
+    }
+
     fn compute(
         &self,
         node: D::NodeId,
@@ -278,6 +394,7 @@ impl<'a, D: LayoutDom> Names<'a, D> {
             suppress_title,
             include_hidden,
             descendant,
+            referenced || descendant,
             visited,
         );
         visited.remove(&node);
@@ -291,6 +408,7 @@ impl<'a, D: LayoutDom> Names<'a, D> {
         suppress_title: bool,
         include_hidden: bool,
         descendant: bool,
+        embedded: bool,
         visited: &mut HashSet<D::NodeId>,
     ) -> Option<String> {
         if self.dom.kind(node) == NodeKind::Text {
@@ -313,6 +431,7 @@ impl<'a, D: LayoutDom> Names<'a, D> {
                                     suppress_title,
                                     self.hidden(target),
                                     false,
+                                    embedded,
                                     visited,
                                 )
                             } else {
@@ -330,6 +449,11 @@ impl<'a, D: LayoutDom> Names<'a, D> {
                         .collect::<Vec<_>>()
                         .join(" "),
                 );
+            }
+        }
+        if embedded {
+            if let Some(value) = self.embedded_value(node, include_hidden, visited) {
+                return Some(value);
             }
         }
         if let Some(label) = attr(self.dom, node, "aria-label").filter(|s| !flat(s).is_empty()) {
@@ -391,6 +515,11 @@ impl<'a, D: LayoutDom> Names<'a, D> {
                 return Some(alt.to_owned());
             }
         }
+        if self.tag(node) == Some("option") {
+            if let Some(label) = attr(self.dom, node, "label").filter(|s| !flat(s).is_empty()) {
+                return Some(label.to_owned());
+            }
+        }
         if let Some(kind) = self.button_input(node) {
             let source = |name: &str| attr(self.dom, node, name).filter(|s| !flat(s).is_empty());
             let native = if kind == "image" { source("alt") } else { None };
@@ -411,7 +540,8 @@ impl<'a, D: LayoutDom> Names<'a, D> {
         // Native text fields get names from labels, never their editable value.
         let content = if barred.is_some()
             || matches!(self.tag(node), Some("input" | "textarea" | "select"))
-            || super::document_role(self.dom, node) == document_session_api::DocumentA11yRole::TextField
+            || super::document_role(self.dom, node)
+                == document_session_api::DocumentA11yRole::TextField
             || self.dom.kind(node) == NodeKind::Document
             || (!referenced
                 && matches!(
@@ -501,6 +631,174 @@ mod tests {
                 .0
                 .as_deref(),
             Some("Message")
+        );
+    }
+
+    #[test]
+    fn embedded_text_controls_contribute_values_before_their_own_labels() {
+        for control in [
+            "<input value=3 aria-label='number of times'>",
+            "<textarea aria-label='number of times'>3</textarea>",
+            "<span role=textbox contenteditable aria-label='number of times'>3</span>",
+            "<input role=combobox value=3 aria-label='number of times'>",
+            "<span role=combobox aria-label='number of times'>3</span>",
+        ] {
+            assert_eq!(
+                alternatives(&format!(
+                    "<label><input id=target type=checkbox>Flash {control} times</label>"
+                ))
+                .0
+                .as_deref(),
+                Some("Flash 3 times"),
+                "{control}"
+            );
+        }
+    }
+
+    #[test]
+    fn embedded_ranges_use_value_text_then_value_now_then_native_value() {
+        for (control, expected) in [
+            (
+                "<span role=slider aria-label=Count aria-valuetext=three aria-valuenow=3>wrong</span>",
+                "Flash three times",
+            ),
+            (
+                "<span role=spinbutton aria-label=Count aria-valuenow=0>wrong</span>",
+                "Flash 0 times",
+            ),
+            (
+                "<span role=slider aria-label=Count aria-valuetext='' aria-valuenow=3>wrong</span>",
+                "Flash times",
+            ),
+            (
+                "<input type=range min=1 max=5 value=3 aria-label=Count>",
+                "Flash 3 times",
+            ),
+            (
+                "<input type=number value=3 aria-label=Count>",
+                "Flash 3 times",
+            ),
+        ] {
+            assert_eq!(
+                alternatives(&format!(
+                    "<label><input id=target type=checkbox>Flash {control} times</label>"
+                ))
+                .0
+                .as_deref(),
+                Some(expected),
+                "{control}"
+            );
+        }
+    }
+
+    #[test]
+    fn embedded_choices_use_selected_option_names_in_tree_order() {
+        for control in [
+            "<select aria-label=Count><option>wrong</option><optgroup label=Group><option selected value=stored label=three>wrong</option></optgroup></select>",
+            "<div role=listbox aria-label=Count><span role=option>wrong</span><span role=option aria-selected=true aria-label=three>wrong</span></div>",
+            "<div role=combobox aria-label=Count><div role=listbox><span role=option aria-selected=true>three</span></div></div>",
+        ] {
+            assert_eq!(
+                alternatives(&format!(
+                    "<label><input id=target type=checkbox>Flash {control} times</label>"
+                ))
+                .0
+                .as_deref(),
+                Some("Flash three times"),
+                "{control}"
+            );
+        }
+        assert_eq!(alternatives("<label><input id=target type=checkbox>Choose <select multiple aria-label=Options><option selected>red</option><option>wrong</option><option selected>blue</option></select> now</label>").0.as_deref(), Some("Choose red blue now"));
+    }
+
+    #[test]
+    fn embedded_values_follow_live_state_without_becoming_the_controls_own_names() {
+        let mut dom = ScriptedDom::new();
+        dom.set_inner_html(dom.document(), "<label><input id=target type=checkbox>Flash <input id=value value=old aria-label=Count> times</label><button id=other aria-labelledby=value></button>");
+        let (target, value, other) = {
+            let names = Names::new(&dom);
+            (
+                names.element_by_id(dom.document(), "target").unwrap(),
+                names.element_by_id(dom.document(), "value").unwrap(),
+                names.element_by_id(dom.document(), "other").unwrap(),
+            )
+        };
+        dom.set_form_control_value(value, "7").unwrap();
+        let names = Names::new(&dom);
+        assert_eq!(names.name(target).as_deref(), Some("Flash 7 times"));
+        assert_eq!(names.name(other).as_deref(), Some("7"));
+        assert_eq!(names.name(value).as_deref(), Some("Count"));
+        dom.set_form_control_value(value, "").unwrap();
+        assert_eq!(
+            Names::new(&dom).name(target).as_deref(),
+            Some("Flash times")
+        );
+    }
+
+    #[test]
+    fn embedded_select_uses_current_selection_instead_of_authored_selectedness() {
+        let mut dom = ScriptedDom::new();
+        dom.set_inner_html(dom.document(), "<label><input id=target type=checkbox>Choose <select id=choice aria-label=Options><option selected value=old>red</option><option value=new>blue</option></select> now</label>");
+        let names = Names::new(&dom);
+        let target = names.element_by_id(dom.document(), "target").unwrap();
+        let choice = names.element_by_id(dom.document(), "choice").unwrap();
+        assert_eq!(names.name(target).as_deref(), Some("Choose red now"));
+        dom.set_form_control_value(choice, "new").unwrap();
+        assert_eq!(
+            Names::new(&dom).name(target).as_deref(),
+            Some("Choose blue now")
+        );
+    }
+
+    #[test]
+    fn embedded_self_reference_keeps_value_eligibility_but_root_does_not() {
+        assert_eq!(alternatives("<button id=target>Flash <input id=n aria-labelledby=n aria-label=Count value=3> times</button>").0.as_deref(), Some("Flash 3 times"));
+        assert_eq!(
+            alternatives("<input id=target aria-labelledby=target aria-label=Count value=3>")
+                .0
+                .as_deref(),
+            Some("Count")
+        );
+    }
+
+    #[test]
+    fn embedded_native_values_survive_ineffective_role_attributes() {
+        for role in ["", "unknown"] {
+            for control in [
+                format!("<input type=range role='{role}' value=3 aria-label=Count>"),
+                format!(
+                    "<select role='{role}' aria-label=Count><option selected>3</option></select>"
+                ),
+            ] {
+                assert_eq!(
+                    alternatives(&format!(
+                        "<label><input id=target type=checkbox>Flash {control} times</label>"
+                    ))
+                    .0
+                    .as_deref(),
+                    Some("Flash 3 times")
+                );
+            }
+        }
+        assert_eq!(alternatives("<label><input id=target type=checkbox>Flash <select role=button aria-label=Count><option selected>3</option></select> times</label>").0.as_deref(), Some("Flash Count times"));
+    }
+
+    #[test]
+    fn embedded_combobox_without_a_choice_does_not_read_all_options() {
+        let aria = alternatives("<label><input id=target type=checkbox>Flash <div role=combobox aria-label=Count><div role=listbox><span role=option>wrong</span></div></div> times</label>").0;
+        let mut dom = ScriptedDom::new();
+        dom.set_inner_html(dom.document(), "<label><input id=target type=checkbox>Flash <select id=choice role=combobox aria-label=Count><option value=old>wrong</option></select> times</label>");
+        let names = Names::new(&dom);
+        let target = names.element_by_id(dom.document(), "target").unwrap();
+        let choice = names.element_by_id(dom.document(), "choice").unwrap();
+        dom.set_form_control_value(choice, "missing").unwrap();
+        let native = Names::new(&dom).name(target);
+        assert_eq!(
+            [aria, native],
+            [
+                Some("Flash times".to_owned()),
+                Some("Flash times".to_owned())
+            ]
         );
     }
 

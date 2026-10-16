@@ -1,16 +1,17 @@
 # Accessible names and descriptions
 
-**Status (2026-10-15):** bounded DOM names/descriptions and retained generated
+**Status (2026-10-16):** bounded DOM names/descriptions and retained generated
 text implemented, including scripted sessions on Boa and Vano. Focused joint
 semantic and native lowering gates pass. Cambium's exact-pin adoption is
 published and recorded below. Full AccName/HTML-AAM conformance and
 headed assistive-technology acceptance remain open.
-*(2026-10-15: the `get_computed_label` hook and families F, B and E are
-merged to main. Family K layout admission is qualified locally on ThinkPad:
-both engines move 370/405 to 424/484, exposing all 79 formerly hidden cases
-(54 pass, 25 fail) with every prior assertion unchanged. The matched CSS
-guards retain all 248 prior passes. Publication awaits Mark's approval.
-Earlier branch-status notes describe their original qualification stage.)*
+*(2026-10-16: the `get_computed_label` hook and families F, B, E and K are
+published on main. Family A embedded-control values are qualified on ThinkPad:
+both engines move 424/484 to 437/484 with exactly 13 gains, no prior-pass loss,
+and no missing/new assertions. The embedded-control file passes 29/29. The
+remaining 47 assertion failures and 159 manual skips stay open; this is a
+bounded family closure. Earlier branch-status notes describe their original
+qualification stage.)*
 
 ## Sources and ownership
 
@@ -607,9 +608,9 @@ formatted against AtomicBasis { width: 67.58594 } but sits in
 AtomicBasis { width: 64.38594 }`.
 
 The original October 14 ranking below describes 52 wrong-name gates and the
-separate layout panic. F, B and E have since shipped; K is qualified locally
-as recorded below. The current maps contain 60 wrong-name assertions, including
-25 newly exposed by K. The original priority order was:
+separate layout panic. F, B, E and K have since shipped; A is qualified on ThinkPad
+as recorded below. The current maps contain 47 failing assertions, including
+25 exposed by K and one separate projection gap. The original priority order was:
 
 1. **F.** `input[type=button/submit/reset]` value and `input[type=image]`
    alt are not used (4). `comp_host_language_label.html`.
@@ -797,14 +798,76 @@ short-deadline Nova diagnostic is preserved alongside the accepted longer
 pair. Forms C, the other AccName families, the layout panic and human
 assistive-technology qualification retain their separate scopes.
 
+## Embedded control values (family A, 2026-10-16)
+
+**Status (2026-10-16): implemented and qualified on ThinkPad,
+based on published main `998ccbd3210`.**
+Mark authorized continuing the standards lane after K was published. Forms C
+stays separate and paused; ask before pushing this slice.
+
+### Findings and design
+
+The accepted K maps preserve 484 assertions and show 13 embedded-control
+failures in `comp_embedded_control.html` (16/29 pass). The baseline
+`Names::compute_inner` returned `aria-label` before considering a descendant's
+value; no embedded-value step existed. The existing `LayoutDom` interface already exposes current
+input/textarea values and option selectedness. Consume those views here without
+changing selection, validation or submission algorithms.
+
+Apply [AccName's embedded-control step](https://www.w3.org/TR/accname-1.2/#comp_embedded_control)
+before `aria-label` in recursive label/content traversal: text values, chosen
+option names, and range value text/value now/native value precedence. Preserve
+root control naming, self-reference handling, cycle guards and empty values.
+ARIA ownership remains its separately ranked gap.
+
+### Done-conditions and progress
+
+The first red run preserves 59 existing passes and fails five new regressions.
+Review then finds self-reference eligibility and ineffective-role edges: a
+second red run preserves 64 passes and fails both new tests. A final no-choice
+regression preserves 66 passes and fails for both native and ARIA comboboxes;
+option-bearing controls now contribute no value when nothing is selected,
+while text-only ARIA comboboxes retain their text-value fallback.
+
+The final render/WPT suite passes **140 tests** (67 render, 72 runner,
+1 integration), with two existing runner ignores. Follow-up read-only review
+finds no remaining actionable issue. Matched Boa and Nova maps agree exactly:
+**424/484 to 437/484**, all 13 transitions in `comp_embedded_control.html`,
+which passes **29/29**. No prior pass is lost; all 484 assertion identities
+remain; there are no file errors and the 159 manual skips are unchanged.
+
+Native select/range role reporting remains coarse in the neutral role owner;
+this name-only step recognizes native values without changing exported roles.
+Direct description references to adjustable controls use the shared
+name-computation path; that value-versus-label edge is not independently
+qualified by local fixtures. ARIA-owned/external popup options remain in the
+separate ownership family. No selection/validation/submission or layout
+implementation changed; K's CSS guard receipt remains its own dated evidence.
+
+[Source-bound receipt](receipts/2026-10-16_accname_embedded_controls.json).
+Raw maps, exact commands, lock, frozen before/after runners, source identities,
+red/green diagnostics and resource ownership are retained under
+`Code/testing/genet/wpt-ledger/2026-10-16_accname_embedded_controls/`.
+The earlier candidate maps are retained as diagnostics; final acceptance uses
+the runner built after the no-choice correction.
+
+1. Observe failing regressions for embedded text, ranges and choices, including
+   live value/selectedness changes and standalone control names.
+2. Implement in the existing render name owner, then pass render and WPT-runner
+   suites and both matched AccName captures. Preserve all 484 prior assertions
+   and prior passes; name all remaining failures rather than counting skips.
+3. Reuse K's baseline only after runner/lock/corpus identity checks; retain raw
+   evidence under `Code/testing/genet/wpt-ledger/2026-10-16_accname_embedded_controls/`.
+4. Review, update this plan/index and commit locally before requesting a push.
+
 ## Layout admission (family K, 2026-10-15)
 
-**Status (2026-10-15): implemented and qualified locally on ThinkPad,
-based on main `27ec5cd5a92`; publication awaits Mark's approval.**
+**Status (2026-10-16): published on main as `998ccbd3210`, after Mark's
+explicit push approval.**
 Mark asked the standards lane to proceed after publishing family E. This
 slice removes the layout panic that prevented the 79 cases in
 `comp_name_from_content.html` from reporting. All 79 now report; 25 retain
-name-computation failures. Forms C remains separate. Ask before pushing.
+name-computation failures. Forms C remains separate.
 
 ### Findings
 

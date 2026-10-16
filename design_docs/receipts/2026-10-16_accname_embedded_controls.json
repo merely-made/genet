@@ -1,0 +1,655 @@
+{
+  "schema_version": 1,
+  "scope": "AccName family A: embedded control values in names",
+  "base": {
+    "head": "998ccbd3210333815e489573d0a79be1aa7202b2",
+    "status": "",
+    "runner_sha256": "15da86104fc19e448f6f6f7665b3e86cd96843435eb8b39b377b805662d6231d",
+    "lock_sha256": "75a0a55e3241f794661e2c5d390005e1d56229700d6cbd54f9e05b7034b50381",
+    "name_rs_sha256": "885aa9a5c0cc28af9d121d98f6d0a902cf283a15bcc992367f07e1aae258f2ec"
+  },
+  "candidate": {
+    "head": "998ccbd3210333815e489573d0a79be1aa7202b2",
+    "source_sha256": "d81efe494211173dc0c29b60fb59377bf11c86b6f76cf3eb055fdb1201ad2232",
+    "patch_sha256": "ed616644028080cf7490c00a02c4935b9dfd1b001ad2c5867274937c707ac6b6",
+    "lock_sha256": "75a0a55e3241f794661e2c5d390005e1d56229700d6cbd54f9e05b7034b50381",
+    "runner_sha256": "44ee7785783b89a316689b132e5e033948ef052a6a4abc5fc9c484ed89bd42f1"
+  },
+  "baseline_reuse": {
+    "reason": "Fresh unchanged-main locked build matches published K runner byte for byte; lock/corpus match. Reuse accepted K captures with original commands/logs rather than rerun identical artifacts.",
+    "origins": {
+      "boa": {
+        "map": "/home/markik/Code/testing/genet/wpt-ledger/2026-10-15_accname_layout_panic/candidate-accname-boa.json",
+        "sha256": "6988b31ac9ce6c401a5df61995fd55c210383503d05b2e7a449be0efa8f8050f"
+      },
+      "nova": {
+        "map": "/home/markik/Code/testing/genet/wpt-ledger/2026-10-15_accname_layout_panic/candidate-accname-nova.json",
+        "sha256": "b8d935bd33d9164ec3dbd9631b9b56fca17e663ca9e945e1cac9b77d2b282dc5"
+      }
+    },
+    "runner_sha256": "15da86104fc19e448f6f6f7665b3e86cd96843435eb8b39b377b805662d6231d",
+    "lock_sha256": "75a0a55e3241f794661e2c5d390005e1d56229700d6cbd54f9e05b7034b50381",
+    "corpus_sha256": "2a90d0571228f54b7beadff856f4e38c88ca78a3aaebfdf751457c9ab093cb9a"
+  },
+  "raw_evidence_directory": "/home/markik/Code/testing/genet/wpt-ledger/2026-10-16_accname_embedded_controls",
+  "raw_artifact_sha256": {
+    "baseline-accname-boa.command.json": "e87f98a188ebe6116428e6a3acebadf720646e65a4774988096a293d1e52ff98",
+    "baseline-accname-boa.json": "6988b31ac9ce6c401a5df61995fd55c210383503d05b2e7a449be0efa8f8050f",
+    "baseline-accname-boa.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "baseline-accname-boa.stdout": "b14bf8c1de3256ff489e1bd0bc42e8415174c04d796533ee869365a7663a78c3",
+    "baseline-accname-nova.command.json": "1f5ae863da84e32b54070e8c8fb764808968503c4ec272f9ffd9627d02b88883",
+    "baseline-accname-nova.json": "b8d935bd33d9164ec3dbd9631b9b56fca17e663ca9e945e1cac9b77d2b282dc5",
+    "baseline-accname-nova.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "baseline-accname-nova.stdout": "bea9c2f10ba1e33e035e4117078dba1ad896be52132d323ca2e66c2c306d824d",
+    "baseline-reuse.json": "4a3cc7bb3dc20483c9c723c7718327a05289c8cbdb513b34dcce930fc2d0800a",
+    "baseline-source.json": "552e57be43e037bca11d342f1eb4de8b2ce0fb98e7e55bec37e9bcf5b0f8dab2",
+    "candidate-accname-boa.command.json": "98338bb45d32b87929f61aa77ae8479bdc3b58ece4a809cff26afe1e21b5529c",
+    "candidate-accname-boa.json": "50fa7fdfe5f29160eba04474c690ccfc093977370282b64778cbef45e39d42bf",
+    "candidate-accname-boa.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "candidate-accname-boa.stdout": "245537ff26af270cb6dd81e64e24e405a29660073d8f8a064238cf2e5c7784c6",
+    "candidate-accname-nova.command.json": "598d5bdca35d715042506a6e747af157a62b3a32f3aff6fe6536ffd8f0970678",
+    "candidate-accname-nova.json": "a5d72081d99981e9f5de2e4e7b48bd4c78765d3f1a1eddf8427bdc48bc5e7591",
+    "candidate-accname-nova.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "candidate-accname-nova.stdout": "4d9eccf5feab95b63f581bb30971ded763a475417a15c8c1fcbc079834601ea2",
+    "candidate-source.json": "dea08a61a0b6016e6edce732ada224b160e3f4a5614bc04e5b95c6d78d1638ab",
+    "candidate-v1-accname-boa.command.json": "98338bb45d32b87929f61aa77ae8479bdc3b58ece4a809cff26afe1e21b5529c",
+    "candidate-v1-accname-boa.json": "61bce9090ad597f329d9ddf83d7752d456188b91d957038334d0b51a6151eab8",
+    "candidate-v1-accname-boa.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "candidate-v1-accname-boa.stdout": "245537ff26af270cb6dd81e64e24e405a29660073d8f8a064238cf2e5c7784c6",
+    "candidate-v1-accname-nova.command.json": "598d5bdca35d715042506a6e747af157a62b3a32f3aff6fe6536ffd8f0970678",
+    "candidate-v1-accname-nova.json": "cc1acbdccf98ac0294627c7979d34f436e0a12910528b025e4a217c6bf4a132b",
+    "candidate-v1-accname-nova.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "candidate-v1-accname-nova.stdout": "4d9eccf5feab95b63f581bb30971ded763a475417a15c8c1fcbc079834601ea2",
+    "candidate-v1-source.json": "25a814149f4a4a8d6c08c942de69078cb67d8ec363a586914b1e354829a661b3",
+    "candidate-v1.patch": "b7583df5736035f737d3b364f8fa50e8a3ba68e9a9e03a5ec0ce34a3513317eb",
+    "candidate.patch": "ed616644028080cf7490c00a02c4935b9dfd1b001ad2c5867274937c707ac6b6",
+    "capture_accname.py": "5d7d9d506623003519a3ca209e59d98e4b9d1a77b2b80c7de0b89cd935615b54",
+    "compare.py": "efd823e0dd719bfbaaaa2d4104e4b5da0a1698a79cb6c16fb5dbff827dd058ff",
+    "comparison.json": "d54e92f06eed3478fd734e05951086332e9e49acc63c69eb677f15d780b7d1e2",
+    "corpus-files.json": "2a90d0571228f54b7beadff856f4e38c88ca78a3aaebfdf751457c9ab093cb9a",
+    "finish.py": "c72fddb5a960fa19b3b5b2a8ddbe5e4964e1834a6795f54f875b5e04d5d9fda0",
+    "finish_docs.py": "948f40d765a59fa7defc8732f39964b3170994673bd025554d61dec010405e09",
+    "review.txt": "cbe4a59b41bab261c95f8925488631bd8e298a5ddd617cfbbabe5a14959e6e53",
+    "run.py": "6b2afff65dfe7315b3fbba563cc8a7de45b4590e12acd61d593d74c84bd4fbf1"
+  },
+  "reference": "https://www.w3.org/TR/accname-1.2/#comp_embedded_control",
+  "change": "Consume live DOM values/selectedness before aria-label in embedded label/content traversal; preserve root names, self-reference eligibility, effective role overrides and empty-value/range precedence. Chosen options use their text alternatives, not submitted values.",
+  "comparison": {
+    "boa": {
+      "before": {
+        "files": {
+          "fail": 10,
+          "pass": 9,
+          "skip": 159
+        },
+        "assertions": {
+          "fail": 60,
+          "pass": 424
+        },
+        "assertion_total": 484,
+        "errors": {}
+      },
+      "after": {
+        "files": {
+          "fail": 9,
+          "pass": 10,
+          "skip": 159
+        },
+        "assertions": {
+          "fail": 47,
+          "pass": 437
+        },
+        "assertion_total": 484,
+        "errors": {}
+      },
+      "before_sha256": "6988b31ac9ce6c401a5df61995fd55c210383503d05b2e7a449be0efa8f8050f",
+      "after_sha256": "50fa7fdfe5f29160eba04474c690ccfc093977370282b64778cbef45e39d42bf",
+      "changed": [
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded textfield",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded select:not([size])",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded select[size]",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded combobox (input[type=text])",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded combobox (span)",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded combobox (div)",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded listbox>option[aria-selected=true]",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded input[type=range]",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded input[type=number]",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded ARIA slider (aria-valuenow)",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded ARIA slider (aria-valuetext)",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded ARIA spinbutton (aria-valuenow)",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded ARIA spinbutton (aria-valuetext)",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        }
+      ],
+      "prior_pass_loss": 0,
+      "missing": 0,
+      "added": 0
+    },
+    "nova": {
+      "before": {
+        "files": {
+          "fail": 10,
+          "pass": 9,
+          "skip": 159
+        },
+        "assertions": {
+          "fail": 60,
+          "pass": 424
+        },
+        "assertion_total": 484,
+        "errors": {}
+      },
+      "after": {
+        "files": {
+          "fail": 9,
+          "pass": 10,
+          "skip": 159
+        },
+        "assertions": {
+          "fail": 47,
+          "pass": 437
+        },
+        "assertion_total": 484,
+        "errors": {}
+      },
+      "before_sha256": "b8d935bd33d9164ec3dbd9631b9b56fca17e663ca9e945e1cac9b77d2b282dc5",
+      "after_sha256": "a5d72081d99981e9f5de2e4e7b48bd4c78765d3f1a1eddf8427bdc48bc5e7591",
+      "changed": [
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded textfield",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded select:not([size])",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded select[size]",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded combobox (input[type=text])",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded combobox (span)",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded combobox (div)",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded listbox>option[aria-selected=true]",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded input[type=range]",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded input[type=number]",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded ARIA slider (aria-valuenow)",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded ARIA slider (aria-valuetext)",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded ARIA spinbutton (aria-valuenow)",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_embedded_control.html",
+          "name": "checkbox label with embedded ARIA spinbutton (aria-valuetext)",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        }
+      ],
+      "prior_pass_loss": 0,
+      "missing": 0,
+      "added": 0
+    }
+  },
+  "unit_tests": {
+    "initial_red": {
+      "passed": 59,
+      "failed": 5
+    },
+    "review_red": {
+      "passed": 64,
+      "failed": 2
+    },
+    "empty_choice_red": {
+      "passed": 66,
+      "failed": 1
+    },
+    "final_green": {
+      "render": 67,
+      "runner": 72,
+      "integration": 1,
+      "failed": 0,
+      "ignored": [
+        "manifest::tests::real_manifest_enumerates_sanely",
+        "test262::tests::real_test262_parses"
+      ]
+    }
+  },
+  "failed_attempts": {
+    "green-suite-v3": "Compilation failed because the formatting command emitted a filename header into the source. Removed the header before green-suite-v4; raw diagnostic retained."
+  },
+  "resources": {
+    "baseline-build": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "+1.99.0",
+        "build",
+        "--locked",
+        "-p",
+        "genet-wpt",
+        "-j1"
+      ],
+      "exit_code": 0,
+      "peak_bytes": 217214976,
+      "memory_max_bytes": 6174015488,
+      "minimum_available_ram_bytes": 10596904960,
+      "resource_sha256": "49ec49aa5daab38448afa004a26b95acda60837ce480819d8d5717201e4c8bde",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "ef62c087a5801a4d732bc1a7ed96215968fd5aae5c93913771288470593e7853"
+    },
+    "red-render-tests": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--locked",
+        "-p",
+        "genet-render",
+        "--lib",
+        "-j1",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 101,
+      "peak_bytes": 1795080192,
+      "memory_max_bytes": 6174015488,
+      "minimum_available_ram_bytes": 10326396928,
+      "resource_sha256": "173048536d5297d480a1552365e2c1ddc16c5dd1e6e4847c051f806ee01118f3",
+      "stdout_sha256": "525de1a5a1997aaa7f393bdf2ebf0d9ca9275f9dd3608cf54c5855bb16c6c2c1",
+      "stderr_sha256": "514a8f8edd1b2760abd73092edf82ae1c18dea71c8679a18c771a9fb931a8ec1"
+    },
+    "green-render-tests": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--locked",
+        "-p",
+        "genet-render",
+        "--lib",
+        "-j1",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "peak_bytes": 584839168,
+      "memory_max_bytes": 6174015488,
+      "minimum_available_ram_bytes": 10286063616,
+      "resource_sha256": "c3c9f72a1b1244589074538392b83ebc533866f78c2ac9b4f16e51c3c1402f4e",
+      "stdout_sha256": "7fb1a075939c2386a64538f03a2c33d448e4a56b81a72c5fb4e82c6284deb536",
+      "stderr_sha256": "2867aaf0e62d412986e2f8f1c28122ba74fa098b383e7dd47616bd731c7e1d15"
+    },
+    "green-suite": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--locked",
+        "-p",
+        "genet-render",
+        "-p",
+        "genet-wpt",
+        "-j1",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "peak_bytes": 3042811904,
+      "memory_max_bytes": 6442450944,
+      "minimum_available_ram_bytes": 9926627328,
+      "resource_sha256": "9a9be375352c6dd92d6e18bdb21f73f2331bb5a8cab3949917ca1da159d45709",
+      "stdout_sha256": "a37046be1421a0492672560fcba7f4f6913e15c01d7c536d1f80357dfeb15295",
+      "stderr_sha256": "dc0a2ebe0927e671f9cd76591c07e68c5c42f7f1f035db7bd95729724b6b2697"
+    },
+    "red-review-regressions": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--locked",
+        "-p",
+        "genet-render",
+        "--lib",
+        "-j1",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 101,
+      "peak_bytes": 516431872,
+      "memory_max_bytes": 6442450944,
+      "minimum_available_ram_bytes": 10404556800,
+      "resource_sha256": "00e9c76e45f59d62d8f46f35f5f2611e7500757adb703a9bf06f4c88651fa371",
+      "stdout_sha256": "8000d309e08300bd18456dda8c55c6d0672e73965815ace7f237cc90c577db70",
+      "stderr_sha256": "2adeb0fe64a203c5a0b1e6a935181cdfd57e66ba5060293e4812d7cc576fc1a3"
+    },
+    "green-suite-v2": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--locked",
+        "-p",
+        "genet-render",
+        "-p",
+        "genet-wpt",
+        "-j1",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "peak_bytes": 1738559488,
+      "memory_max_bytes": 6442450944,
+      "minimum_available_ram_bytes": 10027417600,
+      "resource_sha256": "15fb41394390cfb1afdea7e63b811dd2d991ef32d23a5655b82928312c3711f1",
+      "stdout_sha256": "f6545f3a5ec33409866c9d191a243a0c6aa7ca497b683101691825b3ddd52426",
+      "stderr_sha256": "8892fe7ad5a265b50ce67afe34cb393b8252125c17db6871af054d5a63d7d585"
+    },
+    "red-empty-choice": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--locked",
+        "-p",
+        "genet-render",
+        "--lib",
+        "-j1",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 101,
+      "peak_bytes": 944766976,
+      "memory_max_bytes": 6442450944,
+      "minimum_available_ram_bytes": 10523602944,
+      "resource_sha256": "fc541d5e1bd0df06497d3bd4172874663bdcd65692a1f17ce81575d5138abd3b",
+      "stdout_sha256": "c7382f9c5e9809d04e10d21b3cd91e047e3e760fb08c662f3efa1f6fcedf975f",
+      "stderr_sha256": "628154c7286691a61852ba73cc7bc427b7156795b6f8024298592e9d262facce"
+    },
+    "green-suite-v3": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--locked",
+        "-p",
+        "genet-render",
+        "-p",
+        "genet-wpt",
+        "-j1",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 101,
+      "peak_bytes": 247570432,
+      "memory_max_bytes": 6442450944,
+      "minimum_available_ram_bytes": 10825383936,
+      "resource_sha256": "a01192c8f29224e08fe3e8494ef7c392ac4abb727c8441d97a0a2676ac5ffa83",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "ab2bd5119b005351709fa80296e02927024a99f4b67fafc6c5ce9908c023a2ec"
+    },
+    "green-suite-v4": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--locked",
+        "-p",
+        "genet-render",
+        "-p",
+        "genet-wpt",
+        "-j1",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "peak_bytes": 1512820736,
+      "memory_max_bytes": 6442450944,
+      "minimum_available_ram_bytes": 10153119744,
+      "resource_sha256": "d4397f30e4c4458a84d97a3f7b51ce1b7759d9a5735d2b7630916d44b729f0ed",
+      "stdout_sha256": "a605c14ba7c770560ceb46de424d4452ed807c81f9191656843b95f79ba93a58",
+      "stderr_sha256": "023782c959286cf1b2f26f498e0d03d51110b3f74eafb7dbf3d9ca0b130a19ca"
+    },
+    "candidate-build": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "+1.99.0",
+        "build",
+        "--locked",
+        "-p",
+        "genet-wpt",
+        "-j1"
+      ],
+      "exit_code": 0,
+      "peak_bytes": 1854951424,
+      "memory_max_bytes": 6442450944,
+      "minimum_available_ram_bytes": 10086461440,
+      "resource_sha256": "6bca01c2ee2445adb1de5dfe531ad6c2df057e0a3934a90366bb2d30afe5ad67",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "d93aa5714f4ba193dec2d6b0351f6797a3bb0accc9475ef4d94d10832126bd17"
+    },
+    "candidate-build-v2": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "+1.99.0",
+        "build",
+        "--locked",
+        "-p",
+        "genet-wpt",
+        "-j1"
+      ],
+      "exit_code": 0,
+      "peak_bytes": 1249112064,
+      "memory_max_bytes": 6442450944,
+      "minimum_available_ram_bytes": 10133852160,
+      "resource_sha256": "b59eada69d8442362fd658c83b23c34a040592a20a90f192743d6eab9019dfa8",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "41305efa124749a792bb98247110cdca4fd4f45038728871dcf88318b5771d6b"
+    },
+    "candidate-accname-capture": {
+      "command": [
+        "python3",
+        "-B",
+        "/home/markik/Code/testing/genet/wpt-ledger/2026-10-16_accname_embedded_controls/capture_accname.py"
+      ],
+      "exit_code": 0,
+      "peak_bytes": 540282880,
+      "memory_max_bytes": 6442450944,
+      "minimum_available_ram_bytes": 10276376576,
+      "resource_sha256": "68fea0de216f57ee6f46e26d397307974ccb042244da4815aa5e9182014e5330",
+      "stdout_sha256": "02dcbd5ef9b8d24cf844c5f2b5af040eb83632fa372c719bbd1c581e8369c9fe",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "candidate-accname-capture-v2": {
+      "command": [
+        "python3",
+        "-B",
+        "/home/markik/Code/testing/genet/wpt-ledger/2026-10-16_accname_embedded_controls/capture_accname.py"
+      ],
+      "exit_code": 0,
+      "peak_bytes": 474976256,
+      "memory_max_bytes": 6442450944,
+      "minimum_available_ram_bytes": 9962364928,
+      "resource_sha256": "c1b1456973324ac90868175741b30dd2acb194504a5e9a3c6f4227863c5e297e",
+      "stdout_sha256": "02dcbd5ef9b8d24cf844c5f2b5af040eb83632fa372c719bbd1c581e8369c9fe",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "review": "Read-only review found two P2 edge cases. Both were reproduced by new red regressions and fixed. Follow-up reviewer confirmed both resolved and no new actionable issues. Review was static; runtime evidence is recorded separately.\nNarrow coverage limit: direct aria-describedby reference to an adjustable control uses the shared name-computation path. The normative description rule supports shared traversal, but step 2C does not explicitly settle value versus label for that exact case, and no local fixture covers it. Reviewer could not substantiate a correctness finding; no speculative context split added.\nAdditional empty-choice regression reproduced both native and ARIA failures. Follow-up static review confirmed the has-options fix and found no new actionable issue.",
+  "limits": [
+    "A directly described adjustable control follows the shared name-computation path; its value-versus-label edge is not independently qualified by local fixtures.",
+    "159 manual AccName files remain skipped; this is not whole AccName/HTML-AAM or human assistive-technology qualification.",
+    "ARIA-owned and external popup options remain in the separate ownership family; this slice reads chosen descendants and native selectedness.",
+    "No Forms selection/validation/submission algorithms or layout/CSS implementation changed. K CSS receipts remain historical evidence; no fresh CSS/reftest/GPU claim is made.",
+    "Implementation remains local until explicit push approval."
+  ]
+}

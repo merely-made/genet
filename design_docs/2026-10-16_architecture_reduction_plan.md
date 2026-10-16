@@ -175,3 +175,54 @@ receipt retains the preliminary compile failure separately. Final code matches
 all 24 reviewed source hashes. No new GPU readback, browser run, full-workspace
 qualification, or Forms acceptance is claimed. CSSOM-only new resource discovery,
 pending/custom keyframe values and L3 sharing remain separate work.
+
+## L4 transform and containing-block ownership
+
+**Status:** bounded repair implemented and verified locally, 2026-10-16. Baseline `9ed0bb563f4`.
+
+L3 was inspected first. Its complete immutable-pixel-sharing cut crosses the
+pinned NetRender paint_list_api boundary: ImageResource.data is an owned Vec,
+and frame absorption copies it. Defer that supplier/API change rather than call
+a Genet-only cache a complete L3 repair. No L3 production change is made here.
+
+L4 is the next bounded correctness cut. Box-tree containing-block establishment
+recognizes only the transform list, while paint recognizes individual transforms
+and applies a different inline predicate. Give supported transform/context facts
+one owner with distinct applicability, containing-block, stacking and paint
+projections. Check perspective separately from an element's own matrix. Preserve
+containment, fixed/absolute selection, table/grid ownership and retained-motion
+admission. Primary terminology: [CSS Transforms 1 transformable elements](https://www.w3.org/TR/css-transforms-1/#transformable-element)
+and [CSS Transforms 2](https://www.w3.org/TR/css-transforms-2/) individual
+transforms, perspective and computed preserve-3d context establishment.
+
+Done conditions: static ancestors with individual transforms correctly contain
+absolute/fixed descendants; none/non-none transitions update retained geometry;
+identity transforms count, and non-transformable inline cases remain excluded.
+Run relevant existing geometry/transform/paint tests after the cut and add only
+changed-behavior regressions. Cheaper workers do implementation and test files;
+parent serializes gates under the shared lock, one job, 5 GiB memory, zero swap,
+150% CPU quota, nice 10 and serial tests. Preserve explicit 3D rendering limits.
+
+L4 source review found parent perspective/3D-context reads bypassing applicability,
+missing supported transform properties in the table wrapper/grid split, and
+flex/grid blockification and numeric stacking levels through display: contents.
+These are included in this cut; broader projective rendering and used-value 3D
+grouping behavior remain outside its qualification.
+
+Remaining L4 boundaries: paint still follows the immediate DOM parent when
+applying parent perspective/preserve-3d, so a display: contents intermediary
+does not forward the generated parent. The existing affine projection limit
+also remains. First regression run compiled and passed six cases, but three
+paint assertions found no colored rectangle: positioned spans still enter the
+inline-decoration path in begin_node. Their geometry assertions passed. Those
+fixtures now explicitly make the positioned children block-level while keeping
+the tested parent inline; the positioned-inline decoration defect is recorded
+separately rather than silently included in L4 qualification.
+
+L4 final gates passed 453 tests, zero failed, two existing ignores: 335 library,
+109 existing integration and nine new retained regressions. The retained source
+was frozen before these gates; only explicit child display in the new fixtures
+changed after the first run. The review and receipt record exact source hashes,
+limits and failure history. No new GPU/browser or Forms acceptance is claimed.
+L3 supplier sharing, contents perspective-parent traversal and positioned-inline
+decoration remain open with the source boundaries above.

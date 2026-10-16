@@ -197,7 +197,8 @@ impl PlacementState {
             }
             if let Some(fragment) = fragments.get(id) {
                 let parent = paint::transform_parent(dom, styles, fragments, id);
-                if let Some(transform) = paint::transform_spec(style, fragment, parent) {
+                let context = paint::transform_context_for_node(dom, styles, fragments, id)?;
+                if let Some(transform) = paint::transform_spec(style, fragment, parent, context) {
                     next.matrix = next.matrix.multiply(spec_matrix(&transform));
                 }
                 let inverse = inverse(next.matrix);

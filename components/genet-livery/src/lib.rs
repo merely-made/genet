@@ -38,6 +38,7 @@ pub mod table_shadow;
 mod table_wrapper;
 mod text;
 mod text_fragment;
+mod transform_context;
 
 /// Stack the two per-DOM-level descents guarantee themselves before recursing
 /// one level further: the style cascade

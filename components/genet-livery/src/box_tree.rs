@@ -26,7 +26,7 @@ use livery::{
     },
 };
 
-use crate::StylePlane;
+use crate::{StylePlane, transform_context::TransformContextFacts};
 
 /// Livery-generated, Buckram-normalized CSS boxes.
 #[derive(Clone, Debug)]
@@ -60,13 +60,14 @@ where
             styles: &StylePlane<D::NodeId>,
             node: D::NodeId,
             inherited: Option<&ComputedValues>,
+            formatting_parent: Option<&ComputedValues>,
             output: &mut Vec<BoxTreeInput<D::NodeId>>,
         ) where
             D: LayoutDom,
             D::NodeId: Copy + Eq + Hash,
         {
             crate::with_recursion_stack(move || {
-                collect_on_this_stack(dom, styles, node, inherited, output)
+                collect_on_this_stack(dom, styles, node, inherited, formatting_parent, output)
             })
         }
 
@@ -75,6 +76,7 @@ where
             styles: &StylePlane<D::NodeId>,
             node: D::NodeId,
             inherited: Option<&ComputedValues>,
+            formatting_parent: Option<&ComputedValues>,
             output: &mut Vec<BoxTreeInput<D::NodeId>>,
         ) where
             D: LayoutDom,
@@ -83,7 +85,7 @@ where
             match dom.kind(node) {
                 NodeKind::Document | NodeKind::DocumentFragment => {
                     for child in dom.flat_children(node) {
-                        collect(dom, styles, child, inherited, output);
+                        collect(dom, styles, child, inherited, formatting_parent, output);
                     }
                 },
                 NodeKind::Element => {
@@ -96,6 +98,13 @@ where
                     // would both paint the fallback and stop the element being
                     // a measured replaced leaf.
                     if !is_frame_container(dom, node) {
+                        // `display: contents` does not become the formatting
+                        // parent of its children; flex/grid blockification
+                        // still comes from the nearest generated parent box.
+                        let child_formatting_parent = (computed.display
+                            != ComputedDisplay::Contents)
+                            .then_some(&computed)
+                            .or(formatting_parent);
                         if !is_replaced_element(dom, node) {
                             generated_text_input(
                                 styles,
@@ -105,7 +114,14 @@ where
                             );
                         }
                         for child in dom.flat_children(node) {
-                            collect(dom, styles, child, Some(&computed), &mut children);
+                            collect(
+                                dom,
+                                styles,
+                                child,
+                                Some(&computed),
+                                child_formatting_parent,
+                                &mut children,
+                            );
                         }
                         if !is_replaced_element(dom, node) {
                             generated_text_input(
@@ -128,6 +144,13 @@ where
                         .with_float(float_side(computed.float))
                         .with_containing_block_establishment(containing_block_establishment(
                             &computed,
+                            is_replaced_element(dom, node),
+                            formatting_parent.is_some_and(|parent| {
+                                matches!(
+                                    parent.display,
+                                    ComputedDisplay::Flex | ComputedDisplay::Grid
+                                )
+                            }),
                         )),
                     );
                 },
@@ -155,7 +178,7 @@ where
         }
 
         let mut roots = Vec::new();
-        collect(dom, styles, dom.document(), None, &mut roots);
+        collect(dom, styles, dom.document(), None, None, &mut roots);
         Self {
             tree: generate_box_tree(roots),
         }
@@ -270,9 +293,15 @@ fn positioning_scheme(position: ComputedPosition) -> PositioningScheme {
 /// The currently implemented CSS triggers that establish descendant
 /// containing blocks. Unsupported triggers are absent from the computed
 /// model, so they cannot silently look like an ordinary positioned ancestor.
-fn containing_block_establishment(computed: &ComputedValues) -> ContainingBlockEstablishment {
-    let transformed = !matches!(computed.transform, livery::values::Transform::None);
-    let fixed = transformed || computed.contain.has_layout() || computed.contain.has_paint();
+fn containing_block_establishment(
+    computed: &ComputedValues,
+    replaced: bool,
+    flex_grid_item: bool,
+) -> ContainingBlockEstablishment {
+    let context = TransformContextFacts::for_box(computed, replaced, flex_grid_item);
+    let fixed = context.establishes_positioned_containing_block()
+        || computed.contain.has_layout()
+        || computed.contain.has_paint();
     if fixed {
         ContainingBlockEstablishment::fixed_and_absolute()
     } else if computed.position != ComputedPosition::Static {

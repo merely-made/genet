@@ -26,24 +26,19 @@ where
 }
 
 /// Numeric z-index starts a context only on positioned boxes or flex/grid items.
-pub(crate) fn z_index_stacking_level<D>(
-    dom: &D,
-    styles: &StylePlane<D::NodeId>,
-    id: D::NodeId,
+pub(crate) fn z_index_stacking_level<Id>(
+    styles: &StylePlane<Id>,
+    id: Id,
+    flex_grid_item: bool,
 ) -> Option<i32>
 where
-    D: LayoutDom,
-    D::NodeId: Copy + Eq + Hash,
+    Id: Copy + Eq + Hash,
 {
     let style = styles.get(id)?;
     let livery::values::ZIndex::Integer(level) = style.z_index else {
         return None;
     };
-    let item = dom
-        .parent(id)
-        .and_then(|parent| styles.get(parent))
-        .is_some_and(|parent| matches!(parent.display, CssDisplay::Flex | CssDisplay::Grid));
-    (style.position != CssPosition::Static || item).then_some(level)
+    (style.position != CssPosition::Static || flex_grid_item).then_some(level)
 }
 
 /// Stable CSS order-modified children shared with paint.
@@ -70,6 +65,7 @@ where
 pub(in crate::layout) fn stacking_paint_children<D>(
     dom: &D,
     styles: &StylePlane<D::NodeId>,
+    fragments: &LiveryLayout<D::NodeId>,
     parent: D::NodeId,
 ) -> Vec<D::NodeId>
 where
@@ -77,7 +73,15 @@ where
     D::NodeId: Copy + Eq + Hash,
 {
     let mut children = order_modified_children(dom, styles, parent);
-    children.sort_by_key(|child| stacking_level(dom, styles, *child).unwrap_or_default());
+    children.sort_by_key(|child| {
+        stacking_level(
+            dom,
+            styles,
+            *child,
+            crate::paint::is_blockified_item(fragments, *child),
+        )
+        .unwrap_or_default()
+    });
     children
 }
 
@@ -195,7 +199,12 @@ where
         items: &mut Vec<StackingEntry<D::NodeId>>,
     ) {
         for child in order_modified_children(self.dom, self.styles, parent) {
-            if let Some(level) = stacking_level(self.dom, self.styles, child) {
+            if let Some(level) = stacking_level(
+                self.dom,
+                self.styles,
+                child,
+                crate::paint::is_blockified_item(self.fragments, child),
+            ) {
                 items.push(StackingEntry {
                     id: child,
                     level,

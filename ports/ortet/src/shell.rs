@@ -896,15 +896,17 @@ impl Ortet {
     }
 
     /// Dispatch one neutral input and apply everything the session asked the
-    /// host for. Returns `(handled, editable)` so the keyboard path can decide
-    /// whether its scroll default still applies.
-    fn apply_input(&mut self, input: SessionInput) -> (bool, bool) {
+    /// host for. Returns whether the keyboard scroll default still applies.
+    fn apply_input(&mut self, input: SessionInput) -> bool {
         let outcome = self.session_driver().input(input);
-        let handled = outcome.input.as_ref().is_some_and(|r| r.effect.is_handled());
         let editable = if outcome.installed { self.session.editable_focus() }
             else { outcome.input.as_ref().is_some_and(|r| r.editable) };
+        let allows_default_scroll = outcome.input.as_ref().map_or_else(
+            || SessionEffect::Ignored.allows_default_scroll(editable),
+            |result| result.effect.allows_default_scroll(editable),
+        );
         self.present_driver_outcome(&outcome);
-        (handled, editable)
+        allows_default_scroll
     }
 
     /// The per-frame shape the host crates document: apply the host mutation
@@ -1260,15 +1262,14 @@ impl ApplicationHandler for Ortet {
                 });
             },
             WindowEvent::KeyboardInput { event, .. } => {
-                let (handled, editable) = self.apply_input(SessionInput::Key {
+                let allows_default_scroll = self.apply_input(SessionInput::Key {
                     key: session_key_from_winit(&event.logical_key),
                     state: button_state_from_winit(event.state),
                     modifiers: self.modifiers,
                     repeat: event.repeat,
                 });
                 if event.state == ElementState::Pressed
-                    && !handled
-                    && !editable
+                    && allows_default_scroll
                     && let Some(key) =
                         scroll_key_from_winit(&event.logical_key, self.modifiers.shift)
                     && self.session.scroll_for_key(key)

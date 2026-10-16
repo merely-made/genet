@@ -17,9 +17,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use document_session_api::session_engine::{
-    DocumentSession, SessionButtonState, SessionEffect, SessionEngine, SessionInput, SessionKey,
+    DocumentSession, SessionButtonState, SessionDocumentRequest, SessionEffect,
+    SessionEncodedFormSubmission, SessionEngine, SessionInput, SessionInputResult, SessionKey,
     SessionModifiers, SessionPointerButton, SessionScrollKey, SessionSpawnRequest,
-    SessionDocumentRequest, SessionEncodedFormSubmission,
 };
 use genet_document_resources::ResourceLimits;
 use genet_documents::{LiveryResourcePreparation, LiverySessionEngine, LocalFetcher};
@@ -213,12 +213,11 @@ impl WebOrtet {
     fn sync_address(&mut self) {
         if let Some(address) = self.session.current_address() { self.address = address; }
     }
-    fn dispatch_input(&mut self, input: SessionInput) -> Option<bool> {
+    fn dispatch_input(&mut self, input: SessionInput) -> SessionInputResult {
         let result = self.session.input(input);
-        let capture = result.capture;
-        match result.effect {
+        match &result.effect {
             SessionEffect::Navigate(target) => {
-                self.pending_navigation = Some(BrowserNavigation::Link(resolve_href(&self.address, &target)));
+                self.pending_navigation = Some(BrowserNavigation::Link(resolve_href(&self.address, target)));
             },
             SessionEffect::Submit(_) => {
                 match self.session.take_encoded_form_submission() {
@@ -236,7 +235,7 @@ impl WebOrtet {
             SessionEffect::Ignored => {},
         }
         self.sync_address();
-        capture
+        result
     }
 
     fn capture_pointer(&mut self, pointer_id: i32) {
@@ -577,7 +576,7 @@ fn install_dom_events(host: &Rc<RefCell<WebOrtet>>) -> Result<(), JsValue> {
                     button: pointer_button(event.button()),
                     state: SessionButtonState::Pressed,
                     modifiers,
-                }) == Some(true)
+                }).capture == Some(true)
                 {
                     state.capture_pointer(event.pointer_id());
                 }
@@ -652,16 +651,18 @@ fn install_dom_events(host: &Rc<RefCell<WebOrtet>>) -> Result<(), JsValue> {
                 let modifiers = state.modifiers;
                 let key = session_key(event.key());
                 let scroll = scroll_key(&key, modifiers.shift);
-                state.dispatch_input(SessionInput::Key {
+                let result = state.dispatch_input(SessionInput::Key {
                     key,
                     state: SessionButtonState::Pressed,
                     modifiers,
                     repeat: event.repeat(),
                 });
-                if let Some(scroll) = scroll
-                    && state.session.scroll_for_key(scroll)
-                {
+                let scrolled = result.effect.allows_default_scroll(result.editable)
+                    && scroll.is_some_and(|scroll| state.session.scroll_for_key(scroll));
+                if result.effect.is_handled() || (result.editable && scroll.is_some()) || scrolled {
                     event.prevent_default();
+                }
+                if scrolled {
                     state.render();
                 }
             }

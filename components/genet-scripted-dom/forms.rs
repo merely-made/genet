@@ -876,7 +876,7 @@ impl ScriptedDom {
         }
         None
     }
-    fn is_connected_through_shadow_hosts(&self, id: NodeId) -> bool {
+    pub(super) fn is_connected_through_shadow_hosts(&self, id: NodeId) -> bool {
         let mut current = id;
         loop {
             if self.kind(current) == layout_dom_api::NodeKind::Document {

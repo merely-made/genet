@@ -34,7 +34,9 @@ use genet_host_api::ResourceResponse;
 use genet_scripted_dom::html_encoding::{
     DocumentEncoding, HtmlDecodeOptions, decode_html_document,
 };
-use genet_text::{next_grapheme_boundary, previous_grapheme_boundary};
+use genet_scripted_dom::{
+    FormEditCommand, form_edit_byte_offset_from_utf16, form_edit_utf16_offset_from_byte,
+};
 use layout_dom_api::{
     FormControlState, LayoutDom, LayoutDomMut, LocalName, Namespace, NodeKind, QualName,
     SelectionDirection,
@@ -680,35 +682,6 @@ struct EditableDrag {
 }
 
 #[cfg(feature = "livery")]
-fn byte_offset_from_utf16(value: &str, offset: u32) -> usize {
-    let mut units = 0u32;
-    for (byte, ch) in value.char_indices() {
-        let next = units + ch.len_utf16() as u32;
-        if offset < next {
-            // Native editing can only place a caret on a UTF-8 scalar
-            // boundary. Preserve the exact WebIDL offset in the arena and
-            // map an offset inside a surrogate pair to the scalar's start for
-            // this native-only operation.
-            return byte;
-        }
-        units = next;
-        if offset == units {
-            return byte + ch.len_utf8();
-        }
-    }
-    value.len()
-}
-
-#[cfg(feature = "livery")]
-fn utf16_offset_from_byte(value: &str, byte_offset: usize) -> u32 {
-    value
-        .char_indices()
-        .take_while(|(byte, _)| *byte < byte_offset)
-        .map(|(_, ch)| ch.len_utf16() as u32)
-        .sum()
-}
-
-#[cfg(feature = "livery")]
 impl LiveryDocumentSession {
     pub fn document(&self) -> &genet_livery::LiveryDocument<genet_scripted_dom::ScriptedDom> {
         &self.doc
@@ -1091,9 +1064,7 @@ impl LiveryDocumentSession {
     }
 
     fn editable_is_writable(&self, node: genet_scripted_dom::NodeId) -> bool {
-        !self.is_disabled_control(node)
-            && self.attribute(node, "readonly").is_none()
-            && !self.aria_true(node, "aria-readonly")
+        self.doc.dom().can_user_edit_text_control(node)
     }
 
     fn is_disabled_control(&self, node: genet_scripted_dom::NodeId) -> bool {
@@ -1255,7 +1226,7 @@ impl LiveryDocumentSession {
         else {
             return false;
         };
-        let caret = utf16_offset_from_byte(&value, anchor);
+        let caret = form_edit_utf16_offset_from_byte(&value, anchor);
         let written =
             self.write_control_selection(editor_node, caret, caret, SelectionDirection::None);
         if written {
@@ -1285,8 +1256,8 @@ impl LiveryDocumentSession {
         else {
             return false;
         };
-        let anchor_utf16 = utf16_offset_from_byte(&value, drag.anchor);
-        let focus_utf16 = utf16_offset_from_byte(&value, focus);
+        let anchor_utf16 = form_edit_utf16_offset_from_byte(&value, drag.anchor);
+        let focus_utf16 = form_edit_utf16_offset_from_byte(&value, focus);
         let direction = if drag.anchor <= focus {
             SelectionDirection::Forward
         } else {
@@ -1476,132 +1447,41 @@ impl LiveryDocumentSession {
         self.submit_form(form, Some(submit), position)
     }
 
+    fn edit_control(&mut self, command: FormEditCommand<'_>) -> bool {
+        let Some(node) = self.editor.as_ref().map(|editor| editor.node) else {
+            return false;
+        };
+        self.doc
+            .mutate_dom(|dom| dom.apply_form_control_user_edit(node, command))
+            .0
+            .accepted()
+    }
+
     fn insert_text(&mut self, text: &str) -> bool {
         if text.is_empty() {
             return false;
         }
-        let Some(node) = self.editor.as_ref().map(|editor| editor.node) else {
-            return false;
-        };
-        let Some(state) = self.doc.dom().form_control_editing_value(node) else {
-            return false;
-        };
-        let mut value = state.value;
-        let start = byte_offset_from_utf16(&value, state.selection_start.unwrap_or(0));
-        let end = byte_offset_from_utf16(
-            &value,
-            state
-                .selection_end
-                .unwrap_or(state.selection_start.unwrap_or(0)),
-        );
-        value.replace_range(start.min(end)..start.max(end), text);
-        let caret = start.min(end) + text.len();
-        let caret = utf16_offset_from_byte(&value, caret);
-        let result = self.write_control_value_selection(node, &value, caret, caret);
-        if let Some(editor) = self.editor.as_mut() {
+        let accepted = self.edit_control(FormEditCommand::Insert(text));
+        if accepted && let Some(editor) = self.editor.as_mut() {
             editor.composition = None;
         }
-        result
+        accepted
     }
 
     pub(crate) fn delete_backward(&mut self) -> bool {
-        let Some(node) = self.editor.as_ref().map(|editor| editor.node) else {
-            return false;
-        };
-        let Some(state) = self.doc.dom().form_control_editing_value(node) else {
-            return false;
-        };
-        let mut value = state.value;
-        let start = byte_offset_from_utf16(&value, state.selection_start.unwrap_or(0));
-        let end = byte_offset_from_utf16(
-            &value,
-            state
-                .selection_end
-                .unwrap_or(state.selection_start.unwrap_or(0)),
-        );
-        if start != end {
-            value.replace_range(start.min(end)..start.max(end), "");
-            let caret = start.min(end);
-            let caret = utf16_offset_from_byte(&value, caret);
-            return self.write_control_value_selection(node, &value, caret, caret);
-        }
-        let caret = start;
-        if caret == 0 {
-            return true;
-        }
-        let Some(previous) = previous_grapheme_boundary(&value, caret) else {
-            return false;
-        };
-        value.replace_range(previous..caret, "");
-        let caret = utf16_offset_from_byte(&value, previous);
-        self.write_control_value_selection(node, &value, caret, caret)
+        self.edit_control(FormEditCommand::DeleteBackward)
     }
 
     fn delete_forward(&mut self) -> bool {
-        let Some(node) = self.editor.as_ref().map(|editor| editor.node) else {
-            return false;
-        };
-        let Some(state) = self.doc.dom().form_control_editing_value(node) else {
-            return false;
-        };
-        let mut value = state.value;
-        let start = byte_offset_from_utf16(&value, state.selection_start.unwrap_or(0));
-        let end = byte_offset_from_utf16(
-            &value,
-            state
-                .selection_end
-                .unwrap_or(state.selection_start.unwrap_or(0)),
-        );
-        let caret = start.min(end);
-        if start != end {
-            value.replace_range(caret..start.max(end), "");
-            let caret = utf16_offset_from_byte(&value, caret);
-            return self.write_control_value_selection(node, &value, caret, caret);
-        }
-        if caret == value.len() {
-            return true;
-        }
-        let Some(next) = next_grapheme_boundary(&value, caret) else {
-            return false;
-        };
-        value.replace_range(caret..next, "");
-        let caret = utf16_offset_from_byte(&value, caret);
-        self.write_control_value_selection(node, &value, caret, caret)
+        self.edit_control(FormEditCommand::DeleteForward)
     }
 
     fn move_caret(&mut self, direction: i8) -> bool {
-        let Some(node) = self.editor.as_ref().map(|editor| editor.node) else {
-            return false;
-        };
-        let Some(state) = self.doc.dom().form_control_editing_value(node) else {
-            return false;
-        };
-        let value = state.value;
-        let start = byte_offset_from_utf16(&value, state.selection_start.unwrap_or(0));
-        let end = byte_offset_from_utf16(
-            &value,
-            state
-                .selection_end
-                .unwrap_or(state.selection_start.unwrap_or(0)),
-        );
-        let current = if start != end {
-            if direction < 0 {
-                start.min(end)
-            } else {
-                start.max(end)
-            }
+        self.edit_control(if direction < 0 {
+            FormEditCommand::MoveLeft
         } else {
-            start
-        };
-        let caret = if direction < 0 {
-            previous_grapheme_boundary(&value, current).unwrap_or(current)
-        } else if current == value.len() {
-            current
-        } else {
-            next_grapheme_boundary(&value, current).unwrap_or(current)
-        };
-        let offset = utf16_offset_from_byte(&value, caret);
-        self.write_control_selection(node, offset, offset, SelectionDirection::None)
+            FormEditCommand::MoveRight
+        })
     }
 
     pub(crate) fn collect_focusable(
@@ -1919,8 +1799,8 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
                 .as_ref()
                 .and_then(|state| state.selection_end)
                 .unwrap_or(start);
-            let start_byte = byte_offset_from_utf16(value, start);
-            let end_byte = byte_offset_from_utf16(value, end);
+            let start_byte = form_edit_byte_offset_from_utf16(value, start);
+            let end_byte = form_edit_byte_offset_from_utf16(value, end);
             let selection = (start_byte != end_byte)
                 .then(|| {
                     let (anchor, focus) = match editing
@@ -2142,29 +2022,8 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
             SessionKey::Delete if self.delete_forward() => SessionEffect::Handled,
             SessionKey::ArrowLeft if self.move_caret(-1) => SessionEffect::Handled,
             SessionKey::ArrowRight if self.move_caret(1) => SessionEffect::Handled,
-            SessionKey::Home if let Some(editor) = self.editor.as_ref() => {
-                let node = editor.node;
-                if self.write_control_selection(node, 0, 0, SelectionDirection::None) {
-                    SessionEffect::Handled
-                } else {
-                    SessionEffect::Ignored
-                }
-            },
-            SessionKey::End if let Some(editor) = self.editor.as_ref() => {
-                let node = editor.node;
-                let end = self
-                    .doc
-                    .dom()
-                    .form_control_editing_value(node)
-                    .map(|state| state.value.encode_utf16().count().min(u32::MAX as usize) as u32);
-                if end.is_some_and(|end| {
-                    self.write_control_selection(node, end, end, SelectionDirection::None)
-                }) {
-                    SessionEffect::Handled
-                } else {
-                    SessionEffect::Ignored
-                }
-            },
+            SessionKey::Home if self.edit_control(FormEditCommand::Home) => SessionEffect::Handled,
+            SessionKey::End if self.edit_control(FormEditCommand::End) => SessionEffect::Handled,
             SessionKey::Enter => {
                 if self
                     .editor

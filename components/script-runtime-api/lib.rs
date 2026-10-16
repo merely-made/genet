@@ -113,69 +113,7 @@ pub use webgl::{WebGlFactory, WebGlHandler};
 pub use websocket::{WebSocketHandler, WebSocketRequest};
 pub use worker::ScriptResourceLoader;
 
-/// Built-in constraint-validation message selected for a control's first
-/// failing validity flag. Embedders can replace the English defaults through
-/// [`Runtime::set_validation_message_catalog`].
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ValidationMessageKind {
-    ValueMissing,
-    TypeMismatch,
-    PatternMismatch,
-    TooLong,
-    TooShort,
-    RangeUnderflow,
-    RangeOverflow,
-    StepMismatch,
-    BadInput,
-}
-
-/// Replaceable built-in validation wording shared by `validationMessage` and
-/// native `reportValidity()` feedback. Author-provided custom validity text is
-/// returned verbatim and does not use this catalog.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ValidationMessageCatalog {
-    pub value_missing: String,
-    pub type_mismatch: String,
-    pub pattern_mismatch: String,
-    pub too_long: String,
-    pub too_short: String,
-    pub range_underflow: String,
-    pub range_overflow: String,
-    pub step_mismatch: String,
-    pub bad_input: String,
-}
-
-impl Default for ValidationMessageCatalog {
-    fn default() -> Self {
-        Self {
-            value_missing: "Please fill out this field.".into(),
-            type_mismatch: "Please enter a valid value.".into(),
-            pattern_mismatch: "Please match the requested format.".into(),
-            too_long: "Please shorten this text.".into(),
-            too_short: "Please lengthen this text.".into(),
-            range_underflow: "Value is below the allowed minimum.".into(),
-            range_overflow: "Value is above the allowed maximum.".into(),
-            step_mismatch: "Please enter a valid value.".into(),
-            bad_input: "Please enter a valid value.".into(),
-        }
-    }
-}
-
-impl ValidationMessageCatalog {
-    pub fn message(&self, kind: ValidationMessageKind) -> &str {
-        match kind {
-            ValidationMessageKind::ValueMissing => &self.value_missing,
-            ValidationMessageKind::TypeMismatch => &self.type_mismatch,
-            ValidationMessageKind::PatternMismatch => &self.pattern_mismatch,
-            ValidationMessageKind::TooLong => &self.too_long,
-            ValidationMessageKind::TooShort => &self.too_short,
-            ValidationMessageKind::RangeUnderflow => &self.range_underflow,
-            ValidationMessageKind::RangeOverflow => &self.range_overflow,
-            ValidationMessageKind::StepMismatch => &self.step_mismatch,
-            ValidationMessageKind::BadInput => &self.bad_input,
-        }
-    }
-}
+pub use genet_scripted_dom::{ValidationMessageCatalog, ValidationMessageKind};
 
 /// A host-native request to show validation feedback for a control. It is not
 /// inserted into the authored DOM or exposed to page script.
@@ -244,6 +182,7 @@ impl<'cx, E: ScriptEngine + 'cx> Surface<'_, 'cx, E> {
                 | "__formImplicitDecision"
                 | "__formMeta"
                 | "__formSubmissionPlan"
+                | "__formSubmissionUserValidity"
                 | "__domRegisterHooks"
         ) {
             self.eval(&format!(

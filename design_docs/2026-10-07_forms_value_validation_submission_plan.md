@@ -1,14 +1,24 @@
 # HTML forms: value state, validation and submission
 
 **Current status, 2026-10-16:** Phases A and B are qualified and published.
-Phase C's implementation is published, including native activation, but final
-acceptance remains open. Mark has reopened Forms work in this standards lane.
-F12's scripted post-redirect resource-base repair passes 285 affected package
-tests under Rust 1.99.1 on ThinkPad. Fresh live submission passes all three
-native routes, including network verification and final visual/semantic review.
-Matched WPT, browser submission and whole-change acceptance remain unfinished.
-F11's Windows platform choice awaits explicit clarification; these Linux
-outcomes qualify the local repair and do not close the Windows acceptance gate.
+Phase C's implementation is published, including native activation; final
+acceptance remains open. F12's published redirect-base repair passes the
+original 285 affected tests on Windows as well as the earlier ThinkPad checks.
+Mark directed this continuation onto O-PC, so F11's Windows qualification
+continues there.
+
+The closing review found three submission defects: missing submission
+user-validity transitions, redundant submitter checks after listener mutations,
+and silent script-free validation failures. Their repair passes 678 Windows
+tests under Rust 1.99.1, with zero failures or ignores, including the new RED
+regressions, existing validation/FormData checks, and all original 285 affected
+native/scripted occurrences. The private native hook is deleted on both engines.
+[Windows repair receipt](receipts/2026-10-16_forms_submission_review_windows.json).
+
+Fresh Windows covering gates, all-three-host transport/visual runs, browser
+submission, matched WPT/guard maps and final Checkpoint C reporting remain open.
+The earlier ThinkPad native Livery/Boa/Nova transport and final visual checks
+remain bounded Linux evidence.
 
 The dated status paragraphs below record earlier qualification stages.
 
@@ -233,6 +243,9 @@ and captured on the Windows box with the same toolchain, providers and
 policies. Linux Checkpoint B and pre-integration numbers are reference only.
 The six Linux Livery baseline failures are not an allowance here: any Livery
 failure on Windows is a regression to investigate.
+
+Continuation, 2026-10-16: Mark directed "then ssh into o-pc". Work resumed
+on Windows O-PC under this ruling.
 
 ### F12: fix the scripted post-redirect base URL inside Phase C, 2026-10-15
 

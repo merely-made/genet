@@ -1052,6 +1052,7 @@ fn fix1_transient_native_hooks_absent<E: ScriptEngineLive>() {
       check(typeof __formSubmitterCheck==='undefined','transient __formSubmitterCheck absent');
       check(typeof __formImplicitDecision==='undefined','transient __formImplicitDecision absent');
       check(typeof __formMeta==='undefined','transient __formMeta absent');
+      check(typeof __formSubmissionUserValidity==='undefined','transient submission validity hook absent');
       check(typeof __formSubmissionPlan==='undefined','transient __formSubmissionPlan absent');
       check(typeof __domRegisterHooks==='undefined','transient __domRegisterHooks absent');
     "#,
@@ -1063,4 +1064,83 @@ fn fix1_transient_native_hooks_absent<E: ScriptEngineLive>() {
 }
 both! {
     phase_c_task4_fix1_transient_native_hooks_absent=>fix1_transient_native_hooks_absent,
+}
+
+// Final Phase C review regressions: submission validity and listener mutations.
+fn review_submission_user_validity<E: ScriptEngineLive>() {
+    let (mut rt, rec) = runtime::<E>();
+    run(&mut rt, r#"
+      var f=makeForm(),q=f.querySelector('input'),outside=document.createElement('input');
+      q.required=true;q.value='';outside.required=true;document.body.appendChild(outside);
+      check(!q.matches(':user-invalid') && !outside.matches(':user-invalid'),'untouched fields start neutral');
+      var invalid=0;f.addEventListener('invalid',function(e){invalid++;e.preventDefault();check(q.matches(':user-invalid'),'user-invalid is set before invalid event');},true);
+      f.requestSubmit();
+      check(invalid===1 && q.matches(':user-invalid'),'attempted submission marks invalid control');
+      check(!outside.matches(':user-invalid'),'unassociated control remains untouched');
+      f.reset();check(!q.matches(':user-invalid'),'reset clears submission user validity');
+    "#);
+    rt.run_event_loop(100).unwrap();
+    assert!(rec.0.borrow().is_empty());
+}
+fn review_novalidate_user_validity<E: ScriptEngineLive>() {
+    let (mut rt, rec) = runtime::<E>();
+    run(&mut rt, r#"
+      var f=makeForm(),q=f.querySelector('input');q.required=true;q.value='';f.noValidate=true;
+      var submitted=0;f.addEventListener('submit',function(e){submitted++;e.preventDefault();check(q.matches(submitted===1?':user-invalid':':user-valid'),'submission marks user validity before submit');});
+      f.requestSubmit();check(submitted===1 && q.matches(':user-invalid'),'novalidate submission transition');
+      f.reset();f.noValidate=false;q.value='valid';
+      f.requestSubmit();check(q.matches(':user-valid'),'valid untouched control becomes user-valid');
+    "#);
+    rt.run_event_loop(100).unwrap();
+    assert!(rec.0.borrow().is_empty());
+}
+fn review_submit_bypass_user_validity<E: ScriptEngineLive>() {
+    let (mut rt, rec) = runtime::<E>();
+    run(&mut rt, r#"
+      var f=makeForm(),q=f.querySelector('input');q.required=true;q.value='';
+      f.checkValidity();f.reportValidity();new FormData(f);
+      check(!q.matches(':user-invalid'),'validation APIs and entry construction do not mark user validity');
+      f.submit();check(!q.matches(':user-invalid'),'submit() keeps the scripted bypass');
+    "#);
+    assert_eq!(request(&mut rt,&rec).url,"https://forms.test/send?q=#frag");
+}
+fn review_mutated_submitter<E: ScriptEngineLive>(owner: bool, late: bool) {
+    let (mut rt, rec) = runtime::<E>();
+    run(&mut rt, if owner {"var moveOwner=true;"} else {"var moveOwner=false;"});
+    run(&mut rt, if late {"var mutateLate=true;"} else {"var mutateLate=false;"});
+    run(&mut rt, r#"
+      var f=makeForm(),b=f.querySelector('button'),other=document.createElement('form');
+      other.action='/other-owner';other.method='post';other.enctype='text/plain';
+      other.innerHTML='<input name=outside value=excluded>';document.body.appendChild(other);observe(f);
+      if(!moveOwner){b.setAttribute('formaction','/wrong-override');b.setAttribute('formmethod','post');b.setAttribute('formenctype','text/plain');}
+      f.addEventListener(mutateLate?'formdata':'submit',function(){if(moveOwner)other.appendChild(b);else b.type='button';});
+      f.requestSubmit(b);
+      check(events.join(',')==='submit,formdata','established submission survives submitter mutation');
+      check(lastData.formData.get('q')==='a b' && !lastData.formData.has('outside'),'entry collection stays on original form');
+      check(lastData.formData.get('mode')===(!moveOwner || mutateLate?'go':null),'submitter entry follows collection timing');
+    "#);
+    let r=request(&mut rt,&rec);
+    if owner {
+        assert_eq!(r.method,"POST");
+        assert_eq!(r.url,"https://forms.test/other-owner");
+        assert_eq!(header(&r,"Content-Type"),Some("text/plain"));
+        assert_eq!(r.body.as_deref(),Some(if late {b"q=a b\r\nmode=go\r\n".as_slice()} else {b"q=a b\r\n".as_slice()}));
+    } else {
+        assert_eq!(r.method,"GET");
+        assert_eq!(r.url,"https://forms.test/send?q=a+b&mode=go#frag");
+        assert!(r.body.is_none());
+    }
+}
+fn review_submitter_type_during_submit<E: ScriptEngineLive>(){review_mutated_submitter::<E>(false,false);}
+fn review_submitter_type_during_formdata<E: ScriptEngineLive>(){review_mutated_submitter::<E>(false,true);}
+fn review_submitter_owner_during_submit<E: ScriptEngineLive>(){review_mutated_submitter::<E>(true,false);}
+fn review_submitter_owner_during_formdata<E: ScriptEngineLive>(){review_mutated_submitter::<E>(true,true);}
+both! {
+    phase_c_review_submission_user_validity=>review_submission_user_validity,
+    phase_c_review_novalidate_user_validity=>review_novalidate_user_validity,
+    phase_c_review_submit_bypass_user_validity=>review_submit_bypass_user_validity,
+    phase_c_review_submitter_type_during_submit=>review_submitter_type_during_submit,
+    phase_c_review_submitter_type_during_formdata=>review_submitter_type_during_formdata,
+    phase_c_review_submitter_owner_during_submit=>review_submitter_owner_during_submit,
+    phase_c_review_submitter_owner_during_formdata=>review_submitter_owner_during_formdata,
 }

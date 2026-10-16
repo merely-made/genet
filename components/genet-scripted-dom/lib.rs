@@ -32,6 +32,7 @@ pub use adoption::SubtreeTransferError;
 mod forms;
 pub use forms::FormControlValueError;
 mod forms_validation;
+pub use forms_validation::{ValidationMessageCatalog, ValidationMessageKind};
 pub mod form_encoding;
 pub mod html_encoding;
 mod forms_submission;

@@ -303,7 +303,7 @@ impl<E: ScriptEngine> NativeFn<E> for FormEntrySnapshot {
             cx.value_to_string(&y)?.parse().unwrap_or(0),
         );
         let entries = node
-            .with_dom(|dom| dom.form_submission_entries(node.id(), submitter, &encoding, position))
+            .with_dom(|dom| dom.form_submission_entries_for_captured_submitter(node.id(), submitter, &encoding, position))
             .map_err(|_| type_error::<E>(cx, "Invalid submitter"))?;
         for entry in entries {
             let (record, input) = match entry.value {

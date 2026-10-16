@@ -3792,3 +3792,48 @@ fn phase_c_f2_native_blank_target_explicit_decline_intent() {
     assert_eq!(legacy.fields, [("q".into(), "ok".into()), ("go".into(), "yes".into())]);
 }
 // TASK5 F2 INDEPENDENT NATIVE DECLINE FIXTURES END.
+
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_review_native_submission_user_validity() {
+    for novalidate in [false,true] {
+        let html=if novalidate {"<form id=f novalidate action='/send'><input id=q name=q required><button id=s>go</button></form>"} else {"<form id=f action='/send'><input id=q name=q required><button id=s>go</button></form>"};
+        let mut s=t5_native(html);
+        let before={let c=livery(&mut s);let q=livery_node_with_id(c,"q");c.document().dom().form_control_interaction_state(q).unwrap().user_validity};
+        assert!(!before,"untouched control begins neutral");
+        let effect=t5_native_click(&mut s,"s");
+        let marked={let c=livery(&mut s);let q=livery_node_with_id(c,"q");c.document().dom().form_control_interaction_state(q).unwrap().user_validity};
+        assert!(marked,"attempted native submission marks user validity, novalidate={novalidate}");
+        assert_eq!(matches!(effect,SessionEffect::Submit(_)),novalidate);
+    }
+}
+
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_review_native_invalid_submission_feedback() {
+    use document_session_api::{DocumentA11yLive,DocumentA11yRole};
+    for enter in [false,true] {
+        let mut s=t5_native("<form id=f action='/send'><input id=q name=q required><button id=s>go</button></form>");
+        s.frame(480,480);
+        assert!(s.accessibility_projection().unwrap().nodes().iter().all(|n|n.role!=DocumentA11yRole::Alert));
+        let effect=if enter {t5_native_enter(&mut s,"q")} else {t5_native_click(&mut s,"s")};
+        assert!(!matches!(effect,SessionEffect::Submit(_)),"invalid submission stays on page");
+        assert!(s.take_encoded_form_submission().is_none());
+        s.frame(480,480);
+        let first=s.accessibility_projection().unwrap();
+        let alert=first.nodes().iter().find(|n|n.role==DocumentA11yRole::Alert).expect("native interactive validation exposes visible accessible feedback");
+        assert_eq!(alert.name.as_deref(),Some("Please fill out this field."));
+        assert_eq!(alert.state.live,Some(DocumentA11yLive::Assertive));
+        let bounds=alert.bounds.unwrap();assert!(bounds.width>0.0 && bounds.height>0.0);
+        let first_id=alert.id;
+        t5_native_click(&mut s,"s");s.frame(480,480);
+        let repeated=s.accessibility_projection().unwrap();
+        let repeated_alert=repeated.nodes().iter().find(|n|n.role==DocumentA11yRole::Alert).unwrap();
+        assert_ne!(repeated_alert.id,first_id,"repeated submission can announce the same message");
+        assert_eq!(t5_key(&mut *s,SessionKey::Escape,SessionButtonState::Pressed,SessionModifiers::default(),false),SessionEffect::Cancelled);
+        assert!(s.accessibility_projection().unwrap().nodes().iter().all(|n|n.role!=DocumentA11yRole::Alert));
+        t5_native_click(&mut s,"s");s.frame(480,480);
+        t5_set_native(&mut s,"q","valid");s.frame(480,480);
+        assert!(s.accessibility_projection().unwrap().nodes().iter().all(|n|n.role!=DocumentA11yRole::Alert),"valid control retires old feedback");
+    }
+}

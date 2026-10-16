@@ -149,18 +149,17 @@ completed corpus census or bounded slice does not close its enclosing feature.
   in their own plan.
 
 - [HTML forms](2026-10-07_forms_value_validation_submission_plan.md)
-  (**A/B qualified and published; C acceptance open, 2026-10-16**): Phase C's
-  submission implementation and native activation are published. The remaining
-  work is real host submission, browser submission, matched WPT/guard maps and
-  complete-change review. F12's scripted post-redirect resource-base failure is
-  reproduced on both engines and repaired locally; 285 affected package and
-  integration tests pass under Rust 1.99.1. Fresh native Livery/Boa/Nova runs
-  pass the unchanged network fixture and final visual/semantic review. F11's
-  Windows qualification choice remains in force while Mark
-  clarifies the platform; ThinkPad repair evidence does not close Checkpoint C.
-  Earlier A/B results, source identities, invalid original probe and corrected
-  controls remain in the plan. The old Linux Livery failure allowance is
-  historical, not an allowance for fresh acceptance.
+  (**A/B qualified and published; C acceptance open, 2026-10-16**): Windows
+  qualification has resumed on O-PC under F11. F12's published redirect-base
+  repair passes the original 285 affected tests there. The closing review's
+  submission validity, listener-mutation and native-feedback repairs pass
+  678 Windows tests with zero failures or ignores; see the
+  [repair receipt](receipts/2026-10-16_forms_submission_review_windows.json).
+  Fresh Windows covering gates, all-three-host transport/visual checks, browser
+  submission, matched WPT/guard maps and final Checkpoint C reporting remain.
+  Earlier A/B results, original and corrected controls, and ThinkPad host
+  evidence retain their recorded scope. The old Linux Livery failure allowance
+  is historical.
 
 ## WPT census — the web platform beyond CSS
 

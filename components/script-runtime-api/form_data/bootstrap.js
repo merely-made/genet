@@ -10,6 +10,7 @@
   var nativeEntries = __formEntrySnapshot, nativeEncode = __formDataEncode;
   var nativeCheck = __formSubmitterCheck, nativeInfo = __formControlInfo, nativeMeta = __formMeta;
   var nativeImplicit = __formImplicitDecision, nativePlan = __formSubmissionPlan;
+  var nativeMarkUserValidity = __formSubmissionUserValidity;
   var NativeProxy = Proxy, reflectGet = Reflect.get, nativeNow = Date.now;
   var blobSlots = Core.sharedMap('forms.blobs'), fileSlots = Core.sharedMap('forms.files');
   var fdSlots = Core.sharedMap('forms.data'), listSlots = Core.sharedMap('forms.lists');
@@ -300,15 +301,15 @@
   }
   function meta(form, submitter) { return Core.call(parse, undefined, [nativeMeta(DOM.ref(form, 'form'), submitter === null ? null : DOM.elementRef(submitter))]); }
   function submit(form, submitter, bypass, x, y) {
-    var ref = validateSubmitter(form, submitter), state = formFlags(form); if (state.constructing || !bypass && state.firing) return;
+    validateSubmitter(form, submitter); var state = formFlags(form); if (state.constructing || !bypass && state.firing) return;
     var m = meta(form, submitter); if (!m.eligible) return;
     if (!bypass) {
       state.firing = true;
       try {
+        nativeMarkUserValidity(DOM.ref(form, 'form'));
         if (!m.noValidate && !DOM.validate(form)) return;
         if (!DOM.dispatch(form, DOM.formEvent(form, 'submit', submitter))) return;
         if (!meta(form, submitter).eligible) return;
-        if (nativeCheck(DOM.ref(form, 'form'), ref)) return;
       } finally { state.firing = false; }
     }
     // A nested bypass never owns the outer submit listener's firing flag.
@@ -350,5 +351,5 @@
   Core.define(DataTransferItemList.prototype.add, 'length', { value: 1, configurable: true });
   Core.define(DataTransfer.prototype.clearData, 'length', { value: 0, configurable: true });
   for (var name in interfaces) { Core.define(interfaces[name].prototype, Core.Symbol.toStringTag, { value: name, configurable: true }); Core.define(globalThis, name, { value: interfaces[name], writable: true, configurable: true }); }
-  var transient = ['__formFileAllocate','__formFilesReplace','__formFilesSnapshot','__formEntrySnapshot','__formDataEncode','__formControlInfo','__formSubmitterCheck','__formImplicitDecision','__formMeta','__formSubmissionPlan']; for (var i = 0; i < transient.length; i++) delete globalThis[transient[i]];
+  var transient = ['__formFileAllocate','__formFilesReplace','__formFilesSnapshot','__formEntrySnapshot','__formDataEncode','__formControlInfo','__formSubmitterCheck','__formImplicitDecision','__formMeta','__formSubmissionPlan','__formSubmissionUserValidity']; for (var i = 0; i < transient.length; i++) delete globalThis[transient[i]];
 })();

@@ -15,6 +15,7 @@ use std::rc::{Rc, Weak};
 
 use genet_document_resources::{
     ResolvedDocumentResources, ResourceDelta, ResourceFetcher, ResourceLimits,
+    RetainedResourceResolution,
 };
 use genet_livery::{
     CssomRuleKind, Device, IncrementalStyle, InlineShorthandExpansion, InteractionStates,
@@ -136,6 +137,7 @@ struct LiveStylesheetSource {
     fetcher: Rc<dyn ResourceFetcher>,
     limits: ResourceLimits,
     resources: ResolvedDocumentResources,
+    acquisition: RetainedResourceResolution,
     mutation_cursor: u64,
     resource_sink: Option<Rc<RefCell<dyn LiveResourceSink>>>,
 }
@@ -224,35 +226,54 @@ fn synchronize_live_styles(host: &HostState, state: &mut LiveryState) {
             .expect("checked live stylesheet source");
         let arena_id = host.dom.arena_id();
         let arena_changed = live.arena_id != arena_id;
-        if !arena_changed && live.mutation_cursor >= base && live.mutation_cursor == end {
-            return;
-        }
         // A navigation can replace the DOM while this CSSOM handle survives.
         // The constructor's URL is only a fallback for hosts without a URL.
-        let document_url = host.document_base_url()
+        let document_url = host
+            .document_base_url()
             .unwrap_or_else(|| live.document_url.clone());
-        let resources = ResolvedDocumentResources::resolve_with_limits(
+        if !arena_changed
+            && live.mutation_cursor >= base
+            && live.mutation_cursor == end
+            && live.resources.document_url.as_deref() == Some(document_url.as_str())
+        {
+            return;
+        }
+        if arena_changed || live.mutation_cursor < base || live.mutation_cursor > end {
+            // The journal cannot prove owner lifetimes across an arena change
+            // or a consumed suffix, so start a new acquisition lifetime.
+            live.acquisition = RetainedResourceResolution::default();
+        } else {
+            let offset = (live.mutation_cursor - base) as usize;
+            live.acquisition.observe_mutations(
+                &host.dom,
+                Some(&document_url),
+                &pending[offset..],
+            );
+        }
+        let resources = live.acquisition.reconcile(
             &host.dom,
             Some(&document_url),
             live.fetcher.as_ref(),
             live.limits,
         );
-        let changed = resources != live.resources;
+        let changed = resources != &live.resources;
         if changed {
             let resource_delta = resources.resource_delta_from(&live.resources);
             if !resource_delta.is_empty()
                 && let Some(sink) = &live.resource_sink
             {
                 sink.borrow_mut()
-                    .replace_resources(&resources, &resource_delta);
+                    .replace_resources(resources, &resource_delta);
             }
             live.resources = resources.clone();
         }
         live.mutation_cursor = end;
         live.arena_id = arena_id;
+        let resources = (changed || arena_changed).then(|| live.resources.clone());
         (resources, changed, arena_changed)
     };
     if changed || arena_changed {
+        let resources = resources.expect("changed live resource ledger");
         replace_resource_ledger(state, &resources);
         state.styles.replace_author_sheets(&resources.stylesheets);
         state.document_sheets = state.styles.document_sheet_indexes();
@@ -441,16 +462,22 @@ impl LiveryCssom {
         resource_sink: Option<Rc<RefCell<dyn LiveResourceSink>>>,
     ) -> Self {
         let document_url = document_url.into();
-        let (resources, mutation_cursor, arena_id) = {
+        let (resources, acquisition, mutation_cursor, arena_id) = {
             let host = host.borrow();
-            let resources = ResolvedDocumentResources::resolve_with_limits(
-                &host.dom,
-                Some(&document_url),
-                fetcher.as_ref(),
-                limits,
-            );
+            let mut acquisition = RetainedResourceResolution::default();
+            let effective_url = host
+                .document_base_url()
+                .unwrap_or_else(|| document_url.clone());
+            let resources = acquisition
+                .reconcile(&host.dom, Some(&effective_url), fetcher.as_ref(), limits)
+                .clone();
             let (base, pending) = host.dom.pending_mutations();
-            (resources, base.saturating_add(pending.len() as u64), host.dom.arena_id())
+            (
+                resources,
+                acquisition,
+                base.saturating_add(pending.len() as u64),
+                host.dom.arena_id(),
+            )
         };
         let styles = StyleSet::cambium_resources(&resources.stylesheets);
         if let Some(sink) = &resource_sink {
@@ -483,6 +510,7 @@ impl LiveryCssom {
                 fetcher,
                 limits,
                 resources: resources.clone(),
+                acquisition,
                 mutation_cursor,
                 resource_sink,
             }),
@@ -2147,11 +2175,42 @@ mod tests {
 
         {
             let observed = deltas.borrow();
+            assert_eq!(
+                observed.len(),
+                1,
+                "unrelated attributes do not reacquire resources"
+            );
+        }
+        let resources = cssom.resource_set().expect("retained resource ledger");
+        assert!(
+            resources
+                .resources
+                .iter()
+                .any(|resource| resource.bytes == vec![1])
+        );
+        assert!(
+            resources
+                .resources
+                .iter()
+                .any(|resource| resource.bytes == vec![2])
+        );
+
+        runtime
+            .eval(
+                "var image = document.querySelector('img');\
+                 var style = document.querySelector('style');\
+                 document.body.removeChild(image); document.body.appendChild(image);\
+                 document.head.removeChild(style); document.head.appendChild(style);\
+                 document.styleSheets.length;",
+            )
+            .expect("explicitly replace both resource-owning subtrees");
+        {
+            let observed = deltas.borrow();
             assert_eq!(observed.len(), 2);
             assert_eq!(observed[1].updated.len(), 2);
             assert!(observed[1].removed.is_empty());
         }
-        let resources = cssom.resource_set().expect("updated resource ledger");
+        let resources = cssom.resource_set().expect("reacquired resource ledger");
         assert!(
             resources
                 .resources

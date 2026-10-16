@@ -629,5 +629,127 @@
     "review": "/home/markik/Code/worktrees/genet-audit-reduction-20261016/.superpowers/sdd/w1-w2/review.md",
     "earlier_attempts": "Two missing-import compile errors corrected. First completed gate had 567 pass / 1 info-log wording failure; preserved interface-validation diagnostic. Independent review found and fixed unsupported unused-uniform indexing before final gate.",
     "limits": "Native retained path only; does not establish browser/wasm, other GPU backends, full WebGL conformance, broader I11/I13 compiler cleanup, or Forms acceptance."
+  },
+  "retained_resource_repair": {
+    "baseline_commit": "95ebacf2a4ee7b9b79c8832854b8a767c5dd4bbe",
+    "scope": "I3 retained document resource acquisition; CSSOM consumes reconciled ledger. Dependency fact scans remain. Other audit findings are unchanged.",
+    "source_files": [
+      {
+        "path": "components/genet-document-resources/lib.rs",
+        "sha256": "87877102b2915e361bd761e4e0ec80fcf87714f20769e033c8b6cc5a6ea2715c"
+      },
+      {
+        "path": "components/genet-scripted/livery.rs",
+        "sha256": "a3f2c0433dcddd5c8e2c0db1a8112ae72f580d2b9a952447a3917b7510d3d01f"
+      },
+      {
+        "path": "components/genet-scripted/tests/live_resource_retention.rs",
+        "sha256": "4fd56b57836efc4e2c282ec7e4696d00d9587a0f9815e9b18dfe66a4a7318abe"
+      }
+    ],
+    "review": {
+      "verdict": "approved for I3 scope after fixes",
+      "artifact": {
+        "path": ".superpowers/sdd/i3/review.md",
+        "sha256": "202e2be85f715d5ec2aab2de489251aecc5eae8247d132fa4171ae46fc111b95"
+      },
+      "closed_findings": [
+        "stylesheet/frame case recognition",
+        "light versus shadow resource membership",
+        "retired mutation roots",
+        "saved owner reinsertion after subtree replacement"
+      ]
+    },
+    "limits": {
+      "lock": "/home/markik/Code/testing/machine-heavy.lock",
+      "cargo_jobs": 1,
+      "test_threads": 1,
+      "memory_max_bytes": 5368709120,
+      "swap_max_bytes": 0,
+      "cpu_quota_percent": 150,
+      "nice": 10,
+      "timeout_seconds": 240,
+      "offline": true,
+      "locked": true,
+      "target_directory": "/home/markik/Code/target"
+    },
+    "gates": [
+      {
+        "command": "cargo test --offline --locked -j1 -p genet-scripted --test live_resource_retention -- --test-threads=1",
+        "passed": 9,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "elapsed_seconds": 57.13,
+        "max_process_rss_kib": 756600,
+        "swaps": 0,
+        "log": {
+          "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/resource-retention/retained-path-b.log",
+          "sha256": "db1b43d003586df0eb3cf75af73e5888a1961a4508f154d1f6aece4da3254a2e"
+        }
+      },
+      {
+        "command": "cargo test --offline --locked -j1 -p genet-document-resources --lib -- --test-threads=1",
+        "passed": 18,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "elapsed_seconds": 4.28,
+        "max_process_rss_kib": 199796,
+        "swaps": 0,
+        "log": {
+          "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/resource-retention/resources-c.log",
+          "sha256": "e16dafc56dbceb081f919dee8db8c55218943241638f7753d2f1236b5bae50bc"
+        }
+      },
+      {
+        "command": "cargo test --offline --locked -j1 -p genet-scripted --lib livery::tests -- --test-threads=1",
+        "passed": 17,
+        "failed": 1,
+        "ignored": 0,
+        "exit_status": 101,
+        "elapsed_seconds": 94.07,
+        "max_process_rss_kib": 771300,
+        "observed_cgroup_peak_bytes": 770555904,
+        "swaps": 0,
+        "log": {
+          "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/resource-retention/livery-d.log",
+          "sha256": "ec38c12cf008a4346f8b95e260d2500c791b120e2fd21b280aa7792c4e1bd7b8"
+        },
+        "failure": "Existing live resource sink test required reacquisition on an unrelated body attribute edit. Updated to assert retained bytes for that edit and refreshed bytes on actual owner reinsertion. Separate rerun below."
+      },
+      {
+        "command": "cargo test --offline --locked -j1 -p genet-scripted --lib livery::tests::live_cssom_replaces_image_and_font_resources_after_a_dom_reconciliation -- --exact --test-threads=1",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "elapsed_seconds": 11.46,
+        "max_process_rss_kib": 772308,
+        "swaps": 0,
+        "log": {
+          "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/resource-retention/sink-e.log",
+          "sha256": "2ed0a328e0d71e2e2e671036dc5a8e74ccd5d934c54a26b97f43b92195c29766"
+        }
+      }
+    ],
+    "incomplete_initial_gate": {
+      "command": "cargo test --offline --locked -j1 -p genet-document-resources -p genet-scripted -- --test-threads=1",
+      "exit_status": 124,
+      "result": "Timed out at 240 seconds after 186 seconds of dependency compilation. Resource tests passed; scripted suite incomplete. Predates final observer fixes; not final-source qualification.",
+      "observed_cgroup_peak_bytes": 3192614912,
+      "max_process_rss_kib": 1136056,
+      "log": {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/resource-retention/tests-a.log",
+        "sha256": "b9220fb7badf35e19d983ea8a7f239e43019a5dfe87af18808cc04beef26ae49"
+      }
+    },
+    "boundaries": [
+      "Missing journal history resets acquisition conservatively; I5 remains open.",
+      "I4 image aliases and L3 payload copying remain open.",
+      "Native Boa/Livery retained path only; no full scripted-suite, browser/wasm or Forms acceptance claim."
+    ],
+    "storage": "472 GiB available after gates started; shared build caches, active worktrees and receipts preserved.",
+    "result": "45 distinct relevant tests passed across focused runs: 9 new integration, 18 resource unit, 17 unchanged CSSOM plus 1 corrected CSSOM test. Production unchanged between final gates; broad scripted suite not qualified."
   }
 }

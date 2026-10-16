@@ -29,7 +29,7 @@ use paint_list_api::DeviceIntSize;
 use crate::{
     IncrementalStyle, InteractionStates, LayoutError, LiveryLayout, LiveryPaintList, RestyleStats,
     StylePlane, StyleSet, TextDirective, TextRange, TextRect, TextSelection, TextSystem,
-    emit_paint_list_with_text_system_scrolled_with_images, hit_test_with_scroll,
+    emit_paint_list_with_text_system_scrolled_with_images_and_document_base, hit_test_with_scroll,
     layout::{
         RetainedRootFormatting, StickyScrollport, layout_retained_formatting_root,
         layout_with_text_system, resolve_container_query_styles,

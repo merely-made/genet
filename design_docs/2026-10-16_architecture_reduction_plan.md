@@ -145,3 +145,33 @@ Only two unused imports changed after the first gate; subsequent gates compiled
 the frozen source. Exact source/log hashes and resource limits are in the audit
 receipt. Complete replay fidelity, child-realm capture, browser/wasm and Forms
 acceptance remain outside this cut.
+
+## I4 source-relative image identity
+
+**Status:** implemented and verified locally, 2026-10-16. Baseline `5db13a54460`.
+
+The resource ledger inserts authored image aliases that can collide across
+stylesheet sources. Carry each declaration's source-relative image identity
+through computed styles to layout/paint, and remove ambiguous aliases. Preserve
+CSSOM authored text, final redirect/import bases, document-relative inline and
+replaced images, and dynamic replacement. Reuse the existing URL resolver and
+cascade owner rather than create a second offset/alias-style lookup table.
+
+Done conditions: two sheets using the same relative image spelling retain
+separate computed identities and paint their own decoded pixels; relevant
+replacement updates the retained path; existing image/layout/style and resource
+retention tests pass. Tests follow the cut. Cheaper workers do implementation
+and regression files; parent serializes tests with the shared lock, one Cargo
+job, serial tests, 5 GiB memory, zero swap, 150% CPU quota and nice 10. L3 payload
+copying and broader CSS parser or browser acceptance remain outside this cut.
+
+I4 final gates: 497 passed, zero failed, six existing ignores across cascade,
+Livery library/paint, scripted identity/retention and native session paths. Three
+new regressions inspect draw-command pixels, identity and placement; they cover
+redirected import bases, variable consumption, link/base replacement and literal
+image keyframes. Review caught and closed callback argument order, stale
+keyframe fallback-base rebuilding and the intrinsic-size assertion gap. The
+receipt retains the preliminary compile failure separately. Final code matches
+all 24 reviewed source hashes. No new GPU readback, browser run, full-workspace
+qualification, or Forms acceptance is claimed. CSSOM-only new resource discovery,
+pending/custom keyframe values and L3 sharing remain separate work.

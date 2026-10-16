@@ -1,5 +1,50 @@
 # Genet architecture and removal audit
 
+## I4 source-relative image identity, 2026-10-16
+
+**I4's authored image aliases are removed from retained native and scripted
+ledgers.** This section supersedes its open status in the historical snapshots
+below. The winning declaration carries its stylesheet source through cascade
+selection and variable substitution. Only computed image URLs are resolved;
+authored CSSOM retains its original spelling. Linked/imported rules use their
+final response base, inline styles use the document base, and CSS-wide inherited
+values retain their already-computed identity. Generated rules use the same
+source path. Supported literal image keyframes retain their rule/source together.
+
+Document images use a shared base-aware lookup for intrinsic sizing and paint.
+Native top documents, native child frames, scripted live ledgers and resource
+replacement now register image bytes by resolved URL only. Source-less entry
+points preserve their authored-key behavior. This cut does not address L3 image
+payload cloning or decoding lifetime.
+
+Review caught a resolver callback argument-order mismatch, an animation fallback
+base that needed rebuilding after document-base changes, and an insufficient
+intrinsic-size assertion. All were corrected before the final focused gates.
+Exact source, review and test evidence is in `image_identity_repair` in the
+[audit receipt](receipts/2026-10-16_architecture_post_cut_audit.json).
+
+Final frozen-source gates: **497 passed, zero failed, six existing ignored**.
+That includes 53 base cascade/custom/color tests, 334 Livery library tests,
+81 paint/replaced-image/animation tests, 11 scripted image/retention tests and
+18 native session tests. The three new regressions distinguish equal authored
+filenames across redirected stylesheet bases, a consuming variable declaration,
+link replacement, inline/document image base changes, actual intrinsic draw
+bounds and source-less animation image bases. Existing resource retention and
+native remote-image/import behavior passed. No tests were newly ignored.
+
+The shared-lock gates used one Cargo job, serial tests, 5 GiB memory maximum,
+zero swap allowance, 150% CPU quota and nice 10. The largest observed cgroup peak
+was about 869 MiB; every gate reported zero swaps. Shared build caches and other
+worktrees were preserved. Independent review's 24 source hashes match the final
+code; the initial callback compilation failure is retained in the receipt.
+
+The new witnesses inspect draw-command keys, decoded RGBA and placement through
+real Boa/Livery and native animation frames. They do not constitute a new GPU
+raster/readback or browser-conformance run. Resource discovery for URLs appearing
+only in inserted CSSOM rules, general custom-property resource discovery, and
+pending/custom keyframe values retain their existing boundaries. Forms
+acceptance remains separate.
+
 ## I5 capture observation and journal compaction, 2026-10-16
 
 **I5's recorder drain authority is removed.** This section supersedes its open

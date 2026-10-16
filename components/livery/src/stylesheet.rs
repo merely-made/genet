@@ -960,6 +960,7 @@ impl StyleRule {
                     .source_order
                     .saturating_mul(65_536)
                     .saturating_add(index as u64),
+                source_url: None,
             })
             .collect()
     }

@@ -60,6 +60,8 @@ pub struct LiveryPaintList {
     #[serde(skip)]
     image_sources: HashMap<String, Vec<u8>>,
     #[serde(skip)]
+    document_base_url: Option<String>,
+    #[serde(skip)]
     host_leaf_slots: Vec<HostLeafSlot>,
     #[serde(skip)]
     frame_slots: Vec<FrameSlot>,
@@ -165,7 +167,7 @@ struct TextPaintSlot {
 
 impl LiveryPaintList {
     pub fn new(viewport: DeviceIntSize, generation: u64) -> Self {
-        Self::with_image_sources(viewport, generation, &HashMap::new())
+        Self::with_image_sources(viewport, generation, &HashMap::new(), None)
     }
 
     /// The named transform-lowering gaps this paint list carries.
@@ -498,6 +500,7 @@ impl LiveryPaintList {
         viewport: DeviceIntSize,
         generation: u64,
         image_sources: &HashMap<String, Vec<u8>>,
+        document_base_url: Option<&str>,
     ) -> Self {
         Self {
             viewport,
@@ -507,6 +510,7 @@ impl LiveryPaintList {
             images: Vec::new(),
             image_keys: HashMap::new(),
             image_sources: image_sources.clone(),
+            document_base_url: document_base_url.map(str::to_owned),
             host_leaf_slots: Vec::new(),
             frame_slots: Vec::new(),
             text_paint_slots: Vec::new(),
@@ -534,6 +538,14 @@ impl LiveryPaintList {
         });
         self.image_keys.insert(url.to_owned(), key);
         Some(key)
+    }
+
+    fn document_image_key_for(&mut self, authored: &str) -> Option<ImageKey> {
+        let key = crate::image_resources::document_image_key(
+            self.document_base_url.as_deref(),
+            authored,
+        );
+        self.image_key_for(&key)
     }
 
     fn image_size(&self, key: ImageKey) -> Option<(f32, f32)> {
@@ -720,6 +732,37 @@ where
     )
 }
 
+/// Emit with a document base for replaced `<img>` sources.
+#[allow(clippy::too_many_arguments)]
+pub fn emit_paint_list_with_text_system_scrolled_with_images_and_document_base<D>(
+    dom: &D,
+    styles: &StylePlane<D::NodeId>,
+    fragments: &LiveryLayout<D::NodeId>,
+    viewport: DeviceIntSize,
+    generation: u64,
+    text: &mut TextSystem,
+    scroll_offsets: &HashMap<D::NodeId, (f32, f32)>,
+    image_sources: &HashMap<String, Vec<u8>>,
+    document_base_url: Option<&str>,
+) -> LiveryPaintList
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    emit_paint_list_with_text_system_scrolled_with_images_and_external_textures_with_document_base(
+        dom,
+        styles,
+        fragments,
+        viewport,
+        generation,
+        text,
+        scroll_offsets,
+        image_sources,
+        &HashMap::new(),
+        document_base_url,
+    )
+}
+
 /// Emit a retained Livery frame and trusted WebGL canvas draws. The map is
 /// supplied by the runtime owner, keyed by the canvas DOM node; authored DOM
 /// attributes alone never authorize a compositor texture import.
@@ -739,11 +782,49 @@ where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
+    emit_paint_list_with_text_system_scrolled_with_images_and_external_textures_with_document_base(
+        dom,
+        styles,
+        fragments,
+        viewport,
+        generation,
+        text,
+        scroll_offsets,
+        image_sources,
+        external_textures,
+        None,
+    )
+}
+
+/// Emit with the document base used by `<img src>`. CSS backgrounds already
+/// have source-resolved keys in their computed values.
+#[allow(clippy::too_many_arguments)]
+pub fn emit_paint_list_with_text_system_scrolled_with_images_and_external_textures_with_document_base<D>(
+    dom: &D,
+    styles: &StylePlane<D::NodeId>,
+    fragments: &LiveryLayout<D::NodeId>,
+    viewport: DeviceIntSize,
+    generation: u64,
+    text: &mut TextSystem,
+    scroll_offsets: &HashMap<D::NodeId, (f32, f32)>,
+    image_sources: &HashMap<String, Vec<u8>>,
+    external_textures: &HashMap<D::NodeId, u64>,
+    document_base_url: Option<&str>,
+) -> LiveryPaintList
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
     // C3: consumers receive a numeric view made with the exact retained
     // element scheme and host palette. Keep `styles` contextual for cascade
     // and CSSOM, but never let paint reach the old light-palette fallback.
     let styles = styles.with_used_colors();
-    let mut list = LiveryPaintList::with_image_sources(viewport, generation, image_sources);
+    let mut list = LiveryPaintList::with_image_sources(
+        viewport,
+        generation,
+        image_sources,
+        document_base_url,
+    );
     let mut text_frame = fragments
         .text_frame()
         .cloned()
@@ -3673,7 +3754,7 @@ fn emit_inline_replaced_image<D>(
     let Some(url) = replaced_image_url(dom, id) else {
         return;
     };
-    let Some(image_key) = list.image_key_for(&url) else {
+    let Some(image_key) = list.document_image_key_for(&url) else {
         return;
     };
     let paintable = frame
@@ -3712,7 +3793,7 @@ fn emit_replaced_image<D>(
     let Some(url) = replaced_image_url(dom, id) else {
         return;
     };
-    let Some(image_key) = list.image_key_for(&url) else {
+    let Some(image_key) = list.document_image_key_for(&url) else {
         return;
     };
     let radius = border_radius(style, fragment);

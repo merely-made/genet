@@ -103,7 +103,9 @@ where
         let Some(animation) = self.keyframe_animation.as_ref() else {
             return;
         };
-        let Some(keyframes) = self.style_set.keyframes(&animation.name) else {
+        let Some((keyframes, source_url)) =
+            self.style_set.keyframes_with_source(&animation.name)
+        else {
             return;
         };
         // A paused animation samples against the clock value it was
@@ -134,7 +136,14 @@ where
         let updates = keyframe_properties(keyframes)
             .into_iter()
             .filter_map(|property| {
-                keyframe_value(keyframes, property, progress, base.get(property), context)
+                keyframe_value(
+                    keyframes,
+                    property,
+                    progress,
+                    base.get(property),
+                    context,
+                    source_url,
+                )
                     .map(|value| (property, value))
             })
             .collect::<Vec<_>>();
@@ -299,6 +308,7 @@ fn keyframe_value(
     progress: f32,
     fallback: PropertyValue,
     context: livery::values::UsedColorContext,
+    source_url: Option<&str>,
 ) -> Option<PropertyValue> {
     let samples = keyframes
         .frames()
@@ -313,7 +323,7 @@ fn keyframe_value(
                 .and_then(|declaration| match &declaration.value {
                     DeclaredValue::Value(value) => Some((
                         frame.offset(),
-                        resolve_keyframe_color_value(value.clone(), context),
+                        resolve_keyframe_color_value(value.clone(), context, source_url),
                     )),
                     _ => None,
                 })
@@ -324,11 +334,11 @@ fn keyframe_value(
     if first_offset > 0.0 {
         samples.insert(
             0,
-            (0.0, resolve_keyframe_color_value(fallback.clone(), context)),
+            (0.0, resolve_keyframe_color_value(fallback.clone(), context, None)),
         );
     }
     if samples.last().is_some_and(|(offset, _)| *offset < 1.0) {
-        samples.push((1.0, resolve_keyframe_color_value(fallback, context)));
+        samples.push((1.0, resolve_keyframe_color_value(fallback, context, None)));
     }
     if progress <= samples[0].0 {
         return Some(samples[0].1.clone());
@@ -349,6 +359,7 @@ fn keyframe_value(
 fn resolve_keyframe_color_value(
     value: PropertyValue,
     context: livery::values::UsedColorContext,
+    source_url: Option<&str>,
 ) -> PropertyValue {
     match value {
         PropertyValue::Color(color) => PropertyValue::Color(
@@ -361,6 +372,11 @@ fn resolve_keyframe_color_value(
             from: livery::values::ComputedColor::Absolute(from.resolve_used(context)),
             to: livery::values::ComputedColor::Absolute(to.resolve_used(context)),
         }),
+        PropertyValue::BackgroundImage(livery::values::BackgroundImage::Url(url)) => {
+            PropertyValue::BackgroundImage(livery::values::BackgroundImage::Url(
+                genet_document_resources::resolve_url(source_url, &url).into_boxed_str(),
+            ))
+        },
         PropertyValue::BoxShadow(livery::values::BoxShadow::Value(mut shadow)) => {
             shadow.color =
                 livery::values::ComputedColor::Absolute(shadow.color.resolve_used(context));

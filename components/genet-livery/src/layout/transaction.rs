@@ -26,7 +26,7 @@ where
     D::NodeId: Copy + Eq + Hash,
 {
     taffy_style::reset_calc_scratch();
-    let image_sources = ImageSources::new();
+    let image_sources = HashMap::new();
     let viewport = ViewportSizes::uniform(viewport_width, viewport_height);
     let resolved =
         resolve_container_relative_styles_with_images(dom, styles, viewport, &image_sources)?;
@@ -93,7 +93,7 @@ pub fn layout_with_text_system<D>(
     viewport_height: f32,
     viewport: ViewportSizes,
     text: &mut TextSystem,
-    image_sources: &ImageSources,
+    image_sources: &dyn crate::ImageSourceLookup,
 ) -> Result<ResolvedLayout<D::NodeId>, LayoutError>
 where
     D: LayoutDom,
@@ -173,7 +173,7 @@ pub(in crate::layout) fn layout_impl<D>(
     styles: &StylePlane<D::NodeId>,
     viewport_width: f32,
     viewport_height: f32,
-    image_sources: &ImageSources,
+    image_sources: &dyn crate::ImageSourceLookup,
 ) -> Result<LiveryLayout<D::NodeId>, LayoutError>
 where
     D: LayoutDom,
@@ -392,7 +392,7 @@ fn atomic_build_state<'a, D>(
     dom: &'a D,
     styles: &'a StylePlane<D::NodeId>,
     boxes: &'a GeneratedBoxTree<D::NodeId>,
-    image_sources: &'a ImageSources,
+    image_sources: &'a dyn crate::ImageSourceLookup,
     text: &'a mut TextSystem,
     contribution_root: Option<D::NodeId>,
     width_override: Option<(D::NodeId, f32)>,
@@ -428,7 +428,7 @@ pub(in crate::layout) fn layout_atomic_subtrees<D>(
     viewport_height: f32,
     pass: &AtomicPass<'_>,
     text: &mut TextSystem,
-    image_sources: &ImageSources,
+    image_sources: &dyn crate::ImageSourceLookup,
 ) -> Result<AtomicLayoutPlane, LayoutError>
 where
     D: LayoutDom,
@@ -941,7 +941,7 @@ pub(in crate::layout) fn layout_inline_groups<D>(
     viewport: (f32, f32),
     text: &mut TextSystem,
     atomic: &AtomicLayoutPlane,
-    image_sources: &ImageSources,
+    image_sources: &dyn crate::ImageSourceLookup,
 ) -> Result<LiveryLayout<D::NodeId>, LayoutError>
 where
     D: LayoutDom,

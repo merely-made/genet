@@ -30,6 +30,7 @@ fn matched(
         layer,
         specificity: Specificity(specificity),
         source_order,
+        source_url: None,
     }
 }
 

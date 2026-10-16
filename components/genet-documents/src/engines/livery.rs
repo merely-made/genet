@@ -444,21 +444,17 @@ impl<Fetch> LiverySessionEngine<Fetch> {
             .collect::<Vec<_>>();
         sheets.extend(resources.stylesheets.iter().cloned());
         let (width, height) = request.viewport;
+        let mut styles = genet_livery::StyleSet::cambium_resources(&sheets);
+        styles.set_document_base_url(resources.document_url.as_deref());
         let mut doc = genet_livery::LiveryDocument::new(
             dom,
-            genet_livery::StyleSet::cambium_resources(&sheets),
+            styles,
             genet_livery::Device::screen(width as f32, height as f32),
         );
         for resource in &resources.resources {
             match resource.kind {
                 ResourceKind::Image => {
-                    doc.set_image_resource(resource.authored_url.clone(), resource.bytes.clone());
-                    if resource.resolved_url != resource.authored_url {
-                        doc.set_image_resource(
-                            resource.resolved_url.clone(),
-                            resource.bytes.clone(),
-                        );
-                    }
+                    doc.set_image_resource(resource.resolved_url.clone(), resource.bytes.clone());
                 },
                 ResourceKind::Font => {
                     doc.set_font_resource(resource.resolved_url.clone(), resource.bytes.clone());
@@ -1535,13 +1531,7 @@ impl LiveryDocumentSession {
             .resources
             .iter()
             .filter(|resource| resource.kind == ResourceKind::Image)
-            .flat_map(|resource| {
-                let mut keys = vec![(resource.authored_url.clone(), resource.bytes.clone())];
-                if resource.resolved_url != resource.authored_url {
-                    keys.push((resource.resolved_url.clone(), resource.bytes.clone()));
-                }
-                keys
-            });
+            .map(|resource| (resource.resolved_url.clone(), resource.bytes.clone()));
         let fonts = next
             .resources
             .iter()

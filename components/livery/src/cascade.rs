@@ -1480,6 +1480,9 @@ pub struct MatchedDeclaration {
     pub layer: CascadeLayer,
     pub specificity: Specificity,
     pub source_order: u64,
+    /// Base of the stylesheet or inline declaration that supplied this value.
+    /// Kept with the declaration through winner selection and var() reparsing.
+    pub source_url: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1626,6 +1629,28 @@ pub fn cascade_with_custom_context(
     custom_declarations: impl IntoIterator<Item = MatchedCustomDeclaration>,
     color_context: ColorComputeContext,
 ) -> (ComputedValues, CustomProperties) {
+    cascade_with_custom_context_and_image_resolver(
+        parent,
+        parent_custom,
+        declarations,
+        custom_declarations,
+        color_context,
+        |url, _| url.to_owned(),
+    )
+}
+
+/// Resolve a winning image URL after custom-property substitution. The
+/// callback receives the winning declaration's source URL, so an embedding
+/// style engine can apply that rule's stylesheet base without changing CSSOM
+/// authored values or resolving a losing declaration's URL.
+pub fn cascade_with_custom_context_and_image_resolver(
+    parent: Option<&ComputedValues>,
+    parent_custom: Option<&CustomProperties>,
+    declarations: impl IntoIterator<Item = MatchedDeclaration>,
+    custom_declarations: impl IntoIterator<Item = MatchedCustomDeclaration>,
+    color_context: ColorComputeContext,
+    resolve_image_url: impl Fn(&str, Option<&str>) -> String,
+) -> (ComputedValues, CustomProperties) {
     let mut custom_winners: std::collections::BTreeMap<String, (Priority, CustomDeclaredValue)> =
         std::collections::BTreeMap::new();
     for matched in custom_declarations {
@@ -1657,22 +1682,22 @@ pub fn cascade_with_custom_context(
 
     let mut winners = (0..PropertyId::ALL.len())
         .map(|_| None)
-        .collect::<Vec<Option<(Priority, DeclaredValue)>>>();
+        .collect::<Vec<Option<(Priority, DeclaredValue, Option<String>)>>>();
     for matched in declarations {
         let index = matched.declaration.property as usize;
         let priority = Priority::new(&matched);
         let replace = winners[index]
             .as_ref()
-            .is_none_or(|(current, _)| priority >= *current);
+            .is_none_or(|(current, _, _)| priority >= *current);
         if replace {
-            winners[index] = Some((priority, matched.declaration.value));
+            winners[index] = Some((priority, matched.declaration.value, matched.source_url));
         }
     }
 
     let initial = ComputedValues::default();
     let mut result = parent.map(ComputedValues::for_child).unwrap_or_default();
     for (index, winner) in winners.into_iter().enumerate() {
-        let Some((_, value)) = winner else {
+        let Some((_, value, source_url)) = winner else {
             continue;
         };
         let property = PropertyId::ALL[index];
@@ -1681,7 +1706,10 @@ pub fn cascade_with_custom_context(
             other => other,
         };
         match value {
-            DeclaredValue::Value(value) => {
+            DeclaredValue::Value(mut value) => {
+                if let PropertyValue::BackgroundImage(BackgroundImage::Url(url)) = &mut value {
+                    *url = resolve_image_url(url, source_url.as_deref()).into_boxed_str();
+                }
                 result
                     .set(property, value)
                     .unwrap_or_else(|_| panic!("generated value type mismatch for {property:?}"));

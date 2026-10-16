@@ -155,8 +155,12 @@ completed corpus census or bounded slice does not close its enclosing feature.
   submission validity, listener-mutation and native-feedback repairs pass
   678 Windows tests with zero failures or ignores; see the
   [repair receipt](receipts/2026-10-16_forms_submission_review_windows.json).
-  Fresh Windows covering gates, all-three-host transport/visual checks, browser
-  submission, matched WPT/guard maps and final Checkpoint C reporting remain.
+  Fresh Windows native transport/visual checks pass on all three routes. Actual
+  browser submission passes 20 cases and the editing-only control after three
+  browser host repairs; see the
+  [host receipt](receipts/2026-10-16_forms_native_browser_windows.json).
+  Windows covering gates, matched WPT/guard maps and final Checkpoint C reporting
+  remain open.
   Earlier A/B results, original and corrected controls, and ThinkPad host
   evidence retain their recorded scope. The old Linux Livery failure allowance
   is historical.

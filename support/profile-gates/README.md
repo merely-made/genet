@@ -1,49 +1,25 @@
-# Profile-ladder tier gates
+# Static DOM dependency gate
 
-The profile ladder (`docs/2026-05-12_genet_profile_ladder_plan.md`) is
-package-witnessed: the low, JS-engine-free tiers must not depend on a script
-engine, a heavy servo render/host subsystem, or the WebGL shader compiler. These
-gates are that witness.
+The current static, script-free package is `genet-static-dom`. Its normal
+resolved dependency cone must exclude script engines and the render, host,
+media, and WebGL systems. The planned `genet-static-html` package is not a
+current workspace member.
 
-## Canonical gate
-
-`check-tiers.sh` (cross-platform; bash) is the canonical check. It scans the
-JS-free tiers (`genet-static-dom`, `genet-static-html`) for forbidden crates by
-exact crate name (anchored, so "boa" does not match "keyboard"), via
-`cargo tree` (dependency resolution only, no build).
+CI runs the canonical dependency-cone witness:
 
 ```sh
-bash support/profile-gates/check-tiers.sh
+python3 support/ci/check_dependency_cones.py
 ```
 
-Exit 0 = clean; non-zero prints the offending tier + crates. Extend the
-`BLOCKED` list and `TIERS` array as engines/subsystems or tiers are added.
+The static DOM assertion shares the full Cargo metadata graph and package-ID
+traversal used by the Ortet witness. Resolution failure exits nonzero; it
+cannot count as a clean cone. Focused synthetic controls, including failed
+Cargo commands, run with:
 
-`check-static-html.ps1` is the older Windows-only, single-tier (static-html)
-form; `check-tiers.sh` supersedes it (both tiers, cross-platform, anchored).
-
-## CI wiring (prerequisite, not yet done)
-
-The audit (`docs/2026-06-02_genet_holistic_audit.md`) calls for this gate to run
-in CI; there is no CI in the repo yet. The blocker is dependency resolution:
-`cargo tree` resolves the **whole** workspace, and the workspace pins the JS
-engines as **external path deps** outside the repo:
-
-- `nova_vm = { path = "../../crates/vano/nova_vm" }` (git form, per the root
-  `Cargo.toml` patch comment: `git = "https://github.com/merely-made/vano", branch = "genet-embedder"`)
-- `boa_engine = { path = "../../crates/boa/core/engine" }` (no git form recorded)
-
-So a runner must materialize those sibling checkouts (or the manifest must switch
-to git patches in CI) before `cargo tree` can resolve. nova has a known git form;
-boa's fork URL/branch is the missing piece. Once that bootstrap is settled, a
-GitHub Actions job is one step:
-
-```yaml
-# .github/workflows/tier-gate.yml (after the engine-dep bootstrap)
-#   - uses: actions/checkout@v4
-#   - <materialize ../../crates/vano and ../../crates/boa>
-#   - run: bash support/profile-gates/check-tiers.sh
+```sh
+python3 -m unittest support/ci/test_check_dependency_cones.py
 ```
 
-Until then, run the gate locally (where the path deps exist) before pushing a
-change that touches the low tiers' dependency surface.
+The older shell and PowerShell launchers were retired because they targeted
+the absent `genet-static-html` package and could report success after Cargo
+failed.

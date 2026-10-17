@@ -4,7 +4,7 @@
   "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
   "policy": "exact",
   "renderer": "livery",
-  "runner_sha256": "f89342870cbc035714f6f1511a05e09b036938dc24562949371c7d16c11d66a7",
+  "runner_sha256": "f9804e1739e5774a192bc839d445e911cda79c139b590cc6c34d46d9f937fc88",
   "subset": "shadow-dom",
   "tests": {
     "shadow-dom/Document-caretPositionFromPoint.tentative.html": {
@@ -3423,7 +3423,7 @@
       "subtests_total": 648
     },
     "shadow-dom/declarative/declarative-shadow-dom-available-to-element-internals.html": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "shadow-dom/declarative/declarative-shadow-dom-basic.html": {
@@ -4592,7 +4592,7 @@
       "subtests_total": 1
     },
     "shadow-dom/declarative/tentative/shadowrootadoptedstylesheets/shadowrootadoptedstylesheets-same-document.html": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "shadow-dom/declarative/tentative/shadowrootadoptedstylesheets/shadowrootadoptedstylesheets-serialization.html": {
@@ -7128,7 +7128,8 @@
       "subtests_total": 11
     },
     "shadow-dom/reference-target/tentative/form.html": {
-      "status": "fail",
+      "reason": "harness-error",
+      "status": "error",
       "subtests": [
         {
           "name": "Reference target works with form attribute.",
@@ -10298,7 +10299,7 @@
       "subtests_total": 2
     },
     "shadow-dom/untriaged/shadow-trees/upper-boundary-encapsulation/test-009.html": {
-      "status": "fail",
+      "status": "pass",
       "subtests": [
         {
           "name": "A_04_01_09_T01",
@@ -10334,19 +10335,19 @@
         },
         {
           "name": "A_04_01_09_T11",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "A_04_01_09_T12",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "A_04_01_09_T13",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "A_04_01_09_T14",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "A_04_01_09_T15",
@@ -10357,7 +10358,7 @@
           "status": "pass"
         }
       ],
-      "subtests_passed": 10,
+      "subtests_passed": 14,
       "subtests_total": 14
     },
     "shadow-dom/untriaged/shadow-trees/upper-boundary-encapsulation/test-011.html": {

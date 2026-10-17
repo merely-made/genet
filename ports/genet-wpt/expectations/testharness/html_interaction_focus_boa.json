@@ -4,7 +4,7 @@
   "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
   "policy": "exact",
   "renderer": "livery",
-  "runner_sha256": "f89342870cbc035714f6f1511a05e09b036938dc24562949371c7d16c11d66a7",
+  "runner_sha256": "f9804e1739e5774a192bc839d445e911cda79c139b590cc6c34d46d9f937fc88",
   "subset": "html/interaction/focus",
   "tests": {
     "html/interaction/focus/anchor-element-focus-ring.html": {
@@ -141,11 +141,11 @@
       "subtests_total": 1
     },
     "html/interaction/focus/focus-management/focus-event-targets-simple.html": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "html/interaction/focus/focus-management/focus-events.html": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error",
       "subtests": [
         {
@@ -267,48 +267,20 @@
       "subtests_total": 20
     },
     "html/interaction/focus/focusgroup/tentative/ax-role-inference-item-elementinternals-nested.html": {
-      "status": "pass",
-      "subtests": [
-        {
-          "name": "accessibilityController not available (noop)",
-          "status": "pass"
-        }
-      ],
-      "subtests_passed": 1,
-      "subtests_total": 1
+      "reason": "harness-error",
+      "status": "error"
     },
     "html/interaction/focus/focusgroup/tentative/ax-role-inference-item-elementinternals-owner-implied.html": {
-      "status": "pass",
-      "subtests": [
-        {
-          "name": "accessibilityController not available (noop)",
-          "status": "pass"
-        }
-      ],
-      "subtests_passed": 1,
-      "subtests_total": 1
+      "reason": "harness-error",
+      "status": "error"
     },
     "html/interaction/focus/focusgroup/tentative/ax-role-inference-item-elementinternals.html": {
-      "status": "pass",
-      "subtests": [
-        {
-          "name": "accessibilityController not available (noop)",
-          "status": "pass"
-        }
-      ],
-      "subtests_passed": 1,
-      "subtests_total": 1
+      "reason": "harness-error",
+      "status": "error"
     },
     "html/interaction/focus/focusgroup/tentative/ax-role-inference-owner-elementinternals.html": {
-      "status": "pass",
-      "subtests": [
-        {
-          "name": "accessibilityController not available (noop)",
-          "status": "pass"
-        }
-      ],
-      "subtests_passed": 1,
-      "subtests_total": 1
+      "reason": "harness-error",
+      "status": "error"
     },
     "html/interaction/focus/focusgroup/tentative/ax-role-inference-owner.html": {
       "status": "pass",
@@ -2039,7 +2011,7 @@
       "subtests_total": 3
     },
     "html/interaction/focus/focusgroup/tentative/sequential-navigation/directional-input-handler-all-types.html": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "html/interaction/focus/focusgroup/tentative/sequential-navigation/directional-input-handler-multi-tab-stop.html": {
@@ -2652,7 +2624,7 @@
       "subtests_total": 5
     },
     "html/interaction/focus/processing-model/legend-focusable.html": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error",
       "subtests": [
         {
@@ -2664,7 +2636,7 @@
       "subtests_total": 1
     },
     "html/interaction/focus/processing-model/legend.html": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error",
       "subtests": [
         {
@@ -2770,7 +2742,7 @@
       "subtests_total": 2
     },
     "html/interaction/focus/sequential-focus-navigation-and-the-tabindex-attribute/focus-tabindex-negative.html": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error",
       "subtests": [
         {
@@ -2794,7 +2766,7 @@
       "subtests_total": 1
     },
     "html/interaction/focus/sequential-focus-navigation-and-the-tabindex-attribute/focus-tabindex-positive.html": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error",
       "subtests": [
         {
@@ -2806,7 +2778,7 @@
       "subtests_total": 1
     },
     "html/interaction/focus/sequential-focus-navigation-and-the-tabindex-attribute/focus-tabindex-zero.html": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error",
       "subtests": [
         {
@@ -3355,11 +3327,11 @@
       "subtests_total": 1
     },
     "html/interaction/focus/tab-table-caption.html?caption-side=bottom": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "html/interaction/focus/tab-table-caption.html?caption-side=top": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "html/interaction/focus/tabindex-focus-flag.html": {

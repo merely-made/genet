@@ -4,7 +4,7 @@
   "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
   "policy": "exact",
   "renderer": "livery",
-  "runner_sha256": "f89342870cbc035714f6f1511a05e09b036938dc24562949371c7d16c11d66a7",
+  "runner_sha256": "f9804e1739e5774a192bc839d445e911cda79c139b590cc6c34d46d9f937fc88",
   "subset": "uievents",
   "tests": {
     "uievents/click/auxclick_event.html": {
@@ -209,7 +209,7 @@
       "status": "skip"
     },
     "uievents/keyboard/keyboardevent-composed.html": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "uievents/keyboard/keyboardevent-legacy.html": {
@@ -224,15 +224,15 @@
       "subtests_total": 1
     },
     "uievents/keyboard/keypress-not-fired-for-modifier-shortcuts.html": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "uievents/keyboard/modifier-keys-combinations.html": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "uievents/keyboard/modifier-keys.html": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "uievents/legacy-domevents-tests/approved/dispatchEvent.click.checkbox.html": {
@@ -336,7 +336,7 @@
       "status": "skip"
     },
     "uievents/mouse/layer-coords-transform.html": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "uievents/mouse/layout_change_should_fire_mouseover.html": {
@@ -648,11 +648,11 @@
       "subtests_total": 2
     },
     "uievents/mouse/mouseover-at-removing-mousedown-target.html?duration=16": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "uievents/mouse/mouseover-at-removing-mousedown-target.html?duration=42": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "uievents/mouse/offset_and_page_after_dispatch.tentative.html": {
@@ -691,11 +691,11 @@
       "subtests_total": 7
     },
     "uievents/mouse/synthetic-mouse-enter-leave-over-out-button-state-after-target-removed.tentative.html?buttonType=LEFT&button=0&buttons=1": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "uievents/mouse/synthetic-mouse-enter-leave-over-out-button-state-after-target-removed.tentative.html?buttonType=MIDDLE&button=1&buttons=4": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "uievents/order-of-events/focus-events/focus-automated-blink-webkit.html": {
@@ -907,27 +907,27 @@
       "subtests_total": 9
     },
     "uievents/textInput/backspace.html": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "uievents/textInput/basic.html": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "uievents/textInput/delete-selection.html": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "uievents/textInput/delete.html": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "uievents/textInput/enter-input.html": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "uievents/textInput/enter-textarea-contenteditable.html": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "uievents/textInput/smiley-manual.html": {

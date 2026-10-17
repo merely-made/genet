@@ -1,0 +1,431 @@
+{
+  "command": "testharness",
+  "engine": "nova",
+  "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
+  "policy": "exact",
+  "renderer": "livery",
+  "runner_sha256": "f89342870cbc035714f6f1511a05e09b036938dc24562949371c7d16c11d66a7",
+  "subset": "html/semantics/forms/the-button-element",
+  "tests": {
+    "html/semantics/forms/the-button-element/active-onblur.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Buttons should clear :active when the user tabs away from them while holding spacebar.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/forms/the-button-element/button-activate-keyup-prevented.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Button activation submits on keyup, but not if keydown is defaultPrevented",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/forms/the-button-element/button-activate.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "button activation behaviour submits form",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/forms/the-button-element/button-checkvalidity.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Forms",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "html/semantics/forms/the-button-element/button-click-resets-with-commandfor.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "clicking a reset button should trigger a reset (with command attribute)",
+          "status": "fail"
+        },
+        {
+          "name": "clicking a button should trigger a reset (with commandfor attribute)",
+          "status": "fail"
+        },
+        {
+          "name": "clicking a button should trigger a reset (with command and commandfor attribute)",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "html/semantics/forms/the-button-element/button-click-submits-with-commandfor.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "clicking a button (implicit type) should NOT trigger a submit (with command attribute)",
+          "status": "pass"
+        },
+        {
+          "name": "clicking a button (implicit type) should NOT trigger a submit (with commandfor attribute)",
+          "status": "pass"
+        },
+        {
+          "name": "clicking a button (implicit type) should NOT trigger a submit (with command and commandfor attribute)",
+          "status": "pass"
+        },
+        {
+          "name": "clicking a button (explicit type=submit) SHOULD trigger a submit (with command attribute)",
+          "status": "pass"
+        },
+        {
+          "name": "clicking a button (explicit type=submit) SHOULD trigger a submit (with commandfor attribute)",
+          "status": "pass"
+        },
+        {
+          "name": "clicking a button (explicit type=submit) SHOULD trigger a submit (with command and commandfor attribute)",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 6,
+      "subtests_total": 6
+    },
+    "html/semantics/forms/the-button-element/button-click-submits.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "clicking a button with .click() should trigger a submit (form connected)",
+          "status": "pass"
+        },
+        {
+          "name": "clicking a button with .click() should not trigger a submit (form disconnected)",
+          "status": "pass"
+        },
+        {
+          "name": "clicking a button by dispatching an event should trigger a submit (form connected)",
+          "status": "pass"
+        },
+        {
+          "name": "clicking a button by dispatching an event should not trigger a submit (form disconnected)",
+          "status": "pass"
+        },
+        {
+          "name": "clicking a button that cancels the event should not trigger a submit",
+          "status": "pass"
+        },
+        {
+          "name": "clicking a disabled button (via disabled attribute) should not trigger submit",
+          "status": "pass"
+        },
+        {
+          "name": "clicking a disabled button (via ancestor fieldset) should not trigger submit",
+          "status": "pass"
+        },
+        {
+          "name": "clicking a button inside a disabled fieldset's legend *should* trigger submit",
+          "status": "pass"
+        },
+        {
+          "name": "clicking the child of a button with .click() should trigger a submit",
+          "status": "pass"
+        },
+        {
+          "name": "clicking the child of a button by dispatching a bubbling event should trigger a submit",
+          "status": "pass"
+        },
+        {
+          "name": "clicking the child of a button by dispatching a non-bubbling event should not trigger submit",
+          "status": "pass"
+        },
+        {
+          "name": "clicking the child of a disabled button with .click() should not trigger submit",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 12,
+      "subtests_total": 12
+    },
+    "html/semantics/forms/the-button-element/button-events.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "The submit event must be fired when click a button in submit status",
+          "status": "not-run"
+        },
+        {
+          "name": "The reset event must be fired when click a button in reset status",
+          "status": "not-run"
+        },
+        {
+          "name": "type=button shouldn't trigger submit or reset events",
+          "status": "not-run"
+        },
+        {
+          "name": "Switching from type=button to type=submit should submit the form",
+          "status": "not-run"
+        },
+        {
+          "name": "Switching from type=button to type=reset should reset the form",
+          "status": "not-run"
+        },
+        {
+          "name": "Innermost button should submit its form",
+          "status": "not-run"
+        },
+        {
+          "name": "Innermost button should reset its form",
+          "status": "not-run"
+        },
+        {
+          "name": "Anchor inside a button should be prevent button activation",
+          "status": "not-run"
+        },
+        {
+          "name": "input type=submit inside a button should be prevent button activation",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 9
+    },
+    "html/semantics/forms/the-button-element/button-labels.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Forms",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/forms/the-button-element/button-menu-historical.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "button.menu, the potentially-reflecting IDL attribute, does not exist",
+          "status": "pass"
+        },
+        {
+          "name": "button.type reflects properly",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 2
+    },
+    "html/semantics/forms/the-button-element/button-setcustomvalidity.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "button setCustomValidity is correct",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "html/semantics/forms/the-button-element/button-submit-children.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "This test will pass if a form navigation successfully occurs when clicking a child element of a <button type=submit> element with a onclick event handler which prevents the default form submission and manually calls form.submit() instead.",
+          "status": "timeout"
+        },
+        {
+          "name": "clicking a submit button, which calls form.submit and has a parent calling e.prevenDefault() should still submit the form",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/semantics/forms/the-button-element/button-submit-remove-children-jssubmit.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "This test will pass if a form navigation successfully occurs when clicking a child element of a <button type=submit> element with a onclick event handler which removes the button's child and then calls form.submit().",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/forms/the-button-element/button-submit-remove-children.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "This test will pass if a form navigation successfully occurs when clicking a child element of a <button type=submit> element with a onclick event handler which removes the button's child.",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/forms/the-button-element/button-submit-remove-jssubmit.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "This test will pass if a form navigation successfully occurs when clicking a <button type=submit> element with a onclick event handler which removes the button and then calls form.submit().",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/forms/the-button-element/button-type-enumerated-ascii-case-insensitive.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "keyword reset",
+          "status": "pass"
+        },
+        {
+          "name": "keyword submit",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 2
+    },
+    "html/semantics/forms/the-button-element/button-type.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "a button's type should be submit by default",
+          "status": "pass"
+        },
+        {
+          "name": "a button's type should stay within the range of valid values",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 2
+    },
+    "html/semantics/forms/the-button-element/button-untrusted-key-event.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Dispatching untrusted keypress events to submit button should not cause click event",
+          "status": "pass"
+        },
+        {
+          "name": "Dispatching untrusted keyup/keydown events to submit button should not cause click event",
+          "status": "pass"
+        },
+        {
+          "name": "Dispatching untrusted keypress events to reset button should not cause click event",
+          "status": "pass"
+        },
+        {
+          "name": "Dispatching untrusted keyup/keydown events to reset button should not cause click event",
+          "status": "pass"
+        },
+        {
+          "name": "Dispatching untrusted keypress events to button button should not cause click event",
+          "status": "pass"
+        },
+        {
+          "name": "Dispatching untrusted keyup/keydown events to button button should not cause click event",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 6,
+      "subtests_total": 6
+    },
+    "html/semantics/forms/the-button-element/button-validation.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "missing type attribute",
+          "status": "pass"
+        },
+        {
+          "name": "submit type attribute",
+          "status": "pass"
+        },
+        {
+          "name": "reset type attribute",
+          "status": "pass"
+        },
+        {
+          "name": "button type attribute",
+          "status": "pass"
+        },
+        {
+          "name": "historical menu type attribute",
+          "status": "pass"
+        },
+        {
+          "name": "invalid type attribute",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 6,
+      "subtests_total": 6
+    },
+    "html/semantics/forms/the-button-element/button-validationmessage.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Forms",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "html/semantics/forms/the-button-element/button-validity.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Forms",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "html/semantics/forms/the-button-element/button-willvalidate-readonly-attribute.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Button element with \"readonly\" attribute shouldn't be barred from constraint validation",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "html/semantics/forms/the-button-element/button-willvalidate.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Forms",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    }
+  },
+  "version": 1
+}

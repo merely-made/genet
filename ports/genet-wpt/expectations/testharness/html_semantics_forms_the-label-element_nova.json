@@ -1,0 +1,729 @@
+{
+  "command": "testharness",
+  "engine": "nova",
+  "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
+  "policy": "exact",
+  "renderer": "livery",
+  "runner_sha256": "f89342870cbc035714f6f1511a05e09b036938dc24562949371c7d16c11d66a7",
+  "subset": "html/semantics/forms/the-label-element",
+  "tests": {
+    "html/semantics/forms/the-label-element/clicking-interactive-content.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "interactive content <a href=\"about:blank\" onclick=\"event.preventDefault()\"></a> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <a href=\"about:blank\" onclick=\"event.preventDefault()\"></a> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <a href=\"about:blank\" onclick=\"event.preventDefault()\"></a> as second child under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <audio controls=\"\"></audio> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <audio controls=\"\"></audio> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <audio controls=\"\"></audio> as second child under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <button></button> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <button></button> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <button></button> as second child under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <details></details> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <details></details> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <details></details> as second child under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <embed> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <embed> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <embed> as second child under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <iframe></iframe> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <iframe></iframe> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <iframe></iframe> as second child under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <img usemap=\"\"> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <img usemap=\"\"> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <img usemap=\"\"> as second child under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <input> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <input> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <input> as second child under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <label>label</label> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <label>label</label> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <label>label</label> as second child under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <select></select> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <select></select> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <select></select> as second child under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <textarea></textarea> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <textarea></textarea> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <textarea></textarea> as second child under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <video controls=\"\"></video> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <video controls=\"\"></video> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "interactive content <video controls=\"\"></video> as second child under <label>",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 36,
+      "subtests_total": 36
+    },
+    "html/semantics/forms/the-label-element/clicking-noninteractive-labelable-content.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "labelable element <meter></meter> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "labelable element <meter></meter> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "labelable element <meter></meter> as second child under <label>",
+          "status": "fail"
+        },
+        {
+          "name": "labelable element <output></output> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "labelable element <output></output> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "labelable element <output></output> as second child under <label>",
+          "status": "fail"
+        },
+        {
+          "name": "labelable element <progress></progress> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "labelable element <progress></progress> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "labelable element <progress></progress> as second child under <label>",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 6,
+      "subtests_total": 9
+    },
+    "html/semantics/forms/the-label-element/clicking-noninteractive-unlabelable-content.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "noninteractive unlabelable content <div></div> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <div></div> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <div></div> as second child under <label>",
+          "status": "fail"
+        },
+        {
+          "name": "noninteractive unlabelable content <svg></svg> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <svg></svg> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <svg></svg> as second child under <label>",
+          "status": "fail"
+        },
+        {
+          "name": "noninteractive unlabelable content <a></a> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <a></a> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <a></a> as second child under <label>",
+          "status": "fail"
+        },
+        {
+          "name": "noninteractive unlabelable content <audio></audio> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <audio></audio> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <audio></audio> as second child under <label>",
+          "status": "fail"
+        },
+        {
+          "name": "noninteractive unlabelable content <img> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <img> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <img> as second child under <label>",
+          "status": "fail"
+        },
+        {
+          "name": "noninteractive unlabelable content <input type=\"hidden\"> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <input type=\"hidden\"> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <input type=\"hidden\"> as second child under <label>",
+          "status": "fail"
+        },
+        {
+          "name": "noninteractive unlabelable content <video></video> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <video></video> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <video></video> as second child under <label>",
+          "status": "fail"
+        },
+        {
+          "name": "noninteractive unlabelable content <a tabindex=\"\"></a> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <a tabindex=\"\"></a> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <a tabindex=\"\"></a> as second child under <label>",
+          "status": "fail"
+        },
+        {
+          "name": "noninteractive unlabelable content <audio tabindex=\"\"></audio> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <audio tabindex=\"\"></audio> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <audio tabindex=\"\"></audio> as second child under <label>",
+          "status": "fail"
+        },
+        {
+          "name": "noninteractive unlabelable content <div tabindex=\"\"></div> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <div tabindex=\"\"></div> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <div tabindex=\"\"></div> as second child under <label>",
+          "status": "fail"
+        },
+        {
+          "name": "noninteractive unlabelable content <img tabindex=\"\"> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <img tabindex=\"\"> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <img tabindex=\"\"> as second child under <label>",
+          "status": "fail"
+        },
+        {
+          "name": "noninteractive unlabelable content <input type=\"hidden\" tabindex=\"\"> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <input type=\"hidden\" tabindex=\"\"> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <input type=\"hidden\" tabindex=\"\"> as second child under <label>",
+          "status": "fail"
+        },
+        {
+          "name": "noninteractive unlabelable content <object></object> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <object></object> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <object></object> as second child under <label>",
+          "status": "fail"
+        },
+        {
+          "name": "noninteractive unlabelable content <object tabindex=\"\"></object> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <object tabindex=\"\"></object> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <object tabindex=\"\"></object> as second child under <label>",
+          "status": "fail"
+        },
+        {
+          "name": "noninteractive unlabelable content <object usemap=\"\"></object> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <object usemap=\"\"></object> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <object usemap=\"\"></object> as second child under <label>",
+          "status": "fail"
+        },
+        {
+          "name": "noninteractive unlabelable content <video tabindex=\"\"></video> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <video tabindex=\"\"></video> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <video tabindex=\"\"></video> as second child under <label>",
+          "status": "fail"
+        },
+        {
+          "name": "noninteractive unlabelable content <details></details> as first child of <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <details></details> deeply nested under <label>",
+          "status": "pass"
+        },
+        {
+          "name": "noninteractive unlabelable content <details></details> as second child under <label>",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 34,
+      "subtests_total": 51
+    },
+    "html/semantics/forms/the-label-element/control-active-with-multiple-clicks.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Control should be :active on mousedown when clicking the label twice in succession.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/forms/the-label-element/forward-focus-to-associated-element.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "focusing a label with for attribute should forward focus to the associated element",
+          "status": "fail"
+        },
+        {
+          "name": "focusing a label without for attribute should fowrad focus to the first labelable child",
+          "status": "fail"
+        },
+        {
+          "name": "focusing a label with tabindex should not forward focus to the labelable element",
+          "status": "fail"
+        },
+        {
+          "name": "focusing a label with negative tabindex should not forward focus to the labelable element",
+          "status": "fail"
+        },
+        {
+          "name": "focusing a label with empty tabindex should forward focus to the labelable element",
+          "status": "fail"
+        },
+        {
+          "name": "focusing a hidden label with tabindex should forward focus to the labelable element",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 6
+    },
+    "html/semantics/forms/the-label-element/label-attributes.sub.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "A label element with a 'for' attribute should only be associated with a labelable element.",
+          "status": "fail"
+        },
+        {
+          "name": "A label element not in a document can not label any element in the document.",
+          "status": "fail"
+        },
+        {
+          "name": "The labeled control for a label element that has no 'for' attribute is the first labelable element which is a descendant of that label element.",
+          "status": "fail"
+        },
+        {
+          "name": "The 'for' attribute points to an inexistent id.",
+          "status": "fail"
+        },
+        {
+          "name": "A non-control follows by a control with same ID.",
+          "status": "fail"
+        },
+        {
+          "name": "The 'for' attribute is an empty string.",
+          "status": "fail"
+        },
+        {
+          "name": "A form control has multiple labels.",
+          "status": "fail"
+        },
+        {
+          "name": "A labelable element is moved to outside of nested associated labels.",
+          "status": "fail"
+        },
+        {
+          "name": "A labelable element is moved to inside of nested associated labels.",
+          "status": "fail"
+        },
+        {
+          "name": "A labelable element which is a descendant of non-labelable element is moved to outside of associated label.",
+          "status": "fail"
+        },
+        {
+          "name": "A labelable element is moved to iframe.",
+          "status": "fail"
+        },
+        {
+          "name": "A div element which contains labelable element is removed.",
+          "status": "fail"
+        },
+        {
+          "name": "A labelable element not in a document can label element in the same tree.",
+          "status": "fail"
+        },
+        {
+          "name": "A labelable element inside the shadow DOM.",
+          "status": "fail"
+        },
+        {
+          "name": "A form control has an implicit label.",
+          "status": "fail"
+        },
+        {
+          "name": "A form control has no label 1.",
+          "status": "fail"
+        },
+        {
+          "name": "A form control has no label 2.",
+          "status": "fail"
+        },
+        {
+          "name": "A label in a form without a control",
+          "status": "fail"
+        },
+        {
+          "name": "A label outside a form with a control inside the form",
+          "status": "fail"
+        },
+        {
+          "name": "A label's htmlFor attribute must reflect the for content attribute",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 20
+    },
+    "html/semantics/forms/the-label-element/label-forwarded-click-pointer-properties.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Click forwarded from label to control preserves pointer metadata",
+          "status": "fail"
+        },
+        {
+          "name": "Click forwarded from label.click() is not trusted",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/semantics/forms/the-label-element/label-inside-anchor.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "click on inline element inside a label that's placed inside a anchor should trigger default label behavior",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/forms/the-label-element/labelable-elements.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Check if the output element is a labelable element",
+          "status": "fail"
+        },
+        {
+          "name": "Check if the output element can access 'labels'",
+          "status": "fail"
+        },
+        {
+          "name": "Check if the progress element is a labelable element",
+          "status": "fail"
+        },
+        {
+          "name": "Check if the progress element can access 'labels'",
+          "status": "fail"
+        },
+        {
+          "name": "Check if the select element is a labelable element",
+          "status": "fail"
+        },
+        {
+          "name": "Check if the select element can access 'labels'",
+          "status": "fail"
+        },
+        {
+          "name": "Check if the textarea element is a labelable form-element",
+          "status": "fail"
+        },
+        {
+          "name": "Check if the textarea element can access 'labels'",
+          "status": "fail"
+        },
+        {
+          "name": "Check if the button element is a labelable element",
+          "status": "fail"
+        },
+        {
+          "name": "Check if the button element can access 'labels'",
+          "status": "fail"
+        },
+        {
+          "name": "Check if the hidden input element is not a labelable element.",
+          "status": "fail"
+        },
+        {
+          "name": "Check if the hidden input element has null 'labels'",
+          "status": "fail"
+        },
+        {
+          "name": "Check if the input element in radio state is a labelable element",
+          "status": "fail"
+        },
+        {
+          "name": "Check if the input element in radio state can access 'labels'",
+          "status": "fail"
+        },
+        {
+          "name": "Check if the keygen element is not a labelable element",
+          "status": "fail"
+        },
+        {
+          "name": "Check if the keygen element can access 'labels'",
+          "status": "pass"
+        },
+        {
+          "name": "Check if the meter element is a labelable element",
+          "status": "fail"
+        },
+        {
+          "name": "Check if the meter element can access 'labels'",
+          "status": "fail"
+        },
+        {
+          "name": "Check if the fieldset element is not a labelable element",
+          "status": "fail"
+        },
+        {
+          "name": "Check if the fieldset element can access 'labels'",
+          "status": "pass"
+        },
+        {
+          "name": "Check if the label element is not a labelable element",
+          "status": "fail"
+        },
+        {
+          "name": "Check if the label element can access 'labels'",
+          "status": "pass"
+        },
+        {
+          "name": "Check if the object element is not a labelable element",
+          "status": "fail"
+        },
+        {
+          "name": "Check if the object element can access 'labels'",
+          "status": "pass"
+        },
+        {
+          "name": "Check if the img element is not a labelable element",
+          "status": "fail"
+        },
+        {
+          "name": "Check if the img element can access 'labels'",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 5,
+      "subtests_total": 26
+    },
+    "html/semantics/forms/the-label-element/proxy-click-to-associated-element.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "label with for attribute should proxy click events to the associated element",
+          "status": "timeout"
+        },
+        {
+          "name": "label without for attribute should proxy click events to the first labelable child",
+          "status": "timeout"
+        },
+        {
+          "name": "clicking a label that prevents the event's default should not proxy click events",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 3
+    },
+    "html/semantics/forms/the-label-element/proxy-modifier-click-to-associated-element.tentative.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "label with for attribute should proxy click events to the associated element on click",
+          "status": "fail"
+        },
+        {
+          "name": "label with for attribute should proxy click events to the associated element on shift click",
+          "status": "fail"
+        },
+        {
+          "name": "label with for attribute should proxy click events to the associated element on alt click",
+          "status": "timeout"
+        },
+        {
+          "name": "label with for attribute should proxy click events to the associated element on meta click",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    }
+  },
+  "version": 1
+}

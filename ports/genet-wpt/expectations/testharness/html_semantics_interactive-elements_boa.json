@@ -1,0 +1,3055 @@
+{
+  "command": "testharness",
+  "engine": "boa",
+  "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
+  "policy": "exact",
+  "renderer": "livery",
+  "runner_sha256": "f89342870cbc035714f6f1511a05e09b036938dc24562949371c7d16c11d66a7",
+  "subset": "html/semantics/interactive-elements",
+  "tests": {
+    "html/semantics/interactive-elements/commands/legend/first-input-after-legend-manual.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/commands/legend/first-input-before-legend-manual.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/commands/legend/first-input-inside-legend-manual.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/commands/legend/focusable-legend-manual.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/commands/legend/focusable-legend-sibling-manual.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/commands/legend/input-outside-fieldset-manual.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/commands/legend/label-sibling-manual.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/commands/legend/no-fieldset-parent-manual.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/contextmenu-historical.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "HTMLMenuItemElement must not be not present",
+          "status": "pass"
+        },
+        {
+          "name": "onshow must not be present on the GlobalEventHandlers locations",
+          "status": "fail"
+        },
+        {
+          "name": "RelatedEvent must not be present",
+          "status": "pass"
+        },
+        {
+          "name": "el.contextMenu must not be present",
+          "status": "pass"
+        },
+        {
+          "name": "menu.type must not exist or reflect the content attribute",
+          "status": "pass"
+        },
+        {
+          "name": "menu.label must not exist or reflect the content attribute",
+          "status": "pass"
+        },
+        {
+          "name": ":enabled must not match menuitems",
+          "status": "pass"
+        },
+        {
+          "name": ":disabled must not match menuitems",
+          "status": "pass"
+        },
+        {
+          "name": ":checked must not match menuitems",
+          "status": "pass"
+        },
+        {
+          "name": ":default must not match menuitems",
+          "status": "pass"
+        },
+        {
+          "name": "The user-agent stylesheet must leave type=\"context\" menus as block display like other menus",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 9,
+      "subtests_total": 11
+    },
+    "html/semantics/interactive-elements/the-details-element/auto-expand-ax-slot-recalc-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-details-element/auto-expand-details-element-fragment.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "auto-expand-details-element-fragment",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-details-element/auto-expand-window-find-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-details-element/closed-details-layout-apis.tentative.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Verifies the layout results of elements inside a closed <details> based on the usage of content-visibility:hidden.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-details-element/details-add-summary.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-details-element/details-cq-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-details-element/details-findstring-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-details-element/details-keyboard-activation.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Details activation with space bar",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-details-element/details-name-exclusivity-fragment-insertion.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Test that inserting two open details elements with the same name via DocumentFragment results in exactly one being open.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-details-element/details-toggle-source-commandfor.tentative.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "ToggleEvent.source on <details> elements: command invokers.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-details-element/details-toggle-source.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "ToggleEvent.source on <details> elements: details.open.",
+          "status": "fail"
+        },
+        {
+          "name": "ToggleEvent.source on <details> elements: click summary.",
+          "status": "fail"
+        },
+        {
+          "name": "ToggleEvent.source on <details> elements: click details.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "html/semantics/interactive-elements/the-details-element/details.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "HTML parsing should locate 2 details elements in this document",
+          "status": "pass"
+        },
+        {
+          "name": "HTML parsing should close an unclosed <p> before <details>",
+          "status": "pass"
+        },
+        {
+          "name": "HTMLDetailsElement should be exposed for prototyping",
+          "status": "pass"
+        },
+        {
+          "name": "a dynamically created details element should be instanceof HTMLDetailsElement",
+          "status": "pass"
+        },
+        {
+          "name": "a details element from the parser should be instanceof HTMLDetailsElement",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 5,
+      "subtests_total": 5
+    },
+    "html/semantics/interactive-elements/the-details-element/display-table-with-rt-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-details-element/modified-details-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-details-element/name-attribute.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "basic handling of mutually exclusive details",
+          "status": "fail"
+        },
+        {
+          "name": "more complex handling of mutually exclusive details",
+          "status": "fail"
+        },
+        {
+          "name": "mutually exclusive details across multiple names and multiple tree scopes",
+          "status": "fail"
+        },
+        {
+          "name": "mutation event and toggle event order",
+          "status": "fail"
+        },
+        {
+          "name": "interaction of open attribute changes with mutation events",
+          "status": "pass"
+        },
+        {
+          "name": "empty and missing name attributes do not create groups",
+          "status": "pass"
+        },
+        {
+          "name": "exclusivity enforcement with attachment scenario connected",
+          "status": "fail"
+        },
+        {
+          "name": "exclusivity enforcement with attachment scenario disconnected",
+          "status": "fail"
+        },
+        {
+          "name": "exclusivity enforcement with attachment scenario shadow",
+          "status": "fail"
+        },
+        {
+          "name": "exclusivity enforcement with attachment scenario shadow-in-disconnected",
+          "status": "fail"
+        },
+        {
+          "name": "exclusivity enforcement with attachment scenario template-in-disconnected",
+          "status": "fail"
+        },
+        {
+          "name": "exclusivity enforcement with attachment scenario connected-in-xhr-response",
+          "status": "fail"
+        },
+        {
+          "name": "exclusivity enforcement with attachment scenario connected-in-implementation-create-document",
+          "status": "fail"
+        },
+        {
+          "name": "exclusivity enforcement with attachment scenario connected-in-template",
+          "status": "fail"
+        },
+        {
+          "name": "handling of name attribute changes",
+          "status": "fail"
+        },
+        {
+          "name": "closing as a result of parsing doesn't depend on attribute order",
+          "status": "fail"
+        },
+        {
+          "name": "handling of insertion of elements into group",
+          "status": "timeout"
+        },
+        {
+          "name": "basic handling of mutually exclusive details when the element isn't connected",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 18
+    },
+    "html/semantics/interactive-elements/the-details-element/nested-details-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-details-element/nested-top-layer-elements-in-details-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-details-element/toggleEvent.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Adding open to 'details' should fire a toggle event at the 'details' element, with 'oldState: closed' and 'newState: open'",
+          "status": "not-run"
+        },
+        {
+          "name": "Adding open to 'details' and then removing open from that 'details' should fire only one toggle event at the 'details' element, with 'oldState: closed' and 'newState: closed'",
+          "status": "not-run"
+        },
+        {
+          "name": "Adding open to 'details' (display:none) should fire a toggle event at the 'details' element, with 'oldState: closed' and 'newState: open'",
+          "status": "not-run"
+        },
+        {
+          "name": "Adding open to 'details' (no children) should fire a toggle event at the 'details' element, with 'oldState: closed' and 'newState: open'",
+          "status": "not-run"
+        },
+        {
+          "name": "Adding open to 'details' and then removing open from that 'details' and then again adding open to that 'details' should fire only one toggle event at the 'details' element, with 'oldState: closed' and 'newState: closed'",
+          "status": "fail"
+        },
+        {
+          "name": "Adding open to 'details' using setAttribute('open', '') should fire a toggle event at the 'details' element, with 'oldState: closed' and 'newState: open'",
+          "status": "not-run"
+        },
+        {
+          "name": "Adding open to 'details' and then calling removeAttribute('open') should fire only one toggle event at the 'details' element, with 'oldState: closed' and 'newState: closed'",
+          "status": "not-run"
+        },
+        {
+          "name": "Setting open=true on an opened 'details' element should not fire a toggle event at the 'details' element",
+          "status": "not-run"
+        },
+        {
+          "name": "Setting open=false on a closed 'details' element should not fire a toggle event at the 'details' element",
+          "status": "pass"
+        },
+        {
+          "name": "Adding open to 'details' (not in the document) should fire a toggle event at the 'details' element, with 'oldState: closed' and 'newState: open'",
+          "status": "timeout"
+        },
+        {
+          "name": "Setting open from the parser fires a toggle event",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 11
+    },
+    "html/semantics/interactive-elements/the-dialog-element/abspos-dialog-layout.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/backdrop-descendant-selector.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/backdrop-dynamic-display-none.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/backdrop-dynamic-style-change.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/backdrop-in-flow.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/backdrop-inherits.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/backdrop-receives-element-events.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Test that ::backdrop receives events for the associated element",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/backdrop-stacking-order.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/centering.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "horizontal-tb: tall viewport, default-sizes: true",
+          "status": "fail"
+        },
+        {
+          "name": "horizontal-tb: tall viewport, default-sizes: false",
+          "status": "fail"
+        },
+        {
+          "name": "horizontal-tb: wide viewport, default-sizes: true",
+          "status": "fail"
+        },
+        {
+          "name": "horizontal-tb: wide viewport, default-sizes: false",
+          "status": "fail"
+        },
+        {
+          "name": "horizontal-tb: square viewport, default-sizes: true",
+          "status": "fail"
+        },
+        {
+          "name": "horizontal-tb: square viewport, default-sizes: false",
+          "status": "fail"
+        },
+        {
+          "name": "horizontal-tb: dialog and viewport match, default-sizes: false",
+          "status": "fail"
+        },
+        {
+          "name": "vertical-rl: tall viewport, default-sizes: true",
+          "status": "fail"
+        },
+        {
+          "name": "vertical-rl: tall viewport, default-sizes: false",
+          "status": "fail"
+        },
+        {
+          "name": "vertical-lr: tall viewport, default-sizes: true",
+          "status": "fail"
+        },
+        {
+          "name": "vertical-lr: tall viewport, default-sizes: false",
+          "status": "fail"
+        },
+        {
+          "name": "vertical-rl (dialog horizontal-tb): tall viewport, default-sizes: true",
+          "status": "fail"
+        },
+        {
+          "name": "vertical-rl (dialog horizontal-tb): tall viewport, default-sizes: false",
+          "status": "fail"
+        },
+        {
+          "name": "vertical-lr (dialog horizontal-tb): tall viewport, default-sizes: true",
+          "status": "fail"
+        },
+        {
+          "name": "vertical-lr (dialog horizontal-tb): tall viewport, default-sizes: false",
+          "status": "fail"
+        },
+        {
+          "name": "horizontal-tb (container vertical-rl): tall viewport, default-sizes: true",
+          "status": "fail"
+        },
+        {
+          "name": "horizontal-tb (container vertical-rl): tall viewport, default-sizes: false",
+          "status": "fail"
+        },
+        {
+          "name": "vertical-rl (container horizontal-tb): tall viewport, default-sizes: true",
+          "status": "fail"
+        },
+        {
+          "name": "vertical-rl (container horizontal-tb): tall viewport, default-sizes: false",
+          "status": "fail"
+        },
+        {
+          "name": "horizontal-tb (container vertical-rl) (dialog horizontal-tb): tall viewport, default-sizes: true",
+          "status": "fail"
+        },
+        {
+          "name": "horizontal-tb (container vertical-rl) (dialog horizontal-tb): tall viewport, default-sizes: false",
+          "status": "fail"
+        },
+        {
+          "name": "vertical-rl (container horizontal-tb) (dialog vertical-rl): tall viewport, default-sizes: true",
+          "status": "fail"
+        },
+        {
+          "name": "vertical-rl (container horizontal-tb) (dialog vertical-rl): tall viewport, default-sizes: false",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 23
+    },
+    "html/semantics/interactive-elements/the-dialog-element/child-sequential-focus.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "dialog element with autofocus should get initial focus.",
+          "status": "fail"
+        },
+        {
+          "name": "Only keyboard-focusable elements should get dialog initial focus.",
+          "status": "fail"
+        },
+        {
+          "name": "Autofocus takes precedence over keyboard-focusable requirement.",
+          "status": "fail"
+        },
+        {
+          "name": "Only keyboard-focusable elements should get dialog initial focus including in subtrees.",
+          "status": "fail"
+        },
+        {
+          "name": "Only keyboard-focusable elements should get dialog initial focus including in nested buttons.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 5
+    },
+    "html/semantics/interactive-elements/the-dialog-element/closed-dialog-does-not-block-mouse-events.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Ensure that closed dialogs do not block mouse events. To test manually, click the red box. The test succeeds if the red box turns green.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/default-color.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "<dialog> color and background match default",
+          "status": "fail"
+        },
+        {
+          "name": "<dialog> colors react to dark mode",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-active-document.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "showModal should throw when the document isn't active",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-audio-video-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-autofocus-just-once.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "An autofocus element in a dialog element should not try to get focus twice.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-autofocus-multiple-times.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "autofocus is run every time a dialog is opened",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-autofocus.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "autofocus when a modal dialog is opened",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-cancel-events.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Test cancel event is fired when the dialog is closed by user close requests",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-cancel-preventDefault.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Test cancel event with preventDefault on cancel event for dialog element",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-cancel-with-input.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Test dialog modal is closed by escape key with input focused",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-cancel-with-select.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Test dialog modal is closed by escape key with select focused",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-canceling.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Modal dialogs should close when the escape key is pressed.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-close-event-async.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "close() fires a close event",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-close-event.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Test that dialog receives a close event upon closing.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-close-via-attribute.tentative.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Removing the open attribute from an open modal dialog should run the closing algorithm.",
+          "status": "fail"
+        },
+        {
+          "name": "Removing the open attribute from an open non-modal dialog should fire a close event.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-close.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "close() fires a close event",
+          "status": "fail"
+        },
+        {
+          "name": "close() on a <dialog> that doesn't have an open attribute aborts the steps",
+          "status": "fail"
+        },
+        {
+          "name": "close() removes the open attribute and set the returnValue to the first argument",
+          "status": "fail"
+        },
+        {
+          "name": "close() without argument removes the open attribute and there's no returnValue",
+          "status": "fail"
+        },
+        {
+          "name": "close() should set the returnValue IDL attribute but not the JS property",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 5
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-closedby-bounds-clicking.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Dialog show will not light dismiss if clicked inside of the dialog bounds",
+          "status": "fail"
+        },
+        {
+          "name": "Dialog show will not light dismiss if clicked inside of the dialog bounds (bottom right)",
+          "status": "fail"
+        },
+        {
+          "name": "Dialog show will not light dismiss if clicked inside the overflowing div bounds (center)",
+          "status": "fail"
+        },
+        {
+          "name": "Dialog show will not light dismiss if clicked inside the overflowing div bounds (bottom right)",
+          "status": "fail"
+        },
+        {
+          "name": "Dialog show light dismisses when clicked outside of the bounds of both the dialog and the div",
+          "status": "fail"
+        },
+        {
+          "name": "Dialog show light dismisses when clicked outside of the bounds of the dialog - where the Y direction is in-line with the div still",
+          "status": "fail"
+        },
+        {
+          "name": "Dialog show light dismisses when clicked outside of the bounds of the dialog - where the X direction is in-line with the div still",
+          "status": "fail"
+        },
+        {
+          "name": "Dialog showModal will not light dismiss if clicked inside of the dialog bounds",
+          "status": "fail"
+        },
+        {
+          "name": "Dialog showModal will not light dismiss if clicked inside of the dialog bounds (bottom right)",
+          "status": "fail"
+        },
+        {
+          "name": "Dialog showModal will not light dismiss if clicked inside the overflowing div bounds (center)",
+          "status": "fail"
+        },
+        {
+          "name": "Dialog showModal will not light dismiss if clicked inside the overflowing div bounds (bottom right)",
+          "status": "fail"
+        },
+        {
+          "name": "Dialog showModal light dismisses when clicked outside of the bounds of both the dialog and the div",
+          "status": "fail"
+        },
+        {
+          "name": "Dialog showModal light dismisses when clicked outside of the bounds of the dialog - where the Y direction is in-line with the div still",
+          "status": "fail"
+        },
+        {
+          "name": "Dialog showModal light dismisses when clicked outside of the bounds of the dialog - where the X direction is in-line with the div still",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 14
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-closedby-corner-cases.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Pressing escape, when focusin removes and reinserts, modeless",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking outside, when focusin removes and reinserts, modeless",
+          "status": "fail"
+        },
+        {
+          "name": "Pressing escape, when focusin closes dialog, modeless",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking outside, when focusin closes dialog, modeless",
+          "status": "fail"
+        },
+        {
+          "name": "Pressing escape, when focusin calls showModal, modeless",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking outside, when focusin calls showModal, modeless",
+          "status": "fail"
+        },
+        {
+          "name": "Pressing escape, when beforetoggle closes dialog, modeless",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking outside, when beforetoggle closes dialog, modeless",
+          "status": "fail"
+        },
+        {
+          "name": "Pressing escape, when beforetoggle calls showModal, modeless",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking outside, when beforetoggle calls showModal, modeless",
+          "status": "fail"
+        },
+        {
+          "name": "Pressing escape, when focusin removes and reinserts, modal",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking outside, when focusin removes and reinserts, modal",
+          "status": "fail"
+        },
+        {
+          "name": "Pressing escape, when focusin closes dialog, modal",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking outside, when focusin closes dialog, modal",
+          "status": "fail"
+        },
+        {
+          "name": "Pressing escape, when focusin calls showModal, modal",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking outside, when focusin calls showModal, modal",
+          "status": "fail"
+        },
+        {
+          "name": "Pressing escape, when beforetoggle closes dialog, modal",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking outside, when beforetoggle closes dialog, modal",
+          "status": "fail"
+        },
+        {
+          "name": "Pressing escape, when beforetoggle calls showModal, modal",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking outside, when beforetoggle calls showModal, modal",
+          "status": "fail"
+        },
+        {
+          "name": "Pressing escape, when focusin removes and reinserts, open",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking outside, when focusin removes and reinserts, open",
+          "status": "fail"
+        },
+        {
+          "name": "Pressing escape, when focusin closes dialog, open",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking outside, when focusin closes dialog, open",
+          "status": "fail"
+        },
+        {
+          "name": "Pressing escape, when focusin calls showModal, open",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking outside, when focusin calls showModal, open",
+          "status": "fail"
+        },
+        {
+          "name": "Pressing escape, when beforetoggle closes dialog, open",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking outside, when beforetoggle closes dialog, open",
+          "status": "fail"
+        },
+        {
+          "name": "Pressing escape, when beforetoggle calls showModal, open",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking outside, when beforetoggle calls showModal, open",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 30
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-closedby-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-closedby-show-stacked.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "With an inner closedby=none, the outer & inner dialogs stays open when Esc is pressed",
+          "status": "fail"
+        },
+        {
+          "name": "With an inner closedby=none, the outer & inner dialogs stays open when clicked outside",
+          "status": "fail"
+        },
+        {
+          "name": "With an inner closedby=any, the outer dialog stays open but the inner dialogs should close, when Esc is pressed",
+          "status": "fail"
+        },
+        {
+          "name": "With an inner closedby=any, the outer dialog stays open but the inner dialogs should close, when clicked outside",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-closedby-start-open.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Dialogs that start open and have closedby should still function",
+          "status": "fail"
+        },
+        {
+          "name": "Opening and closing a dialog during the dialog focus fixup should still leave closedby functional",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-closedby.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "closedby=any, modeless",
+          "status": "fail"
+        },
+        {
+          "name": "closedby=any, modal",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby=any, open",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby=closerequest, modeless",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby=closerequest, modal",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby=closerequest, open",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby=none, modeless",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby=none, modal",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby=none, open",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby=AnY, modeless",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby=AnY, modal",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby=AnY, open",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby=ClOsErEqUeSt, modeless",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby=ClOsErEqUeSt, modal",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby=ClOsErEqUeSt, open",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby=NoNe, modeless",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby=NoNe, modal",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby=NoNe, open",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby=invalid, modeless",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby=invalid, modal",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby=invalid, open",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby=, modeless",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby=, modal",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby=, open",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby=null, modeless",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby=null, modal",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby=null, open",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 27
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-closewatcher-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-enabled.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "The DIALOG element should be recognized",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-focus-previous-outside.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Focus should not be restored if the currently focused element is not inside the dialog.",
+          "status": "fail"
+        },
+        {
+          "name": "Focus restore should not occur when the focused element is in a shadowroot outside of the dialog.",
+          "status": "fail"
+        },
+        {
+          "name": "Focus restore should occur when the focused element is in a shadowroot inside the dialog.",
+          "status": "fail"
+        },
+        {
+          "name": "Focus restore should occur when the focused element is slotted into a dialog.",
+          "status": "fail"
+        },
+        {
+          "name": "Focus restore should always occur for modal dialogs.",
+          "status": "fail"
+        },
+        {
+          "name": "Focus restore should work when the dialog itself is focused.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 6
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-focus-shadow-double-nested.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "show()",
+          "status": "fail"
+        },
+        {
+          "name": "showModal()",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-focus-shadow.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "show: No autofocus, no delegatesFocus, no siblings",
+          "status": "fail"
+        },
+        {
+          "name": "showModal: No autofocus, no delegatesFocus, no siblings",
+          "status": "fail"
+        },
+        {
+          "name": "show: No autofocus, no delegatesFocus, sibling before",
+          "status": "fail"
+        },
+        {
+          "name": "showModal: No autofocus, no delegatesFocus, sibling before",
+          "status": "fail"
+        },
+        {
+          "name": "show: No autofocus, no delegatesFocus, sibling after",
+          "status": "fail"
+        },
+        {
+          "name": "showModal: No autofocus, no delegatesFocus, sibling after",
+          "status": "fail"
+        },
+        {
+          "name": "show: No autofocus, yes delegatesFocus, no siblings",
+          "status": "fail"
+        },
+        {
+          "name": "showModal: No autofocus, yes delegatesFocus, no siblings",
+          "status": "fail"
+        },
+        {
+          "name": "show: No autofocus, yes delegatesFocus, sibling before",
+          "status": "fail"
+        },
+        {
+          "name": "showModal: No autofocus, yes delegatesFocus, sibling before",
+          "status": "fail"
+        },
+        {
+          "name": "show: No autofocus, yes delegatesFocus, sibling after",
+          "status": "fail"
+        },
+        {
+          "name": "showModal: No autofocus, yes delegatesFocus, sibling after",
+          "status": "fail"
+        },
+        {
+          "name": "show: Autofocus before, no delegatesFocus",
+          "status": "fail"
+        },
+        {
+          "name": "showModal: Autofocus before, no delegatesFocus",
+          "status": "fail"
+        },
+        {
+          "name": "show: Autofocus before, yes delegatesFocus",
+          "status": "fail"
+        },
+        {
+          "name": "showModal: Autofocus before, yes delegatesFocus",
+          "status": "fail"
+        },
+        {
+          "name": "show: Autofocus after, no delegatesFocus",
+          "status": "fail"
+        },
+        {
+          "name": "showModal: Autofocus after, no delegatesFocus",
+          "status": "fail"
+        },
+        {
+          "name": "show: Autofocus after, yes delegatesFocus",
+          "status": "fail"
+        },
+        {
+          "name": "showModal: Autofocus after, yes delegatesFocus",
+          "status": "fail"
+        },
+        {
+          "name": "show: Autofocus on shadow host, yes delegatesFocus, no siblings",
+          "status": "fail"
+        },
+        {
+          "name": "showModal: Autofocus on shadow host, yes delegatesFocus, no siblings",
+          "status": "fail"
+        },
+        {
+          "name": "show: Autofocus on shadow host, yes delegatesFocus, sibling before",
+          "status": "fail"
+        },
+        {
+          "name": "showModal: Autofocus on shadow host, yes delegatesFocus, sibling before",
+          "status": "fail"
+        },
+        {
+          "name": "show: Autofocus on shadow host, yes delegatesFocus, sibling after",
+          "status": "fail"
+        },
+        {
+          "name": "showModal: Autofocus on shadow host, yes delegatesFocus, sibling after",
+          "status": "fail"
+        },
+        {
+          "name": "show: Autofocus on shadow host, no delegatesFocus, no siblings",
+          "status": "fail"
+        },
+        {
+          "name": "showModal: Autofocus on shadow host, no delegatesFocus, no siblings",
+          "status": "fail"
+        },
+        {
+          "name": "show: Autofocus on shadow host, no delegatesFocus, sibling before",
+          "status": "fail"
+        },
+        {
+          "name": "showModal: Autofocus on shadow host, no delegatesFocus, sibling before",
+          "status": "fail"
+        },
+        {
+          "name": "show: Autofocus on shadow host, no delegatesFocus, sibling after",
+          "status": "fail"
+        },
+        {
+          "name": "showModal: Autofocus on shadow host, no delegatesFocus, sibling after",
+          "status": "fail"
+        },
+        {
+          "name": "show: Autofocus inside shadow tree, yes delegatesFocus, no siblings",
+          "status": "fail"
+        },
+        {
+          "name": "showModal: Autofocus inside shadow tree, yes delegatesFocus, no siblings",
+          "status": "fail"
+        },
+        {
+          "name": "show: Autofocus inside shadow tree, yes delegatesFocus, sibling before",
+          "status": "fail"
+        },
+        {
+          "name": "showModal: Autofocus inside shadow tree, yes delegatesFocus, sibling before",
+          "status": "fail"
+        },
+        {
+          "name": "show: Autofocus inside shadow tree, yes delegatesFocus, sibling after",
+          "status": "fail"
+        },
+        {
+          "name": "showModal: Autofocus inside shadow tree, yes delegatesFocus, sibling after",
+          "status": "fail"
+        },
+        {
+          "name": "show: Autofocus inside shadow tree, no delegatesFocus, no siblings",
+          "status": "fail"
+        },
+        {
+          "name": "showModal: Autofocus inside shadow tree, no delegatesFocus, no siblings",
+          "status": "fail"
+        },
+        {
+          "name": "show: Autofocus inside shadow tree, no delegatesFocus, sibling before",
+          "status": "fail"
+        },
+        {
+          "name": "showModal: Autofocus inside shadow tree, no delegatesFocus, sibling before",
+          "status": "fail"
+        },
+        {
+          "name": "show: Autofocus inside shadow tree, no delegatesFocus, sibling after",
+          "status": "fail"
+        },
+        {
+          "name": "showModal: Autofocus inside shadow tree, no delegatesFocus, sibling after",
+          "status": "fail"
+        },
+        {
+          "name": "show: Two shadow trees, both delegatesFocus, first tree doesn't have autofocus element, second does",
+          "status": "fail"
+        },
+        {
+          "name": "showModal: Two shadow trees, both delegatesFocus, first tree doesn't have autofocus element, second does",
+          "status": "fail"
+        },
+        {
+          "name": "show: No autofocus, no delegatesFocus, slotted target",
+          "status": "fail"
+        },
+        {
+          "name": "showModal: No autofocus, no delegatesFocus, slotted target",
+          "status": "fail"
+        },
+        {
+          "name": "show: Shadowroot on child, no autofocus, no delegatesFocus",
+          "status": "fail"
+        },
+        {
+          "name": "showModal: Shadowroot on child, no autofocus, no delegatesFocus",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 50
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-focusability.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "The dialog element itself should not be keyboard focusable.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-focusing-steps-disconnected.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "dialog.show(): focusing steps should not change focus on disconnected <dialog>",
+          "status": "fail"
+        },
+        {
+          "name": "dialog.showModal() should throw on disconnected <dialog>",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-focusing-steps-inert.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "dialog.show(): focusing steps should not change focus when dialog is inert",
+          "status": "fail"
+        },
+        {
+          "name": "dialog.showModal(): focusing steps should apply focus fixup rule when dialog is inert",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-focusing-steps-prevent-autofocus.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "After showing a dialog, non-dialog autofocus processing won't work.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-form-submission-unusual.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "A form's action and rel=noopener are ignored during submission",
+          "status": "fail"
+        },
+        {
+          "name": "A form's action and rel=noopener are ignored during submission, part 2",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-form-submission.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "click the form submission button should close the dialog",
+          "status": "fail"
+        },
+        {
+          "name": "form submission should return correct value",
+          "status": "not-run"
+        },
+        {
+          "name": "returnValue doesn't update when there's no value attribute.",
+          "status": "not-run"
+        },
+        {
+          "name": "returnValue does update when there's an empty value attribute.",
+          "status": "not-run"
+        },
+        {
+          "name": "input image button should return the coordinates",
+          "status": "not-run"
+        },
+        {
+          "name": "formmethod attribute should use dialog form submission",
+          "status": "not-run"
+        },
+        {
+          "name": "closing the dialog while submitting should stop the submission",
+          "status": "not-run"
+        },
+        {
+          "name": "calling form.submit() in click handler of submit button should start the submission synchronously",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 8
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-inert.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "dialog-inert",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-insert-disconnected-node-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-keydown-preventDefault.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Test cancel event with preventDefault on keydown event for dialog element",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-light-dismiss-drag.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Dialog should not light dismiss when clicking inside the dialog and dragging outside of it.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-light-dismiss-pointer-capture.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Light dismiss on dialog with touch input with pointer capture.",
+          "status": "fail"
+        },
+        {
+          "name": "Light dismiss on dialog with mouse input with pointer capture.",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-light-dismiss-touch.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Dialog light dismiss should work with touch and not trigger a click event.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-no-throw-requested-state.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "dialog-no-throw-requested-state",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-not-in-tree-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-open-2.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Tests that dialog is visible after show() is called and not visible after close() is called.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-open-add-closedby-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-open-movebefore-setup.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "reparenting a dialog should not cause it to move in the open dialogs list",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-open-pseudo-invalidation.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-open.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "On getting, the IDL open attribute must return true if the content open attribute is set, and false if it is absent.",
+          "status": "pass"
+        },
+        {
+          "name": "On setting, the content open attribute must be removed if the IDL open attribute is set to false, and must be present if the IDL open attribute is set to true.",
+          "status": "pass"
+        },
+        {
+          "name": "On setting it to false, the close event should not be fired",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 3,
+      "subtests_total": 3
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-overlay-re-add-during-transition.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-overlay.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "dialog computed overlay initially 'none'",
+          "status": "fail"
+        },
+        {
+          "name": "Opening and closing a modal dialog changes computed overlay to 'auto' and back to 'none'",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-popover-closedby-complex.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "clicking outside all with modeless dialogA and modeless dialogB, normal DOM nesting",
+          "status": "fail"
+        },
+        {
+          "name": "clicking popoverB with modeless dialogA and modeless dialogB, normal DOM nesting",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking dialogB with modeless dialogA and modeless dialogB, normal DOM nesting",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking popoverA with modeless dialogA and modeless dialogB, normal DOM nesting",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking dialogA with modeless dialogA and modeless dialogB, normal DOM nesting",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking outside all with modeless dialogA and modal dialogB, normal DOM nesting",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking popoverB with modeless dialogA and modal dialogB, normal DOM nesting",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking dialogB with modeless dialogA and modal dialogB, normal DOM nesting",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking popoverA with modeless dialogA and modal dialogB, normal DOM nesting",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking dialogA with modeless dialogA and modal dialogB, normal DOM nesting",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking outside all with modal dialogA and modeless dialogB, normal DOM nesting",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking popoverB with modal dialogA and modeless dialogB, normal DOM nesting",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking dialogB with modal dialogA and modeless dialogB, normal DOM nesting",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking popoverA with modal dialogA and modeless dialogB, normal DOM nesting",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking dialogA with modal dialogA and modeless dialogB, normal DOM nesting",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking outside all with modal dialogA and modal dialogB, normal DOM nesting",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking popoverB with modal dialogA and modal dialogB, normal DOM nesting",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking dialogB with modal dialogA and modal dialogB, normal DOM nesting",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking popoverA with modal dialogA and modal dialogB, normal DOM nesting",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking dialogA with modal dialogA and modal dialogB, normal DOM nesting",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking outside all with modeless dialogA and modeless dialogB, same structure, but with shadow DOM slots",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking popoverB with modeless dialogA and modeless dialogB, same structure, but with shadow DOM slots",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking dialogB with modeless dialogA and modeless dialogB, same structure, but with shadow DOM slots",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking popoverA with modeless dialogA and modeless dialogB, same structure, but with shadow DOM slots",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking dialogA with modeless dialogA and modeless dialogB, same structure, but with shadow DOM slots",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking outside all with modeless dialogA and modal dialogB, same structure, but with shadow DOM slots",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking popoverB with modeless dialogA and modal dialogB, same structure, but with shadow DOM slots",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking dialogB with modeless dialogA and modal dialogB, same structure, but with shadow DOM slots",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking popoverA with modeless dialogA and modal dialogB, same structure, but with shadow DOM slots",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking dialogA with modeless dialogA and modal dialogB, same structure, but with shadow DOM slots",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking outside all with modal dialogA and modeless dialogB, same structure, but with shadow DOM slots",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking popoverB with modal dialogA and modeless dialogB, same structure, but with shadow DOM slots",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking dialogB with modal dialogA and modeless dialogB, same structure, but with shadow DOM slots",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking popoverA with modal dialogA and modeless dialogB, same structure, but with shadow DOM slots",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking dialogA with modal dialogA and modeless dialogB, same structure, but with shadow DOM slots",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking outside all with modal dialogA and modal dialogB, same structure, but with shadow DOM slots",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking popoverB with modal dialogA and modal dialogB, same structure, but with shadow DOM slots",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking dialogB with modal dialogA and modal dialogB, same structure, but with shadow DOM slots",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking popoverA with modal dialogA and modal dialogB, same structure, but with shadow DOM slots",
+          "status": "not-run"
+        },
+        {
+          "name": "clicking dialogA with modal dialogA and modal dialogB, same structure, but with shadow DOM slots",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 40
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-popover-closedby-simple.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Dialog closedby=any parent, popover child",
+          "status": "fail"
+        },
+        {
+          "name": "Dialog closedby=closerequest parent, popover child",
+          "status": "not-run"
+        },
+        {
+          "name": "Dialog closedby=none parent, popover child",
+          "status": "not-run"
+        },
+        {
+          "name": "Popover parent, dialog closedby=any child",
+          "status": "not-run"
+        },
+        {
+          "name": "Popover parent, dialog closedby=closerequest child",
+          "status": "not-run"
+        },
+        {
+          "name": "Popover parent, dialog closedby=none child",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 6
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-popover-overlay.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-remove-open-attr-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-requestclose-2-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-requestclose-3-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-requestclose-4-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-requestclose-5-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-requestclose-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-requestclose.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "requestClose basic behavior for modeless dialog with closedby=null",
+          "status": "fail"
+        },
+        {
+          "name": "requestClose fires both cancel and close for modeless dialog with closedby=null",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby has no effect on dialog.requestClose() for modeless dialog with closedby=null",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose can be cancelled for modeless dialog with closedby=null",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose avoids abuse prevention logic for modeless dialog with closedby=null",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose(returnValue) passes along the return value for modeless dialog with closedby=null",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose(returnValue) doesn't change returnvalue when cancelled for modeless dialog with closedby=null",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose basic behavior for modeless dialog with closedby=any",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose fires both cancel and close for modeless dialog with closedby=any",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby has no effect on dialog.requestClose() for modeless dialog with closedby=any",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose can be cancelled for modeless dialog with closedby=any",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose avoids abuse prevention logic for modeless dialog with closedby=any",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose(returnValue) passes along the return value for modeless dialog with closedby=any",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose(returnValue) doesn't change returnvalue when cancelled for modeless dialog with closedby=any",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose basic behavior for modeless dialog with closedby=closedrequest",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose fires both cancel and close for modeless dialog with closedby=closedrequest",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby has no effect on dialog.requestClose() for modeless dialog with closedby=closedrequest",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose can be cancelled for modeless dialog with closedby=closedrequest",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose avoids abuse prevention logic for modeless dialog with closedby=closedrequest",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose(returnValue) passes along the return value for modeless dialog with closedby=closedrequest",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose(returnValue) doesn't change returnvalue when cancelled for modeless dialog with closedby=closedrequest",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose basic behavior for modeless dialog with closedby=none",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose fires both cancel and close for modeless dialog with closedby=none",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby has no effect on dialog.requestClose() for modeless dialog with closedby=none",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose basic behavior for modal dialog with closedby=null",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose fires both cancel and close for modal dialog with closedby=null",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby has no effect on dialog.requestClose() for modal dialog with closedby=null",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose can be cancelled for modal dialog with closedby=null",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose avoids abuse prevention logic for modal dialog with closedby=null",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose(returnValue) passes along the return value for modal dialog with closedby=null",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose(returnValue) doesn't change returnvalue when cancelled for modal dialog with closedby=null",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose basic behavior for modal dialog with closedby=any",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose fires both cancel and close for modal dialog with closedby=any",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby has no effect on dialog.requestClose() for modal dialog with closedby=any",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose can be cancelled for modal dialog with closedby=any",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose avoids abuse prevention logic for modal dialog with closedby=any",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose(returnValue) passes along the return value for modal dialog with closedby=any",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose(returnValue) doesn't change returnvalue when cancelled for modal dialog with closedby=any",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose basic behavior for modal dialog with closedby=closedrequest",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose fires both cancel and close for modal dialog with closedby=closedrequest",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby has no effect on dialog.requestClose() for modal dialog with closedby=closedrequest",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose can be cancelled for modal dialog with closedby=closedrequest",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose avoids abuse prevention logic for modal dialog with closedby=closedrequest",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose(returnValue) passes along the return value for modal dialog with closedby=closedrequest",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose(returnValue) doesn't change returnvalue when cancelled for modal dialog with closedby=closedrequest",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose basic behavior for modal dialog with closedby=none",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose fires both cancel and close for modal dialog with closedby=none",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby has no effect on dialog.requestClose() for modal dialog with closedby=none",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose basic behavior for open dialog with closedby=null",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose fires both cancel and close for open dialog with closedby=null",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby has no effect on dialog.requestClose() for open dialog with closedby=null",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose can be cancelled for open dialog with closedby=null",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose avoids abuse prevention logic for open dialog with closedby=null",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose(returnValue) passes along the return value for open dialog with closedby=null",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose(returnValue) doesn't change returnvalue when cancelled for open dialog with closedby=null",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose basic behavior for open dialog with closedby=any",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose fires both cancel and close for open dialog with closedby=any",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby has no effect on dialog.requestClose() for open dialog with closedby=any",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose can be cancelled for open dialog with closedby=any",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose avoids abuse prevention logic for open dialog with closedby=any",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose(returnValue) passes along the return value for open dialog with closedby=any",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose(returnValue) doesn't change returnvalue when cancelled for open dialog with closedby=any",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose basic behavior for open dialog with closedby=closedrequest",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose fires both cancel and close for open dialog with closedby=closedrequest",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby has no effect on dialog.requestClose() for open dialog with closedby=closedrequest",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose can be cancelled for open dialog with closedby=closedrequest",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose avoids abuse prevention logic for open dialog with closedby=closedrequest",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose(returnValue) passes along the return value for open dialog with closedby=closedrequest",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose(returnValue) doesn't change returnvalue when cancelled for open dialog with closedby=closedrequest",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose basic behavior for open dialog with closedby=none",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose fires both cancel and close for open dialog with closedby=none",
+          "status": "not-run"
+        },
+        {
+          "name": "closedby has no effect on dialog.requestClose() for open dialog with closedby=none",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose basic behavior when dialog is open via attribute",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose fires cancel and close when dialog is open via attribute",
+          "status": "not-run"
+        },
+        {
+          "name": "requestClose(returnValue) passes along the return value when dialog is open via attribute",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 75
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-return-value.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Tests dialog.returnValue is settable and returns the last value set.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-setup-cleanup-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-showModal-inert-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-showModal-remove.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "dialog element: removing from document after showModal()",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-showModal.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "dialog element: showModal()",
+          "status": "fail"
+        },
+        {
+          "name": "showModal() on a <dialog> that already has an open attribute throws an InvalidStateError exception",
+          "status": "fail"
+        },
+        {
+          "name": "showModal() on a <dialog> after initial showModal() and removing the open attribute",
+          "status": "not-run"
+        },
+        {
+          "name": "showModal() on a <dialog> not in a Document throws an InvalidStateError exception",
+          "status": "not-run"
+        },
+        {
+          "name": "when opening multiple dialogs, only the newest one is non-inert",
+          "status": "not-run"
+        },
+        {
+          "name": "opening dialog without focusable children",
+          "status": "not-run"
+        },
+        {
+          "name": "opening dialog with multiple focusable children",
+          "status": "not-run"
+        },
+        {
+          "name": "opening dialog with multiple focusable children, one having the autofocus attribute",
+          "status": "not-run"
+        },
+        {
+          "name": "when opening multiple dialogs, the most recently opened is rendered on top",
+          "status": "not-run"
+        },
+        {
+          "name": "When the document is not attached to any pages, showModal() should throw.",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 10
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialog-toggle-source.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "ToggleEvent.source on <dialog> elements: dialog.showModal().",
+          "status": "fail"
+        },
+        {
+          "name": "ToggleEvent.source on <dialog> elements: command button.",
+          "status": "fail"
+        },
+        {
+          "name": "ToggleEvent.source on <dialog> elements: open with showModal, close with button.",
+          "status": "fail"
+        },
+        {
+          "name": "ToggleEvent.soruce on <dialog> elements: open with button, close with dialog.close().",
+          "status": "fail"
+        },
+        {
+          "name": "ToggleEvent.source on <dialog> elements: open with showModal, close with request-close button.",
+          "status": "fail"
+        },
+        {
+          "name": "ToggleEvent.source on <dialog> elements: open with button, close with light dismiss.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 6
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dialogs-with-no-backdrop.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/dont-share-style-to-top-layer.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/element-removed-from-top-layer-has-original-position.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/fixed-position-child-with-contain-ancestor.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/fixed-position-child-with-fo-ancestor.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/fixed-position-child-with-transformed-ancestor.tentative.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/fixed-position-child-with-will-change-ancestor.tentative.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/focus-after-close.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Focus should be moved to the previously focused element (Simple dialog usage)",
+          "status": "fail"
+        },
+        {
+          "name": "Focus should be moved to the previously focused element (Complex dialog usage)",
+          "status": "fail"
+        },
+        {
+          "name": "Focus should be moved to the previously focused element even if it has moved in between show/close",
+          "status": "fail"
+        },
+        {
+          "name": "Focus should be moved to the previously focused element even if it has moved to shadow DOM root in between show/close",
+          "status": "fail"
+        },
+        {
+          "name": "Focus should be moved to the body if the previously focused element is removed",
+          "status": "fail"
+        },
+        {
+          "name": "Focus should be moved to the shadow DOM host if the previouly focused element is a shadow DOM node",
+          "status": "fail"
+        },
+        {
+          "name": "Focus should not scroll if the previously focused element is outside the viewport",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 7
+    },
+    "html/semantics/interactive-elements/the-dialog-element/focus-previous-iframe.tentative.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Focus should move back from parent document to child document",
+          "status": "pass"
+        },
+        {
+          "name": "Focus should move back from child document to parent document",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 2
+    },
+    "html/semantics/interactive-elements/the-dialog-element/form-submit-dialog-shadow.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "<form method=dialog> should not submit across shadow boundaries.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/inert-does-not-match-disabled-selector.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Tests inert elements do not match the :disabled selector.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/inert-focus-in-frames.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/inert-inlines.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Tests that inert inlines do not receive mouse events.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/inert-label-focus.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Tests focusing of an inert label for a non-inert target.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/inert-node-is-not-highlighted.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/inert-node-is-uneditable.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Test that inert nodes cannot be edited. The test passes if the only text you can edit is in the dialog.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/inert-node-is-unfocusable.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/inert-node-is-unselectable.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Test that inert nodes cannot be selected. The test passes if the only text you can select is inside the dialog.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/inert-svg-hittest.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Hit-testing doesn't reach contents of an inert SVG",
+          "status": "fail"
+        },
+        {
+          "name": "Hit-testing can reach contents of a no longer inert SVG",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/semantics/interactive-elements/the-dialog-element/inertness-with-modal-dialogs-and-iframes.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Initially, no node is inert",
+          "status": "fail"
+        },
+        {
+          "name": "Modal dialog in the outer iframe marks outer nodes in that iframe as inert.",
+          "status": "fail"
+        },
+        {
+          "name": "Modal dialog in the inner iframe marks outer nodes in that iframe as inert.",
+          "status": "fail"
+        },
+        {
+          "name": "Modal dialogs in both iframes mark outer nodes in these iframes as inert.",
+          "status": "fail"
+        },
+        {
+          "name": "Modal dialog in the main document marks outer nodes as inert. Contents of the outer iframe aren't marked as inert.",
+          "status": "fail"
+        },
+        {
+          "name": "Modal dialogs in the main document and inner iframe mark outer nodes as inert. Contents of the outer iframe aren't marked as inert.",
+          "status": "fail"
+        },
+        {
+          "name": "Modal dialogs in the main document and outer iframe mark outer nodes as inert. Contents of the outer iframe aren't marked as inert.",
+          "status": "fail"
+        },
+        {
+          "name": "Modal dialogs in the main document and both iframes mark outer nodes as inert. Contents of the outer iframe aren't marked as inert.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 8
+    },
+    "html/semantics/interactive-elements/the-dialog-element/modal-dialog-ancestor-is-inert.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Test that ancestors of modal dialog are inert.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/modal-dialog-backdrop-opacity.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/modal-dialog-backdrop.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/modal-dialog-blocks-mouse-events.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Ensure that mouse events are not dispatched to an inert node.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/modal-dialog-display-contents.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/modal-dialog-generated-content.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/modal-dialog-in-iframe.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/modal-dialog-in-object.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/modal-dialog-in-replaced-renderer.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/modal-dialog-in-table-column.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/modal-dialog-in-visibility-hidden.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Non-modal dialog should let parent visibility inherit",
+          "status": "fail"
+        },
+        {
+          "name": "Modal dialog should have visibility: visible by default in UA sheet",
+          "status": "fail"
+        },
+        {
+          "name": "Modal dialog visibility should be overridable",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "html/semantics/interactive-elements/the-dialog-element/modal-dialog-scroll-height.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "dialogs should be centered before computing overflow.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/modal-dialog-selection.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/modal-dialog-sibling.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/multiple-centered-dialogs.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Test that multiple dialogs are centered properly.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/non-modal-canceling.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Non-modal dialogs should not be cancelable via ESC",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/non-modal-dialog-does-not-block-mouse-events.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Ensure that non-modal dialogs do not block mouse events.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/non-modal-dialog-layout.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Tests layout of non-modal dialogs.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/popover-dialog-does-not-block-mouse-events.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Ensure that popover dialogs do not block mouse events. To test manually, click the red box. The test succeeds if the red box turns green.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/remove-dialog-should-unblock-document.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Test that removing dialog unblocks the document.",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/removed-element-is-removed-from-top-layer.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/show-modal-focusing-steps.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "focus when a modal dialog is opened",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/showmodal-in-shadow-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/showmodal-shadow-sibling-frame-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/simulated-click-inert.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Ensure that simulated click is still dispatched to an inert node.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/submit-dialog-close-event.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Tests submitting a dialog on a close event triggered by a previous submission.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/synthetic-click-inert.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Test that inert nodes still get programmatic click events",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/toggle-events.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "dialog.show() should fire beforetoggle and toggle events.",
+          "status": "fail"
+        },
+        {
+          "name": "dialog.show() should fire cancelable beforetoggle which does not open dialog if canceled",
+          "status": "fail"
+        },
+        {
+          "name": "dialog.show() should coalesce asynchronous toggle events.",
+          "status": "fail"
+        },
+        {
+          "name": "dialog.show() should not double-set open/close if beforetoggle re-opens",
+          "status": "fail"
+        },
+        {
+          "name": "dialog.show() should not open if beforetoggle removes",
+          "status": "fail"
+        },
+        {
+          "name": "dialog.show() should not open if beforetoggle calls showPopover",
+          "status": "not-run"
+        },
+        {
+          "name": "dialog.showModal() should fire beforetoggle and toggle events.",
+          "status": "not-run"
+        },
+        {
+          "name": "dialog.showModal() should fire cancelable beforetoggle which does not open dialog if canceled",
+          "status": "not-run"
+        },
+        {
+          "name": "dialog.showModal() should coalesce asynchronous toggle events.",
+          "status": "not-run"
+        },
+        {
+          "name": "dialog.showModal() should not double-set open/close if beforetoggle re-opens",
+          "status": "not-run"
+        },
+        {
+          "name": "dialog.showModal() should not open if beforetoggle removes",
+          "status": "not-run"
+        },
+        {
+          "name": "dialog.showModal() should not open if beforetoggle calls showPopover",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 12
+    },
+    "html/semantics/interactive-elements/the-dialog-element/top-layer-backdrop-remove-add-ordering.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/top-layer-containing-block.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/top-layer-display-none.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/top-layer-nesting.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/top-layer-parent-clip.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/top-layer-parent-filter.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/top-layer-parent-mask.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/top-layer-parent-opacity.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/top-layer-parent-overflow-clip.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/top-layer-parent-overflow-hidden.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/top-layer-parent-overflow-scroll.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/top-layer-parent-transform.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/top-layer-position-relative.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/top-layer-position-static.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/top-layer-position.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Verifies that position:static and position:relative computed to position:absolute in the top layer.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-dialog-element/top-layer-remove-popover-attribute.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/top-layer-stacking-correct-order-remove-readd.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/top-layer-stacking-dynamic.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-dialog-element/top-layer-stacking.tentative.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-summary-element/activation-behavior.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Should open a closed details if all conditions are met",
+          "status": "fail"
+        },
+        {
+          "name": "Should close an open details if all conditions are met",
+          "status": "fail"
+        },
+        {
+          "name": "Should open a closed details even if the details is not being rendered",
+          "status": "fail"
+        },
+        {
+          "name": "Should open a closed details even if the summary is not being rendered",
+          "status": "fail"
+        },
+        {
+          "name": "Should open a closed details if a span element precedes the summary",
+          "status": "fail"
+        },
+        {
+          "name": "Should stay closed if another summary element precedes the summary",
+          "status": "pass"
+        },
+        {
+          "name": "Should open a closed details if another summary element *nested inside a span* precedes the summary",
+          "status": "fail"
+        },
+        {
+          "name": "Should stay closed if the summary element is nested inside a span element",
+          "status": "pass"
+        },
+        {
+          "name": "toggle events should be coalesced even when using the activation behavior of a summary",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 9
+    },
+    "html/semantics/interactive-elements/the-summary-element/anchor-with-inline-element.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Clicking on anchor with embedded inline element should navigate instead of opening details",
+          "status": "not-run"
+        },
+        {
+          "name": "Expected <a> containing <i> to navigate",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/semantics/interactive-elements/the-summary-element/anchor-without-link.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "clicking on anchor without link should open details and not navigate.",
+          "status": "fail"
+        },
+        {
+          "name": "clicking on anchor without link, with embedded inline element should open details and not navigate.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/semantics/interactive-elements/the-summary-element/click-behavior-optional.tentative.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "clicking on summary should open details and set focus on summary",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/semantics/interactive-elements/the-summary-element/display-table-with-rt-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/semantics/interactive-elements/the-summary-element/interactive-content.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Clicking on non-interactive child of a <summary> opens its <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an <a> link doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an SVG <a> link doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an HTML <a> link in an SVG <foreignObject> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an <audio> element doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking a <button> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking the content of an <embed> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking in an <iframe> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an <img> with a 'usemap' attribute doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an <img> without a 'usemap' attribute opens <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an <input type=button> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an <input type=reset> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an <input type=submit> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an <input type=text> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an <input type=search> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an <input type=tel> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an <input type=url> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an <input type=email> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an <input type=password> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an <input type=date> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an <input type=month> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an <input type=week> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an <input type=time> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an <input type=datetime-local> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an <input type=number> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an <input type=range> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an <input type=color> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an <input type=checkbox> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an <input type=radio> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an <input type=file> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking an <input type=image> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking a <label> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking in a <textarea> doesn't open <details>",
+          "status": "fail"
+        },
+        {
+          "name": "Clicking a <video> doesn't open <details>",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 34
+    },
+    "html/semantics/interactive-elements/the-summary-element/summary-untrusted-key-event.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Dispatching untrusted keypress events to summary should not cause click event",
+          "status": "pass"
+        },
+        {
+          "name": "Dispatching untrusted keyup/keydown events to summary should not cause click event",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 2
+    }
+  },
+  "version": 1
+}

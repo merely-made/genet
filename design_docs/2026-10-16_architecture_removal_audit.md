@@ -1,5 +1,27 @@
 # Genet architecture and removal audit
 
+## Slice 3: I6/H5/I9/R12, 2026-10-17
+
+**I9 and R12 are addressed locally; I6 and H5 remain partial.** The default
+cookie jar now applies public-suffix and cookie-prefix restrictions at storage
+and retrieval while retaining injected storage and SameSite request context.
+History state uses the shared structured-clone record, including cycles, aliases,
+Map, Date and BigInt, and decodes in the reading realm. Bare runtimes own an
+explicit session history that moves into the browsing context when it is
+initialized. Cross-document traversal retains state and follows the accepted
+final URL; queued targets are revalidated after outgoing callbacks.
+
+I6 makes rich-to-byte-only conversion explicit and refuses to invent HTTP
+success metadata for URL-only fetchers. External byte-only callers still need
+migration to the shared request/response contract. H5 now counts decoded bytes,
+applies elapsed deadlines and admits native requests under the configured
+concurrency limit. The browser adapter does not yet consume the same configured
+policy, so the original shared native/browser policy condition remains open.
+Realm installation can still fail after the outgoing realm is released; this
+inherited navigation boundary has no atomic rollback.
+
+Verification: **163 passed, zero failed, zero ignored**, plus the Ortet scripted-Nova all-target compile check. Tests cover cookie storage/retrieval, structured history on both engines, queued and refused traversals, native chunked/gzip/SRI limits, elapsed deadlines, bridge admission and worker delivery. The initial unload fixture incorrectly included a URL fragment in its resource lookup; the repaired fixture asserts unload actually ran, and both focused tests plus all 26 navigation tests passed. Exact hashes, gates, reviews and excluded attempts are in the [slice 3 receipt](receipts/2026-10-17_remaining_architecture_slice3.json). Gates used the same serialized 5 GiB resource limits.
+
 ## Slice 2: R7/R8/R14/I2, 2026-10-17
 
 Headless and live documents now share lifecycle state and hidden wake admission. External completions can wake independently of a long timer. Freeze/resume crosses the session adapter and Ortet suspend/resume boundary. Execution capabilities distinguish bounded VM evaluation, completed-job counts and work inside each job; unsupported required bounds refuse before executing. Nova owns host hooks and copies names through the exact pinned Vano contract; Piccolo retains VM-owned registration names.
@@ -480,22 +502,25 @@ The fresh review covered the production changes, their consumers and regression 
 
 ### Current disposition of the findings
 
-Reconciled against `ec5d8b997aa` plus the source-hashed slice 2 repair snapshot on 2026-10-17. This table supersedes
+Reconciled against `ec5d8b997aa`, the source-hashed slice 2 repair snapshot and
+the source-hashed slice 3 repair snapshot on 2026-10-17. This table supersedes
 the older 9-addressed / 3-partial / 43-open snapshot and the open-status wording
 in historical evidence below. Addressed means the named source defect or cut,
 with each repair's stated qualification and publication limits retained.
 
 | Disposition | IDs | Current evidence / remaining boundary |
 |---|---|---|
-| Addressed locally | H1, H3, H4, H7, H8, H11, I2, I3, I4, I5, I7, I8, I12, I13, I14, I15, L1, L2, L3, L4, L7, L8, L10, L11, L12, L13, R1, R2, R3, R4, R5, R6, R8, R9, R13, R14, R15, W1, W2 | Original narrow removals plus retained acquisition, source-relative image identity, non-stealing capture, shared decoded pixels, generated transform/paint ownership, canonical origins, bounded decoded cache accumulation, shared CSS comment lexing, borrowed retained planes, authoritative linked shader layout, importer identity, scoped resolver/root cleanup, table-owned aggregation, capture admission, shared selector grammar, static query membership, whole-list declaration parsing and fallible context creation, retained task dispatch, parser failure reporting, production animation-frame scheduling and host elapsed clocks. Dated repair sections and receipts above contain the tests and limits. |
+| Addressed locally | H1, H3, H4, H7, H8, H11, I2, I3, I4, I5, I7, I8, I9, I12, I13, I14, I15, L1, L2, L3, L4, L7, L8, L10, L11, L12, L13, R1, R2, R3, R4, R5, R6, R8, R9, R12, R13, R14, R15, W1, W2 | Original narrow removals plus retained acquisition, source-relative image identity, non-stealing capture, shared decoded pixels, generated transform/paint ownership, canonical origins, bounded decoded cache accumulation, default cookie storage restrictions, structured history state and bare-runtime ownership, shared CSS comment lexing, borrowed retained planes, authoritative linked shader layout, importer identity, scoped resolver/root cleanup, table-owned aggregation, capture admission, shared selector grammar, static query membership, whole-list declaration parsing and fallible context creation, retained task dispatch, parser failure reporting, production animation-frame scheduling and host elapsed clocks. Dated repair sections and receipts above contain the tests and limits. |
 | Partial | I1 | Native editing shares DOM defaults; scripted text/IME, key releases and default-action integration remain open. |
+| Partial | I6 | Rich/legacy conversion is explicit and URL-only fetchers no longer fabricate response metadata; external byte-only callers still need migration. |
 | Partial | I11 | Cache-key lookup no longer recompiles shaders; a source/stage/options-owned compiled-artifact lifecycle remains open. |
+| Partial | H5 | Native byte, deadline and admission limits are enforced; browser policy wiring remains absent, so one host-configured policy is not shared across adapters. |
 | Partial | H6 | Setup/execution/completion accounting repaired; trustworthy VM error phase/type and complete Test262 qualification remain open. |
 | Partial | L6 | Shared form/radio predicates; broader dependency classification and separate mutation switches remain. |
 | Partial | R7 | Default workers refuse unsupported required cancellation; explicit trusted cooperative workers can still detach uninterruptible VM work. Direct shutdown counts do not track descendants. |
-| Open | I6, I9-I10; R10-R12; L5, L9; H2, H5, H9-H10 | No later cut or verification closes these findings. |
+| Open | I10; R10-R11; L5, L9; H2, H9-H10 | No later cut or verification closes these findings. |
 
-**56 findings: 39 addressed locally, 5 partial, 12 open.** Supplemental X1 remains
+**56 findings: 41 addressed locally, 7 partial, 8 open.** Supplemental X1 remains
 partial and is excluded from that count. The pinned NetRender supplier revision is now published on main; Mere adoption,
 the baseline supplier corpus mismatch, existing ignored continuation tests and
 platform/Forms acceptance are separate outstanding obligations, not extra closed
@@ -630,7 +655,13 @@ Relevant existing evidence: [review receipt](receipts/2026-10-16_forms_submissio
 
 ## Consolidated finding register
 
-Status is reconciled to `ec5d8b997aa` plus the source-hashed slice 2 repair; descriptions and cut directions retain the original evidence. IDs match the detailed evidence sections. These are issues and removal decisions, not a count of independently reproduced bugs. Related rows share a repair boundary rather than requiring separate frameworks. W1 is the independent review's shader-link finding; the remaining independent observations corroborate I findings and are not counted twice.
+Status is reconciled to `ec5d8b997aa`, the source-hashed slice 2 repair and
+the slice 3 source cuts pending final gates; descriptions and cut directions
+retain the original evidence. IDs match the detailed evidence sections. These
+are issues and removal decisions, not a count of independently reproduced bugs.
+Related rows share a repair boundary rather than requiring separate frameworks.
+W1 is the independent review's shader-link finding; the remaining independent
+observations corroborate I findings and are not counted twice.
 
 | ID | Current status | Finding | Disposition / dependency |
 |---|---|---|---|
@@ -639,10 +670,10 @@ Status is reconciled to `ec5d8b997aa` plus the source-hashed slice 2 repair; des
 | I3 | Addressed locally | Generic DOM synchronization re-resolves all document resources | Retain dependency-aware acquisition results; remove whole-resource resolution from unrelated mutations/style reads. |
 | I4 | Addressed locally | Authored image aliases collapse different stylesheet bases | Carry resolved source identity into computed image/paint keys. |
 | I5 | Addressed locally | Capture drains rendering's mutation journal | One consumption owner or non-stealing observation cursors; preserve historical capture format. |
-| I6 | Open | Request and response compatibility representations duplicate and discard metadata | Migrate actual callers to a shared host contract; retain transport/VM separation. |
+| I6 | Partial | Request and response compatibility representations duplicate and discard metadata | Explicit rich/legacy conversion and no fabricated URL-only success are in place; migrate external byte-only callers to the shared host contract. |
 | I7 | Addressed locally | Handwritten origin grammar normalizes malformed URLs inconsistently | Derive tuples from canonical parsed URLs; preserve opaque/inherited origin policy. |
 | I8 | Addressed locally | Cache limit checks Content-Length but not accumulated decoded bytes | Stop cache accumulation at configured streamed-byte cap; preserve body delivery. |
-| I9 | Open | Default cookie jar defers public-suffix and prefix restrictions | Complete or explicitly constrain one policy owner; keep injected storage and SameSite context. |
+| I9 | Addressed locally | Default cookie jar defers public-suffix and prefix restrictions | Default jar now enforces suffix and prefix restrictions at storage/retrieval; injected storage and SameSite context remain. |
 | I10 | Open | Taproot reconstructs names/roles and estimated geometry | Migrate live consumers to owner projection/retained layout, then delete shadow semantics. |
 | I11 | Partial | Shader compilation repeats for validation, cache-key discovery and translation | Retain compiled shader artifacts under source/stage/options identity. |
 | I12 | Addressed locally | Obsolete narrow shader reflection still rejects input sets | Remove unused compatibility fields and positional inference; preserve general reflection. |
@@ -660,7 +691,7 @@ Status is reconciled to `ec5d8b997aa` plus the source-hashed slice 2 repair; des
 | R9 | Addressed locally | Missing WebGL factory manufactures a context-shaped capability | Return unsupported/null when actual graphics capability is absent. |
 | R10 | Open | WebGL objects use public mutable identity and permissive text coercion | Private context-owned brands and genuine value extraction. |
 | R11 | Open | XPath adapter loses attributes, namespaces, mode and detached context | Replace lossy live adapter; preserve language core and real result identity. |
-| R12 | Open | History uses JSON state despite existing structured clone; fallback duplicates history | Share serialization semantics, then migrate fallback owner deliberately. |
+| R12 | Addressed locally | History uses JSON state despite existing structured clone; fallback duplicates history | Shared structured records and receiving-realm decode; explicit bare session-history owner moves into context at initialization. Realm-install failure after release remains an inherited navigation limit. |
 | R13 | Addressed locally | Module resolver lifetimes are erased and manually restored without unwind guard | Owned/scoped resolver context and unwind-safe restoration; preserve GC roots. |
 | R14 | Addressed locally | Ordinary engine/realm registration leaks process-lifetime allocations | Proper owned registrations or fixed static names; keep required rooted release queues. |
 | R15 | Addressed locally | Product elapsed-time API uses timer-driven test-like clock | Explicit host elapsed clock and separate deterministic test profile. |
@@ -681,7 +712,7 @@ Status is reconciled to `ec5d8b997aa` plus the source-hashed slice 2 repair; des
 | H2 | Open | Browser compatibility renderer access bypasses checked ownership | Migrate to browser frame transaction; preserve leases/loss/scope outcomes. |
 | H3 | Addressed locally | WPT runs animation callbacks that live session pumps omit | Share production turn contract and pending-work wake facts; preserve virtual clock. |
 | H4 | Addressed locally | Browser key route discards typed input outcome and performs scroll defaults | Gate defaults using handled/editable/cancelled outcome, as native host does. |
-| H5 | Open | Native fetch ignores declared byte/deadline/concurrency policy | Wire configurable policy through counted streaming/admission/deadline enforcement. |
+| H5 | Partial | Native fetch ignores declared byte/deadline/concurrency policy | Native counted bytes, elapsed deadline and admission are in place; wire the same host-configured policy through the browser adapter. |
 | H6 | Partial | Test262 negative/module/async paths can turn setup/wrong failures into passes | Typed setup/execution/completion and shared exact negative matching; combine flags correctly. |
 | H7 | Addressed locally | Old profile gates turn cargo failure into empty clean result | Retire obsolete entrance; strengthen canonical CI cone witness with failing controls. |
 | H8 | Addressed locally | PowerShell wrappers can continue after native build/bindgen failure | Checked native-command helper and environment restoration; stale outputs must not imply success. |

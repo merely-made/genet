@@ -143,6 +143,23 @@ pub struct ResourceRequest {
 }
 
 impl ResourceRequest {
+    /// The common URL-only request, with every policy choice stated.
+    pub fn plain_get(url: impl Into<String>) -> Self {
+        Self {
+            url: url.into(),
+            method: "GET".into(),
+            headers: Vec::new(),
+            body: None,
+            cache: "default".into(),
+            redirect: "follow".into(),
+            mode: "cors".into(),
+            referrer: String::new(),
+            referrer_policy: String::new(),
+            credentials: "same-origin".into(),
+            integrity: String::new(),
+        }
+    }
+
     /// Requests a URL-only host can honor without silently losing semantics.
     pub fn is_plain_get(&self) -> bool {
         self.method == "GET"
@@ -180,8 +197,8 @@ impl ResourceResponse {
     }
 }
 
-/// Metadata from the request-aware fetch seam. Kept distinct from the legacy
-/// resource record so existing host struct literals and destructuring stay valid.
+/// The request-aware host response. The byte-only `ResourceResponse` remains
+/// for existing embedders, but metadata is never inferred from it implicitly.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ResourceFetchResponse {
     pub final_url: String,
@@ -193,8 +210,11 @@ pub struct ResourceFetchResponse {
     pub response_type: String,
     pub redirected: bool,
 }
-impl From<ResourceResponse> for ResourceFetchResponse {
-    fn from(response: ResourceResponse) -> Self {
+impl ResourceFetchResponse {
+    /// Give a local plain GET an explicit synthetic success response. Local
+    /// files and data URLs have no HTTP status or response headers to preserve.
+    /// Never use this for a remote response or a request with other semantics.
+    pub fn from_local_plain_get(response: ResourceResponse) -> Self {
         let headers = response
             .content_type
             .as_ref()
@@ -211,13 +231,14 @@ impl From<ResourceResponse> for ResourceFetchResponse {
             redirected: false,
         }
     }
-}
-impl From<ResourceFetchResponse> for ResourceResponse {
-    fn from(response: ResourceFetchResponse) -> Self {
-        Self {
-            final_url: response.final_url,
-            content_type: response.content_type,
-            bytes: response.bytes,
+
+    /// Adapt a rich reply to a legacy byte-only document consumer. Callers
+    /// must choose this lossy boundary explicitly.
+    pub fn into_legacy_response(self) -> ResourceResponse {
+        ResourceResponse {
+            final_url: self.final_url,
+            content_type: self.content_type,
+            bytes: self.bytes,
         }
     }
 }
@@ -255,14 +276,16 @@ pub trait ResourceFetcher {
     /// Fetch `url` to bytes, or `None` on failure / unsupported scheme.
     fn fetch(&self, url: &str) -> Option<Vec<u8>>;
 
-    /// Rich requests are optional. URL-only implementations must decline any
-    /// request whose semantics their legacy URL seam cannot preserve.
-    fn fetch_request(&self, request: &ResourceRequest) -> Option<ResourceFetchResponse> {
-        if request.is_plain_get() {
-            self.fetch_response(&request.url).map(Into::into)
-        } else {
-            None
-        }
+    /// Maximum concurrent scripted requests this host admits before starting
+    /// workers. A host with another policy overrides this along with its fetch.
+    fn max_concurrent_fetches(&self) -> usize {
+        ResourceFetchPolicy::default().max_concurrent_fetches
+    }
+
+    /// A URL-only implementation does not imply an HTTP 200 response. Hosts
+    /// that serve local plain GETs may opt in with `from_local_plain_get`.
+    fn fetch_request(&self, _request: &ResourceRequest) -> Option<ResourceFetchResponse> {
+        None
     }
 
     /// Fetch `url` with its redirect-final identity and response type. Existing
@@ -286,26 +309,12 @@ mod request_compatibility {
         }
     }
     fn plain() -> ResourceRequest {
-        ResourceRequest {
-            url: "https://host.test/resource".into(),
-            method: "GET".into(),
-            headers: vec![],
-            body: None,
-            cache: "default".into(),
-            redirect: "follow".into(),
-            mode: "cors".into(),
-            referrer: String::new(),
-            referrer_policy: String::new(),
-            credentials: "same-origin".into(),
-            integrity: String::new(),
-        }
+        ResourceRequest::plain_get("https://host.test/resource")
     }
     #[test]
-    fn url_only_default_serves_get_and_declines_semantic_changes() {
+    fn url_only_default_does_not_fabricate_success_metadata() {
         let fetcher = UrlOnly(Cell::new(0));
-        let response = fetcher.fetch_request(&plain()).unwrap();
-        assert_eq!(response.bytes, [0, 128, 255]);
-        assert_eq!(response.final_url, "https://host.test/resource");
+        assert!(fetcher.fetch_request(&plain()).is_none());
         for change in 0..10 {
             let mut request = plain();
             match change {
@@ -327,6 +336,7 @@ mod request_compatibility {
                 "changed field {change} cannot be discarded"
             );
         }
-        assert_eq!(fetcher.0.get(), 1);
+        assert_eq!(fetcher.0.get(), 0);
+        assert_eq!(fetcher.fetch("https://host.test/resource"), Some(vec![0, 128, 255]));
     }
 }

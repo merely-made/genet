@@ -231,9 +231,9 @@ impl FrameLoading {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HistoryEntry {
     pub url: String,
-    /// The serialized `pushState` / `replaceState` state, in the same JSON
-    /// encoding of the structured-clone record the Worker lane uses as its
-    /// cross-agent wire. `None` is the null state a plain navigation leaves.
+    /// The serialized `pushState` / `replaceState` state, encoded as a
+    /// structured-clone record. `None` is the null state a plain navigation
+    /// leaves. Deserialization happens in the realm reading the entry.
     pub state: Option<String>,
     pub title: Option<String>,
     /// Which of the context's documents this entry belongs to. HTML decides
@@ -271,6 +271,7 @@ impl HistoryEntry {
 pub struct SessionHistory {
     entries: Vec<HistoryEntry>,
     current: usize,
+    generation: u64,
 }
 
 impl SessionHistory {
@@ -278,6 +279,7 @@ impl SessionHistory {
         Self {
             entries: vec![entry],
             current: 0,
+            generation: 0,
         }
     }
 
@@ -295,11 +297,35 @@ impl SessionHistory {
         self.current
     }
 
+    /// Changes whenever a write or traversal can invalidate a queued target.
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    /// Inspect a traversal target without moving the current entry.
+    pub fn target(&self, delta: i64) -> Option<(usize, &HistoryEntry)> {
+        let target = i64::try_from(self.current).ok()?.checked_add(delta)?;
+        let target = usize::try_from(target).ok()?;
+        self.entries.get(target).map(|entry| (target, entry))
+    }
+
+    /// Select a previously inspected target only if no history operation has
+    /// changed the source or target while navigation was pending.
+    pub fn select_if_unchanged(&mut self, target: usize, generation: u64) -> bool {
+        if self.generation != generation || target >= self.entries.len() {
+            return false;
+        }
+        self.current = target;
+        self.generation = self.generation.wrapping_add(1);
+        true
+    }
+
     pub fn current(&self) -> &HistoryEntry {
         &self.entries[self.current]
     }
 
     pub fn current_mut(&mut self) -> &mut HistoryEntry {
+        self.generation = self.generation.wrapping_add(1);
         &mut self.entries[self.current]
     }
 
@@ -313,31 +339,26 @@ impl SessionHistory {
         self.entries.truncate(self.current + 1);
         self.entries.push(entry);
         self.current = self.entries.len() - 1;
+        self.generation = self.generation.wrapping_add(1);
     }
 
     /// `history.replaceState` and a `location.replace()` navigation.
     pub fn replace(&mut self, entry: HistoryEntry) {
         self.entries[self.current] = entry;
+        self.generation = self.generation.wrapping_add(1);
     }
 
     /// `history.go(delta)`. Out-of-range traversal is a no-op that returns
     /// `None`, which is what HTML specifies rather than a clamp.
     pub fn go(&mut self, delta: i64) -> Option<&HistoryEntry> {
-        let target = i64::try_from(self.current).ok()?.checked_add(delta)?;
-        let target = usize::try_from(target).ok()?;
-        if target >= self.entries.len() {
-            return None;
-        }
+        let target = self.target(delta)?.0;
         self.current = target;
+        self.generation = self.generation.wrapping_add(1);
         Some(&self.entries[target])
     }
 
     pub fn can_go(&self, delta: i64) -> bool {
-        i64::try_from(self.current)
-            .ok()
-            .and_then(|current| current.checked_add(delta))
-            .and_then(|target| usize::try_from(target).ok())
-            .is_some_and(|target| target < self.entries.len())
+        self.target(delta).is_some()
     }
 }
 
@@ -467,6 +488,23 @@ impl BrowsingContext {
         } else {
             self.history.push(entry);
         }
+        self.document = document;
+    }
+
+    /// Show the document selected by a history traversal without replacing
+    /// that entry or its state. A discarded document gets a new serial; all
+    /// entries from the old document receive it so sibling entries can still
+    /// traverse within the newly opened document.
+    pub fn activate_traversed_document(&mut self, document: ActiveDocument) {
+        let old_serial = self.history.current().document;
+        self.document_serial += 1;
+        for entry in &mut self.history.entries {
+            if entry.document == old_serial {
+                entry.document = self.document_serial;
+            }
+        }
+        // A redirect changes the landed entry's URL, not its serialized state.
+        self.history.current_mut().url = document.url.clone();
         self.document = document;
     }
 

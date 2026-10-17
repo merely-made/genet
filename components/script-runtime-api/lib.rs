@@ -324,15 +324,6 @@ pub struct HostState {
     /// [`Runtime::set_local_storage_provider`]; an `Rc` so the native sink clones it
     /// out before calling (no live `HostState` borrow during the call).
     pub local_storage: Option<std::rc::Rc<dyn StorageProvider>>,
-    /// `window.history` entries: `(serialized state JSON, document URL)`, the
-    /// session history the `platform` surface's `__history*` sinks drive
-    /// (`pushState` / `replaceState` / `state` / `length` / `go`). The current
-    /// entry is [`history_index`](Self::history_index). Seeded with one entry on
-    /// first use. `popstate` / real navigation are not wired (the scripted tier
-    /// has none); the URL + state bookkeeping is correct.
-    pub history: Vec<(String, String)>,
-    /// Index of the current entry in [`history`](Self::history).
-    pub history_index: usize,
     /// The host's WebGL context factory. With no factory, or when the factory
     /// returns `None`, canvas `getContext('webgl')` returns null. Installed by
     /// [`Runtime::set_webgl_factory`]; invoked with the canvas drawing-buffer

@@ -250,6 +250,49 @@ fn push_state_and_traversal_fire_popstate<E: ScriptEngine>() {
     );
 }
 
+fn history_state_and_popstate_use_receiving_realm<E: ScriptEngine>() {
+    let mut runtime = runtime::<E>();
+    runtime.eval(r#"
+        globalThis.held = frame.contentWindow;
+        held.__pops = [];
+        held.addEventListener('popstate', function(event) { held.__pops.push(event.state); });
+        var shared = { n: 7 };
+        var input = { first: shared, second: shared, map: new Map(),
+                      date: new Date(1700000000000), big: BigInt(23) };
+        input.self = input;
+        input.map.set(shared, input);
+        held.history.pushState(input, '', '?graph');
+        shared.n = 99;
+    "#).expect("push structured state");
+    check(&mut runtime, r#"
+        (function() {
+          var state = held.history.state;
+          return state !== input && state.self === state &&
+            state.first === state.second && state.first.n === 7 &&
+            state.map.get(state.first) === state && state.big === BigInt(23) &&
+            state.date.getTime() === 1700000000000 &&
+            Object.getPrototypeOf(state) === held.Object.prototype &&
+            Object.getPrototypeOf(state.map) === held.Map.prototype &&
+            Object.getPrototypeOf(state.date) === held.Date.prototype;
+        })()
+    "#);
+    runtime.eval("held.history.back();").expect("back");
+    runtime.run_event_loop(20).expect("back tasks");
+    check(&mut runtime, "held.__pops.length === 1 && held.__pops[0] === null");
+    runtime.eval("held.history.forward();").expect("forward");
+    runtime.run_event_loop(20).expect("forward tasks");
+    check(&mut runtime, r#"
+        (function() {
+          var eventState = held.__pops[1], readState = held.history.state;
+          return held.__pops.length === 2 && eventState !== readState &&
+            eventState.self === eventState && eventState.first === eventState.second &&
+            eventState.map.get(eventState.first) === eventState &&
+            Object.getPrototypeOf(eventState) === held.Object.prototype &&
+            Object.getPrototypeOf(eventState.map) === held.Map.prototype;
+        })()
+    "#);
+}
+
 /// A navigation that changes the frame's origin flips the parent's view to the
 /// cross-origin branch of the very same `WindowProxy`.
 fn an_origin_change_flips_the_parents_view<E: ScriptEngine>() {
@@ -291,6 +334,10 @@ macro_rules! backend {
             #[test]
             fn push_state_and_popstate() {
                 super::push_state_and_traversal_fire_popstate::<$engine>();
+            }
+            #[test]
+            fn structured_history_state_and_popstate() {
+                super::history_state_and_popstate_use_receiving_realm::<$engine>();
             }
             #[test]
             fn origin_change_flips_the_view() {

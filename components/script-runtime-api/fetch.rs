@@ -23,34 +23,9 @@ use script_engine_api::{CallCx, NativeFn, ScriptEngine};
 
 use crate::HostState;
 
-/// A fetch the host should perform on script's behalf.
-pub struct FetchRequest {
-    pub method: String,
-    pub url: String,
-    pub headers: Vec<(String, String)>,
-    pub body: Option<Vec<u8>>,
-    /// The HTTP cache mode name (`default` / `no-store` / `reload` / `no-cache` /
-    /// `force-cache` / `only-if-cached`); the host maps it to its cache engine.
-    pub cache: String,
-    /// The redirect mode name (`follow` / `error` / `manual`); the host maps it to
-    /// its redirect handling.
-    pub redirect: String,
-    /// The request mode name (`cors` / `no-cors` / `same-origin` / `navigate`); the
-    /// host maps it to its CORS / response-tainting model.
-    pub mode: String,
-    /// The request's referrer URL (the initiator document), or empty for none; the
-    /// host derives the `Referer` header from it per [`Self::referrer_policy`].
-    pub referrer: String,
-    /// The referrer policy name (`` / `no-referrer` / `origin` / `unsafe-url` / …);
-    /// the host maps it to its referrer engine.
-    pub referrer_policy: String,
-    /// The credentials mode name (`omit` / `same-origin` / `include`); the host maps
-    /// it to whether cookies/auth travel with the request.
-    pub credentials: String,
-    /// Subresource Integrity metadata (`alg-base64 ...`), or empty for none; the
-    /// host verifies the response body against it.
-    pub integrity: String,
-}
+/// The host-owned request contract, re-exported for script callers. This crate
+/// still owns JS execution and completion; the host owns request policy fields.
+pub use genet_host_api::ResourceRequest as FetchRequest;
 
 /// The result handed back to script. A Fetch *network error* is
 /// `network_error == true` (script sees a rejected promise / `TypeError`).

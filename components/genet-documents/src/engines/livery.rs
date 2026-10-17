@@ -332,7 +332,7 @@ impl<Fetch: ResourceFetcher> LiverySessionEngine<Fetch> {
         }
         let navigation_address = redirected_navigation_address(&request.url, &response.final_url);
         let navigation = genet_livery::NavigationFragment::parse(&navigation_address);
-        let source_response: ResourceResponse = response.into();
+        let source_response: ResourceResponse = response.into_legacy_response();
         let base_resource = source_response.final_url.split('#').next().unwrap_or("").to_owned();
         let decoded = decode_html_document(&source_response.bytes,
             source_response.content_type.as_deref(), self.decode_options);

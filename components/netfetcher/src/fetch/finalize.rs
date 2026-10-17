@@ -117,10 +117,20 @@ pub(super) async fn finalize_response(
     // mismatch is a network error. (Bypasses the streaming/cache paths — an
     // integrity request needs the whole body anyway.)
     if sri::is_enforced(&request.integrity) {
-        let bytes = match ResponseBody::new(body).bytes().await {
-            Ok(b) => b,
-            Err(_) => return Response::network_error(),
-        };
+        let mut body = ResponseBody::new(body);
+        let mut bytes = BytesMut::new();
+        while let Some(chunk) = body.next_chunk().await {
+            let Ok(chunk) = chunk else {
+                return Response::network_error();
+            };
+            if cx.response_max_body_bytes.is_some_and(|max| {
+                chunk.len() > max.saturating_sub(bytes.len())
+            }) {
+                return Response::network_error();
+            }
+            bytes.extend_from_slice(&chunk);
+        }
+        let bytes = bytes.freeze();
         if !sri::verify(&request.integrity, &bytes) {
             return Response::network_error();
         }

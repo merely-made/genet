@@ -201,6 +201,17 @@ impl ScriptWake {
 struct Completion {
     id: u64,
     outcome: FetchOutcome,
+    _reservation: FetchReservation,
+}
+
+/// Held until a page completion is consumed or discarded. Worker requests
+/// release after delivery to the worker's mailbox.
+struct FetchReservation(Arc<AtomicUsize>);
+
+impl Drop for FetchReservation {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
+    }
 }
 
 struct CompletionState {
@@ -212,9 +223,40 @@ struct BridgeState {
     fetcher: Arc<dyn ResourceFetcher + Send + Sync>,
     completions: Mutex<CompletionState>,
     active: AtomicUsize,
+    admitted: Arc<AtomicUsize>,
+    admission_limit: usize,
     closed: AtomicBool,
     wake: ScriptWake,
     generation: u64,
+}
+
+impl BridgeState {
+    fn try_reserve(&self) -> Option<FetchReservation> {
+        if self.closed.load(Ordering::Acquire) {
+            return None;
+        }
+        let mut current = self.admitted.load(Ordering::Acquire);
+        loop {
+            if current >= self.admission_limit {
+                return None;
+            }
+            match self.admitted.compare_exchange_weak(
+                current,
+                current + 1,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => {
+                    let reservation = FetchReservation(Arc::clone(&self.admitted));
+                    if self.closed.load(Ordering::Acquire) {
+                        return None;
+                    }
+                    return Some(reservation);
+                },
+                Err(actual) => current = actual,
+            }
+        }
+    }
 }
 
 /// A cloneable resource route installed into both the runtime and Livery.
@@ -239,6 +281,7 @@ impl ScriptResourceBridge {
     where
         F: ResourceFetcher + Send + Sync + 'static,
     {
+        let admission_limit = fetcher.max_concurrent_fetches();
         wake.register_generation(generation);
         Self {
             state: Arc::new(BridgeState {
@@ -248,6 +291,8 @@ impl ScriptResourceBridge {
                     queue: VecDeque::new(),
                 }),
                 active: AtomicUsize::new(0),
+                admitted: Arc::new(AtomicUsize::new(0)),
+                admission_limit,
                 closed: AtomicBool::new(false),
                 wake,
                 generation,
@@ -321,20 +366,7 @@ impl ScriptResourceBridge {
     }
 
     fn outcome(&self, request: &FetchRequest) -> FetchOutcome {
-        let host_request = genet_host_api::ResourceRequest {
-            url: request.url.clone(),
-            method: request.method.clone(),
-            headers: request.headers.clone(),
-            body: request.body.clone(),
-            cache: request.cache.clone(),
-            redirect: request.redirect.clone(),
-            mode: request.mode.clone(),
-            referrer: request.referrer.clone(),
-            referrer_policy: request.referrer_policy.clone(),
-            credentials: request.credentials.clone(),
-            integrity: request.integrity.clone(),
-        };
-        match self.state.fetcher.fetch_request(&host_request) {
+        match self.state.fetcher.fetch_request(request) {
             Some(response) => {
                 let mut headers = response.headers;
                 if !headers
@@ -359,6 +391,53 @@ impl ScriptResourceBridge {
             None => FetchOutcome::network_error(),
         }
     }
+
+    fn start_fetch_with(
+        &self,
+        id: u64,
+        request: FetchRequest,
+        spawn: impl FnOnce(Box<dyn FnOnce() + Send + 'static>) -> std::io::Result<()>,
+    ) -> Option<FetchOutcome> {
+        let Some(reservation) = self.state.try_reserve() else {
+            return Some(FetchOutcome::network_error());
+        };
+        self.state.active.fetch_add(1, Ordering::AcqRel);
+        let state = Arc::clone(&self.state);
+        let work = Box::new(move || {
+            let outcome = Self {
+                state: Arc::clone(&state),
+            }
+            .outcome(&request);
+            let resource = request.url.clone();
+            let mut completions = state
+                .completions
+                .lock()
+                .expect("script resource mutex poisoned");
+            if completions.closed || state.closed.load(Ordering::Acquire) {
+                drop(completions);
+                state.active.fetch_sub(1, Ordering::AcqRel);
+                state
+                    .wake
+                    .notify_source("fetch", state.generation, Some(resource));
+                return;
+            }
+            completions.queue.push_back(Completion {
+                id,
+                outcome,
+                _reservation: reservation,
+            });
+            state.active.fetch_sub(1, Ordering::AcqRel);
+            drop(completions);
+            state
+                .wake
+                .notify_source("fetch", state.generation, Some(resource));
+        });
+        if spawn(work).is_err() {
+            self.state.active.fetch_sub(1, Ordering::AcqRel);
+            return Some(FetchOutcome::network_error());
+        }
+        None
+    }
 }
 
 impl Drop for ScriptResourceBridge {
@@ -372,6 +451,10 @@ impl Drop for ScriptResourceBridge {
 impl ResourceFetcher for ScriptResourceBridge {
     fn fetch(&self, url: &str) -> Option<Vec<u8>> {
         self.state.fetcher.fetch(url)
+    }
+
+    fn max_concurrent_fetches(&self) -> usize {
+        self.state.admission_limit
     }
 
     fn fetch_request(
@@ -388,40 +471,12 @@ impl ResourceFetcher for ScriptResourceBridge {
 
 impl FetchHandler for ScriptResourceBridge {
     fn start(&self, id: u64, request: FetchRequest) -> Option<FetchOutcome> {
-        if self.state.closed.load(Ordering::Acquire) {
-            return Some(FetchOutcome::network_error());
-        }
-        self.state.active.fetch_add(1, Ordering::AcqRel);
-        let state = Arc::clone(&self.state);
-        std::thread::Builder::new()
-            .name("genet-script-fetch".to_owned())
-            .spawn(move || {
-                let outcome = Self {
-                    state: Arc::clone(&state),
-                }
-                .outcome(&request);
-                let resource = request.url.clone();
-                let mut completions = state
-                    .completions
-                    .lock()
-                    .expect("script resource mutex poisoned");
-                if completions.closed || state.closed.load(Ordering::Acquire) {
-                    drop(completions);
-                    state.active.fetch_sub(1, Ordering::AcqRel);
-                    state
-                        .wake
-                        .notify_source("fetch", state.generation, Some(resource));
-                    return;
-                }
-                completions.queue.push_back(Completion { id, outcome });
-                state.active.fetch_sub(1, Ordering::AcqRel);
-                drop(completions);
-                state
-                    .wake
-                    .notify_source("fetch", state.generation, Some(resource));
-            })
-            .expect("could not start scripted fetch worker");
-        None
+        self.start_fetch_with(id, request, |work| {
+            std::thread::Builder::new()
+                .name("genet-script-fetch".to_owned())
+                .spawn(move || work())
+                .map(|_| ())
+        })
     }
 
     fn fetch(&self, request: FetchRequest) -> FetchOutcome {
@@ -478,14 +533,18 @@ impl ScriptResourceLoader for ScriptResourceBridge {
         request: FetchRequest,
         complete: Box<dyn FnOnce(FetchOutcome) + Send>,
     ) -> Option<FetchRequest> {
-        if self.state.closed.load(Ordering::Acquire) {
-            return Some(request);
-        }
+        let Some(reservation) = self.state.try_reserve() else {
+            complete(FetchOutcome::network_error());
+            return None;
+        };
         self.state.active.fetch_add(1, Ordering::AcqRel);
         let state = Arc::clone(&self.state);
-        std::thread::Builder::new()
+        let completion = Arc::new(Mutex::new(Some(complete)));
+        let worker_completion = Arc::clone(&completion);
+        let spawned = std::thread::Builder::new()
             .name("genet-worker-resource".to_owned())
             .spawn(move || {
+                let _reservation = reservation;
                 let resource = request.url.clone();
                 let outcome = Self {
                     state: Arc::clone(&state),
@@ -499,9 +558,24 @@ impl ScriptResourceLoader for ScriptResourceBridge {
                         .stale("worker", state.generation, active, Some(resource));
                     return;
                 }
-                complete(outcome);
-            })
-            .expect("could not start worker resource thread");
+                if let Some(complete) = worker_completion
+                    .lock()
+                    .expect("worker completion mutex poisoned")
+                    .take()
+                {
+                    complete(outcome);
+                }
+            });
+        if spawned.is_err() {
+            self.state.active.fetch_sub(1, Ordering::AcqRel);
+            if let Some(complete) = completion
+                .lock()
+                .expect("worker completion mutex poisoned")
+                .take()
+            {
+                complete(FetchOutcome::network_error());
+            }
+        }
         None
     }
 }
@@ -509,8 +583,159 @@ impl ScriptResourceLoader for ScriptResourceBridge {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use genet_host_api::ResourceResponse;
+    use genet_host_api::{ResourceFetchResponse, ResourceResponse};
     use std::sync::atomic::AtomicUsize;
+    use std::sync::{Condvar, mpsc};
+
+    fn known_http_fixture(response: ResourceResponse) -> ResourceFetchResponse {
+        let headers = response
+            .content_type
+            .as_ref()
+            .map(|value| vec![("content-type".into(), value.clone())])
+            .unwrap_or_default();
+        ResourceFetchResponse {
+            final_url: response.final_url,
+            content_type: response.content_type,
+            bytes: response.bytes,
+            status: 200,
+            status_text: "OK".into(),
+            headers,
+            response_type: "basic".into(),
+            redirected: false,
+        }
+    }
+
+    #[derive(Clone)]
+    struct BlockingHost {
+        calls: Arc<AtomicUsize>,
+        entered: mpsc::Sender<()>,
+        gate: Arc<(Mutex<bool>, Condvar)>,
+    }
+
+    impl ResourceFetcher for BlockingHost {
+        fn fetch(&self, _: &str) -> Option<Vec<u8>> {
+            None
+        }
+
+        fn max_concurrent_fetches(&self) -> usize {
+            1
+        }
+
+        fn fetch_request(&self, request: &FetchRequest) -> Option<ResourceFetchResponse> {
+            self.calls.fetch_add(1, Ordering::AcqRel);
+            self.entered.send(()).unwrap();
+            let (lock, changed) = &*self.gate;
+            let released = lock.lock().unwrap();
+            let (released, _) = changed
+                .wait_timeout_while(released, std::time::Duration::from_secs(3), |open| !*open)
+                .unwrap();
+            if !*released {
+                return None;
+            }
+            Some(known_http_fixture(ResourceResponse::new(
+                request.url.clone(),
+                b"ok".to_vec(),
+            )))
+        }
+    }
+
+    fn blocking_host() -> (BlockingHost, mpsc::Receiver<()>) {
+        let (entered, receiver) = mpsc::channel();
+        (
+            BlockingHost {
+                calls: Arc::new(AtomicUsize::new(0)),
+                entered,
+                gate: Arc::new((Mutex::new(false), Condvar::new())),
+            },
+            receiver,
+        )
+    }
+
+    fn release(host: &BlockingHost) {
+        let (lock, changed) = &*host.gate;
+        *lock.lock().unwrap() = true;
+        changed.notify_all();
+    }
+
+    #[test]
+    fn page_admission_bounds_workers_and_queued_completions_until_pump() {
+        let (host, entered) = blocking_host();
+        let (woke_tx, woke_rx) = mpsc::channel();
+        let wake = ScriptWake::new();
+        wake.set_callback(move |_| {
+            let _ = woke_tx.send(());
+        });
+        let bridge = ScriptResourceBridge::new(host.clone(), wake);
+        assert!(FetchHandler::start(&bridge, 1, FetchRequest::plain_get("https://fixture.test/one")).is_none());
+        entered.recv_timeout(std::time::Duration::from_secs(2)).unwrap();
+        assert!(FetchHandler::start(&bridge, 2, FetchRequest::plain_get("https://fixture.test/two"))
+            .unwrap().network_error);
+        assert_eq!(host.calls.load(Ordering::Acquire), 1);
+        release(&host);
+        woke_rx.recv_timeout(std::time::Duration::from_secs(2)).unwrap();
+        assert_eq!(bridge.state.admitted.load(Ordering::Acquire), 1);
+        assert!(FetchHandler::start(&bridge, 3, FetchRequest::plain_get("https://fixture.test/three"))
+            .unwrap().network_error, "unconsumed completion still holds admission");
+        let mut runtime = Runtime::<script_engine_boa::BoaEngine>::new().unwrap();
+        // These direct starts use fixture IDs without registering JS promises;
+        // the JS settlement hook deliberately ignores unknown IDs.
+        assert_eq!(bridge.pump(&mut runtime).unwrap(), 1);
+        assert_eq!(bridge.state.admitted.load(Ordering::Acquire), 0);
+        assert!(FetchHandler::start(&bridge, 4, FetchRequest::plain_get("https://fixture.test/four")).is_none());
+        entered.recv_timeout(std::time::Duration::from_secs(2)).unwrap();
+        woke_rx.recv_timeout(std::time::Duration::from_secs(2)).unwrap();
+        bridge.close();
+        assert_eq!(host.calls.load(Ordering::Acquire), 2);
+        assert_eq!(bridge.state.admitted.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn worker_admission_refuses_inline_without_falling_back_to_sync_fetch() {
+        let (host, entered) = blocking_host();
+        let bridge = ScriptResourceBridge::new(host.clone(), ScriptWake::new());
+        let (completed_tx, completed_rx) = mpsc::channel();
+        assert!(ScriptResourceLoader::start(
+            &bridge,
+            1,
+            FetchRequest::plain_get("https://fixture.test/worker-one"),
+            Box::new(move |outcome| completed_tx.send(outcome).unwrap()),
+        ).is_none());
+        entered.recv_timeout(std::time::Duration::from_secs(2)).unwrap();
+        let (refused_tx, refused_rx) = mpsc::channel();
+        assert!(ScriptResourceLoader::start(
+            &bridge,
+            2,
+            FetchRequest::plain_get("https://fixture.test/worker-two"),
+            Box::new(move |outcome| refused_tx.send(outcome).unwrap()),
+        ).is_none());
+        assert!(refused_rx.recv_timeout(std::time::Duration::from_secs(2)).unwrap().network_error);
+        assert_eq!(host.calls.load(Ordering::Acquire), 1);
+        release(&host);
+        assert!(!completed_rx.recv_timeout(std::time::Duration::from_secs(2)).unwrap().network_error);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while bridge.state.admitted.load(Ordering::Acquire) != 0
+            && std::time::Instant::now() < deadline
+        {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        assert_eq!(bridge.state.admitted.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn page_spawn_failure_releases_reservation_without_panicking() {
+        let bridge = ScriptResourceBridge::new(
+            Fixture { calls: Arc::new(AtomicUsize::new(0)) },
+            ScriptWake::new(),
+        );
+        let outcome = bridge.start_fetch_with(
+            1,
+            FetchRequest::plain_get("https://fixture.test/fail"),
+            |_work| Err(std::io::Error::other("injected thread refusal")),
+        );
+        assert!(outcome.unwrap().network_error);
+        assert_eq!(bridge.state.admitted.load(Ordering::Acquire), 0);
+        assert!(!bridge.has_pending());
+    }
 
     #[derive(Clone)]
     struct Fixture {
@@ -528,6 +753,14 @@ mod tests {
                 ResourceResponse::new("https://final.test/script.js", b"x".to_vec())
                     .with_content_type("text/javascript"),
             )
+        }
+
+        fn fetch_request(&self, request: &FetchRequest) -> Option<ResourceFetchResponse> {
+            request
+                .is_plain_get()
+                .then(|| self.fetch_response(&request.url))
+                .flatten()
+                .map(known_http_fixture)
         }
     }
 
@@ -549,6 +782,13 @@ mod tests {
                     ResourceResponse::new(final_url, b"<p id=mark>redirected</p>".to_vec())
                         .with_content_type("text/html"),
                 )
+            }
+            fn fetch_request(&self, request: &FetchRequest) -> Option<ResourceFetchResponse> {
+                request
+                    .is_plain_get()
+                    .then(|| self.fetch_response(&request.url))
+                    .flatten()
+                    .map(known_http_fixture)
             }
         }
         fn read<E: ScriptEngine>(runtime: &mut Runtime<E>, code: &str) -> String {
@@ -656,11 +896,16 @@ mod tests {
                 if self.status == 0 {
                     return None;
                 }
-                let mut response: genet_host_api::ResourceFetchResponse = ResourceResponse::new(
-                    "https://final.test/final.html",
-                    b"<p>replacement</p>".to_vec(),
-                )
-                .into();
+                let mut response = genet_host_api::ResourceFetchResponse {
+                    final_url: "https://final.test/final.html".into(),
+                    content_type: None,
+                    bytes: b"<p>replacement</p>".to_vec(),
+                    status: 200,
+                    status_text: "OK".into(),
+                    headers: Vec::new(),
+                    response_type: "basic".into(),
+                    redirected: false,
+                };
                 response.status = self.status;
                 if self.status == 1 {
                     response.response_type = "error".into();
@@ -764,8 +1009,16 @@ mod tests {
                 request: &genet_host_api::ResourceRequest,
             ) -> Option<genet_host_api::ResourceFetchResponse> {
                 self.0.lock().unwrap().push(request.clone());
-                let mut response: genet_host_api::ResourceFetchResponse =
-                    ResourceResponse::new("https://final.test/posted", b"accepted".to_vec()).into();
+                let mut response = genet_host_api::ResourceFetchResponse {
+                    final_url: "https://final.test/posted".into(),
+                    content_type: None,
+                    bytes: b"accepted".to_vec(),
+                    status: 200,
+                    status_text: "OK".into(),
+                    headers: Vec::new(),
+                    response_type: "basic".into(),
+                    redirected: false,
+                };
                 response.status = 201;
                 response.status_text = "Created".into();
                 response.response_type = "cors".into();
@@ -814,14 +1067,16 @@ mod tests {
     }
 
     #[test]
-    fn url_only_host_refuses_post_instead_of_loading_get() {
+    fn url_only_host_refuses_rich_requests_without_claiming_http_success() {
+        struct UrlOnly(Arc<AtomicUsize>);
+        impl ResourceFetcher for UrlOnly {
+            fn fetch(&self, _: &str) -> Option<Vec<u8>> {
+                self.0.fetch_add(1, Ordering::Relaxed);
+                Some(b"legacy".to_vec())
+            }
+        }
         let calls = Arc::new(AtomicUsize::new(0));
-        let bridge = ScriptResourceBridge::new(
-            Fixture {
-                calls: calls.clone(),
-            },
-            ScriptWake::new(),
-        );
+        let bridge = ScriptResourceBridge::new(UrlOnly(calls.clone()), ScriptWake::new());
         let outcome = FetchHandler::fetch(
             &bridge,
             FetchRequest {
@@ -841,6 +1096,11 @@ mod tests {
         assert!(
             outcome.network_error,
             "URL-only host cannot serve a POST as GET"
+        );
+        assert_eq!(calls.load(Ordering::Relaxed), 0);
+        assert!(
+            FetchHandler::fetch(&bridge, fixture_request("GET")).network_error,
+            "URL-only bytes do not establish HTTP status or response policy"
         );
         assert_eq!(calls.load(Ordering::Relaxed), 0);
     }
@@ -942,10 +1202,12 @@ mod tests {
             .push_back(Completion {
                 id: 1,
                 outcome: FetchOutcome::network_error(),
+                _reservation: bridge.state.try_reserve().unwrap(),
             });
         assert!(bridge.has_pending());
         bridge.close();
         assert!(!bridge.has_pending());
+        assert_eq!(bridge.state.admitted.load(Ordering::Acquire), 0);
     }
 
     #[test]

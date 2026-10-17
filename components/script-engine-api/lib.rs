@@ -46,18 +46,33 @@ pub type ReflectorData = u64;
 /// [`pump_microtasks`]: ScriptEngine::pump_microtasks
 pub type PromiseToken = u64;
 
-/// A bound on how much work one [`ScriptEngine::pump`] call may do, as a runaway
-/// guard. The unit is **coarse and backend-defined** (Nova counts reaction *jobs*, a
-/// fuel-metered VM counts VM *steps*), so `Steps(n)` is a "stop a script that never
-/// settles" cap, not precise accounting. `Unbounded` drains to quiescence (the
-/// classic microtask checkpoint).
+/// An explicit work limit. `Steps` means backend-defined coarse VM work units
+/// for `eval_bounded` (Piccolo spends up to 4096 fuel per unit), and completed
+/// jobs for `pump`. A job may run arbitrary VM code, so a job count is not an
+/// execution limit. Check [`ExecutionCapabilities`] before requiring either.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Budget {
     /// Drain the queue fully (a job storm can hang the caller; use only on trusted
     /// scripts or after their work is known-bounded).
     Unbounded,
-    /// Run at most this many coarse steps, then return control even if work remains.
+    /// Limit coarse VM work units in `eval_bounded`, or completed jobs in `pump`.
     Steps(u64),
+}
+
+/// Enforceable script limits advertised by a backend. Worker cancellation also
+/// requires interrupting callbacks and running jobs; these flags do not imply it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ExecutionCapabilities {
+    pub bounded_eval_vm: bool,
+    pub bounded_pump_jobs: bool,
+    pub bounded_pump_vm: bool,
+}
+
+/// A required VM evaluation limit cannot silently fall back to plain `eval`.
+#[derive(Debug)]
+pub enum BoundedEvalError<E> {
+    Unsupported,
+    Engine(E),
 }
 
 /// The result of a [`ScriptEngine::pump`] call.
@@ -69,6 +84,8 @@ pub enum PumpOutcome {
     /// more progress (a runaway script keeps returning this, which is how the caller
     /// detects and abandons it).
     Pending,
+    /// The backend cannot honor a requested bound. Nothing was pumped.
+    UnsupportedBound,
 }
 
 /// Opaque, engine-assigned identity for a **realm** inside one engine instance.
@@ -173,6 +190,10 @@ pub const WINDOW_PROXY_HANDLER_SLOT: &str = "__windowProxyHandler";
 pub const WINDOW_PROXY_TARGET_SLOT: &str = "__windowProxyTarget";
 
 pub trait ScriptEngine: Sized {
+    /// Limits this backend can enforce. Defaults to no bounded execution.
+    fn execution_capabilities() -> ExecutionCapabilities {
+        ExecutionCapabilities::default()
+    }
     /// A handle to a JS value. For engines whose values are GC-scoped (Nova), this is
     /// a *rooted* handle so it can be held across calls; for others it is the native
     /// value type (Boa `JsValue`).
@@ -258,19 +279,17 @@ pub trait ScriptEngine: Sized {
         Err(RealmError::Unsupported)
     }
 
-    /// Like [`eval`](Self::eval), but bounded: a [`Budget::Steps`] cap stops a
-    /// runaway script (e.g. `while true do end`) after roughly that many
-    /// coarse VM steps and returns an error instead of hanging. The cap is on
-    /// the *main* evaluation, complementing [`pump`](Self::pump)'s cap on
-    /// microtask jobs.
-    ///
-    /// The default ignores the budget and runs [`eval`](Self::eval) unbounded
-    /// — correct for backends whose VM cannot be step-metered (Boa). A
-    /// fuel-metered backend (piccolo) overrides this; an untrusted-script host
-    /// should prefer this method with a [`Budget::Steps`] bound on those
-    /// backends.
-    fn eval_bounded(&mut self, source: &str, _budget: Budget) -> Result<Self::Value, Self::Error> {
-        self.eval(source)
+    /// Evaluate with a required backend-defined VM-work limit. Unsupported backends refuse
+    /// before running source. `Unbounded` explicitly opts into ordinary eval.
+    fn eval_bounded(
+        &mut self,
+        source: &str,
+        budget: Budget,
+    ) -> Result<Self::Value, BoundedEvalError<Self::Error>> {
+        match budget {
+            Budget::Unbounded => self.eval(source).map_err(BoundedEvalError::Engine),
+            Budget::Steps(_) => Err(BoundedEvalError::Unsupported),
+        }
     }
 
     /// Coerce a value to a Rust string (`ToString`).
@@ -308,24 +327,14 @@ pub trait ScriptEngine: Sized {
         length: usize,
     ) -> Result<(), Self::Error>;
 
-    /// Run pending microtasks (Promise reaction jobs) up to `budget`, including jobs
-    /// enqueued while running. Returns [`PumpOutcome::Quiescent`] if the queue drained
-    /// or [`PumpOutcome::Pending`] if `budget` ran out with work remaining. The host
-    /// calls this at task boundaries (after the initial script, between timer tasks) so
-    /// Promise continuations resolve; passing a [`Budget::Steps`] bound lets it cap a
-    /// runaway script instead of hanging. Errors thrown by a job are swallowed (an
-    /// unhandled rejection is not the host's failure).
-    ///
-    /// Backends honor the budget to the degree their job machinery allows: a
-    /// fuel-metered VM bounds by VM step, Nova bounds by job count, and Boa drains
-    /// fully (its `SimpleJobExecutor` has no sub-drain) and so always returns
-    /// `Quiescent`. The contract a caller can rely on everywhere is "`Quiescent` means
-    /// done"; only `Steps`-honoring backends return `Pending`.
+    /// Run pending microtasks. `Steps(n)` requests a completed-job count limit,
+    /// not a bound on VM execution inside a job. A backend that cannot count
+    /// jobs returns `UnsupportedBound` before running any. `Unbounded` opts into
+    /// a full checkpoint. Job errors are swallowed as unhandled rejections.
     fn pump(&mut self, budget: Budget) -> PumpOutcome;
 
-    /// Drain pending microtasks to quiescence: [`pump`] with [`Budget::Unbounded`]. The
-    /// common case at a task boundary; callers that must not hang on a runaway script
-    /// use [`pump`] with a [`Budget::Steps`] bound and loop on [`PumpOutcome::Pending`].
+    /// Drain pending microtasks to quiescence by explicitly choosing unbounded
+    /// work. A counted-job pump cannot stop a job that spins inside the VM.
     ///
     /// [`pump`]: ScriptEngine::pump
     fn pump_microtasks(&mut self) {

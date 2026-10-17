@@ -58,10 +58,10 @@ use script_engine_api::RealmId;
 use script_engine_api::ScriptEngine;
 use script_runtime_api::{CookieProvider, Runtime, WebGlFactory};
 
-use crate::ResourceFetcher;
+use crate::{ResourceFetcher, ScriptedDocumentOptions};
 use crate::capture::DomCaptureRecorder;
 #[cfg(feature = "livery")]
-use crate::{LiveryCssom, ScriptedClick, ScriptedDocumentOptions};
+use crate::{LiveryCssom, ScriptedClick};
 #[cfg(feature = "livery")]
 use crate::{ScriptResourceBridge, ScriptWake};
 
@@ -70,12 +70,85 @@ fn report_runtime_task_error<E: ScriptEngine>(rt: &mut Runtime<E>, task: &str, e
     rt.report_script_exception(&format!("{task}: {message}"), None);
 }
 
-fn next_document_wake_delay<E: ScriptEngine>(
-    rt: &mut Runtime<E>,
+/// One scheduler state for both the headless and rendered document. Visibility
+/// throttles task delivery; freezing suspends it altogether. The hidden wake
+/// deadline is the same one that admits a pump, so a short interval cannot
+/// repeatedly wake the host while every pump is skipped.
+#[derive(Default)]
+struct DocumentLifecycle {
     hidden: bool,
     frozen: bool,
+    hidden_deadline_ms: Option<f64>,
+    last_pump_ms: Option<f64>,
+}
+
+impl DocumentLifecycle {
+    fn set_hidden(&mut self, hidden: bool) -> bool {
+        if self.hidden == hidden {
+            return false;
+        }
+        self.hidden = hidden;
+        // The first hidden pump establishes the host's clock origin. An
+        // immediate wake is needed only if a timer is pending.
+        self.hidden_deadline_ms = None;
+        true
+    }
+
+    fn freeze(&mut self) -> bool {
+        if self.frozen {
+            return false;
+        }
+        self.frozen = true;
+        true
+    }
+
+    fn resume(&mut self) -> bool {
+        if !self.frozen {
+            return false;
+        }
+        self.frozen = false;
+        if self.hidden {
+            self.hidden_deadline_ms = None;
+        }
+        true
+    }
+
+    fn allows_pump(&mut self, now_ms: f64) -> bool {
+        if self.frozen {
+            return false;
+        }
+        self.last_pump_ms = Some(now_ms);
+        if !self.hidden {
+            return true;
+        }
+        match self.hidden_deadline_ms {
+            None => {
+                self.hidden_deadline_ms = Some(now_ms + 1000.0);
+                false
+            },
+            Some(deadline) if now_ms < deadline => false,
+            Some(_) => {
+                self.hidden_deadline_ms = Some(now_ms + 1000.0);
+                true
+            },
+        }
+    }
+
+    fn hidden_wake_delay(&self, source_delay: f64) -> f64 {
+        match (self.hidden_deadline_ms, self.last_pump_ms) {
+            (Some(deadline), Some(now)) => source_delay.max((deadline - now).max(0.0)),
+            // Establish the first hidden deadline without delivering tasks.
+            _ => 0.0,
+        }
+    }
+}
+
+fn next_document_wake_delay<E: ScriptEngine>(
+    rt: &mut Runtime<E>,
+    lifecycle: &DocumentLifecycle,
+    external_pending: bool,
 ) -> Option<f64> {
-    if frozen {
+    if lifecycle.frozen {
         return None;
     }
     let timer = match rt.next_timer_delay() {
@@ -85,8 +158,16 @@ fn next_document_wake_delay<E: ScriptEngine>(
             Some(0.0)
         },
     };
-    if hidden {
-        return timer;
+    if lifecycle.hidden {
+        // Timer and external work independently request an admitted turn.
+        // A distant timer must not postpone an already queued completion.
+        let timer_wake = timer.map(|delay| lifecycle.hidden_wake_delay(delay));
+        let external_wake = external_pending.then(|| lifecycle.hidden_wake_delay(0.0));
+        return match (timer_wake, external_wake) {
+            (Some(timer), Some(external)) => Some(timer.min(external)),
+            (Some(delay), None) | (None, Some(delay)) => Some(delay),
+            (None, None) => None,
+        };
     }
     match rt.has_animation_frame_callbacks() {
         Ok(true) => Some(0.0),
@@ -195,15 +276,7 @@ pub struct ScriptedDocument<E: ScriptEngine> {
     /// the page's script mutates.
     rt: Runtime<E>,
     capture: Option<DomCaptureRecorder>,
-    /// Page Visibility state (W3C adoption plan P1): `true` = the document is
-    /// not being presented (an unfocused preview card). Hidden documents get
-    /// their timer pump throttled to the spec-licensed 1s clamp; a
-    /// `visibilitychange` event fires on each flip.
-    hidden: bool,
-    /// Page Lifecycle frozen state: no tasks run at all until `resume`.
-    frozen: bool,
-    /// Virtual-clock stamp of the last hidden-state timer pump (the 1s clamp).
-    last_hidden_pump_ms: f64,
+    lifecycle: DocumentLifecycle,
 }
 
 impl<E: ScriptEngine> ScriptedDocument<E> {
@@ -212,7 +285,16 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
     /// same `fetcher`). `Err` on a failed fetch of the document, or a runtime that
     /// would not initialize.
     pub fn load(fetcher: &impl ResourceFetcher, url: &str) -> Result<Self, String> {
-        Self::load_inner(fetcher, url, None, Default::default())
+        Self::load_inner(fetcher, url, ScriptedDocumentOptions::default(), Default::default())
+    }
+
+    /// Load with host capabilities installed before parser scripts run.
+    pub fn load_with_options(
+        fetcher: &impl ResourceFetcher,
+        url: &str,
+        options: ScriptedDocumentOptions,
+    ) -> Result<Self, String> {
+        Self::load_inner(fetcher, url, options, Default::default())
     }
 
     /// Load a document with a host-owned WebGL factory installed before any
@@ -224,7 +306,9 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         url: &str,
         webgl: WebGlFactory,
     ) -> Result<Self, String> {
-        Self::load_inner(fetcher, url, Some(webgl), Default::default())
+        Self::load_inner(fetcher, url, ScriptedDocumentOptions {
+            webgl: Some(webgl), ..ScriptedDocumentOptions::default()
+        }, Default::default())
     }
 
     pub fn load_with_decode_options(
@@ -232,12 +316,12 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         url: &str,
         decode_options: script_runtime_api::HtmlDecodeOptions,
     ) -> Result<Self, String> {
-        Self::load_inner(fetcher, url, None, decode_options)
+        Self::load_inner(fetcher, url, ScriptedDocumentOptions::default(), decode_options)
     }
     fn load_inner(
         fetcher: &impl ResourceFetcher,
         url: &str,
-        webgl: Option<WebGlFactory>,
+        options: ScriptedDocumentOptions,
         decode_options: script_runtime_api::HtmlDecodeOptions,
     ) -> Result<Self, String> {
         // Split a `url#id` fragment off before fetching (the fetcher takes the
@@ -260,7 +344,7 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
             &decoded.source,
             Some((fetcher, &response.final_url)),
             None,
-            webgl,
+            options,
             decoded.encoding,
             decode_options,
         )?;
@@ -276,14 +360,21 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
     /// `data:` content — with no fetcher, external `<script src>` is reported and
     /// skipped. `Err` if the runtime fails to initialize.
     pub fn parse(html: &str) -> Result<Self, String> {
-        Self::build(html, None, None, None)
+        Self::build(html, None, None, ScriptedDocumentOptions::default())
+    }
+
+    /// Parse with host capabilities installed before inline scripts run.
+    pub fn parse_with_options(html: &str, options: ScriptedDocumentOptions) -> Result<Self, String> {
+        Self::build(html, None, None, options)
     }
 
     /// Parse a document with a host-owned WebGL factory installed before its
     /// inline scripts run. This is the fetch-free companion to
     /// [`load_with_webgl_factory`](Self::load_with_webgl_factory).
     pub fn parse_with_webgl_factory(html: &str, webgl: WebGlFactory) -> Result<Self, String> {
-        Self::build(html, None, None, Some(webgl))
+        Self::build(html, None, None, ScriptedDocumentOptions {
+            webgl: Some(webgl), ..ScriptedDocumentOptions::default()
+        })
     }
 
     /// Parse an already-fetched `html` body and run its scripts, fetching external
@@ -300,7 +391,18 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         base_url: &str,
         cookies: Option<Box<dyn CookieProvider>>,
     ) -> Result<Self, String> {
-        Self::build(html, Some((fetcher, base_url)), cookies, None)
+        Self::build(html, Some((fetcher, base_url)), cookies, ScriptedDocumentOptions::default())
+    }
+
+    /// Parse an already-fetched body with host capabilities set before scripts.
+    pub fn from_body_with_options(
+        html: &str,
+        fetcher: &dyn ResourceFetcher,
+        base_url: &str,
+        cookies: Option<Box<dyn CookieProvider>>,
+        options: ScriptedDocumentOptions,
+    ) -> Result<Self, String> {
+        Self::build(html, Some((fetcher, base_url)), cookies, options)
     }
 
     /// Parse an already-fetched body with a host-owned WebGL factory installed
@@ -312,7 +414,9 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         cookies: Option<Box<dyn CookieProvider>>,
         webgl: WebGlFactory,
     ) -> Result<Self, String> {
-        Self::build(html, Some((fetcher, base_url)), cookies, Some(webgl))
+        Self::build(html, Some((fetcher, base_url)), cookies, ScriptedDocumentOptions {
+            webgl: Some(webgl), ..ScriptedDocumentOptions::default()
+        })
     }
 
     /// Parse `html` into a live DOM and run its scripts in document order. With a
@@ -325,13 +429,13 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         html: &str,
         loader: Option<(&dyn ResourceFetcher, &str)>,
         cookies: Option<Box<dyn CookieProvider>>,
-        webgl: Option<WebGlFactory>,
+        options: ScriptedDocumentOptions,
     ) -> Result<Self, String> {
         Self::build_encoded(
             html,
             loader,
             cookies,
-            webgl,
+            options,
             Default::default(),
             Default::default(),
         )
@@ -340,7 +444,7 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         html: &str,
         loader: Option<(&dyn ResourceFetcher, &str)>,
         cookies: Option<Box<dyn CookieProvider>>,
-        webgl: Option<WebGlFactory>,
+        options: ScriptedDocumentOptions,
         encoding: script_runtime_api::DocumentEncoding,
         decode_options: script_runtime_api::HtmlDecodeOptions,
     ) -> Result<Self, String> {
@@ -351,6 +455,8 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         let sheets: Vec<String> = Vec::new();
 
         let mut rt = Runtime::<E>::new().map_err(|e| format!("script runtime init: {e:?}"))?;
+        rt.set_worker_policy(options.worker_policy);
+        rt.set_validation_message_catalog(options.validation_message_catalog);
         rt.set_document_encoding(encoding);
         rt.set_html_decode_options(decode_options);
         // The document URL is the base for reflected URL attributes (`a.href`,
@@ -367,7 +473,7 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         // Install the graphics seam before the parsed body enters the runtime
         // and before any parser-blocking script executes. Vano's nova_vm backend
         // and Boa receive the same engine-neutral factory contract here.
-        if let Some(webgl) = webgl {
+        if let Some(webgl) = options.webgl {
             rt.set_webgl_factory(webgl);
         }
         let mut capture = {
@@ -397,9 +503,7 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         Ok(Self {
             rt,
             capture,
-            hidden: false,
-            frozen: false,
-            last_hidden_pump_ms: f64::NAN,
+            lifecycle: DocumentLifecycle::default(),
         })
     }
 
@@ -413,6 +517,11 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         self.rt.set_script_resource_loader(loader);
     }
 
+    /// Select the worker lifetime contract before evaluating Worker scripts.
+    pub fn set_worker_policy(&mut self, policy: script_runtime_api::WorkerPolicy) {
+        self.rt.set_worker_policy(policy);
+    }
+
     /// Drive the runtime one frame's worth: fire due timers against the `now_ms`
     /// virtual clock, settle microtasks, then take the GC tick. Returns
     /// `(reflectors_unpinned, nodes_collected)` from the collection. This is the
@@ -424,20 +533,8 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         // Visibility: a hidden one pumps timers at most once per second (the
         // HTML-spec-licensed clamp for hidden documents), so a background
         // page's interval loop stops driving per-frame work.
-        if self.frozen {
+        if !self.lifecycle.allows_pump(now_ms) {
             return (0, 0);
-        }
-        if self.hidden {
-            // The clamp window anchors at the first pump after hiding (NaN
-            // sentinel set by `set_hidden`), so hiding never grants an
-            // immediate bonus tick.
-            if self.last_hidden_pump_ms.is_nan() || now_ms - self.last_hidden_pump_ms < 1000.0 {
-                if self.last_hidden_pump_ms.is_nan() {
-                    self.last_hidden_pump_ms = now_ms;
-                }
-                return (0, 0);
-            }
-            self.last_hidden_pump_ms = now_ms;
         }
         if let Err(error) = self.rt.run_timers(64, now_ms) {
             report_runtime_task_error(&mut self.rt, "timer task", error);
@@ -445,7 +542,7 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         self.rt.run_microtasks();
         let _ = self.rt.pump_workers();
         self.rt.run_microtasks();
-        if !self.hidden {
+        if !self.lifecycle.hidden {
             if let Err(error) = self.rt.run_animation_frame_callbacks(now_ms) {
                 report_runtime_task_error(&mut self.rt, "animation frame", error);
             }
@@ -508,13 +605,14 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
     /// Worker liveness keeps a polling host driving until acknowledged idle;
     /// it does not mean a message is ready now or provide a wake callback.
     pub fn has_pending_work(&mut self) -> bool {
-        !self.frozen && (self.next_wake_delay().is_some() || self.rt.has_worker_work())
+        !self.lifecycle.frozen && (self.next_wake_delay().is_some() || self.rt.has_worker_work())
     }
 
     /// Milliseconds until the next timer or visible animation frame. A pending
     /// animation frame asks the host for the next rendering opportunity.
     pub fn next_wake_delay(&mut self) -> Option<f64> {
-        next_document_wake_delay(&mut self.rt, self.hidden, self.frozen)
+        let worker_pending = self.rt.has_worker_work();
+        next_document_wake_delay(&mut self.rt, &self.lifecycle, worker_pending)
     }
 
     /// Set Page Visibility (W3C adoption plan P1). The host calls this as a
@@ -524,12 +622,8 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
     /// an engine-side follow-up; the observable contract here is the event
     /// plus the hidden timer clamp in [`pump`](Self::pump).
     pub fn set_hidden(&mut self, hidden: bool) {
-        if self.hidden == hidden {
+        if !self.lifecycle.set_hidden(hidden) {
             return;
-        }
-        self.hidden = hidden;
-        if hidden {
-            self.last_hidden_pump_ms = f64::NAN;
         }
         let doc = self.rt.host().borrow().dom.document().raw();
         let _ = self.dispatch_event(doc, "visibilitychange");
@@ -537,33 +631,32 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
 
     /// Whether the document is currently hidden (Page Visibility).
     pub fn is_hidden(&self) -> bool {
-        self.hidden
+        self.lifecycle.hidden
     }
 
     /// Whether the document is currently frozen (Page Lifecycle).
     pub fn is_frozen(&self) -> bool {
-        self.frozen
+        self.lifecycle.frozen
     }
 
     /// Page Lifecycle freeze: dispatch `freeze` (listeners get a last turn to
     /// persist state, per spec), then stop running tasks until
     /// [`resume`](Self::resume). Idempotent.
     pub fn freeze(&mut self) {
-        if self.frozen {
+        if self.lifecycle.frozen {
             return;
         }
         let doc = self.rt.host().borrow().dom.document().raw();
         let _ = self.dispatch_event(doc, "freeze");
-        self.frozen = true;
+        self.lifecycle.freeze();
     }
 
     /// Page Lifecycle resume: leave the frozen state and dispatch `resume`.
     /// Idempotent.
     pub fn resume(&mut self) {
-        if !self.frozen {
+        if !self.lifecycle.resume() {
             return;
         }
-        self.frozen = false;
         let doc = self.rt.host().borrow().dom.document().raw();
         let _ = self.dispatch_event(doc, "resume");
     }
@@ -655,9 +748,7 @@ pub struct LiveryScriptedDocument<E: ScriptEngine> {
     >,
     pending_fragment: Option<NavigationFragment>,
     capture: Option<DomCaptureRecorder>,
-    hidden: bool,
-    frozen: bool,
-    last_hidden_pump_ms: f64,
+    lifecycle: DocumentLifecycle,
     validation_notice: Option<ScriptedValidationNotice>,
     next_validation_notice_sequence: u64,
 }
@@ -949,6 +1040,7 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         rt.set_document_encoding(encoding);
         rt.set_html_decode_options(decode_options);
         rt.set_validation_message_catalog(options.validation_message_catalog);
+        rt.set_worker_policy(options.worker_policy);
         rt.set_fetch_handler(Box::new(fetcher.clone()));
         rt.set_script_resource_loader(Box::new(fetcher.clone()));
         let worker_wake = fetcher.wake();
@@ -1039,9 +1131,7 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             child_cssoms,
             pending_fragment: None,
             capture,
-            hidden: false,
-            frozen: false,
-            last_hidden_pump_ms: f64::NAN,
+            lifecycle: DocumentLifecycle::default(),
             validation_notice: None,
             next_validation_notice_sequence: 0,
         };
@@ -1532,17 +1622,8 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
     }
 
     pub fn pump(&mut self, now_ms: f64) -> (usize, usize) {
-        if self.frozen {
+        if !self.lifecycle.allows_pump(now_ms) {
             return (0, 0);
-        }
-        if self.hidden {
-            if self.last_hidden_pump_ms.is_nan() || now_ms - self.last_hidden_pump_ms < 1000.0 {
-                if self.last_hidden_pump_ms.is_nan() {
-                    self.last_hidden_pump_ms = now_ms;
-                }
-                return (0, 0);
-            }
-            self.last_hidden_pump_ms = now_ms;
         }
         let external = match self.bridge.pump(&mut self.rt) {
             Ok(count) => count,
@@ -1561,7 +1642,7 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         self.rt.run_microtasks();
         workers += self.rt.pump_workers();
         self.rt.run_microtasks();
-        if !self.hidden {
+        if !self.lifecycle.hidden {
             if let Err(error) = self.rt.run_animation_frame_callbacks(now_ms) {
                 report_runtime_task_error(&mut self.rt, "animation frame", error);
             }
@@ -1573,7 +1654,7 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
     }
 
     pub fn has_pending_work(&mut self) -> bool {
-        !self.frozen
+        !self.lifecycle.frozen
             && (self.next_wake_delay().is_some()
                 || self.bridge.has_pending()
                 || self.rt.has_worker_work())
@@ -1582,23 +1663,53 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
     /// Milliseconds until the next timer or visible animation frame. The
     /// document adapter hands this deadline to the host's pending-work report.
     pub fn next_wake_delay(&mut self) -> Option<f64> {
-        next_document_wake_delay(&mut self.rt, self.hidden, self.frozen)
+        let external_pending = self.bridge.has_pending() || self.rt.has_worker_work();
+        next_document_wake_delay(&mut self.rt, &self.lifecycle, external_pending)
     }
 
     pub fn has_external_work(&self) -> bool {
-        !self.frozen && (self.bridge.has_pending() || self.rt.has_worker_work())
+        !self.lifecycle.frozen && (self.bridge.has_pending() || self.rt.has_worker_work())
+    }
+
+    /// Select the worker lifetime contract for workers created after this call.
+    pub fn set_worker_policy(&mut self, policy: script_runtime_api::WorkerPolicy) {
+        self.rt.set_worker_policy(policy);
     }
 
     pub fn set_hidden(&mut self, hidden: bool) {
-        if self.hidden == hidden {
+        if !self.lifecycle.set_hidden(hidden) {
             return;
-        }
-        self.hidden = hidden;
-        if hidden {
-            self.last_hidden_pump_ms = f64::NAN;
         }
         let document = self.rt.host().borrow().dom.document().raw();
         let _ = self.rt.dispatch_event(document, "visibilitychange");
+    }
+
+    pub fn is_hidden(&self) -> bool {
+        self.lifecycle.hidden
+    }
+
+    pub fn is_frozen(&self) -> bool {
+        self.lifecycle.frozen
+    }
+
+    /// Dispatch the last lifecycle event before suspending timer, worker,
+    /// resource, and animation-frame delivery. Idempotent.
+    pub fn freeze(&mut self) {
+        if self.lifecycle.frozen {
+            return;
+        }
+        let document = self.rt.host().borrow().dom.document().raw();
+        let _ = self.rt.dispatch_event(document, "freeze");
+        self.lifecycle.freeze();
+    }
+
+    /// Resume the document and notify authored lifecycle listeners.
+    pub fn resume(&mut self) {
+        if !self.lifecycle.resume() {
+            return;
+        }
+        let document = self.rt.host().borrow().dom.document().raw();
+        let _ = self.rt.dispatch_event(document, "resume");
     }
 
     pub fn evaluate(&mut self, source: &str) -> Result<(), String> {
@@ -2333,6 +2444,45 @@ mod tests {
         );
     }
 
+    fn lifecycle_wake_matches_task_delivery<E: ScriptEngine>() {
+        let mut doc = ScriptedDocument::<E>::parse(
+            "<body><script>\
+             document.addEventListener('visibilitychange', () => console.log('visibility'));\
+             document.addEventListener('freeze', () => console.log('freeze'));\
+             document.addEventListener('resume', () => console.log('resume'));\
+             setInterval(() => console.log('tick'), 16);\
+             </script></body>",
+        ).expect("headless document");
+        doc.set_hidden(true);
+        assert!(doc.is_hidden());
+        assert!(!doc.is_frozen());
+        assert_eq!(doc.next_wake_delay(), Some(0.0), "first hidden wake anchors the clamp");
+        doc.pump(0.0);
+        assert_eq!(doc.next_wake_delay(), Some(1000.0));
+        doc.pump(16.0);
+        assert_eq!(doc.next_wake_delay(), Some(984.0));
+        assert!(!doc.console().iter().any(|line| line == "tick"));
+        doc.pump(1000.0);
+        assert!(doc.console().iter().any(|line| line == "tick"));
+        assert_eq!(doc.next_wake_delay(), Some(1000.0));
+        let before = doc.console().len();
+        doc.freeze();
+        assert!(doc.is_frozen());
+        assert_eq!(doc.next_wake_delay(), None);
+        assert!(!doc.has_pending_work());
+        doc.pump(2000.0);
+        assert_eq!(doc.console().len(), before + 1, "only freeze event ran");
+        doc.resume();
+        assert!(doc.is_hidden(), "resume does not change visibility");
+        assert_eq!(doc.next_wake_delay(), Some(0.0));
+        doc.pump(2000.0);
+        assert_eq!(doc.next_wake_delay(), Some(1000.0));
+        doc.set_hidden(false);
+        assert!(!doc.is_hidden());
+        doc.pump(2016.0);
+        assert_eq!(doc.console().last().map(String::as_str), Some("tick"));
+    }
+
     /// The gc-arena soak (carve-out #2): a page that churns nodes under `setInterval`
     /// is driven through [`pump`](ScriptedDocument::pump) at frame cadence; the GC tick
     /// keeps the live set bounded rather than growing one batch per frame. Without a
@@ -3029,6 +3179,10 @@ mod tests {
         hidden_clamps_timers_frozen_stops_them::<BoaEngine>();
     }
     #[test]
+    fn lifecycle_wake_matches_task_delivery_on_boa() {
+        lifecycle_wake_matches_task_delivery::<BoaEngine>();
+    }
+    #[test]
     fn gc_soak_bounds_memory_on_boa() {
         gc_soak_bounds_memory::<BoaEngine>();
     }
@@ -3137,6 +3291,10 @@ mod tests {
         #[test]
         fn animation_frames_follow_visible_document_turn_on_nova() {
             animation_frames_follow_visible_document_turn::<NovaEngine>();
+        }
+        #[test]
+        fn lifecycle_wake_matches_task_delivery_on_nova() {
+            lifecycle_wake_matches_task_delivery::<NovaEngine>();
         }
         #[test]
         fn gc_soak_bounds_memory_on_nova() {
@@ -3457,6 +3615,43 @@ mod tests {
             );
             assert!(doc.dom_snapshot().contains("frame mutation"));
             assert_eq!(doc.next_wake_delay(), None);
+        }
+
+        fn live_lifecycle_wake_matches_delivery<E: ScriptEngine>() {
+            let mut doc = LiveryScriptedDocument::<E>::parse(
+                "<body><script>\
+                 document.addEventListener('visibilitychange', () => console.log('visibility'));\
+                 document.addEventListener('freeze', () => console.log('freeze'));\
+                 document.addEventListener('resume', () => console.log('resume'));\
+                 setInterval(() => console.log('tick'), 16);\
+                 </script></body>",
+            ).expect("live document");
+            doc.set_hidden(true);
+            assert!(doc.is_hidden());
+            assert_eq!(doc.next_wake_delay(), Some(0.0));
+            doc.pump(0.0);
+            assert_eq!(doc.next_wake_delay(), Some(1000.0));
+            doc.pump(16.0);
+            assert_eq!(doc.next_wake_delay(), Some(984.0));
+            assert!(!doc.console().iter().any(|line| line == "tick"));
+            doc.pump(1000.0);
+            assert!(doc.console().iter().any(|line| line == "tick"));
+            assert_eq!(doc.next_wake_delay(), Some(1000.0));
+            let before = doc.console().len();
+            doc.freeze();
+            assert!(doc.is_frozen());
+            assert_eq!(doc.next_wake_delay(), None);
+            assert!(!doc.has_external_work());
+            doc.pump(2000.0);
+            assert_eq!(doc.console().len(), before + 1, "only freeze event ran");
+            doc.resume();
+            assert!(doc.is_hidden());
+            assert_eq!(doc.next_wake_delay(), Some(0.0));
+            doc.pump(2000.0);
+            assert_eq!(doc.next_wake_delay(), Some(1000.0));
+            doc.set_hidden(false);
+            doc.pump(2016.0);
+            assert_eq!(doc.console().last().map(String::as_str), Some("tick"));
         }
 
         /// Control: with no script, the same empty body paints no text — so the glyphs in
@@ -3906,6 +4101,10 @@ mod tests {
             animation_frame_mutation_renders::<BoaEngine>();
         }
         #[test]
+        fn live_lifecycle_wake_matches_delivery_on_boa() {
+            live_lifecycle_wake_matches_delivery::<BoaEngine>();
+        }
+        #[test]
         fn native_validation_notice_is_painted_and_dismissible_on_boa() {
             native_validation_notice_is_painted_and_dismissible::<BoaEngine>();
         }
@@ -3988,6 +4187,10 @@ mod tests {
             #[test]
             fn animation_frame_mutation_renders_on_nova() {
                 animation_frame_mutation_renders::<NovaEngine>();
+            }
+            #[test]
+            fn live_lifecycle_wake_matches_delivery_on_nova() {
+                live_lifecycle_wake_matches_delivery::<NovaEngine>();
             }
             #[test]
             fn scripted_content_scrolls_on_nova() {

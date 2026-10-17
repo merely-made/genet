@@ -17,3 +17,7 @@ Cheaper implementation agents; controller alone runs builds and commits. Test af
 ## Scope and evidence
 
 The four previously partial findings are outside this twenty-finding sequence. A finding is addressed only when its stated ownership cut and required evidence are established. Record any remaining platform/dependency/caller limits explicitly; do not relabel incomplete work to meet the batch count. Publication of a slice does not establish unrelated Forms or full browser conformance.
+
+## Progress
+
+Slice 1 published as `ec5d8b997aa`: four findings addressed, 591 passing tests and six retained ignores. Slice 2: I2/R8/R14 addressed locally; R7 partial because VM cancellation remains unavailable. 131 passing tests, Ortet host compile and actual GPU draw; source hashes and excluded attempts in the slice 2 receipt. Remaining slices retain their listed done conditions.

@@ -1071,7 +1071,11 @@ impl Ortet {
 
 impl ApplicationHandler for Ortet {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if self.session.supports_freeze_resume() {
+            self.session.resume();
+        }
         if self.window.is_some() {
+            self.request_redraw();
             return;
         }
         let attributes = Window::default_attributes()
@@ -1176,6 +1180,13 @@ impl ApplicationHandler for Ortet {
             window.set_visible(true);
             window.request_redraw();
         }
+    }
+
+    fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
+        if self.session.supports_freeze_resume() {
+            self.session.freeze();
+        }
+        self.wake_deadline = None;
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {

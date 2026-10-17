@@ -1,7 +1,7 @@
 // Copyright 2026 Mark Alan Boykin
 // SPDX-License-Identifier: MPL-2.0
 use script_engine_api::ScriptEngine;
-use script_runtime_api::{NoScriptLoader, Runtime, ScriptResourceLoader};
+use script_runtime_api::{NoScriptLoader, Runtime, ScriptResourceLoader, WorkerPolicy};
 
 struct Documents;
 impl ScriptResourceLoader for Documents {
@@ -63,6 +63,10 @@ fn navigation<E: ScriptEngine>() {
 }
 fn worker<E: ScriptEngine>() {
     let mut rt = runtime::<E>();
+    rt.set_worker_policy(WorkerPolicy::TrustedCooperative {
+        resource_timeout: std::time::Duration::from_secs(30),
+        shutdown_grace: std::time::Duration::from_millis(500),
+    });
     rt.eval("var answer; var w = new Worker('/worker.js'); w.onmessage = function(e) { answer = e.data; w.terminate(); }; w.onerror = function(e) { answer = 'error: ' + e.message; };").unwrap();
     let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {

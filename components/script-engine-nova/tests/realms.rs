@@ -153,6 +153,21 @@ fn native_fn_sees_its_own_realm_and_host_data() {
     assert_eq!(*child_state.borrow(), vec![child]);
 }
 
+#[test]
+fn realm_function_name_survives_registration_input() {
+    let mut engine = NovaEngine::new().unwrap();
+    let child = engine.create_realm().unwrap();
+    let name = String::from("temporaryRealmFunction");
+    engine
+        .set_function_in_realm::<WhereAmI>(child, &name, 0)
+        .unwrap();
+    drop(name);
+    let reflected = engine
+        .eval_in_realm(child, "temporaryRealmFunction.name")
+        .unwrap();
+    assert_eq!(text(&mut engine, &reflected), "temporaryRealmFunction");
+}
+
 /// A reflector handed into the child realm is recoverable there: the reflector
 /// bridge is agent-wide, so a node crossing realms is still the same node to the
 /// host.
@@ -398,10 +413,12 @@ fn native_callback_creates_and_initializes_child_synchronously() {
             let records = data.downcast_ref::<RefCell<Vec<RealmId>>>().unwrap();
             let mut global = None;
             let id = E::create_realm_from_call(cx, data.clone(), |child| {
-                E::set_function_from_call::<Who>(child, "who", 0)?;
+                let name = String::from("who");
+                E::set_function_from_call::<Who>(child, &name, 0)?;
+                drop(name);
                 E::eval_from_call(
                     child,
-                    "globalThis.childRealm = who(); globalThis.obj = { answer: 42 }",
+                    "globalThis.childRealm = who(); globalThis.whoName = who.name; globalThis.obj = { answer: 42 }",
                 )?;
                 global = Some(E::eval_from_call(child, "globalThis")?);
                 Ok(())
@@ -421,7 +438,7 @@ fn native_callback_creates_and_initializes_child_synchronously() {
         .unwrap();
     let id = records.borrow()[0];
     let value = engine
-        .eval_in_realm(id, "obj.answer === 43 && childRealm === who()")
+        .eval_in_realm(id, "obj.answer === 43 && childRealm === who() && whoName === 'who'")
         .unwrap();
     assert_eq!(engine.value_to_string(&value).unwrap(), "true");
     let value = engine.eval("typeof who").unwrap();

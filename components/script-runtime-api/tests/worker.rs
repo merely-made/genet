@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use script_engine_api::ScriptEngine;
-use script_runtime_api::{FetchOutcome, FetchRequest, Runtime, ScriptResourceLoader};
+use script_runtime_api::{FetchOutcome, FetchRequest, Runtime, ScriptResourceLoader, WorkerPolicy};
 
 /// A fixed script route: the disk loader's shape, without a disk.
 struct Scripts(Vec<(String, String)>);
@@ -64,6 +64,15 @@ fn scripts(pairs: &[(&str, &str)]) -> Box<Scripts> {
     ))
 }
 
+fn trusted_runtime<E: ScriptEngine>() -> Runtime<E> {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.set_worker_policy(WorkerPolicy::TrustedCooperative {
+        resource_timeout: Duration::from_secs(30),
+        shutdown_grace: Duration::from_millis(500),
+    });
+    rt
+}
+
 /// Evaluate `expr` and read its value back as a string.
 fn read<E: ScriptEngine>(rt: &mut Runtime<E>, expr: &str) -> String {
     let v = rt.eval(expr).expect("eval");
@@ -99,7 +108,7 @@ fn drive_until<E: ScriptEngine>(rt: &mut Runtime<E>, done: &str) -> bool {
 // ── the transportable record ─────────────────────────────────────────────────
 
 fn wire_record_round_trips<E: ScriptEngine>() {
-    let mut rt = Runtime::<E>::new().expect("runtime");
+    let mut rt = trusted_runtime::<E>();
     // Cycles, shared subgraphs, holes, Map/Set, Date/RegExp, boxed primitives,
     // typed-array aliasing over one buffer, and an Error.
     rt.eval(
@@ -160,7 +169,7 @@ fn wire_record_round_trips<E: ScriptEngine>() {
 // ── a second agent ───────────────────────────────────────────────────────────
 
 fn worker_round_trip_works<E: ScriptEngine>() {
-    let mut rt = Runtime::<E>::new().expect("runtime");
+    let mut rt = trusted_runtime::<E>();
     rt.set_script_resource_loader(scripts(&[(
         "double.js",
         "onmessage = function(e) { postMessage({ n: e.data.n * 2, kind: typeof e.data }); };",
@@ -178,7 +187,7 @@ fn worker_round_trip_works<E: ScriptEngine>() {
 }
 
 fn worker_scope_has_no_document<E: ScriptEngine>() {
-    let mut rt = Runtime::<E>::new().expect("runtime");
+    let mut rt = trusted_runtime::<E>();
     rt.set_script_resource_loader(scripts(&[(
         "scope.js",
         "postMessage({ \
@@ -224,7 +233,7 @@ fn worker_scope_has_no_document<E: ScriptEngine>() {
 }
 
 fn worker_import_scripts_works<E: ScriptEngine>() {
-    let mut rt = Runtime::<E>::new().expect("runtime");
+    let mut rt = trusted_runtime::<E>();
     rt.set_script_resource_loader(scripts(&[
         ("helper.js", "var HELPER = 'helped';"),
         (
@@ -243,7 +252,7 @@ fn worker_import_scripts_works<E: ScriptEngine>() {
 }
 
 fn worker_timers_and_ordering_work<E: ScriptEngine>() {
-    let mut rt = Runtime::<E>::new().expect("runtime");
+    let mut rt = trusted_runtime::<E>();
     rt.set_script_resource_loader(scripts(&[(
         "order.js",
         "var seen = []; \
@@ -263,7 +272,7 @@ fn worker_timers_and_ordering_work<E: ScriptEngine>() {
 }
 
 fn worker_timer_uses_elapsed_host_clock<E: ScriptEngine>() {
-    let mut rt = Runtime::<E>::new().expect("runtime");
+    let mut rt = trusted_runtime::<E>();
     rt.set_script_resource_loader(scripts(&[(
         "elapsed.js",
         "var before = performance.now(); \
@@ -277,16 +286,16 @@ fn worker_timer_uses_elapsed_host_clock<E: ScriptEngine>() {
          w.onmessage = function(e) { got = e.data; };",
     )
     .expect("start");
-    assert!(drive_until(&mut rt, "String(got !== null)"), "no timer reply");
-    assert_eq!(read(&mut rt, "String(got.elapsed >= 20)"), "true");
-    assert_eq!(
-        read(&mut rt, "String(got.wall + 30 >= got.origin)"),
-        "true"
+    assert!(
+        drive_until(&mut rt, "String(got !== null)"),
+        "no timer reply"
     );
+    assert_eq!(read(&mut rt, "String(got.elapsed >= 20)"), "true");
+    assert_eq!(read(&mut rt, "String(got.wall + 30 >= got.origin)"), "true");
 }
 
 fn worker_error_reaches_the_page<E: ScriptEngine>() {
-    let mut rt = Runtime::<E>::new().expect("runtime");
+    let mut rt = trusted_runtime::<E>();
     rt.set_script_resource_loader(scripts(&[("boom.js", "throw new Error('worker boom');")]));
     rt.eval(
         "var err = null; var windowErr = null; \
@@ -310,7 +319,7 @@ fn worker_error_reaches_the_page<E: ScriptEngine>() {
     assert!(read(&mut rt, "String(windowErr)").contains("worker boom"));
 
     // A script that cannot be fetched is an error event, not a hang.
-    let mut rt2 = Runtime::<E>::new().expect("runtime");
+    let mut rt2 = trusted_runtime::<E>();
     rt2.set_script_resource_loader(scripts(&[]));
     rt2.eval(
         "var err = null; var w = new Worker('missing.js'); \
@@ -325,7 +334,7 @@ fn worker_error_reaches_the_page<E: ScriptEngine>() {
 }
 
 fn worker_terminate_and_close_work<E: ScriptEngine>() {
-    let mut rt = Runtime::<E>::new().expect("runtime");
+    let mut rt = trusted_runtime::<E>();
     rt.set_script_resource_loader(scripts(&[
         (
             "chatty.js",
@@ -360,10 +369,29 @@ fn worker_terminate_and_close_work<E: ScriptEngine>() {
         "no close reply"
     );
     assert_eq!(read(&mut rt, "closeReply"), "bye");
+    let shutdown = rt.shutdown_workers();
+    assert!(
+        shutdown.direct_joined >= 1,
+        "cooperative worker should join: {shutdown:?}"
+    );
+    assert_eq!(shutdown.direct_detached, 0, "{shutdown:?}");
+    assert!(shutdown.descendants_untracked);
+}
+
+fn required_worker_cancellation_refuses_before_spawn<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    assert_eq!(
+        read(
+            &mut rt,
+            "(function() { try { new Worker('never.js'); return 'started'; } catch (e) { return e.name + ':' + e.message; } })()"
+        ),
+        "NotSupportedError:Worker cancellation is unsupported by this script engine."
+    );
+    assert_eq!(rt.shutdown_workers(), Default::default());
 }
 
 fn module_worker_is_a_named_residual<E: ScriptEngine>() {
-    let mut rt = Runtime::<E>::new().expect("runtime");
+    let mut rt = trusted_runtime::<E>();
     rt.set_script_resource_loader(scripts(&[("m.js", "postMessage(1);")]));
     assert_eq!(
         read(
@@ -383,7 +411,7 @@ fn module_worker_is_a_named_residual<E: ScriptEngine>() {
 }
 
 fn message_port_crosses_the_thread_boundary<E: ScriptEngine>() {
-    let mut rt = Runtime::<E>::new().expect("runtime");
+    let mut rt = trusted_runtime::<E>();
     rt.set_script_resource_loader(scripts(&[(
         "port.js",
         "onmessage = function(e) { \
@@ -413,7 +441,7 @@ fn message_port_crosses_the_thread_boundary<E: ScriptEngine>() {
 }
 
 fn transferred_buffer_reaches_the_worker<E: ScriptEngine>() {
-    let mut rt = Runtime::<E>::new().expect("runtime");
+    let mut rt = trusted_runtime::<E>();
     rt.set_script_resource_loader(scripts(&[(
         "buf.js",
         "onmessage = function(e) { var u = new Uint8Array(e.data); postMessage(u[0] + ',' + u.length); };",
@@ -432,7 +460,7 @@ fn transferred_buffer_reaches_the_worker<E: ScriptEngine>() {
 }
 
 fn worker_fetch_uses_the_page_route<E: ScriptEngine>() {
-    let mut rt = Runtime::<E>::new().expect("runtime");
+    let mut rt = trusted_runtime::<E>();
     rt.set_script_resource_loader(scripts(&[
         ("data.txt", "payload"),
         (
@@ -449,7 +477,7 @@ fn worker_fetch_uses_the_page_route<E: ScriptEngine>() {
 }
 
 fn deferred_worker_resource_wakes_page_service<E: ScriptEngine>() {
-    let mut rt = Runtime::<E>::new().expect("runtime");
+    let mut rt = trusted_runtime::<E>();
     let wake_count = Arc::new(AtomicUsize::new(0));
     rt.set_script_resource_loader(Box::new(DeferredScripts));
     let observed_wakes = Arc::clone(&wake_count);
@@ -488,6 +516,7 @@ both_engines! {
     worker_timer_uses_elapsed_host_clock => (worker_elapsed_clock_on_boa, worker_elapsed_clock_on_nova),
     worker_error_reaches_the_page => (worker_error_on_boa, worker_error_on_nova),
     worker_terminate_and_close_work => (worker_terminate_on_boa, worker_terminate_on_nova),
+    required_worker_cancellation_refuses_before_spawn => (required_cancellation_on_boa, required_cancellation_on_nova),
     module_worker_is_a_named_residual => (module_worker_on_boa, module_worker_on_nova),
     message_port_crosses_the_thread_boundary => (port_transfer_on_boa, port_transfer_on_nova),
     transferred_buffer_reaches_the_worker => (buffer_transfer_on_boa, buffer_transfer_on_nova),

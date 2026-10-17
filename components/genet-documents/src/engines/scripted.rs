@@ -448,6 +448,15 @@ impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
     fn set_hidden(&mut self, hidden: bool) {
         self.doc.set_hidden(hidden);
     }
+    fn supports_freeze_resume(&self) -> bool {
+        true
+    }
+    fn freeze(&mut self) {
+        self.doc.freeze();
+    }
+    fn resume(&mut self) {
+        self.doc.resume();
+    }
     fn inspect(&self) -> Option<document_session_api::ContentReport> {
         Some(self.doc.with_dom(content_report))
     }
@@ -537,14 +546,60 @@ mod animation_frame_pending_tests {
         assert!(session.pending_work().is_settled());
     }
 
+    fn host_lifecycle_controls_scripted_session<E: script_engine_api::ScriptEngine + 'static>() {
+        let doc = genet_scripted::LiveryScriptedDocument::<E>::parse(
+            "<body><script>\
+             document.addEventListener('visibilitychange', () => console.log('visibility'));\
+             document.addEventListener('freeze', () => console.log('freeze'));\
+             document.addEventListener('resume', () => console.log('resume'));\
+             setInterval(() => console.log('tick'), 16);\
+             </script></body>",
+        ).expect("scripted document");
+        let mut host_session: Box<dyn DocumentSession<Scene>> =
+            Box::new(ScriptedDocumentSession::new(doc));
+        assert!(host_session.supports_freeze_resume());
+        host_session.set_hidden(true);
+        assert_eq!(host_session.pending_work().timer, Some(Duration::ZERO));
+        host_session.pump(0.0);
+        assert_eq!(host_session.pending_work().timer, Some(Duration::from_secs(1)));
+        host_session.freeze();
+        assert!(host_session.pending_work().is_idle());
+        host_session.pump(1000.0);
+        let live = host_session.as_any().downcast_mut::<ScriptedDocumentSession<E>>().unwrap();
+        assert!(live.document_mut().is_hidden());
+        assert!(live.document_mut().is_frozen());
+        assert_eq!(live.document_mut().console(), vec!["visibility", "freeze"]);
+        host_session.resume();
+        assert_eq!(host_session.pending_work().timer, Some(Duration::ZERO));
+        host_session.pump(1000.0);
+        assert_eq!(host_session.pending_work().timer, Some(Duration::from_secs(1)));
+        host_session.set_hidden(false);
+        host_session.pump(1016.0);
+        let live = host_session.as_any().downcast_mut::<ScriptedDocumentSession<E>>().unwrap();
+        assert!(!live.document_mut().is_hidden());
+        assert!(!live.document_mut().is_frozen());
+        assert_eq!(live.document_mut().console(), vec!["visibility", "freeze", "resume", "visibility", "tick"]);
+    }
+
     #[test]
     fn raf_only_session_wakes_on_boa() {
         raf_only_session_wakes::<script_engine_boa::BoaEngine>();
+    }
+
+    #[test]
+    fn host_lifecycle_controls_scripted_session_on_boa() {
+        host_lifecycle_controls_scripted_session::<script_engine_boa::BoaEngine>();
     }
 
     #[cfg(all(target_pointer_width = "64", feature = "scripted-nova"))]
     #[test]
     fn raf_only_session_wakes_on_nova() {
         raf_only_session_wakes::<script_engine_nova::NovaEngine>();
+    }
+
+    #[cfg(all(target_pointer_width = "64", feature = "scripted-nova"))]
+    #[test]
+    fn host_lifecycle_controls_scripted_session_on_nova() {
+        host_lifecycle_controls_scripted_session::<script_engine_nova::NovaEngine>();
     }
 }

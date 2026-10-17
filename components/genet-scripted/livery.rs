@@ -1981,6 +1981,34 @@ mod tests {
     use std::cell::RefCell;
     use std::rc::Rc;
 
+    #[test]
+    fn inline_declaration_priority_survives_later_normal_values() {
+        let mut runtime = Runtime::<BoaEngine>::new().expect("runtime");
+        runtime.load_dom(&StaticDocument::parse(
+            "<html><body><div id='d' style='color: red !important; color: blue; flex-direction: row !important; flex-flow: column wrap'></div></body></html>",
+        ));
+        runtime.set_inline_style_handler(Box::new(LiveryInlineStyle));
+        runtime
+            .eval(
+                "var s = document.getElementById('d').style; \
+                 console.log([s.color, s.getPropertyPriority('color'), \
+                   s.getPropertyValue('flex-direction'), s.getPropertyPriority('flex-direction'), \
+                   s.getPropertyValue('flex-wrap'), s.getPropertyValue('flex-flow')].join('|')); \
+                 console.log(s.cssText); \
+                 s.setProperty('color', 'blue'); \
+                 console.log([s.color, s.getPropertyPriority('color')].join('|'));",
+            )
+            .expect("priority script");
+        assert_eq!(
+            runtime.host().borrow().console,
+            vec![
+                "red|important|row|important|wrap|",
+                "color: red !important; flex-direction: row !important; flex-wrap: wrap;",
+                "blue|",
+            ]
+        );
+    }
+
     struct LiveSheetFetch;
 
     impl ResourceFetcher for LiveSheetFetch {

@@ -74,16 +74,16 @@
   // arg 0 of every sink. Methods that don't fit the surface throw
   // (so test failures are loud).
   // -----------------------------------------------------------------
-  function WebGLRenderingContext(width, height) {
+  var constructionToken = {};
+  function WebGLRenderingContext(token, contextId, width, height) {
+    if (token !== constructionToken) throw new TypeError('Illegal constructor');
     // GLenum constants on the instance, per the WebGL IDL.
     for (var k in K) { if (K.hasOwnProperty(k)) this[k] = K[k]; }
-    // Direct construction keeps the HTML canvas default dimensions. A canvas
-    // resize can deliberately pass zero, which the host clamps to one pixel.
-    var w = width === undefined ? 300 : Math.max(1, width >>> 0);
-    var h = height === undefined ? 150 : Math.max(1, height >>> 0);
-    this._ctx = parseInt(__webgl_create_context(String(w), String(h)), 10) | 0;
-    this.drawingBufferWidth = w;
-    this.drawingBufferHeight = h;
+    // Creation is attempted before this constructor runs, so an unavailable
+    // host context never becomes a context-shaped JS object.
+    this._ctx = contextId;
+    this.drawingBufferWidth = width;
+    this.drawingBufferHeight = height;
     this._externalTextureKey = __webgl_external_texture_key(String(this._ctx));
   }
   var P = WebGLRenderingContext.prototype;
@@ -319,10 +319,15 @@
   globalThis.WebGLUniformLocation = WebGLUniformLocation;
 
   // Host / test helper: a bare context at the given drawing-buffer size
-  // (defaults to the HTML canvas 300x150). The host must have installed a
-  // WebGlFactory via Runtime::set_webgl_factory; otherwise _ctx is -1 and
-  // every sink no-ops / returns 0 / NO_ERROR.
+  // (defaults to the HTML canvas 300x150). A missing or refusing factory
+  // returns null without constructing a JS context.
   globalThis.__createWebGLContext = function(width, height) {
-    return new WebGLRenderingContext(width, height);
+    // A canvas resize can deliberately pass zero, which the host clamps to
+    // one pixel. Keep the same dimensions for bare and canvas contexts.
+    var w = width === undefined ? 300 : Math.max(1, width >>> 0);
+    var h = height === undefined ? 150 : Math.max(1, height >>> 0);
+    var contextId = parseInt(__webgl_create_context(String(w), String(h)), 10);
+    if (!(contextId >= 0)) return null;
+    return new WebGLRenderingContext(constructionToken, contextId, w, h);
   };
 })();

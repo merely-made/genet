@@ -1389,7 +1389,8 @@ fn element_style_reflects_inline_shorthands<E: ScriptEngine>() {
          s.setProperty('pair', 'invalid'); console.log(s.getPropertyValue('pair') + '|' + s.cssText);\
          s.setProperty('pair-first', ''); console.log(s.getPropertyValue('pair') + '|' + s.cssText);\
          s.setProperty('pair', 'next final');\
-         s.setProperty('pair', 'malformed'); console.log(s.getPropertyValue('pair') + '|' + s.cssText);\
+         try { s.setProperty('pair', 'malformed'); } catch (e) { console.log(e.name); }\
+         console.log(s.getPropertyValue('pair') + '|' + s.cssText);\
          console.log(s.removeProperty('pair') + '|' + s.cssText);\
          s.setProperty('pair', 'var(--pair)');\
          console.log(s.getPropertyValue('pair') + '|' + s.getPropertyValue('pair-first') + '|' +\
@@ -1416,6 +1417,7 @@ fn element_style_reflects_inline_shorthands<E: ScriptEngine>() {
             "other: keep; pair: left right;",
             "left right|other: keep; pair: left right;",
             "|other: keep; pair-second: right;",
+            "TypeError",
             "next final|other: keep; pair: next final;",
             "next final|other: keep;",
             "var(--pair)|||3|other|pair-first|pair-second|other: keep; pair: var(--pair);",

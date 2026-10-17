@@ -2055,7 +2055,7 @@ mod tests {
             html,
             Box::new(move |_width, _height| {
                 marker.set(true);
-                Box::new(NullWebGl(None))
+                Some(Box::new(NullWebGl(None)))
             }),
         )
         .expect("runtime inits");
@@ -2087,7 +2087,7 @@ mod tests {
                 ScriptedDocumentOptions {
                     webgl: Some(Box::new(move |_width, _height| {
                         marker.set(true);
-                        Box::new(NullWebGl(Some(recorded_drops.clone())))
+                        Some(Box::new(NullWebGl(Some(recorded_drops.clone()))))
                     })),
                     ..ScriptedDocumentOptions::default()
                 },

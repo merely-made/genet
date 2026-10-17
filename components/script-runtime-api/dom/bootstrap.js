@@ -1460,7 +1460,15 @@
     if (has) this.removeAttribute(name);
     return false;
   };
-  Element.prototype.matches = function(sel) { return __matches(this.__ref, String(sel)) === 'true'; };
+  function selectorResult(value) {
+    if (typeof value === 'string' && value.slice(0, 7) === 'syntax:') {
+      throw new DOMException(value.slice(7), 'SyntaxError');
+    }
+    return value;
+  }
+  Element.prototype.matches = function(sel) {
+    return selectorResult(__matches(this.__ref, String(sel), String(isHtmlDocument(ownerDocumentOf(this))))) === 'true';
+  };
   Object.defineProperty(Element.prototype, 'tagName', {
     configurable: true, get: function() { return elementQualifiedName(this); }
   });
@@ -1498,34 +1506,32 @@
   });
 
   // element.style: a CSSStyleDeclaration over the inline `style` content
-  // attribute. The declaration string is parsed/serialized in JS (no engine CSS
-  // parser here); a value containing ';' (url(), quoted strings) is a known gap.
+  // attribute. Livery parses complete declaration lists before JS receives
+  // ordered name/value/priority records.
   // Surface: getPropertyValue / setProperty / removeProperty / item / length /
   // cssText, plus camelCase (`style.fontSize`) and numeric-index access via a
   // Proxy. A fresh declaration is returned each access; all of them read/write
   // the same live attribute, so it stays correct (identity `el.style === el.style`
   // is not preserved — a later refinement).
-  function cssKebab(s) { return s.replace(/[A-Z]/g, function(m) { return '-' + m.toLowerCase(); }); }
+  function cssKebab(s) { return s.slice(0, 2) === '--' ? s : s.replace(/[A-Z]/g, function(m) { return '-' + m.toLowerCase(); }); }
+  function cssName(s) { return s.slice(0, 2) === '--' ? s : s.toLowerCase(); }
   function cssParse(text) {
-    var out = [];
-    if (!text) return out;
-    var decls = String(text).split(';');
-    for (var i = 0; i < decls.length; i++) {
-      var ci = decls[i].indexOf(':');
-      if (ci < 0) continue;
-      var name = decls[i].slice(0, ci).trim().toLowerCase();
-      var value = decls[i].slice(ci + 1).trim();
-      if (name) out.push([name, value]);
+    var rows = cssDecodeRows(String(__inlineStyleDeclarations(text || '')), 3);
+    if (rows === null) throw new TypeError('Malformed native CSS declaration record');
+    for (var i = 0; i < rows.length; i++) {
+      if (!rows[i][0] || (rows[i][2] !== '' && rows[i][2] !== 'important'))
+        throw new TypeError('Malformed native CSS declaration record');
     }
-    return out;
+    return rows;
   }
-  // Native inline-style records are line-oriented, so values are escaped before
-  // crossing the boundary. Keep decoding strict: a malformed native expansion
-  // must not turn into a partial CSS declaration update.
+  // Record grammar: LF separates rows, TAB separates fields, and each field
+  // escapes backslash/LF/CR/TAB as \\, \n, \r, \t. Empty record means no rows.
+  // Decode the full record before changing a declaration map.
   function cssDecodeField(field) {
     var out = '';
     for (var i = 0; i < field.length; i++) {
       var ch = field.charAt(i);
+      if (ch === '\n' || ch === '\r' || ch === '\t') return null;
       if (ch !== '\\') { out += ch; continue; }
       if (++i >= field.length) return null;
       ch = field.charAt(i);
@@ -1540,51 +1546,52 @@
   function cssEncodeField(field) {
     return String(field).replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
   }
-  function cssDecodeList(record) {
+  function cssDecodeRows(record, width) {
     if (record === '') return [];
     var raw = record.split('\n');
-    var values = [];
+    var rows = [];
     for (var i = 0; i < raw.length; i++) {
-      var value = cssDecodeField(raw[i]);
-      if (value === null || value === '') return null;
-      values.push(value);
+      var fields = raw[i].split('\t');
+      if (fields.length !== width) return null;
+      var row = [];
+      for (var j = 0; j < fields.length; j++) {
+        var field = cssDecodeField(fields[j]);
+        if (field === null) return null;
+        row.push(field);
+      }
+      rows.push(row);
     }
-    return values;
+    return rows;
   }
-  function cssDecodePairs(record) {
-    if (record === '') return [];
-    var raw = record.split('\n');
-    var pairs = [];
-    for (var i = 0; i < raw.length; i++) {
-      var tab = raw[i].indexOf('\t');
-      if (tab <= 0 || raw[i].indexOf('\t', tab + 1) >= 0) return null;
-      var name = cssDecodeField(raw[i].slice(0, tab));
-      var value = cssDecodeField(raw[i].slice(tab + 1));
-      if (name === null || name === '' || value === null) return null;
-      pairs.push([name, value]);
-    }
-    return pairs;
-  }
-  function cssEncodePairs(pairs) {
+  function cssEncodeRows(rows) {
     var lines = [];
-    for (var i = 0; i < pairs.length; i++) {
-      lines.push(cssEncodeField(pairs[i][0]) + '\t' + cssEncodeField(pairs[i][1]));
+    for (var i = 0; i < rows.length; i++) {
+      var fields = [];
+      for (var j = 0; j < rows[i].length; j++) fields.push(cssEncodeField(rows[i][j]));
+      lines.push(fields.join('\t'));
     }
     return lines.join('\n');
   }
   function cssShorthandComponents(name) {
-    var components = cssDecodeList(String(__inlineStyleShorthandComponents(name)));
-    return components === null ? [] : components;
+    var rows = cssDecodeRows(String(__inlineStyleShorthandComponents(name)), 1);
+    if (rows === null || rows.some(function(row) { return !row[0]; }))
+      throw new TypeError('Malformed native CSS shorthand metadata');
+    return rows.map(function(row) { return row[0]; });
   }
   function cssShorthands() {
-    var names = cssDecodeList(String(__inlineStyleShorthands()));
-    return names === null ? [] : names;
+    var rows = cssDecodeRows(String(__inlineStyleShorthands()), 1);
+    if (rows === null || rows.some(function(row) { return !row[0]; }))
+      throw new TypeError('Malformed native CSS shorthand metadata');
+    return rows.map(function(row) { return row[0]; });
   }
   function cssPendingShorthand(map, shorthand, components) {
     var pending = null;
+    var priority = null;
     for (var i = 0; i < components.length; i++) {
       var index = cssIdx(map, components[i]);
       if (index < 0 || !map[index][2]) return null;
+      if (priority === null) priority = map[index][3] || '';
+      else if (priority !== (map[index][3] || '')) return null;
       var origin = map[index][2];
       if (origin[0] !== shorthand) return null;
       if (pending === null) pending = origin;
@@ -1597,18 +1604,22 @@
     var rows = [];
     var first = map.length;
     var hasPending = false;
+    var priority = null;
     for (var i = 0; i < components.length; i++) {
       var index = cssIdx(map, components[i]);
       if (index < 0) return null;
+      if (priority === null) priority = map[index][3] || '';
+      else if (priority !== (map[index][3] || '')) return null;
       first = Math.min(first, index);
       if (map[index][2]) hasPending = true;
       rows.push([components[i], map[index][1]]);
     }
     var pending = cssPendingShorthand(map, shorthand, components);
-    if (pending !== null) return { first: first, value: pending[1], components: components };
+    if (pending !== null) return { first: first, value: pending[1], components: components, priority: priority };
     if (hasPending) return null;
-    var value = cssDecodeField(String(__inlineStyleShorthandValue(shorthand, cssEncodePairs(rows))));
-    return value === null || value === '' ? null : { first: first, value: value, components: components };
+    var value = cssDecodeField(String(__inlineStyleShorthandValue(shorthand, cssEncodeRows(rows))));
+    if (value === null) throw new TypeError('Malformed native CSS shorthand value');
+    return value === '' ? null : { first: first, value: value, components: components, priority: priority };
   }
   function cssSerialize(map) {
     var shorthands = cssShorthands();
@@ -1630,7 +1641,7 @@
       for (var k = 0; k < serializations.length; k++) {
         var candidate = serializations[k];
         if (candidate.first !== index) continue;
-        parts.push(candidate.name + ': ' + candidate.value + ';');
+        parts.push(candidate.name + ': ' + candidate.value + (candidate.priority ? ' !important' : '') + ';');
         for (var c = 0; c < candidate.components.length; c++) {
           var component = cssIdx(map, candidate.components[c]);
           if (component >= 0) consumed[component] = true;
@@ -1641,7 +1652,7 @@
       if (!emitted && !consumed[index]) {
         // A pending-substitution longhand is unobservable on its own. This
         // matters after a later longhand mutation breaks an authored shorthand.
-        parts.push(map[index][0] + ': ' + (map[index][2] ? '' : map[index][1]) + ';');
+        parts.push(map[index][0] + ': ' + (map[index][2] ? '' : map[index][1]) + (map[index][3] ? ' !important' : '') + ';');
       }
     }
     return parts.join(' ');
@@ -1649,36 +1660,47 @@
   function cssStyleValue(name, value) {
     var record = String(__inlineStyleValue(name, value));
     var split = record.indexOf('\n');
-    var kind = split < 0 ? record : record.slice(0, split);
-    if (kind === 'invalid') return null;
+    if (split < 0) throw new TypeError('Malformed native CSS value record');
+    var kind = record.slice(0, split);
+    var payload = record.slice(split + 1);
+    if (kind === 'invalid' && payload === '') return null;
     if (kind === 'canonical') {
-      var canonical = cssDecodeField(record.slice(split + 1));
-      return canonical === null ? null : { kind: kind, entries: [[name, canonical]] };
+      var canonical = cssDecodeField(payload);
+      if (canonical === null) throw new TypeError('Malformed native CSS value record');
+      return { kind: kind, entries: [[name, canonical]] };
     }
     if (kind === 'expanded') {
-      var entries = cssDecodePairs(record.slice(split + 1));
-      return entries === null || entries.length === 0 ? null : { kind: kind, entries: entries };
+      var entries = cssDecodeRows(payload, 2);
+      if (entries === null || entries.length === 0 || entries.some(function(row) { return !row[0]; }))
+        throw new TypeError('Malformed native CSS value record');
+      return { kind: kind, entries: entries };
     }
-    return { kind: kind, entries: [[name, value]] };
+    if ((kind === 'pass' || kind === 'deferred') && payload === '')
+      return { kind: kind, entries: [[name, value]] };
+    throw new TypeError('Malformed native CSS value record');
   }
   function cssIdx(map, name) {
     for (var i = 0; i < map.length; i++) { if (map[i][0] === name) return i; }
     return -1;
   }
-  function cssRemoveNames(map, names) {
+  function cssRemoveNames(map, names, preserveImportant) {
     var removed = false;
     for (var i = map.length - 1; i >= 0; i--) {
-      if (names.indexOf(map[i][0]) >= 0) { map.splice(i, 1); removed = true; }
+      if (names.indexOf(map[i][0]) >= 0 && !(preserveImportant && map[i][3] === 'important')) {
+        map.splice(i, 1); removed = true;
+      }
     }
     return removed;
   }
-  function cssPut(map, name, value, pending) {
+  function cssPut(map, name, value, pending, priority, preserveImportant) {
     var i = cssIdx(map, name);
     if (i >= 0) {
+      if (preserveImportant && map[i][3] === 'important') return;
       map[i][1] = value;
       map[i][2] = pending;
+      map[i][3] = priority || '';
     } else {
-      map.push(pending ? [name, value, pending] : [name, value]);
+      map.push([name, value, pending || null, priority || '']);
     }
   }
   function cssMatchesComponents(entries, components) {
@@ -1688,31 +1710,34 @@
     }
     return true;
   }
-  function cssApplyDeclaration(map, name, value) {
+  function cssApplyDeclaration(map, name, value, priority, fromParse) {
     var normalized = cssStyleValue(name, value);
     if (normalized === null) return false;
     var components = cssShorthandComponents(name);
     if (normalized.kind === 'expanded' &&
-        (components.length === 0 || !cssMatchesComponents(normalized.entries, components))) return false;
-    if (normalized.kind === 'deferred' && components.length === 0) return false;
-    if (components.length > 0) cssRemoveNames(map, [name].concat(components));
+        (components.length === 0 || !cssMatchesComponents(normalized.entries, components)))
+      throw new TypeError('Malformed native CSS shorthand expansion');
+    if (normalized.kind === 'deferred' && components.length === 0)
+      throw new TypeError('Malformed native CSS shorthand metadata');
+    var preserveImportant = fromParse && priority !== 'important';
+    if (components.length > 0) cssRemoveNames(map, [name].concat(components), preserveImportant);
     if (normalized.kind === 'expanded') {
       for (var i = 0; i < normalized.entries.length; i++) {
-        cssPut(map, normalized.entries[i][0], normalized.entries[i][1]);
+        cssPut(map, normalized.entries[i][0], normalized.entries[i][1], null, priority, preserveImportant);
       }
     } else if (normalized.kind === 'deferred') {
       for (var j = 0; j < components.length; j++) {
-        cssPut(map, components[j], value, [name, value]);
+        cssPut(map, components[j], value, [name, value], priority, preserveImportant);
       }
     } else {
-      cssPut(map, name, normalized.entries[0][1]);
+      cssPut(map, name, normalized.entries[0][1], null, priority, preserveImportant);
     }
     return true;
   }
   function cssCanonicalMap(map) {
     var out = [];
     for (var i = 0; i < map.length; i++) {
-      cssApplyDeclaration(out, map[i][0], map[i][1]);
+      cssApplyDeclaration(out, map[i][0], map[i][1], map[i][2], true);
     }
     return out;
   }
@@ -1724,13 +1749,24 @@
     var pending = cssPendingShorthand(map, name, components);
     if (pending !== null) return pending[1];
     var rows = [];
+    var priority = null;
     for (var i = 0; i < components.length; i++) {
       var component = cssIdx(map, components[i]);
       if (component < 0 || map[component][2]) return '';
+      if (priority === null) priority = map[component][3] || '';
+      else if (priority !== (map[component][3] || '')) return '';
       rows.push([components[i], map[component][1]]);
     }
-    var shorthand = cssDecodeField(String(__inlineStyleShorthandValue(name, cssEncodePairs(rows))));
-    return shorthand === null ? '' : shorthand;
+    var shorthand = cssDecodeField(String(__inlineStyleShorthandValue(name, cssEncodeRows(rows))));
+    if (shorthand === null) throw new TypeError('Malformed native CSS shorthand value');
+    return shorthand;
+  }
+  function cssPropertyPriority(map, name) {
+    var direct = cssIdx(map, name);
+    if (direct >= 0) return map[direct][3] || '';
+    var components = cssShorthandComponents(name);
+    var shorthand = cssShorthandSerialization(map, name, components);
+    return shorthand === null ? '' : shorthand.priority;
   }
   function cssRemoveProperty(map, name) {
     return cssRemoveNames(map, [name].concat(cssShorthandComponents(name)));
@@ -1743,7 +1779,7 @@
   function cssCloneMap(map) {
     var cloned = [];
     for (var i = 0; i < map.length; i++) {
-      cloned.push(map[i][2] ? [map[i][0], map[i][1], [map[i][2][0], map[i][2][1]]] : [map[i][0], map[i][1]]);
+      cloned.push([map[i][0], map[i][1], map[i][2] ? [map[i][2][0], map[i][2][1]] : null, map[i][3] || '']);
     }
     return cloned;
   }
@@ -1760,16 +1796,19 @@
       inlineStyleStates.set(el, { text: text, map: cssCloneMap(map) });
     }
     var api = {
-      getPropertyValue: function(name) { return cssPropertyValue(read(), String(name).toLowerCase()); },
-      setProperty: function(name, value) {
-        name = String(name).toLowerCase();
+      getPropertyValue: function(name) { return cssPropertyValue(read(), cssName(String(name))); },
+      getPropertyPriority: function(name) { return cssPropertyPriority(read(), cssName(String(name))); },
+      setProperty: function(name, value, priority) {
+        name = cssName(String(name));
         value = (value === undefined || value === null) ? '' : String(value);
+        priority = priority === undefined ? '' : String(priority).trim().toLowerCase();
+        if (priority !== '' && priority !== 'important') return;
         var m = read();
         if (value === '') { if (cssRemoveProperty(m, name)) write(m); return; }
-        if (cssApplyDeclaration(m, name, value)) write(m);
+        if (cssApplyDeclaration(m, name, value, priority)) write(m);
       },
       removeProperty: function(name) {
-        name = String(name).toLowerCase();
+        name = cssName(String(name));
         var m = read(); var old = cssPropertyValue(m, name);
         if (cssRemoveProperty(m, name)) write(m);
         return old;
@@ -1782,7 +1821,7 @@
       get: function() { return cssSerialize(read()); },
       set: function(v) { write(cssCanonicalMap(cssParse(v))); },
     });
-    var reserved = { getPropertyValue: 1, setProperty: 1, removeProperty: 1, item: 1, length: 1, cssText: 1 };
+    var reserved = { getPropertyValue: 1, getPropertyPriority: 1, setProperty: 1, removeProperty: 1, item: 1, length: 1, cssText: 1 };
     return new Proxy(api, {
       get: function(target, prop) {
         if (typeof prop !== 'string' || reserved[prop]) { return target[prop]; }
@@ -1851,18 +1890,17 @@
   if (globalThis.window) { globalThis.window.getComputedStyle = globalThis.getComputedStyle; }
 
   // The selected style engine classifies two-argument CSS.supports queries.
-  // A one-string declaration is split at its first colon; condition grammar is
-  // a later surface.
+  // One-string declarations use the same CSS-owner parser as inline style;
+  // condition grammar is a later surface.
   var cssApi = globalThis.CSS || {};
   cssApi.supports = function(property, value) {
     if (arguments.length < 2) {
-      var declaration = String(property);
-      var colon = declaration.indexOf(':');
-      if (colon < 1) return false;
-      value = declaration.slice(colon + 1).trim();
-      property = declaration.slice(0, colon).trim();
+      var declarations = cssParse(String(property));
+      if (declarations.length !== 1 || declarations[0][2]) return false;
+      property = declarations[0][0];
+      value = declarations[0][1];
     }
-    return String(__supportsStyleValue(String(property).toLowerCase(), String(value))) === 'true';
+    return String(__supportsStyleValue(cssName(String(property)), String(value))) === 'true';
   };
   globalThis.CSS = cssApi;
   if (globalThis.window) { globalThis.window.CSS = cssApi; }
@@ -1906,20 +1944,22 @@
   // already routed through the retained engine. The surface still supplies the
   // standard reads needed for CSSStyleRule and CSSKeyframeRule inspection.
   function makeRuleStyleDecl(text) {
+    function read() { return cssCanonicalMap(cssParse(text)); }
     var api = {
       getPropertyValue: function(name) {
-        var m = cssParse(text), target = String(name).toLowerCase();
-        for (var i = 0; i < m.length; i++) if (m[i][0] === target) return m[i][1];
-        return '';
+        return cssPropertyValue(read(), cssName(String(name)));
+      },
+      getPropertyPriority: function(name) {
+        return cssPropertyPriority(read(), cssName(String(name)));
       },
       setProperty: function() {}, removeProperty: function() { return ''; },
-      item: function(i) { var m = cssParse(text); i = i >>> 0; return i < m.length ? m[i][0] : ''; },
+      item: function(i) { var m = read(); i = i >>> 0; return i < m.length ? m[i][0] : ''; },
     };
-    Object.defineProperty(api, 'length', { configurable: true, get: function() { return cssParse(text).length; } });
+    Object.defineProperty(api, 'length', { configurable: true, get: function() { return read().length; } });
     Object.defineProperty(api, 'cssText', { configurable: true, get: function() { return text || ''; }, set: function() {} });
     return new Proxy(api, {
       get: function(target, prop) {
-        if (typeof prop !== 'string' || prop === 'getPropertyValue' || prop === 'setProperty' || prop === 'removeProperty' || prop === 'item' || prop === 'length' || prop === 'cssText') return target[prop];
+        if (typeof prop !== 'string' || prop === 'getPropertyValue' || prop === 'getPropertyPriority' || prop === 'setProperty' || prop === 'removeProperty' || prop === 'item' || prop === 'length' || prop === 'cssText') return target[prop];
         if (/^[0-9]+$/.test(prop)) return target.item(Number(prop));
         return target.getPropertyValue(cssKebab(prop));
       },
@@ -2085,15 +2125,17 @@
   globalThis.MediaList = MediaList;
   globalThis.StyleSheetList = StyleSheetList;
 
-  // querySelector / querySelectorAll, shared by Element and Document (scope is the
-  // receiver). querySelectorAll returns an array (NodeList-approximate).
-  function querySelector(sel) { return wrapNode(__querySelector(this.__ref, String(sel))); }
+  // querySelector / querySelectorAll, shared by Element, Document and fragment.
+  function querySelector(sel) {
+    var html = isHtmlDocument(this.nodeType === 9 ? this : ownerDocumentOf(this));
+    return wrapNode(selectorResult(__querySelector(this.__ref, String(sel), String(html))));
+  }
   function querySelectorAll(sel) {
-    // querySelectorAll returns a *static* NodeList: snapshot now, captured by the
-    // collection's getItems closure.
-    var n = +__querySelectorAllCount(this.__ref, String(sel));
+    var html = isHtmlDocument(this.nodeType === 9 ? this : ownerDocumentOf(this));
     var out = [];
-    for (var i = 0; i < n; i++) { out.push(wrapNode(__querySelectorAllItem(this.__ref, String(sel), String(i)))); }
+    selectorResult(__querySelectorAll(this.__ref, String(sel), String(html), function(ref) {
+      out.push(wrapNode(ref));
+    }));
     return makeCollection(function() { return out; }, false);
   }
   Element.prototype.querySelector = querySelector;
@@ -3513,11 +3555,14 @@
       // the WebGL 1.0 context; the conformance tests use both spellings.
       if (t !== 'webgl' && t !== 'experimental-webgl') return null;
       if (this.__webglContext) return this.__webglContext;
-      var Ctor = globalThis.WebGLRenderingContext;
-      if (typeof Ctor !== 'function') return null;
+      if (typeof globalThis.WebGLRenderingContext !== 'function') return null;
+      var create = globalThis.__createWebGLContext;
+      if (typeof create !== 'function') return null;
       var w = parseInt(this.getAttribute('width'), 10); if (!(w >= 0)) w = 300;
       var h = parseInt(this.getAttribute('height'), 10); if (!(h >= 0)) h = 150;
-      this.__webglContext = new Ctor(w, h);
+      var context = create(w, h);
+      if (context === null) return null;
+      this.__webglContext = context;
       // WebGL helpers use the standard back-reference for drawing-buffer
       // dimensions and context classification. Keep it on the context rather
       // than making the runtime API know about DOM wrapper identity.

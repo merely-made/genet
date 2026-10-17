@@ -6,16 +6,18 @@
 //!
 //! The runtime exposes a [`WebGlHandler`] trait — one instance is one WebGL
 //! context — plus a *factory* the host installs ([`crate::Runtime::set_webgl_factory`])
-//! that mints a fresh handler per `<canvas>.getContext('webgl')`. The JS
+//! that mints a fresh handler for each canvas's first `getContext('webgl')`.
+//! The JS
 //! `WebGLRenderingContext` surface is a bootstrap over a set of native sinks
 //! (`__webgl_*`). No graphics dependency enters this crate; only the trait does.
 //!
-//! Multi-context: each `getContext` call invokes the factory with the canvas's
-//! width/height and pushes the resulting handler into a per-runtime registry;
+//! Multi-context: each uncached `getContext` call invokes the factory with the
+//! canvas's width/height and pushes a successful handler into a per-runtime registry;
 //! the JS context object carries the registry index (`_ctx`), and every sink
 //! call passes it as its first argument so the sink routes to the right
-//! handler. A negative / out-of-range index (no factory installed, or a stale
-//! context) makes the sink no-op or return its default.
+//! handler. A missing factory or one that refuses creation gives JS no context;
+//! a negative / out-of-range index from a stale context makes a sink return its
+//! default.
 
 use std::cell::RefCell;
 
@@ -25,8 +27,9 @@ use crate::HostState;
 
 /// Mints a fresh [`WebGlHandler`] (one WebGL context) at the given drawing-buffer
 /// `width` x `height`. The host installs one via
-/// [`crate::Runtime::set_webgl_factory`]; each `getContext('webgl')` calls it.
-pub type WebGlFactory = Box<dyn FnMut(u32, u32) -> Box<dyn WebGlHandler>>;
+/// [`crate::Runtime::set_webgl_factory`]; each uncached `getContext('webgl')` calls it.
+/// `None` refuses creation for that canvas, allowing `getContext` to return null.
+pub type WebGlFactory = Box<dyn FnMut(u32, u32) -> Option<Box<dyn WebGlHandler>>>;
 
 /// What a Triangle-class WebGL smoke needs. Each method maps to one
 /// `WebGLRenderingContext` JS method; arguments come pre-decoded (GLenum
@@ -124,7 +127,8 @@ pub trait WebGlHandler {
 }
 
 /// Invoke the installed factory to mint a context at `width` x `height`, push it
-/// into the registry, and return its index. `None` if no factory is installed.
+/// into the registry, and return its index. `None` if no factory is installed
+/// or the factory refuses creation; no registry entry is added on failure.
 fn create_webgl_context<E: ScriptEngine>(
     cx: &mut E::CallCx<'_>,
     width: u32,
@@ -141,14 +145,14 @@ fn create_webgl_context<E: ScriptEngine>(
         ..
     } = &mut *host;
     let factory = webgl_factory.as_mut()?;
-    let handler = factory(width, height);
+    let handler = factory(width, height)?;
     webgl_contexts.push(handler);
     Some(webgl_contexts.len() - 1)
 }
 
-/// Route to the context at registry index `ctx_id`. A negative index (no
-/// factory / stale context) or an out-of-range one yields `default` — the sink
-/// no-ops, matching the "no handler" behavior of the singleton era.
+/// Route to the context at registry index `ctx_id`. A negative or out-of-range
+/// index yields `default` for a stale or invalid sink request. Failed context
+/// creation is handled before any JS context is exposed.
 fn with_webgl_ctx<E: ScriptEngine, F, R>(cx: &mut E::CallCx<'_>, ctx_id: i64, default: R, f: F) -> R
 where
     F: FnOnce(&mut dyn WebGlHandler) -> R,
@@ -295,7 +299,7 @@ pub(crate) fn install_webgl_surface<E: ScriptEngine>(
 /// Each `WebGLRenderingContext` carries a registry index (`_ctx`) minted by
 /// `__webgl_create_context(width, height)`; every method threads it as the
 /// leading sink argument. `HTMLCanvasElement.getContext('webgl')` (in dom.rs)
-/// constructs one with the canvas's drawing-buffer size; the
+/// requests one with the canvas's drawing-buffer size; the
 /// `__createWebGLContext(w, h)` helper is for host code / tests that want a
 /// bare context.
 const WEBGL_BOOTSTRAP: &str = include_str!("bootstrap.js");

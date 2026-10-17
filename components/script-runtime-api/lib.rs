@@ -332,11 +332,10 @@ pub struct HostState {
     pub history: Vec<(String, String)>,
     /// Index of the current entry in [`history`](Self::history).
     pub history_index: usize,
-    /// The host's WebGL context factory. `None` = no WebGL support (every
-    /// `__webgl_*` sink no-ops or yields 0 / NO_ERROR, and contexts mint to
-    /// index `-1`). Installed by [`Runtime::set_webgl_factory`]; invoked once
-    /// per `getContext('webgl')` with the canvas drawing-buffer size, the
-    /// result pushed into [`Self::webgl_contexts`].
+    /// The host's WebGL context factory. With no factory, or when the factory
+    /// returns `None`, canvas `getContext('webgl')` returns null. Installed by
+    /// [`Runtime::set_webgl_factory`]; invoked with the canvas drawing-buffer
+    /// size. Only successful results enter [`Self::webgl_contexts`].
     pub webgl_factory: Option<WebGlFactory>,
     /// Live WebGL contexts, indexed by the registry id the JS context object
     /// carries (`_ctx`). Each `__webgl_*` sink routes to one of these by its
@@ -2048,11 +2047,7 @@ impl<E: ScriptEngine> Runtime<E> {
         self.host.borrow_mut().random = Some(std::rc::Rc::from(source));
     }
 
-    /// Install the host's WebGL context factory (e.g. one that mints a
-    /// webgl-wgpu context over a real `wgpu::Device` at the requested size).
-    /// Until set, the JS `WebGLRenderingContext` methods no-op or return
-    /// `gl.NO_ERROR`. The factory is called once per `getContext('webgl')`,
-    /// so each `<canvas>` gets its own independent context.
+    /// Install the page's loader for worker scripts and worker fetches.
     pub fn set_script_resource_loader(&mut self, loader: Box<dyn ScriptResourceLoader>) {
         self.host.borrow_mut().script_loader = Some(loader.into());
     }
@@ -2086,6 +2081,11 @@ impl<E: ScriptEngine> Runtime<E> {
         worker::has_work(&self.host) || self.child_hosts().values().any(worker::has_work)
     }
 
+    /// Install the host's WebGL context factory (e.g. one that mints a
+    /// webgl-wgpu context over a real `wgpu::Device` at the requested size).
+    /// Until set, canvas `getContext('webgl')` returns null. A factory can
+    /// also return `None` to refuse an individual creation. Each successful
+    /// canvas request gets its own independent context.
     pub fn set_webgl_factory(&mut self, factory: WebGlFactory) {
         self.host.borrow_mut().webgl_factory = Some(factory);
     }
@@ -2603,8 +2603,8 @@ pub(crate) fn install_host_surface<E: ScriptEngine>(
     // message is delivered as.
     websocket::install_websocket_surface(engine)?;
     // `WebGLRenderingContext` (Triangle-class subset) over the host webgl seam.
-    // Until step 2 wires `HTMLCanvasElement.getContext('webgl')`, JS reaches it
-    // through the `__createWebGLContext()` helper.
+    // Canvas `getContext('webgl')` and the bare `__createWebGLContext()` helper
+    // return null when the host has no context to provide.
     webgl::install_webgl_surface(engine)?;
 
     // `structuredClone` + the serialize/deserialize algorithm. After `fetch` so

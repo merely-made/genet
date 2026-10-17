@@ -2,189 +2,222 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-//! A small, self-contained CSS selector matcher for `querySelector` /
-//! `querySelectorAll` / `matches`, generic over [`LayoutDom`].
-//!
-//! Supported: selector lists (`a, b`), type / universal (`div`, `*`), `#id`,
-//! `.class`, attribute selectors (`[a]`, `[a=v]`, `[a~=v]`), and the descendant
-//! (` `) and child (`>`) combinators, in any compound combination
-//! (`div.foo#bar[x] > .y`). **Not** supported (yet): pseudo-classes/elements
-//! (`:hover`, `::before`), sibling combinators (`+`, `~`), and the other
-//! attribute operators (`^=`, `$=`, `*=`, `|=`). The safety rule is **never
-//! over-match**: any unsupported syntax makes the whole selector list match
-//! nothing (an empty [`Selectors`]), rather than silently matching a prefix.
-//!
-//! This is a pragmatic subset, not `selectors`-crate-grade matching; the
-//! eventual `web-api` layer can swap in full `selectors`-crate matching (already
-//! used by Livery's cascade) behind the same sink surface.
+//! Live-DOM adapter for Cadency's shared selector grammar. Queries walk DOM
+//! children, not flat-tree or shadow-root children.
 
-use layout_dom_api::{LayoutDom, LocalName, Namespace};
+use cadency::{AttrOperation, CaseSensitivity, Element, NamespaceConstraint, PseudoClass, SelectorList};
+use layout_dom_api::{LayoutDom, LocalName, Namespace, NodeKind};
 
-/// A parsed selector list. Empty means "matches nothing" (no selectors, or an
-/// unsupported one made the whole list invalid).
-pub struct Selectors(Vec<Complex>);
-
-/// One complex selector: compound selectors joined by combinators, stored
-/// left-to-right. `parts[i].0` is the combinator linking `parts[i-1]` to
-/// `parts[i]`; `parts[0].0` is unused.
-struct Complex {
-    parts: Vec<(Combinator, Compound)>,
-}
-
-#[derive(Clone, Copy, PartialEq)]
-enum Combinator {
-    Descendant,
-    Child,
-}
-
-/// A compound selector (no combinators): a single element's constraints.
-#[derive(Default)]
-struct Compound {
-    tag: Option<String>,
-    id: Option<String>,
-    classes: Vec<String>,
-    attrs: Vec<AttrSel>,
-    validity: Vec<ValidityPseudo>,
-}
-
-#[derive(Clone, Copy)]
-enum ValidityPseudo {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ValidityPseudo {
     Valid,
     Invalid,
     UserValid,
     UserInvalid,
 }
 
-struct AttrSel {
-    name: String,
-    op: AttrOp,
+impl PseudoClass for ValidityPseudo {
+    fn parse(name: &str) -> Option<Self> {
+        Some(match name {
+            "valid" => Self::Valid,
+            "invalid" => Self::Invalid,
+            "user-valid" => Self::UserValid,
+            "user-invalid" => Self::UserInvalid,
+            _ => return None,
+        })
+    }
 }
 
-enum AttrOp {
-    Exists,
-    Equals(String),
-    Includes(String),
+pub type Selectors = SelectorList<ValidityPseudo>;
+
+pub fn parse(input: &str) -> Result<Selectors, cadency::ParseError> {
+    Selectors::parse(input)
 }
 
-impl Selectors {
-    /// `true` if `node` matches any complex selector in the list.
-    pub fn matches<D: LayoutDom>(&self, dom: &D, node: D::NodeId) -> bool {
-        self.0.iter().any(|c| matches_complex(dom, node, c))
+/// One query uses the receiver as its explicit `:scope` element. A Document
+/// supplies its document element; a fragment has no element scoping root.
+fn scope_element<D: LayoutDom>(dom: &D, scope: D::NodeId) -> Option<D::NodeId> {
+    match dom.kind(scope) {
+        NodeKind::Element => Some(scope),
+        NodeKind::Document => dom.dom_children(scope).find(|&id| dom.element_name(id).is_some()),
+        _ => None,
     }
+}
 
-    /// All descendants of `scope` matching the list, in document (preorder).
-    pub fn query_all<D: LayoutDom>(&self, dom: &D, scope: D::NodeId) -> Vec<D::NodeId> {
-        let mut descendants = Vec::new();
-        collect_descendants(dom, scope, &mut descendants);
-        descendants
-            .into_iter()
-            .filter(|&n| self.matches(dom, n))
-            .collect()
+pub fn matches<D: LayoutDom>(selectors: &Selectors, dom: &D, node: D::NodeId, html_document: bool) -> bool {
+    let element = DomElement { dom, id: node, html_document };
+    selectors.matches_scoped(&element, None, Some(&element))
+}
+
+/// One preorder traversal and one test per element. The returned IDs describe
+/// static membership; the host materializes canonical reflectors before JS runs.
+pub fn query_all<D: LayoutDom>(
+    selectors: &Selectors,
+    dom: &D,
+    scope: D::NodeId,
+    html_document: bool,
+) -> Vec<D::NodeId> {
+    let scope_element = scope_element(dom, scope).map(|id| DomElement { dom, id, html_document });
+    let mut out = Vec::new();
+    let mut stack: Vec<_> = dom.dom_children(scope).collect();
+    stack.reverse();
+    while let Some(id) = stack.pop() {
+        if dom.element_name(id).is_some() {
+            let element = DomElement { dom, id, html_document };
+            if selectors.matches_scoped(&element, None, scope_element.as_ref()) {
+                out.push(id);
+            }
+        }
+        let children: Vec<_> = dom.dom_children(id).collect();
+        stack.extend(children.into_iter().rev());
     }
+    out
+}
 
-    /// The first descendant of `scope` matching the list, or `None`.
-    pub fn query_first<D: LayoutDom>(&self, dom: &D, scope: D::NodeId) -> Option<D::NodeId> {
-        let mut descendants = Vec::new();
-        collect_descendants(dom, scope, &mut descendants);
-        descendants.into_iter().find(|&n| self.matches(dom, n))
+pub fn query_first<D: LayoutDom>(
+    selectors: &Selectors,
+    dom: &D,
+    scope: D::NodeId,
+    html_document: bool,
+) -> Option<D::NodeId> {
+    let scope_element = scope_element(dom, scope).map(|id| DomElement { dom, id, html_document });
+    let mut stack: Vec<_> = dom.dom_children(scope).collect();
+    stack.reverse();
+    while let Some(id) = stack.pop() {
+        if dom.element_name(id).is_some() {
+            let element = DomElement { dom, id, html_document };
+            if selectors.matches_scoped(&element, None, scope_element.as_ref()) {
+                return Some(id);
+            }
+        }
+        let children: Vec<_> = dom.dom_children(id).collect();
+        stack.extend(children.into_iter().rev());
+    }
+    None
+}
+
+struct DomElement<'a, D: LayoutDom> {
+    dom: &'a D,
+    id: D::NodeId,
+    html_document: bool,
+}
+
+impl<D: LayoutDom> Clone for DomElement<'_, D> {
+    fn clone(&self) -> Self {
+        Self { dom: self.dom, id: self.id, html_document: self.html_document }
+    }
+}
+
+impl<D: LayoutDom> Element for DomElement<'_, D> {
+    type PseudoClass = ValidityPseudo;
+
+    fn is_same(&self, other: &Self) -> bool { self.id == other.id }
+    fn parent_element(&self) -> Option<Self> {
+        let id = self.dom.parent(self.id)?;
+        self.dom.element_name(id).map(|_| Self { id, ..self.clone() })
+    }
+    fn prev_sibling_element(&self) -> Option<Self> {
+        let mut id = self.dom.prev_sibling(self.id);
+        while let Some(sibling) = id {
+            if self.dom.element_name(sibling).is_some() {
+                return Some(Self { id: sibling, ..self.clone() });
+            }
+            id = self.dom.prev_sibling(sibling);
+        }
+        None
+    }
+    fn next_sibling_element(&self) -> Option<Self> {
+        let mut id = self.dom.next_sibling(self.id);
+        while let Some(sibling) = id {
+            if self.dom.element_name(sibling).is_some() {
+                return Some(Self { id: sibling, ..self.clone() });
+            }
+            id = self.dom.next_sibling(sibling);
+        }
+        None
+    }
+    fn is_root(&self) -> bool {
+        self.dom.parent(self.id).is_none_or(|parent| self.dom.kind(parent) == NodeKind::Document)
+    }
+    fn is_empty(&self) -> bool {
+        !self.dom.dom_children(self.id).any(|id| {
+            self.dom.element_name(id).is_some()
+                || matches!(self.dom.kind(id), NodeKind::Text | NodeKind::CdataSection)
+                    && self.dom.text(id).is_some_and(|text| !text.is_empty())
+        })
+    }
+    fn is_html_element_in_html_document(&self) -> bool {
+        self.html_document && self.dom.element_name(self.id)
+            .is_some_and(|name| name.ns.as_ref() == "http://www.w3.org/1999/xhtml")
+    }
+    fn has_local_name(&self, name: &str) -> bool {
+        self.dom.element_name(self.id).is_some_and(|q| {
+            if self.is_html_element_in_html_document() {
+                q.local.as_ref().eq_ignore_ascii_case(name)
+            } else {
+                q.local.as_ref() == name
+            }
+        })
+    }
+    fn has_namespace(&self, url: &str) -> bool {
+        self.dom.element_name(self.id).is_some_and(|q| q.ns.as_ref() == url)
+    }
+    fn is_same_type(&self, other: &Self) -> bool {
+        match (self.dom.element_name(self.id), self.dom.element_name(other.id)) {
+            (Some(a), Some(b)) => a.ns.as_ref() == b.ns.as_ref() && if self.is_html_element_in_html_document() {
+                a.local.as_ref().eq_ignore_ascii_case(b.local.as_ref())
+            } else {
+                a.local.as_ref() == b.local.as_ref()
+            },
+            _ => false,
+        }
+    }
+    fn has_id(&self, id: &str, case: CaseSensitivity) -> bool {
+        self.dom.attribute(self.id, &Namespace::from(""), &LocalName::from("id"))
+            .is_some_and(|value| case.eq(value, id))
+    }
+    fn has_class(&self, class: &str, case: CaseSensitivity) -> bool {
+        self.dom.attribute(self.id, &Namespace::from(""), &LocalName::from("class"))
+            .is_some_and(|value| value.split([' ', '\t', '\n', '\r', '\x0c']).any(|token| case.eq(token, class)))
+    }
+    fn attr_matches(
+        &self,
+        namespace: &NamespaceConstraint<'_>,
+        local_name: &str,
+        operation: &AttrOperation<'_>,
+    ) -> bool {
+        self.dom.attributes(self.id).any(|attr| {
+            let name = attr.name;
+            let namespace_matches = match namespace {
+                NamespaceConstraint::Any => true,
+                NamespaceConstraint::Specific(ns) => name.ns.as_ref() == *ns,
+            };
+            let local_matches = if self.is_html_element_in_html_document() && name.ns.as_ref().is_empty() {
+                name.local.as_ref().eq_ignore_ascii_case(local_name)
+            } else {
+                name.local.as_ref() == local_name
+            };
+            namespace_matches && local_matches && operation.eval_str(attr.value)
+        })
+    }
+    fn matches_pseudo_class(&self, pseudo: &Self::PseudoClass) -> bool {
+        matches_validity_pseudo(self.dom, self.id, *pseudo)
+    }
+    fn parent_node_is_shadow_root(&self) -> bool {
+        self.dom.parent(self.id).is_some_and(|parent| self.dom.kind(parent) == NodeKind::ShadowRoot)
+    }
+    fn containing_shadow_host(&self) -> Option<Self> {
+        let root = self.dom.containing_shadow_root(self.id)?;
+        let id = self.dom.shadow_host(root)?;
+        Some(Self { id, ..self.clone() })
     }
 }
 
 fn collect_descendants<D: LayoutDom>(dom: &D, node: D::NodeId, out: &mut Vec<D::NodeId>) {
-    for child in dom.dom_children(node).collect::<Vec<_>>() {
+    for child in dom.dom_children(node) {
         out.push(child);
         collect_descendants(dom, child, out);
     }
-}
-
-/// Match `node` against one complex selector, right-to-left: the node must match
-/// the rightmost compound, then each preceding compound must match an
-/// ancestor/parent per its combinator.
-fn matches_complex<D: LayoutDom>(dom: &D, node: D::NodeId, complex: &Complex) -> bool {
-    let parts = &complex.parts;
-    let last = parts.len() - 1;
-    if !matches_compound(dom, node, &parts[last].1) {
-        return false;
-    }
-    let mut current = node;
-    let mut i = last;
-    while i > 0 {
-        let combinator = parts[i].0;
-        let target = &parts[i - 1].1;
-        match combinator {
-            Combinator::Child => {
-                let Some(parent) = dom.parent(current) else {
-                    return false;
-                };
-                if !matches_compound(dom, parent, target) {
-                    return false;
-                }
-                current = parent;
-            },
-            Combinator::Descendant => {
-                let mut ancestor = dom.parent(current);
-                loop {
-                    match ancestor {
-                        Some(a) if matches_compound(dom, a, target) => {
-                            current = a;
-                            break;
-                        },
-                        Some(a) => ancestor = dom.parent(a),
-                        None => return false,
-                    }
-                }
-            },
-        }
-        i -= 1;
-    }
-    true
-}
-
-fn matches_compound<D: LayoutDom>(dom: &D, node: D::NodeId, c: &Compound) -> bool {
-    // Only elements match a compound selector.
-    let Some(qname) = dom.element_name(node) else {
-        return false;
-    };
-    if let Some(tag) = &c.tag {
-        if !qname.local.as_ref().eq_ignore_ascii_case(tag) {
-            return false;
-        }
-    }
-    let ns = Namespace::from("");
-    if let Some(id) = &c.id {
-        if dom.attribute(node, &ns, &LocalName::from("id")) != Some(id.as_str()) {
-            return false;
-        }
-    }
-    if !c.classes.is_empty() {
-        let class_attr = dom
-            .attribute(node, &ns, &LocalName::from("class"))
-            .unwrap_or("");
-        for needed in &c.classes {
-            if !class_attr.split_whitespace().any(|h| h == needed) {
-                return false;
-            }
-        }
-    }
-    for a in &c.attrs {
-        let val = dom.attribute(node, &ns, &LocalName::from(a.name.as_str()));
-        let ok = match &a.op {
-            AttrOp::Exists => val.is_some(),
-            AttrOp::Equals(v) => val == Some(v.as_str()),
-            AttrOp::Includes(v) => val.is_some_and(|s| s.split_whitespace().any(|t| t == v)),
-        };
-        if !ok {
-            return false;
-        }
-    }
-    if !c
-        .validity
-        .iter()
-        .all(|pseudo| matches_validity_pseudo(dom, node, *pseudo))
-    {
-        return false;
-    }
-    true
 }
 
 fn matches_validity_pseudo<D: LayoutDom>(dom: &D, node: D::NodeId, pseudo: ValidityPseudo) -> bool {
@@ -306,299 +339,58 @@ fn associated_with_form<D: LayoutDom>(
     false
 }
 
-// ---- parsing --------------------------------------------------------------
-
-/// Parse a selector list. Any unsupported construct yields an empty [`Selectors`]
-/// (matches nothing) rather than a partial match.
-pub fn parse(input: &str) -> Selectors {
-    let mut list = Vec::new();
-    for part in split_top_level(input, ',') {
-        match parse_complex(part.trim()) {
-            Some(c) => list.push(c),
-            None => return Selectors(Vec::new()),
-        }
-    }
-    Selectors(list)
-}
-
-/// Split on `sep` at bracket depth 0 (so commas inside `[...]` are preserved).
-fn split_top_level(s: &str, sep: char) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut cur = String::new();
-    let mut depth = 0i32;
-    for ch in s.chars() {
-        match ch {
-            '[' => {
-                depth += 1;
-                cur.push(ch);
-            },
-            ']' => {
-                depth -= 1;
-                cur.push(ch);
-            },
-            c if c == sep && depth == 0 => {
-                out.push(std::mem::take(&mut cur));
-            },
-            _ => cur.push(ch),
-        }
-    }
-    out.push(cur);
-    out
-}
-
-enum Raw {
-    Compound(String),
-    Child,
-    Space,
-}
-
-fn parse_complex(s: &str) -> Option<Complex> {
-    // Tokenize into compound strings + combinators, respecting bracket depth.
-    let mut raws = Vec::new();
-    let mut cur = String::new();
-    let mut depth = 0i32;
-    for ch in s.chars() {
-        match ch {
-            '[' => {
-                depth += 1;
-                cur.push(ch);
-            },
-            ']' => {
-                depth -= 1;
-                cur.push(ch);
-            },
-            c if depth == 0 && c.is_whitespace() => {
-                if !cur.is_empty() {
-                    raws.push(Raw::Compound(std::mem::take(&mut cur)));
-                }
-                raws.push(Raw::Space);
-            },
-            '>' if depth == 0 => {
-                if !cur.is_empty() {
-                    raws.push(Raw::Compound(std::mem::take(&mut cur)));
-                }
-                raws.push(Raw::Child);
-            },
-            '+' | '~' if depth == 0 => return None, // sibling combinators unsupported
-            _ => cur.push(ch),
-        }
-    }
-    if !cur.is_empty() {
-        raws.push(Raw::Compound(cur));
-    }
-
-    // Fold into parts. A `Space` becomes a descendant combinator only between two
-    // compounds; `Child` overrides an adjacent space.
-    let mut parts: Vec<(Combinator, Compound)> = Vec::new();
-    let mut pending: Option<Combinator> = None;
-    for raw in raws {
-        match raw {
-            Raw::Compound(cs) => {
-                let compound = parse_compound(&cs)?;
-                let combinator = pending.take().unwrap_or(Combinator::Descendant);
-                parts.push((combinator, compound));
-            },
-            Raw::Child => pending = Some(Combinator::Child),
-            Raw::Space => {
-                if pending.is_none() && !parts.is_empty() {
-                    pending = Some(Combinator::Descendant);
-                }
-            },
-        }
-    }
-    if parts.is_empty() {
-        return None;
-    }
-    Some(Complex { parts })
-}
-
-fn parse_compound(s: &str) -> Option<Compound> {
-    let chars: Vec<char> = s.chars().collect();
-    let mut i = 0;
-    let mut c = Compound::default();
-
-    // Optional leading type selector or universal.
-    if i < chars.len() && (chars[i] == '*' || is_ident_start(chars[i])) {
-        if chars[i] == '*' {
-            i += 1;
-        } else {
-            let (ident, next) = read_ident(&chars, i);
-            c.tag = Some(ident);
-            i = next;
-        }
-    }
-
-    while i < chars.len() {
-        match chars[i] {
-            '#' => {
-                let (ident, next) = read_ident(&chars, i + 1);
-                if ident.is_empty() {
-                    return None;
-                }
-                c.id = Some(ident);
-                i = next;
-            },
-            '.' => {
-                let (ident, next) = read_ident(&chars, i + 1);
-                if ident.is_empty() {
-                    return None;
-                }
-                c.classes.push(ident);
-                i = next;
-            },
-            '[' => {
-                let close = chars[i..].iter().position(|&ch| ch == ']')? + i;
-                let inner: String = chars[i + 1..close].iter().collect();
-                c.attrs.push(parse_attr(&inner)?);
-                i = close + 1;
-            },
-            ':' => {
-                let (ident, next) = read_ident(&chars, i + 1);
-                c.validity.push(match ident.to_ascii_lowercase().as_str() {
-                    "valid" => ValidityPseudo::Valid,
-                    "invalid" => ValidityPseudo::Invalid,
-                    "user-valid" => ValidityPseudo::UserValid,
-                    "user-invalid" => ValidityPseudo::UserInvalid,
-                    _ => return None,
-                });
-                i = next;
-            },
-            _ => return None, // pseudo-classes, etc. — unsupported
-        }
-    }
-    Some(c)
-}
-
-fn parse_attr(inner: &str) -> Option<AttrSel> {
-    let inner = inner.trim();
-    match inner.find('=') {
-        None => {
-            if inner.is_empty() {
-                return None;
-            }
-            Some(AttrSel {
-                name: inner.to_string(),
-                op: AttrOp::Exists,
-            })
-        },
-        Some(eq) => {
-            let before = &inner[..eq];
-            let raw_value = inner[eq + 1..].trim();
-            let value = strip_quotes(raw_value).to_string();
-            // The operator prefix char, if any: `~=`, or unsupported `^$*|=`.
-            let (name, op) = match before.chars().last() {
-                Some('~') => (before[..before.len() - 1].trim(), AttrOp::Includes(value)),
-                Some('^' | '$' | '*' | '|') => return None,
-                _ => (before.trim(), AttrOp::Equals(value)),
-            };
-            if name.is_empty() {
-                return None;
-            }
-            Some(AttrSel {
-                name: name.to_string(),
-                op,
-            })
-        },
-    }
-}
-
-fn strip_quotes(s: &str) -> &str {
-    let bytes = s.as_bytes();
-    if bytes.len() >= 2
-        && (bytes[0] == b'"' || bytes[0] == b'\'')
-        && bytes[bytes.len() - 1] == bytes[0]
-    {
-        &s[1..s.len() - 1]
-    } else {
-        s
-    }
-}
-
-fn is_ident_start(ch: char) -> bool {
-    ch.is_ascii_alphabetic() || ch == '_' || ch == '-' || !ch.is_ascii()
-}
-
-fn is_ident_char(ch: char) -> bool {
-    ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' || !ch.is_ascii()
-}
-
-/// Read an identifier starting at `start`; returns it plus the next index.
-fn read_ident(chars: &[char], start: usize) -> (String, usize) {
-    let mut i = start;
-    while i < chars.len() && is_ident_char(chars[i]) {
-        i += 1;
-    }
-    (chars[start..i].iter().collect(), i)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use genet_scripted_dom::ScriptedDom;
-    use layout_dom_api::{LayoutDom, LayoutDomMut, QualName};
+    use std::cell::Cell;
 
-    // Build `<body><div id=a class="x y"><p class=x></p><span></span></div></body>`.
-    // The `<body>` is created explicitly because fragment-parsing `<body>` under the
-    // document root drops the wrapper; set_inner_html on the body keeps the subtree.
-    fn fixture() -> ScriptedDom {
+    use genet_scripted_dom::{NodeId, ScriptedDom};
+    use layout_dom_api::{AttributeView, LayoutDomMut, QualName};
+
+    use super::*;
+
+    struct CountingDom {
+        dom: ScriptedDom,
+        child_walks: Cell<usize>,
+    }
+
+    impl LayoutDom for CountingDom {
+        type NodeId = NodeId;
+
+        fn document(&self) -> NodeId { self.dom.document() }
+        fn parent(&self, id: NodeId) -> Option<NodeId> { self.dom.parent(id) }
+        fn prev_sibling(&self, id: NodeId) -> Option<NodeId> { self.dom.prev_sibling(id) }
+        fn next_sibling(&self, id: NodeId) -> Option<NodeId> { self.dom.next_sibling(id) }
+        fn dom_children(&self, id: NodeId) -> impl Iterator<Item = NodeId> + '_ {
+            self.child_walks.set(self.child_walks.get() + 1);
+            self.dom.dom_children(id)
+        }
+        fn kind(&self, id: NodeId) -> NodeKind { self.dom.kind(id) }
+        fn element_name(&self, id: NodeId) -> Option<&QualName> { self.dom.element_name(id) }
+        fn attribute(&self, id: NodeId, ns: &Namespace, local: &LocalName) -> Option<&str> {
+            self.dom.attribute(id, ns, local)
+        }
+        fn attributes(&self, id: NodeId) -> impl Iterator<Item = AttributeView<'_>> + '_ {
+            self.dom.attributes(id)
+        }
+        fn text(&self, id: NodeId) -> Option<&str> { self.dom.text(id) }
+    }
+
+    #[test]
+    fn all_matching_query_walks_each_node_once() {
         let mut dom = ScriptedDom::new();
-        let root = dom.document();
         let body = dom.create_element(QualName::new(
             None,
             Namespace::from("http://www.w3.org/1999/xhtml"),
             LocalName::from("body"),
         ));
-        dom.append_child(root, body);
-        dom.set_inner_html(
-            body,
-            "<div id='a' class='x y'><p class='x'></p><span></span></div>",
-        );
-        dom
-    }
-
-    fn q(dom: &ScriptedDom, sel: &str) -> Vec<String> {
-        let sels = parse(sel);
-        sels.query_all(dom, dom.document())
-            .iter()
-            .map(|&n| {
-                dom.element_name(n)
-                    .map(|q| q.local.as_ref().to_string())
-                    .unwrap_or_default()
-            })
-            .collect()
-    }
-
-    #[test]
-    fn type_id_class_and_combinators() {
-        let dom = fixture();
-        assert_eq!(q(&dom, "div"), vec!["div"]);
-        assert_eq!(q(&dom, "#a"), vec!["div"]);
-        assert_eq!(q(&dom, ".x"), vec!["div", "p"]);
-        assert_eq!(q(&dom, "div.x"), vec!["div"]);
-        assert_eq!(q(&dom, "div > p"), vec!["p"]);
-        assert_eq!(q(&dom, "div p"), vec!["p"]);
-        assert_eq!(q(&dom, "body span"), vec!["span"]);
-        // selector list
-        assert_eq!(q(&dom, "p, span"), vec!["p", "span"]);
-        // universal under div
-        assert_eq!(q(&dom, "div > *"), vec!["p", "span"]);
-    }
-
-    #[test]
-    fn attribute_selectors() {
-        let dom = fixture();
-        assert_eq!(q(&dom, "[id]"), vec!["div"]);
-        assert_eq!(q(&dom, "[id=a]"), vec!["div"]);
-        assert_eq!(q(&dom, "[class~=y]"), vec!["div"]);
-        assert!(q(&dom, "[id=nope]").is_empty());
-    }
-
-    #[test]
-    fn unsupported_matches_nothing() {
-        let dom = fixture();
-        assert!(q(&dom, "div:hover").is_empty());
-        assert!(q(&dom, "p + span").is_empty());
-        assert!(q(&dom, "[class^=x]").is_empty());
-        assert!(q(&dom, "::before").is_empty());
+        let document = dom.document();
+        dom.append_child(document, body);
+        dom.set_inner_html(body, &"<i></i>".repeat(500));
+        let counted = CountingDom { dom, child_walks: Cell::new(0) };
+        let selectors = parse("i").expect("selector");
+        let matched = query_all(&selectors, &counted, body, true);
+        assert_eq!(matched.len(), 500);
+        // One body enumeration, then one child enumeration per matched node.
+        assert_eq!(counted.child_walks.get(), 501);
     }
 }

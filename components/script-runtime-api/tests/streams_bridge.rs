@@ -269,7 +269,7 @@ fn worker_installs_transform_and_byob_algorithms<E: ScriptEngine>() {
     let deadline = Instant::now() + Duration::from_secs(20);
     while Instant::now() < deadline {
         rt.run_microtasks();
-        rt.run_timers(64, 0.0);
+        rt.run_timers(64, 0.0).unwrap();
         rt.pump_workers();
         if read(&mut rt, "result") != "pending" {
             break;

@@ -608,8 +608,10 @@ pub struct NovaHarnessTemplate {
 #[expect(dead_code, reason = "Nova convenience wrappers, reached another way")]
 impl NovaHarnessTemplate {
     pub fn new(testharness_js: &str) -> Result<Self, String> {
-        let mut rt = Runtime::<script_engine_nova::NovaEngine>::new()
-            .map_err(|e| format!("runtime init: {e:?}"))?;
+        let mut rt = Runtime::<script_engine_nova::NovaEngine>::with_performance_clock(
+            script_runtime_api::PerformanceClockProfile::Virtual,
+        )
+        .map_err(|e| format!("runtime init: {e:?}"))?;
         rt.load_testharness(testharness_js)
             .map_err(|e| format!("testharness load: {e:?}"))?;
         Ok(Self {
@@ -782,7 +784,9 @@ fn run_with<E: ScriptEngine>(
     route: Option<Box<dyn ScriptResourceLoader>>,
     encoding: script_runtime_api::DocumentEncoding,
 ) -> HarnessOutcome {
-    let mut rt = match Runtime::<E>::new() {
+    let mut rt = match Runtime::<E>::with_performance_clock(
+        script_runtime_api::PerformanceClockProfile::Virtual,
+    ) {
         Ok(rt) => rt,
         Err(e) => return HarnessOutcome::Threw(format!("runtime init: {e:?}")),
     };
@@ -867,18 +871,20 @@ impl RenderSession {
     /// built before the parser has inserted a single `<style>` and still hold
     /// the whole cascade once it has. On the XML route the document is already
     /// loaded, and the same installation reads it immediately.
-    fn new<E: ScriptEngine>(rt: &mut Runtime<E>, _style: StyleRoute) -> Self {
+    fn new<E: ScriptEngine>(rt: &mut Runtime<E>, _style: StyleRoute) -> Result<Self, String> {
         let cssom = LiveryCssom::install_over_parse(
             rt,
             "about:blank",
             Device::screen(VIEWPORT_W, VIEWPORT_H),
         );
-        let _ = cssom.frame(rt, VIEWPORT_W as u32, VIEWPORT_H as u32);
+        cssom
+            .frame(rt, VIEWPORT_W as u32, VIEWPORT_H as u32)
+            .map_err(|error| format!("initial retained frame: {error:?}"))?;
         // `window.innerWidth`/`innerHeight` must agree with the session's
         // viewport: the wheel/scroll cluster computes its hit point from them
         // (`Math.floor(window.innerWidth / 2)`).
         rt.set_viewport_size(VIEWPORT_W, VIEWPORT_H);
-        Self { cssom }
+        Ok(Self { cssom })
     }
 
     /// Whether a declared CSS animation/transition is still live on the session
@@ -899,21 +905,21 @@ impl RenderSession {
     /// `design_docs/2026-09-12_css_3d_transforms_and_first_frame_plan.md`.
     /// Returns how much work happened (0 = the turn was a no-op), which feeds
     /// the quiescence check.
-    fn turn<E: ScriptEngine>(&self, rt: &mut Runtime<E>, now_ms: f64) -> usize {
-        let mut work = rt.run_animation_frame_callbacks(now_ms).unwrap_or(0);
+    fn turn<E: ScriptEngine>(&self, rt: &mut Runtime<E>, now_ms: f64) -> Result<usize, String> {
+        let mut work = rt
+            .run_animation_frame_callbacks(now_ms)
+            .map_err(|error| format!("animation task: {error:?}"))?;
         let pending = {
             let host = rt.host().borrow();
             host.dom.pending_mutations().1.len()
         };
-        if pending > 0
-            && self
-                .cssom
+        if pending > 0 {
+            self.cssom
                 .frame(rt, VIEWPORT_W as u32, VIEWPORT_H as u32)
-                .is_ok()
-        {
+                .map_err(|error| format!("retained frame: {error:?}"))?;
             work += pending;
         }
-        work
+        Ok(work)
     }
 }
 
@@ -932,27 +938,31 @@ fn process_testdriver_actions<E: ScriptEngine>(
     render: &RenderSession,
     now_ms: &mut f64,
     virtual_clock: bool,
-) -> usize {
+) -> Result<usize, String> {
     let json = match rt.eval("String(typeof __tdTake === 'function' ? __tdTake() : '')") {
-        Ok(v) => rt.value_to_string(&v).unwrap_or_default(),
-        Err(_) => return 0,
+        Ok(v) => rt
+            .value_to_string(&v)
+            .map_err(|error| format!("action payload: {error:?}"))?,
+        Err(error) => return Err(format!("action queue: {error:?}")),
     };
     if json.is_empty() {
-        return 0;
+        return Ok(0);
     }
-    let settle = |rt: &mut Runtime<E>, err: Option<String>| {
+    let settle = |rt: &mut Runtime<E>, err: Option<String>| -> Result<(), String> {
         let call = match err {
             Some(m) => format!("__tdSettle({:?})", m),
             None => "__tdSettle()".to_string(),
         };
-        let _ = rt.eval(&call);
+        rt.eval(&call)
+            .map_err(|error| format!("action settlement: {error:?}"))?;
         rt.run_microtasks();
+        Ok(())
     };
     let sequences: Vec<webdriver::actions::ActionSequence> = match serde_json::from_str(&json) {
         Ok(s) => s,
         Err(e) => {
-            settle(rt, Some(format!("malformed actions payload: {e}")));
-            return 1;
+            settle(rt, Some(format!("malformed actions payload: {e}")))?;
+            return Ok(1);
         },
     };
     // The resolver holds a cheap retained-session clone, so `rt` stays free
@@ -968,8 +978,8 @@ fn process_testdriver_actions<E: ScriptEngine>(
     {
         Ok(t) => t,
         Err(e) => {
-            settle(rt, Some(format!("{e:?}")));
-            return 1;
+            settle(rt, Some(format!("{e:?}")))?;
+            return Ok(1);
         },
     };
     // Per Touch Events, every event for one touch point goes to the element the
@@ -979,15 +989,15 @@ fn process_testdriver_actions<E: ScriptEngine>(
         std::collections::HashMap::new();
     for tick in ticks {
         for event in tick.events {
-            dispatch_input_event(rt, render, &event, &mut touch_targets);
+            dispatch_input_event(rt, render, &event, &mut touch_targets)?;
         }
         if virtual_clock {
             *now_ms += tick.duration_ms as f64;
         }
-        let _ = render.turn(rt, *now_ms);
+        render.turn(rt, *now_ms)?;
     }
-    settle(rt, None);
-    1
+    settle(rt, None)?;
+    Ok(1)
 }
 
 /// Rejection for an element the projection leaves out (accessible names plan,
@@ -1077,7 +1087,7 @@ fn dispatch_input_event<E: ScriptEngine>(
     render: &RenderSession,
     event: &crate::testdriver::input_events::InputEvent,
     touch_targets: &mut std::collections::HashMap<i32, DomNodeId>,
-) {
+) -> Result<(), String> {
     use crate::testdriver::WebViewPoint;
     use crate::testdriver::input_events::{InputEvent, MouseButtonAction, TouchEventType};
     let xy = |p: &WebViewPoint| match p {
@@ -1095,7 +1105,7 @@ fn dispatch_input_event<E: ScriptEngine>(
             let (kind, target) = match t.event_type {
                 TouchEventType::Down => {
                     let Some(target) = hit(rt, (x, y)) else {
-                        return;
+                        return Ok(());
                     };
                     // Every later event for this touch point goes here.
                     touch_targets.insert(id, target);
@@ -1105,56 +1115,65 @@ fn dispatch_input_event<E: ScriptEngine>(
                 // hit-test: the finger owns the element it landed on.
                 TouchEventType::Move => match touch_targets.get(&id) {
                     Some(&target) => ("touchmove", target),
-                    None => return,
+                    None => return Ok(()),
                 },
                 TouchEventType::Up => match touch_targets.remove(&id) {
                     Some(target) => ("touchend", target),
-                    None => return,
+                    None => return Ok(()),
                 },
                 TouchEventType::Cancel => match touch_targets.remove(&id) {
                     Some(target) => ("touchcancel", target),
-                    None => return,
+                    None => return Ok(()),
                 },
             };
-            let _ = rt.dispatch_touch_event(target.raw(), kind, f64::from(x), f64::from(y), id);
+            rt.dispatch_touch_event(target.raw(), kind, f64::from(x), f64::from(y), id)
+                .map_err(|error| format!("touch dispatch: {error:?}"))?;
         },
         InputEvent::Wheel(w) => {
             let (x, y) = xy(&w.point);
             let Some(target) = hit(rt, (x, y)) else {
-                return;
+                return Ok(());
             };
             // The interpreter negates the spec's deltas (its positive WheelDelta
             // scrolls the view up); the DOM event carries the spec sign, so
             // negate back.
-            let _ = rt.dispatch_wheel_event(
+            rt.dispatch_wheel_event(
                 target.raw(),
                 f64::from(x),
                 f64::from(y),
                 -w.delta.x,
                 -w.delta.y,
                 0, // DOM_DELTA_PIXEL
-            );
+            )
+            .map_err(|error| format!("wheel dispatch: {error:?}"))?;
         },
         InputEvent::MouseMove(m) => {
             let p = xy(&m.point);
-            let Some(target) = hit(rt, p) else { return };
+            let Some(target) = hit(rt, p) else {
+                return Ok(());
+            };
             for kind in ["pointermove", "mousemove"] {
-                let _ = rt.dispatch_event(target.raw(), kind);
+                rt.dispatch_event(target.raw(), kind)
+                    .map_err(|error| format!("event dispatch: {error:?}"))?;
             }
         },
         InputEvent::MouseButton(b) => {
             let p = xy(&b.point);
-            let Some(target) = hit(rt, p) else { return };
+            let Some(target) = hit(rt, p) else {
+                return Ok(());
+            };
             let kinds: &[&str] = match b.action {
                 MouseButtonAction::Down => &["pointerdown", "mousedown"],
                 MouseButtonAction::Up => &["pointerup", "mouseup", "click"],
             };
             for kind in kinds {
-                let _ = rt.dispatch_event(target.raw(), kind);
+                rt.dispatch_event(target.raw(), kind)
+                    .map_err(|error| format!("event dispatch: {error:?}"))?;
             }
         },
         _ => {},
     }
+    Ok(())
 }
 
 fn run_loaded_with<E: ScriptEngine>(
@@ -1165,7 +1184,10 @@ fn run_loaded_with<E: ScriptEngine>(
 ) -> HarnessOutcome {
     // H7a: every testharness run gets a rendering session. Built before the test
     // body runs so early `getComputedStyle` reads see the parse-time cascade.
-    let render = RenderSession::new(rt, style);
+    let render = match RenderSession::new(rt, style) {
+        Ok(render) => render,
+        Err(error) => return HarnessOutcome::Threw(error),
+    };
     if let Err(e) = rt.begin_loaded_testharness(test_src) {
         return HarnessOutcome::Threw(truncate(&format!("{e:?}"), 200));
     }
@@ -1189,7 +1211,10 @@ fn run_parsed_with<E: ScriptEngine>(
     completion: Option<&dyn CompletionSource>,
     style: StyleRoute,
 ) -> HarnessOutcome {
-    let render = RenderSession::new(rt, style);
+    let render = match RenderSession::new(rt, style) {
+        Ok(render) => render,
+        Err(error) => return HarnessOutcome::Threw(error),
+    };
     let parser_loader = HarnessParserLoader { inner: loader };
     if let Err(e) = rt.begin_parsed_testharness(html, &parser_loader) {
         return HarnessOutcome::Threw(truncate(&format!("{e:?}"), 200));
@@ -1230,18 +1255,33 @@ fn drive_virtual<E: ScriptEngine>(rt: &mut Runtime<E>, render: &RenderSession) -
         turns += 1;
         harness_gc_turn(rt, turns);
         rt.run_microtasks();
-        let fired = rt.run_timers(TIMER_BUDGET, now_ms);
-        let rendered = render.turn(rt, now_ms);
+        let fired = match rt.run_timers(TIMER_BUDGET, now_ms) {
+            Ok(value) => value,
+            Err(error) => return HarnessOutcome::Threw(format!("runtime turn: {error:?}")),
+        };
+        let rendered = match render.turn(rt, now_ms) {
+            Ok(value) => value,
+            Err(error) => return HarnessOutcome::Threw(format!("runtime turn: {error:?}")),
+        };
         let labelled = process_testdriver_labels(rt, render);
-        let acted = process_testdriver_actions(rt, render, &mut now_ms, true) + labelled;
+        let acted = match process_testdriver_actions(rt, render, &mut now_ms, true) {
+            Ok(work) => work + labelled,
+            Err(error) => return HarnessOutcome::Threw(error),
+        };
         // Dedicated workers: answer their resource requests and deliver their
         // messages. A worker that has not reported idle can still speak, so it
         // holds the loop open the way a pending timer does.
         let worked = rt.pump_workers();
         let workers_live = rt.has_worker_work();
-        let has_raf = rt.has_animation_frame_callbacks();
+        let has_raf = match rt.has_animation_frame_callbacks() {
+            Ok(value) => value,
+            Err(error) => return HarnessOutcome::Threw(format!("runtime turn: {error:?}")),
+        };
         let animating = render.animating();
-        let next_timer = rt.next_timer_delay();
+        let next_timer = match rt.next_timer_delay() {
+            Ok(value) => value,
+            Err(error) => return HarnessOutcome::Threw(format!("runtime turn: {error:?}")),
+        };
         if rt.harness_completion().is_some() {
             break;
         }
@@ -1325,12 +1365,33 @@ fn drive_wall<E: ScriptEngine>(
             break;
         }
         rt.run_microtasks();
+        let mut delivery_error = None;
         let applied = cs.drain(&mut |c| match c {
-            FetchCompletion::StartStream(id, o) => rt.start_stream(id, o),
-            FetchCompletion::Chunk(id, b) => rt.push_chunk(id, &b),
-            FetchCompletion::Close(id) => rt.close_stream(id),
-            FetchCompletion::Error(id) => rt.error_stream(id),
-            FetchCompletion::Fail(id, m) => rt.fail_fetch(id, &m),
+            FetchCompletion::StartStream(id, o) => {
+                if let Err(error) = rt.start_stream(id, o) {
+                    delivery_error = Some(format!("fetch delivery: {error:?}"));
+                }
+            },
+            FetchCompletion::Chunk(id, b) => {
+                if let Err(error) = rt.push_chunk(id, &b) {
+                    delivery_error = Some(format!("fetch delivery: {error:?}"));
+                }
+            },
+            FetchCompletion::Close(id) => {
+                if let Err(error) = rt.close_stream(id) {
+                    delivery_error = Some(format!("fetch delivery: {error:?}"));
+                }
+            },
+            FetchCompletion::Error(id) => {
+                if let Err(error) = rt.error_stream(id) {
+                    delivery_error = Some(format!("fetch delivery: {error:?}"));
+                }
+            },
+            FetchCompletion::Fail(id, m) => {
+                if let Err(error) = rt.fail_fetch(id, &m) {
+                    delivery_error = Some(format!("fetch delivery: {error:?}"));
+                }
+            },
             FetchCompletion::WsOpen(id, p, e) => rt.ws_open(id, &p, &e),
             FetchCompletion::WsText(id, t) => rt.ws_message_text(id, &t),
             FetchCompletion::WsBinary(id, b) => rt.ws_message_binary(id, &b),
@@ -1338,23 +1399,40 @@ fn drive_wall<E: ScriptEngine>(
             FetchCompletion::WsError(id) => rt.ws_error(id),
             FetchCompletion::WsClose(id, c, r, clean) => rt.ws_close(id, c, &r, clean),
         });
+        if let Some(error) = delivery_error.take() {
+            return HarnessOutcome::Threw(error);
+        }
         let clock = elapsed_ms(start) + skipped_ms;
-        let fired = rt.run_timers(TIMER_BUDGET, clock);
-        let rendered = render.turn(rt, clock);
+        let fired = match rt.run_timers(TIMER_BUDGET, clock) {
+            Ok(value) => value,
+            Err(error) => return HarnessOutcome::Threw(format!("runtime turn: {error:?}")),
+        };
+        let rendered = match render.turn(rt, clock) {
+            Ok(value) => value,
+            Err(error) => return HarnessOutcome::Threw(format!("runtime turn: {error:?}")),
+        };
         // Wall-clock drive: tick durations are collapsed, not slept (the
         // interpreter reports them; a headed consumer would pace real frames).
         let mut wall_now = clock;
-        let acted = process_testdriver_actions(rt, render, &mut wall_now, false)
-            + process_testdriver_labels(rt, render);
+        let acted = match process_testdriver_actions(rt, render, &mut wall_now, false) {
+            Ok(work) => work + process_testdriver_labels(rt, render),
+            Err(error) => return HarnessOutcome::Threw(error),
+        };
         let worked = rt.pump_workers();
         let workers_live = rt.has_worker_work();
-        let has_raf = rt.has_animation_frame_callbacks();
+        let has_raf = match rt.has_animation_frame_callbacks() {
+            Ok(value) => value,
+            Err(error) => return HarnessOutcome::Threw(format!("runtime turn: {error:?}")),
+        };
         let animating = render.animating();
         // A live WebSocket is outstanding network work exactly as an in-flight
         // fetch is: the peer can still speak, and the page cannot see it until
         // the loop applies the completion.
         let pending = rt.pending_fetches() + rt.pending_websockets();
-        let next_timer = rt.next_timer_delay();
+        let next_timer = match rt.next_timer_delay() {
+            Ok(value) => value,
+            Err(error) => return HarnessOutcome::Threw(format!("runtime turn: {error:?}")),
+        };
         if rt.harness_completion().is_some() {
             break;
         }
@@ -1403,11 +1481,31 @@ fn drive_wall<E: ScriptEngine>(
                 cs.wait(
                     Duration::from_millis(wait_ms.ceil() as u64),
                     &mut |c| match c {
-                        FetchCompletion::StartStream(id, o) => rt.start_stream(id, o),
-                        FetchCompletion::Chunk(id, b) => rt.push_chunk(id, &b),
-                        FetchCompletion::Error(id) => rt.error_stream(id),
-                        FetchCompletion::Close(id) => rt.close_stream(id),
-                        FetchCompletion::Fail(id, m) => rt.fail_fetch(id, &m),
+                        FetchCompletion::StartStream(id, o) => {
+                            if let Err(error) = rt.start_stream(id, o) {
+                                delivery_error = Some(format!("fetch delivery: {error:?}"));
+                            }
+                        },
+                        FetchCompletion::Chunk(id, b) => {
+                            if let Err(error) = rt.push_chunk(id, &b) {
+                                delivery_error = Some(format!("fetch delivery: {error:?}"));
+                            }
+                        },
+                        FetchCompletion::Error(id) => {
+                            if let Err(error) = rt.error_stream(id) {
+                                delivery_error = Some(format!("fetch delivery: {error:?}"));
+                            }
+                        },
+                        FetchCompletion::Close(id) => {
+                            if let Err(error) = rt.close_stream(id) {
+                                delivery_error = Some(format!("fetch delivery: {error:?}"));
+                            }
+                        },
+                        FetchCompletion::Fail(id, m) => {
+                            if let Err(error) = rt.fail_fetch(id, &m) {
+                                delivery_error = Some(format!("fetch delivery: {error:?}"));
+                            }
+                        },
                         FetchCompletion::WsOpen(id, p, e) => rt.ws_open(id, &p, &e),
                         FetchCompletion::WsText(id, t) => rt.ws_message_text(id, &t),
                         FetchCompletion::WsBinary(id, b) => rt.ws_message_binary(id, &b),
@@ -1416,6 +1514,9 @@ fn drive_wall<E: ScriptEngine>(
                         FetchCompletion::WsClose(id, c, r, clean) => rt.ws_close(id, c, &r, clean),
                     },
                 );
+                if let Some(error) = delivery_error.take() {
+                    return HarnessOutcome::Threw(error);
+                }
             } else if wait_ms > 0.0 {
                 // Only timers/frames are outstanding: sleep until the soonest.
                 std::thread::sleep(Duration::from_millis(wait_ms.ceil() as u64));
@@ -1976,6 +2077,77 @@ test(function() {
         ));
         assert_eq!(results.len(), 1, "one subtest: {results:?}");
         assert!(results[0].passed(), "Livery route should pass: {results:?}");
+    }
+
+    fn retained_animation_turn<E: ScriptEngine>() {
+        let mut rt = Runtime::<E>::with_performance_clock(
+            script_runtime_api::PerformanceClockProfile::Virtual,
+        )
+        .expect("runtime");
+        let render = RenderSession::new(&mut rt, StyleRoute::Livery).expect("render session");
+        rt.parse_document_interleaved_with(
+            "<div id='box' style='width:10px;height:10px'></div>",
+            &HarnessParserLoader {
+                inner: &EmptyLoader,
+            },
+            false,
+        );
+        let node = {
+            let host = rt.host().borrow();
+            let mut pending = vec![host.dom.document()];
+            loop {
+                let node = pending.pop().expect("box node");
+                if host
+                    .dom
+                    .element_name(node)
+                    .is_some_and(|name| name.local.as_ref() == "div")
+                {
+                    break node;
+                }
+                pending.extend(host.dom.dom_children(node));
+            }
+        };
+        render.turn(&mut rt, 0.0).expect("initial retained frame");
+        assert_eq!(
+            render.cssom.fragment_rect(node).expect("initial box")[2],
+            10.0
+        );
+        rt.eval("var order=[]; requestAnimationFrame(function(){order.push('frame'); document.getElementById('box').style.width='40px'; Promise.resolve().then(function(){order.push('micro');}); requestAnimationFrame(function(){order.push('next');});}); var cancelled=requestAnimationFrame(function(){order.push('cancelled');}); cancelAnimationFrame(cancelled);").unwrap();
+        assert!(rt.has_animation_frame_callbacks().unwrap());
+        rt.run_timers(0, 16.0).unwrap();
+        assert!(render.turn(&mut rt, 16.0).unwrap() > 0);
+        assert_eq!(
+            render
+                .cssom
+                .fragment_rect(node)
+                .expect("mutated retained box")[2],
+            40.0
+        );
+        let value = rt
+            .eval("order.join(',') + ':' + getComputedStyle(document.getElementById('box')).width")
+            .unwrap();
+        assert_eq!(
+            rt.engine_mut().value_to_string(&value).unwrap(),
+            "frame,micro:40px"
+        );
+        assert!(rt.has_animation_frame_callbacks().unwrap());
+        rt.run_timers(0, 32.0).unwrap();
+        assert!(render.turn(&mut rt, 32.0).unwrap() > 0);
+        assert!(!rt.has_animation_frame_callbacks().unwrap());
+        let value = rt.eval("order.join(',')").unwrap();
+        assert_eq!(
+            rt.engine_mut().value_to_string(&value).unwrap(),
+            "frame,micro,next"
+        );
+    }
+
+    #[test]
+    fn retained_animation_turn_on_boa() {
+        retained_animation_turn::<script_engine_boa::BoaEngine>();
+    }
+    #[test]
+    fn retained_animation_turn_on_nova() {
+        retained_animation_turn::<script_engine_nova::NovaEngine>();
     }
 
     /// End to end through the H7a rendering session: the real WPT

@@ -22,6 +22,7 @@
   var formRefs = globalThis.__agentTimers.domFormRefs;
   var nodeDispatchers = globalThis.__agentTimers.domNodeDispatch;
   var mouseEvents = globalThis.__agentTimers.domMouseEvents;
+  var reportListenerException = globalThis.__agentTimers.reportException;
   var formEventCreators = globalThis.__agentTimers.domFormEventCreators;
   if (!formEventCreators) formEventCreators = globalThis.__agentTimers.domFormEventCreators = new WeakMap();
   var creatorFormKind = globalThis.__formControlGet;
@@ -30,6 +31,11 @@
   // on the page-deletable public Event global at dispatch time.
   var userAgentEventConstructor = globalThis.Event;
   var userAgentEventPrototype = userAgentEventConstructor.prototype;
+  var userAgentTouchEventConstructor = globalThis.TouchEvent;
+  var userAgentWheelEventConstructor = globalThis.WheelEvent;
+  var userAgentTouchConstructor = globalThis.Touch;
+  var userAgentString = String, userAgentNumber = Number;
+  var userAgentSetPrototypeOf = Object.setPrototypeOf;
   delete globalThis.__domAgentDispatch;
   delete globalThis.__domRegisterHooks;
 
@@ -1035,7 +1041,7 @@
       // §dispatch step "if this throws an exception, report the exception").
       // Without this, one throwing onload/handler errors out the whole test.
       try { rec.cb.call(node, event); }
-      catch (ex) { globalThis.__reportListenerException(ex); }
+      catch (ex) { reportListenerException(ex); }
       event.__inPassive = false;
     }
   }
@@ -5949,10 +5955,22 @@
   }
 
   globalThis.__dispatchSynthetic = function(rawId, type, opts) {
-    var node = wrapNode(__reflectNode(String(rawId)));
+    var node = wrapNode(__reflectNode(userAgentString(rawId)));
     if (!node) { return false; }
-    var ev = new Event(String(type), opts || { bubbles: true, cancelable: true });
-    return node.dispatchEvent(ev);
+    var ev = new userAgentEventConstructor(userAgentString(type), opts || { bubbles: true, cancelable: true });
+    return applyDOMBrand(dispatchNodeEvent, node, [ev]);
+  };
+  // Parser-owned external script load failure. Keep the node wrapper and event
+  // constructor in this closure so author globals cannot replace the host path.
+  globalThis.__dispatchScriptLoadError = function(rawId) {
+    var node = wrapNode(__reflectNode(userAgentString(rawId)));
+    if (!node) return false;
+    return applyDOMBrand(dispatchNodeEvent, node, [new userAgentEventConstructor('error', { bubbles: false, cancelable: false })]);
+  };
+  globalThis.__dispatchFrameLoad = function(rawId) {
+    var node = wrapNode(__reflectNode(userAgentString(rawId)));
+    if (!node) return false;
+    return applyDOMBrand(dispatchNodeEvent, node, [new userAgentEventConstructor('load', { bubbles: false })]);
   };
 
   // TransitionEvent (css-transitions): an Event carrying `propertyName`,
@@ -5962,31 +5980,32 @@
   // (what the WPT event tests assert first) and `instanceof Event` both hold.
   globalThis.TransitionEvent = function(type, init) {
     init = init || {};
-    var ev = new Event(String(type), {
+    var ev = new userAgentEventConstructor(userAgentString(type), {
       bubbles: init.bubbles !== undefined ? !!init.bubbles : true,
       cancelable: !!init.cancelable,
     });
-    ev.propertyName = init.propertyName !== undefined ? String(init.propertyName) : '';
-    ev.elapsedTime = init.elapsedTime !== undefined ? Number(init.elapsedTime) : 0;
-    ev.pseudoElement = init.pseudoElement !== undefined ? String(init.pseudoElement) : '';
-    Object.setPrototypeOf(ev, TransitionEvent.prototype);
+    ev.propertyName = init.propertyName !== undefined ? userAgentString(init.propertyName) : '';
+    ev.elapsedTime = init.elapsedTime !== undefined ? userAgentNumber(init.elapsedTime) : 0;
+    ev.pseudoElement = init.pseudoElement !== undefined ? userAgentString(init.pseudoElement) : '';
+    userAgentSetPrototypeOf(ev, userAgentTransitionEventConstructor.prototype);
     return ev;
   };
   globalThis.TransitionEvent.prototype = Object.create(Event.prototype, {
     constructor: { value: globalThis.TransitionEvent, writable: true, configurable: true },
   });
+  var userAgentTransitionEventConstructor = globalThis.TransitionEvent;
 
   // Host bridge: dispatch a transition* event at a node (from the layout tick's
   // harvested lifecycle events). `type` is one of transitionrun /
   // transitionstart / transitionend / transitioncancel.
   globalThis.__dispatchTransition = function(rawId, type, propertyName, elapsedTime) {
-    var node = wrapNode(__reflectNode(String(rawId)));
+    var node = wrapNode(__reflectNode(userAgentString(rawId)));
     if (!node) { return false; }
-    var ev = new globalThis.TransitionEvent(String(type), {
+    var ev = new userAgentTransitionEventConstructor(userAgentString(type), {
       propertyName: propertyName,
       elapsedTime: elapsedTime,
     });
-    return node.dispatchEvent(ev);
+    return applyDOMBrand(dispatchNodeEvent, node, [ev]);
   };
 
   // ---- UA-generated input events (touch / wheel) ----
@@ -6031,52 +6050,52 @@
   // (empty once the finger lifts), while `changedTouches` always carries the
   // point this event is about.
   globalThis.__dispatchTouch = function(rawId, type, x, y, identifier) {
-    var node = wrapNode(__reflectNode(String(rawId)));
+    var node = wrapNode(__reflectNode(userAgentString(rawId)));
     if (!node) { return false; }
-    type = String(type);
-    var touch = new Touch({
-      identifier: Number(identifier), target: node,
-      clientX: Number(x), clientY: Number(y),
-      pageX: Number(x), pageY: Number(y),
-      screenX: Number(x), screenY: Number(y),
+    type = userAgentString(type);
+    var touch = new userAgentTouchConstructor({
+      identifier: userAgentNumber(identifier), target: node,
+      clientX: userAgentNumber(x), clientY: userAgentNumber(y),
+      pageX: userAgentNumber(x), pageY: userAgentNumber(y),
+      screenX: userAgentNumber(x), screenY: userAgentNumber(y),
       force: (type === 'touchend' || type === 'touchcancel') ? 0 : 1,
     });
     var lifted = (type === 'touchend' || type === 'touchcancel');
     var active = lifted ? [] : [touch];
-    var ev = new TouchEvent(type, {
+    var ev = new userAgentTouchEventConstructor(type, {
       bubbles: true,
       cancelable: hasNonPassiveListener(node, type),
       touches: active,
       targetTouches: active,
       changedTouches: [touch],
     });
-    return node.dispatchEvent(ev);
+    return applyDOMBrand(dispatchNodeEvent, node, [ev]);
   };
 
   // Host bridge: dispatch a wheel input as both the standard `wheel` event and
   // the legacy `mousewheel` (WPT covers both). Each gets its own cancelable
   // decision, since the rule is per event type.
   globalThis.__dispatchWheel = function(rawId, x, y, deltaX, deltaY, deltaMode) {
-    var node = wrapNode(__reflectNode(String(rawId)));
+    var node = wrapNode(__reflectNode(userAgentString(rawId)));
     if (!node) { return false; }
     var proceed = true;
     for (var i = 0; i < 2; i++) {
       var type = (i === 0) ? 'wheel' : 'mousewheel';
-      var ev = new WheelEvent(type, {
+      var ev = new userAgentWheelEventConstructor(type, {
         bubbles: true,
         cancelable: hasNonPassiveListener(node, type),
-        clientX: Number(x), clientY: Number(y),
-        screenX: Number(x), screenY: Number(y),
-        deltaX: Number(deltaX), deltaY: Number(deltaY), deltaZ: 0,
-        deltaMode: Number(deltaMode),
+        clientX: userAgentNumber(x), clientY: userAgentNumber(y),
+        screenX: userAgentNumber(x), screenY: userAgentNumber(y),
+        deltaX: userAgentNumber(deltaX), deltaY: userAgentNumber(deltaY), deltaZ: 0,
+        deltaMode: userAgentNumber(deltaMode),
       });
       if (type === 'mousewheel') {
         // Legacy: wheelDelta is the inverse of deltaY, scaled by 120 per notch.
-        ev.wheelDelta = -Number(deltaY) * 120;
-        ev.wheelDeltaX = -Number(deltaX) * 120;
-        ev.wheelDeltaY = -Number(deltaY) * 120;
+        ev.wheelDelta = -userAgentNumber(deltaY) * 120;
+        ev.wheelDeltaX = -userAgentNumber(deltaX) * 120;
+        ev.wheelDeltaY = -userAgentNumber(deltaY) * 120;
       }
-      if (!node.dispatchEvent(ev)) { proceed = false; }
+      if (!applyDOMBrand(dispatchNodeEvent, node, [ev])) { proceed = false; }
     }
     return proceed;
   };
@@ -6087,31 +6106,32 @@
   // Prototype-chained exactly like TransitionEvent, for `instanceof`.
   globalThis.AnimationEvent = function(type, init) {
     init = init || {};
-    var ev = new Event(String(type), {
+    var ev = new userAgentEventConstructor(userAgentString(type), {
       bubbles: init.bubbles !== undefined ? !!init.bubbles : true,
       cancelable: !!init.cancelable,
     });
-    ev.animationName = init.animationName !== undefined ? String(init.animationName) : '';
-    ev.elapsedTime = init.elapsedTime !== undefined ? Number(init.elapsedTime) : 0;
-    ev.pseudoElement = init.pseudoElement !== undefined ? String(init.pseudoElement) : '';
-    Object.setPrototypeOf(ev, AnimationEvent.prototype);
+    ev.animationName = init.animationName !== undefined ? userAgentString(init.animationName) : '';
+    ev.elapsedTime = init.elapsedTime !== undefined ? userAgentNumber(init.elapsedTime) : 0;
+    ev.pseudoElement = init.pseudoElement !== undefined ? userAgentString(init.pseudoElement) : '';
+    userAgentSetPrototypeOf(ev, userAgentAnimationEventConstructor.prototype);
     return ev;
   };
   globalThis.AnimationEvent.prototype = Object.create(Event.prototype, {
     constructor: { value: globalThis.AnimationEvent, writable: true, configurable: true },
   });
+  var userAgentAnimationEventConstructor = globalThis.AnimationEvent;
 
   // Host bridge: dispatch an animation* event at a node (from the layout tick's
   // harvested lifecycle events). `type` is one of animationstart /
   // animationiteration / animationend / animationcancel.
   globalThis.__dispatchAnimation = function(rawId, type, animationName, elapsedTime) {
-    var node = wrapNode(__reflectNode(String(rawId)));
+    var node = wrapNode(__reflectNode(userAgentString(rawId)));
     if (!node) { return false; }
-    var ev = new globalThis.AnimationEvent(String(type), {
+    var ev = new userAgentAnimationEventConstructor(userAgentString(type), {
       animationName: animationName,
       elapsedTime: elapsedTime,
     });
-    return node.dispatchEvent(ev);
+    return applyDOMBrand(dispatchNodeEvent, node, [ev]);
   };
 
   // window.matchMedia (css-mediaqueries): a MediaQueryList over the host's

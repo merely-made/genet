@@ -120,6 +120,132 @@ fn script_order_is_document_order<E: ScriptEngine>() {
     );
 }
 
+/// A failed fetch reports an error at its script element, even though parsing
+/// and the deferred list continue. Scheduling a script is not a successful run.
+fn missing_external_scripts_report_and_continue<E: ScriptEngine>() {
+    let loader = TableLoader(vec![("ok.js", "log.push('external ok')")]);
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    let report = rt.parse_document_interleaved(
+        "<body><script>\
+           window.log = []; window.failed = [];\
+           window.addEventListener('error', function(e) {\
+             if (e.target && e.target.id) failed.push(e.target.id);\
+           }, true);\
+         </script>\
+         <script id=missing-blocking src=missing.js></script>\
+         <script>log.push('after missing')</script>\
+         <script id=missing-deferred src=defer-missing.js defer></script>\
+         <script id=missing-module type=module src=module-missing.js></script>\
+         <script src=ok.js></script></body>",
+        &loader,
+    );
+    assert_eq!(read(&mut rt, "log.join(',')"), "after missing,external ok");
+    assert_eq!(
+        read(&mut rt, "failed.join(',')"),
+        "missing-blocking,missing-deferred,missing-module"
+    );
+    assert_eq!(report.scripts_run, 3);
+    assert_eq!(report.deferred_run, 0);
+    assert_eq!(report.script_fetch_failures, 3);
+    assert_eq!(report.script_exceptions, 0);
+    let host = rt.host();
+    let host = host.borrow();
+    let console = &host.console;
+    assert!(console.iter().any(|line| line.contains("missing.js")));
+    assert!(console.iter().any(|line| line.contains("defer-missing.js")));
+    assert!(
+        console
+            .iter()
+            .any(|line| line.contains("module-missing.js"))
+    );
+}
+
+/// A dependency that cannot be fetched fails the declaring module's load,
+/// while a later module still evaluates. The element receives one error event
+/// and the console receives one record naming the missing import.
+fn missing_module_import_reports_load_failure_once<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    let report = rt.parse_document_interleaved(
+        "<body><script>\
+           window.log = []; window.failed = [];\
+           window.addEventListener('error', function(e) {\
+             if (e.target && e.target.id) failed.push(e.target.id);\
+           }, true);\
+         </script>\
+         <script id=entry type=module>import './missing-import.js';</script>\
+         <script>log.push('after import')</script>\
+         <script type=module>log.push('later module')</script></body>",
+        &TableLoader(vec![]),
+    );
+    assert_eq!(read(&mut rt, "failed.join(',')"), "entry");
+    assert_eq!(read(&mut rt, "log.join(',')"), "after import,later module");
+    assert_eq!(report.script_fetch_failures, 1);
+    assert_eq!(report.script_exceptions, 0);
+    assert_eq!(report.deferred_run, 1);
+    let host = rt.host();
+    let host = host.borrow();
+    assert_eq!(
+        host.console
+            .iter()
+            .filter(|line| line.contains("missing-import.js"))
+            .count(),
+        1,
+        "the failed import has one console record"
+    );
+}
+
+/// Thrown parser scripts reach the shared window error listener and console.
+/// Later blocking, deferred, and module scripts still run, with currentScript
+/// restored after a failed classic evaluation.
+fn thrown_parser_scripts_report_and_continue<E: ScriptEngine>() {
+    let loader = TableLoader(vec![(
+        "throws-deferred.js",
+        "window.deferredCurrent = document.currentScript.id; throw Error('deferred boom')",
+    )]);
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    let report = rt.parse_document_interleaved(
+        "<body><script>\
+           window.log = []; window.messages = [];\
+           window.addEventListener('error', function(e) { messages.push(e.message); });\
+         </script>\
+         <script id=throws-blocking>\
+           window.blockingCurrent = document.currentScript.id;\
+           throw Error('blocking boom');\
+         </script>\
+         <script>log.push('after blocking')</script>\
+         <script id=throws-deferred src=throws-deferred.js defer></script>\
+         <script type=module>throw Error('module boom')</script>\
+         <script type=module>log.push('after module')</script></body>",
+        &loader,
+    );
+    assert_eq!(
+        read(&mut rt, "log.join(',')"),
+        "after blocking,after module"
+    );
+    assert_eq!(read(&mut rt, "blockingCurrent"), "throws-blocking");
+    assert_eq!(read(&mut rt, "deferredCurrent"), "throws-deferred");
+    assert_eq!(read(&mut rt, "String(document.currentScript)"), "null");
+    let messages = read(&mut rt, "messages.join('|')");
+    for marker in ["blocking boom", "deferred boom", "module boom"] {
+        assert!(
+            messages.contains(marker),
+            "missing {marker} from {messages}"
+        );
+        assert!(
+            rt.host()
+                .borrow()
+                .console
+                .iter()
+                .any(|line| line.contains(marker)),
+            "missing {marker} in console"
+        );
+    }
+    assert_eq!(report.scripts_run, 2);
+    assert_eq!(report.deferred_run, 1);
+    assert_eq!(report.script_exceptions, 3);
+    assert_eq!(report.script_fetch_failures, 0);
+}
+
 /// `document.write` during parsing inserts at the insertion point — before the
 /// source that follows the script, not appended at the end.
 fn document_write_lands_at_the_insertion_point<E: ScriptEngine>() {
@@ -636,6 +762,12 @@ both_engines! {
         => (inline_identity_on_boa, inline_identity_on_nova),
     a_script_sees_the_tree_only_as_far_as_itself => (partial_tree_on_boa, partial_tree_on_nova),
     script_order_is_document_order => (script_order_on_boa, script_order_on_nova),
+    missing_external_scripts_report_and_continue
+        => (missing_external_reports_on_boa, missing_external_reports_on_nova),
+    missing_module_import_reports_load_failure_once
+        => (missing_import_reports_on_boa, missing_import_reports_on_nova),
+    thrown_parser_scripts_report_and_continue
+        => (thrown_parser_reports_on_boa, thrown_parser_reports_on_nova),
     document_write_lands_at_the_insertion_point => (write_point_on_boa, write_point_on_nova),
     current_script_names_the_running_script => (current_script_on_boa, current_script_on_nova),
     readiness_transitions_fire_in_order => (readiness_on_boa, readiness_on_nova),

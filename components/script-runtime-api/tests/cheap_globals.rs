@@ -8,7 +8,9 @@
 //! (`Image` / `Option` / `Audio`). Each body runs against both backends.
 
 use script_engine_api::ScriptEngine;
-use script_runtime_api::Runtime;
+use script_runtime_api::{ElapsedClock, PerformanceClockProfile, Runtime};
+use std::cell::Cell;
+use std::rc::Rc;
 
 /// Evaluate `expr` and read its value back as a string.
 fn read<E: ScriptEngine>(rt: &mut Runtime<E>, expr: &str) -> String {
@@ -22,8 +24,8 @@ fn performance_clock_works<E: ScriptEngine>() {
     let mut rt = Runtime::<E>::new().expect("runtime");
     assert_eq!(read(&mut rt, "typeof performance"), "object");
     assert_eq!(read(&mut rt, "typeof performance.now()"), "number");
-    // Positive and never decreasing, which hr-time asserts directly.
-    assert_eq!(read(&mut rt, "String(performance.now() > 0)"), "true");
+    // A host monotonic source can return the same value on two reads.
+    assert_eq!(read(&mut rt, "String(performance.now() >= 0)"), "true");
     assert_eq!(
         read(
             &mut rt,
@@ -54,11 +56,48 @@ fn performance_clock_works<E: ScriptEngine>() {
         ),
         "true"
     );
-    // The clock is the timers' clock: firing a 50ms timer advances now().
+}
+
+fn virtual_performance_clock_follows_timer_driver<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::with_performance_clock(PerformanceClockProfile::Virtual)
+        .expect("virtual runtime");
+    assert_eq!(
+        read(&mut rt, "String(performance.now() === performance.now())"),
+        "true",
+        "reads at one virtual instant do not advance time"
+    );
+    assert_eq!(read(&mut rt, "String(performance.now())"), "0");
     rt.eval("var before = performance.now(); var after = 0; setTimeout(function(){ after = performance.now(); }, 50);")
         .expect("schedule");
     rt.run_event_loop(10).expect("drain");
-    assert_eq!(read(&mut rt, "String(after - before >= 50)"), "true");
+    assert_eq!(read(&mut rt, "String(Math.abs(after - before - 50) < 0.00001)"), "true");
+}
+
+fn host_performance_clock_follows_configured_reader<E: ScriptEngine>() {
+    let elapsed = Rc::new(Cell::new(1_000.0));
+    let reader = elapsed.clone();
+    let clock = ElapsedClock::from_reader(move || reader.get());
+    let mut rt = Runtime::<E>::with_performance_clock(PerformanceClockProfile::Host(clock))
+        .expect("configured host runtime");
+
+    assert_eq!(read(&mut rt, "String(performance.now())"), "0");
+    elapsed.set(1_012.5);
+    assert_eq!(read(&mut rt, "String(performance.now())"), "12.5");
+    assert_eq!(read(&mut rt, "String(performance.now())"), "12.5");
+    rt.eval("performance.mark('controlled')").expect("mark");
+    assert_eq!(
+        read(&mut rt, "String(performance.getEntriesByName('controlled')[0].startTime)"),
+        "12.5"
+    );
+    elapsed.set(1_005.0);
+    assert_eq!(read(&mut rt, "String(performance.now())"), "12.5");
+    elapsed.set(1_020.0);
+    assert_eq!(read(&mut rt, "String(performance.now())"), "20");
+
+    // Advancing timer state does not manufacture host elapsed time.
+    rt.eval("setTimeout(function() {}, 50)").expect("schedule");
+    rt.run_event_loop(10).expect("drain");
+    assert_eq!(read(&mut rt, "String(performance.now())"), "20");
 }
 
 fn user_timing_works<E: ScriptEngine>() {
@@ -561,6 +600,8 @@ macro_rules! both_engines {
 
 both_engines! {
     performance_clock_works => (performance_clock_on_boa, performance_clock_on_nova),
+    virtual_performance_clock_follows_timer_driver => (virtual_performance_clock_on_boa, virtual_performance_clock_on_nova),
+    host_performance_clock_follows_configured_reader => (host_performance_clock_on_boa, host_performance_clock_on_nova),
     user_timing_works => (user_timing_on_boa, user_timing_on_nova),
     performance_observer_works => (performance_observer_on_boa, performance_observer_on_nova),
     queue_microtask_works => (queue_microtask_on_boa, queue_microtask_on_nova),

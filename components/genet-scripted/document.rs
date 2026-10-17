@@ -65,6 +65,39 @@ use crate::{LiveryCssom, ScriptedClick, ScriptedDocumentOptions};
 #[cfg(feature = "livery")]
 use crate::{ScriptResourceBridge, ScriptWake};
 
+fn report_runtime_task_error<E: ScriptEngine>(rt: &mut Runtime<E>, task: &str, error: E::Error) {
+    let message = rt.describe_error(&error);
+    rt.report_script_exception(&format!("{task}: {message}"), None);
+}
+
+fn next_document_wake_delay<E: ScriptEngine>(
+    rt: &mut Runtime<E>,
+    hidden: bool,
+    frozen: bool,
+) -> Option<f64> {
+    if frozen {
+        return None;
+    }
+    let timer = match rt.next_timer_delay() {
+        Ok(delay) => delay,
+        Err(error) => {
+            report_runtime_task_error(rt, "timer wake probe", error);
+            Some(0.0)
+        },
+    };
+    if hidden {
+        return timer;
+    }
+    match rt.has_animation_frame_callbacks() {
+        Ok(true) => Some(0.0),
+        Ok(false) => timer,
+        Err(error) => {
+            report_runtime_task_error(rt, "animation frame wake probe", error);
+            Some(0.0)
+        },
+    }
+}
+
 /// Host-neutral keyboard scrolling for either scripted layout engine.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ScrollKey {
@@ -406,10 +439,17 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
             }
             self.last_hidden_pump_ms = now_ms;
         }
-        self.rt.run_timers(64, now_ms);
+        if let Err(error) = self.rt.run_timers(64, now_ms) {
+            report_runtime_task_error(&mut self.rt, "timer task", error);
+        }
         self.rt.run_microtasks();
         let _ = self.rt.pump_workers();
         self.rt.run_microtasks();
+        if !self.hidden {
+            if let Err(error) = self.rt.run_animation_frame_callbacks(now_ms) {
+                report_runtime_task_error(&mut self.rt, "animation frame", error);
+            }
+        }
         self.flush_dom_capture();
         self.rt.collect_garbage()
     }
@@ -464,18 +504,17 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         self.rt.collect_garbage()
     }
 
-    /// Whether an unfrozen runtime has a timer or outstanding worker work.
+    /// Whether an unfrozen runtime has a timer, animation frame, or worker work.
     /// Worker liveness keeps a polling host driving until acknowledged idle;
     /// it does not mean a message is ready now or provide a wake callback.
     pub fn has_pending_work(&mut self) -> bool {
-        !self.frozen && (self.rt.next_timer_delay().is_some() || self.rt.has_worker_work())
+        !self.frozen && (self.next_wake_delay().is_some() || self.rt.has_worker_work())
     }
 
-    /// Milliseconds until the next timer is due on the runtime's virtual
-    /// clock. The document adapter uses this to hand an exact deadline to its
-    /// host instead of forcing a repaint loop.
-    pub fn next_timer_delay(&mut self) -> Option<f64> {
-        (!self.frozen).then(|| self.rt.next_timer_delay()).flatten()
+    /// Milliseconds until the next timer or visible animation frame. A pending
+    /// animation frame asks the host for the next rendering opportunity.
+    pub fn next_wake_delay(&mut self) -> Option<f64> {
+        next_document_wake_delay(&mut self.rt, self.hidden, self.frozen)
     }
 
     /// Set Page Visibility (W3C adoption plan P1). The host calls this as a
@@ -1505,12 +1544,28 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             }
             self.last_hidden_pump_ms = now_ms;
         }
-        let external = self.bridge.pump(&mut self.rt);
+        let external = match self.bridge.pump(&mut self.rt) {
+            Ok(count) => count,
+            Err(error) => {
+                self.rt.report_script_exception(
+                    &format!("resource completion: {error}"),
+                    None,
+                );
+                1
+            },
+        };
         let mut workers = self.rt.pump_workers();
-        self.rt.run_timers(64, now_ms);
+        if let Err(error) = self.rt.run_timers(64, now_ms) {
+            report_runtime_task_error(&mut self.rt, "timer task", error);
+        }
         self.rt.run_microtasks();
         workers += self.rt.pump_workers();
         self.rt.run_microtasks();
+        if !self.hidden {
+            if let Err(error) = self.rt.run_animation_frame_callbacks(now_ms) {
+                report_runtime_task_error(&mut self.rt, "animation frame", error);
+            }
+        }
         self.flush_dom_capture();
         let (unpinned, collected) = self.rt.collect_garbage();
         self.drain_validation_reports();
@@ -1519,16 +1574,15 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
 
     pub fn has_pending_work(&mut self) -> bool {
         !self.frozen
-            && (self.rt.next_timer_delay().is_some()
+            && (self.next_wake_delay().is_some()
                 || self.bridge.has_pending()
                 || self.rt.has_worker_work())
     }
 
-    /// Milliseconds until the next timer is due on the runtime's virtual
-    /// clock. The document adapter uses this to hand an exact deadline to its
-    /// host instead of forcing a repaint loop.
-    pub fn next_timer_delay(&mut self) -> Option<f64> {
-        (!self.frozen).then(|| self.rt.next_timer_delay()).flatten()
+    /// Milliseconds until the next timer or visible animation frame. The
+    /// document adapter hands this deadline to the host's pending-work report.
+    pub fn next_wake_delay(&mut self) -> Option<f64> {
+        next_document_wake_delay(&mut self.rt, self.hidden, self.frozen)
     }
 
     pub fn has_external_work(&self) -> bool {
@@ -2153,6 +2207,58 @@ mod tests {
             "collect_garbage reaped at least the orphan (got {collected})"
         );
         let _ = unpinned;
+    }
+
+    fn animation_frames_follow_visible_document_turn<E: ScriptEngine>() {
+        let mut doc = ScriptedDocument::<E>::parse("<body></body>").expect("runtime inits");
+        doc.evaluate(
+            "var canceled = requestAnimationFrame(function(){ console.log('canceled'); });\
+             cancelAnimationFrame(canceled);\
+             requestAnimationFrame(function(now) {\
+               console.log('first@' + now);\
+               Promise.resolve().then(function(){ console.log('microtask'); });\
+               requestAnimationFrame(function(next) { console.log('next@' + next); });\
+             });\
+             requestAnimationFrame(function(){ console.log('peer'); });",
+        )
+        .expect("schedule animation frames");
+        assert!(
+            doc.has_pending_work(),
+            "rAF alone keeps the document pending"
+        );
+        assert_eq!(doc.next_wake_delay(), Some(0.0));
+        doc.pump(16.0);
+        assert_eq!(doc.console(), vec!["first@16", "microtask", "peer"]);
+        assert_eq!(
+            doc.next_wake_delay(),
+            Some(0.0),
+            "next-frame callback remains"
+        );
+        doc.pump(32.0);
+        assert_eq!(
+            doc.console(),
+            vec!["first@16", "microtask", "peer", "next@32"]
+        );
+        assert!(!doc.has_pending_work());
+
+        doc.evaluate("requestAnimationFrame(function(){ console.log('resumed'); });")
+            .expect("schedule hidden frame");
+        doc.set_hidden(true);
+        assert_eq!(doc.next_wake_delay(), None, "hidden rAF does not wake");
+        doc.pump(1000.0);
+        doc.pump(2000.0);
+        assert_eq!(doc.console().last().map(String::as_str), Some("next@32"));
+        doc.set_hidden(false);
+        assert_eq!(doc.next_wake_delay(), Some(0.0));
+        doc.freeze();
+        assert_eq!(doc.next_wake_delay(), None, "frozen work cannot wake");
+        doc.pump(2016.0);
+        assert_eq!(doc.console().last().map(String::as_str), Some("next@32"));
+        doc.resume();
+        assert_eq!(doc.next_wake_delay(), Some(0.0));
+        doc.pump(2032.0);
+        assert_eq!(doc.console().last().map(String::as_str), Some("resumed"));
+        assert!(!doc.has_pending_work());
     }
 
     /// Page Visibility + Page Lifecycle (W3C adoption plan P1): a hidden
@@ -2915,6 +3021,10 @@ mod tests {
         pump_collects_orphans::<BoaEngine>();
     }
     #[test]
+    fn animation_frames_follow_visible_document_turn_on_boa() {
+        animation_frames_follow_visible_document_turn::<BoaEngine>();
+    }
+    #[test]
     fn hidden_clamps_timers_frozen_stops_them_on_boa() {
         hidden_clamps_timers_frozen_stops_them::<BoaEngine>();
     }
@@ -3023,6 +3133,10 @@ mod tests {
         #[test]
         fn pump_collects_orphans_on_nova() {
             pump_collects_orphans::<NovaEngine>();
+        }
+        #[test]
+        fn animation_frames_follow_visible_document_turn_on_nova() {
+            animation_frames_follow_visible_document_turn::<NovaEngine>();
         }
         #[test]
         fn gc_soak_bounds_memory_on_nova() {
@@ -3310,6 +3424,39 @@ mod tests {
                     .any(|op| matches!(op, netrender::SceneOp::GlyphRun(_))),
                 "script-injected text renders as glyphs",
             );
+        }
+
+        /// rAF mutation lands before the next retained Livery frame consumes
+        /// the DOM journal; a frame painted before the pump stays unchanged.
+        fn animation_frame_mutation_renders<E: ScriptEngine>() {
+            let mut doc = LiveryScriptedDocument::<E>::parse(
+                "<body><script>requestAnimationFrame(function() {\
+                   var p = document.createElement('p');\
+                   p.textContent = 'frame mutation';\
+                   document.body.appendChild(p);\
+                 });</script></body>",
+            )
+            .expect("runtime inits");
+            assert_eq!(doc.next_wake_delay(), Some(0.0));
+            let before = doc.frame(400, 300);
+            assert!(
+                !before
+                    .ops
+                    .iter()
+                    .any(|op| matches!(op, netrender::SceneOp::GlyphRun(_))),
+                "the callback has not run before the pump"
+            );
+            doc.pump(16.0);
+            let after = doc.frame(400, 300);
+            assert!(
+                after
+                    .ops
+                    .iter()
+                    .any(|op| matches!(op, netrender::SceneOp::GlyphRun(_))),
+                "the retained frame paints the rAF mutation"
+            );
+            assert!(doc.dom_snapshot().contains("frame mutation"));
+            assert_eq!(doc.next_wake_delay(), None);
         }
 
         /// Control: with no script, the same empty body paints no text — so the glyphs in
@@ -3755,6 +3902,10 @@ mod tests {
             mutation_renders::<BoaEngine>();
         }
         #[test]
+        fn animation_frame_mutation_renders_on_boa() {
+            animation_frame_mutation_renders::<BoaEngine>();
+        }
+        #[test]
         fn native_validation_notice_is_painted_and_dismissible_on_boa() {
             native_validation_notice_is_painted_and_dismissible::<BoaEngine>();
         }
@@ -3833,6 +3984,10 @@ mod tests {
             #[test]
             fn mutation_renders_on_nova() {
                 mutation_renders::<NovaEngine>();
+            }
+            #[test]
+            fn animation_frame_mutation_renders_on_nova() {
+                animation_frame_mutation_renders::<NovaEngine>();
             }
             #[test]
             fn scripted_content_scrolls_on_nova() {

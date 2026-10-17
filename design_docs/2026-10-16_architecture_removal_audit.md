@@ -1,5 +1,21 @@
 # Genet architecture and removal audit
 
+## R4/R5/H3/R15 runtime task and clock ownership repairs, 2026-10-17
+
+- **R4:** host task delivery retains rooted callable handles at bootstrap. Realm teardown removes the Rust and private JS roots; snapshot clones restore the private handles. Timer/frame probes and delivery return explicit outcomes; infallible host boundaries report failures and conservatively retain pending work. Decimal string node/request identities do not pass through JS numeric conversion.
+- **R5:** parser reporting distinguishes successful execution, skipped scripts, failed source acquisition, unsupported modules and thrown scripts. Script resource errors and script exceptions use their appropriate reporting path without stopping later scripts. Boa renders thrown values while the originating realm is still entered instead of losing messages to an opaque debug string.
+- **H3:** both production document pumps run the runtime rendering step before mutation capture and retained rendering. Visible rAF-only documents request a wake; hidden/frozen callbacks remain queued. WPT uses the same runtime step and propagates task/frame failures. Receipt settling remains distinct from pending frame wake, so perpetual animation does not block completion indefinitely.
+- **R15:** product performance time reads a configurable host monotonic source; deterministic harnesses explicitly choose virtual time. Reads do not fabricate elapsed time. Each realm samples Date.now for timeOrigin near its elapsed baseline; this does not replace Date. Worker timers wait for elapsed deadlines, including startup-script time, with bounded inbox waits.
+
+Qualification: **205 passed, zero failed, 0 ignored**; the full runtime test-consumer compile check also passed. Gates were serialized under the shared machine lock with 5 GiB memory, zero swap allowance, 150% CPU quota, one Cargo job and one test thread.
+
+Earlier attempts are preserved: a Rust borrow error in clock profile lookup, the combined gate's four-minute timeout, and the Boa opaque-error regression that identified the realm conversion defect. Final counts exclude these attempts.
+
+Boundaries: this does not close I2 lifecycle ownership or its inherited hidden-timer wake/clamp mismatch, R7/R8 enforceable execution budgets, or platform/Forms acceptance. Explicit virtual time may initially read zero; historical WPT expectations of a positive initial read do not justify artificial time advances. Full WPT conformance and arbitrary post-author snapshot cloning are not claimed. Supplier publication and the earlier baseline font failure remain separate obligations.
+
+Commands, source hashes, review findings and receipts are in `runtime_turn_repairs` in the [audit receipt](receipts/2026-10-16_architecture_post_cut_audit.json).
+
+
 ## R1/R2/R3/R9 query, declaration and context ownership repairs, 2026-10-17
 
 - **R1:** runtime DOM queries use Cadency's grammar through a live DOM adapter.
@@ -446,7 +462,7 @@ The fresh review covered the production changes, their consumers and regression 
 
 ### Current disposition of the findings
 
-Reconciled against `0556b0ac8fd` plus the source-hashed R1/R2/R3/R9 repair
+Reconciled against `42026a78a4b` plus the source-hashed R4/R5/H3/R15 repair
 snapshot on 2026-10-17. This table supersedes
 the older 9-addressed / 3-partial / 43-open snapshot and the open-status wording
 in historical evidence below. Addressed means the named source defect or cut,
@@ -454,18 +470,18 @@ with each repair's stated qualification and publication limits retained.
 
 | Disposition | IDs | Current evidence / remaining boundary |
 |---|---|---|
-| Addressed locally | H1, H4, H7, H8, H11, I3, I4, I5, I7, I8, I12, I14, I15, L1, L2, L3, L4, L7, L8, L13, R1, R2, R3, R6, R9, R13, W1, W2 | Original narrow removals plus retained acquisition, source-relative image identity, non-stealing capture, shared decoded pixels, generated transform/paint ownership, canonical origins, bounded decoded cache accumulation, shared CSS comment lexing, borrowed retained planes, authoritative linked shader layout, importer identity, scoped resolver/root cleanup, table-owned aggregation, capture admission, shared selector grammar, static query membership, whole-list declaration parsing and fallible context creation. Dated repair sections and receipts above contain the tests and limits. |
+| Addressed locally | H1, H3, H4, H7, H8, H11, I3, I4, I5, I7, I8, I12, I14, I15, L1, L2, L3, L4, L7, L8, L13, R1, R2, R3, R4, R5, R6, R9, R13, R15, W1, W2 | Original narrow removals plus retained acquisition, source-relative image identity, non-stealing capture, shared decoded pixels, generated transform/paint ownership, canonical origins, bounded decoded cache accumulation, shared CSS comment lexing, borrowed retained planes, authoritative linked shader layout, importer identity, scoped resolver/root cleanup, table-owned aggregation, capture admission, shared selector grammar, static query membership, whole-list declaration parsing and fallible context creation, retained task dispatch, parser failure reporting, production animation-frame scheduling and host elapsed clocks. Dated repair sections and receipts above contain the tests and limits. |
 | Partial | I1 | Native editing shares DOM defaults; scripted text/IME, key releases and default-action integration remain open. |
 | Partial | I11 | Cache-key lookup no longer recompiles shaders; a source/stage/options-owned compiled-artifact lifecycle remains open. |
 | Partial | H6 | Setup/execution/completion accounting repaired; trustworthy VM error phase/type and complete Test262 qualification remain open. |
 | Partial | L6 | Shared form/radio predicates; broader dependency classification and separate mutation switches remain. |
-| Open | I2, I6, I9-I10, I13; R4-R5, R7-R8, R10-R12, R14-R15; L5, L9-L12; H2-H3, H5, H9-H10 | No later cut or verification closes these findings. |
+| Open | I2, I6, I9-I10, I13; R7-R8, R10-R12, R14; L5, L9-L12; H2, H5, H9-H10 | No later cut or verification closes these findings. |
 
-**56 findings: 28 addressed locally, 4 partial, 24 open.** Supplemental X1 remains
+**56 findings: 32 addressed locally, 4 partial, 20 open.** Supplemental X1 remains
 partial and is excluded from that count. Supplier publication/Mere adoption,
 the baseline supplier corpus mismatch, existing ignored continuation tests and
 platform/Forms acceptance are separate outstanding obligations, not extra closed
-findings. R1, R2, R3 and R9 now have local retained-path verification. The prior
+findings. R4, R5, H3 and R15 now have local retained-path verification. The prior
 R6, R13, L8 and L13 continuation retains its separately recorded baseline
 font-test failure; larger runtime,
 input, policy and layout findings remain open.
@@ -596,7 +612,7 @@ Relevant existing evidence: [review receipt](receipts/2026-10-16_forms_submissio
 
 ## Consolidated finding register
 
-Status is reconciled to `0556b0ac8fd` plus the source-hashed R1/R2/R3/R9 repair; descriptions and cut directions retain the original evidence. IDs match the detailed evidence sections. These are issues and removal decisions, not a count of independently reproduced bugs. Related rows share a repair boundary rather than requiring separate frameworks. W1 is the independent review's shader-link finding; the remaining independent observations corroborate I findings and are not counted twice.
+Status is reconciled to `42026a78a4b` plus the source-hashed R4/R5/H3/R15 repair; descriptions and cut directions retain the original evidence. IDs match the detailed evidence sections. These are issues and removal decisions, not a count of independently reproduced bugs. Related rows share a repair boundary rather than requiring separate frameworks. W1 is the independent review's shader-link finding; the remaining independent observations corroborate I findings and are not counted twice.
 
 | ID | Current status | Finding | Disposition / dependency |
 |---|---|---|---|
@@ -618,8 +634,8 @@ Status is reconciled to `0556b0ac8fd` plus the source-hashed R1/R2/R3/R9 repair;
 | R1 | Addressed locally | Runtime selector grammar silently narrows selectors and hides parse errors | Shared selector parser with faithful live-DOM adapter and explicit invalid-list outcome. |
 | R2 | Addressed locally | Count/item queries repeat complete selection for every item | One selection with static membership, stable identity and bounded result lifetime. |
 | R3 | Addressed locally | JS splits CSS declarations and mirrors a private Rust record codec | Whole-list parse in CSS owner; adequate structured boundary or one specified codec. |
-| R4 | Open | Internal task source-eval and result coercion can erase errors/work | Retained private callable entrypoints with realm/GC ownership and explicit outcomes. |
-| R5 | Open | Parsed script loading/evaluation errors disappear behind scheduling counters | Typed nonfatal execution results and proper exception reporting. |
+| R4 | Addressed locally | Internal task source-eval and result coercion can erase errors/work | Retained private callable entrypoints with realm/GC ownership and explicit outcomes. |
+| R5 | Addressed locally | Parsed script loading/evaluation errors disappear behind scheduling counters | Typed nonfatal execution results and proper exception reporting. |
 | R6 | Addressed locally | Parser module resolver drops referrer identity | Resolve/cache using actual importer/final URL and inline document base. |
 | R7 | Open | Worker shutdown detaches uninterruptible VM execution | Enforceable interruption/isolation; truthful lifetime and configurable shutdown policy. |
 | R8 | Open | Budget-shaped API defaults ignore limits | Separate execution interruption from job count; refuse unsupported required bounds. |
@@ -629,7 +645,7 @@ Status is reconciled to `0556b0ac8fd` plus the source-hashed R1/R2/R3/R9 repair;
 | R12 | Open | History uses JSON state despite existing structured clone; fallback duplicates history | Share serialization semantics, then migrate fallback owner deliberately. |
 | R13 | Addressed locally | Module resolver lifetimes are erased and manually restored without unwind guard | Owned/scoped resolver context and unwind-safe restoration; preserve GC roots. |
 | R14 | Open | Ordinary engine/realm registration leaks process-lifetime allocations | Proper owned registrations or fixed static names; keep required rooted release queues. |
-| R15 | Open | Product elapsed-time API uses timer-driven test-like clock | Explicit host elapsed clock and separate deterministic test profile. |
+| R15 | Addressed locally | Product elapsed-time API uses timer-driven test-like clock | Explicit host elapsed clock and separate deterministic test profile. |
 | L1 | Addressed locally | Two comment strippers remove comment-like text inside quoted CSS strings | Token-aware CSS lexical authority; isolated probe confirms helper corruption. |
 | L2 | Addressed locally | Prospective line-break stream runs while Parley still selects lines | Remove unused production work or gate it as explicit experimental diagnostics. |
 | L3 | Addressed locally | Paint clones source image payloads and decodes repeatedly | Share versioned resource payload/decoded ownership; preserve invalidation. |
@@ -645,7 +661,7 @@ Status is reconciled to `0556b0ac8fd` plus the source-hashed R1/R2/R3/R9 repair;
 | L13 | Addressed locally | Feature-enabled font diagnostics construct events before capture check | Avoid discarded collection; keep deterministic font evidence and RAII scope. |
 | H1 | Addressed locally | Unused GL capability/handle stubs claim success without work | Delete stub surface after API consumer check; preserve real wgpu Core capability. |
 | H2 | Open | Browser compatibility renderer access bypasses checked ownership | Migrate to browser frame transaction; preserve leases/loss/scope outcomes. |
-| H3 | Open | WPT runs animation callbacks that live session pumps omit | Share production turn contract and pending-work wake facts; preserve virtual clock. |
+| H3 | Addressed locally | WPT runs animation callbacks that live session pumps omit | Share production turn contract and pending-work wake facts; preserve virtual clock. |
 | H4 | Addressed locally | Browser key route discards typed input outcome and performs scroll defaults | Gate defaults using handled/editable/cancelled outcome, as native host does. |
 | H5 | Open | Native fetch ignores declared byte/deadline/concurrency policy | Wire configurable policy through counted streaming/admission/deadline enforcement. |
 | H6 | Partial | Test262 negative/module/async paths can turn setup/wrong failures into passes | Typed setup/execution/completion and shared exact negative matching; combine flags correctly. |
@@ -654,7 +670,7 @@ Status is reconciled to `0556b0ac8fd` plus the source-hashed R1/R2/R3/R9 repair;
 | H9 | Open | Dormant Wayland timeline allocation can reject a same-queue route | Conditional cut after queue/release audit and Wayland hardware proof. |
 | H10 | Open | Compositor failures/logged capture fallback lack observable presentation outcome | Typed host-visible display/capture/failure status; preserve real OS consumers. |
 | H11 | Addressed locally | Live implementation contains stale proposal/lineage comments | Correct current scope; keep historical receipts as history. |
-| W1 | Addressed locally | Independently lowered stages disagree on varying locations and uniform layout | Coherent pair interface/layout before final lowering, or correct distinct stage bindings. Source-derived counterexamples; GPU draw unexecuted. |
+| W1 | Addressed locally | Independently lowered stages disagree on varying locations and uniform layout | Linked pair interface/layout repair verified by native GPU draw/readback; historical counterexamples and receipts retained. |
 | W2 | Addressed locally | CPU uniform offsets disagreed with emitted WGSL within a stage | Linked-layout repair now consumes Naga reflection; matrix draw/readback regressions passed. |
 
 Smaller observations remain explicit in the appendices: scheduler trace schema omits the emitted animation-frame boundary; clipboard and random-source comments are stale; invalid custom-method fallback and recursive Fleece input limits remain bounded review questions rather than asserted integrated failures. They are not hidden acceptance passes or reasons for broad deletion.

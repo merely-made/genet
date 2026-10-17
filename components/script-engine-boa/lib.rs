@@ -446,6 +446,17 @@ impl BoaEngine {
     }
 }
 
+fn describe_js_error(ctx: &mut Context, error: &JsError) -> String {
+    // RealmError cannot retain a Boa value. Convert the thrown value while its
+    // realm is still entered, before reducing the failure to a host string.
+    if let Ok(thrown) = error.clone().into_opaque(ctx) {
+        if let Ok(s) = thrown.to_string(ctx) {
+            return s.to_std_string_escaped();
+        }
+    }
+    format!("{error:?}")
+}
+
 /// The call context handed to a native callback. Boa's callback gives
 /// `(this, &[JsValue], &mut Context)`, so one lifetime suffices.
 pub struct BoaCallCx<'a> {
@@ -768,6 +779,10 @@ impl ScriptEngine for BoaEngine {
             .map_err(|error| RealmError::Engine(self.describe_error(&error)))
     }
 
+    fn host_string(&mut self, value: &str) -> Result<Self::Value, RealmError> {
+        Ok(JsValue::from(JsString::from(value)))
+    }
+
     fn eval_module(
         &mut self,
         source: &str,
@@ -796,10 +811,11 @@ impl ScriptEngine for BoaEngine {
         let previous = self.ctx.enter_realm(target);
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             self.eval_module_entry(source, base_url, entry_identity, resolve)
+                .map_err(|error| RealmError::Engine(describe_js_error(&mut self.ctx, &error)))
         }));
         let _ = self.ctx.enter_realm(previous);
         match result {
-            Ok(result) => result.map_err(|error| RealmError::Engine(format!("{error:?}"))),
+            Ok(result) => result,
             Err(payload) => std::panic::resume_unwind(payload),
         }
     }
@@ -809,14 +825,7 @@ impl ScriptEngine for BoaEngine {
     }
 
     fn describe_error(&mut self, error: &Self::Error) -> String {
-        // `JsError` is opaque; the thrown value's `toString` ("TypeError: …") is what
-        // a `negative:` match needs. Fall back to the error's own Debug.
-        if let Ok(thrown) = error.clone().into_opaque(&mut self.ctx) {
-            if let Ok(s) = thrown.to_string(&mut self.ctx) {
-                return s.to_std_string_escaped();
-            }
-        }
-        format!("{error:?}")
+        describe_js_error(&mut self.ctx, error)
     }
 
     fn set_global(&mut self, name: &str, value: &Self::Value) -> Result<(), Self::Error> {
@@ -1315,8 +1324,10 @@ impl ScriptEngine for BoaEngine {
 
     fn eval_in_realm(&mut self, realm: RealmId, source: &str) -> Result<Self::Value, RealmError> {
         let src = source.to_string();
-        self.with_realm(realm, |ctx| ctx.eval(Source::from_bytes(src.as_bytes())))?
-            .map_err(|e| RealmError::Engine(format!("{e:?}")))
+        self.with_realm(realm, |ctx| {
+            ctx.eval(Source::from_bytes(src.as_bytes()))
+                .map_err(|error| RealmError::Engine(describe_js_error(ctx, &error)))
+        })?
     }
 
     fn realm_global(&mut self, realm: RealmId) -> Result<Self::Value, RealmError> {

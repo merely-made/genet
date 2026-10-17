@@ -798,6 +798,7 @@ fn run_pending_teardown<E: ScriptEngine>(
                 a.frames.release_context(*realm);
                 a.dom_adoption.remove_realm(*realm);
                 a.hosts.remove(realm);
+                a.task_hooks.retain(|(owner, _), _| owner != realm);
                 a.opaque_roots.remove(realm);
                 a.fetch_realms.retain(|_, owner| owner != realm);
             }
@@ -1188,14 +1189,17 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
                     // Finish realm creation and proxy binding before authored
                     // callbacks can remove or navigate this context. This
                     // event belongs to the iframe, not the child Window.
-                    realm_eval::<E>(
-                        cx,
-                        parent,
-                        &format!(
-                            "__dispatchSynthetic({}, 'load', {{bubbles:false}})",
-                            crate::js_str(&node.raw().to_string())
-                        ),
-                    )?;
+                    let hook = agent
+                        .borrow()
+                        .task_hooks
+                        .get(&(parent, "__dispatchFrameLoad"))
+                        .cloned()
+                        .ok_or_else(|| cx.error("frame load hook is unavailable"))?;
+                    let hook = hook
+                        .downcast_ref::<E::Value>()
+                        .ok_or_else(|| cx.error("frame load hook belongs to another engine"))?;
+                    let raw = cx.make_string(&node.raw().to_string())?;
+                    invoke::<E>(cx, hook, &[raw])?;
                 }
                 view::<E>(cx, realm)
             },
@@ -1390,6 +1394,7 @@ fn open_document_realm<E: ScriptEngine>(
                 SurfaceError::Engine(error) => RealmError::Engine(format!("{error:?}")),
             });
         }
+        crate::capture_task_hooks_from_call::<E>(child, agent, realm)?;
         E::eval_from_call(
             child,
             "delete globalThis.__agentTimers; delete globalThis.__realmId;",
@@ -1412,9 +1417,16 @@ fn open_document_realm<E: ScriptEngine>(
     });
     if result.is_err() {
         if let Some(realm) = attempted_realm {
+            let cancel = agent.borrow().cancel_realm_tasks.clone();
+            if let Some(cancel) = cancel.as_ref().and_then(|value| value.downcast_ref::<E::Value>()) {
+                if let Ok(id) = cx.make_string(&realm.to_string()) {
+                    let _ = invoke::<E>(cx, cancel, &[id]);
+                }
+            }
             let mut agent = agent.borrow_mut();
             agent.dom_adoption.remove_realm(realm);
             agent.hosts.remove(&realm);
+            agent.task_hooks.retain(|(owner, _), _| *owner != realm);
             agent.opaque_roots.remove(&realm);
             agent.frames.contexts.remove(&realm);
             agent.frames.records.remove(&realm);
@@ -2335,6 +2347,7 @@ fn unload_for_navigation<E: ScriptEngine>(
             a.frames.release_context(*realm);
             a.dom_adoption.remove_realm(*realm);
             a.hosts.remove(realm);
+            a.task_hooks.retain(|(owner, _), _| owner != realm);
             a.opaque_roots.remove(realm);
             a.fetch_realms.retain(|_, owner| owner != realm);
             context

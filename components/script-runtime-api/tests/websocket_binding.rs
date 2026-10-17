@@ -580,6 +580,18 @@ fn pending_count_tracks_live_sockets<E: ScriptEngine>() {
     assert_eq!(read(&mut rt, "String(b.readyState)"), "3");
 }
 
+fn retained_host_delivery_survives_public_hook_replacement<E: ScriptEngine>() {
+    let (mut rt, rec) = wired::<E>();
+    rt.eval("var socket=new WebSocket('ws://socket.test/'); var received=[]; socket.addEventListener('open',function(){received.push('open');}); socket.addEventListener('message',function(e){received.push(e.data.byteLength);}); socket.addEventListener('close',function(e){received.push(e.wasClean);}); socket.binaryType='arraybuffer'; for(var name of ['__websocketOpen','__websocketMessageBinary','__websocketClose','__websocketPending','__websocketFailAll'])globalThis[name]=function(){throw new Error('stolen '+name);};").expect("setup");
+    let id = only_id(&rec);
+    assert_eq!(rt.pending_websockets(), 1);
+    rt.ws_open(id, "", "");
+    rt.ws_message_binary(id, &[0, 128, 255]);
+    rt.ws_close(id, 1000, "", true);
+    assert_eq!(read(&mut rt, "received.join(',')"), "open,3,true");
+    assert_eq!(rt.pending_websockets(), 0);
+}
+
 macro_rules! both_engines {
     ($($body:ident => ($boa:ident, $nova:ident)),* $(,)?) => {
         $(
@@ -606,4 +618,5 @@ both_engines! {
     with_no_handler_every_connection_fails => (no_handler_on_boa, no_handler_on_nova),
     event_handlers_treat_non_callable_as_null => (handlers_on_boa, handlers_on_nova),
     pending_count_tracks_live_sockets => (pending_on_boa, pending_on_nova),
+    retained_host_delivery_survives_public_hook_replacement => (retained_delivery_on_boa, retained_delivery_on_nova),
 }

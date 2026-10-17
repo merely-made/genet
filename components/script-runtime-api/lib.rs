@@ -108,6 +108,7 @@ pub use dom::{
 pub use fetch::{FetchHandler, FetchOutcome, FetchRequest};
 pub use harness::{HarnessCompletion, TestResult};
 pub use parse::{NoScriptLoader, ParseReport, ParserScriptLoader};
+pub use timing::{ElapsedClock, PerformanceClockProfile};
 pub use platform::StorageProvider;
 pub use webgl::{WebGlFactory, WebGlHandler};
 pub use websocket::{WebSocketHandler, WebSocketRequest};
@@ -587,9 +588,100 @@ pub struct Runtime<E: ScriptEngine> {
     opaque_roots: OpaqueRootState,
 }
 
+const REALM_TASK_HOOKS: &[&str] = &[
+    "__dispatchSynthetic", "__dispatchTransition", "__dispatchTouch",
+    "__dispatchWheel", "__dispatchAnimation", "__dispatchScriptLoadError", "__dispatchFrameLoad",
+    "__reportListenerException", "__reportScriptException", "__fetchSettle", "__fetchFail",
+    "__fetchStartStream", "__fetchPushChunk", "__fetchClose", "__fetchError",
+    "__fetchPendingCount", "__fetchFailAll",
+    "__moPump", "__websocketOpen", "__websocketMessageText",
+    "__websocketMessageBinary", "__websocketFlushed", "__websocketError",
+    "__websocketClose", "__websocketPending", "__websocketFailAll",
+];
+const AGENT_TASK_HOOKS: &[&str] = &[
+    "__runTimers", "__nextTimerDelay", "__runOneAnimationFrameCallback",
+    "__hasAnimationFrameCallbacks",
+];
+
+fn capture_task_hooks<E: ScriptEngine>(
+    engine: &mut E,
+    realm: RealmId,
+    names: &[&'static str],
+) -> Result<std::collections::BTreeMap<(RealmId, &'static str), Rc<E::Value>>, RealmError> {
+    let mut hooks = std::collections::BTreeMap::new();
+    for &name in names {
+        let source = format!("globalThis.{name}");
+        let value = if realm == MAIN_REALM {
+            engine.eval(&source).map_err(|e| RealmError::Engine(engine.describe_error(&e)))?
+        } else {
+            engine.eval_in_realm(realm, &source)?
+        };
+        hooks.insert((realm, name), Rc::new(value));
+        // The agent's already-retained private state carries the same handles
+        // through ScriptEngineSnapshot. It is absent from authored globals.
+        let hide = if name == "__reportListenerException" { "" } else { "delete globalThis." };
+        let remove = format!(
+            "(function(){{var p=globalThis.__agentTimers.taskHooks||(globalThis.__agentTimers.taskHooks=Object.create(null));\
+             var r=p[{realm}]||(p[{realm}]=Object.create(null));r[{key}]=globalThis.{name};\
+             {hide}{name};}})()",
+            key = js_str(name),
+        );
+        if realm == MAIN_REALM {
+            engine.eval(&remove).map_err(|e| RealmError::Engine(engine.describe_error(&e)))?;
+        } else {
+            engine.eval_in_realm(realm, &remove)?;
+        }
+    }
+    Ok(hooks)
+}
+
+fn restored_task_hooks<E: ScriptEngine>(
+    engine: &mut E,
+    realm: RealmId,
+    names: &[&'static str],
+) -> Result<std::collections::BTreeMap<(RealmId, &'static str), Rc<E::Value>>, E::Error> {
+    let mut hooks = std::collections::BTreeMap::new();
+    for &name in names {
+        let source = format!(
+            "globalThis.__agentTimers.taskHooks[{realm}][{}]",
+            js_str(name),
+        );
+        hooks.insert((realm, name), Rc::new(engine.eval(&source)?));
+    }
+    Ok(hooks)
+}
+
+/// The frame loader installs a realm while the VM is already inside a native
+/// callback. Capture its private entry points before removing setup globals.
+pub(crate) fn capture_task_hooks_from_call<E: ScriptEngine>(
+    cx: &mut E::CallCx<'_>,
+    agent: &Rc<RefCell<AgentState>>,
+    realm: RealmId,
+) -> Result<(), RealmError> {
+    let mut hooks = std::collections::BTreeMap::new();
+    for &name in REALM_TASK_HOOKS {
+        let value = E::eval_from_call(cx, &format!("globalThis.{name}"))?;
+        hooks.insert((realm, name), Rc::new(value) as Rc<dyn std::any::Any>);
+        let hide = if name == "__reportListenerException" { "" } else { "delete globalThis." };
+        let remove = format!(
+            "(function(){{var p=globalThis.__agentTimers.taskHooks||(globalThis.__agentTimers.taskHooks=Object.create(null));\
+             var r=p[{realm}]||(p[{realm}]=Object.create(null));r[{key}]=globalThis.{name};\
+             {hide}{name};}})()",
+            key = js_str(name),
+        );
+        E::eval_from_call(cx, &remove)?;
+    }
+    agent.borrow_mut().task_hooks.extend(hooks);
+    Ok(())
+}
+
 /// Realm-owned state shared with native frame creation. Hosts point back weakly.
 #[derive(Default)]
 pub(crate) struct AgentState {
+    pub(crate) performance_clock: timing::PerformanceClockProfile,
+    /// Type-erased rooted callables, keyed by their creation realm. Frame
+    /// teardown can release them without needing the concrete backend type.
+    pub(crate) task_hooks: std::collections::BTreeMap<(RealmId, &'static str), Rc<dyn std::any::Any>>,
     pub(crate) dom_adoption: dom::adoption::AgentDomState,
     pub(crate) frames: crate::frames::FrameState,
     pub(crate) validation_message_catalog: ValidationMessageCatalog,
@@ -745,16 +837,24 @@ fn install_window_proxy_in_realm<E: ScriptEngine>(
 impl<E: ScriptEngine> Runtime<E> {
     /// Construct an engine and install the `Window` host surface on it.
     pub fn new() -> Result<Self, E::Error> {
-        Self::with_scope(GlobalScopeKind::Window)
+        Self::with_performance_clock(PerformanceClockProfile::default())
+    }
+
+    /// Construct a window runtime with an explicit performance clock profile.
+    pub fn with_performance_clock(profile: PerformanceClockProfile) -> Result<Self, E::Error> {
+        Self::with_scope(GlobalScopeKind::Window, profile)
     }
 
     /// The same surface with a worker global: no `window`, and a read-only
     /// `self`. Used by [`worker::worker_main`] on the worker thread.
     pub(crate) fn new_worker() -> Result<Self, E::Error> {
-        Self::with_scope(GlobalScopeKind::Worker)
+        Self::with_scope(GlobalScopeKind::Worker, PerformanceClockProfile::default())
     }
 
-    fn with_scope(scope: GlobalScopeKind) -> Result<Self, E::Error> {
+    fn with_scope(
+        scope: GlobalScopeKind,
+        profile: PerformanceClockProfile,
+    ) -> Result<Self, E::Error> {
         let mut engine = E::new()?;
         let host: SharedHost = Rc::new(RefCell::new(HostState::default()));
         // The default viewport: the same 800x600 the media-query evaluator
@@ -762,6 +862,7 @@ impl<E: ScriptEngine> Runtime<E> {
         // has `innerWidth`/`innerHeight` agree with `matchMedia`.
         host.borrow_mut().viewport_size = (800.0, 600.0);
         let agent = Rc::new(RefCell::new(AgentState::default()));
+        agent.borrow_mut().performance_clock = profile;
         host.borrow_mut().agent = Rc::downgrade(&agent);
         agent.borrow_mut().register(MAIN_REALM, host.clone());
         engine.set_host_data(host.clone());
@@ -808,9 +909,21 @@ impl<E: ScriptEngine> Runtime<E> {
         }
         let timer_state = engine.eval("globalThis.__agentTimers")?;
         let cancel_realm_tasks = engine.eval("globalThis.__agentTimers.cancelRealm")?;
+        let mut task_hooks = capture_task_hooks(&mut engine, MAIN_REALM, REALM_TASK_HOOKS)
+            .map_err(|e| engine.eval(&format!("throw new Error({})", js_str(&e.to_string()))).err().expect("error construction"))?;
+        task_hooks.extend(
+            capture_task_hooks(&mut engine, MAIN_REALM, AGENT_TASK_HOOKS)
+                .map_err(|e| engine.eval(&format!("throw new Error({})", js_str(&e.to_string()))).err().expect("error construction"))?,
+        );
         engine.eval("delete globalThis.__agentTimers")?;
-        agent.borrow_mut().timer_state = Some(Rc::new(timer_state));
-        agent.borrow_mut().cancel_realm_tasks = Some(Rc::new(cancel_realm_tasks));
+        {
+            let mut agent = agent.borrow_mut();
+            agent.timer_state = Some(Rc::new(timer_state));
+            agent.cancel_realm_tasks = Some(Rc::new(cancel_realm_tasks));
+            agent.task_hooks.extend(task_hooks.into_iter().map(|(key, value)| {
+                (key, value as Rc<dyn std::any::Any>)
+            }));
+        }
         host.borrow_mut().worker_spawn = Some(worker::worker_main::<E> as fn(_));
         let mut runtime = Self {
             engine,
@@ -928,6 +1041,83 @@ impl<E: ScriptEngine> Runtime<E> {
         }
     }
 
+    /// Invoke an installation-time rooted bridge. Arguments are minted as JS
+    /// strings, never parsed as source; bridge code converts numeric fields.
+    fn call_task(
+        &mut self,
+        realm: RealmId,
+        name: &'static str,
+        args: &[&str],
+    ) -> Result<E::Value, RealmError> {
+        self.host_in_realm(realm)?;
+        let function = self
+            .agent
+            .borrow()
+            .task_hooks
+            .get(&(realm, name))
+            .cloned()
+            .ok_or(RealmError::Refused("private task hook is unavailable"))?;
+        let function = function
+            .downcast_ref::<E::Value>()
+            .ok_or(RealmError::Refused("private task hook belongs to another engine"))?;
+        let args = args
+            .iter()
+            .map(|value| self.engine.host_string(value))
+            .collect::<Result<Vec<_>, _>>()?;
+        let result = self.engine.call_function(&function, &function, &args);
+        self.flush_host_trace_events();
+        result
+    }
+
+    fn call_task_top(&mut self, name: &'static str, args: &[&str]) -> Result<E::Value, E::Error> {
+        self.call_task(self.top_realm(), name, args)
+            .map_err(|error| self.engine_error(&error.to_string()))
+    }
+
+    fn task_text(&mut self, value: &E::Value) -> Result<String, E::Error> {
+        self.engine.value_to_string(value)
+    }
+
+    fn task_count(&mut self, value: &E::Value) -> Result<usize, E::Error> {
+        let text = self.task_text(value)?;
+        text.parse().map_err(|_| self.engine_error("private task hook returned an invalid count"))
+    }
+
+    fn task_boolean(&mut self, value: &E::Value) -> Result<bool, E::Error> {
+        match self.task_text(value)?.as_str() {
+            "true" => Ok(true),
+            "false" => Ok(false),
+            _ => Err(self.engine_error("private task hook returned an invalid boolean")),
+        }
+    }
+
+    /// Report a parsed script failure through the same guarded window error
+    /// path used for listener exceptions. Parsing continues after this report.
+    pub fn report_script_exception(&mut self, message: &str, source: Option<&str>) {
+        if let Err(error) = self.call_task_top(
+            "__reportScriptException",
+            &[message, source.unwrap_or("")],
+        ) {
+            self.host.borrow_mut().console.push(format!(
+                "Uncaught: {message} (error reporting failed: {})",
+                self.engine.describe_error(&error)
+            ));
+        }
+    }
+
+    /// The external `<script>` owns a nonbubbling resource `error` event.
+    pub(crate) fn report_script_load_failure(&mut self, node: NodeId, source: &str) {
+        let result = self.call_task_top("__dispatchScriptLoadError", &[&node.raw().to_string()]);
+        if let Err(error) = result {
+            self.host.borrow_mut().console.push(format!(
+                "Script load failed ({source}); error dispatch failed: {}",
+                self.engine.describe_error(&error)
+            ));
+        } else {
+            self.host.borrow_mut().console.push(format!("Script load failed: {source}"));
+        }
+    }
+
     /// Turn a [`RealmError`] into the engine's own error type. The engine trait
     /// has no error constructor - only a call context does - so the error is
     /// minted the one way an embedder always can: by throwing in the bootstrap
@@ -1011,6 +1201,14 @@ impl<E: ScriptEngine> Runtime<E> {
                 SurfaceError::Realm(e) => e,
                 SurfaceError::Engine(e) => RealmError::Engine(self.engine.describe_error(&e)),
             })?;
+            let hooks = capture_task_hooks(
+                &mut self.engine,
+                realm,
+                REALM_TASK_HOOKS,
+            )?;
+            self.agent.borrow_mut().task_hooks.extend(hooks.into_iter().map(|(key, value)| {
+                (key, value as Rc<dyn std::any::Any>)
+            }));
             self.engine.eval_in_realm(
                 realm,
                 "delete globalThis.__agentTimers; delete globalThis.__realmId",
@@ -1020,6 +1218,13 @@ impl<E: ScriptEngine> Runtime<E> {
             Ok(())
         })();
         if let Err(error) = result {
+            let cancel = self.agent.borrow().cancel_realm_tasks.clone();
+            if let Some(cancel) = cancel.as_ref().and_then(|value| value.downcast_ref::<E::Value>()) {
+                if let Ok(id) = self.engine.host_string(&realm.to_string()) {
+                    let _ = self.engine.call_function(cancel, cancel, &[id]);
+                }
+            }
+            self.agent.borrow_mut().task_hooks.retain(|(owner, _), _| *owner != realm);
             {
                 let mut agent = self.agent.borrow_mut();
                 agent.dom_adoption.remove_realm(realm);
@@ -1147,12 +1352,13 @@ impl<E: ScriptEngine> Runtime<E> {
         // MutationObserver: hand the arena's pending record to the registry
         // before the queue is pumped, so "notify mutation observers" is a
         // microtask of *this* checkpoint. Costs nothing until something observes.
-        if self.host.borrow().dom.is_observing() {
-            let _ = self.eval_top("__moPump()");
-        }
-        for (&realm, host) in &self.child_hosts() {
-            if host.borrow().dom.is_observing() {
-                let _ = self.engine.eval_in_realm(realm, "__moPump()");
+        let observing = std::iter::once((self.top_realm(), self.host.clone()))
+            .chain(self.child_hosts().iter().map(|(&realm, host)| (realm, host.clone())))
+            .filter_map(|(realm, host)| host.borrow().dom.is_observing().then_some(realm))
+            .collect::<Vec<_>>();
+        for realm in observing {
+            if let Err(error) = self.call_task(realm, "__moPump", &[]) {
+                self.report_script_exception(&format!("MutationObserver delivery: {error}"), None);
             }
         }
         self.engine.pump_microtasks();
@@ -1186,13 +1392,8 @@ impl<E: ScriptEngine> Runtime<E> {
             }
             return result;
         }
-        // Pass the node id as a *string* literal, not a bare number: a tagged
-        // raw NodeId can exceed 2^53 and lose precision as a JS f64, corrupting
-        // its doc-tag high bits and tripping the scripted-DOM fence. The
-        // `__dispatchSynthetic` bridge does `String(rawId)` anyway.
-        let v = match self.eval_top(&format!(
-            "__dispatchSynthetic(\"{raw_node_id}\", {event_type:?})"
-        )) {
+        // The tagged raw id crosses as a decimal string, preserving all 64 bits.
+        let v = match self.call_task_top("__dispatchSynthetic", &[&raw_node_id.to_string(), event_type]) {
             Ok(value) => value,
             Err(error) => {
                 self.flush_host_trace_events();
@@ -1201,11 +1402,13 @@ impl<E: ScriptEngine> Runtime<E> {
             },
         };
         self.flush_host_trace_events();
-        let proceed = self
-            .engine
-            .value_to_string(&v)
-            .map(|s| s != "false")
-            .unwrap_or(true);
+        let proceed = match self.task_boolean(&v) {
+            Ok(proceed) => proceed,
+            Err(error) => {
+                self.trace_scheduler("dispatch_event", "error", None);
+                return Err(error);
+            },
+        };
         self.perform_microtask_checkpoint();
         self.trace_scheduler("dispatch_event", "end", Some(format!("proceed={proceed}")));
         Ok(proceed)
@@ -1224,16 +1427,9 @@ impl<E: ScriptEngine> Runtime<E> {
         property_name: &str,
         elapsed_time: f64,
     ) -> Result<(), E::Error> {
-        // Pass the node id as a *string* literal, not a bare number: a tagged
-        // raw NodeId can exceed 2^53 and lose precision as a JS f64 (the
-        // `__dispatchTransition` bridge does `String(rawId)` anyway). `{:?}`
-        // renders each &str as a quoted, escaped literal (valid JS), so a
-        // property name / event type can't break out of the call expression.
-        let expr = format!(
-            "__dispatchTransition(\"{raw_node_id}\", {event_type:?}, {property_name:?}, {elapsed_time})"
-        );
-        self.eval_top(&expr)?;
-        self.flush_host_trace_events();
+        self.call_task_top("__dispatchTransition", &[
+            &raw_node_id.to_string(), event_type, property_name, &elapsed_time.to_string(),
+        ])?;
         self.perform_microtask_checkpoint();
         Ok(())
     }
@@ -1266,17 +1462,11 @@ impl<E: ScriptEngine> Runtime<E> {
         y: f64,
         identifier: i32,
     ) -> Result<bool, E::Error> {
-        // Node id as a *string*: a tagged raw NodeId can exceed 2^53 (the
-        // precision bug the transitions plan hit).
-        let expr =
-            format!("__dispatchTouch(\"{raw_node_id}\", {event_type:?}, {x}, {y}, {identifier})");
-        let v = self.eval_top(&expr)?;
-        self.flush_host_trace_events();
-        let proceed = self
-            .engine
-            .value_to_string(&v)
-            .map(|s| s != "false")
-            .unwrap_or(true);
+        let v = self.call_task_top("__dispatchTouch", &[
+            &raw_node_id.to_string(), event_type, &x.to_string(), &y.to_string(),
+            &identifier.to_string(),
+        ])?;
+        let proceed = self.task_boolean(&v)?;
         self.perform_microtask_checkpoint();
         Ok(proceed)
     }
@@ -1296,16 +1486,11 @@ impl<E: ScriptEngine> Runtime<E> {
         delta_y: f64,
         delta_mode: u32,
     ) -> Result<bool, E::Error> {
-        let expr = format!(
-            "__dispatchWheel(\"{raw_node_id}\", {x}, {y}, {delta_x}, {delta_y}, {delta_mode})"
-        );
-        let v = self.eval_top(&expr)?;
-        self.flush_host_trace_events();
-        let proceed = self
-            .engine
-            .value_to_string(&v)
-            .map(|s| s != "false")
-            .unwrap_or(true);
+        let v = self.call_task_top("__dispatchWheel", &[
+            &raw_node_id.to_string(), &x.to_string(), &y.to_string(),
+            &delta_x.to_string(), &delta_y.to_string(), &delta_mode.to_string(),
+        ])?;
+        let proceed = self.task_boolean(&v)?;
         self.perform_microtask_checkpoint();
         Ok(proceed)
     }
@@ -1325,14 +1510,9 @@ impl<E: ScriptEngine> Runtime<E> {
         animation_name: &str,
         elapsed_time: f64,
     ) -> Result<(), E::Error> {
-        // Node id as a *string* literal: a tagged raw NodeId can exceed 2^53 and
-        // lose precision as a JS f64. `{:?}` renders each &str as a quoted, escaped
-        // literal, so a name or event type cannot break out of the call expression.
-        let expr = format!(
-            "__dispatchAnimation(\"{raw_node_id}\", {event_type:?}, {animation_name:?}, {elapsed_time})"
-        );
-        self.eval_top(&expr)?;
-        self.flush_host_trace_events();
+        self.call_task_top("__dispatchAnimation", &[
+            &raw_node_id.to_string(), event_type, animation_name, &elapsed_time.to_string(),
+        ])?;
         self.perform_microtask_checkpoint();
         Ok(())
     }
@@ -1817,18 +1997,31 @@ impl<E: ScriptEngine> Runtime<E> {
     /// against the virtual clock at `now_ms` (the real elapsed time of the run), and
     /// return how many fired. Real-time gating lets a short abort timer fire at its
     /// delay while the far-future testharness timeout stays pending.
-    pub fn run_timers(&mut self, budget: u32, now_ms: f64) -> usize {
+    pub fn run_timers(&mut self, budget: u32, now_ms: f64) -> Result<usize, E::Error> {
         self.trace_scheduler(
             "run_timers",
             "start",
             Some(format!("budget={budget};now_ms={now_ms}")),
         );
         self.perform_microtask_checkpoint();
+        if budget == 0 {
+            // Advancing the scheduler clock is useful even when this turn does
+            // not admit a timer task (worker deadline anchoring).
+            let value = self.call_task(MAIN_REALM, "__runTimers", &["0", &now_ms.to_string()])
+                .map_err(|error| self.engine_error(&error.to_string()))?;
+            self.task_count(&value)?;
+        }
         let mut fired = 0;
         for _ in 0..budget {
             // Step 2.6: "Perform oldestTask's steps."
             // The host drive loop supplies `now_ms`; the JS timer queue chooses one due task.
-            let n = self.run_one_timer_task(Some(now_ms)).unwrap_or(0);
+            let n = match self.run_one_timer_task(Some(now_ms)) {
+                Ok(n) => n,
+                Err(error) => {
+                    self.trace_scheduler("run_timers", "error", None);
+                    return Err(error);
+                },
+            };
             if n == 0 {
                 break;
             }
@@ -1837,7 +2030,7 @@ impl<E: ScriptEngine> Runtime<E> {
             self.perform_microtask_checkpoint();
         }
         self.trace_scheduler("run_timers", "end", Some(format!("fired={fired}")));
-        fired
+        Ok(fired)
     }
 
     /// Run the window's animation frame callbacks against the frame timestamp
@@ -1860,23 +2053,15 @@ impl<E: ScriptEngine> Runtime<E> {
         loop {
             // Step 3: "For each handle in callbackHandles, if handle exists in
             // callbacks: ... Invoke callback with « now » and "report"."
-            let v = match self.engine.eval(&format!(
-                "String(globalThis.__runOneAnimationFrameCallback({now_ms}))"
-            )) {
+            let v = match self.call_task(MAIN_REALM, "__runOneAnimationFrameCallback", &[&now_ms.to_string()]) {
                 Ok(value) => value,
                 Err(error) => {
                     self.flush_host_trace_events();
                     self.trace_scheduler("run_animation_frame_callbacks", "error", None);
-                    return Err(error);
+                    return Err(self.engine_error(&error.to_string()));
                 },
             };
-            self.flush_host_trace_events();
-            let n = self
-                .engine
-                .value_to_string(&v)
-                .ok()
-                .and_then(|s| s.parse::<usize>().ok())
-                .unwrap_or(0);
+            let n = self.task_count(&v)?;
             if n == 0 {
                 break;
             }
@@ -1897,34 +2082,31 @@ impl<E: ScriptEngine> Runtime<E> {
     /// Whether any animation frame callbacks are registered. The host uses this
     /// (alongside its own animation state) to keep requesting frames only while
     /// script is animating, so idle surfaces stop ticking.
-    pub fn has_animation_frame_callbacks(&mut self) -> bool {
-        self.engine
-            .eval("String(globalThis.__hasAnimationFrameCallbacks())")
-            .ok()
-            .and_then(|v| self.engine.value_to_string(&v).ok())
-            .map(|s| s == "true")
-            .unwrap_or(false)
+    pub fn has_animation_frame_callbacks(&mut self) -> Result<bool, E::Error> {
+        let value = self
+            .call_task(MAIN_REALM, "__hasAnimationFrameCallbacks", &[])
+            .map_err(|error| self.engine_error(&error.to_string()))?;
+        self.task_boolean(&value)
     }
 
     fn run_one_timer_task(&mut self, now_ms: Option<f64>) -> Result<usize, E::Error> {
         if now_ms.is_none() && self.pending_fetches() > 0 {
             return Ok(0);
         }
-        let expr = match now_ms {
-            Some(now_ms) => format!("String(globalThis.__runTimers(1,{now_ms}))"),
-            None => "String(globalThis.__runTimers(1))".to_string(),
+        let now_text = now_ms.map(|now| now.to_string());
+        let args = match now_text.as_deref() {
+            Some(now) => vec!["1", now],
+            None => vec!["1"],
         };
-        let v = match self.engine.eval(&expr) {
+        let v = match self.call_task(MAIN_REALM, "__runTimers", &args) {
             Ok(value) => value,
             Err(error) => {
                 self.flush_host_trace_events();
                 self.trace_scheduler("timer_task", "error", None);
-                return Err(error);
+                return Err(self.engine_error(&error.to_string()));
             },
         };
-        self.flush_host_trace_events();
-        let s = self.engine.value_to_string(&v)?;
-        let fired = s.parse().unwrap_or(0);
+        let fired = self.task_count(&v)?;
         if fired > 0 {
             self.trace_scheduler("timer_task", "performed", Some(format!("fired={fired}")));
         }
@@ -1934,15 +2116,16 @@ impl<E: ScriptEngine> Runtime<E> {
     /// Milliseconds until the next timer is due (relative to the last `run_timers`
     /// virtual clock), or `None` if no timer is scheduled. The drive loop sleeps at
     /// most this long so a timer fires near its real deadline.
-    pub fn next_timer_delay(&mut self) -> Option<f64> {
-        let d: f64 = self
-            .engine
-            .eval("String(globalThis.__nextTimerDelay())")
-            .ok()
-            .and_then(|v| self.engine.value_to_string(&v).ok())
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(-1.0);
-        if d < 0.0 { None } else { Some(d) }
+    pub fn next_timer_delay(&mut self) -> Result<Option<f64>, E::Error> {
+        let value = self
+            .call_task(MAIN_REALM, "__nextTimerDelay", &[])
+            .map_err(|error| self.engine_error(&error.to_string()))?;
+        let text = self.task_text(&value)?;
+        let delay: f64 = text.parse().map_err(|_| self.engine_error("invalid timer delay"))?;
+        if !delay.is_finite() {
+            return Err(self.engine_error("invalid timer delay"));
+        }
+        Ok(if delay < 0.0 { None } else { Some(delay) })
     }
 
     /// The per-subtest results collected so far (the driver reads this after the run
@@ -2090,7 +2273,13 @@ impl<E: ScriptEngine> Runtime<E> {
         self.host.borrow_mut().webgl_factory = Some(factory);
     }
 
-    fn eval_fetch_completion(&mut self, id: u64, source: &str, terminal: bool) {
+    fn deliver_fetch_completion(
+        &mut self,
+        id: u64,
+        hook: &'static str,
+        payload: Option<&str>,
+        terminal: bool,
+    ) -> Result<(), RealmError> {
         let realm = self
             .agent
             .borrow()
@@ -2098,35 +2287,32 @@ impl<E: ScriptEngine> Runtime<E> {
             .get(&id)
             .copied()
             .unwrap_or_else(|| self.agent.borrow().frames.top_realm());
-        if realm == MAIN_REALM {
-            let _ = self.engine.eval(source);
-        } else {
-            let _ = self.engine.eval_in_realm(realm, source);
-        }
+        let id_text = id.to_string();
+        let result = match payload {
+            Some(payload) => self.call_task(realm, hook, &[&id_text, payload]),
+            None => self.call_task(realm, hook, &[&id_text]),
+        };
+        // A task gets its checkpoint even if its body threw after scheduling jobs.
+        self.perform_microtask_checkpoint();
+        result?;
         if terminal {
             self.agent.borrow_mut().fetch_realms.remove(&id);
         }
+        Ok(())
     }
 
     /// Resolve the pending `fetch()` Promise `id` with `outcome` (a deferred host
-    /// calls this when the reply arrives). Rust cannot call a held JS function, so
-    /// this evals the `__fetchSettle` entry point (the same shape as `__runTimers`)
-    /// and pumps microtasks. Holds no `HostState` borrow across the eval.
-    pub fn settle_fetch(&mut self, id: u64, outcome: FetchOutcome) {
+    /// calls this when the reply arrives). The private retained hook runs in
+    /// the requesting document's realm and gets a task checkpoint.
+    pub fn settle_fetch(&mut self, id: u64, outcome: FetchOutcome) -> Result<(), RealmError> {
         let json = fetch::encode_outcome(&outcome);
-        let js = format!("globalThis.__fetchSettle({},{});", id, js_str(&json));
-        // Fetch task source: perform the host completion task, then checkpoint.
-        self.eval_fetch_completion(id, &js, true);
-        self.perform_microtask_checkpoint();
+        self.deliver_fetch_completion(id, "__fetchSettle", Some(&json), true)
     }
 
     /// Reject the pending `fetch()` Promise `id` as a network error with `message`
     /// (a `TypeError`, per Fetch). For a deferred host's failed request.
-    pub fn fail_fetch(&mut self, id: u64, message: &str) {
-        let js = format!("globalThis.__fetchFail({},{});", id, js_str(message));
-        // Fetch task source: perform the host completion task, then checkpoint.
-        self.eval_fetch_completion(id, &js, true);
-        self.perform_microtask_checkpoint();
+    pub fn fail_fetch(&mut self, id: u64, message: &str) -> Result<(), RealmError> {
+        self.deliver_fetch_completion(id, "__fetchFail", Some(message), true)
     }
 
     /// Early-settle the pending `fetch()` Promise `id` with a streaming response:
@@ -2134,98 +2320,77 @@ impl<E: ScriptEngine> Runtime<E> {
     /// incrementally via [`push_chunk`](Self::push_chunk) then
     /// [`close_stream`](Self::close_stream). For a host that streams a response body
     /// as it arrives rather than buffering the whole thing.
-    pub fn start_stream(&mut self, id: u64, meta: FetchOutcome) {
+    pub fn start_stream(&mut self, id: u64, meta: FetchOutcome) -> Result<(), RealmError> {
         let json = fetch::encode_outcome(&meta);
-        let js = format!("globalThis.__fetchStartStream({},{});", id, js_str(&json));
-        // Fetch task source: resolve the response task before body chunks arrive.
-        self.eval_fetch_completion(id, &js, false);
-        self.perform_microtask_checkpoint();
+        self.deliver_fetch_completion(id, "__fetchStartStream", Some(&json), false)
     }
 
     /// Push a body chunk to a streaming response started with
     /// [`start_stream`](Self::start_stream). Bytes cross as a JS array literal (no
     /// string-escape hazard), feeding the response's `ReadableStream` controller.
-    pub fn push_chunk(&mut self, id: u64, bytes: &[u8]) {
-        let mut lit = String::with_capacity(bytes.len() * 4 + 2);
-        lit.push('[');
-        for (i, b) in bytes.iter().enumerate() {
-            if i > 0 {
-                lit.push(',');
-            }
-            lit.push_str(&b.to_string());
-        }
-        lit.push(']');
-        // Fetch task source: deliver one body-chunk task, then checkpoint.
-        self.eval_fetch_completion(
-            id,
-            &format!("globalThis.__fetchPushChunk({},{});", id, lit),
-            false,
-        );
-        self.perform_microtask_checkpoint();
+    pub fn push_chunk(&mut self, id: u64, bytes: &[u8]) -> Result<(), RealmError> {
+        let binary: String = bytes.iter().map(|byte| char::from(*byte)).collect();
+        self.deliver_fetch_completion(id, "__fetchPushChunk", Some(&binary), false)
     }
 
     /// Close a streaming response started with [`start_stream`](Self::start_stream):
     /// the body's `ReadableStream` ends and pending reads resolve `done`.
-    pub fn close_stream(&mut self, id: u64) {
-        // Fetch task source: deliver the end-of-body task, then checkpoint.
-        self.eval_fetch_completion(id, &format!("globalThis.__fetchClose({});", id), true);
-        self.perform_microtask_checkpoint();
+    pub fn close_stream(&mut self, id: u64) -> Result<(), RealmError> {
+        self.deliver_fetch_completion(id, "__fetchClose", None, true)
     }
 
     /// Error a streaming response started with [`start_stream`](Self::start_stream):
     /// the body's `ReadableStream` errors so pending/future reads reject with a
     /// `TypeError`. The response itself stays resolved (the failure is mid-body,
     /// e.g. a `Content-Encoding` decode error), so only body consumption rejects.
-    pub fn error_stream(&mut self, id: u64) {
-        // Fetch task source: deliver the body-error task, then checkpoint.
-        self.eval_fetch_completion(id, &format!("globalThis.__fetchError({});", id), true);
-        self.perform_microtask_checkpoint();
+    pub fn error_stream(&mut self, id: u64) -> Result<(), RealmError> {
+        self.deliver_fetch_completion(id, "__fetchError", None, true)
     }
 
     /// Reject every still-pending `fetch()` Promise with `message` (a `TypeError`).
     /// The host drive loop calls this at its wall-clock deadline so a test that
     /// awaits a never-settling fetch records a failure rather than hanging.
     pub fn fail_all_pending(&mut self, message: &str) {
-        let js = format!(
-            "(function(){{var p=globalThis.__pending;for(var k in p){{var e=p[k];delete p[k];if(e){{\
-             if(e.controller){{try{{e.controller.error(new TypeError({m}));}}catch(x){{}}}}\
-             if(!e.settled){{e.settled=true;e.reject(new TypeError({m}));}}}}}}}})();",
-            m = js_str(message)
-        );
-        self.agent.borrow_mut().fetch_realms.clear();
-        // Fetch task source: reject outstanding fetches at the host deadline, then checkpoint.
-        let _ = self.eval_top(&js);
-        for &realm in self.child_hosts().keys() {
-            let _ = self.engine.eval_in_realm(realm, &js);
+        let realms = std::iter::once(self.top_realm())
+            .chain(self.child_hosts().keys().copied())
+            .collect::<Vec<_>>();
+        for realm in realms {
+            match self.call_task(realm, "__fetchFailAll", &[message]) {
+                Ok(_) => self.agent.borrow_mut().fetch_realms.retain(|_, owner| *owner != realm),
+                Err(error) => {
+                    self.report_script_exception(&format!("fetch failure delivery: {error}"), None);
+                }
+            }
         }
+        // Failed realms keep their routing so a later delivery can retry them.
         self.perform_microtask_checkpoint();
     }
 
     /// How many `fetch()` Promises are still pending. The host drive loop reads this
     /// to know when script has quiesced (no in-flight fetches left to settle).
     pub fn pending_fetches(&mut self) -> usize {
-        let mut total = self.pending_fetches_in_realm(self.top_realm()).unwrap_or(0);
-        for realm in self.child_hosts().keys().copied().collect::<Vec<_>>() {
-            total += self.pending_fetches_in_realm(realm).unwrap_or(0);
+        let realms = std::iter::once(self.top_realm())
+            .chain(self.child_hosts().keys().copied())
+            .collect::<Vec<_>>();
+        let mut total = 0;
+        for realm in realms {
+            match self.pending_fetches_in_realm(realm) {
+                Ok(count) => total += count,
+                Err(error) => {
+                    self.report_script_exception(&format!("fetch pending count: {error}"), None);
+                    total += 1; // Uncertain state must keep the host drive loop alive.
+                }
+            }
         }
         total
     }
 
     pub fn pending_fetches_in_realm(&mut self, realm: RealmId) -> Result<usize, RealmError> {
-        let js = "String((function(){var p=globalThis.__pending,n=0;for(var k in p){var e=p[k];if(e&&(!e.settled||e.awaiting))n++;}return n;})())";
-        let value = if realm == MAIN_REALM {
-            self.engine
-                .eval(js)
-                .map_err(|e| RealmError::Engine(self.engine.describe_error(&e)))?
-        } else {
-            self.eval_in_realm(realm, js)?
-        };
-        Ok(self
-            .engine
-            .value_to_string(&value)
+        let value = self.call_task(realm, "__fetchPendingCount", &[])?;
+        self.engine.value_to_string(&value)
             .map_err(|e| RealmError::Engine(self.engine.describe_error(&e)))?
             .parse()
-            .unwrap_or(0))
+            .map_err(|_| RealmError::Refused("private fetch pending hook returned an invalid count"))
     }
 
     /// Complete a deferred resource in its requesting realm, then checkpoint the agent.
@@ -2245,12 +2410,10 @@ impl<E: ScriptEngine> Runtime<E> {
             return Err(RealmError::Refused("fetch belongs to another realm"));
         }
         let json = fetch::encode_outcome(&outcome);
-        self.eval_in_realm(
-            realm,
-            &format!("globalThis.__fetchSettle({id},{});", js_str(&json)),
-        )?;
-        self.agent.borrow_mut().fetch_realms.remove(&id);
+        let result = self.call_task(realm, "__fetchSettle", &[&id.to_string(), &json]);
         self.perform_microtask_checkpoint();
+        result?;
+        self.agent.borrow_mut().fetch_realms.remove(&id);
         Ok(())
     }
 
@@ -2269,12 +2432,10 @@ impl<E: ScriptEngine> Runtime<E> {
         {
             return Err(RealmError::Refused("fetch belongs to another realm"));
         }
-        self.eval_in_realm(
-            realm,
-            &format!("globalThis.__fetchFail({id},{});", js_str(message)),
-        )?;
-        self.agent.borrow_mut().fetch_realms.remove(&id);
+        let result = self.call_task(realm, "__fetchFail", &[&id.to_string(), message]);
         self.perform_microtask_checkpoint();
+        result?;
+        self.agent.borrow_mut().fetch_realms.remove(&id);
         Ok(())
     }
 
@@ -2427,6 +2588,7 @@ impl<E: ScriptEngineSnapshot> Runtime<E> {
         let top = self.top_realm();
         let boot_host: SharedHost = Rc::new(RefCell::new(HostState::default()));
         let agent = Rc::new(RefCell::new(AgentState::default()));
+        agent.borrow_mut().performance_clock = self.agent.borrow().performance_clock.clone();
         boot_host.borrow_mut().agent = Rc::downgrade(&agent);
         agent.borrow_mut().register(MAIN_REALM, boot_host.clone());
         // The cloned heap's global `this` is the donor's WindowProxy, which
@@ -2460,9 +2622,17 @@ impl<E: ScriptEngineSnapshot> Runtime<E> {
         };
         let timer_state = engine.eval("globalThis.__agentTimers")?;
         let cancel_realm_tasks = engine.eval("globalThis.__agentTimers.cancelRealm")?;
+        let mut task_hooks = restored_task_hooks(&mut engine, MAIN_REALM, REALM_TASK_HOOKS)?;
+        task_hooks.extend(restored_task_hooks(&mut engine, MAIN_REALM, AGENT_TASK_HOOKS)?);
+        if top != MAIN_REALM {
+            task_hooks.extend(restored_task_hooks(&mut engine, top, REALM_TASK_HOOKS)?);
+        }
         engine.eval("delete globalThis.__agentTimers")?;
         agent.borrow_mut().timer_state = Some(Rc::new(timer_state));
         agent.borrow_mut().cancel_realm_tasks = Some(Rc::new(cancel_realm_tasks));
+        agent.borrow_mut().task_hooks.extend(task_hooks.into_iter().map(|(key, value)| {
+            (key, value as Rc<dyn std::any::Any>)
+        }));
         let mut clone = Self {
             engine,
             host,
@@ -2643,6 +2813,7 @@ const EVENT_LOOP_BOOTSTRAP: &str = r#"
 (function() {
   'use strict';
   var apply = Reflect.apply;
+  var timerNumber = Number;
   var push = Array.prototype.push;
   var splice = Array.prototype.splice;
   // The `this` a timer callback is invoked with is HTML's "relevant global
@@ -2745,7 +2916,9 @@ const EVENT_LOOP_BOOTSTRAP: &str = r#"
   // `at` has elapsed, in (at, seq) order — so a short abort timer fires at its real
   // delay while the far-future testharness timeout stays pending.
   globalThis.__runTimers = function(budget, nowMs) {
+    budget = timerNumber(budget);
     var realtime = (nowMs !== undefined);
+    if (realtime) nowMs = timerNumber(nowMs);
     if (realtime && nowMs > state.now) state.now = nowMs;
     var fired = 0;
     while (fired < budget) {
@@ -2771,7 +2944,9 @@ const EVENT_LOOP_BOOTSTRAP: &str = r#"
       fired++;
       if (due.repeat) { due.at = state.now + due.delay; due.seq = state.nextId++; apply(push, timers, [due]); }
       if (typeof globalThis.__traceProtocol === 'function') globalThis.__traceProtocol('timer_realm', 'performed', 'realm=' + due.realm + ';sequence=' + due.seq);
-      apply(due.cb, due.global, []);
+      var reportTimerException = state.taskHooks[due.realm].__reportListenerException;
+      try { apply(due.cb, due.global, []); }
+      catch (ex) { reportTimerException(ex); }
       // If a timer callback issued a deferred fetch (left a pending entry), stop so
       // the host drive loop can settle it before later timers (e.g. the harness
       // timeout) fire. No-op when nothing is pending (the disk path).
@@ -2789,9 +2964,10 @@ const EVENT_LOOP_BOOTSTRAP: &str = r#"
     if (typeof callback !== 'function') {
       throw new TypeError('queueMicrotask: callback is not callable');
     }
+    var reportMicrotaskException = state.taskHooks[realm].__reportListenerException;
     Promise.resolve().then(function() {
       // "Report the exception" rather than rejecting an invisible promise.
-      try { callback(); } catch (ex) { globalThis.__reportListenerException(ex); }
+      try { callback(); } catch (ex) { reportMicrotaskException(ex); }
     });
   };
   // Milliseconds until the next timer is due (real-time), or -1 if none. The drive
@@ -2873,7 +3049,7 @@ const EVENT_TARGET_BOOTSTRAP: &str = r#"
       // Listener exceptions are reported, not propagated (DOM §dispatch); see
       // the same guard in dom/bootstrap.js's node `fire`.
       try { rec.cb.call(this, event); }
-      catch (ex) { globalThis.__reportListenerException(ex); }
+      catch (ex) { reportException(ex, '', 'Uncaught (in listener): '); }
       event.__inPassive = false;
     }
   };
@@ -3115,27 +3291,38 @@ const EVENT_TARGET_BOOTSTRAP: &str = r#"
   // `message` / `error` / `filename` / `lineno` / `colno` to fail the running
   // test. Guard against recursion: a throwing error-listener must not re-enter.
   var reporting = false;
-  globalThis.__reportListenerException = function(ex) {
-    var msg = (ex && ex.message !== undefined) ? String(ex.message) : String(ex);
+  var reportString = String, reportError = Error;
+  var reportConsole = globalThis.console && globalThis.console.error;
+  function reportException(ex, filename, label) {
+    var msg = (ex && ex.message !== undefined) ? reportString(ex.message) : reportString(ex);
     if (!reporting) {
       reporting = true;
       try {
         var ev = new Event('error', { cancelable: true });
         ev.message = msg;
         ev.error = ex;
-        ev.filename = '';
+        ev.filename = filename || '';
         ev.lineno = 0;
         ev.colno = 0;
-        globalThis.dispatchEvent(ev);
+        trustApply(EventTarget.prototype.dispatchEvent, globalThis, [ev]);
       } catch (ignored) {
         // An error handler that itself threw: fall through to the console.
       }
       reporting = false;
     }
-    if (globalThis.console && globalThis.console.error) {
-      globalThis.console.error('Uncaught (in listener): ' + msg);
+    if (reportConsole) {
+      trustApply(reportConsole, undefined, [label + msg]);
     }
+  }
+  globalThis.__reportListenerException = function(ex) {
+    reportException(ex, '', 'Uncaught (in listener): ');
   };
+  globalThis.__reportScriptException = function(message, filename) {
+    reportException(new reportError(reportString(message)), reportString(filename || ''), 'Uncaught: ');
+  };
+  // The agent queue can report callback exceptions without consulting a public
+  // global that an authored page may replace.
+  globalThis.__agentTimers.reportException = globalThis.__reportListenerException;
 })();
 "#;
 
@@ -3451,6 +3638,7 @@ const SHELL_GLOBALS_BOOTSTRAP: &str = r#"
   // authored Array/Object/Function prototype method sees foreign callbacks.
   var rafCreate = Object.create;
   var rafApply = Reflect.apply;
+  var rafNumber = Number;
   var rafTrace = globalThis.__traceProtocol;
   var rafState = globalThis.__agentTimers;
   if (!rafState.animationContexts) {
@@ -3475,10 +3663,11 @@ const SHELL_GLOBALS_BOOTSTRAP: &str = r#"
     var cancelTimers = rafState.timers;
     var cancelSplice = Array.prototype.splice;
     rafState.cancelRealm = function(id) {
-      var target = Number(id);
+      var target = rafNumber(id);
       for (var t = cancelTimers.length - 1; t >= 0; t--) {
         if (cancelTimers[t].realm === target) rafApply(cancelSplice, cancelTimers, [t, 1]);
       }
+      if (rafState.taskHooks) delete rafState.taskHooks[target];
       var contexts = rafState.animationContexts;
       for (var c = contexts.length - 1; c >= 0; c--) {
         if (contexts[c].realm !== target) continue;
@@ -3505,6 +3694,7 @@ const SHELL_GLOBALS_BOOTSTRAP: &str = r#"
   // Run one callback per engine boundary, so the Rust driver checkpoints
   // microtasks between callbacks, including callbacks in different realms.
   globalThis.__runOneAnimationFrameCallback = function(now) {
+    now = rafNumber(now);
     if (rafState.animationPass === null) {
       var pass = rafCreate(null);
       pass.length = rafState.animationContexts.length;
@@ -3535,7 +3725,9 @@ const SHELL_GLOBALS_BOOTSTRAP: &str = r#"
         var callback = context.callbacks[handle];
         delete context.callbacks[handle];
         rafTrace('animation_frame_realm', 'performed', 'realm=' + context.realm + ';handle=' + handle);
-        rafApply(callback, context.global, [now]);
+        var reportFrameException = rafState.taskHooks[context.realm].__reportListenerException;
+        try { rafApply(callback, context.global, [now]); }
+        catch (ex) { reportFrameException(ex); }
         return 1;
       }
       pass.index++;
@@ -3590,6 +3782,26 @@ const SHELL_GLOBALS_BOOTSTRAP: &str = r#"
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn malformed_task_boolean_is_error<E: ScriptEngine>() {
+        let mut rt = Runtime::<E>::new().expect("runtime");
+        let malformed = rt.eval("({toString(){throw new Error('bad conversion')}})")
+            .expect("object");
+        assert!(rt.task_boolean(&malformed).is_err());
+        let unexpected = rt.eval("'unexpected'").expect("string");
+        assert!(rt.task_boolean(&unexpected).is_err());
+    }
+
+    #[test]
+    fn malformed_task_boolean_on_boa() {
+        malformed_task_boolean_is_error::<script_engine_boa::BoaEngine>();
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn malformed_task_boolean_on_nova() {
+        malformed_task_boolean_is_error::<script_engine_nova::NovaEngine>();
+    }
 
     /// The host surface, exercised against any backend: global aliases resolve and
     /// `console.log` reaches host state through real JS execution.
@@ -3730,7 +3942,7 @@ mod tests {
 
         let mut rt = Runtime::<E>::new().expect("runtime");
         rt.eval(script).expect("schedule");
-        assert_eq!(rt.run_timers(10, 0.0), 2);
+        assert_eq!(rt.run_timers(10, 0.0).unwrap(), 2);
         assert_eq!(rt.host().borrow().console, vec!["first", "micro", "second"]);
     }
 
@@ -3810,14 +4022,14 @@ mod tests {
 
         let mut rt = Runtime::<E>::new().expect("runtime");
         rt.eval(script).expect("schedule");
-        assert!(rt.has_animation_frame_callbacks());
+        assert!(rt.has_animation_frame_callbacks().unwrap());
 
         // Pass 1: snapshot is the three registered handles; the mid-pass
         // registration ('next') must not run, the canceled one must be skipped,
         // and 'micro' must land between the two callbacks that do run.
         assert_eq!(rt.run_animation_frame_callbacks(16.0).expect("frame 1"), 2);
         assert_eq!(rt.host().borrow().console, vec!["one@16", "micro", "two"]);
-        assert!(rt.has_animation_frame_callbacks());
+        assert!(rt.has_animation_frame_callbacks().unwrap());
 
         // Pass 2: only the mid-pass registration remains.
         assert_eq!(rt.run_animation_frame_callbacks(32.0).expect("frame 2"), 1);
@@ -3827,7 +4039,7 @@ mod tests {
         );
 
         // Idle: nothing registered, nothing runs.
-        assert!(!rt.has_animation_frame_callbacks());
+        assert!(!rt.has_animation_frame_callbacks().unwrap());
         assert_eq!(rt.run_animation_frame_callbacks(48.0).expect("frame 3"), 0);
     }
 
@@ -3846,7 +4058,7 @@ mod tests {
         let _ = rt.dispatch_event(document, "click").expect("dispatch");
 
         rt.eval(script).expect("reschedule");
-        assert_eq!(rt.run_timers(10, 0.0), 1);
+        assert_eq!(rt.run_timers(10, 0.0).unwrap(), 1);
 
         let trace = rt.scheduler_trace();
         assert!(

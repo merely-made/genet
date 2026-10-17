@@ -4,12 +4,11 @@
 
 //! `performance`: High Resolution Time, User Timing and the Performance Timeline.
 //!
-//! A pure JS bootstrap with no native sink. The clock is the **timers' virtual
-//! clock** (`__virtualNow`, from the event-loop bootstrap), not wall time, so a
-//! harness run under the drive loop's virtual clock stays deterministic; a
-//! per-read sub-tick keeps `now()` strictly increasing and positive, which
-//! hr-time requires. `timeOrigin` is the engine's `Date.now()` at install, which
-//! is what the hr-time tests compare against.
+//! The product clock reads a host monotonic source. A test harness can select
+//! the timer queue's virtual clock explicitly, preserving deterministic timer
+//! order without making ordinary synchronous work appear to take zero time.
+//! Each realm samples `Date.now()` for `timeOrigin` near its monotonic baseline;
+//! this surface does not replace the engine's `Date` implementation.
 //!
 //! `PerformanceObserver` records are delivered as a task on the drive loop (a
 //! zero-delay timer), so a callback never runs inside `mark()`.
@@ -19,11 +18,86 @@
 //! `performance.timing` / `performance.navigation` are present as the legacy
 //! zero-valued shapes `performance.toJSON()` is specified to carry.
 
-use script_engine_api::ScriptEngine;
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::time::Instant;
+
+use script_engine_api::{CallCx, NativeFn, ScriptEngine};
+
+use crate::HostState;
+
+/// Milliseconds from a host-owned monotonic source. The absolute value has no
+/// script meaning: each realm samples a baseline when its surface is installed.
+#[derive(Clone)]
+pub struct ElapsedClock(Rc<dyn Fn() -> f64>);
+
+impl ElapsedClock {
+    /// A monotonic clock for a product runtime.
+    pub fn system() -> Self {
+        let start = Instant::now();
+        Self(Rc::new(move || start.elapsed().as_secs_f64() * 1_000.0))
+    }
+
+    /// Supply a controlled monotonic reader, in milliseconds, for an embedder
+    /// or a deterministic test. Advancing the reader is entirely host-owned.
+    pub fn from_reader(reader: impl Fn() -> f64 + 'static) -> Self {
+        Self(Rc::new(reader))
+    }
+
+    fn read_ms(&self) -> f64 {
+        (self.0)()
+    }
+}
+
+/// The `performance` clock chosen when a runtime is constructed. Virtual time
+/// advances only when the explicit harness timer driver advances its queue.
+#[derive(Clone)]
+pub enum PerformanceClockProfile {
+    Host(ElapsedClock),
+    Virtual,
+}
+
+impl Default for PerformanceClockProfile {
+    fn default() -> Self {
+        Self::Host(ElapsedClock::system())
+    }
+}
+
+fn profile_from_call<E: ScriptEngine>(cx: &E::CallCx<'_>) -> Option<PerformanceClockProfile> {
+    let data = cx.host_data()?;
+    let host = data.downcast_ref::<RefCell<HostState>>()?;
+    let agent = host.borrow().agent.upgrade()?;
+    let profile = agent.borrow().performance_clock.clone();
+    Some(profile)
+}
+
+struct ClockMode;
+impl<E: ScriptEngine> NativeFn<E> for ClockMode {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let mode = match profile_from_call::<E>(cx) {
+            Some(PerformanceClockProfile::Virtual) => "virtual",
+            _ => "host",
+        };
+        cx.make_string(mode)
+    }
+}
+
+struct HostElapsed;
+impl<E: ScriptEngine> NativeFn<E> for HostElapsed {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let elapsed = match profile_from_call::<E>(cx) {
+            Some(PerformanceClockProfile::Host(clock)) => clock.read_ms(),
+            _ => 0.0,
+        };
+        cx.make_string(&elapsed.to_string())
+    }
+}
 
 pub(crate) fn install_timing_surface<E: ScriptEngine>(
     engine: &mut crate::Surface<'_, '_, E>,
 ) -> Result<(), crate::SurfaceError<E::Error>> {
+    engine.set_function::<ClockMode>("__performanceClockMode", 0)?;
+    engine.set_function::<HostElapsed>("__performanceHostElapsed", 0)?;
     engine.eval(TIMING_BOOTSTRAP)?;
     Ok(())
 }
@@ -31,13 +105,20 @@ pub(crate) fn install_timing_surface<E: ScriptEngine>(
 const TIMING_BOOTSTRAP: &str = r#"
 (function() {
   var timeOrigin = Date.now();
-  // A strictly increasing sub-tick on top of the timers' clock: hr-time requires
-  // now() > 0 and a non-negative difference between consecutive reads, which a
-  // clock that only moves when a timer fires cannot give.
-  var subTick = 0;
+  var virtualClock = __performanceClockMode() === 'virtual';
+  var readVirtualNow = globalThis.__virtualNow;
+  var readHostElapsed = __performanceHostElapsed;
+  var schedulePerformanceTask = globalThis.setTimeout;
+  var reportPerformanceException = globalThis.__reportListenerException;
+  var hostStart = virtualClock ? 0 : Number(readHostElapsed());
+  var lastNow = 0;
   function now() {
-    subTick += 0.001;
-    return globalThis.__virtualNow() + subTick;
+    if (virtualClock) return readVirtualNow();
+    var elapsed = Number(readHostElapsed()) - hostStart;
+    // A configured clock may have coarser resolution or briefly regress.
+    // Clamp reads without inventing elapsed time on each call.
+    if (isFinite(elapsed) && elapsed > lastNow) lastNow = elapsed;
+    return lastNow;
   }
 
   function defineTag(ctor, name) {
@@ -116,7 +197,7 @@ const TIMING_BOOTSTRAP: &str = r#"
     deliveryScheduled = true;
     // The performance timeline task source: never run a callback synchronously
     // inside mark()/measure().
-    setTimeout(function() {
+    schedulePerformanceTask(function() {
       deliveryScheduled = false;
       var snapshot = observers.slice();
       for (var i = 0; i < snapshot.length; i++) {
@@ -126,7 +207,7 @@ const TIMING_BOOTSTRAP: &str = r#"
         o._buffer = [];
         var dropped = o._dropped; o._dropped = 0;
         try { o._callback.call(o, new PerformanceObserverEntryList(records), o, { droppedEntriesCount: dropped }); }
-        catch (ex) { globalThis.__reportListenerException(ex); }
+        catch (ex) { reportPerformanceException(ex); }
       }
     }, 0);
   }

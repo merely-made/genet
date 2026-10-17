@@ -7,8 +7,8 @@
 //! Caller-owned scratch tree for Taffy's low-level layout algorithms.
 //!
 //! Taffy supplies block, flex, and grid algorithms. Buckram owns the tree,
-//! source identity, contexts, and returned placements. The public surface in
-//! this module deliberately uses Buckram types rather than Taffy types.
+//! source identity, contexts, and returned placements. The scratch tree takes
+//! Taffy's concrete `Style` until the remaining backend roles are owned here.
 
 use std::slice;
 
@@ -130,33 +130,7 @@ pub struct AlgorithmLayout {
     pub height: f32,
 }
 
-mod sealed {
-    pub trait AlgorithmStyle {
-        fn as_taffy_style(&self) -> &taffy::Style;
-        fn as_taffy_style_mut(&mut self) -> &mut taffy::Style;
-    }
-
-    impl AlgorithmStyle for taffy::Style {
-        fn as_taffy_style(&self) -> &taffy::Style {
-            self
-        }
-
-        fn as_taffy_style_mut(&mut self) -> &mut taffy::Style {
-            self
-        }
-    }
-}
-
-/// A style accepted by the private Taffy algorithm adapter.
-///
-/// This sealed trait keeps Taffy out of Buckram's method signatures while the
-/// K1 caller still constructs the backend style privately. K3 replaces that
-/// caller-side lowering with Buckram-owned logical and intrinsic inputs.
-pub trait AlgorithmStyle: sealed::AlgorithmStyle {}
-
-impl AlgorithmStyle for Style {}
-
-struct AlgorithmNode<S> {
+struct AlgorithmNode {
     kind: AlgorithmKind,
     block_style: BlockStyle,
     block_algorithm: Option<BlockAlgorithm>,
@@ -172,7 +146,7 @@ struct AlgorithmNode<S> {
     flex_content_base_probe_active: bool,
     intrinsic_inline_sizes: Option<IntrinsicSizes>,
     table_wrapper_inline_size: Option<f32>,
-    style: S,
+    style: Style,
     /// Whether the caller attached a measure context. The context itself is
     /// stored beside the node so the algorithms never depend on its type.
     has_context: bool,
@@ -195,10 +169,10 @@ struct AlgorithmNode<S> {
 /// A caller-owned arena used only while running layout algorithms.
 ///
 /// Source identity lives on each node, so callers need no parallel
-/// `NodeId -> source` map. The style parameter is generic and the public
-/// methods expose only Buckram identifiers and geometry.
-pub struct AlgorithmTree<S, Context, Source> {
-    core: AlgorithmCore<S>,
+/// `NodeId -> source` map. The remaining backend style is explicitly Taffy's;
+/// caller-owned context and source identity stay outside the algorithm core.
+pub struct AlgorithmTree<Context, Source> {
+    core: AlgorithmCore,
     contexts: Vec<Option<Context>>,
     sources: Vec<Source>,
 }
@@ -207,12 +181,12 @@ pub struct AlgorithmTree<S, Context, Source> {
 /// measure contexts and source identities.
 ///
 /// Every layout algorithm runs over this type, so Taffy's tree traits are
-/// instantiated once per style type rather than once per `(Context, Source)`
-/// pair (2026-10-14: two such pairs duplicated the whole of Taffy in the
-/// browser viewer). Reached through the tree's `Deref`.
+/// instantiated once rather than once per `(Context, Source)` pair
+/// (2026-10-14: two such pairs duplicated the whole of Taffy in the browser
+/// viewer). Reached through the tree's `Deref`.
 #[doc(hidden)]
-pub struct AlgorithmCore<S> {
-    nodes: Vec<AlgorithmNode<S>>,
+pub struct AlgorithmCore {
+    nodes: Vec<AlgorithmNode>,
     fragmentation_output: FragmentationOutput,
     /// Resolves a Taffy calc() pointer against a percentage basis. The tree
     /// owner stores calc values with stable addresses, tags them into
@@ -221,13 +195,13 @@ pub struct AlgorithmCore<S> {
     calc_resolver: Option<fn(*const (), f32) -> f32>,
 }
 
-impl<S, Context, Source> Default for AlgorithmTree<S, Context, Source> {
+impl<Context, Source> Default for AlgorithmTree<Context, Source> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
+impl<Context, Source> AlgorithmTree<Context, Source> {
     pub fn new() -> Self {
         Self {
             core: AlgorithmCore {
@@ -243,7 +217,7 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
     pub fn new_with_children(
         &mut self,
         kind: AlgorithmKind,
-        style: S,
+        style: Style,
         children: &[AlgorithmNodeId],
         source: Source,
     ) -> AlgorithmNodeId {
@@ -254,7 +228,7 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
         &mut self,
         kind: AlgorithmKind,
         block_style: BlockStyle,
-        style: S,
+        style: Style,
         children: &[AlgorithmNodeId],
         source: Source,
     ) -> AlgorithmNodeId {
@@ -263,7 +237,7 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
 
     pub fn new_leaf_with_context(
         &mut self,
-        style: S,
+        style: Style,
         context: Context,
         source: Source,
     ) -> AlgorithmNodeId {
@@ -273,7 +247,7 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
     pub fn new_leaf_with_context_and_block_style(
         &mut self,
         block_style: BlockStyle,
-        style: S,
+        style: Style,
         context: Context,
         source: Source,
     ) -> AlgorithmNodeId {
@@ -291,7 +265,7 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
         &mut self,
         kind: AlgorithmKind,
         block_style: BlockStyle,
-        style: S,
+        style: Style,
         children: &[AlgorithmNodeId],
         context: Option<Context>,
         source: Source,
@@ -359,7 +333,6 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
         mut measure: Measure,
     ) -> Option<IntrinsicSizes>
     where
-        S: AlgorithmStyle,
         Measure: FnMut(
             AlgorithmSize<Option<f32>>,
             AlgorithmSize<AlgorithmAvailableSpace>,
@@ -420,20 +393,20 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
     }
 }
 
-impl<S, Context, Source> std::ops::Deref for AlgorithmTree<S, Context, Source> {
-    type Target = AlgorithmCore<S>;
-    fn deref(&self) -> &AlgorithmCore<S> {
+impl<Context, Source> std::ops::Deref for AlgorithmTree<Context, Source> {
+    type Target = AlgorithmCore;
+    fn deref(&self) -> &AlgorithmCore {
         &self.core
     }
 }
 
-impl<S, Context, Source> std::ops::DerefMut for AlgorithmTree<S, Context, Source> {
-    fn deref_mut(&mut self) -> &mut AlgorithmCore<S> {
+impl<Context, Source> std::ops::DerefMut for AlgorithmTree<Context, Source> {
+    fn deref_mut(&mut self) -> &mut AlgorithmCore {
         &mut self.core
     }
 }
 
-impl<S> AlgorithmCore<S> {
+impl AlgorithmCore {
     /// Install the interpreter for calc()-tagged dimensions in this tree's
     /// styles. The caller guarantees every tagged pointer outlives the tree.
     pub fn set_calc_resolver(&mut self, resolver: fn(*const (), f32) -> f32) {
@@ -444,7 +417,7 @@ impl<S> AlgorithmCore<S> {
         self.nodes[id.index()].kind
     }
 
-    pub fn style(&self, id: AlgorithmNodeId) -> &S {
+    pub fn style(&self, id: AlgorithmNodeId) -> &Style {
         &self.nodes[id.index()].style
     }
 
@@ -522,7 +495,7 @@ impl<S> AlgorithmCore<S> {
             .count()
     }
 
-    pub fn style_mut(&mut self, id: AlgorithmNodeId) -> &mut S {
+    pub fn style_mut(&mut self, id: AlgorithmNodeId) -> &mut Style {
         &mut self.nodes[id.index()].style
     }
 
@@ -556,10 +529,7 @@ impl<S> AlgorithmCore<S> {
     /// The provider is deliberately unavailable outside a flex or grid
     /// parent. Ordinary block, inline, and table-internal out-of-flow routes
     /// have separate Buckram formatting boundaries.
-    pub fn enable_flex_grid_static_position_provider(&mut self, id: AlgorithmNodeId)
-    where
-        S: AlgorithmStyle,
-    {
+    pub fn enable_flex_grid_static_position_provider(&mut self, id: AlgorithmNodeId) {
         let parent = self.nodes[id.index()]
             .parent
             .expect("a flex/grid static-position provider requires an attached direct child");
@@ -577,8 +547,7 @@ impl<S> AlgorithmCore<S> {
             ),
             "the static-position provider requires an absolute or fixed child"
         );
-        sealed::AlgorithmStyle::as_taffy_style_mut(&mut self.nodes[id.index()].style).position =
-            taffy::Position::Absolute;
+        self.nodes[id.index()].style.position = taffy::Position::Absolute;
     }
 
     /// Select this direct grid child's finalized grid area as its
@@ -1036,10 +1005,7 @@ impl<S> AlgorithmCore<S> {
     }
 }
 
-impl<S, Context, Source> AlgorithmTree<S, Context, Source>
-where
-    S: AlgorithmStyle,
-{
+impl<Context, Source> AlgorithmTree<Context, Source> {
     /// Run scratch layout with the root's renderer-owned positioned children
     /// presented to Taffy as out of flow.
     ///
@@ -1067,16 +1033,14 @@ where
             if !self.nodes[child.index()].block_style.is_out_of_flow() {
                 continue;
             }
-            let style =
-                sealed::AlgorithmStyle::as_taffy_style_mut(&mut self.nodes[child.index()].style);
+            let style = &mut self.nodes[child.index()].style;
             flipped.push((child, style.position));
             style.position = taffy::Position::Absolute;
         }
         self.clear_layout_cache();
         self.compute_layout_with_measure(root, available, measure);
         for (child, previous) in flipped {
-            sealed::AlgorithmStyle::as_taffy_style_mut(&mut self.nodes[child.index()].style)
-                .position = previous;
+            self.nodes[child.index()].style.position = previous;
         }
         // The next ordinary run must not reuse a cache entry made while those
         // private backend roles were temporarily different.

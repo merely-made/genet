@@ -99,6 +99,6 @@ pub use table::{
 };
 pub use taffy_adapter::{
     AlgorithmAvailableSpace, AlgorithmCore, AlgorithmKind, AlgorithmLayout, AlgorithmNodeId,
-    AlgorithmSize, AlgorithmStyle, AlgorithmTree, BlockAlgorithm, FragmentationDispatch,
+    AlgorithmSize, AlgorithmTree, BlockAlgorithm, FragmentationDispatch,
     FragmentationOutput,
 };

@@ -22,7 +22,8 @@ pub mod interop;
 pub mod rendering_context_core;
 
 pub use crate::compositor::{
-    OsCompositorBackend, PaintCompositor, ServoCompositor, WgpuMasterCaptureBackend,
+    OsCompositorBackend, PaintCompositor, PresentationOutcome, PresentationRoute,
+    PresentationStage, ServoCompositor, WgpuMasterCaptureBackend,
 };
 #[cfg(target_vendor = "apple")]
 pub use crate::compositor_calayer::{
@@ -31,7 +32,8 @@ pub use crate::compositor_calayer::{
 #[cfg(target_os = "windows")]
 pub use crate::compositor_dxgi::{BackendError as WindowsDxgiBackendError, WindowsDxgiBackend};
 pub use crate::compositor_factory::{
-    BoxedFactoryError, default_compositor_for_window, default_compositor_for_window_or_capture,
+    BoxedFactoryError, CompositorSelection, default_compositor_for_window,
+    default_compositor_for_window_or_capture,
 };
 #[cfg(target_os = "linux")]
 pub use crate::compositor_wayland::{

@@ -17,6 +17,8 @@ default = []
 # host integration remain separate work.
 scripted = ["genet-documents/scripted", "dep:genet-scripted", "dep:script-engine-boa", "dep:script-runtime-api", "dep:webgl_wgpu"]
 scripted-nova = ["scripted", "genet-documents/scripted-nova", "dep:script-engine-nova"]
+# Browser-only real-device lease probe; never exposed in ordinary artifacts.
+browser-frame-fixture = []
 
 [lib]
 name = "ortet"
@@ -68,6 +70,7 @@ webgl_wgpu = { workspace = true, optional = true }
 wasm-bindgen = "=0.2.129"
 wasm-bindgen-futures = "=0.4.79"
 js-sys = "=0.3.106"
+gloo-timers = { version = "0.3", features = ["futures"] }
 wgpu = { workspace = true, features = ["webgpu"] }
 web-sys = { version = "=0.3.106", features = [
     "Document", "DomRect", "Element", "Event", "EventTarget", "Headers", "Response", "Request", "RequestInit", "Location", "Url",

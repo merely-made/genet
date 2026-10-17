@@ -350,7 +350,7 @@ pub(in crate::layout) fn physical_flex_gap(
 /// transition and retains the static rectangle it yields for the later K5d
 /// equation.
 pub(in crate::layout) fn enable_flex_grid_static_position_provider<Id, Context, Source>(
-    tree: &mut AlgorithmTree<Style, Context, Source>,
+    tree: &mut AlgorithmTree<Context, Source>,
     styles: &StylePlane<Id>,
     boxes: &GeneratedBoxTree<Id>,
     container: BoxId,

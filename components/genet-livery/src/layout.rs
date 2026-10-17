@@ -382,7 +382,7 @@ fn text_baselines(context: &TextMeasure, width: f32) -> Option<(f32, f32)> {
 /// captions count for nothing either way. Whether any line or counted row
 /// did.
 fn feed_line_baselines<Context, Source>(
-    tree: &mut AlgorithmTree<Style, Context, Source>,
+    tree: &mut AlgorithmTree<Context, Source>,
     root: AlgorithmNodeId,
     table_rows: bool,
     line_baselines: impl Fn(&Context, f32) -> Option<(f32, f32)>,
@@ -730,7 +730,7 @@ fn verify_one_table<Id>(
 /// a taller content box, which is why the measurement pass leaves the height
 /// automatic.
 fn format_table_cell<Context, Source>(
-    tree: &mut AlgorithmTree<Style, Context, Source>,
+    tree: &mut AlgorithmTree<Context, Source>,
     node: AlgorithmNodeId,
     request: TableCellLayoutInput,
     cell: &CellBlockInput,
@@ -823,7 +823,7 @@ fn format_table_cell<Context, Source>(
 /// Parent block, flex, and grid contexts consume these declared outputs
 /// through `AlgorithmTree::propagate_declared_baselines`; no post-layout
 /// traversal of backend children is involved.
-fn populate_inline_baselines(tree: &mut AlgorithmTree<Style, InlineMeasure, Vec<BoxId>>) {
+fn populate_inline_baselines(tree: &mut AlgorithmTree<InlineMeasure, Vec<BoxId>>) {
     let direct = tree
         .node_ids()
         .filter_map(|node| {
@@ -845,7 +845,7 @@ fn populate_inline_baselines(tree: &mut AlgorithmTree<Style, InlineMeasure, Vec<
 /// root. The map is keyed by Buckram box identity, never a backend node or a
 /// completed normal-flow rectangle.
 fn positioned_intrinsic_sizes<Context, Source>(
-    tree: &mut AlgorithmTree<Style, Context, Source>,
+    tree: &mut AlgorithmTree<Context, Source>,
     candidates: &[(BoxId, AlgorithmNodeId)],
     mut measure: impl FnMut(
         AlgorithmSize<Option<f32>>,
@@ -1639,7 +1639,7 @@ fn supports_float_avoidance<Id>(
 }
 
 fn supports_intrinsic_shrink_to_fit<Id, Context, Source>(
-    tree: &AlgorithmTree<Style, Context, Source>,
+    tree: &AlgorithmTree<Context, Source>,
     node: AlgorithmNodeId,
     boxes: &GeneratedBoxTree<Id>,
     box_id: BoxId,
@@ -1884,7 +1884,7 @@ where
 type TableFragmentPlane = HashMap<BoxId, TableFragments>;
 
 fn collect_fragments<Id>(
-    tree: &AlgorithmTree<Style, TextMeasure, Option<BoxId>>,
+    tree: &AlgorithmTree<TextMeasure, Option<BoxId>>,
     boxes: &GeneratedBoxTree<Id>,
     node: AlgorithmNodeId,
     cursor: FragmentCursor,
@@ -2004,7 +2004,7 @@ where
     reason = "one recursive walk; six of the eight are context invariant across               the whole walk and the other two are the per-node cursor"
 )]
 fn collect_inline_fragments<Id>(
-    tree: &AlgorithmTree<Style, InlineMeasure, Vec<BoxId>>,
+    tree: &AlgorithmTree<InlineMeasure, Vec<BoxId>>,
     boxes: &GeneratedBoxTree<Id>,
     node: AlgorithmNodeId,
     cursor: FragmentCursor,

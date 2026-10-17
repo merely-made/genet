@@ -13,8 +13,9 @@
 //! events. Fetches in an older navigation are ignored when a newer generation
 //! wins; aborting their browser requests is a separate follow-up.
 
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::cell::{Cell, RefCell};
+use std::rc::{Rc, Weak};
+use std::sync::Arc;
 
 use document_session_api::session_engine::{
     DocumentSession, SessionButtonState, SessionDocumentRequest, SessionEffect,
@@ -25,7 +26,12 @@ use genet_document_resources::ResourceLimits;
 use genet_documents::{LiveryResourcePreparation, LiverySessionEngine, LocalFetcher};
 use genet_host_api::navigation::resolve_href;
 use genet_host_api::{ResourceFetchPolicy, ResourceResponse};
-use genet_render_host::{RenderCore, WindowSurface};
+use genet_render_host::{
+    BrowserFrameStartError, PendingBrowserFrame, RasterizeFailure, RenderCore, SurfaceAcquire,
+    WindowSurface,
+};
+#[cfg(feature = "browser-frame-fixture")]
+use genet_render_host::BrowserFrameSubmission;
 use netrender::{ColorLoad, ExternalTexturePlacement, NetrenderOptions, Scene};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::closure::Closure;
@@ -97,9 +103,9 @@ pub async fn start_with_limits(
         enable_vello: true,
         ..NetrenderOptions::for_untrusted_content()
     };
-    let core = RenderCore::boot_async(options)
+    let core = Arc::new(RenderCore::boot_async(options)
         .await
-        .map_err(|error| JsValue::from_str(&format!("could not boot renderer: {error}")))?;
+        .map_err(|error| JsValue::from_str(&format!("could not boot renderer: {error}")))?);
     let surface = core
         .create_surface(
             wgpu::SurfaceTarget::Canvas(canvas.clone()),
@@ -125,7 +131,15 @@ pub async fn start_with_limits(
         browser_limits: limits,
         navigation_generation: 0,
         pending_navigation: None,
+        self_weak: Weak::new(),
+        render_running: false,
+        render_queued: false,
+        surface_resize_pending: false,
+        surface_size_generation: 0,
+        render_revision: 0,
+        outdated_retry_remaining: 0,
     }));
+    host.borrow_mut().self_weak = Rc::downgrade(&host);
     host.borrow_mut().render();
     install_dom_events(&host)?;
     Ok(())
@@ -133,7 +147,7 @@ pub async fn start_with_limits(
 
 struct WebOrtet {
     canvas: HtmlCanvasElement,
-    core: RenderCore,
+    core: Arc<RenderCore>,
     surface: WindowSurface,
     address: String,
     session: Box<dyn DocumentSession<Scene>>,
@@ -148,6 +162,13 @@ struct WebOrtet {
     browser_limits: BrowserResourceLimits,
     navigation_generation: u64,
     pending_navigation: Option<BrowserNavigation>,
+    self_weak: Weak<RefCell<WebOrtet>>,
+    render_running: bool,
+    render_queued: bool,
+    surface_resize_pending: bool,
+    surface_size_generation: u64,
+    render_revision: u64,
+    outdated_retry_remaining: u8,
 }
 
 enum BrowserNavigation { Link(String), Form(SessionEncodedFormSubmission) }
@@ -159,35 +180,13 @@ struct LoadedSession {
 
 impl WebOrtet {
     fn render(&mut self) {
-        let scene = self.session.frame(self.layout_width, self.layout_height);
-        self.sync_address();
-        let (_texture, view) = self.core.rasterize_scaled(
-            &scene,
-            self.physical_width,
-            self.physical_height,
-            ColorLoad::Clear(wgpu::Color::WHITE),
-            self.scale,
-        );
-        let Some(frame) = self.surface.acquire(&self.core) else {
-            return;
-        };
-        let target = frame
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-        self.core.renderer().compose_external_texture(
-            &view,
-            &target,
-            self.surface.format(),
-            self.physical_width,
-            self.physical_height,
-            ExternalTexturePlacement::new([
-                0.0,
-                0.0,
-                self.physical_width as f32,
-                self.physical_height as f32,
-            ]),
-        );
-        self.core.queue().present(frame);
+        self.render_revision = self.render_revision.wrapping_add(1);
+        self.outdated_retry_remaining = 1;
+        self.render_queued = true;
+        if !self.render_running {
+            self.render_running = true;
+            spawn_local(run_render_queue(self.self_weak.clone()));
+        }
     }
 
     fn resize(&mut self) {
@@ -199,8 +198,8 @@ impl WebOrtet {
         if (physical_width, physical_height) != (self.physical_width, self.physical_height) {
             self.canvas.set_width(physical_width);
             self.canvas.set_height(physical_height);
-            self.surface
-                .resize(&self.core, physical_width, physical_height);
+            self.surface_resize_pending = true;
+            self.surface_size_generation = self.surface_size_generation.wrapping_add(1);
         }
         self.layout_width = layout_width;
         self.layout_height = layout_height;
@@ -267,6 +266,196 @@ impl WebOrtet {
             ((f64::from(event.client_y()) - rect.top()) * f64::from(self.layout_height) / height)
                 .clamp(0.0, f64::from(self.layout_height)) as f32,
         )
+    }
+}
+
+enum BrowserRenderAttempt {
+    Retry,
+    Pending {
+        pending: PendingBrowserFrame,
+        surface_frame: Option<(wgpu::Texture, wgpu::SurfaceTexture)>,
+        core: std::sync::Weak<RenderCore>,
+        size_generation: u64,
+        render_revision: u64,
+        outdated: bool,
+    },
+    Refused(RasterizeFailure),
+    Idle,
+}
+
+#[cfg(feature = "browser-frame-fixture")]
+fn emit_frame_fixture_event(canvas: &HtmlCanvasElement, name: &str) {
+    if let Ok(event) = Event::new(name) {
+        let _ = canvas.dispatch_event(&event);
+    }
+}
+
+/// A queued redraw does not borrow the host across an await. The checked
+/// frame admission covers retained scene production, rasterization, surface
+/// composition, and the actual GPU completion ledger. Presentation follows
+/// only after acceptance on the original Core and deadline.
+async fn run_render_queue(host: Weak<RefCell<WebOrtet>>) {
+    loop {
+        let Some(owner) = host.upgrade() else { return; };
+        let attempt = {
+            let mut state = owner.borrow_mut();
+            if !state.render_queued {
+                state.render_running = false;
+                BrowserRenderAttempt::Idle
+            } else {
+                let core = state.core.clone();
+                match core.try_begin_browser_frame() {
+                    Err(BrowserFrameStartError::Busy) => BrowserRenderAttempt::Retry,
+                    Err(BrowserFrameStartError::Refused(error)) => {
+                        state.render_queued = false;
+                        state.render_running = false;
+                        BrowserRenderAttempt::Refused(error)
+                    },
+                    Ok(mut submission) => {
+                        state.render_queued = false;
+                        let (layout_width, layout_height) = (state.layout_width, state.layout_height);
+                        let scene = state.session.frame(layout_width, layout_height);
+                        state.sync_address();
+                        let size_generation = state.surface_size_generation;
+                        let render_revision = state.render_revision;
+                        let outdated = Cell::new(false);
+                        let result = submission.submit(|commands| {
+                            if state.surface_resize_pending {
+                                let (width, height) = (state.physical_width, state.physical_height);
+                                state.surface.resize(&core, width, height);
+                                state.surface_resize_pending = false;
+                            }
+                            let (texture, view) = commands.rasterize_scaled_for(
+                                0,
+                                &scene,
+                                state.physical_width,
+                                state.physical_height,
+                                ColorLoad::Clear(wgpu::Color::WHITE),
+                                state.scale,
+                            )?;
+                            let frame = match state.surface.acquire_status(&core) {
+                                SurfaceAcquire::Frame(frame) => frame,
+                                SurfaceAcquire::DeviceLost(loss) => {
+                                    return Err(RasterizeFailure::DeviceLost(loss));
+                                },
+                                SurfaceAcquire::Reconfigured => {
+                                    outdated.set(true);
+                                    return Ok(None);
+                                },
+                                SurfaceAcquire::Unavailable { .. } => {
+                                    return Ok(None);
+                                },
+                                SurfaceAcquire::SurfaceLost => {
+                                    return Ok(None);
+                                },
+                            };
+                            let target = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
+                            commands.compose_external_texture(
+                                &view,
+                                &target,
+                                state.surface.format(),
+                                state.physical_width,
+                                state.physical_height,
+                                ExternalTexturePlacement::new([
+                                    0.0,
+                                    0.0,
+                                    state.physical_width as f32,
+                                    state.physical_height as f32,
+                                ]),
+                            )?;
+                            Ok(Some((texture, frame)))
+                        });
+                        match submission.seal() {
+                            Ok(pending) => BrowserRenderAttempt::Pending {
+                                pending,
+                                surface_frame: result.ok().flatten(),
+                                core: Arc::downgrade(&core),
+                                size_generation,
+                                render_revision,
+                                outdated: outdated.get(),
+                            },
+                            Err(error) => BrowserRenderAttempt::Refused(error),
+                        }
+                    },
+                }
+            }
+        };
+        drop(owner);
+        match attempt {
+            BrowserRenderAttempt::Idle => return,
+            BrowserRenderAttempt::Retry => {
+                gloo_timers::future::TimeoutFuture::new(16).await;
+            },
+            BrowserRenderAttempt::Refused(error) => {
+                if let Some(owner) = host.upgrade() {
+                    let mut state = owner.borrow_mut();
+                    state.render_running = false;
+                }
+                web_sys::console::warn_1(&JsValue::from_str(&format!("[ortet] browser frame refused: {error}")));
+                return;
+            },
+            BrowserRenderAttempt::Pending { pending, surface_frame, core, size_generation, render_revision, outdated } => {
+                // The fixture queues a real resize event here, after submission
+                // and outside the host borrow, before the completion wait.
+                #[cfg(feature = "browser-frame-fixture")]
+                if surface_frame.is_some() {
+                    if let Some(owner) = host.upgrade() {
+                        let canvas = owner.borrow().canvas.clone();
+                        emit_frame_fixture_event(&canvas, "ortet-fixture-submitted");
+                    }
+                }
+                match pending.wait().await {
+                    Ok(accepted) => {
+                        if let Some((_texture, frame)) = surface_frame {
+                            let (size_is_current, render_is_current) = host.upgrade().map(|owner| {
+                                let state = owner.borrow();
+                                (state.surface_size_generation == size_generation,
+                                 state.render_revision == render_revision)
+                            }).unwrap_or((false, false));
+                            match (accepted.check_current(), core.upgrade(), size_is_current && render_is_current) {
+                                (Ok(()), Some(core), true) => {
+                                    core.queue().present(frame);
+                                    #[cfg(feature = "browser-frame-fixture")]
+                                    if let Some(owner) = host.upgrade() {
+                                        let canvas = owner.borrow().canvas.clone();
+                                        emit_frame_fixture_event(&canvas, "ortet-fixture-presented");
+                                    }
+                                },
+                                (Err(error), _, _) => web_sys::console::warn_1(&JsValue::from_str(
+                                    &format!("[ortet] browser frame expired before presentation: {error}"),
+                                )),
+                                _ => {
+                                    #[cfg(feature = "browser-frame-fixture")]
+                                    if size_is_current && !render_is_current {
+                                        if let Some(owner) = host.upgrade() {
+                                            let canvas = owner.borrow().canvas.clone();
+                                            emit_frame_fixture_event(&canvas, "ortet-fixture-stale-skipped");
+                                        }
+                                    }
+                                },
+                            }
+                        }
+                        if outdated {
+                            let retry = host.upgrade().is_some_and(|owner| {
+                                let mut state = owner.borrow_mut();
+                                if state.render_revision == render_revision
+                                    && state.outdated_retry_remaining > 0 {
+                                    state.outdated_retry_remaining -= 1;
+                                    state.render_queued = true;
+                                    true
+                                } else {
+                                    false
+                                }
+                            });
+                            if retry { gloo_timers::future::TimeoutFuture::new(16).await; }
+                        }
+                    },
+                    Err(error) => web_sys::console::warn_1(&JsValue::from_str(
+                        &format!("[ortet] browser frame failed: {error}"),
+                    )),
+                }
+            },
+        }
     }
 }
 
@@ -514,6 +703,168 @@ fn redirected_navigation_address(requested: &str, final_url: &str) -> String {
     if final_url.contains('#') { return final_url.to_owned(); }
     requested.split_once('#').map_or_else(|| final_url.to_owned(),
         |(_, fragment)| format!("{final_url}#{fragment}"))
+}
+
+/// Real-WebGPU lifecycle probe used by `tests/web/checked_frame.html`.
+/// Its own shared Core keeps the destructive loss case away from the visible
+/// Ortet canvas while exercising the same lease and completion implementation.
+#[cfg(feature = "browser-frame-fixture")]
+fn submit_probe_frame(
+    submission: &mut BrowserFrameSubmission,
+    core: &RenderCore,
+    surface: &WindowSurface,
+    surface_id: u64,
+    color: wgpu::Color,
+    called: &Cell<bool>,
+) -> Result<Option<(wgpu::Texture, wgpu::SurfaceTexture)>, RasterizeFailure> {
+    let scene = Scene::new(64, 64);
+    submission.submit(|commands| {
+        called.set(true);
+        let (texture, view) = commands.rasterize_scaled_for(
+            surface_id, &scene, 64, 64, ColorLoad::Clear(color), 1.0,
+        )?;
+        let frame = match surface.acquire_status(core) {
+            SurfaceAcquire::Frame(frame) => frame,
+            SurfaceAcquire::DeviceLost(loss) => return Err(RasterizeFailure::DeviceLost(loss)),
+            SurfaceAcquire::SurfaceLost
+            | SurfaceAcquire::Reconfigured
+            | SurfaceAcquire::Unavailable { .. } => return Ok(None),
+        };
+        let target = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
+        commands.compose_external_texture(
+            &view, &target, surface.format(), 64, 64,
+            ExternalTexturePlacement::new([0.0, 0.0, 64.0, 64.0]),
+        )?;
+        Ok(Some((texture, frame)))
+    })
+}
+
+#[cfg(feature = "browser-frame-fixture")]
+#[wasm_bindgen]
+pub async fn probe_browser_frame_contract(
+    canvas_a: HtmlCanvasElement,
+    canvas_b: HtmlCanvasElement,
+    witness: js_sys::Function,
+) -> Result<String, JsValue> {
+    let core = Arc::new(RenderCore::boot_async(NetrenderOptions {
+        tile_cache_size: Some(8),
+        enable_vello: true,
+        ..NetrenderOptions::for_untrusted_content()
+    }).await.map_err(|error| JsValue::from_str(&format!("probe boot: {error}")))?);
+    let surface_a = core.create_surface(wgpu::SurfaceTarget::Canvas(canvas_a), 64, 64)
+        .map_err(|error| JsValue::from_str(&format!("surface A: {error}")))?;
+    let surface_b = core.create_surface(wgpu::SurfaceTarget::Canvas(canvas_b), 64, 64)
+        .map_err(|error| JsValue::from_str(&format!("surface B: {error}")))?;
+    let red = wgpu::Color { r: 0.8, g: 0.1, b: 0.1, a: 1.0 };
+    let blue = wgpu::Color { r: 0.1, g: 0.2, b: 0.8, a: 1.0 };
+    let mut presented_a = 0u32;
+    let mut presented_b = 0u32;
+
+    let unsubmitted = core.try_begin_browser_frame()
+        .map_err(|error| JsValue::from_str(&format!("unsubmitted admission: {error:?}")))?;
+    if !matches!(core.try_begin_browser_frame(), Err(BrowserFrameStartError::Busy)) {
+        return Err(JsValue::from_str("unsubmitted lease did not own the shared Core"));
+    }
+    drop(unsubmitted);
+    let mut busy = core.try_begin_browser_frame()
+        .map_err(|error| JsValue::from_str(&format!("busy admission: {error:?}")))?;
+    if !matches!(core.try_begin_browser_frame(), Err(BrowserFrameStartError::Busy)) {
+        return Err(JsValue::from_str("shared-Core busy admission was not refused"));
+    }
+    let a_called = Cell::new(false);
+    let a_frame = submit_probe_frame(&mut busy, &core, &surface_a, 0xa, red, &a_called)
+        .map_err(|error| JsValue::from_str(&format!("surface A submit: {error}")))?
+        .ok_or_else(|| JsValue::from_str("surface A did not acquire"))?;
+    if !a_called.get() { return Err(JsValue::from_str("surface A submission did not run")); }
+    let accepted = busy.seal().map_err(|error| JsValue::from_str(&format!("surface A seal: {error}")))?
+        .wait().await.map_err(|error| JsValue::from_str(&format!("surface A completion: {error}")))?;
+    accepted.check_current().map_err(|error| JsValue::from_str(&format!("surface A acceptance: {error}")))?;
+    let (_texture, frame) = a_frame;
+    core.queue().present(frame);
+    presented_a += 1;
+    drop(accepted);
+
+    let mut dropped = core.try_begin_browser_frame()
+        .map_err(|error| JsValue::from_str(&format!("drop admission: {error:?}")))?;
+    let drop_called = Cell::new(false);
+    let dropped_frame = submit_probe_frame(&mut dropped, &core, &surface_a, 0xa, red, &drop_called)
+        .map_err(|error| JsValue::from_str(&format!("drop submit: {error}")))?
+        .ok_or_else(|| JsValue::from_str("drop frame did not acquire"))?;
+    if !drop_called.get() { return Err(JsValue::from_str("dropped frame submission did not run")); }
+    let pending = dropped.seal().map_err(|error| JsValue::from_str(&format!("drop seal: {error}")))?;
+    drop(dropped_frame); // Submitted but deliberately never presented.
+    drop(pending);
+    if !matches!(core.try_begin_browser_frame(), Err(BrowserFrameStartError::Busy)) {
+        return Err(JsValue::from_str("dropped pending frame released its Core before completion"));
+    }
+    let drop_deadline = js_sys::Date::now() + 6000.0;
+    let mut after_drop = loop {
+        match core.try_begin_browser_frame() {
+            Ok(frame) => break frame,
+            Err(BrowserFrameStartError::Busy) if js_sys::Date::now() < drop_deadline => {
+                gloo_timers::future::TimeoutFuture::new(16).await;
+            },
+            Err(other) => return Err(JsValue::from_str(&format!("dropped frame did not retire: {other:?}"))),
+        }
+    };
+    let b_called = Cell::new(false);
+    let b_frame = submit_probe_frame(&mut after_drop, &core, &surface_b, 0xb, blue, &b_called)
+        .map_err(|error| JsValue::from_str(&format!("surface B submit: {error}")))?
+        .ok_or_else(|| JsValue::from_str("surface B did not acquire"))?;
+    if !b_called.get() { return Err(JsValue::from_str("surface B submission did not run")); }
+    let accepted = after_drop.seal().map_err(|error| JsValue::from_str(&format!("surface B seal: {error}")))?
+        .wait().await.map_err(|error| JsValue::from_str(&format!("surface B completion: {error}")))?;
+    accepted.check_current().map_err(|error| JsValue::from_str(&format!("surface B acceptance: {error}")))?;
+    let (_texture, frame) = b_frame;
+    core.queue().present(frame);
+    presented_b += 1;
+    drop(accepted);
+
+    // The page reads actual A/B canvas pixels before the destructive loss
+    // case can clear those browser surfaces. Its Promise must settle first.
+    let proof = witness.call0(&JsValue::NULL)?;
+    JsFuture::from(proof.dyn_into::<js_sys::Promise>()?).await?;
+
+    let before_refusals = (presented_a, presented_b);
+
+    let mut expired = core.try_begin_browser_frame()
+        .map_err(|error| JsValue::from_str(&format!("deadline admission: {error:?}")))?;
+    gloo_timers::future::TimeoutFuture::new(5100).await;
+    let expired_called = Cell::new(false);
+    if !matches!(submit_probe_frame(&mut expired, &core, &surface_a, 0xa, red, &expired_called), Err(RasterizeFailure::ProviderError(_)))
+        || expired_called.get() {
+        return Err(JsValue::from_str("expired frame was not refused by its original deadline"));
+    }
+    drop(expired);
+    if (presented_a, presented_b) != before_refusals {
+        return Err(JsValue::from_str("deadline refusal presented a frame"));
+    }
+
+    let mut lost = core.try_begin_browser_frame()
+        .map_err(|error| JsValue::from_str(&format!("loss admission: {error:?}")))?;
+    core.device().destroy();
+    let loss_deadline = js_sys::Date::now() + 5000.0;
+    while core.device_failure().is_none() && js_sys::Date::now() < loss_deadline {
+        gloo_timers::future::TimeoutFuture::new(16).await;
+    }
+    if core.device_failure().is_none() {
+        return Err(JsValue::from_str("actual device-loss callback did not arrive"));
+    }
+    // Both facts now hold. Loss must win even though the original clock has
+    // expired and cancellation has already retired the admission.
+    gloo_timers::future::TimeoutFuture::new(5100).await;
+    let lost_called = Cell::new(false);
+    if !matches!(submit_probe_frame(&mut lost, &core, &surface_b, 0xb, blue, &lost_called), Err(RasterizeFailure::DeviceLost(_)))
+        || lost_called.get() {
+        return Err(JsValue::from_str("device loss did not outrank frame deadline"));
+    }
+    if !matches!(core.try_begin_browser_frame(), Err(BrowserFrameStartError::Refused(RasterizeFailure::DeviceLost(_)))) {
+        return Err(JsValue::from_str("lost Core admitted a new frame"));
+    }
+    if (presented_a, presented_b) != before_refusals {
+        return Err(JsValue::from_str("device-loss refusal presented a frame"));
+    }
+    Ok(format!("unsubmitted=reusable busy=refused drop=retired_after_completion presented_a={presented_a} presented_b={presented_b} timeout=refused loss=priority refusal_presents=0"))
 }
 
 #[cfg(test)]

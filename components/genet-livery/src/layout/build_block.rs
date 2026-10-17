@@ -75,7 +75,7 @@ pub(in crate::layout) struct BuildState<'a, D: LayoutDom> {
     pub(in crate::layout) dom: &'a D,
     pub(in crate::layout) styles: &'a StylePlane<D::NodeId>,
     pub(in crate::layout) boxes: &'a GeneratedBoxTree<D::NodeId>,
-    pub(in crate::layout) tree: AlgorithmTree<Style, TextMeasure, Option<BoxId>>,
+    pub(in crate::layout) tree: AlgorithmTree<TextMeasure, Option<BoxId>>,
     pub(in crate::layout) image_sources: &'a dyn crate::ImageSourceLookup,
     pub(in crate::layout) text: Option<&'a mut TextSystem>,
     pub(in crate::layout) table_shadow: TableShadowLedger,
@@ -157,7 +157,7 @@ where
         style.size.width = Dimension::auto();
         style.min_size.width = Dimension::auto();
         style.max_size.width = Dimension::auto();
-        let direct_child_width = |tree: &AlgorithmTree<Style, TextMeasure, Option<BoxId>>| {
+        let direct_child_width = |tree: &AlgorithmTree<TextMeasure, Option<BoxId>>| {
             tree.children(cell_node)
                 .iter()
                 .filter(|child| !tree.block_style(**child).is_out_of_flow())

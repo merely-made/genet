@@ -803,7 +803,7 @@ where
 }
 
 pub(in crate::layout) fn collect_atomic_fragments(
-    tree: &AlgorithmTree<Style, TextMeasure, Option<BoxId>>,
+    tree: &AlgorithmTree<TextMeasure, Option<BoxId>>,
     node: AlgorithmNodeId,
     parent_origin: Point<f32>,
     output: &mut Vec<AtomicFragment>,

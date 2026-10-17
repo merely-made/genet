@@ -364,6 +364,15 @@ pub struct PendingBrowserFrame {
     diagnostics:Option<crate::BrowserFrameQualityObservation>,
 }
 impl PendingBrowserFrame {
+    /// Yield to browser turns while the submitted GPU work and Classic quality
+    /// ledger settle. `poll` enforces the original five-second deadline and
+    /// gives device loss priority over timeout.
+    pub async fn wait(mut self) -> Result<AcceptedBrowserFrame, RasterizeFailure> {
+        loop {
+            if let Some(result) = self.poll() { return result; }
+            gloo_timers::future::TimeoutFuture::new(16).await;
+        }
+    }
     #[cfg(feature = "browser-surface-readback-diagnostics")]
     pub fn quality_observation(&self) -> Option<crate::BrowserFrameQualityObservation> { self.diagnostics.clone() }
     pub fn poll(&mut self) -> Option<Result<AcceptedBrowserFrame, RasterizeFailure>> {

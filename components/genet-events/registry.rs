@@ -234,6 +234,38 @@ impl Registry {
         n
     }
 
+    /// A registry holding only the listeners of non-node targets, with their
+    /// ids and counters intact. A cloned script heap keeps its windows and
+    /// plain `EventTarget`s (and their callbacks) while the DOM arena, and so
+    /// every node target, starts over.
+    pub fn without_nodes(&self) -> Registry {
+        let mut copy = Registry {
+            next_listener: self.next_listener,
+            next_dispatch: self.next_dispatch,
+            ..Registry::default()
+        };
+        for (target, list) in &self.lists {
+            if matches!(target, TargetKey::Node(_)) {
+                continue;
+            }
+            for l in list {
+                let fresh = Rc::new(Listener {
+                    id: l.id,
+                    owner: l.owner,
+                    token: l.token,
+                    event_type: l.event_type.clone(),
+                    capture: l.capture,
+                    once: l.once,
+                    passive: l.passive,
+                    removed: Cell::new(false),
+                });
+                *copy.type_counts.entry(fresh.event_type.clone()).or_default() += 1;
+                copy.lists.entry(*target).or_default().push(fresh);
+            }
+        }
+        copy
+    }
+
     pub fn target_count(&self) -> usize {
         self.lists.len()
     }

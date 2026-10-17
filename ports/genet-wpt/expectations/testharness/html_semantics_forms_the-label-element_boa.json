@@ -4,7 +4,7 @@
   "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
   "policy": "exact",
   "renderer": "livery",
-  "runner_sha256": "f89342870cbc035714f6f1511a05e09b036938dc24562949371c7d16c11d66a7",
+  "runner_sha256": "f9804e1739e5774a192bc839d445e911cda79c139b590cc6c34d46d9f937fc88",
   "subset": "html/semantics/forms/the-label-element",
   "tests": {
     "html/semantics/forms/the-label-element/clicking-interactive-content.html": {

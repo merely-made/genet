@@ -4,7 +4,7 @@
   "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
   "policy": "exact",
   "renderer": "livery",
-  "runner_sha256": "f89342870cbc035714f6f1511a05e09b036938dc24562949371c7d16c11d66a7",
+  "runner_sha256": "f9804e1739e5774a192bc839d445e911cda79c139b590cc6c34d46d9f937fc88",
   "subset": "pointerevents",
   "tests": {
     "pointerevents/bugs/drag_on_added_range_input.html": {
@@ -196,26 +196,12 @@
       "subtests_total": 1
     },
     "pointerevents/coalesced_events_attributes_under_load.https.optional.html?mouse": {
-      "status": "fail",
-      "subtests": [
-        {
-          "name": "Coalesced pointermoves under load",
-          "status": "fail"
-        }
-      ],
-      "subtests_passed": 0,
-      "subtests_total": 1
+      "reason": "hang-killed",
+      "status": "error"
     },
     "pointerevents/coalesced_events_attributes_under_load.https.optional.html?pen": {
-      "status": "fail",
-      "subtests": [
-        {
-          "name": "Coalesced pointermoves under load",
-          "status": "fail"
-        }
-      ],
-      "subtests_passed": 0,
-      "subtests_total": 1
+      "reason": "hang-killed",
+      "status": "error"
     },
     "pointerevents/coalesced_events_attributes_under_load.https.optional.html?touch": {
       "reason": "harness-timeout",
@@ -253,11 +239,11 @@
       "subtests_total": 4
     },
     "pointerevents/compat/pointerevent_mouse-on-object.html": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "pointerevents/compat/pointerevent_mouse-pointer-on-scrollbar.html": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "pointerevents/compat/pointerevent_mouse-pointer-preventdefault-passive.html": {
@@ -1544,23 +1530,23 @@
       "subtests_total": 6
     },
     "pointerevents/pointerevent_click_during_parent_capture.html?pointerType=mouse&preventDefault=": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "pointerevents/pointerevent_click_during_parent_capture.html?pointerType=mouse&preventDefault=pointerdown": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "pointerevents/pointerevent_click_during_parent_capture.html?pointerType=touch&preventDefault=": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "pointerevents/pointerevent_click_during_parent_capture.html?pointerType=touch&preventDefault=pointerdown": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "pointerevents/pointerevent_click_during_parent_capture.html?pointerType=touch&preventDefault=touchstart": {
-      "reason": "harness-timeout",
+      "reason": "harness-error",
       "status": "error"
     },
     "pointerevents/pointerevent_click_is_a_pointerevent.html?mouse": {
@@ -1839,7 +1825,8 @@
       "status": "error"
     },
     "pointerevents/pointerevent_fractional_coordinates_untrusted.html": {
-      "status": "fail",
+      "reason": "harness-error",
+      "status": "error",
       "subtests": [
         {
           "name": "PointerEvent.pointerdown.screenX",

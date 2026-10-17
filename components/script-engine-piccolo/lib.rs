@@ -29,7 +29,7 @@
 //!   are no Promise combinators (`.then`, `Promise.all`). `eval` of a chunk
 //!   that awaits *yields* rather than returning its final value (the host sees
 //!   completion via `pump` after `settle`, like top-level await).
-//! - `pump` drains the runnable set fully (no `Budget::Steps` honoring yet);
+//! - `pump` refuses `Budget::Steps` and drains only on `Budget::Unbounded`;
 //!   Lua has no microtask queue, so it returns `Quiescent`.
 
 use std::cell::{Cell, RefCell};
@@ -44,7 +44,7 @@ use piccolo::{
     StashedExecutor, StashedValue, UserData, Value, Variadic,
 };
 use script_engine_api::{
-    Budget, CallCx, HostData, NativeFn, PromiseToken, PumpOutcome, ReflectorData, ScriptEngine,
+    BoundedEvalError, Budget, CallCx, ExecutionCapabilities, HostData, NativeFn, PromiseToken, PumpOutcome, ReflectorData, ScriptEngine,
     ScriptEngineLive,
 };
 
@@ -298,6 +298,9 @@ impl PiccoloEngine {
 }
 
 impl ScriptEngine for PiccoloEngine {
+    fn execution_capabilities() -> ExecutionCapabilities {
+        ExecutionCapabilities { bounded_eval_vm: true, ..ExecutionCapabilities::default() }
+    }
     type Value = StashedValue;
     type Error = String;
     type CallCx<'a> = PiccoloCallCx<'a>;
@@ -325,7 +328,10 @@ impl ScriptEngine for PiccoloEngine {
         self.take_first(&executor)
     }
 
-    fn eval_bounded(&mut self, source: &str, budget: Budget) -> Result<Self::Value, Self::Error> {
+    fn eval_bounded(&mut self, source: &str, budget: Budget) -> Result<Self::Value, BoundedEvalError<Self::Error>> {
+        if budget == Budget::Steps(0) {
+            return Err(BoundedEvalError::Engine("script budget exhausted before execution".to_owned()));
+        }
         let src = source.as_bytes().to_vec();
         let executor: StashedExecutor = self
             .lua
@@ -333,7 +339,7 @@ impl ScriptEngine for PiccoloEngine {
                 let closure = Closure::load(ctx, None, &src[..])?;
                 Ok(ctx.stash(Executor::start(ctx, closure.into(), ())))
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| BoundedEvalError::Engine(e.to_string()))?;
 
         // Step the executor with metered fuel, the bounded mirror of
         // `Lua::finish`. A `Steps(n)` budget caps the number of fuel
@@ -350,21 +356,21 @@ impl ScriptEngine for PiccoloEngine {
             let done = self
                 .lua
                 .enter(|ctx| ctx.fetch(&executor).step(ctx, &mut fuel))
-                .map_err(|e| format!("{e:?}"))?;
+                .map_err(|e| BoundedEvalError::Engine(format!("{e:?}")))?;
             if done {
                 break;
             }
             steps += 1;
             if let Some(max) = max_steps {
                 if steps >= max {
-                    return Err(format!(
+                    return Err(BoundedEvalError::Engine(format!(
                         "script budget exhausted after {steps} steps (~{} fuel)",
                         steps as i64 * FUEL_PER_STEP as i64
-                    ));
+                    )));
                 }
             }
         }
-        self.take_first(&executor)
+        self.take_first(&executor).map_err(BoundedEvalError::Engine)
     }
 
     fn value_to_string(&mut self, value: &Self::Value) -> Result<String, Self::Error> {
@@ -375,12 +381,10 @@ impl ScriptEngine for PiccoloEngine {
     }
 
     fn set_global(&mut self, name: &str, value: &Self::Value) -> Result<(), Self::Error> {
-        // Piccolo's `set_global` wants a `&'static str`; globals are installed a
-        // bounded number of times at setup, so leaking is acceptable (matches Nova).
-        let name: &'static str = Box::leak(name.to_string().into_boxed_str());
         self.lua.enter(|ctx| {
             let v = ctx.fetch(value);
-            ctx.set_global(name, v);
+            let key = piccolo::String::from_slice(&ctx, name.as_bytes());
+            ctx.globals().set(ctx, key, v).expect("string table key");
         });
         Ok(())
     }
@@ -394,7 +398,6 @@ impl ScriptEngine for PiccoloEngine {
         name: &str,
         _length: usize,
     ) -> Result<(), Self::Error> {
-        let name: &'static str = Box::leak(name.to_string().into_boxed_str());
         let slot = self.slot.clone();
         self.lua.enter(|ctx| {
             // The trampoline captures the host slot (a `'static` `Rc`) and is
@@ -422,12 +425,18 @@ impl ScriptEngine for PiccoloEngine {
                     },
                 }
             });
-            ctx.set_global(name, callback);
+            let key = piccolo::String::from_slice(&ctx, name.as_bytes());
+            ctx.globals()
+                .set(ctx, key, callback)
+                .expect("string table key");
         });
         Ok(())
     }
 
-    fn pump(&mut self, _budget: Budget) -> PumpOutcome {
+    fn pump(&mut self, budget: Budget) -> PumpOutcome {
+        if matches!(budget, Budget::Steps(_)) {
+            return PumpOutcome::UnsupportedBound;
+        }
         // Drive every executor a settle made runnable to completion (or its next
         // `await`, which re-parks it in `waiters`). Lua has no microtask queue,
         // so once the runnable set drains the engine is quiescent. A fresh
@@ -547,7 +556,10 @@ mod tests {
 
     #[test]
     fn eval_bounded_runs_a_normal_script_to_completion() {
+        assert!(PiccoloEngine::execution_capabilities().bounded_eval_vm);
+        assert!(!PiccoloEngine::execution_capabilities().bounded_pump_jobs);
         let mut engine = PiccoloEngine::new().unwrap();
+        assert_eq!(engine.pump(Budget::Steps(1)), PumpOutcome::UnsupportedBound);
         // A terminating loop well under the cap completes normally.
         let v = engine
             .eval_bounded(
@@ -565,8 +577,8 @@ mod tests {
             .eval_bounded("while true do end", Budget::Steps(50))
             .unwrap_err();
         assert!(
-            err.contains("budget exhausted"),
-            "a runaway script must error, got: {err}"
+            matches!(&err, BoundedEvalError::Engine(message) if message.contains("budget exhausted")),
+            "a runaway script must exhaust its fuel, got: {err:?}"
         );
         // The engine is still usable after stopping a runaway.
         let v = engine
@@ -583,6 +595,33 @@ mod tests {
 
         let from_lua = engine.eval("return node").unwrap();
         assert_eq!(engine.reflector_data(&from_lua), Some(0x1234));
+    }
+
+    #[test]
+    fn dynamic_registration_names_survive_input_drop() {
+        struct Marker;
+        impl NativeFn<PiccoloEngine> for Marker {
+            fn call(cx: &mut PiccoloCallCx<'_>) -> Result<StashedValue, String> {
+                Ok(cx.undefined())
+            }
+        }
+
+        for i in 0..16 {
+            let mut engine = PiccoloEngine::new().unwrap();
+            let value = engine.eval("return 42").unwrap();
+            let global_name = format!("temporaryGlobal{i}");
+            let function_name = format!("temporaryFunction{i}");
+            engine.set_global(&global_name, &value).unwrap();
+            engine.set_function::<Marker>(&function_name, 0).unwrap();
+            drop(global_name);
+            drop(function_name);
+            let result = engine
+                .eval(&format!(
+                    "return temporaryGlobal{i} == 42 and type(temporaryFunction{i}) == 'function'"
+                ))
+                .unwrap();
+            assert_eq!(engine.value_to_string(&result).unwrap(), "true");
+        }
     }
 
     #[test]

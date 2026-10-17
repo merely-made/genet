@@ -19,7 +19,8 @@ mod native {
 
     use nova_vm::{
         ecmascript::{
-            AbstractModule, Agent, AgentOptions, ArgumentsList, Behaviour, BuiltinFunctionArgs,
+            AbstractModule, Agent, AgentOptions, ArgumentsList, Behaviour, BuiltinFunction,
+            BuiltinFunctionArgs,
             EmbedderObject, ExceptionType, Function, GcAgent, GraphLoadingStateRecord, HostDefined,
             HostHooks, InternalMethods, Job, JsError, ModuleRequest, Object, OrdinaryObject,
             PromiseCapability, PropertyDescriptor, PropertyKey, Realm, RealmRoot, Referrer,
@@ -245,18 +246,56 @@ mod native {
         }
     }
 
-    fn leak_host_hooks(jobs: Rc<RefCell<VecDeque<Job>>>) -> &'static GenetHostHooks {
-        Box::leak(Box::new(GenetHostHooks {
+    fn new_host_hooks(jobs: Rc<RefCell<VecDeque<Job>>>) -> Box<GenetHostHooks> {
+        Box::new(GenetHostHooks {
             jobs,
             module_resolver: Cell::new(None),
             resolver_panic: RefCell::new(None),
             module_cache: RefCell::new(HashMap::new()),
             module_realm: Cell::new(None),
-        }))
+        })
+    }
+
+    /// Vano 7235209 stores this reference in `Agent`, which is owned only by
+    /// `NovaEngine`. `NovaEngine` drops `agent` before `hook_owner`; snapshot
+    /// clones receive a separate hook owner. The box keeps the pointee fixed.
+    fn agent_hooks(owner: &GenetHostHooks) -> &'static GenetHostHooks {
+        // SAFETY: The only callers immediately install this reference in their
+        // own agent and retain the box in the same engine. Field drop order
+        // destroys that agent before its box. No agent or hook reference escapes
+        // the engine; `snapshot_clone` substitutes the clone's own hooks.
+        unsafe { std::mem::transmute(owner) }
+    }
+
+    /// Vano 7235209 uses `BuiltinFunctionArgs::name` only to construct a VM
+    /// string before `create_builtin_function` returns. It does not retain the
+    /// borrowed slice. Keep the lifetime erasure inside that call.
+    fn create_named_host_function<'gc>(
+        agent: &mut Agent,
+        behaviour: Behaviour,
+        name: &str,
+        length: u32,
+        realm: Option<Realm<'gc>>,
+        gc: NoGcScope<'gc, '_>,
+    ) -> BuiltinFunction<'gc> {
+        // SAFETY: The pinned Vano implementation copies `args.name` into its
+        // own `String` before returning and stores only that VM string.
+        let name: &'static str = unsafe { std::mem::transmute(name) };
+        create_builtin_function(
+            agent,
+            behaviour,
+            BuiltinFunctionArgs {
+                length,
+                name,
+                realm,
+                ..Default::default()
+            },
+            gc,
+        )
     }
 
     use script_engine_api::{
-        Budget, CallCx, HostData, MAIN_REALM, NativeFn, PromiseToken, PumpOutcome, RealmError,
+        Budget, CallCx, ExecutionCapabilities, HostData, MAIN_REALM, NativeFn, PromiseToken, PumpOutcome, RealmError,
         RealmId, ReflectorData, ScriptEngine, ScriptEngineLive, ScriptEngineSnapshot,
         WINDOW_PROXY_ACCESS_SLOT, WINDOW_PROXY_HANDLER_SLOT, WINDOW_PROXY_TARGET_SLOT,
         WINDOW_PROXY_TRAPS,
@@ -1041,12 +1080,14 @@ mod native {
         /// another. Nova caps an agent at 256 simultaneous realms.
         registry: Rc<RealmRegistry>,
         jobs: Rc<RefCell<VecDeque<Job>>>,
-        /// The leaked (`'static`) host hooks installed on `agent`; `eval_module` sets
-        /// their module resolver per call.
+        /// Hooks installed on `agent`; `eval_module` sets their resolver per call.
         hooks: &'static GenetHostHooks,
         /// Release queue for dropped [`NovaValue`]s (shared with the realm host slot).
         /// Drained at each native call (in the trampoline) and at each GC tick.
         release: ReleaseQueue,
+        /// Must remain after `agent` in field order: Vano stores a hook reference
+        /// in the agent and requires it through the agent's entire lifetime.
+        hook_owner: Box<GenetHostHooks>,
     }
 
     impl NovaEngine {
@@ -1090,7 +1131,8 @@ mod native {
             });
 
             let jobs: Rc<RefCell<VecDeque<Job>>> = Rc::new(RefCell::new(VecDeque::new()));
-            let hooks = leak_host_hooks(jobs.clone());
+            let hook_owner = new_host_hooks(jobs.clone());
+            let hooks = agent_hooks(&hook_owner);
             let release: ReleaseQueue = Rc::new(RefCell::new(Vec::new()));
             let mut agent = self.agent.snapshot_clone(hooks);
             let registry = Rc::new(RealmRegistry {
@@ -1157,11 +1199,15 @@ mod native {
                 jobs,
                 hooks,
                 release,
+                hook_owner,
             })
         }
     }
 
     impl ScriptEngine for NovaEngine {
+        fn execution_capabilities() -> ExecutionCapabilities {
+            ExecutionCapabilities { bounded_pump_jobs: true, ..ExecutionCapabilities::default() }
+        }
         // Nova's `Global` has no `Drop`, so the held value type is a `NovaValue`
         // wrapper that parks its `Global` on the release queue when dropped.
         type Value = NovaValue;
@@ -1169,11 +1215,9 @@ mod native {
         type CallCx<'a> = NovaCallCx<'a>;
 
         fn new() -> Result<Self, Self::Error> {
-            // The hooks must be `&'static`; leak one per engine (a few words +
-            // shared queue handle). Acceptable for the engine lifetime; the proper
-            // fix is a non-'static hooks API upstream.
             let jobs: Rc<RefCell<VecDeque<Job>>> = Rc::new(RefCell::new(VecDeque::new()));
-            let hooks = leak_host_hooks(jobs.clone());
+            let hook_owner = new_host_hooks(jobs.clone());
+            let hooks = agent_hooks(&hook_owner);
             let mut agent = GcAgent::new(AgentOptions::default(), hooks);
             let realm = agent.create_default_realm();
             // One release queue, shared between the engine (drained at GC ticks) and
@@ -1209,6 +1253,7 @@ mod native {
                 jobs,
                 hooks,
                 release,
+                hook_owner,
             })
         }
 
@@ -1511,15 +1556,14 @@ mod native {
             name: &str,
             length: usize,
         ) -> Result<(), Self::Error> {
-            // Nova wants a `&'static str` function name; builtins are registered a
-            // bounded number of times at setup, so leaking is acceptable here.
-            let name: &'static str = Box::leak(name.to_string().into_boxed_str());
             let mut out = Err("set_function did not run".to_string());
             self.agent.run_in_realm(&self.realm, |agent, mut gc| {
-                let func = create_builtin_function(
+                let func = create_named_host_function(
                     agent,
                     Behaviour::Regular(nova_trampoline::<F>),
-                    BuiltinFunctionArgs::new(length as u32, name),
+                    name,
+                    length as u32,
+                    None,
                     gc.nogc(),
                 );
                 let global = agent.current_realm(gc.nogc()).global_object(agent).unbind();
@@ -2031,11 +2075,12 @@ mod native {
             name: &str,
             length: usize,
         ) -> Result<(), RealmError> {
-            let name: &'static str = Box::leak(name.to_string().into_boxed_str());
-            let func = create_builtin_function(
+            let func = create_named_host_function(
                 cx.agent,
                 Behaviour::Regular(nova_trampoline::<F>),
-                BuiltinFunctionArgs::new(length as u32, name),
+                name,
+                length as u32,
+                None,
                 cx.gc.nogc(),
             );
             let global = cx
@@ -2476,9 +2521,6 @@ mod native {
                 return Err(RealmError::NoSuchRealm(realm));
             }
             let registry = self.registry.clone();
-            // Nova wants a `&'static str` name; the same bounded-setup leak the
-            // single-realm `set_function` takes.
-            let name: &'static str = Box::leak(name.to_string().into_boxed_str());
             let mut out = Err(RealmError::Engine(
                 "set_function_in_realm did not run".to_string(),
             ));
@@ -2490,14 +2532,12 @@ mod native {
                     .expect("checked realm")
                     .get(agent, gc.nogc())
                     .unbind();
-                let func = create_builtin_function(
+                let func = create_named_host_function(
                     agent,
                     Behaviour::Regular(nova_trampoline::<F>),
-                    BuiltinFunctionArgs::new_with_realm(
-                        length as u32,
-                        name,
-                        target.bind(gc.nogc()),
-                    ),
+                    name,
+                    length as u32,
+                    Some(target.bind(gc.nogc())),
                     gc.nogc(),
                 );
                 let global = target.bind(gc.nogc()).global_object(agent).unbind();
@@ -2822,6 +2862,52 @@ mod native {
         }
 
         #[test]
+        fn registrations_and_pending_jobs_release_with_each_engine() {
+            struct Marker;
+            impl NativeFn<NovaEngine> for Marker {
+                fn call(cx: &mut NovaCallCx<'_>) -> Result<NovaValue, String> {
+                    Ok(cx.undefined())
+                }
+            }
+
+            for i in 0..16 {
+                let mut engine = NovaEngine::new().unwrap();
+                let jobs = Rc::downgrade(&engine.jobs);
+                let name = format!("temporaryHostFunction{i}");
+                engine.set_function::<Marker>(&name, 0).unwrap();
+                drop(name);
+                let reflected = engine
+                    .eval(&format!("temporaryHostFunction{i}.name"))
+                    .unwrap();
+                assert_eq!(
+                    engine.value_to_string(&reflected).unwrap(),
+                    format!("temporaryHostFunction{i}")
+                );
+                drop(reflected);
+
+                let mut clone = engine.snapshot_clone().unwrap();
+                let clone_jobs = Rc::downgrade(&clone.jobs);
+                let cloned_name = clone
+                    .eval(&format!("temporaryHostFunction{i}.name"))
+                    .unwrap();
+                assert_eq!(
+                    clone.value_to_string(&cloned_name).unwrap(),
+                    format!("temporaryHostFunction{i}")
+                );
+                drop(cloned_name);
+
+                engine
+                    .eval("Promise.resolve().then(() => { globalThis.done = true; });")
+                    .unwrap();
+                assert!(!engine.jobs.borrow().is_empty());
+                drop(engine);
+                assert!(jobs.upgrade().is_none(), "engine retained its job queue");
+                drop(clone);
+                assert!(clone_jobs.upgrade().is_none(), "clone retained its job queue");
+            }
+        }
+
+        #[test]
         fn host_promise_bridges_js_await() {
             let mut engine = NovaEngine::new().unwrap();
 
@@ -2868,6 +2954,16 @@ mod native {
         #[test]
         fn budgeted_pump_bounds_a_microtask_chain() {
             let mut engine = NovaEngine::new().unwrap();
+            let bounds = NovaEngine::execution_capabilities();
+            assert!(bounds.bounded_pump_jobs);
+            assert!(!bounds.bounded_eval_vm);
+            assert!(!bounds.bounded_pump_vm);
+            assert!(matches!(
+                engine.eval_bounded("globalThis.boundRan = true", Budget::Steps(1)),
+                Err(script_engine_api::BoundedEvalError::Unsupported)
+            ));
+            let marker = engine.eval("typeof boundRan").unwrap();
+            assert_eq!(engine.value_to_string(&marker).unwrap(), "undefined");
             // A chain of `.then` continuations, each bumping a global counter. The chain
             // is lazy (each `.then` enqueues the next reaction only as the prior resolves),
             // so it is a run of distinct jobs Nova can step through one at a time.

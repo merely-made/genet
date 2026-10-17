@@ -1094,6 +1094,20 @@ pub trait DocumentSession<F>: Any {
     /// Visibility hint (a hidden tile may skip raster-adjacent work).
     fn set_hidden(&mut self, _hidden: bool) {}
 
+    /// Whether the host can suspend and resume this session's task delivery.
+    /// A hidden presentation still runs throttled work and is distinct from
+    /// this lifecycle control.
+    fn supports_freeze_resume(&self) -> bool {
+        false
+    }
+
+    /// Suspend all document task delivery after its lifecycle event. Sessions
+    /// without this capability leave the request unchanged.
+    fn freeze(&mut self) {}
+
+    /// Restore task delivery and dispatch the document's resume event.
+    fn resume(&mut self) {}
+
     /// A structural [`ContentReport`] of the addressed content, for hosts that
     /// cannot downcast to the concrete session type (it may be private to its
     /// engine crate — turnstone's one registered lane is exactly that case, which

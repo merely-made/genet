@@ -1,5 +1,17 @@
 # Genet architecture and removal audit
 
+## Slice 2: R7/R8/R14/I2, 2026-10-17
+
+Headless and live documents now share lifecycle state and hidden wake admission. External completions can wake independently of a long timer. Freeze/resume crosses the session adapter and Ortet suspend/resume boundary. Execution capabilities distinguish bounded VM evaluation, completed-job counts and work inside each job; unsupported required bounds refuse before executing. Nova owns host hooks and copies names through the exact pinned Vano contract; Piccolo retains VM-owned registration names.
+
+**R7 remains partial.** Default worker creation now refuses with NotSupportedError because no backend can enforce VM cancellation. Hosts may explicitly select trusted cooperative workers, including before parser execution. Snapshot and child runtimes retain this policy. Shutdown reports direct joined/detached threads and explicitly marks descendants untracked. This changes the default Worker capability; it does not interrupt arbitrary loops or prove whole-tree reclamation.
+
+Verification: **131 passed, zero failed, zero ignored**, plus the Ortet scripted-Nova all-target compile check. Gates cover engine registration teardown, bounded-operation refusal, worker admission/shutdown/snapshots, headless/live lifecycle, external-completion wakes, retained animation mutation, and the production Ortet triangle draw with GPU readback. The host check caught an earlier R9 caller that still assumed infallible WebGL creation; it now propagates failure and rejects oversized contexts before registration. All five Ortet graphics tests ran without a device skip. Exact logs, source hashes, superseded attempts and limits are in the [slice 2 receipt](receipts/2026-10-17_remaining_architecture_slice2.json).
+
+Limits: physical OS suspend/resume was not exercised. Normal runtime checkpoints remain explicitly unbounded. Registration queue teardown tests are not total process allocation accounting; the unsafe owned-hook and synchronous name-copy contract depends on exact Vano revision `7235209`. Tests remained serialized under the 5 GiB memory, zero swap, 150% CPU and one-job limits.
+
+The previously unpublished NetRender image-sharing revision `e8cda06` is now reachable from supplier main `69d73c1`; the publication merge changed only repository tooling text. Its earlier rendering evidence is retained, with no new supplier runtime test claim. Mere adoption remains separate.
+
 ## Slice 1: I13/L10/L11/L12, 2026-10-17
 
 Shader output normalization and float precision now belong to the parsed compiler representation; WebGL keeps the original source. Logical axes share the dependency-neutral `genet-css-flow` mapping. The synthetic fragmentation continuation kernel is off by default behind `experimental-fragmentation-kernel`; live unsupported markers and the six ignored end-to-end repros remain. The property census is explicitly a historical baseline rather than a current reader inventory.
@@ -468,22 +480,23 @@ The fresh review covered the production changes, their consumers and regression 
 
 ### Current disposition of the findings
 
-Reconciled against merged `c1b4100dca7` plus the source-hashed slice 1 repair snapshot on 2026-10-17. This table supersedes
+Reconciled against `ec5d8b997aa` plus the source-hashed slice 2 repair snapshot on 2026-10-17. This table supersedes
 the older 9-addressed / 3-partial / 43-open snapshot and the open-status wording
 in historical evidence below. Addressed means the named source defect or cut,
 with each repair's stated qualification and publication limits retained.
 
 | Disposition | IDs | Current evidence / remaining boundary |
 |---|---|---|
-| Addressed locally | H1, H3, H4, H7, H8, H11, I3, I4, I5, I7, I8, I12, I13, I14, I15, L1, L2, L3, L4, L7, L8, L10, L11, L12, L13, R1, R2, R3, R4, R5, R6, R9, R13, R15, W1, W2 | Original narrow removals plus retained acquisition, source-relative image identity, non-stealing capture, shared decoded pixels, generated transform/paint ownership, canonical origins, bounded decoded cache accumulation, shared CSS comment lexing, borrowed retained planes, authoritative linked shader layout, importer identity, scoped resolver/root cleanup, table-owned aggregation, capture admission, shared selector grammar, static query membership, whole-list declaration parsing and fallible context creation, retained task dispatch, parser failure reporting, production animation-frame scheduling and host elapsed clocks. Dated repair sections and receipts above contain the tests and limits. |
+| Addressed locally | H1, H3, H4, H7, H8, H11, I2, I3, I4, I5, I7, I8, I12, I13, I14, I15, L1, L2, L3, L4, L7, L8, L10, L11, L12, L13, R1, R2, R3, R4, R5, R6, R8, R9, R13, R14, R15, W1, W2 | Original narrow removals plus retained acquisition, source-relative image identity, non-stealing capture, shared decoded pixels, generated transform/paint ownership, canonical origins, bounded decoded cache accumulation, shared CSS comment lexing, borrowed retained planes, authoritative linked shader layout, importer identity, scoped resolver/root cleanup, table-owned aggregation, capture admission, shared selector grammar, static query membership, whole-list declaration parsing and fallible context creation, retained task dispatch, parser failure reporting, production animation-frame scheduling and host elapsed clocks. Dated repair sections and receipts above contain the tests and limits. |
 | Partial | I1 | Native editing shares DOM defaults; scripted text/IME, key releases and default-action integration remain open. |
 | Partial | I11 | Cache-key lookup no longer recompiles shaders; a source/stage/options-owned compiled-artifact lifecycle remains open. |
 | Partial | H6 | Setup/execution/completion accounting repaired; trustworthy VM error phase/type and complete Test262 qualification remain open. |
 | Partial | L6 | Shared form/radio predicates; broader dependency classification and separate mutation switches remain. |
-| Open | I2, I6, I9-I10; R7-R8, R10-R12, R14; L5, L9; H2, H5, H9-H10 | No later cut or verification closes these findings. |
+| Partial | R7 | Default workers refuse unsupported required cancellation; explicit trusted cooperative workers can still detach uninterruptible VM work. Direct shutdown counts do not track descendants. |
+| Open | I6, I9-I10; R10-R12; L5, L9; H2, H5, H9-H10 | No later cut or verification closes these findings. |
 
-**56 findings: 36 addressed locally, 4 partial, 16 open.** Supplemental X1 remains
-partial and is excluded from that count. Supplier publication/Mere adoption,
+**56 findings: 39 addressed locally, 5 partial, 12 open.** Supplemental X1 remains
+partial and is excluded from that count. The pinned NetRender supplier revision is now published on main; Mere adoption,
 the baseline supplier corpus mismatch, existing ignored continuation tests and
 platform/Forms acceptance are separate outstanding obligations, not extra closed
 findings. R4, R5, H3 and R15 now have local retained-path verification. The prior
@@ -617,12 +630,12 @@ Relevant existing evidence: [review receipt](receipts/2026-10-16_forms_submissio
 
 ## Consolidated finding register
 
-Status is reconciled to merged `c1b4100dca7` plus the source-hashed slice 1 repair; descriptions and cut directions retain the original evidence. IDs match the detailed evidence sections. These are issues and removal decisions, not a count of independently reproduced bugs. Related rows share a repair boundary rather than requiring separate frameworks. W1 is the independent review's shader-link finding; the remaining independent observations corroborate I findings and are not counted twice.
+Status is reconciled to `ec5d8b997aa` plus the source-hashed slice 2 repair; descriptions and cut directions retain the original evidence. IDs match the detailed evidence sections. These are issues and removal decisions, not a count of independently reproduced bugs. Related rows share a repair boundary rather than requiring separate frameworks. W1 is the independent review's shader-link finding; the remaining independent observations corroborate I findings and are not counted twice.
 
 | ID | Current status | Finding | Disposition / dependency |
 |---|---|---|---|
 | I1 | Partial | Scripted session lacks native text/IME/default-action integration; Tab is consumed before page keydown | Share actual editable-control defaults and input outcomes; live typing proof precedes Forms acceptance. |
-| I2 | Open | Headless lifecycle tests and live lifecycle state have different owners | Share lifecycle facts; wire freeze/resume before advertising live support. |
+| I2 | Addressed locally | Headless lifecycle tests and live lifecycle state have different owners | Share lifecycle facts; wire freeze/resume before advertising live support. |
 | I3 | Addressed locally | Generic DOM synchronization re-resolves all document resources | Retain dependency-aware acquisition results; remove whole-resource resolution from unrelated mutations/style reads. |
 | I4 | Addressed locally | Authored image aliases collapse different stylesheet bases | Carry resolved source identity into computed image/paint keys. |
 | I5 | Addressed locally | Capture drains rendering's mutation journal | One consumption owner or non-stealing observation cursors; preserve historical capture format. |
@@ -642,14 +655,14 @@ Status is reconciled to merged `c1b4100dca7` plus the source-hashed slice 1 repa
 | R4 | Addressed locally | Internal task source-eval and result coercion can erase errors/work | Retained private callable entrypoints with realm/GC ownership and explicit outcomes. |
 | R5 | Addressed locally | Parsed script loading/evaluation errors disappear behind scheduling counters | Typed nonfatal execution results and proper exception reporting. |
 | R6 | Addressed locally | Parser module resolver drops referrer identity | Resolve/cache using actual importer/final URL and inline document base. |
-| R7 | Open | Worker shutdown detaches uninterruptible VM execution | Enforceable interruption/isolation; truthful lifetime and configurable shutdown policy. |
-| R8 | Open | Budget-shaped API defaults ignore limits | Separate execution interruption from job count; refuse unsupported required bounds. |
+| R7 | Partial | Worker shutdown detaches uninterruptible VM execution | Enforceable interruption/isolation; truthful lifetime and configurable shutdown policy. |
+| R8 | Addressed locally | Budget-shaped API defaults ignore limits | Separate execution interruption from job count; refuse unsupported required bounds. |
 | R9 | Addressed locally | Missing WebGL factory manufactures a context-shaped capability | Return unsupported/null when actual graphics capability is absent. |
 | R10 | Open | WebGL objects use public mutable identity and permissive text coercion | Private context-owned brands and genuine value extraction. |
 | R11 | Open | XPath adapter loses attributes, namespaces, mode and detached context | Replace lossy live adapter; preserve language core and real result identity. |
 | R12 | Open | History uses JSON state despite existing structured clone; fallback duplicates history | Share serialization semantics, then migrate fallback owner deliberately. |
 | R13 | Addressed locally | Module resolver lifetimes are erased and manually restored without unwind guard | Owned/scoped resolver context and unwind-safe restoration; preserve GC roots. |
-| R14 | Open | Ordinary engine/realm registration leaks process-lifetime allocations | Proper owned registrations or fixed static names; keep required rooted release queues. |
+| R14 | Addressed locally | Ordinary engine/realm registration leaks process-lifetime allocations | Proper owned registrations or fixed static names; keep required rooted release queues. |
 | R15 | Addressed locally | Product elapsed-time API uses timer-driven test-like clock | Explicit host elapsed clock and separate deterministic test profile. |
 | L1 | Addressed locally | Two comment strippers remove comment-like text inside quoted CSS strings | Token-aware CSS lexical authority; isolated probe confirms helper corruption. |
 | L2 | Addressed locally | Prospective line-break stream runs while Parley still selects lines | Remove unused production work or gate it as explicit experimental diagnostics. |

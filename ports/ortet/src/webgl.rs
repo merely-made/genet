@@ -77,22 +77,29 @@ impl WebGlHost {
         let host = self.clone();
         genet_scripted::ScriptedDocumentOptions {
             webgl: Some(Box::new(move |width, height| {
-                Box::new(host.make_handler(width, height))
+                host.make_handler(width, height)
+                    .map(|handler| Box::new(handler) as Box<dyn WebGlHandler>)
             })),
             ..genet_scripted::ScriptedDocumentOptions::default()
         }
     }
 
-    fn make_handler(&self, width: u32, height: u32) -> OrtetWebGl {
-        let key = self.next_key.fetch_add(1, Ordering::Relaxed);
+    fn make_handler(&self, width: u32, height: u32) -> Option<OrtetWebGl> {
+        let width = width.max(1);
+        let height = height.max(1);
+        let max_dimension = self.device.limits().max_texture_dimension_2d;
+        if width > max_dimension || height > max_dimension {
+            return None;
+        }
         let context = Arc::new(Mutex::new(
             WebGlContext::from_wgpu_handles(
                 self.device.clone(),
                 self.queue.clone(),
-                WebGlCanvasDescriptor::new(width.max(1), height.max(1)),
+                WebGlCanvasDescriptor::new(width, height),
             )
-            .expect("same-device WebGL canvas"),
+            .ok()?,
         ));
+        let key = self.next_key.fetch_add(1, Ordering::Relaxed);
         let content_generation = Arc::new(AtomicU64::new(1));
         self.contexts.lock().expect("WebGL registry lock").insert(
             key,
@@ -101,7 +108,12 @@ impl WebGlHost {
                 content_generation: content_generation.clone(),
             },
         );
-        OrtetWebGl::new(context, key, self.contexts.clone(), content_generation)
+        Some(OrtetWebGl::new(
+            context,
+            key,
+            self.contexts.clone(),
+            content_generation,
+        ))
     }
 
     /// Stage every trusted texture used by this frame as a normal Vello image.
@@ -664,8 +676,8 @@ mod tests {
     #[test]
     fn registry_tracks_two_contexts_across_resize_and_drop() {
         let Some(host) = host() else { return };
-        let mut first = host.make_handler(4, 4);
-        let second = host.make_handler(8, 8);
+        let mut first = host.make_handler(4, 4).expect("first context");
+        let second = host.make_handler(8, 8).expect("second context");
         let first_key = first.external_texture_key().expect("first key");
         let second_key = second.external_texture_key().expect("second key");
         assert_ne!(first_key, second_key);
@@ -688,7 +700,7 @@ mod tests {
         assert_eq!(host.live_contexts(), 1);
         drop(first);
         assert_eq!(host.live_contexts(), 0);
-        let third = host.make_handler(2, 2);
+        let third = host.make_handler(2, 2).expect("third context");
         assert_ne!(third.external_texture_key(), Some(first_key));
         drop(third);
     }
@@ -697,8 +709,29 @@ mod tests {
     fn document_factory_registers_and_drops_its_context() {
         let Some(host) = host() else { return };
         let mut options = host.scripted_document_options();
-        let handler = options.webgl.as_mut().expect("WebGL capability")(3, 2);
+        let handler = options.webgl.as_mut().expect("WebGL capability")(3, 2)
+            .expect("document WebGL context");
         assert_eq!(host.live_contexts(), 1);
+        drop(handler);
+        assert_eq!(host.live_contexts(), 0);
+    }
+
+    #[test]
+    fn document_factory_rejects_oversized_context_without_registering_it() {
+        let Some(host) = host() else { return };
+        let too_wide = host
+            .device
+            .limits()
+            .max_texture_dimension_2d
+            .checked_add(1)
+            .expect("finite texture dimension limit");
+        let mut options = host.scripted_document_options();
+        assert!(options.webgl.as_mut().expect("WebGL capability")(too_wide, 1).is_none());
+        assert_eq!(host.live_contexts(), 0);
+        assert_eq!(host.next_key.load(Ordering::Relaxed), 1);
+        let handler = options.webgl.as_mut().expect("WebGL capability")(1, 1)
+            .expect("valid context after rejected request");
+        assert_eq!(handler.external_texture_key(), Some(1));
         drop(handler);
         assert_eq!(host.live_contexts(), 0);
     }
@@ -708,7 +741,7 @@ mod tests {
         let Some((core, host)) = core_and_host() else {
             return;
         };
-        let mut context = host.make_handler(4, 3);
+        let mut context = host.make_handler(4, 3).expect("staged context");
         let key = context.external_texture_key().expect("context key");
         let image_key = netrender::external_image_key(key);
         let draws = [
@@ -759,7 +792,7 @@ mod tests {
     #[test]
     fn production_handler_draws_a_triangle() {
         let Some(host) = host() else { return };
-        let mut gl = host.make_handler(32, 32);
+        let mut gl = host.make_handler(32, 32).expect("draw context");
         gl.viewport(0, 0, 32, 32);
         gl.clear_color(0.0, 0.0, 0.0, 1.0);
         gl.clear(GL_COLOR_BUFFER_BIT);

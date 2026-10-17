@@ -112,7 +112,7 @@ pub use timing::{ElapsedClock, PerformanceClockProfile};
 pub use platform::StorageProvider;
 pub use webgl::{WebGlFactory, WebGlHandler};
 pub use websocket::{WebSocketHandler, WebSocketRequest};
-pub use worker::ScriptResourceLoader;
+pub use worker::{ScriptResourceLoader, WorkerPolicy, WorkerShutdownReport};
 
 pub use genet_scripted_dom::{ValidationMessageCatalog, ValidationMessageKind};
 
@@ -365,6 +365,9 @@ pub struct HostState {
     pub script_loader: Option<std::rc::Rc<dyn ScriptResourceLoader>>,
     /// Live dedicated workers this agent owns, indexed by the id script holds.
     workers: Vec<worker::WorkerHandle>,
+    /// Required cancellation is the default. Hosts that trust their worker
+    /// scripts must opt into cooperative shutdown explicitly.
+    worker_policy: WorkerPolicy,
     /// Host wake sink copied into each worker so an idle/message transition
     /// wakes a sleeping UI event loop.
     pub(crate) worker_wake: Option<std::sync::Arc<dyn Fn() + Send + Sync>>,
@@ -1147,6 +1150,7 @@ impl<E: ScriptEngine> Runtime<E> {
             if host.script_loader.is_none() {
                 host.script_loader = parent.script_loader.clone();
             }
+            host.worker_policy = parent.worker_policy;
             if host.worker_wake.is_none() {
                 host.worker_wake = parent.worker_wake.clone();
             }
@@ -2235,6 +2239,32 @@ impl<E: ScriptEngine> Runtime<E> {
         self.host.borrow_mut().script_loader = Some(loader.into());
     }
 
+    /// Choose the native worker lifetime contract before creating workers.
+    /// `RequireCancellation` refuses creation unless the backend can interrupt
+    /// startup, callbacks, and jobs. `TrustedCooperative` permits workers that
+    /// may detach after `shutdown_grace` if script does not yield.
+    pub fn set_worker_policy(&mut self, policy: WorkerPolicy) {
+        self.host.borrow_mut().worker_policy = policy;
+        for host in self.child_hosts().values() {
+            host.borrow_mut().worker_policy = policy;
+        }
+    }
+
+    /// Stop directly owned native workers and report joined/detached counts.
+    /// Descendants created inside workers are outside this count.
+    pub fn shutdown_workers(&mut self) -> WorkerShutdownReport {
+        let hosts: Vec<SharedHost> = self.agent.borrow().host_lifetimes.iter()
+            .filter_map(|host| host.upgrade()).collect();
+        let mut report = WorkerShutdownReport::default();
+        for host in hosts {
+            let one = worker::shutdown(&host);
+            report.direct_joined += one.direct_joined;
+            report.direct_detached += one.direct_detached;
+            report.descendants_untracked |= one.descendants_untracked;
+        }
+        report
+    }
+
     /// Install the host wake sink copied into dedicated workers. Workers are
     /// separate threads, so they cannot request a redraw through the page's
     /// runtime directly; this callback is the event-loop notification seam.
@@ -2527,8 +2557,8 @@ impl<E: ScriptEngine> Runtime<E> {
 }
 
 impl<E: ScriptEngine> Drop for Runtime<E> {
-    /// No worker thread outlives the agent that owns it, and no realm's host
-    /// state outlives the thread.
+    /// Cooperative workers are asked to exit. Trusted workers that do not
+    /// yield can detach; callers needing counts can use `shutdown_workers`.
     fn drop(&mut self) {
         let hosts: Vec<SharedHost> = self
             .agent
@@ -2537,9 +2567,7 @@ impl<E: ScriptEngine> Drop for Runtime<E> {
             .iter()
             .filter_map(|host| host.upgrade())
             .collect();
-        for host in &hosts {
-            worker::shutdown(host);
-        }
+        for host in &hosts { let _ = worker::shutdown(host); }
         // Then empty them. See the note on the `Runtime` type: a realm's
         // `HostState` is reachable from that realm's `[[HostDefined]]` slot,
         // which lives in the engine's heap - and Boa's heap is a thread-local,
@@ -2586,10 +2614,16 @@ impl<E: ScriptEngineSnapshot> Runtime<E> {
         // of its own, and leave the donor's frame tree behind: a clone is a
         // fresh top-level browsing context, not a copy of the donor's.
         let top = self.top_realm();
+        let worker_policy = self.host.borrow().worker_policy;
         let boot_host: SharedHost = Rc::new(RefCell::new(HostState::default()));
         let agent = Rc::new(RefCell::new(AgentState::default()));
         agent.borrow_mut().performance_clock = self.agent.borrow().performance_clock.clone();
-        boot_host.borrow_mut().agent = Rc::downgrade(&agent);
+        {
+            let mut boot = boot_host.borrow_mut();
+            boot.agent = Rc::downgrade(&agent);
+            boot.worker_policy = worker_policy;
+            boot.worker_spawn = Some(worker::worker_main::<E> as fn(_));
+        }
         agent.borrow_mut().register(MAIN_REALM, boot_host.clone());
         // The cloned heap's global `this` is the donor's WindowProxy, which
         // resolves its `[[Window]]` through *this* agent. Bind each context
@@ -2605,6 +2639,8 @@ impl<E: ScriptEngineSnapshot> Runtime<E> {
         } else {
             let host: SharedHost = Rc::new(RefCell::new(HostState {
                 viewport_size: self.host.borrow().viewport_size,
+                worker_policy,
+                worker_spawn: Some(worker::worker_main::<E> as fn(_)),
                 agent: Rc::downgrade(&agent),
                 ..HostState::default()
             }));
@@ -4620,6 +4656,23 @@ mod tests {
 
         assert_eq!(clone.host().borrow().console, vec!["2"]);
         assert_eq!(template.host().borrow().console, vec!["template", "1"]);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn runtime_snapshot_clone_preserves_explicit_worker_policy() {
+        let mut template = Runtime::<script_engine_nova::NovaEngine>::new().expect("runtime");
+        let policy = WorkerPolicy::TrustedCooperative {
+            resource_timeout: std::time::Duration::from_millis(100),
+            shutdown_grace: std::time::Duration::from_secs(2),
+        };
+        template.set_worker_policy(policy);
+        let mut clone = template.snapshot_clone().expect("snapshot clone");
+        assert_eq!(clone.host().borrow().worker_policy, policy);
+        let value = clone.eval("(function() { try { new Worker('missing.js'); return 'started'; } catch (e) { return e.name; } })()")
+            .expect("worker construction check");
+        assert_eq!(clone.value_to_string(&value).unwrap(), "started");
+        let _ = clone.shutdown_workers();
     }
 
     #[cfg(not(target_arch = "wasm32"))]

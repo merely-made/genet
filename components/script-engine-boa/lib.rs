@@ -866,12 +866,12 @@ impl ScriptEngine for BoaEngine {
         )
     }
 
-    fn pump(&mut self, _budget: Budget) -> PumpOutcome {
-        // Boa's default executor (SimpleJobExecutor) runs the promise-job queue to
-        // completion and exposes no sub-drain, so the budget cannot be honored: drain
-        // fully and report `Quiescent`. Step-bounding is a Nova/piccolo capability; on
-        // Boa a runaway microtask loop still hangs here (acceptable: Boa is the
-        // wasm/oracle backend, the runaway-sensitive actors run on native Nova).
+    fn pump(&mut self, budget: Budget) -> PumpOutcome {
+        // SimpleJobExecutor has no sub-drain. Refuse a required count before
+        // entering the VM; an unbounded checkpoint remains an explicit choice.
+        if matches!(budget, Budget::Steps(_)) {
+            return PumpOutcome::UnsupportedBound;
+        }
         let _ = self.ctx.run_jobs();
         PumpOutcome::Quiescent
     }
@@ -1785,15 +1785,23 @@ mod tests {
     }
 
     #[test]
-    fn pump_drains_fully_regardless_of_budget() {
+    fn pump_refuses_unsupported_job_bound_before_running() {
         let mut engine = BoaEngine::new().unwrap();
+        assert!(!BoaEngine::execution_capabilities().bounded_eval_vm);
+        assert!(!BoaEngine::execution_capabilities().bounded_pump_jobs);
+        assert!(matches!(
+            engine.eval_bounded("globalThis.boundRan = true", Budget::Steps(1)),
+            Err(script_engine_api::BoundedEvalError::Unsupported)
+        ));
+        let marker = engine.eval("typeof boundRan").unwrap();
+        assert_eq!(engine.value_to_string(&marker).unwrap(), "undefined");
         engine
             .eval("globalThis.n = 0; Promise.resolve().then(() => { globalThis.n++; });")
             .unwrap();
-        // Boa cannot sub-drain, so even a tight `Steps` budget drains to quiescence.
-        assert_eq!(engine.pump(Budget::Steps(1)), PumpOutcome::Quiescent);
+        assert_eq!(engine.pump(Budget::Steps(1)), PumpOutcome::UnsupportedBound);
         let n = engine.eval("n").unwrap();
-        assert_eq!(engine.value_to_string(&n).unwrap(), "1");
+        assert_eq!(engine.value_to_string(&n).unwrap(), "0");
+        assert_eq!(engine.pump(Budget::Unbounded), PumpOutcome::Quiescent);
     }
 
     // ---- Realms ------------------------------------------------------------

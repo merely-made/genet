@@ -4,7 +4,7 @@
 
 //! Per-document capabilities installed before authored scripts execute.
 
-use script_runtime_api::{ValidationMessageCatalog, WebGlFactory};
+use script_runtime_api::{ValidationMessageCatalog, WebGlFactory, WorkerPolicy};
 
 /// Host capabilities for one live scripted document.
 ///
@@ -16,4 +16,6 @@ pub struct ScriptedDocumentOptions {
     /// Built-in constraint-validation wording installed before any authored
     /// scripts run. Custom validity text remains exact and bypasses this.
     pub validation_message_catalog: ValidationMessageCatalog,
+    /// Explicit worker lifetime contract, installed before parser scripts.
+    pub worker_policy: WorkerPolicy,
 }

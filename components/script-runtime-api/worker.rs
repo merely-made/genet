@@ -37,6 +37,34 @@ use script_engine_api::{CallCx, NativeFn, ScriptEngine};
 
 use crate::{FetchHandler, FetchOutcome, FetchRequest, HostState, Runtime, SharedHost, js_str};
 
+/// A host must explicitly accept cooperative shutdown for trusted scripts.
+/// The default requires cancellation of running VM work; currently no backend
+/// provides that complete worker guarantee, so creation is refused.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkerPolicy {
+    RequireCancellation,
+    TrustedCooperative {
+        resource_timeout: Duration,
+        shutdown_grace: Duration,
+    },
+}
+
+impl Default for WorkerPolicy {
+    fn default() -> Self {
+        Self::RequireCancellation
+    }
+}
+
+/// Results for worker threads directly owned by one runtime. Descendants
+/// started inside them are not counted and may still execute after a join.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct WorkerShutdownReport {
+    pub direct_joined: usize,
+    pub direct_detached: usize,
+    /// True when direct workers might have spawned untracked descendants.
+    pub descendants_untracked: bool,
+}
+
 /// Where a worker's classic script, `importScripts` target or `fetch()` is read
 /// from when the page has no network seam. Disk-mode WPT installs one; a hosted
 /// page leaves it unset and everything goes through the [`FetchHandler`].
@@ -114,6 +142,7 @@ pub(crate) struct WorkerBoot {
     rx: Receiver<ToWorker>,
     tx: Sender<FromWorker>,
     wake: Option<Arc<dyn Fn() + Send + Sync>>,
+    policy: WorkerPolicy,
 }
 
 /// The page's handle on one live worker.
@@ -127,6 +156,7 @@ pub(crate) struct WorkerHandle {
     alive: bool,
     /// Messages sent to this worker; compared against the count in `Idle`.
     sent: Arc<AtomicU64>,
+    shutdown_grace: Duration,
 }
 
 /// Process-unique ids for cross-agent message ports.
@@ -146,15 +176,8 @@ pub(crate) struct WorkerLink {
     closed: bool,
     /// `terminate()` was called on the page, or the link died.
     terminated: bool,
+    resource_timeout: Duration,
 }
-
-/// How long a worker waits for the page to answer a resource request before
-/// treating it as a network error. The page answers inside its drive loop, so
-/// this only fires when the page has stopped driving.
-const RESOURCE_TIMEOUT: Duration = Duration::from_secs(30);
-
-/// How long the page waits for its workers to exit before detaching them.
-const SHUTDOWN_JOIN: Duration = Duration::from_millis(500);
 
 impl WorkerLink {
     fn notify(&self) {
@@ -238,9 +261,9 @@ impl WorkerLink {
             return FetchOutcome::network_error();
         }
         self.notify();
-        let deadline = Instant::now() + RESOURCE_TIMEOUT;
+        let started = Instant::now();
         loop {
-            let left = deadline.saturating_duration_since(Instant::now());
+            let left = self.resource_timeout.saturating_sub(started.elapsed());
             if left.is_zero() {
                 return FetchOutcome::network_error();
             }
@@ -309,6 +332,7 @@ pub(crate) fn worker_main<E: ScriptEngine>(boot: WorkerBoot) {
         rx,
         tx,
         wake,
+        policy,
     } = boot;
     let link = Rc::new(RefCell::new(WorkerLink {
         tx: tx.clone(),
@@ -319,6 +343,12 @@ pub(crate) fn worker_main<E: ScriptEngine>(boot: WorkerBoot) {
         consumed: 0,
         closed: false,
         terminated: false,
+        resource_timeout: match policy {
+            WorkerPolicy::TrustedCooperative {
+                resource_timeout, ..
+            } => resource_timeout,
+            WorkerPolicy::RequireCancellation => Duration::from_secs(30),
+        },
     }));
     let mut rt = match Runtime::<E>::new_worker() {
         Ok(rt) => rt,
@@ -330,6 +360,7 @@ pub(crate) fn worker_main<E: ScriptEngine>(boot: WorkerBoot) {
             return;
         },
     };
+    rt.set_worker_policy(policy);
     rt.host().borrow_mut().worker_link = Some(link.clone());
     rt.set_fetch_handler(Box::new(WorkerFetch(link.clone())));
     let _ = rt.set_base_url(&url);
@@ -504,6 +535,12 @@ impl<E: ScriptEngine> NativeFn<E> for WorkerCreate {
         .flatten()
         .unwrap_or(url);
         let name = arg_string::<E>(cx, 1)?;
+        let policy = with_host::<E, _>(cx, |h| h.worker_policy).unwrap_or_default();
+        // There is no worker interruption or process-isolation contract yet.
+        // VM fuel for one eval and counting completed jobs cannot provide it.
+        if matches!(policy, WorkerPolicy::RequireCancellation) {
+            return cx.make_string("-2");
+        }
         let spawn = with_host::<E, _>(cx, |h| h.worker_spawn).flatten();
         let wake = with_host::<E, _>(cx, |h| h.worker_wake.clone()).flatten();
         let Some(spawn) = spawn else {
@@ -518,6 +555,7 @@ impl<E: ScriptEngine> NativeFn<E> for WorkerCreate {
             rx: rx_to,
             tx: tx_from,
             wake,
+            policy,
         };
         let join = std::thread::Builder::new()
             .name("genet-worker".to_owned())
@@ -534,6 +572,10 @@ impl<E: ScriptEngine> NativeFn<E> for WorkerCreate {
                 idle: false,
                 alive: true,
                 sent,
+                shutdown_grace: match policy {
+                    WorkerPolicy::TrustedCooperative { shutdown_grace, .. } => shutdown_grace,
+                    WorkerPolicy::RequireCancellation => Duration::ZERO,
+                },
             });
             h.workers.len() - 1
         });
@@ -867,9 +909,9 @@ pub(crate) fn has_work(host: &SharedHost) -> bool {
     !h.worker_events.is_empty() || h.workers.iter().any(|w| w.alive && !w.idle)
 }
 
-/// Terminate and join every worker. Called when the page runtime is dropped, so
-/// no worker thread outlives the agent that owns it.
-pub(crate) fn shutdown(host: &SharedHost) {
+/// Request termination and join completed workers. A spinning trusted worker
+/// remains detached and is counted as such; there is no VM interrupt seam.
+pub(crate) fn shutdown(host: &SharedHost) -> WorkerShutdownReport {
     let handles: Vec<_> = {
         let mut h = host.borrow_mut();
         h.workers
@@ -878,23 +920,29 @@ pub(crate) fn shutdown(host: &SharedHost) {
                 w.sent.fetch_add(1, Ordering::Relaxed);
                 let _ = w.tx.send(ToWorker::Terminate);
                 w.alive = false;
-                w.join.take()
+                w.join.take().map(|join| (join, w.shutdown_grace))
             })
             .collect()
     };
-    // Join, but bounded: `terminate()` is a cooperative signal, and a worker
-    // spinning inside its own script never reaches the check (there is no VM
-    // interrupt seam). Detach such a thread rather than hanging the page — the
-    // process teardown ends it.
-    let deadline = Instant::now() + SHUTDOWN_JOIN;
-    for join in handles {
-        while !join.is_finished() && Instant::now() < deadline {
+    // A worker spinning inside script cannot observe the cooperative signal.
+    // The grace only bounds the caller's wait; it does not reclaim that thread.
+    let mut report = WorkerShutdownReport {
+        descendants_untracked: !handles.is_empty(),
+        ..WorkerShutdownReport::default()
+    };
+    for (join, grace) in handles {
+        let started = Instant::now();
+        while !join.is_finished() && started.elapsed() < grace {
             std::thread::sleep(Duration::from_millis(2));
         }
         if join.is_finished() {
             let _ = join.join();
+            report.direct_joined += 1;
+        } else {
+            report.direct_detached += 1;
         }
     }
+    report
 }
 
 /// `Worker`, the page's handle on another agent.
@@ -941,6 +989,7 @@ const WORKER_HOST_BOOTSTRAP: &str = r#"
     this._url = url;
     this._name = (options.name === undefined) ? '' : String(options.name);
     var id = Number(__worker_create(url, this._name));
+    if (id === -2) throw new DOMException("Worker cancellation is unsupported by this script engine.", "NotSupportedError");
     if (!(id >= 0)) throw new DOMException("Worker could not be started.", "NotSupportedError");
     this._id = id;
     this._terminated = false;
@@ -1108,3 +1157,139 @@ const WORKER_SCOPE_BOOTSTRAP: &str = r#"
   };
 })();
 "#;
+
+#[cfg(test)]
+mod shutdown_tests {
+    use super::*;
+    use std::sync::{Condvar, Mutex};
+
+    struct FiniteThreadCleanup {
+        gate: Arc<(Mutex<bool>, Condvar)>,
+        finished: Option<Receiver<()>>,
+    }
+
+    impl FiniteThreadCleanup {
+        fn release(&mut self) {
+            let (lock, wake) = &*self.gate;
+            *lock.lock().unwrap() = true;
+            wake.notify_all();
+            if let Some(finished) = self.finished.take() {
+                finished.recv_timeout(Duration::from_secs(2)).unwrap();
+            }
+        }
+    }
+
+    impl Drop for FiniteThreadCleanup {
+        fn drop(&mut self) {
+            // Also releases the finite helper if shutdown or an assertion panics.
+            if self.finished.is_some() {
+                self.release();
+            }
+        }
+    }
+
+    #[test]
+    fn finite_blocked_trusted_thread_is_reported_detached() {
+        let gate = Arc::new((Mutex::new(false), Condvar::new()));
+        let worker_gate = Arc::clone(&gate);
+        let (started_tx, started_rx) = channel();
+        let (finished_tx, finished_rx) = channel();
+        let mut cleanup = FiniteThreadCleanup {
+            gate,
+            finished: Some(finished_rx),
+        };
+        let join = std::thread::spawn(move || {
+            started_tx.send(()).unwrap();
+            let (lock, wake) = &*worker_gate;
+            let mut released = lock.lock().unwrap();
+            while !*released {
+                released = wake.wait(released).unwrap();
+            }
+            finished_tx.send(()).unwrap();
+        });
+        started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        let (tx, _rx) = channel();
+        let (_reply_tx, reply_rx) = channel();
+        let host = Rc::new(RefCell::new(HostState::default()));
+        host.borrow_mut().workers.push(WorkerHandle {
+            tx,
+            rx: reply_rx,
+            join: Some(join),
+            idle: false,
+            alive: true,
+            sent: Arc::new(AtomicU64::new(0)),
+            shutdown_grace: Duration::ZERO,
+        });
+        let report = shutdown(&host);
+        cleanup.release();
+        assert_eq!(
+            report,
+            WorkerShutdownReport {
+                direct_joined: 0,
+                direct_detached: 1,
+                descendants_untracked: true,
+            }
+        );
+    }
+
+    #[test]
+    fn nested_shutdown_report_counts_only_direct_threads() {
+        let gate = Arc::new((Mutex::new(false), Condvar::new()));
+        let inner_gate = Arc::clone(&gate);
+        let (inner_finished_tx, inner_finished_rx) = channel();
+        let mut cleanup = FiniteThreadCleanup {
+            gate,
+            finished: Some(inner_finished_rx),
+        };
+        let (outer_tx, outer_rx) = channel();
+        let (ready_tx, ready_rx) = channel();
+        let (inner_report_tx, inner_report_rx) = channel();
+        let outer = std::thread::spawn(move || {
+            let (nested_tx, nested_rx) = channel();
+            let (_reply_tx, reply_rx) = channel();
+            let inner = std::thread::spawn(move || {
+                let _keep_channel_open = nested_rx;
+                let (lock, wake) = &*inner_gate;
+                let mut released = lock.lock().unwrap();
+                while !*released {
+                    released = wake.wait(released).unwrap();
+                }
+                inner_finished_tx.send(()).unwrap();
+            });
+            let nested = Rc::new(RefCell::new(HostState::default()));
+            nested.borrow_mut().workers.push(WorkerHandle {
+                tx: nested_tx,
+                rx: reply_rx,
+                join: Some(inner),
+                idle: false,
+                alive: true,
+                sent: Arc::new(AtomicU64::new(0)),
+                shutdown_grace: Duration::ZERO,
+            });
+            ready_tx.send(()).unwrap();
+            let _ = outer_rx.recv_timeout(Duration::from_secs(2));
+            inner_report_tx.send(shutdown(&nested)).unwrap();
+        });
+        ready_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        let (_reply_tx, reply_rx) = channel();
+        let parent = Rc::new(RefCell::new(HostState::default()));
+        parent.borrow_mut().workers.push(WorkerHandle {
+            tx: outer_tx,
+            rx: reply_rx,
+            join: Some(outer),
+            idle: false,
+            alive: true,
+            sent: Arc::new(AtomicU64::new(0)),
+            shutdown_grace: Duration::from_secs(2),
+        });
+        let direct = shutdown(&parent);
+        let nested = inner_report_rx
+            .recv_timeout(Duration::from_secs(1))
+            .unwrap();
+        cleanup.release();
+        assert_eq!(direct.direct_joined, 1);
+        assert_eq!(direct.direct_detached, 0);
+        assert!(direct.descendants_untracked);
+        assert_eq!(nested.direct_detached, 1);
+    }
+}

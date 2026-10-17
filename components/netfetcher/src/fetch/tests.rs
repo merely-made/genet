@@ -644,3 +644,182 @@ async fn the_cache_body_cap_is_the_contexts_policy() {
         );
     }
 }
+
+/// A transport with a caller-selected wire body and no implicit Content-Length.
+#[derive(Clone)]
+struct FixedBodyTransport {
+    headers: Vec<(String, String)>,
+    chunks: Vec<bytes::Bytes>,
+}
+
+impl crate::transport::Transport for FixedBodyTransport {
+    fn send(
+        &self,
+        _request: crate::transport::WireRequest,
+    ) -> crate::transport::TransportFuture<'_> {
+        let headers = self.headers.clone();
+        let chunks = self.chunks.clone();
+        Box::pin(async move {
+            Some(crate::transport::RawResponse {
+                status: 200,
+                headers,
+                body: Box::pin(futures_util::stream::iter(
+                    chunks.into_iter().map(Ok::<_, std::io::Error>),
+                )),
+            })
+        })
+    }
+}
+
+#[tokio::test]
+async fn unknown_length_body_obeys_decoded_cache_cap() {
+    use crate::cache::HttpCache;
+
+    let url: Url = "http://example.test/chunked".parse().unwrap();
+    let key = crate::cache::cache_key("GET", &url);
+    let transport = Arc::new(FixedBodyTransport {
+        headers: vec![("cache-control".to_owned(), "max-age=60".to_owned())],
+        chunks: vec![
+            bytes::Bytes::from_static(b"he"),
+            bytes::Bytes::from_static(b"llo"),
+        ],
+    });
+
+    for (cap, stored) in [(0u64, false), (4, false), (5, true)] {
+        let cache = Arc::new(InMemoryHttpCache::new());
+        let mut cx = caching_cx()
+            .with_transport(transport.clone())
+            .with_cache_max_body_bytes(cap);
+        cx.cache = cache.clone();
+        let body = fetch(Request::get(url.clone()), &cx)
+            .await
+            .bytes()
+            .await
+            .unwrap();
+        assert_eq!(body.as_ref(), b"hello", "the full body reaches the caller");
+        assert_eq!(cache.get(&key).is_some(), stored, "cap {cap}");
+    }
+
+    let cache = Arc::new(InMemoryHttpCache::new());
+    let mut cx = caching_cx()
+        .with_transport(Arc::new(FixedBodyTransport {
+            headers: vec![("cache-control".to_owned(), "max-age=60".to_owned())],
+            chunks: vec![],
+        }))
+        .with_cache_max_body_bytes(0);
+    cx.cache = cache.clone();
+    assert!(
+        fetch(Request::get(url), &cx)
+            .await
+            .bytes()
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(cache.get(&key).unwrap().body.len(), 0);
+}
+
+#[tokio::test]
+async fn compressed_body_obeys_decoded_cache_cap() {
+    use crate::cache::HttpCache;
+    use std::io::Write;
+
+    let decoded = vec![b'a'; 4096];
+    let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    encoder.write_all(&decoded).unwrap();
+    let encoded = encoder.finish().unwrap();
+    let cap = 128u64;
+    assert!((encoded.len() as u64) < cap, "wire body must fit the cap");
+
+    let transport = Arc::new(FixedBodyTransport {
+        headers: vec![
+            ("cache-control".to_owned(), "max-age=60".to_owned()),
+            ("content-encoding".to_owned(), "gzip".to_owned()),
+            ("content-length".to_owned(), encoded.len().to_string()),
+        ],
+        chunks: vec![bytes::Bytes::from(encoded)],
+    });
+    let cache = Arc::new(InMemoryHttpCache::new());
+    let mut cx = caching_cx()
+        .with_transport(transport)
+        .with_cache_max_body_bytes(cap);
+    cx.cache = cache.clone();
+    let url: Url = "http://example.test/compressed".parse().unwrap();
+    let key = crate::cache::cache_key("GET", &url);
+
+    let body = fetch(Request::get(url), &cx).await.bytes().await.unwrap();
+    assert_eq!(body.as_ref(), decoded.as_slice());
+    assert!(cache.get(&key).is_none(), "decoded expansion is not cached");
+}
+
+#[tokio::test]
+async fn cache_overflow_releases_buffer_and_keeps_streaming() {
+    use crate::cache::HttpCache;
+    use futures_util::StreamExt;
+
+    let cache = Arc::new(InMemoryHttpCache::new());
+    let mut body = super::cache_phase::CachingBody {
+        inner: Box::pin(futures_util::stream::iter(
+            [
+                bytes::Bytes::from_static(b"ab"),
+                bytes::Bytes::from_static(b"cde"),
+                bytes::Bytes::from_static(b"f"),
+            ]
+            .into_iter()
+            .map(Ok::<_, std::io::Error>),
+        )),
+        acc: bytes::BytesMut::new(),
+        max_body_bytes: 4,
+        cache: cache.clone(),
+        key: "test".to_owned(),
+        status: 200,
+        headers: vec![],
+        stored_at: std::time::SystemTime::now(),
+        poisoned: false,
+        done: false,
+    };
+
+    assert_eq!(body.next().await.unwrap().unwrap().as_ref(), b"ab");
+    assert_eq!(&body.acc[..], b"ab");
+    assert_eq!(body.next().await.unwrap().unwrap().as_ref(), b"cde");
+    assert!(body.acc.is_empty());
+    assert_eq!(body.acc.capacity(), 0, "overflow releases cached bytes");
+    assert_eq!(body.next().await.unwrap().unwrap().as_ref(), b"f");
+    assert!(body.next().await.is_none());
+    assert!(cache.get("test").is_none());
+}
+
+#[tokio::test]
+async fn cache_stream_error_releases_partial_buffer_without_storing() {
+    use crate::cache::HttpCache;
+    use futures_util::StreamExt;
+    use std::io::{Error, ErrorKind};
+
+    let cache = Arc::new(InMemoryHttpCache::new());
+    let mut body = super::cache_phase::CachingBody {
+        inner: Box::pin(futures_util::stream::iter([
+            Ok(bytes::Bytes::from_static(b"partial")),
+            Err(Error::new(ErrorKind::InvalidData, "broken decode")),
+            Ok(bytes::Bytes::from_static(b"unreachable")),
+        ])),
+        acc: bytes::BytesMut::new(),
+        max_body_bytes: 1024,
+        cache: cache.clone(),
+        key: "error-test".to_owned(),
+        status: 200,
+        headers: vec![],
+        stored_at: std::time::SystemTime::now(),
+        poisoned: false,
+        done: false,
+    };
+
+    assert_eq!(body.next().await.unwrap().unwrap().as_ref(), b"partial");
+    assert!(body.acc.capacity() > 0);
+    let error = body.next().await.unwrap().unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::InvalidData);
+    assert_eq!(error.to_string(), "broken decode");
+    assert_eq!(body.acc.capacity(), 0, "partial cache bytes are released");
+    assert!(body.next().await.is_none());
+    assert!(body.next().await.is_none());
+    assert!(cache.get("error-test").is_none());
+}

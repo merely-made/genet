@@ -136,26 +136,6 @@ pub struct DeclarationBlock {
     pub errors: Vec<DeclarationError>,
 }
 
-fn without_comments(css: &str) -> String {
-    let mut clean = String::with_capacity(css.len());
-    let mut chars = css.chars().peekable();
-    let mut in_comment = false;
-    while let Some(ch) = chars.next() {
-        if in_comment {
-            if ch == '*' && chars.peek() == Some(&'/') {
-                chars.next();
-                in_comment = false;
-            }
-        } else if ch == '/' && chars.peek() == Some(&'*') {
-            chars.next();
-            in_comment = true;
-        } else {
-            clean.push(ch);
-        }
-    }
-    clean
-}
-
 fn split_top_level(input: &str, delimiter: char) -> Vec<&str> {
     let mut parts = Vec::new();
     let mut start = 0;
@@ -189,7 +169,7 @@ fn split_top_level(input: &str, delimiter: char) -> Vec<&str> {
 }
 
 pub(crate) fn contains_top_level_declaration_delimiter(input: &str) -> bool {
-    split_top_level(&without_comments(input), ';').len() > 1
+    split_top_level(&crate::css_comments::without_comments(input), ';').len() > 1
 }
 
 fn split_components(input: &str) -> Vec<&str> {
@@ -1314,7 +1294,7 @@ fn expand_css_wide_shorthand(
 /// Parse a style-rule declaration block. Invalid declarations are retained as
 /// diagnostics while valid declarations continue through CSS error recovery.
 pub fn parse_declaration_block(input: &str) -> DeclarationBlock {
-    let clean = without_comments(input);
+    let clean = crate::css_comments::without_comments(input);
     let mut block = DeclarationBlock::default();
     for raw in split_top_level(&clean, ';') {
         let declaration = raw.trim();

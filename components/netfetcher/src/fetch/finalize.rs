@@ -136,8 +136,8 @@ pub(super) async fn finalize_response(
     // Cacheable GET 200 → stream the body straight through, teeing it into the
     // cache as it is read. The response resolves at its headers (no buffering up
     // front, so a slow or never-read body cannot stall it); the entry is stored
-    // only once the body is read to completion. A body whose declared length
-    // exceeds the cache cap is streamed without teeing (not worth a cache slot).
+    // only once the body is read to completion. A declared length above the cap
+    // bypasses teeing; the tee also checks decoded bytes as they arrive.
     if let Some(key) = cache_key {
         if cache::is_cacheable(status, &headers) && !over_cache_size_cap(cx, &headers) {
             let mut stored_headers = headers;
@@ -145,6 +145,7 @@ pub(super) async fn finalize_response(
             let caching = CachingBody {
                 inner: body,
                 acc: BytesMut::new(),
+                max_body_bytes: cx.cache_max_body_bytes,
                 cache: cx.cache.clone(),
                 key: key.to_owned(),
                 status,

@@ -87,6 +87,13 @@ where
         self.buckram.boxes()
     }
 
+    pub(crate) fn has_sticky_positioning(&self) -> bool {
+        self.buckram
+            .boxes()
+            .iter()
+            .any(|(_, css_box)| css_box.positioning == PositioningScheme::Sticky)
+    }
+
     pub fn fragments(&self) -> &FragmentTree {
         self.buckram.fragments()
     }
@@ -314,15 +321,15 @@ where
         true
     }
 
-    /// Apply retained scroll-dependent sticky constraints to this otherwise
-    /// normal-flow layout snapshot. Callers clone the static layout first, so
-    /// scroll changes never accumulate into the next frame's base geometry.
+    /// Apply retained scroll-dependent sticky constraints to an owned copy of
+    /// the normal-flow layout. All placements are scanned before mutation, so
+    /// scrollport lookup can borrow this same pre-translation geometry.
     pub(crate) fn apply_sticky_positioning(
         &mut self,
         styles: &StylePlane<Id>,
         viewport_width: f32,
         viewport_height: f32,
-        mut scrollport_for: impl FnMut(Id) -> Option<StickyScrollport>,
+        mut scrollport_for: impl FnMut(Id, &Self) -> Option<StickyScrollport>,
     ) {
         let placements = self
             .buckram
@@ -338,7 +345,7 @@ where
                     return None;
                 }
                 let node = css_box.origin.node()?;
-                let scrollport = scrollport_for(node)?;
+                let scrollport = scrollport_for(node, self)?;
                 let root = self
                     .buckram
                     .fragments()

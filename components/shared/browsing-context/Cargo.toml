@@ -9,3 +9,6 @@ description = "Browsing-context identity, origins, sandbox flags and session his
 
 [lib]
 path = "lib.rs"
+
+[dependencies]
+url = { workspace = true }

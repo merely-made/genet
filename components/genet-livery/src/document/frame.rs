@@ -442,19 +442,17 @@ where
             && !self.style_set.has_container_queries()
             && let (Some(root), Some(previous)) = (local_root, self.layout.as_ref())
         {
-            let previous_styles = previous.styles.clone();
-            let previous_fragments = previous.fragments.clone();
             let dom_text_order = text_sources_in_dom_order(&self.dom);
             let mut candidate =
-                retained_table_owner(previous_fragments.boxes(), root).unwrap_or(root);
+                retained_table_owner(previous.fragments.boxes(), root).unwrap_or(root);
             loop {
                 let mut replaced_nodes = nodes_in_subtree(&self.dom, candidate);
-                replaced_nodes.extend(previous_fragments.generated_subtree_nodes(candidate));
+                replaced_nodes.extend(previous.fragments.generated_subtree_nodes(candidate));
                 match layout_retained_formatting_root(
                     &self.dom,
                     &styles,
-                    &previous_styles,
-                    &previous_fragments,
+                    &previous.styles,
+                    &previous.fragments,
                     candidate,
                     &mut self.text,
                     &crate::DocumentImageSources::new(
@@ -463,8 +461,10 @@ where
                     ),
                 )? {
                     RetainedRootFormatting::Formatted(mut local) => {
-                        local.reconcile_identifiers(&previous_fragments);
-                        let mut fragments = previous_fragments.clone();
+                        local.reconcile_identifiers(&previous.fragments);
+                        // Only a formatted candidate gets a copy. Failed and
+                        // promoted roots leave the retained layout untouched.
+                        let mut fragments = previous.fragments.clone();
                         if fragments.replace_reconciled_local_formatting_subtree_from(
                             &local,
                             candidate,
@@ -566,17 +566,15 @@ where
         height: u32,
     ) -> Result<LiveryPaintList, LayoutError> {
         let _paint_span = crate::phase::span(crate::phase::Phase::Paint);
-        let (mut styles, mut fragments) = self
+        let layout = self
             .layout
             .as_ref()
-            .map(|layout| (layout.styles.clone(), layout.fragments.clone()))
             .ok_or_else(|| LayoutError::retained_state("no retained layout to paint"))?;
         // The retained geometry stays stable between clock ticks, while
         // paint reads a fresh style sample at the current transition or
         // keyframe time.
-        self.apply_transitions(&mut styles);
-        self.apply_keyframe_animation(&mut styles);
-        self.apply_sticky_positioning(&mut fragments, &styles);
+        let styles = self.sampled_paint_styles(layout);
+        let fragments = self.sticky_layout_with_styles(layout, &styles);
         let list = emit_paint_list_with_text_system_scrolled_with_images_and_document_base(
             &self.dom,
             &styles,
@@ -592,6 +590,18 @@ where
         self.cached = Some(((width, height), list.clone()));
         self.style_only_damage = true;
         Ok(list.translated(-self.scroll.0, -self.scroll.1))
+    }
+
+    pub(in crate::document) fn sampled_paint_styles<'a>(
+        &self,
+        layout: &'a LayoutState<D::NodeId>,
+    ) -> Cow<'a, StylePlane<D::NodeId>> {
+        let mut styles = Cow::Borrowed(&layout.styles);
+        if !self.transitions.is_empty() || self.keyframe_animation.is_some() {
+            self.apply_transitions(styles.to_mut());
+            self.apply_keyframe_animation(styles.to_mut());
+        }
+        styles
     }
 
     fn retain_active_data_urls(&self, styles: &StylePlane<D::NodeId>) {
@@ -630,12 +640,22 @@ where
         self.image_sources.retain_data_urls(&active);
     }
 
-    pub(in crate::document) fn sticky_layout(
+    pub(in crate::document) fn sticky_layout<'a>(
         &self,
-        layout: &LayoutState<D::NodeId>,
-    ) -> LiveryLayout<D::NodeId> {
-        let mut active = layout.fragments.clone();
-        self.apply_sticky_positioning(&mut active, &layout.styles);
+        layout: &'a LayoutState<D::NodeId>,
+    ) -> Cow<'a, LiveryLayout<D::NodeId>> {
+        self.sticky_layout_with_styles(layout, &layout.styles)
+    }
+
+    fn sticky_layout_with_styles<'a>(
+        &self,
+        layout: &'a LayoutState<D::NodeId>,
+        styles: &StylePlane<D::NodeId>,
+    ) -> Cow<'a, LiveryLayout<D::NodeId>> {
+        let mut active = Cow::Borrowed(&layout.fragments);
+        if layout.fragments.has_sticky_positioning() {
+            self.apply_sticky_positioning(active.to_mut(), styles);
+        }
         active
     }
 
@@ -644,12 +664,11 @@ where
         fragments: &mut LiveryLayout<D::NodeId>,
         styles: &StylePlane<D::NodeId>,
     ) {
-        let scrollport_geometry = fragments.clone();
         fragments.apply_sticky_positioning(
             styles,
             self.viewport.0 as f32,
             self.viewport.1 as f32,
-            |node| self.sticky_scrollport(node, styles, &scrollport_geometry),
+            |node, geometry| self.sticky_scrollport(node, styles, geometry),
         );
     }
 
@@ -697,12 +716,6 @@ where
         self.layout
             .as_ref()
             .or(self.identity_source.as_ref())
-            .is_some_and(|layout| {
-                layout
-                    .fragments
-                    .boxes()
-                    .iter()
-                    .any(|(_, css_box)| css_box.positioning == buckram::PositioningScheme::Sticky)
-            })
+            .is_some_and(|layout| layout.fragments.has_sticky_positioning())
     }
 }

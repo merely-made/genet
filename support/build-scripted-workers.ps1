@@ -7,7 +7,7 @@
 [CmdletBinding()]
 param(
     [string]$Wasm64Toolchain = "nightly-2026-06-22",
-    [string]$StableToolchain = "1.99.0",
+    [string]$StableToolchain = "1.99.1",
     [string]$OutputDirectory = "dist/scripted-workers"
 )
 

@@ -2822,7 +2822,7 @@ fn form_invalid_event_trust_and_author_overrides_works<E: ScriptEngine>() {
       const fields = ['type', 'bubbles', 'cancelable', 'composed', 'defaultPrevented',
         '__canceled', 'eventPhase', 'target', 'currentTarget', 'srcElement',
         '__initialized', '__dispatch', '__stop', '__stopImmediate', '__inPassive',
-        '__path', '__pathTargets', '__pathIndex', 'isTrusted'];
+        '__eid', 'isTrusted'];
       const previous = fields.map(key => Object.getOwnPropertyDescriptor(prototype, key));
       let retained;
       const seen = [];

@@ -79,6 +79,7 @@ impl<T: script_engine_api::CallCx + ?Sized> OwnerResolvedCx for T {}
 
 mod crypto;
 mod dom;
+mod events;
 mod fetch;
 pub mod form_encoding;
 mod form_data;
@@ -212,8 +213,9 @@ impl<'cx, E: ScriptEngine + 'cx> Surface<'_, 'cx, E> {
 
 /// State the runtime's native callbacks share, stored as the engine's single
 /// host-data slot (`Rc<dyn Any>`). One aggregate so every host object reaches the
-/// same place; grows as host objects are added (the event-loop task queue and
-/// `EventTarget` listeners land here as they graduate from JS bootstraps).
+/// same place; grows as host objects are added (the event-loop task queue
+/// graduates here from its JS bootstrap; `EventTarget` listeners already live in
+/// the agent's `genet-events` registry).
 #[derive(Default)]
 pub struct HostState {
     pub(crate) agent: std::rc::Weak<RefCell<AgentState>>,
@@ -590,7 +592,7 @@ pub struct Runtime<E: ScriptEngine> {
 }
 
 const REALM_TASK_HOOKS: &[&str] = &[
-    "__dispatchSynthetic", "__dispatchTransition", "__dispatchTouch",
+    "__dispatchHostEvent", "__dispatchTransition", "__dispatchTouch",
     "__dispatchWheel", "__dispatchAnimation", "__dispatchScriptLoadError", "__dispatchFrameLoad",
     "__reportListenerException", "__reportScriptException", "__fetchSettle", "__fetchFail",
     "__fetchStartStream", "__fetchPushChunk", "__fetchClose", "__fetchError",
@@ -684,6 +686,10 @@ pub(crate) struct AgentState {
     /// teardown can release them without needing the concrete backend type.
     pub(crate) task_hooks: std::collections::BTreeMap<(RealmId, &'static str), Rc<dyn std::any::Any>>,
     pub(crate) dom_adoption: dom::adoption::AgentDomState,
+    /// The one listener registry every realm of the agent dispatches through.
+    pub(crate) events: Rc<RefCell<genet_events::Registry>>,
+    /// Allocator for the ids of windows and plain `EventTarget` objects.
+    pub(crate) next_event_target: u64,
     pub(crate) frames: crate::frames::FrameState,
     pub(crate) validation_message_catalog: ValidationMessageCatalog,
     pub(crate) next_validation_report_sequence: u64,
@@ -1397,7 +1403,7 @@ impl<E: ScriptEngine> Runtime<E> {
             return result;
         }
         // The tagged raw id crosses as a decimal string, preserving all 64 bits.
-        let v = match self.call_task_top("__dispatchSynthetic", &[&raw_node_id.to_string(), event_type]) {
+        let v = match self.call_task_top("__dispatchHostEvent", &[&raw_node_id.to_string(), event_type]) {
             Ok(value) => value,
             Err(error) => {
                 self.flush_host_trace_events();
@@ -1876,6 +1882,11 @@ impl<E: ScriptEngine> Runtime<E> {
             let HostState { dom, pins, .. } = &mut *host;
             totals.1 += dom.collect(pins.iter());
         }
+        // Listeners go with their node: drop the targets no store holds any more.
+        let events = self.agent.borrow().events.clone();
+        events
+            .borrow_mut()
+            .retain_nodes(|id| dom::adoption::owner_host(&self.host, id).is_some());
         totals
     }
 
@@ -2810,6 +2821,7 @@ pub(crate) fn install_host_surface<E: ScriptEngine>(
     // ES5-style (function constructors, no arrows/classes) for the widest backend
     // coverage.
     engine.eval(EVENT_LOOP_BOOTSTRAP)?;
+    events::install(engine)?;
     engine.eval(EVENT_TARGET_BOOTSTRAP)?;
 
     // postMessage (async 'message' delivery to the global) + minimal location /
@@ -3061,59 +3073,176 @@ const EVENT_TARGET_BOOTSTRAP: &str = r#"
       trustApply(trustSet, uaEventTrust, [event, false]);
     }
   }
-  // Shared EventTarget. Listeners are stored as `{cb, once, passive}` records,
-  // keyed by phase ('c:'/'b:' + type) — the same model Node uses in dom.rs, so
-  // window and DOM nodes share one listener shape and one firing helper
-  // (`__fire`). window has no DOM children, so its own `dispatchEvent` is a
-  // target-only dispatch; Node (dom.rs) overrides dispatchEvent with the full
-  // capture → target → bubble walk and reuses `__fire` per node (including
-  // window at the top of the propagation path). See
-  // docs/2026-06-01_event_model_convergence_plan.md.
+  // Shared EventTarget over the Rust listener registry (genet-events). The
+  // registry owns listener order, phases, once/passive and the dispatch walk; a
+  // callback itself stays here, on its target (a WeakMap entry keyed by the
+  // wrapper), so a detached node and its listeners are collected together. The
+  // realm's `evHook`, handed to every native dispatch, is how Rust runs one.
   function eventOpts(arg) {
     if (arg && typeof arg === 'object') {
       return { capture: !!arg.capture, once: !!arg.once, passive: !!arg.passive };
     }
     return { capture: !!arg, once: false, passive: false };
   }
-  function EventTarget() { this.__listeners = {}; }
+  var evAdd = globalThis.__evAdd, evRemove = globalThis.__evRemove, evDispatch = globalThis.__evDispatch;
+  var evComposed = globalThis.__evComposedPath, evNonPassive = globalThis.__evHasNonPassive;
+  var evHasListeners = globalThis.__evHasListeners, evNewId = globalThis.__evNewId, evDrop = globalThis.__evDropObject;
+  delete globalThis.__evAdd; delete globalThis.__evRemove; delete globalThis.__evDispatch;
+  delete globalThis.__evComposedPath; delete globalThis.__evHasNonPassive;
+  delete globalThis.__evHasListeners; delete globalThis.__evNewId; delete globalThis.__evDropObject;
+  var evApply = Reflect.apply, evString = String, evCreate = Object.create, evSplit = String.prototype.split;
+  var evTypeError = TypeError;
+  var evGet = WeakMap.prototype.get, evSet = WeakMap.prototype.set;
+  // Agent-wide, so every realm names one window or EventTarget object by one key.
+  var targetKeys = globalThis.__agentTimers.eventTargetKeys;
+  if (!targetKeys) targetKeys = globalThis.__agentTimers.eventTargetKeys = new WeakMap();
+  var windows = globalThis.__agentTimers.eventWindows;
+  if (!windows) windows = globalThis.__agentTimers.eventWindows = evCreate(null);
+  // Agent-wide too: a node keeps its listeners when it is adopted into another
+  // realm or its creation realm is discarded, and any realm's hook can run them.
+  var callbackState = globalThis.__agentTimers.eventCallbacks;
+  if (!callbackState) {
+    callbackState = globalThis.__agentTimers.eventCallbacks =
+      { stores: new WeakMap(), ids: new WeakMap(), next: 1 };   // target -> {id: cb}; cb -> id
+  }
+  var callbackStores = callbackState.stores, callbackIds = callbackState.ids;
+  var dropRegistry = typeof FinalizationRegistry === 'function'
+    ? new FinalizationRegistry(function(id) { evDrop(id); }) : null;
+  // A window is named per realm, not per object: the WindowProxy outlives a
+  // navigation, but its listeners belong to the page, so they must not.
+  var ownWindowKey = null;
+  function windowKey() {
+    if (ownWindowKey === null) {
+      var id = evNewId();
+      ownWindowKey = 'w' + id; windows[id] = globalThis;
+    }
+    return ownWindowKey;
+  }
+  function keyOf(target) {
+    if (target === globalThis) return windowKey();
+    var key = evApply(evGet, targetKeys, [target]);
+    if (key !== undefined) return key;
+    var id = evNewId();
+    key = 'o' + id;
+    if (dropRegistry) dropRegistry.register(target, id);
+    evApply(evSet, targetKeys, [target, key]);
+    return key;
+  }
+  function callbackId(callback) {
+    var id = evApply(evGet, callbackIds, [callback]);
+    if (id === undefined) { id = callbackState.next++; evApply(evSet, callbackIds, [callback, id]); }
+    return id;
+  }
+  // `ref` is a node wrapper's reflector (the registry keys nodes by it); other
+  // targets are keyed through `keyOf`.
+  function addListener(target, ref, type, callback, options) {
+    type = evString(type);
+    if (callback === null || callback === undefined) return;
+    if (typeof callback !== 'function' && typeof callback !== 'object') {
+      throw new evTypeError("Failed to execute 'addEventListener': parameter 2 is not of type 'EventListener'.");
+    }
+    var o = eventOpts(options);
+    var id = callbackId(callback);
+    var flags = (o.capture ? 'c' : '') + (o.once ? 'o' : '') + (o.passive ? 'p' : '');
+    if (evAdd(ref !== undefined ? ref : keyOf(target), type, evString(id), flags) === '1') {
+      var store = evApply(evGet, callbackStores, [target]);
+      if (!store) { store = evCreate(null); evApply(evSet, callbackStores, [target, store]); }
+      store[id] = callback;
+    }
+  }
+  function removeListener(target, ref, type, callback, options) {
+    type = evString(type);
+    if (callback === null || callback === undefined) return;
+    var id = evApply(evGet, callbackIds, [callback]);
+    if (id === undefined) return;
+    var o = eventOpts(options);
+    var removed = evRemove(ref !== undefined ? ref : keyOf(target), type, evString(id), o.capture ? '1' : '0');
+    if (removed === '2') {
+      var store = evApply(evGet, callbackStores, [target]);
+      if (store) delete store[id];
+    }
+  }
+  // The DOM bootstrap supplies what only it can: wrapping a node key and the
+  // form activation behaviours.
+  var nodeOps = null;
+  function resolveKey(key, objectTarget) {
+    var kind = key.charAt(0), rest = key.slice(1);
+    if (kind === 'n') return nodeOps ? nodeOps.resolve(rest) : null;
+    if (kind === 'w') return windows[rest] || null;
+    return objectTarget;
+  }
+  // Rust-initiated callbacks. `invoke` runs one listener and reports the event's
+  // flags back as a bitmask (1 stop, 2 stop-immediate, 4 canceled).
+  // Passed to every native dispatch: Rust calls back through the realm's own code.
+  function evHook(op, a, b, c, d, e, f, g) {
+    if (op === 'invoke') {
+      var current = resolveKey(a, g);
+      var store = current && evApply(evGet, callbackStores, [current]);
+      var callback = store && store[b];
+            if (callback === undefined || callback === null) return '0';
+      var target = d ? resolveKey(d, g) : null;
+      c.target = target; c.srcElement = target; c.currentTarget = current;
+      c.eventPhase = +e.charAt(0); c.__inPassive = e.length > 1; c.__eid = +f;
+      try {
+        if (typeof callback === 'function') {
+          evApply(callback, current, [c]);
+        } else {
+          var handler = callback.handleEvent;
+          if (typeof handler !== 'function') throw new evTypeError('EventListener.handleEvent is not callable');
+          evApply(handler, callback, [c]);
+        }
+      } catch (ex) { reportException(ex, '', 'Uncaught (in listener): '); }
+      c.__inPassive = false;
+      return evString((c.__stop ? 1 : 0) + (c.__stopImmediate ? 2 : 0) + (c.__canceled ? 4 : 0));
+    }
+    if (op === 'activationTarget') return nodeOps && nodeOps.activationTarget(resolveKey(a)) ? '1' : '0';
+    if (op === 'activate') { if (nodeOps) nodeOps.activate(resolveKey(a), b); return ''; }
+    return '';
+  }
+  function dispatchTo(target, ref, event, windowKey, activation) {
+    event.__dispatch = true;
+    var flags = (event.bubbles ? 'b' : '') + (event.composed ? 'c' : '') + (event.__stop ? 's' : '') +
+      (event.__stopImmediate ? 'i' : '') + (event.__canceled ? 'x' : '') + (activation ? 'a' : '');
+    var out = '00';
+    try {
+      out = evDispatch(ref !== undefined ? ref : keyOf(target), event, target, windowKey || '', evString(event.type), flags, evHook);
+    } finally {
+      // DOM clears the transient state after dispatch; `clearTargets` also
+      // nulls the target of an event that ended inside a shadow tree.
+      event.__dispatch = false; event.currentTarget = null; event.eventPhase = 0;
+      event.__stop = false; event.__stopImmediate = false; event.__eid = 0;
+      event.target = out.charAt(1) === '1' ? null : target;
+      event.srcElement = event.target;
+    }
+    return out.charAt(0) !== '1';
+  }
+  function composedPathOf(event) {
+    var id = event.__eid;
+    if (!id) return [];
+    var list = evComposed(evString(id));
+    if (!list) return [];
+    var keys = evApply(evSplit, list, [',']), out = [];
+    for (var i = 0; i < keys.length; i++) {
+      var entry = resolveKey(keys[i], event.currentTarget);
+      if (entry) out[out.length] = entry;
+    }
+    return out;
+  }
+  globalThis.__agentTimers.eventHasListeners = function(target) {
+    return evHasListeners(keyOf(target)) === '1';
+  };
+  Object.defineProperty(globalThis, '__eventCore', { configurable: true, writable: true, value: {
+    add: addListener, remove: removeListener, dispatch: dispatchTo, composedPath: composedPathOf,
+    windowKey: function() { return windowKey().slice(1); },
+    hasNonPassive: function(ref, type, windowKey) { return evNonPassive(ref, evString(type), windowKey || '') === '1'; },
+    setNodeOps: function(ops) { nodeOps = ops; }
+  } });
+  function EventTarget() {}
   EventTarget.prototype.addEventListener = function(type, cb, opts) {
-    if (typeof cb !== 'function') return;
-    if (!this.__listeners) this.__listeners = {};
-    var o = eventOpts(opts);
-    var key = (o.capture ? 'c:' : 'b:') + type;
-    var l = this.__listeners[key] || (this.__listeners[key] = []);
-    for (var i = 0; i < l.length; i++) { if (l[i].cb === cb) return; }
-    l.push({ cb: cb, once: o.once, passive: o.passive });
+    addListener(this, undefined, type, cb, opts);
   };
   EventTarget.prototype.removeEventListener = function(type, cb, opts) {
-    if (!this.__listeners) return;
-    var o = eventOpts(opts);
-    var l = this.__listeners[(o.capture ? 'c:' : 'b:') + type];
-    if (!l) return;
-    for (var i = 0; i < l.length; i++) {
-      if (l[i].cb === cb) { l.splice(i, 1); return; }
-    }
-  };
-  // Fire one node's listeners for `key` ('c:'/'b:' + type). Honors once (remove
-  // before call), passive (preventDefault no-op via __inPassive), and
-  // stopImmediatePropagation (halts the rest of this node's listeners). Shared
-  // by window's dispatchEvent here and Node's propagation walk in dom.rs.
-  EventTarget.prototype.__fire = function(event, key) {
-    if (!this.__listeners) return;
-    var l = this.__listeners[key];
-    if (!l) return;
-    event.currentTarget = this;
-    var copy = l.slice();
-    for (var i = 0; i < copy.length && !event.__stopImmediate; i++) {
-      var rec = copy[i];
-      if (rec.once) { var j = l.indexOf(rec); if (j !== -1) l.splice(j, 1); }
-      event.__inPassive = rec.passive;
-      // Listener exceptions are reported, not propagated (DOM §dispatch); see
-      // the same guard in dom/bootstrap.js's node `fire`.
-      try { rec.cb.call(this, event); }
-      catch (ex) { reportException(ex, '', 'Uncaught (in listener): '); }
-      event.__inPassive = false;
-    }
+    removeListener(this, undefined, type, cb, opts);
   };
   EventTarget.prototype.dispatchEvent = function(event) {
     if (event.__initialized === false || event.__dispatch) {
@@ -3122,22 +3251,7 @@ const EVENT_TARGET_BOOTSTRAP: &str = r#"
     clearUAEventTrust(event);
     var dispatcher = trustApply(trustGet, nodeDispatch, [this]);
     if (dispatcher) return trustApply(dispatcher, this, [event]);
-    // window is a leaf target (no DOM tree): target phase only — capture- then
-    // bubble-registered listeners on this target, with the dispatch flags set.
-    // The stop flags are cleared *after* dispatch, not before (DOM §dispatch):
-    // an event already stopped (`cancelBubble` set pre-dispatch) fires nothing.
-    event.__dispatch = true;
-    event.target = this;
-    event.srcElement = this;
-    event.eventPhase = 2; // AT_TARGET
-    if (!event.__stop) { this.__fire(event, 'c:' + event.type); }
-    if (!event.__stop) { this.__fire(event, 'b:' + event.type); }
-    event.__dispatch = false;
-    event.currentTarget = null;
-    event.eventPhase = 0;
-    event.__stop = false;
-    event.__stopImmediate = false;
-    return !event.__canceled;
+    return dispatchTo(this, undefined, event, '', false);
   };
   globalThis.EventTarget = EventTarget;
 
@@ -3152,6 +3266,7 @@ const EVENT_TARGET_BOOTSTRAP: &str = r#"
     this.composed = !!init.composed;
     this.defaultPrevented = false;
     this.__canceled = false;
+    this.__eid = 0;
     this.eventPhase = 0; // NONE until dispatch sets the phase
     this.target = null;
     this.currentTarget = null;
@@ -3320,12 +3435,9 @@ const EVENT_TARGET_BOOTSTRAP: &str = r#"
   TouchEvent.prototype.constructor = TouchEvent;
   globalThis.TouchEvent = TouchEvent;
 
-  // The Window's listeners live on `globalThis` **itself**, not on a private
-  // EventTarget instance. This is load-bearing: `Node.prototype.dispatchEvent`
-  // (dom/bootstrap.js) walks the tree and, at the top of the path, fires the
-  // window by reading `globalThis.__listeners` directly. If the listeners lived
-  // anywhere else, `window.addEventListener('click', …)` would never fire for a
-  // click on the page — it would only see events dispatched *at* the window.
+  // The Window's listeners are registered against `globalThis` **itself**, not a
+  // private EventTarget instance, so the window the registry puts at the top of
+  // a connected node's path is the object `window.addEventListener` registers.
   //
   // The options argument is forwarded, so `{capture, once, passive}` reaches the
   // window too (dropping it silently made every window listener non-passive).
@@ -3338,14 +3450,6 @@ const EVENT_TARGET_BOOTSTRAP: &str = r#"
   globalThis.dispatchEvent = function(event) {
     return EventTarget.prototype.dispatchEvent.call(globalThis, event);
   };
-  // `dispatchEvent` fires through `this.__fire`, and globalThis does not inherit
-  // from EventTarget.prototype — it only borrows its methods — so it needs its
-  // own. (Node's tree walk calls the standalone `fire` in dom/bootstrap.js, which
-  // reads `__listeners` off the node directly, so it needs nothing here.)
-  globalThis.__fire = function(event, key) {
-    return EventTarget.prototype.__fire.call(globalThis, event, key);
-  };
-
   // "Report the exception" (HTML): fire an ErrorEvent-shaped `error` event at
   // the global, then fall back to the console. This is what a listener's
   // exception does instead of propagating out of dispatchEvent — and it is how
@@ -4483,8 +4587,8 @@ mod tests {
     ///
     /// Both halves were broken: `globalThis.addEventListener` delegated to a
     /// private `EventTarget` instance, so the window's listeners lived somewhere
-    /// `Node.prototype.dispatchEvent` never looked (it fires the top of the
-    /// propagation path by reading `globalThis.__listeners`) — meaning
+    /// path walk never looked (it fired the top of the propagation path by
+    /// reading `globalThis.__listeners`) — meaning
     /// `window.addEventListener('click', …)` never saw a click on the page. And
     /// the wrapper dropped its third argument, so `{passive}` / `{capture}` /
     /// `{once}` silently never applied to a window listener.

@@ -45,9 +45,12 @@ impl WireTransport {
 }
 impl Transport for WireTransport {
     fn send(&self, request: WireRequest) -> TransportFuture<'_> {
+        let Some(method) = http_method(&request.method) else {
+            return Box::pin(async { None });
+        };
         let request = murm_wire::WireRequest {
             url: request.url,
-            method: http_method(&request.method),
+            method,
             headers: request.headers,
             body: request.body,
             prefer_h3: request.prefer_h3,
@@ -61,20 +64,32 @@ impl Transport for WireTransport {
         })
     }
 }
-fn http_method(method: &Method) -> murm_wire::http::Method {
+fn http_method(method: &Method) -> Option<murm_wire::http::Method> {
     use murm_wire::http;
     match method {
-        Method::Get => http::Method::GET,
-        Method::Head => http::Method::HEAD,
-        Method::Post => http::Method::POST,
-        Method::Put => http::Method::PUT,
-        Method::Delete => http::Method::DELETE,
-        Method::Patch => http::Method::PATCH,
-        Method::Options => http::Method::OPTIONS,
-        // Preserve the established adapter behavior for a directly constructed
-        // invalid token. Fetch validates its own methods before this seam.
-        Method::Other(token) => {
-            http::Method::from_bytes(token.as_bytes()).unwrap_or(http::Method::GET)
-        },
+        Method::Get => Some(http::Method::GET),
+        Method::Head => Some(http::Method::HEAD),
+        Method::Post => Some(http::Method::POST),
+        Method::Put => Some(http::Method::PUT),
+        Method::Delete => Some(http::Method::DELETE),
+        Method::Patch => Some(http::Method::PATCH),
+        Method::Options => Some(http::Method::OPTIONS),
+        Method::Other(token) => http::Method::from_bytes(token.as_bytes()).ok(),
+    }
+}
+
+#[cfg(test)]
+mod method_tests {
+    use super::*;
+
+    #[test]
+    fn wire_refuses_invalid_custom_method_without_replacing_it_with_get() {
+        assert!(http_method(&Method::Other("BAD METHOD".into())).is_none());
+        assert_eq!(
+            http_method(&Method::Other("REPORT".into()))
+                .unwrap()
+                .as_str(),
+            "REPORT"
+        );
     }
 }

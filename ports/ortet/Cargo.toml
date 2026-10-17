@@ -19,6 +19,7 @@ scripted = ["genet-documents/scripted", "dep:genet-scripted", "dep:script-engine
 scripted-nova = ["scripted", "genet-documents/scripted-nova", "dep:script-engine-nova"]
 # Browser-only real-device lease probe; never exposed in ordinary artifacts.
 browser-frame-fixture = []
+browser-fetch-fixture = []
 
 [lib]
 name = "ortet"
@@ -73,7 +74,7 @@ js-sys = "=0.3.106"
 gloo-timers = { version = "0.3", features = ["futures"] }
 wgpu = { workspace = true, features = ["webgpu"] }
 web-sys = { version = "=0.3.106", features = [
-    "Document", "DomRect", "Element", "Event", "EventTarget", "Headers", "Response", "Request", "RequestInit", "Location", "Url",
+    "AbortController", "AbortSignal", "Document", "DomRect", "Element", "Event", "EventTarget", "Headers", "Response", "Request", "RequestInit", "Location", "Performance", "Url",
     "ReadableStream", "ReadableStreamDefaultReader",
     "FocusEvent", "HtmlCanvasElement", "HtmlElement", "KeyboardEvent", "MouseEvent",
     "PointerEvent", "WheelEvent", "Window", "console",

@@ -456,6 +456,10 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
 
         let mut rt = Runtime::<E>::new().map_err(|e| format!("script runtime init: {e:?}"))?;
         rt.set_worker_policy(options.worker_policy);
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(launcher) = options.worker_process_launcher {
+            rt.set_worker_process_launcher(launcher);
+        }
         rt.set_validation_message_catalog(options.validation_message_catalog);
         rt.set_document_encoding(encoding);
         rt.set_html_decode_options(decode_options);
@@ -723,6 +727,13 @@ struct EmptyResourceFetcher;
 
 #[cfg(feature = "livery")]
 impl ResourceFetcher for EmptyResourceFetcher {
+    fn fetch_request(
+        &self,
+        _request: &genet_host_api::ResourceRequest,
+    ) -> Option<genet_host_api::ResourceFetchResponse> {
+        None
+    }
+
     fn fetch(&self, _url: &str) -> Option<Vec<u8>> {
         None
     }
@@ -1041,6 +1052,10 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         rt.set_html_decode_options(decode_options);
         rt.set_validation_message_catalog(options.validation_message_catalog);
         rt.set_worker_policy(options.worker_policy);
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(launcher) = options.worker_process_launcher {
+            rt.set_worker_process_launcher(launcher);
+        }
         rt.set_fetch_handler(Box::new(fetcher.clone()));
         rt.set_script_resource_loader(Box::new(fetcher.clone()));
         let worker_wake = fetcher.wake();
@@ -1796,6 +1811,13 @@ mod livery_text_fragment_tests {
     }
 
     impl ResourceFetcher for CountingFetcher {
+        fn fetch_request(
+            &self,
+            _request: &genet_host_api::ResourceRequest,
+        ) -> Option<genet_host_api::ResourceFetchResponse> {
+            None
+        }
+
         fn fetch(&self, url: &str) -> Option<Vec<u8>> {
             self.calls.lock().unwrap().push(url.to_owned());
             (url == "https://example.test/article").then(|| self.body.clone())
@@ -2526,6 +2548,13 @@ mod tests {
     #[derive(Clone)]
     struct MapFetcher(std::collections::HashMap<String, Vec<u8>>);
     impl ResourceFetcher for MapFetcher {
+        fn fetch_request(
+            &self,
+            _request: &genet_host_api::ResourceRequest,
+        ) -> Option<genet_host_api::ResourceFetchResponse> {
+            None
+        }
+
         fn fetch(&self, url: &str) -> Option<Vec<u8>> {
             self.0.get(url).cloned()
         }
@@ -2903,6 +2932,13 @@ mod tests {
             requested: Mutex<Vec<String>>,
         }
         impl ResourceFetcher for Modules {
+            fn fetch_request(
+                &self,
+                _request: &genet_host_api::ResourceRequest,
+            ) -> Option<genet_host_api::ResourceFetchResponse> {
+                None
+            }
+
             fn fetch(&self, url: &str) -> Option<Vec<u8>> {
                 self.fetch_response(url).map(|response| response.bytes)
             }
@@ -4242,6 +4278,13 @@ mod tests {
         }
 
         impl ResourceFetcher for LiveryFixtureFetcher {
+            fn fetch_request(
+                &self,
+                _request: &genet_host_api::ResourceRequest,
+            ) -> Option<genet_host_api::ResourceFetchResponse> {
+                None
+            }
+
             fn fetch(&self, url: &str) -> Option<Vec<u8>> {
                 self.resources.get(url).cloned()
             }
@@ -4354,6 +4397,13 @@ mod phase_c_document_encoding_fixtures {
     #[derive(Clone)]
     struct Pages;
     impl ResourceFetcher for Pages {
+        fn fetch_request(
+            &self,
+            _request: &genet_host_api::ResourceRequest,
+        ) -> Option<genet_host_api::ResourceFetchResponse> {
+            None
+        }
+
         fn fetch(&self, url: &str) -> Option<Vec<u8>> {
             self.fetch_response(url).map(|response| response.bytes)
         }

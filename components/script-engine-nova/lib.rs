@@ -1251,6 +1251,7 @@ mod native {
     }
 
     impl ScriptEngine for NovaEngine {
+        fn native_worker_backend() -> Option<&'static str> { Some("nova") }
         fn execution_capabilities() -> ExecutionCapabilities {
             ExecutionCapabilities { bounded_pump_jobs: true, ..ExecutionCapabilities::default() }
         }

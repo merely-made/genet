@@ -342,6 +342,13 @@ impl ResourceResponseSnapshot {
 }
 
 impl ResourceFetcher for ResourceResponseSnapshot {
+    fn fetch_request(
+        &self,
+        _request: &genet_host_api::ResourceRequest,
+    ) -> Option<genet_host_api::ResourceFetchResponse> {
+        None
+    }
+
     fn fetch(&self, url: &str) -> Option<Vec<u8>> {
         self.responses
             .get(url)
@@ -1914,6 +1921,13 @@ mod tests {
 
     struct Fetch;
     impl ResourceFetcher for Fetch {
+        fn fetch_request(
+            &self,
+            _request: &genet_host_api::ResourceRequest,
+        ) -> Option<genet_host_api::ResourceFetchResponse> {
+            None
+        }
+
         fn fetch(&self, url: &str) -> Option<Vec<u8>> {
             match url {
                 "https://example.test/page/site.css" => Some(
@@ -1956,6 +1970,13 @@ mod tests {
 
     struct FrameFetch;
     impl ResourceFetcher for FrameFetch {
+        fn fetch_request(
+            &self,
+            _request: &genet_host_api::ResourceRequest,
+        ) -> Option<genet_host_api::ResourceFetchResponse> {
+            None
+        }
+
         fn fetch(&self, url: &str) -> Option<Vec<u8>> {
             match url {
                 "https://example.test/page/child.html" => Some(b"<p>child</p>".to_vec()),
@@ -2071,6 +2092,13 @@ mod tests {
     fn classifies_data_font_face_as_a_font_resource() {
         struct DataFontFetch;
         impl ResourceFetcher for DataFontFetch {
+            fn fetch_request(
+                &self,
+                _request: &genet_host_api::ResourceRequest,
+            ) -> Option<genet_host_api::ResourceFetchResponse> {
+                None
+            }
+
             fn fetch(&self, url: &str) -> Option<Vec<u8>> {
                 url.starts_with("data:font/ttf;base64,")
                     .then_some(vec![0, 1, 2])
@@ -2124,6 +2152,13 @@ mod tests {
     struct ResponseFetch;
 
     impl ResourceFetcher for ResponseFetch {
+        fn fetch_request(
+            &self,
+            _request: &genet_host_api::ResourceRequest,
+        ) -> Option<genet_host_api::ResourceFetchResponse> {
+            None
+        }
+
         fn fetch(&self, _url: &str) -> Option<Vec<u8>> {
             None
         }

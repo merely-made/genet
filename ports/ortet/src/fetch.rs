@@ -194,73 +194,8 @@ impl RemoteFetcher {
         if lane_for(&request.url) != FetchLane::Remote {
             return Err(NativeFetchFailure::UnsupportedScheme);
         }
-        let parsed =
-            url::Url::parse(&request.url).map_err(|_| NativeFetchFailure::InvalidRequest)?;
-        let mut wire = netfetcher::Request::get(parsed);
-        wire.method = match request.method.as_str() {
-            "GET" => netfetcher::Method::Get,
-            "HEAD" => netfetcher::Method::Head,
-            "POST" => netfetcher::Method::Post,
-            "PUT" => netfetcher::Method::Put,
-            "DELETE" => netfetcher::Method::Delete,
-            "PATCH" => netfetcher::Method::Patch,
-            "OPTIONS" => netfetcher::Method::Options,
-            other => netfetcher::Method::Other(other.into()),
-        };
-        wire.headers = request.headers.clone();
-        wire.body = request.body.clone().map(Into::into);
-        wire.cache = match request.cache.as_str() {
-            "default" => netfetcher::CacheMode::Default,
-            "no-store" => netfetcher::CacheMode::NoStore,
-            "reload" => netfetcher::CacheMode::Reload,
-            "no-cache" => netfetcher::CacheMode::NoCache,
-            "force-cache" => netfetcher::CacheMode::ForceCache,
-            "only-if-cached" => netfetcher::CacheMode::OnlyIfCached,
-            _ => return Err(NativeFetchFailure::InvalidRequest),
-        };
-        wire.redirect = match request.redirect.as_str() {
-            "follow" => netfetcher::RedirectMode::Follow,
-            "error" => netfetcher::RedirectMode::Error,
-            "manual" => netfetcher::RedirectMode::Manual,
-            _ => return Err(NativeFetchFailure::InvalidRequest),
-        };
-        wire.mode = match request.mode.as_str() {
-            "cors" => netfetcher::RequestMode::Cors,
-            "no-cors" => netfetcher::RequestMode::NoCors,
-            "same-origin" => netfetcher::RequestMode::SameOrigin,
-            "navigate" => netfetcher::RequestMode::Navigate,
-            _ => return Err(NativeFetchFailure::InvalidRequest),
-        };
-        wire.referrer = if request.referrer.is_empty() {
-            None
-        } else {
-            Some(url::Url::parse(&request.referrer).map_err(|_| NativeFetchFailure::InvalidRequest)?)
-        };
-        wire.origin = wire.referrer.as_ref().map(url::Url::origin);
-        wire.referrer_policy = match request.referrer_policy.as_str() {
-            "" => netfetcher::ReferrerPolicy::Empty,
-            "no-referrer" => netfetcher::ReferrerPolicy::NoReferrer,
-            "no-referrer-when-downgrade" => netfetcher::ReferrerPolicy::NoReferrerWhenDowngrade,
-            "same-origin" => netfetcher::ReferrerPolicy::SameOrigin,
-            "origin" => netfetcher::ReferrerPolicy::Origin,
-            "strict-origin" => netfetcher::ReferrerPolicy::StrictOrigin,
-            "origin-when-cross-origin" => netfetcher::ReferrerPolicy::OriginWhenCrossOrigin,
-            "strict-origin-when-cross-origin" => {
-                netfetcher::ReferrerPolicy::StrictOriginWhenCrossOrigin
-            },
-            "unsafe-url" => netfetcher::ReferrerPolicy::UnsafeUrl,
-            _ => return Err(NativeFetchFailure::InvalidRequest),
-        };
-        wire.credentials = match request.credentials.as_str() {
-            "omit" => netfetcher::Credentials::Omit,
-            "same-origin" => netfetcher::Credentials::SameOrigin,
-            "include" => netfetcher::Credentials::Include,
-            _ => return Err(NativeFetchFailure::InvalidRequest),
-        };
-        wire.integrity = request.integrity.clone();
-        if request.mode == "navigate" {
-            wire.destination = netfetcher::Destination::Document;
-        }
+        let wire = netfetcher::Request::from_host(request)
+            .ok_or(NativeFetchFailure::InvalidRequest)?;
         if self.policy.max_concurrent_fetches == 0 {
             return Err(NativeFetchFailure::NoAdmissionCapacity);
         }

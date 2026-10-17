@@ -38,6 +38,13 @@ use std::sync::{Arc, Mutex};
 #[derive(Clone)]
 struct NoFetch;
 impl ResourceFetcher for NoFetch {
+    fn fetch_request(
+        &self,
+        _request: &genet_host_api::ResourceRequest,
+    ) -> Option<genet_host_api::ResourceFetchResponse> {
+        None
+    }
+
     fn fetch(&self, _url: &str) -> Option<Vec<u8>> {
         None
     }
@@ -50,6 +57,13 @@ struct ImageFetch {
 
 #[cfg(feature = "livery")]
 impl ResourceFetcher for ImageFetch {
+    fn fetch_request(
+        &self,
+        _request: &genet_host_api::ResourceRequest,
+    ) -> Option<genet_host_api::ResourceFetchResponse> {
+        None
+    }
+
     fn fetch(&self, url: &str) -> Option<Vec<u8>> {
         self.requests.lock().unwrap().push(url.to_owned());
         Some(self.bytes.clone())
@@ -87,6 +101,13 @@ struct LinkedResourceFetch {
 
 #[cfg(feature = "livery")]
 impl ResourceFetcher for LinkedResourceFetch {
+    fn fetch_request(
+        &self,
+        _request: &genet_host_api::ResourceRequest,
+    ) -> Option<genet_host_api::ResourceFetchResponse> {
+        None
+    }
+
     fn fetch(&self, url: &str) -> Option<Vec<u8>> {
         self.requests.lock().unwrap().push(url.to_owned());
         match url {
@@ -107,6 +128,13 @@ struct ImportedSheetFetch;
 
 #[cfg(feature = "livery")]
 impl ResourceFetcher for ImportedSheetFetch {
+    fn fetch_request(
+        &self,
+        _request: &genet_host_api::ResourceRequest,
+    ) -> Option<genet_host_api::ResourceFetchResponse> {
+        None
+    }
+
     fn fetch(&self, _url: &str) -> Option<Vec<u8>> {
         None
     }
@@ -137,6 +165,13 @@ struct RedirectedDocumentFetch;
 
 #[cfg(feature = "livery")]
 impl ResourceFetcher for RedirectedDocumentFetch {
+    fn fetch_request(
+        &self,
+        _request: &genet_host_api::ResourceRequest,
+    ) -> Option<genet_host_api::ResourceFetchResponse> {
+        None
+    }
+
     fn fetch(&self, _url: &str) -> Option<Vec<u8>> {
         None
     }
@@ -1981,6 +2016,13 @@ struct SiteFetch;
 
 #[cfg(feature = "livery")]
 impl ResourceFetcher for SiteFetch {
+    fn fetch_request(
+        &self,
+        _request: &genet_host_api::ResourceRequest,
+    ) -> Option<genet_host_api::ResourceFetchResponse> {
+        None
+    }
+
     fn fetch(&self, url: &str) -> Option<Vec<u8>> {
         match url {
             "https://example.test/child.html" => Some(

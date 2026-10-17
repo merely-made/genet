@@ -190,6 +190,11 @@ pub const WINDOW_PROXY_HANDLER_SLOT: &str = "__windowProxyHandler";
 pub const WINDOW_PROXY_TARGET_SLOT: &str = "__windowProxyTarget";
 
 pub trait ScriptEngine: Sized {
+    /// Identifies a concrete native worker helper backend, when available.
+    /// An absent identity cannot be used with a killable worker helper.
+    fn native_worker_backend() -> Option<&'static str> {
+        None
+    }
     /// Limits this backend can enforce. Defaults to no bounded execution.
     fn execution_capabilities() -> ExecutionCapabilities {
         ExecutionCapabilities::default()

@@ -1,0 +1,89 @@
+<!-- Copyright 2026 Mark Alan Boykin
+     This Source Code Form is subject to the terms of the Mozilla Public
+     License, v. 2.0. If a copy of the MPL was not distributed with this
+     file, You can obtain one at https://mozilla.org/MPL/2.0/.
+     SPDX-License-Identifier: MPL-2.0 -->
+<!doctype html>
+<meta charset="utf-8">
+<title>Ortet browser fetch policy receipt</title>
+<pre id="receipt">ORTET_FETCH_POLICY pending</pre>
+<script type="module">
+  const output = document.querySelector("#receipt");
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const stats = async () => (await (await fetch("/__stats")).json()).requests;
+  const count = (requests, path) => requests.filter(entry => entry.path === path).length;
+  const failure = async promise => {
+    try { await promise; return "accepted"; }
+    catch (error) { return String(error); }
+  };
+  const waitForRequest = async path => {
+    for (let attempt = 0; attempt < 40; attempt++) {
+      if (count(await stats(), path)) return;
+      await sleep(25);
+    }
+    throw new Error(`${path} never reached the fixture server`);
+  };
+  try {
+    const { default: init, BrowserResourceLimits, BrowserFetchFixture } = await import("/ortet.js");
+    await init();
+    const origin = location.origin;
+    const small = new BrowserFetchFixture(new BrowserResourceLimits(7, 128, 8));
+    const exact = new BrowserFetchFixture(new BrowserResourceLimits(8, 128, 8));
+    const chunked = await failure(small.fetch(`${origin}/policy/chunked`));
+    const exactLength = await exact.fetch(`${origin}/policy/chunked`);
+    const gzipOverLimit = await failure(small.fetch(`${origin}/policy/gzip`));
+    const gzipExactLength = await exact.fetch(`${origin}/policy/gzip`);
+    const redirected = await failure(small.fetch(`${origin}/policy/redirect`));
+
+    const timed = new BrowserResourceLimits(32, 128, 8);
+    timed.set_fetch_policy(20, 1, 80);
+    const timedFixture = new BrowserFetchFixture(timed);
+    const deadline = await failure(timedFixture.fetch(`${origin}/policy/slow`));
+    const afterAbortLength = await timedFixture.fetch(`${origin}/policy/short`);
+
+    const closed = new BrowserResourceLimits(32, 128, 8);
+    closed.set_fetch_policy(20, 0, 100);
+    const beforeClosed = count(await stats(), "/policy/short");
+    const admission = await failure(new BrowserFetchFixture(closed).fetch(`${origin}/policy/short`));
+    const afterClosed = count(await stats(), "/policy/short");
+
+    const overlapping = new BrowserResourceLimits(32, 128, 8);
+    overlapping.set_fetch_policy(20, 1, 1500);
+    const shared = new BrowserFetchFixture(overlapping);
+    const first = shared.fetch(`${origin}/policy/hold`);
+    await waitForRequest("/policy/hold");
+    const beforeSecond = count(await stats(), "/policy/short");
+    const waitingDeadline = await failure(shared.fetch_with_timeout(`${origin}/policy/short`, 80));
+    const afterWaitingDeadline = count(await stats(), "/policy/short");
+    const second = shared.fetch(`${origin}/policy/short`);
+    await sleep(75);
+    const duringHold = count(await stats(), "/policy/short");
+    await fetch("/__release");
+    const [heldLength, queuedLength] = await Promise.all([first, second]);
+    const afterRelease = count(await stats(), "/policy/short");
+
+    const unsupported = new BrowserResourceLimits(32, 128, 8);
+    let redirectConfig = "accepted";
+    try { unsupported.set_fetch_policy(19, 1, 100); }
+    catch (error) { redirectConfig = String(error); }
+
+    const checks = {
+      decoded_chunk_limit: chunked.includes("byte limit exceeded"),
+      exact_chunk_length: exactLength === 8,
+      decoded_gzip_limit: gzipOverLimit.includes("byte limit exceeded"),
+      exact_gzip_length: gzipExactLength === 8,
+      redirected_limit: redirected.includes("byte limit exceeded"),
+      elapsed_deadline: deadline.includes("deadline exceeded"),
+      abort_releases_permit: afterAbortLength === 2,
+      zero_admission: admission.includes("admission capacity is zero") && beforeClosed === afterClosed,
+      queued_wait_deadline: waitingDeadline.includes("deadline exceeded") && afterWaitingDeadline === beforeSecond,
+      queued_before_wire: duringHold === beforeSecond,
+      shared_admission_released: heldLength === 8 && queuedLength === 2 && afterRelease === beforeSecond + 1,
+      unsupported_redirect_cap: redirectConfig.includes("cannot enforce a custom redirect limit"),
+    };
+    if (!Object.values(checks).every(Boolean)) throw new Error(JSON.stringify(checks));
+    output.textContent = `ORTET_FETCH_POLICY ${Object.entries(checks).map(([key, value]) => `${key}=${value}`).join(" ")}`;
+  } catch (error) {
+    output.textContent = `ORTET_FETCH_POLICY error=${error}`;
+  }
+</script>

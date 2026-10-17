@@ -44,6 +44,13 @@ impl FixtureFetcher {
 }
 
 impl ResourceFetcher for FixtureFetcher {
+    fn fetch_request(
+        &self,
+        _request: &genet_host_api::ResourceRequest,
+    ) -> Option<genet_host_api::ResourceFetchResponse> {
+        None
+    }
+
     fn fetch(&self, url: &str) -> Option<Vec<u8>> {
         self.fetch_response(url).map(|response| response.bytes)
     }

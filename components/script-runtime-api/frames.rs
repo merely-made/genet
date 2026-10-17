@@ -161,6 +161,29 @@ struct FrameRecord {
     loaded: bool,
 }
 
+impl HostState {
+    /// The live child document's effective resource base for this iframe.
+    /// The child host owns its URL, inherited about-document base, and first
+    /// connected `<base>` element; callers must not reconstruct those facts
+    /// from the container's `src` attribute.
+    pub fn child_document_base_url(&self, container: NodeId) -> Option<String> {
+        let agent = self.agent.upgrade()?;
+        let child = {
+            let agent = agent.borrow();
+            let realm = agent.frames.records.iter().find_map(|(realm, record)| {
+                if record.owner != container {
+                    return None;
+                }
+                let parent = agent.hosts.get(&record.parent)?;
+                (parent.borrow().dom.arena_id() == self.dom.arena_id()).then_some(*realm)
+            })?;
+            agent.hosts.get(&realm)?.clone()
+        };
+        let base = child.borrow().document_base_url();
+        base
+    }
+}
+
 impl FrameState {
     pub(crate) fn ancestor_origins(&self, realm: RealmId) -> Option<Vec<String>> {
         if self.document_is_detached(realm) {

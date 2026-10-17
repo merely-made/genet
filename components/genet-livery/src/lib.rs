@@ -95,7 +95,7 @@ pub use layout::{
     BlockAlgorithmCounts, LayoutError, LiveryLayout, content_box_size, hit_test,
     hit_test_with_scroll, layout, layout_with_text_system, resolve_container_query_styles,
     resolve_container_query_styles_with_images, resolve_container_relative_styles,
-    used_value_context,
+    estimated_used_value_context, used_value_context_with_text_system,
 };
 pub use livery::media::{Device, ViewportSize, ViewportSizes};
 pub use livery::selector::StatePseudoClass;

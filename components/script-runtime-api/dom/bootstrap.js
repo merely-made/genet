@@ -24,6 +24,7 @@
   var mouseEvents = globalThis.__agentTimers.domMouseEvents;
   var reportListenerException = globalThis.__agentTimers.reportException;
   var formEventCreators = globalThis.__agentTimers.domFormEventCreators;
+  var documentModes = globalThis.__agentTimers.domDocumentModes;
   if (!formEventCreators) formEventCreators = globalThis.__agentTimers.domFormEventCreators = new WeakMap();
   var creatorFormKind = globalThis.__formControlGet;
 
@@ -80,6 +81,13 @@
   var gcWeakMapGet = WeakMap.prototype.get;
   var gcWeakMapSet = WeakMap.prototype.set;
   var gcWeakMapDelete = WeakMap.prototype.delete;
+  var gcWeakMapHas = WeakMap.prototype.has;
+  var gcWeakSetHas = WeakSet.prototype.has;
+  function privateGet(map, key) { return applyDOMBrand(gcWeakMapGet, map, [key]); }
+  function privateSet(map, key, value) { return applyDOMBrand(gcWeakMapSet, map, [key, value]); }
+  function privateHas(map, key) { return applyDOMBrand(gcWeakMapHas, map, [key]); }
+  function privateDelete(map, key) { return applyDOMBrand(gcWeakMapDelete, map, [key]); }
+  function privateSetHas(set, key) { return applyDOMBrand(gcWeakSetHas, set, [key]); }
   var gcStringSplit = String.prototype.split;
   var gcStringIndexOf = String.prototype.indexOf;
   var gcStringSlice = String.prototype.slice;
@@ -209,7 +217,7 @@
   // A document is an HTML document unless it was minted as an XML one
   // (`new Document()`, `createDocument`, an XML `DOMParser` parse).
   function isHtmlDocument(doc) {
-    return !doc || doc.__isHtml !== false;
+    return !doc || privateGet(documentModes, doc) === true;
   }
   // `tagName` / `nodeName` for an element: the qualified name, ASCII-uppercased
   // only for an HTML-namespaced element whose *current* node document is an HTML
@@ -535,7 +543,9 @@
     if (!root) return;
     var contents = templateContentsOf(root);
     if (contents) {
-      ownerDocuments.set(contents, wrapNode(__templateOwnerDocument(contents.__ref)));
+      var inertDocument = wrapNode(__templateOwnerDocument(contents.__ref));
+      privateSet(documentModes, inertDocument, true);
+      ownerDocuments.set(contents, inertDocument);
       rehomeTemplateOwnersLocal(contents);
     }
     var kids = root.childNodes;
@@ -838,7 +848,7 @@
         // A Document clone begins empty, even when deep. createHTMLDocument()
         // would prepopulate html/head/body and make copied children duplicates.
         copy = wrapNode(__createDocument());
-        copy.__isHtml = isHtmlDocument(node);
+        privateSet(documentModes, copy, isHtmlDocument(node));
         __copyDocumentEncoding(node.__ref, copy.__ref);
         copyDocument = copy;
         break;
@@ -1442,6 +1452,7 @@
     local = String(local);
     var oldValue = __getAttributeNS(this.__ref, nsArg(ns), local);
     if (oldValue === null) return;
+    detachAttrView(this, nsArg(ns), local, oldValue);
     moRemoveAttributeNS(this.__ref, nsArg(ns), local);
     customElementAttributeChanged(this, local, oldValue, null);
   };
@@ -1454,6 +1465,15 @@
     name = String(name);
     if (this.namespaceURI === 'http://www.w3.org/1999/xhtml') name = name.toLowerCase();
     var oldValue = __getAttribute(this.__ref, name);
+    if (oldValue !== null) {
+      var recs = attributeRecords(this);
+      for (var i = 0; i < recs.length; i++) {
+        if (recs[i].qname === name) {
+          detachAttrView(this, recs[i].ns, recs[i].local, oldValue);
+          break;
+        }
+      }
+    }
     moRemoveAttribute(this.__ref, name);
     if (name === 'style') inlineStyleStates.delete(this);
     resizeWebGlCanvas(this, name);
@@ -2311,7 +2331,9 @@
   // `attr.value` after a `setAttribute`. A detached `Attr` (from
   // `createAttribute`) owns its own value until `setAttributeNode` binds it.
   // Views are cached per element so `getAttributeNode('x')` has identity.
-  var attrViews = new WeakMap();
+  var attrViews = globalThis.__agentTimers.domAttrViews;
+  var attrNodes = globalThis.__agentTimers.domAttrNodes;
+  var attrSlots = globalThis.__agentTimers.domAttrSlots;
   var RS = '\u001e', US = '\u001f';
 
   function attributeRecords(el) {
@@ -2338,69 +2360,93 @@
   Object.defineProperty(Attr.prototype, 'constructor', {
     configurable: true, writable: true, value: Attr
   });
+  function attrSlot(attr) { return privateGet(attrSlots, attr); }
   function makeAttr(owner, ns, prefix, local, doc) {
     var a = Object.create(Attr.prototype);
+    applyDOMBrand(addDOMNode, attrNodes, [a]);
     a.nodeType = 2;
-    a.__owner = owner || null;
-    a.__ns = ns || null;
-    a.__prefix = prefix || null;
-    a.__local = String(local);
-    a.__value = '';
-    a.__doc = doc || document;
+    privateSet(attrSlots, a, {
+      owner: owner || null, ns: ns || null, prefix: prefix || null,
+      local: String(local), value: '', doc: doc || document
+    });
     // Attribute views have no native reflector; follow their current element or
     // saved document, including when the getter is borrowed across realms.
-    nodeBaseReaders.set(a, function() {
-      var target = a.__owner || a.__doc;
-      return nodeBaseReaders.get(target)(target.__ref);
+    privateSet(nodeBaseReaders, a, function() {
+      var slot = attrSlot(a), target = slot.owner || slot.doc;
+      return privateGet(nodeBaseReaders, target)(target.__ref);
     });
-    a.__isAttr = true; // the Range boundary guard rejects an Attr container
     return a;
   }
   function attrFor(el, ns, prefix, local) {
-    var byKey = attrViews.get(el);
-    if (!byKey) { byKey = Object.create(null); attrViews.set(el, byKey); }
+    var byKey = privateGet(attrViews, el);
+    if (!byKey) { byKey = Object.create(null); privateSet(attrViews, el, byKey); }
     var key = attrKey(ns, local);
     var existing = byKey[key];
-    if (existing) { existing.__prefix = prefix || null; return existing; }
+    if (existing) { attrSlot(existing).prefix = prefix || null; return existing; }
     var a = makeAttr(el, ns, prefix, local, ownerDocumentOf(el));
     byKey[key] = a;
     return a;
   }
+  function detachAttrView(el, ns, local, value) {
+    var byKey = privateGet(attrViews, el);
+    var key = attrKey(ns, local);
+    var attr = byKey && byKey[key];
+    if (!attr) return;
+    var slot = attrSlot(attr);
+    slot.value = value;
+    slot.doc = ownerDocumentOf(el);
+    slot.owner = null;
+    delete byKey[key];
+  }
   Object.defineProperty(Attr.prototype, 'namespaceURI', {
-    configurable: true, get: function() { return this.__ns; }
+    configurable: true, get: function() { return attrSlot(this).ns; }
   });
   Object.defineProperty(Attr.prototype, 'prefix', {
-    configurable: true, get: function() { return this.__prefix; }
+    configurable: true, get: function() { return attrSlot(this).prefix; }
   });
   Object.defineProperty(Attr.prototype, 'localName', {
-    configurable: true, get: function() { return this.__local; }
+    configurable: true, get: function() { return attrSlot(this).local; }
   });
   Object.defineProperty(Attr.prototype, 'name', {
     configurable: true,
-    get: function() { return this.__prefix ? this.__prefix + ':' + this.__local : this.__local; }
+    get: function() {
+      var slot = attrSlot(this);
+      return slot.prefix ? slot.prefix + ':' + slot.local : slot.local;
+    }
   });
   Object.defineProperty(Attr.prototype, 'nodeName', {
     configurable: true, get: function() { return this.name; }
   });
   Object.defineProperty(Attr.prototype, 'ownerElement', {
-    configurable: true, get: function() { return this.__owner; }
+    configurable: true, get: function() { return attrSlot(this).owner; }
   });
   Object.defineProperty(Attr.prototype, 'ownerDocument', {
     configurable: true,
-    get: function() { return this.__owner ? ownerDocumentOf(this.__owner) : this.__doc; }
+    get: function() {
+      var slot = attrSlot(this);
+      return slot.owner ? ownerDocumentOf(slot.owner) : slot.doc;
+    }
   });
   Object.defineProperty(Attr.prototype, 'specified', {
     configurable: true, get: function() { return true; }
   });
   function attrValue(a) {
-    if (!a.__owner) return a.__value;
-    var v = __getAttributeNS(a.__owner.__ref, a.__ns || '', a.__local);
-    return v === null ? a.__value : v;
+    var slot = attrSlot(a);
+    if (!slot.owner) return slot.value;
+    var v = __getAttributeNS(slot.owner.__ref, slot.ns || '', slot.local);
+    return v === null ? slot.value : v;
   }
   function setAttrValue(a, v) {
+    var slot = attrSlot(a);
     v = String(v);
-    a.__value = v;
-    if (a.__owner) a.__owner.setAttributeNS(a.__ns, a.name, v);
+    if (slot.owner) {
+      var name = slot.prefix ? slot.prefix + ':' + slot.local : slot.local;
+      var oldValue = __getAttributeNS(slot.owner.__ref, slot.ns || '', slot.local);
+      moSetAttributeNS(slot.owner.__ref, slot.ns || '', name, v);
+      slot.value = v;
+      if (name === 'style') inlineStyleStates.delete(slot.owner);
+      customElementAttributeChanged(slot.owner, slot.local, oldValue, v);
+    } else slot.value = v;
   }
   var attrValueDescriptor = {
     configurable: true,
@@ -2418,13 +2464,15 @@
   });
   Attr.prototype.hasChildNodes = function() { return false; };
   Attr.prototype.cloneNode = function() {
-    var copy = makeAttr(null, this.__ns, this.__prefix, this.__local, this.ownerDocument);
-    copy.__value = this.value;
+    var slot = attrSlot(this);
+    var copy = makeAttr(null, slot.ns, slot.prefix, slot.local, this.ownerDocument);
+    attrSlot(copy).value = this.value;
     return copy;
   };
   Attr.prototype.isEqualNode = function(other) {
-    return !!other && other.nodeType === 2 && other.__ns === this.__ns &&
-           other.__local === this.__local && other.value === this.value;
+    if (!privateHas(attrSlots, other)) return false;
+    var a = attrSlot(this), b = attrSlot(other);
+    return b.ns === a.ns && b.local === a.local && other.value === this.value;
   };
   globalThis.Attr = Attr;
 
@@ -2505,30 +2553,41 @@
     return null;
   };
   function setAttrNode(el, attr) {
-    if (!attr || attr.nodeType !== 2) throw new TypeError('not an Attr');
-    if (attr.__owner && attr.__owner !== el) {
+    var slot = attrSlot(attr);
+    if (!slot) throw new TypeError('not an Attr');
+    if (slot.owner && slot.owner !== el) {
       throw new DOMException("The attribute is in use by another element.", "InUseAttributeError");
     }
-    var old = el.getAttributeNodeNS(attr.__ns, attr.__local);
-    attr.__owner = el;
-    el.setAttributeNS(attr.__ns, attr.name, attr.__value);
-    var byKey = attrViews.get(el);
-    if (!byKey) { byKey = Object.create(null); attrViews.set(el, byKey); }
-    byKey[attrKey(attr.__ns, attr.__local)] = attr;
+    var name = slot.prefix ? slot.prefix + ':' + slot.local : slot.local;
+    validateNS(slot.ns || null, name);
+    var newValue = attrValue(attr);
+    var old = xpathAttrFor(el, slot.ns || '', slot.local);
+    var oldValue = __getAttributeNS(el.__ref, slot.ns || '', slot.local);
+    moSetAttributeNS(el.__ref, slot.ns || '', name, newValue);
+    if (old && old !== attr) detachAttrView(el, slot.ns, slot.local, oldValue);
+    slot.owner = el;
+    slot.value = newValue;
+    var byKey = privateGet(attrViews, el);
+    if (!byKey) { byKey = Object.create(null); privateSet(attrViews, el, byKey); }
+    byKey[attrKey(slot.ns, slot.local)] = attr;
+    if (name === 'style') inlineStyleStates.delete(el);
+    customElementAttributeChanged(el, slot.local, oldValue, newValue);
     return (old && old !== attr) ? old : null;
   }
   Element.prototype.setAttributeNode = function(attr) { return setAttrNode(this, attr); };
   Element.prototype.setAttributeNodeNS = function(attr) { return setAttrNode(this, attr); };
   Element.prototype.removeAttributeNode = function(attr) {
-    if (!attr || attr.__owner !== this) {
+    var slot = attrSlot(attr);
+    if (!slot || slot.owner !== this) {
       throw new DOMException("The attribute is not on this element.", "NotFoundError");
     }
-    attr.__value = attr.value;
-    attr.__doc = ownerDocumentOf(this);
-    this.removeAttributeNS(attr.__ns, attr.__local);
-    attr.__owner = null;
-    var byKey = attrViews.get(this);
-    if (byKey) delete byKey[attrKey(attr.__ns, attr.__local)];
+    var oldValue = __getAttributeNS(this.__ref, slot.ns || '', slot.local);
+    if (oldValue === null) {
+      throw new DOMException("The attribute is not on this element.", "NotFoundError");
+    }
+    moRemoveAttributeNS(this.__ref, slot.ns || '', slot.local);
+    detachAttrView(this, slot.ns, slot.local, oldValue);
+    customElementAttributeChanged(this, slot.local, oldValue, null);
     return attr;
   };
 
@@ -2807,7 +2866,7 @@
       throw new TypeError("Constructor Document requires 'new'");
     }
     var doc = wrapNode(__createDocument());
-    doc.__isHtml = false;
+    privateSet(documentModes, doc, false);
     return doc;
   }
   Document.prototype = Object.create(Node.prototype);
@@ -2998,22 +3057,48 @@
   Document.prototype.getElementsByClassName = getElementsByClassName;
   Document.prototype.querySelector = querySelector;
   Document.prototype.querySelectorAll = querySelectorAll;
-  function XPathResult(resultType, value) {
+  function xpathMutationVersion(doc) { return __xpathMutationCursor(doc.__ref); }
+  var xpathResults = globalThis.__agentTimers.domXPathResults;
+  function xpathResultSlot(result) {
+    var slot = privateGet(xpathResults, result);
+    if (!slot) throw new TypeError('Illegal XPathResult receiver');
+    return slot;
+  }
+  function xpathResultNodes(value) { return value.kind === 'nodes' ? value.nodes : []; }
+  function firstXPathNode(nodes) { return nodes.length ? nodes[0] : null; }
+  function xpathStringValue(value) {
+    if (value.kind === 'nodes') {
+      var node = firstXPathNode(xpathResultNodes(value));
+      return node ? node.textContent : '';
+    }
+    return String(value.value);
+  }
+  function xpathNumberValue(value) {
+    if (value.kind === 'boolean') return value.value === 'true' ? 1 : 0;
+    return Number(xpathStringValue(value));
+  }
+  function xpathBooleanValue(value) {
+    if (value.kind === 'nodes') return xpathResultNodes(value).length > 0;
+    if (value.kind === 'number') {
+      var n = Number(value.value);
+      return n !== 0 && n === n;
+    }
+    if (value.kind === 'string') return value.value.length > 0;
+    return value.value === 'true';
+  }
+  function XPathResult(resultType, value, doc) {
+    var nodes = xpathResultNodes(value);
+    privateSet(xpathResults, this, {
+      type: resultType, nodes: nodes, cursor: 0,
+      document: doc, version: xpathMutationVersion(doc)
+    });
     this.resultType = resultType;
     this.booleanValue = false;
     this.numberValue = 0;
     this.stringValue = '';
     this.singleNodeValue = null;
-    this.invalidIteratorState = false;
-    this._nodes = [];
-    this._cursor = 0;
-    this.snapshotLength = 0;
-
-    if (value.kind === 'nodes') {
-      this._nodes = xpathNodes(value);
-      this.singleNodeValue = firstXPathNode(this._nodes);
-      this.snapshotLength = this._nodes.length;
-    }
+    this.snapshotLength = nodes.length;
+    if (nodes.length) this.singleNodeValue = nodes[0];
     if (resultType === XPathResult.BOOLEAN_TYPE) {
       this.booleanValue = xpathBooleanValue(value);
     } else if (resultType === XPathResult.NUMBER_TYPE) {
@@ -3037,58 +3122,95 @@
       XPathResult.prototype[xk] = XPathResult[xk];
     }
   }
+  function xpathIteratorInvalidated(slot) {
+    return (slot.type === XPathResult.UNORDERED_NODE_ITERATOR_TYPE ||
+            slot.type === XPathResult.ORDERED_NODE_ITERATOR_TYPE) &&
+           __xpathIteratorInvalidated(slot.document.__ref, slot.version) === 'true';
+  }
+  Object.defineProperty(XPathResult.prototype, 'invalidIteratorState', {
+    configurable: true,
+    get: function() {
+      return xpathIteratorInvalidated(xpathResultSlot(this));
+    }
+  });
   XPathResult.prototype.iterateNext = function() {
-    if (this._cursor >= this._nodes.length) return null;
-    return wrapNode(__reflectNode(this._nodes[this._cursor++]));
+    var slot = xpathResultSlot(this);
+    if (xpathIteratorInvalidated(slot)) {
+      throw new DOMException('The document changed after XPath evaluation.', 'InvalidStateError');
+    }
+    return slot.cursor < slot.nodes.length ? slot.nodes[slot.cursor++] : null;
   };
   XPathResult.prototype.snapshotItem = function(i) {
+    var slot = xpathResultSlot(this);
     i = i >>> 0;
-    return i < this._nodes.length ? wrapNode(__reflectNode(this._nodes[i])) : null;
+    return i < slot.nodes.length ? slot.nodes[i] : null;
   };
   globalThis.XPathResult = XPathResult;
-  function xpathNodes(value) {
-    return value.kind === 'nodes' && value.value ? value.value.split(',') : [];
-  }
-  function firstXPathNode(nodes) {
-    return nodes.length ? wrapNode(__reflectNode(nodes[0])) : null;
-  }
-  function xpathStringValue(value) {
-    if (value.kind === 'nodes') {
-      var node = firstXPathNode(xpathNodes(value));
-      return node ? node.textContent : '';
-    }
-    return String(value.value);
-  }
-  function xpathNumberValue(value) {
-    if (value.kind === 'boolean') return value.value === 'true' ? 1 : 0;
-    return Number(xpathStringValue(value));
-  }
-  function xpathBooleanValue(value) {
-    if (value.kind === 'nodes') return xpathNodes(value).length > 0;
-    if (value.kind === 'number') {
-      var n = Number(value.value);
-      return n !== 0 && n === n;
-    }
-    if (value.kind === 'string') return value.value.length > 0;
-    return value.value === 'true';
-  }
-  function parseXPathRecord(record) {
+  function parseXPathRecord(record, nodes) {
     var s = String(record);
     var cut = s.indexOf('\n');
     var kind = cut < 0 ? s : s.slice(0, cut);
     var value = cut < 0 ? '' : s.slice(cut + 1);
-    if (kind === 'error') {
-      throw new DOMException(value, 'SyntaxError');
+    if (kind === 'error') throw new DOMException(value, 'SyntaxError');
+    return { kind: kind, value: value, nodes: nodes };
+  }
+  function xpathAttrFor(owner, ns, local) {
+    var records = attributeRecords(owner);
+    for (var i = 0; i < records.length; i++) {
+      var rec = records[i];
+      if ((rec.ns || '') === ns && rec.local === local) {
+        return attrFor(owner, rec.ns, rec.prefix, rec.local);
+      }
     }
-    return { kind: kind, value: value };
+    return null;
+  }
+  function xpathContextInfo(context) {
+    var slot = attrSlot(context);
+    var owner = slot ? slot.owner : context;
+    var doc = slot ? (owner ? ownerDocumentOf(owner) : slot.doc)
+                   : (privateHas(documentModes, context) ? context : ownerDocumentOf(context));
+    if (!doc || !privateHas(documentModes, doc)) {
+      throw new DOMException('Document.evaluate requires a context node', 'NotSupportedError');
+    }
+    return { slot: slot, owner: owner, doc: doc };
   }
   Document.prototype.evaluate = function(expression, contextNode, namespaceResolver, resultType, result) {
-    var context = contextNode || this;
+    var context = contextNode == null ? this : contextNode;
     var requested = resultType == null ? XPathResult.ANY_TYPE : (resultType >>> 0);
     if (requested > XPathResult.FIRST_ORDERED_NODE_TYPE) {
       throw new DOMException('Unsupported XPathResult type', 'NotSupportedError');
     }
-    var parsed = parseXPathRecord(__xpathEvaluate(String(expression), context.__ref));
+    var state = xpathContextInfo(context);
+    var nodes = [];
+    var resolvePrefix = function(prefix) {
+      if (prefix === 'xml') return 'http://www.w3.org/XML/1998/namespace';
+      if (namespaceResolver == null) return '';
+      var uri;
+      if (typeof namespaceResolver === 'function') uri = namespaceResolver(prefix);
+      else if (typeof namespaceResolver.lookupNamespaceURI === 'function') {
+        uri = namespaceResolver.lookupNamespaceURI(prefix);
+      } else throw new TypeError('XPath namespace resolver is not callable');
+      return uri == null ? '' : String(uri);
+    };
+    var append = function(kind, reference, ns, local) {
+      if (kind === 'detached-attr') nodes.push(context);
+      else if (kind === 'attr') nodes.push(xpathAttrFor(wrapNode(reference), ns, local));
+      else nodes.push(wrapNode(reference));
+    };
+    var contextState = function(field) {
+      if (field === 'ref' || field === 'html') state = xpathContextInfo(context);
+      var slot = state.slot;
+      if (field === 'ref') return state.owner ? state.owner.__ref : null;
+      if (field === 'kind') return slot ? (slot.owner ? 'attr' : 'detached-attr') : 'node';
+      if (field === 'ns') return slot ? (slot.ns || '') : '';
+      if (field === 'prefix') return slot ? (slot.prefix || '') : '';
+      if (field === 'local') return slot ? slot.local : '';
+      if (field === 'value') return slot ? attrValue(context) : '';
+      if (field === 'html') return String(isHtmlDocument(state.doc));
+      return '';
+    };
+    var record = __xpathEvaluate(String(expression), contextState, resolvePrefix, append);
+    var parsed = parseXPathRecord(record, nodes);
     var actual = requested;
     if (requested === XPathResult.ANY_TYPE) {
       actual = parsed.kind === 'number' ? XPathResult.NUMBER_TYPE
@@ -3099,7 +3221,7 @@
     if (actual >= XPathResult.UNORDERED_NODE_ITERATOR_TYPE && parsed.kind !== 'nodes') {
       throw new DOMException('XPath expression did not return a node set', 'TypeError');
     }
-    return new XPathResult(actual, parsed);
+    return new XPathResult(actual, parsed, xpathContextInfo(context).doc);
   };
   // Document takes the ParentNode mixin here, once its prototype exists.
   installMixin(Document.prototype, parentNodeMixin);
@@ -3143,7 +3265,7 @@
         },
         createHTMLDocument: function(title) {
           var doc = wrapNode(__createDocument());
-          doc.__isHtml = true;
+          privateSet(documentModes, doc, true);
           var html = doc.createElement('html'); doc.appendChild(html);
           var head = doc.createElement('head'); html.appendChild(head);
           if (title !== undefined) { var t = doc.createElement('title'); t.textContent = String(title); head.appendChild(t); }
@@ -3152,7 +3274,7 @@
         },
         createDocument: function(ns, qname, doctype) {
           var doc = wrapNode(__createDocument());
-          doc.__isHtml = false; // an XML document: createCDATASection is allowed
+          privateSet(documentModes, doc, false); // an XML document: createCDATASection is allowed
           if (doctype) doc.appendChild(doctype);
           if (qname) { doc.appendChild(doc.createElementNS(ns === null ? '' : String(ns), String(qname))); }
           return doc;
@@ -4075,7 +4197,7 @@
   // drains that list. Guarded on there being any shadow root at all, so a
   // document with none pays one native call that returns the empty string
   // — and only outside a coalescing group, so `replaceChild` fires once.
-  function moAfterMutation() {
+  function moAfterMutation(target) {
     if ((domAgentDispatch || moActive) && !moGroupDepth) moFlush();
     if (!moGroupDepth) flushSlotChanges();
   }
@@ -4091,7 +4213,7 @@
     moGroupDepth--;
     if (domAgentDispatch) domAgentDispatch('moGroup', parent.__ref, 0);
     else if (!moGroupDepth) __moGroup('0');
-    if (!moGroupDepth) moAfterMutation();
+    if (!moGroupDepth) moAfterMutation(parent.__ref);
   }
   // The same call sites carry the DOM's live-range steps: `rangeWillRemove`
   // before the tree moves (it needs the child index and the pre-mutation
@@ -4099,35 +4221,35 @@
   // reference child's old index).
   function moAppendChild(p, c) {
     rangeWillRemove(wrapNode(c)); discardFrameSubtree(wrapNode(c), true); __appendChild(p, c);
-    rangeDidInsert(wrapNode(c)); moAfterMutation(); syncFrameSubtree(wrapNode(c));
+    rangeDidInsert(wrapNode(c)); moAfterMutation(p); syncFrameSubtree(wrapNode(c));
   }
   function moInsertBefore(p, n, r) {
     rangeWillRemove(wrapNode(n)); discardFrameSubtree(wrapNode(n), true); __insertBefore(p, n, r);
-    rangeDidInsert(wrapNode(n)); moAfterMutation(); syncFrameSubtree(wrapNode(n));
+    rangeDidInsert(wrapNode(n)); moAfterMutation(p); syncFrameSubtree(wrapNode(n));
   }
   // `moveBefore` is the one mutation that does not destroy a nested browsing
   // context, which is the whole point of the method -- so no discard here.
   function moMoveBefore(p, n, r) {
     rangeWillRemove(wrapNode(n)); __moveBefore(p, n, r);
-    rangeDidInsert(wrapNode(n)); moAfterMutation();
+    rangeDidInsert(wrapNode(n)); moAfterMutation(p);
   }
   function moRemoveChild(p, c) {
     rangeWillRemove(wrapNode(c)); discardFrameSubtree(wrapNode(c), true); __removeChild(p, c);
-    moAfterMutation(); refreshFramesAfterRemoval();
+    moAfterMutation(p); refreshFramesAfterRemoval();
   }
-  function moSetAttribute(e, n, v) { __setAttribute(e, n, v); moAfterMutation(); }
-  function moRemoveAttribute(e, n) { __removeAttribute(e, n); moAfterMutation(); }
-  function moSetAttributeNS(e, ns, q, v) { __setAttributeNS(e, ns, q, v); moAfterMutation(); }
-  function moRemoveAttributeNS(e, ns, l) { __removeAttributeNS(e, ns, l); moAfterMutation(); }
+  function moSetAttribute(e, n, v) { __setAttribute(e, n, v); moAfterMutation(e); }
+  function moRemoveAttribute(e, n) { __removeAttribute(e, n); moAfterMutation(e); }
+  function moSetAttributeNS(e, ns, q, v) { __setAttributeNS(e, ns, q, v); moAfterMutation(e); }
+  function moRemoveAttributeNS(e, ns, l) { __removeAttributeNS(e, ns, l); moAfterMutation(e); }
   function moSetTextContent(n, t) {
     var nodeType = +__nodeType(n);
     if (nodeType === 9 || nodeType === 10) return;
     rangeWillReplaceAll(wrapNode(n)); discardFrameSubtree(wrapNode(n), false);
-    __setTextContent(n, t); moAfterMutation(); refreshFramesAfterRemoval();
+    __setTextContent(n, t); moAfterMutation(n); refreshFramesAfterRemoval();
   }
   function moSetInnerHtml(n, h) {
     rangeWillReplaceAll(wrapNode(n)); discardFrameSubtree(wrapNode(n), false);
-    __setInnerHtml(n, h); moAfterMutation();
+    __setInnerHtml(n, h); moAfterMutation(n);
     syncFrameSubtree(wrapNode(n)); refreshFramesAfterRemoval();
   }
 
@@ -4490,7 +4612,8 @@
     if (!sc || !sc.__ref || !ec || !ec.__ref) {
       throw new TypeError('StaticRange: containers must be Nodes');
     }
-    if (sc.nodeType === 10 || ec.nodeType === 10 || sc.__isAttr || ec.__isAttr) {
+    if (sc.nodeType === 10 || ec.nodeType === 10 ||
+        privateSetHas(attrNodes, sc) || privateSetHas(attrNodes, ec)) {
       throw new DOMException('DocumentType or Attr boundary', 'InvalidNodeTypeError');
     }
     this.__sc = sc;
@@ -5739,6 +5862,7 @@
   applyDOMBrand(addDOMNode, domNodes, [document]);
   document.__ref = docRef;
   document.nodeType = 9;
+  privateSet(documentModes, document, true);
   wrappers.set(docRef, document);
   registerBaseReader(document);
   // On a Window, `document` is `[LegacyUnforgeable]`: a getter with no setter,
@@ -6457,14 +6581,14 @@
     if (ref === undefined || ref === null) {
       // Parse failure (XML only; the HTML parser never fails).
       var bad = wrapNode(__createDocument());
-      bad.__isHtml = false;
+      privateSet(documentModes, bad, false);
       var err = bad.createElementNS('http://www.mozilla.org/newlayout/xml/parseerror.xml', 'parsererror');
       err.textContent = 'XML parse error';
       bad.appendChild(err);
       return bad;
     }
     var doc = wrapNode(ref);
-    doc.__isHtml = isHtml;
+    privateSet(documentModes, doc, isHtml);
     return doc;
   };
   globalThis.DOMParser = DOMParser;
@@ -6717,7 +6841,9 @@
         // template-contents document, not the page's, and the fragment is
         // detached so no tree walk could work that out.
         if (fragment && !ownerDocuments.get(fragment)) {
-          ownerDocuments.set(fragment, wrapNode(__templateOwnerDocument(fragment.__ref)));
+          var inertDocument = wrapNode(__templateOwnerDocument(fragment.__ref));
+          privateSet(documentModes, inertDocument, true);
+          ownerDocuments.set(fragment, inertDocument);
         }
         return fragment;
       }

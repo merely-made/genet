@@ -20,7 +20,7 @@ use boa_engine::{
     module::{Module, ModuleLoader, ModuleRequest, Referrer},
     object::{
         FunctionObjectBuilder, WeakJsObject,
-        builtins::{JsFunction, JsPromise, JsProxy},
+        builtins::{JsFloat32Array, JsFunction, JsPromise, JsProxy, JsUint8Array},
     },
     property::PropertyDescriptor,
     realm::Realm,
@@ -668,6 +668,28 @@ impl CallCx for BoaCallCx<'_> {
 
     fn value_to_string(&mut self, value: &JsValue) -> Result<String, JsError> {
         Ok(value.to_string(self.ctx)?.to_std_string_escaped())
+    }
+
+    fn value_to_number(&mut self, value: &JsValue) -> Result<f64, JsError> {
+        value.to_number(self.ctx)
+    }
+
+    fn copy_float32_array(&mut self, value: &JsValue) -> Result<Vec<f32>, JsError> {
+        let object = value.as_object().ok_or_else(|| JsNativeError::typ().with_message("Float32Array required"))?;
+        let array = JsFloat32Array::from_object(object.clone())?;
+        let length = array.length(self.ctx)?;
+        let mut values = Vec::with_capacity(length);
+        for index in 0..length {
+            let number = array.get(index as u32, self.ctx)?.as_number()
+                .ok_or_else(|| JsNativeError::typ().with_message("Float32Array value required"))?;
+            values.push(number as f32);
+        }
+        Ok(values)
+    }
+
+    fn copy_uint8_array(&mut self, value: &JsValue) -> Result<Vec<u8>, JsError> {
+        let object = value.as_object().ok_or_else(|| JsNativeError::typ().with_message("Uint8Array required"))?;
+        JsUint8Array::from_object(object.clone())?.to_vec(self.ctx)
     }
 
     fn reflector_data(&mut self, value: &JsValue) -> Option<ReflectorData> {

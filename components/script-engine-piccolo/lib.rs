@@ -173,6 +173,18 @@ impl CallCx for PiccoloCallCx<'_> {
         Ok(value_to_lua_string(self.ctx, v))
     }
 
+    fn value_to_number(&mut self, _value: &Self::Value) -> Result<f64, Self::Error> {
+        Err("WebGL numeric values are unavailable in the Lua backend".to_string())
+    }
+
+    fn copy_float32_array(&mut self, _value: &Self::Value) -> Result<Vec<f32>, Self::Error> {
+        Err("Float32Array is unavailable in the Lua backend".to_string())
+    }
+
+    fn copy_uint8_array(&mut self, _value: &Self::Value) -> Result<Vec<u8>, Self::Error> {
+        Err("Uint8Array is unavailable in the Lua backend".to_string())
+    }
+
     fn reflector_data(&mut self, value: &Self::Value) -> Option<ReflectorData> {
         match self.ctx.fetch(value) {
             Value::UserData(ud) => ud.downcast_static::<u64>().ok().copied(),

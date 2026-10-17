@@ -24,9 +24,9 @@ use genet_livery::{
     canonicalize_specified_value, classify_specified_shorthand, content_box_size,
     emit_paint_list_with_text_system_scrolled_with_images_and_external_textures_with_document_base,
     DocumentImageSources, hit_test,
-    is_implemented_shorthand, layout, layout_with_text_system, reconstruct_specified_shorthand,
-    resolve_container_query_styles, resolve_container_query_styles_with_images, resolve_styles,
-    specified_shorthand_longhands, used_value_context as layout_used_value_context,
+    is_implemented_shorthand, layout_with_text_system, reconstruct_specified_shorthand,
+    resolve_container_query_styles_with_images, resolve_styles,
+    specified_shorthand_longhands, used_value_context_with_text_system,
 };
 use genet_scripted_dom::{NodeId, ScriptedDom};
 use layout_dom_api::{
@@ -1545,21 +1545,27 @@ impl ComputedStyleHandler for LiveryComputedStyle {
             state.mutation_cursor = base;
         }
         let start = state.mutation_cursor.saturating_sub(base) as usize;
+        let document_base_url = state.styles.document_base_url().map(str::to_owned);
         let LiveryState {
             styles,
             device,
             interactions,
             session,
+            text,
+            image_sources,
             ..
         } = &mut *state;
         session.update(&host.dom, styles, device, interactions, &pending[start..]);
         let node = NodeId::from_raw(node);
-        let container_resolved = resolve_container_query_styles(
+        let document_images =
+            DocumentImageSources::new(image_sources, document_base_url.as_deref());
+        let container_resolved = resolve_container_query_styles_with_images(
             &host.dom,
             session.styles(),
             styles,
             device,
             interactions,
+            &document_images,
         )
         .ok();
         let computed_styles = container_resolved
@@ -1567,11 +1573,14 @@ impl ComputedStyleHandler for LiveryComputedStyle {
             .unwrap_or_else(|| session.styles());
         let used = needs_used_values(property)
             .then(|| {
-                layout_used_value_context(
+                used_value_context_with_text_system(
                     &host.dom,
                     computed_styles,
                     device.viewport_width,
                     device.viewport_height,
+                    device.viewport_sizes,
+                    text,
+                    &document_images,
                     node,
                 )
                 .ok()
@@ -1595,35 +1604,44 @@ impl ComputedStyleHandler for LiveryComputedStyle {
             state.mutation_cursor = base;
         }
         let start = state.mutation_cursor.saturating_sub(base) as usize;
+        let document_base_url = state.styles.document_base_url().map(str::to_owned);
         let LiveryState {
             styles,
             device,
             interactions,
             session,
             mutation_cursor,
+            text,
+            image_sources,
             ..
         } = &mut *state;
         session.update(&host.dom, styles, device, interactions, &pending[start..]);
         *mutation_cursor = end;
 
-        let primary = resolve_container_query_styles(
+        let document_images =
+            DocumentImageSources::new(image_sources, document_base_url.as_deref());
+        let primary = resolve_container_query_styles_with_images(
             &host.dom,
             session.styles(),
             styles,
             device,
             interactions,
+            &document_images,
         )
         .ok();
         let primary = primary.as_ref().unwrap_or_else(|| session.styles());
         let context = NodeId::from_raw(context);
-        let fragments = layout(
+        let (resolved_primary, fragments) = layout_with_text_system(
             &host.dom,
             primary,
             device.viewport_width,
             device.viewport_height,
+            device.viewport_sizes,
+            text,
+            &document_images,
         )
         .ok()?;
-        let frame_style = primary.get(context)?;
+        let frame_style = resolved_primary.get(context)?;
         let frame_fragment = fragments.get(context)?;
         let (width, height) = content_box_size(frame_style, frame_fragment);
 
@@ -1632,11 +1650,14 @@ impl ComputedStyleHandler for LiveryComputedStyle {
         if document == host.dom.document() {
             let used = needs_used_values(property)
                 .then(|| {
-                    layout_used_value_context(
+                    used_value_context_with_text_system(
                         &host.dom,
                         primary,
                         device.viewport_width,
                         device.viewport_height,
+                        device.viewport_sizes,
+                        text,
+                        &document_images,
                         node,
                     )
                     .ok()
@@ -1649,6 +1670,8 @@ impl ComputedStyleHandler for LiveryComputedStyle {
             dom: &host.dom,
             document,
         };
+        let child_base_url = host.child_document_base_url(context);
+        let child_images = DocumentImageSources::new(image_sources, child_base_url.as_deref());
         let sheets = inline_stylesheets(&scoped);
         let sheet_refs = sheets.iter().map(String::as_str).collect::<Vec<_>>();
         let child_styles = StyleSet::cambium(&sheet_refs);
@@ -1656,19 +1679,29 @@ impl ComputedStyleHandler for LiveryComputedStyle {
         let child_interactions = InteractionStates::default();
         let child_plane =
             resolve_styles(&scoped, &child_styles, &child_device, &child_interactions);
-        let child_plane = resolve_container_query_styles(
+        let child_plane = resolve_container_query_styles_with_images(
             &scoped,
             &child_plane,
             &child_styles,
             &child_device,
             &child_interactions,
+            &child_images,
         )
         .ok()?;
         let used = needs_used_values(property)
             .then(|| {
-                layout_used_value_context(&scoped, &child_plane, width, height, node)
-                    .ok()
-                    .flatten()
+                used_value_context_with_text_system(
+                    &scoped,
+                    &child_plane,
+                    width,
+                    height,
+                    child_device.viewport_sizes,
+                    text,
+                    &child_images,
+                    node,
+                )
+                .ok()
+                .flatten()
             })
             .flatten();
         child_plane.computed_style_with_used_values(node, property, used)
@@ -2037,6 +2070,22 @@ mod tests {
             match url {
                 "https://example.test/docs/poster.png" => Some(self.image.borrow().clone()),
                 "https://example.test/docs/reading.woff2" => Some(self.font.borrow().clone()),
+                _ => None,
+            }
+        }
+    }
+
+    struct RelativeImageFetch;
+
+    impl ResourceFetcher for RelativeImageFetch {
+        fn fetch(&self, url: &str) -> Option<Vec<u8>> {
+            match url {
+                "https://example.test/parent/poster.png" => Some(
+                    include_bytes!("../../tests/wpt/webgl/tests/extra/sample-100.png").to_vec(),
+                ),
+                "https://cdn.example.test/child/poster.png" => Some(
+                    include_bytes!("../../tests/wpt/webgl/tests/resources/3x3.png").to_vec(),
+                ),
                 _ => None,
             }
         }
@@ -2626,6 +2675,56 @@ mod tests {
     }
 
     #[test]
+    fn boa_used_values_follow_the_retained_font_and_image_geometry() {
+        let mut runtime = Runtime::<BoaEngine>::new().expect("runtime");
+        runtime.load_dom(&StaticDocument::parse(
+            "<html><body style='margin:0'><div id='parent' style='width:64px'>\
+             <div id='text' style='font:16px monospace'>aaaa aaaa aaaa aaaa</div>\
+             <img id='image' src='fixture.png'></div></body></html>",
+        ));
+        let cssom = LiveryCssom::install(&mut runtime, &[], Device::screen(320.0, 240.0));
+        {
+            let mut state = cssom.state.borrow_mut();
+            state
+                .text
+                .register_generic_font_bytes(
+                    include_bytes!("../../tests/wpt/tests/fonts/Ahem.ttf").to_vec(),
+                    "monospace",
+                )
+                .expect("registered test font");
+            state.image_sources.insert(
+                "fixture.png".to_string(),
+                include_bytes!("../../tests/wpt/webgl/tests/resources/3x3.png").to_vec(),
+            );
+        }
+        let _ = cssom.frame(&mut runtime, 320, 240).expect("retained frame");
+        runtime
+            .eval(
+                "console.log(getComputedStyle(document.getElementById('parent')).height);\
+                 console.log(getComputedStyle(document.getElementById('text')).height);\
+                 console.log(getComputedStyle(document.getElementById('image')).width);",
+            )
+            .expect("used-value query");
+        let measured = runtime.host().borrow().console.clone();
+        let host = runtime.host();
+        let host = host.borrow();
+        for (id, dimension, css_value) in [
+            ("parent", 3, &measured[0]),
+            ("text", 3, &measured[1]),
+            ("image", 2, &measured[2]),
+        ] {
+            let node = find_element_id(&host.dom, host.dom.document(), id).expect("fixture node");
+            let rect = cssom.fragment_rect(node).expect("painted fragment");
+            let used: f32 = css_value
+                .strip_suffix("px")
+                .unwrap_or_else(|| panic!("{id}: expected resolved pixel value, got {css_value}"))
+                .parse()
+                .expect("numeric used value");
+            assert!((used - rect[dimension]).abs() < 0.5, "{id}: {used} versus {rect:?}");
+        }
+    }
+
+    #[test]
     fn boa_reads_advanced_math_through_livery_used_values() {
         let mut runtime = Runtime::<BoaEngine>::new().expect("runtime");
         runtime.load_dom(&StaticDocument::parse(
@@ -2713,6 +2812,41 @@ mod tests {
                 "3px",
             ]
         );
+    }
+
+    #[test]
+    fn iframe_image_uses_its_document_base_for_used_geometry() {
+        let mut runtime = Runtime::<BoaEngine>::new().expect("runtime");
+        runtime
+            .set_base_url("https://example.test/parent/index.html")
+            .expect("parent URL");
+        runtime.load_dom(&StaticDocument::parse(
+            "<html><body><img id='parent-image' src='poster.png'><iframe id='frame' style='width:200px;height:100px'></iframe></body></html>",
+        ));
+        LiveryCssom::install_live(
+            &mut runtime,
+            RelativeImageFetch,
+            "https://example.test/parent/index.html",
+            ResourceLimits::default(),
+            Device::screen(800.0, 600.0),
+        );
+        runtime
+            .eval(
+                "var d=frame.contentDocument;\
+                 d.head.innerHTML='<base href=\"https://cdn.example.test/child/\">';\
+                 d.body.innerHTML='<img id=\"child-image\" src=\"poster.png\">';\
+                 console.log(getComputedStyle(document.getElementById('parent-image')).width);\
+                 console.log(frame.contentWindow.getComputedStyle(d.getElementById('child-image')).width);",
+            )
+            .expect("relative image CSSOM reads");
+        let host = runtime.host();
+        let host = host.borrow();
+        let frame = find_element_id(&host.dom, host.dom.document(), "frame").unwrap();
+        assert_eq!(
+            host.child_document_base_url(frame).as_deref(),
+            Some("https://cdn.example.test/child/")
+        );
+        assert_eq!(host.console, vec!["100px", "3px"]);
     }
 
     #[test]

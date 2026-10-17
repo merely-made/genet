@@ -790,6 +790,15 @@ pub trait CallCx {
     /// Coerce a value to a Rust string (`ToString`).
     fn value_to_string(&mut self, value: &Self::Value) -> Result<String, Self::Error>;
 
+    /// Apply JavaScript ToNumber without a text round trip.
+    fn value_to_number(&mut self, value: &Self::Value) -> Result<f64, Self::Error>;
+
+    /// Copy a genuine Float32Array view, honoring its offset and length.
+    fn copy_float32_array(&mut self, value: &Self::Value) -> Result<Vec<f32>, Self::Error>;
+
+    /// Copy a genuine Uint8Array view, honoring its offset and length.
+    fn copy_uint8_array(&mut self, value: &Self::Value) -> Result<Vec<u8>, Self::Error>;
+
     /// Recover reflector native data (the JS → host bridge), or `None` if `value`
     /// is not a reflector.
     fn reflector_data(&mut self, value: &Self::Value) -> Option<ReflectorData>;

@@ -8,10 +8,12 @@
 
 use crate::OwnerResolvedCx as _;
 use std::cmp::Ordering;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use genet_scripted_dom::{NodeId, ScriptedDom};
-use layout_dom_api::{LayoutDom, NodeKind};
+use layout_dom_api::{DomMutation, LayoutDom, NodeKind};
 use markup5ever::{LocalName, Namespace, Prefix};
 use script_engine_api::{NativeFn, ScriptEngine};
 use xpath::Node as _;
@@ -22,7 +24,8 @@ use super::*;
 struct XPathTree {
     nodes: Vec<XPathNodeData>,
     attrs: Vec<XPathAttrData>,
-    root: usize,
+    root: XPathKind,
+    html_document: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -39,7 +42,7 @@ struct XPathNodeData {
 
 #[derive(Clone, Debug)]
 struct XPathAttrData {
-    owner: usize,
+    owner: Option<usize>,
     name: QualName,
     value: String,
     index: usize,
@@ -73,18 +76,28 @@ struct XPathDocument {
 }
 
 #[derive(Clone)]
-struct NoNamespaces;
+struct CollectNamespaces(Rc<RefCell<Vec<String>>>);
+
+#[derive(Clone)]
+struct ResolvedNamespaces(HashMap<String, String>);
 
 struct XPathDom;
 
 impl xpath::Dom for XPathDom {
     type Node = XPathNode;
-    type NamespaceResolver = NoNamespaces;
+    type NamespaceResolver = ResolvedNamespaces;
 }
 
-impl xpath::NamespaceResolver for NoNamespaces {
-    fn resolve_namespace_prefix(&self, _prefix: &str) -> Option<String> {
-        None
+impl xpath::NamespaceResolver for CollectNamespaces {
+    fn resolve_namespace_prefix(&self, prefix: &str) -> Option<String> {
+        self.0.borrow_mut().push(prefix.to_owned());
+        Some("urn:genet:xpath-prefix-probe".to_owned())
+    }
+}
+
+impl xpath::NamespaceResolver for ResolvedNamespaces {
+    fn resolve_namespace_prefix(&self, prefix: &str) -> Option<String> {
+        self.0.get(prefix).cloned()
     }
 }
 
@@ -97,7 +110,7 @@ impl PartialEq for XPathNode {
 impl Eq for XPathNode {}
 
 impl XPathTree {
-    fn from_dom(dom: &ScriptedDom, root: NodeId) -> Rc<Self> {
+    fn from_dom(dom: &ScriptedDom, root: NodeId, html_document: bool) -> Rc<Self> {
         fn copy_node(
             dom: &ScriptedDom,
             id: NodeId,
@@ -115,7 +128,7 @@ impl XPathTree {
                 .map(|(index, attr)| {
                     let attr_idx = attrs.len();
                     attrs.push(XPathAttrData {
-                        owner: idx,
+                        owner: Some(idx),
                         name: attr.name.clone(),
                         value: attr.value.to_string(),
                         index,
@@ -147,7 +160,16 @@ impl XPathTree {
         let mut attrs = Vec::new();
         let mut order = 0;
         let root = copy_node(dom, root, None, &mut nodes, &mut attrs, &mut order);
-        Rc::new(Self { nodes, attrs, root })
+        Rc::new(Self { nodes, attrs, root: XPathKind::Node(root), html_document })
+    }
+
+    fn detached_attr(name: QualName, value: String, html_document: bool) -> Rc<Self> {
+        Rc::new(Self {
+            nodes: Vec::new(),
+            attrs: vec![XPathAttrData { owner: None, name, value, index: 0 }],
+            root: XPathKind::Attr(0),
+            html_document,
+        })
     }
 
     fn node(self: &Rc<Self>, idx: usize) -> XPathNode {
@@ -185,7 +207,7 @@ impl XPathNode {
             XPathKind::Node(idx) => (self.tree.nodes[idx].order * 2, 0),
             XPathKind::Attr(idx) => {
                 let attr = &self.tree.attrs[idx];
-                (self.tree.nodes[attr.owner].order * 2 + 1, attr.index)
+                (attr.owner.map_or(0, |owner| self.tree.nodes[owner].order * 2 + 1), attr.index)
             },
         }
     }
@@ -214,11 +236,10 @@ impl XPathNode {
     }
 
     fn root(&self) -> XPathNode {
-        self.tree.node(self.tree.root)
-    }
-
-    fn raw_node(&self) -> Option<u64> {
-        self.node_data().map(|d| d.raw)
+        match self.tree.root {
+            XPathKind::Node(idx) => self.tree.node(idx),
+            XPathKind::Attr(idx) => self.tree.attr(idx),
+        }
     }
 
     fn is_ancestor_of(&self, other: &XPathNode) -> bool {
@@ -274,7 +295,7 @@ impl xpath::Node for XPathNode {
     fn parent(&self) -> Option<Self> {
         match self.kind {
             XPathKind::Node(idx) => self.tree.nodes[idx].parent.map(|p| self.tree.node(p)),
-            XPathKind::Attr(idx) => Some(self.tree.node(self.tree.attrs[idx].owner)),
+            XPathKind::Attr(idx) => self.tree.attrs[idx].owner.map(|owner| self.tree.node(owner)),
         }
     }
 
@@ -401,8 +422,11 @@ impl xpath::Document for XPathDocument {
         &self,
         id: &str,
     ) -> impl Iterator<Item = <Self::Node as xpath::Node>::Element> {
-        self.tree
-            .node(self.tree.root)
+        let root = match self.tree.root {
+            XPathKind::Node(idx) => self.tree.node(idx),
+            XPathKind::Attr(idx) => self.tree.attr(idx),
+        };
+        root
             .traverse_preorder()
             .filter_map(|node| {
                 let XPathKind::Node(idx) = node.kind else {
@@ -463,7 +487,7 @@ impl xpath::Element for XPathElement {
     }
 
     fn is_html_element_in_html_document(&self) -> bool {
-        self.namespace().as_ref() == XHTML_NS
+        self.node.tree.html_document && self.namespace().as_ref() == XHTML_NS
     }
 }
 
@@ -493,67 +517,195 @@ impl xpath::Attribute for XPathAttr {
     }
 }
 
-/// `__xpathEvaluate(expression, contextNode)` -> a line-based record:
-///
-/// - `boolean\ntrue|false`
-/// - `number\n...`
-/// - `string\n...`
-/// - `nodes\nraw,raw,...`
-/// - `error\n...`
+/// `__xpathEvaluate(expression, contextState, resolver, append)` returns a scalar record. Node-set
+/// members are delivered through `append` as genuine node or Attr identities.
 pub(crate) struct EvaluateXPath;
+
+/// An arena-owned mutation cursor. The absolute sequence remains monotonic
+/// when layout drains the pending journal, unlike a JS-side mutation hook.
+pub(crate) struct XPathMutationCursor;
+pub(crate) struct XPathIteratorInvalidated;
+
+impl<E: ScriptEngine> NativeFn<E> for XPathMutationCursor {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let document = cx.arg(0);
+        let Some(document) = cx.owned_node(&document)? else {
+            return cx.make_string("");
+        };
+        let cursor = document.with_dom(|dom| {
+            let (base, pending) = dom.pending_mutations();
+            format!("{}:{}", dom.arena_id(), base + pending.len() as u64)
+        });
+        cx.make_string(&cursor)
+    }
+}
+
+impl<E: ScriptEngine> NativeFn<E> for XPathIteratorInvalidated {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let document = cx.arg(0);
+        let cursor = cx.arg(1);
+        let cursor = cx.value_to_string(&cursor)?;
+        let Some(document) = cx.owned_node(&document)? else {
+            return cx.make_string("true");
+        };
+        let document_id = document.id();
+        let invalidated = document.with_dom(|dom| {
+            let (base, pending) = dom.pending_mutations();
+            let Some((arena, sequence)) = cursor.split_once(':') else { return true };
+            let Some(arena) = arena.parse::<u32>().ok() else { return true };
+            let Some(sequence) = sequence.parse::<u64>().ok() else { return true };
+            let end = base + pending.len() as u64;
+            if arena != dom.arena_id() || sequence < base || sequence > end {
+                // A drained journal cannot prove which document changed.
+                return true;
+            }
+            let touches_document = |node: NodeId| {
+                // Detached or retired nodes have no native document owner to
+                // classify. Conservatively invalidate rather than miss one.
+                dom.tree_root(node).is_none_or(|root| root == document_id ||
+                    dom.kind(root) != NodeKind::Document)
+            };
+            pending.iter().skip((sequence - base) as usize).any(|change| match change {
+                DomMutation::Inserted { parent, .. } => touches_document(*parent),
+                DomMutation::Removed { former_parent, .. } => touches_document(*former_parent),
+                DomMutation::Moved { from_parent, to_parent, .. } =>
+                    touches_document(*from_parent) || touches_document(*to_parent),
+                DomMutation::SubtreeReplaced { node } |
+                DomMutation::AttributeChanged { node, .. } |
+                DomMutation::CharacterDataChanged { node } => touches_document(*node),
+                _ => false,
+            })
+        });
+        cx.make_string(if invalidated { "true" } else { "false" })
+    }
+}
 
 impl<E: ScriptEngine> NativeFn<E> for EvaluateXPath {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
         let expr_v = cx.arg(0);
         let expression = cx.value_to_string(&expr_v)?;
-        let context_v = cx.arg(1);
-        let Some(context_raw) = cx.owned_node(&context_v)? else {
-            return cx.make_string("error\nDocument.evaluate requires a context node");
+        let context_state = cx.arg(1);
+        let resolver = cx.arg(2);
+        let append = cx.arg(3);
+        let read_context = |cx: &mut E::CallCx<'_>, field: &str| {
+            let field = cx.make_string(field)?;
+            let this = cx.undefined();
+            E::call_from_call(cx, &context_state, &this, &[field])
+        };
+        let html_v = read_context(cx, "html")?;
+        let mut html_document = cx.value_to_string(&html_v)? == "true";
+
+        // Ask the generic parser which prefixes its name tests use, invoke the
+        // supplied JS resolver without a DOM borrow, then parse with those URIs.
+        let prefixes = Rc::new(RefCell::new(Vec::new()));
+        if let Err(err) = xpath::parse(&expression, Some(CollectNamespaces(prefixes.clone())), html_document) {
+            return cx.make_string(&format!("error\n{err:?}"));
+        }
+        let mut bindings = HashMap::new();
+        for prefix in prefixes.borrow().iter() {
+            if bindings.contains_key(prefix) {
+                continue;
+            }
+            let arg = cx.make_string(prefix)?;
+            let this = cx.undefined();
+            let resolved = E::call_from_call(cx, &resolver, &this, &[arg])?;
+            let uri = cx.value_to_string(&resolved)?;
+            if !uri.is_empty() {
+                bindings.insert(prefix.clone(), uri);
+            }
+        }
+        // A resolver can remove an Attr, adopt the context, or move it to a
+        // different document. Read trusted JS wrapper metadata after it runs.
+        let context_v = read_context(cx, "ref")?;
+        let kind_v = read_context(cx, "kind")?;
+        let kind = cx.value_to_string(&kind_v)?;
+        let ns_v = read_context(cx, "ns")?;
+        let ns = cx.value_to_string(&ns_v)?;
+        let prefix_v = read_context(cx, "prefix")?;
+        let prefix = cx.value_to_string(&prefix_v)?;
+        let local_v = read_context(cx, "local")?;
+        let local = cx.value_to_string(&local_v)?;
+        let value_v = read_context(cx, "value")?;
+        let value = cx.value_to_string(&value_v)?;
+        let html_v = read_context(cx, "html")?;
+        html_document = cx.value_to_string(&html_v)? == "true";
+        let parsed = match xpath::parse(&expression, Some(ResolvedNamespaces(bindings)), html_document) {
+            Ok(parsed) => parsed,
+            Err(err) => return cx.make_string(&format!("error\n{err:?}")),
+        };
+        let context = if kind == "detached-attr" {
+            let name = QualName::new(
+                (!prefix.is_empty()).then(|| Prefix::from(prefix.as_str())),
+                Namespace::from(ns.as_str()),
+                LocalName::from(local.as_str()),
+            );
+            let tree = XPathTree::detached_attr(name, value, html_document);
+            tree.attr(0)
+        } else {
+            let Some(context_raw) = cx.owned_node(&context_v)? else {
+                return cx.make_string("error\nDocument.evaluate requires a context node");
+            };
+            let context_id = context_raw.id();
+            let (tree, context_idx) = context_raw.with_dom(|dom| {
+                // Detached subtrees and secondary documents have their own
+                // XPath roots; the primary document is not universal.
+                let mut root = context_id;
+                while let Some(parent) = dom.parent(root) {
+                    root = parent;
+                }
+                let tree = XPathTree::from_dom(dom, root, html_document);
+                let idx = tree.nodes.iter().position(|node| node.raw == context_id.raw());
+                (tree, idx)
+            });
+            let Some(context_idx) = context_idx else {
+                return cx.make_string("error\nDocument.evaluate context node is outside its tree");
+            };
+            if kind == "attr" {
+                let found = tree.nodes[context_idx].attrs.iter().copied().find(|&idx| {
+                    let attr = &tree.attrs[idx];
+                    attr.name.ns.as_ref() == ns.as_str() && attr.name.local.as_ref() == local.as_str()
+                });
+                let Some(idx) = found else {
+                    return cx.make_string("error\nDocument.evaluate context attribute is detached");
+                };
+                tree.attr(idx)
+            } else {
+                tree.node(context_idx)
+            }
         };
 
-        // The expression is argument zero; route by the context reflector in
-        // argument one rather than the native function's creation realm.
-        let owner = adoption::current_host(cx)
-            .and_then(|host| adoption::owner_host(&host, context_raw.id()));
-        let record = owner
-            .map(|(_, host)| {
-                let host = host.borrow();
-                let dom = &host.dom;
-                let context_id = context_raw.id();
-                if !dom.is_live(context_id) {
-                    return "error\nDocument.evaluate context node is not live".to_string();
-                }
-                let tree = XPathTree::from_dom(dom, dom.document());
-                let Some(context_idx) = tree
-                    .nodes
-                    .iter()
-                    .position(|node| node.raw == context_id.raw())
-                else {
-                    return "error\nDocument.evaluate context node is outside this document"
-                        .to_string();
-                };
-                let parsed = match xpath::parse(&expression, None::<NoNamespaces>, true) {
-                    Ok(parsed) => parsed,
-                    Err(err) => return format!("error\n{err:?}"),
-                };
-                match xpath::evaluate_parsed_xpath::<XPathDom>(&parsed, tree.node(context_idx)) {
-                    Ok(xpath::Value::Boolean(value)) => format!("boolean\n{value}"),
-                    Ok(xpath::Value::Number(value)) => format!("number\n{value}"),
-                    Ok(xpath::Value::String(value)) => format!("string\n{value}"),
-                    Ok(xpath::Value::NodeSet(nodes)) => {
-                        let ids = nodes
-                            .into_iter()
-                            .filter_map(|node| node.raw_node())
-                            .map(|raw| raw.to_string())
-                            .collect::<Vec<_>>()
-                            .join(",");
-                        format!("nodes\n{ids}")
-                    },
-                    Err(err) => format!("error\n{err:?}"),
-                }
-            })
-            .unwrap_or_else(|| "error\nDocument.evaluate has no host DOM".to_string());
-
+        let mut result_nodes = Vec::new();
+        let record = match xpath::evaluate_parsed_xpath::<XPathDom>(&parsed, context) {
+            Ok(xpath::Value::Boolean(value)) => format!("boolean\n{value}"),
+            Ok(xpath::Value::Number(value)) => format!("number\n{value}"),
+            Ok(xpath::Value::String(value)) => format!("string\n{value}"),
+            Ok(xpath::Value::NodeSet(nodes)) => {
+                result_nodes.extend(nodes);
+                "nodes\n".to_owned()
+            },
+            Err(err) => format!("error\n{err:?}"),
+        };
+        for node in result_nodes {
+            let (result_kind, raw, ns, local) = match node.kind {
+                XPathKind::Node(idx) => ("node", node.tree.nodes[idx].raw, "", ""),
+                XPathKind::Attr(idx) => {
+                    let attr = &node.tree.attrs[idx];
+                    let Some(owner) = attr.owner else {
+                        let result_kind = cx.make_string("detached-attr")?;
+                        let this = cx.undefined();
+                        E::call_from_call(cx, &append, &this, &[result_kind])?;
+                        continue;
+                    };
+                    ("attr", node.tree.nodes[owner].raw, attr.name.ns.as_ref(), attr.name.local.as_ref())
+                },
+            };
+            let result_kind = cx.make_string(result_kind)?;
+            let reference = reflect_pinned::<E>(cx, raw)?;
+            let ns = cx.make_string(ns)?;
+            let local = cx.make_string(local)?;
+            let this = cx.undefined();
+            E::call_from_call(cx, &append, &this, &[result_kind, reference, ns, local])?;
+        }
         cx.make_string(&record)
     }
 }

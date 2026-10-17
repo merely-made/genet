@@ -104,7 +104,10 @@ use transaction::*;
 // The transaction and retained-root entries keep their crate and public
 // paths: lib.rs, the document and its frame reach them as `layout::<name>`.
 pub(crate) use retained::{layout_retained_formatting_root, retained_table_owner};
-pub use transaction::{layout, layout_with_text_system, used_value_context};
+pub use transaction::{
+    estimated_used_value_context, layout, layout_with_text_system,
+    used_value_context_with_text_system,
+};
 // These four converters are crate vocabulary: text, paint, table sizing and
 // the retained document all call them as `layout::<name>`. Re-exporting keeps
 // those call sites exactly as they were.

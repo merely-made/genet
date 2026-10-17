@@ -4018,7 +4018,7 @@ mod tests {
 
         impl LiveryFixtureFetcher {
             fn new() -> Self {
-                let image = include_bytes!("../../resources/servo_64.png").to_vec();
+                let image = include_bytes!("../../resources/merely_64.png").to_vec();
                 let mut resources = std::collections::BTreeMap::new();
                 resources.insert(
                     "https://f4.test/route/theme.css".to_string(),

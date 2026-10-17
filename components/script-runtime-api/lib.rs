@@ -2648,6 +2648,14 @@ impl<E: ScriptEngineSnapshot> Runtime<E> {
         let agent = Rc::new(RefCell::new(AgentState::default()));
         agent.borrow_mut().performance_clock = self.agent.borrow().performance_clock.clone();
         {
+            // The heap keeps its windows' and plain targets' listeners and
+            // callbacks, and the ids they were keyed by.
+            let donor = self.agent.borrow();
+            let mut fresh = agent.borrow_mut();
+            fresh.events = Rc::new(RefCell::new(donor.events.borrow().without_nodes()));
+            fresh.next_event_target = donor.next_event_target;
+        }
+        {
             let mut boot = boot_host.borrow_mut();
             boot.agent = Rc::downgrade(&agent);
             boot.worker_policy = worker_policy;

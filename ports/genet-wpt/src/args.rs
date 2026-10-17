@@ -39,8 +39,8 @@ pub(crate) struct Args {
     /// Run every `testharness` test in the parent process, the pre-isolation path. A
     /// test that blocks inside the engine then hangs the whole run.
     pub(crate) in_process: bool,
-    /// Worker subprocesses `testharness` runs concurrently. Each test is isolated, so
-    /// the result map does not depend on this.
+    /// Worker subprocesses `testharness` and `test262` run concurrently. Each
+    /// test is isolated, so the result map does not depend on this.
     pub(crate) jobs: usize,
     /// The backing file for the single test a `testharness-one` worker runs.
     pub(crate) test_path: Option<String>,
@@ -283,7 +283,7 @@ Options:
                          per-test testharness drive-loop deadline (default: 15)
     --no-harness-gc      do not run a GC tick inside the testharness drive loop
     --in-process         run `testharness` tests without worker isolation
-    --jobs <n>           `testharness` worker subprocesses in flight (default: 1)
+    --jobs <n>           `testharness` or `test262` workers in flight (default: 1)
     --worklist-out <f>   write the full `test262` Nova-gap + timeout list to <f>
     --walk-discovery     use the legacy directory walk instead of MANIFEST.json
     --expectations <f>   fail if testharness results differ from JSON expectations

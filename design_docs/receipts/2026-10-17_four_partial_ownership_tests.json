@@ -1,0 +1,98 @@
+{
+  "status": "All retained gates passed; supplier revisions published; Genet publication graph matches; downstream adoption follows this commit",
+  "genet_base": "f926fb574ca",
+  "mere_base": "a17e5bb97",
+  "turnstone_base": "428deb5",
+  "raw_receipts": "/home/markik/Code/testing/audits/genet-architecture-20261017/four-partials",
+  "tested_source_sha256": {
+    "genet-audit-reduction-20261016": {
+      "components/genet-documents/src/engines/livery.rs": "21706e649b7d5ef4bef9306a31a5d46e7647daa69de4305970aecf7ba4b79479",
+      "components/genet-documents/src/engines/scripted.rs": "6b33ccef111b3100224b0f7a4117891c59d7beda1d97d51a1e01d639cdb2f58f",
+      "components/genet-documents/src/engines/tests.rs": "80b3be53c9db5b36f44e7c0df889b664dd398f301b16aafef93fe56aae91b4bb",
+      "components/genet-livery/src/document/frame.rs": "9572402ec09647de940dac017858376f400374881ac7d1440876f231d7b5f189",
+      "components/genet-livery/src/document/tests.rs": "6b2f552896d71e4c0809c345354cc8e6678f727577c1a2fc2996eee83e6c8eb8",
+      "components/genet-livery/src/invalidation.rs": "111fb4db15e4d447e5f62a878ad9114e1eed7a70bae7e2a8b5f7b06b4132d13b",
+      "components/genet-scripted/document.rs": "6d68c019d47aa4f3fa549249579c51e8cfb629219b2fa4e3e7b9b9b57edeb47e",
+      "components/script-engine-api/lib.rs": "de73537a1510db294676b6f577cc6d7bb5af4cdf31680dc8b598f7fa232c5c2b",
+      "components/script-engine-boa/lib.rs": "84864891867e9fca9a55b350ce3f6b26b4d0a61256bc850bdd4b76f51bc9454e",
+      "components/script-engine-nova/lib.rs": "12319ab8aea926aa1847ac22573beb26f2d51a90e833c15e5d0a9a32e56f410d",
+      "components/script-runtime-api/dom/bootstrap.js": "3ec6c26f27943a2d482da25c5287ac756bf39d56a496e147b6ebe38988789038",
+      "components/script-runtime-api/form_data/bootstrap.js": "500f139c18a4f1c224988965cb2c0f6740d831b3a454c4a19a74c277adf9553e",
+      "components/script-runtime-api/form_submission.rs": "493f1d665e8202a65551f9e7c70a305a95d42118581ae8606241095af3db107b",
+      "components/script-runtime-api/lib.rs": "72319d55b757f543c06fae837959cc81abf2f2f7c70a01008540775d5eaffc3f",
+      "components/shared/document-session-api/src/session_engine.rs": "c723c1edd3a84d326ca6f6796fa9615678251d3aeb4f254a994b3d6376ff559a",
+      "components/webgl-essl/lib.rs": "18f84496d434e57dbbe0f19269a8c442cba3bc97aab8e6d575a1abffd91476e5",
+      "components/webgl-essl/lower.rs": "cd30de861bd6a5395d61929deff6d92a757e84ab82d2d795537dfbdcbc6cae70",
+      "components/webgl-essl/tests/compiled_artifact.rs": "1a01f64f04d1c19712f8dafc0390ba8e4db6f698ad961dbdad7f6a092e4c614e",
+      "components/webgl-essl/validate.rs": "b3676331edcca002da3f41b6181f26a94fb4e07197acaa122a9a6e1d47b4fe28",
+      "components/webgl-wgpu/shader.rs": "355e23f359ad4e3074536cb574d2e953edd29844e5aea83605a4d7c0d2686280",
+      "components/webgl-wgpu/shader/lowering.rs": "3cee7861f43f20fdcf1303b458afc7475416c49a367c526ee204017f971e36fd",
+      "components/webgl-wgpu/webgl.rs": "36bde40ec9a2729f9004526d88cb259c9ea79da4bd3df1158a7edbee7d8e22d0",
+      "components/webgl-wgpu/webgl/programs.rs": "6a47afc666e825984beec6af1e0431ef9a07f05b09cce7656e43e175f7ff7cf3",
+      "components/webgl-wgpu/webgl/tests_core.rs": "b6978cc443aa50c774ba5e4947770e4a062b08f92e777de19ba7092bf5387463",
+      "ports/genet-wpt/src/args.rs": "a33ea3beee0d6cae3d92e6e3303786298856fb83516bb51bdcf4a847fa6d2e16",
+      "ports/genet-wpt/src/test262.rs": "261a19358ed7dfdca60f2c0fabfd0fa13460e2b3e76a2c358ac461f65f9f4216",
+      "ports/genet-wpt/src/test262_cmd.rs": "6e9d455149ac1af3a0ed1897259d6f39e5cd8baef5c915b4c6c4a505b904bfa6",
+      "ports/genet-wpt/src/test262_error_identity.js": "17487667039c4a40378fd1fe16c4a83d86c5e91522a9ca4dfe9e83cfa04066c2",
+      "ports/ortet/src/shell.rs": "104cbe598ef973abbb14e57a11500b12a99a09652a7fa27d28521a9e9d388704",
+      "ports/ortet/src/web.rs": "7da0abf4c5facca6ff4bc331d5e7160fec370e96f2996f1e0197e17a9523f262"
+    },
+    "mere-retained-geometry-20261017": {
+      "crates/cambium/cambium-rootstock/src/embedding.rs": "c3321bb6f39165bb02dbde8bedd11a7f3815efbabd75e377399d58d1ae12d2e7",
+      "crates/cambium/cambium-rootstock/src/embedding/egui_input.rs": "068d64b4d295a3e863c6916c1b1f4d0e3e31be7352c74faeebc35da4a39f1bfa",
+      "crates/cambium/cambium-rootstock/src/embedding/iced_input.rs": "33b4b221cddf03a3e0f9403ee9ea746c7e9de1ba62a72f892867dd3ff8fe7356",
+      "crates/cambium/cambium-rootstock/src/embedding/tests.rs": "bdb68324497c498cada935dc2606aaad63765b013491488e5ad8ee26029a9cb7",
+      "ports/graphshell/src/retained_content/view.rs": "92aa141509fa3303c37b2908afddce3ad214e5e9922ae487562d8c8de47d3cae",
+      "ports/pelt/core/src/content.rs": "2aaa8b237a608f6f8e7a85356c2787f55e706964a0be72041a66a499a7c93e98",
+      "ports/pelt/core/tests/host_surface.rs": "b7beafe7d9c3586179d14737a75b5549f452d422b46fac9cc1ee93deba8db2df",
+      "ports/pelt/desktop/static_viewer.rs": "e448576edf320cf3abb4d30faa016d69666b87a229ac2c909437f94c939f4620",
+      "ports/pelt/desktop/workspace_viewer.rs": "fe360adeb11bc3c734ba31e933c880c6a606313907891222cffc07e21a1d5c95",
+      "ports/pelt/desktop/workspace_viewer/tests.rs": "7df354dd811c77b0103397bf800877f7cd719afa3a3b7c63a8931a4c960a57f8"
+    },
+    "vano-four-partials-20261017": {
+      "nova_vm/src/ecmascript/builtins/error.rs": "e27d9ab11bbe3cb9f073960a56dac217083ce50b393428e8a31cc9bbfad88ef1",
+      "nova_vm/src/ecmascript/builtins/promise.rs": "0727416225291d2507c048226d39a0b8419ebf12b12eac9d253e5a9707e56244",
+      "nova_vm/src/ecmascript/execution/agent.rs": "ecf980e88e001889ab7d24df759ccc10beccc1857fe1743f3692be50682141e6",
+      "nova_vm/src/ecmascript/scripts_and_modules/module/module_semantics/cyclic_module_records.rs": "95effced341a7c3a4e7323786221002df5caf8a9ce1ce3fc2deaa30880540fe2"
+    },
+    "bole-four-partials-20261017": {
+      "core/engine/src/error/mod.rs": "73d9e59af3fe60e67a060b2e803d77f69a3a7feb4440f53a5aa7d9372caada70",
+      "core/engine/src/error/tests.rs": "ab252fc9bd33f9308fa94b449962b484595dd34a9df2f5fe09e99e52f6360e59"
+    }
+  },
+  "gates": {
+    "shader-retained-fixed": "590 passed, actual RADV draw/readback",
+    "dependency-retained-fixed": "85 passed",
+    "dependency-invalidation": "5 passed",
+    "retained-final": "147 passed, 3 failed before corrections",
+    "input-corrections": "7 passed, including all three corrected failures",
+    "engines-final": "27 Boa + 12 Nova passed",
+    "test262-identity-final": "15 passed, 1 negative-identity failure before wrapper correction",
+    "harness-wrapper-final": "corrected negative-identity test passed, both engines and all controls",
+    "corpus-boolean": "5 files both-pass, no excluded results/timeouts",
+    "corpus-modules-final": "4 files both-pass, no excluded results/timeouts",
+    "bole-error-brand-online": "1 passed",
+    "mere-embedding-fixed": "8 passed",
+    "mere-host-input": "11 Graphshell + 1 Pelt passed",
+    "pelt-surface-pair": "1 passed",
+    "ortet-native": "check passed",
+    "ortet-wasm": "check passed",
+    "graphshell-web": "check passed",
+    "turnstone-retained": "Cold compilation timed out at 600s before tests, with no compiler error",
+    "turnstone-retained-warm": "8 passed; peak RSS 3302576 KiB; zero swaps"
+  },
+  "limits": [
+    "Physical IME not exercised",
+    "Complete InputEvent/CompositionEvent IDL not claimed",
+    "Native event convergence and Forms/platform acceptance remain separate",
+    "Full Test262 conformance not run",
+    "Supplemental X1 remains partial"
+  ],
+  "integration_base": "44657594dc4",
+  "mere_integration_base": "e9df653ac",
+  "supplier_revisions": {
+    "bole": "aef1134bb121c7aa4e4b408b3fa62460d10740b0",
+    "vano": "fd9db00d225c22522f088713de7c9de512181dbf"
+  },
+  "publication_verification": "Genet published supplier graph matches tested versions, features and dependency edges; source hashes unchanged after concurrent event module/toolchain integration."
+}

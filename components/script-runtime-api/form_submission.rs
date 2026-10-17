@@ -6,7 +6,7 @@ use crate::{
     dom::{adoption, reflect_pinned},
     form_data,
 };
-use genet_scripted_dom::{FormImplicitSubmission, NodeId};
+use genet_scripted_dom::{FormEditCommand, FormEditOutcome, FormImplicitSubmission, NodeId};
 use layout_dom_api::{LayoutDom, LocalName, Namespace};
 use script_engine_api::{CallCx, NativeFn, ScriptEngine};
 
@@ -17,6 +17,46 @@ pub struct FormKeyModifiers {
     pub ctrl: bool,
     pub meta: bool,
     pub shift: bool,
+}
+/// The only script-facing user edit callback. The shared DOM owns value,
+/// selection, grapheme movement, draft state, and control eligibility.
+pub(crate) struct HostFormEdit;
+impl<E: ScriptEngine> NativeFn<E> for HostFormEdit {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let value = cx.arg(0);
+        let Some(node) = cx.owned_node(&value)? else { return cx.make_string("rejected") };
+        let operation = cx.arg(1);
+        let operation = cx.value_to_string(&operation)?;
+        let text = cx.arg(2);
+        let text = cx.value_to_string(&text)?;
+        let command = match operation.as_str() {
+            "insert" => FormEditCommand::Insert(&text),
+            "backward" => FormEditCommand::DeleteBackward,
+            "forward" => FormEditCommand::DeleteForward,
+            "left" => FormEditCommand::MoveLeft,
+            "right" => FormEditCommand::MoveRight,
+            "home" => FormEditCommand::Home,
+            "end" => FormEditCommand::End,
+            _ => return cx.make_string("rejected"),
+        };
+        let result = node.with_dom(|dom| {
+            if !dom.can_user_edit_text_control(node.id()) {
+                return FormEditOutcome::Rejected;
+            }
+            if dom.form_control_interaction_state(node.id())
+                .is_some_and(|state| state.user_edit_initial_value.is_none())
+            {
+                dom.begin_form_control_user_edit(node.id());
+            }
+            dom.apply_form_control_user_edit(node.id(), command)
+        });
+        cx.make_string(match result {
+            FormEditOutcome::Rejected => "rejected",
+            FormEditOutcome::Unchanged => "unchanged",
+            FormEditOutcome::SelectionChanged => "selection",
+            FormEditOutcome::ValueEdited => "edited",
+        })
+    }
 }
 pub(crate) struct ControlInfo;
 impl<E: ScriptEngine> NativeFn<E> for ControlInfo {
@@ -291,6 +331,7 @@ impl<E: ScriptEngine> NativeFn<E> for FormSubmissionPlan {
 pub(crate) fn install<E: ScriptEngine>(
     engine: &mut crate::Surface<'_, '_, E>,
 ) -> Result<(), crate::SurfaceError<E::Error>> {
+    engine.set_function::<HostFormEdit>("__hostFormEdit", 3)?;
     engine.set_function::<ControlInfo>("__formControlInfo", 1)?;
     engine.set_function::<SubmitterCheck>("__formSubmitterCheck", 2)?;
     engine.set_function::<ImplicitDecision>("__formImplicitDecision", 1)?;
@@ -300,14 +341,14 @@ pub(crate) fn install<E: ScriptEngine>(
     Ok(())
 }
 impl<E: ScriptEngine> crate::Runtime<E> {
-    fn private_form_host(&mut self, raw: u64, op: &str, details: &str) -> Result<bool, E::Error> {
+    fn private_form_host_result(&mut self, raw: u64, op: &str, details: &str, checkpoint: bool) -> Result<Option<String>, E::Error> {
         let Some((realm, _)) = adoption::owner_host(&self.host, NodeId::from_raw(raw)) else {
-            return Ok(false);
+            return Ok(None);
         };
         let hook = self.agent.borrow().dom_adoption.hook(realm);
-        let Some(hook) = hook else { return Ok(false) };
+        let Some(hook) = hook else { return Ok(None) };
         let Some(function) = hook.downcast_ref::<E::Value>() else {
-            return Ok(false);
+            return Ok(None);
         };
         let op = self
             .engine
@@ -332,10 +373,28 @@ impl<E: ScriptEngine> crate::Runtime<E> {
         let result = self
             .engine
             .value_to_string(&result)
-            .map(|s| s != "false")
-            .unwrap_or(false);
-        self.perform_microtask_checkpoint();
+            .ok();
+        if checkpoint { self.perform_microtask_checkpoint(); }
         Ok(result)
+    }
+    fn private_form_host(&mut self, raw: u64, op: &str, details: &str) -> Result<bool, E::Error> {
+        Ok(self.private_form_host_result(raw, op, details, true)?.is_some_and(|value| value != "false"))
+    }
+    /// A host input turn finishes its defaults before this checkpoint.
+    pub fn finish_host_input(&mut self) { self.perform_microtask_checkpoint(); }
+    pub fn dispatch_host_focus_step(&mut self, raw: u64, focused: bool) -> Result<bool, E::Error> {
+        Ok(self.private_form_host_result(raw, "formFocusRaw", if focused { "true" } else { "false" }, false)?.is_some_and(|value| value != "false"))
+    }
+    pub fn dispatch_host_text_edit(&mut self, raw: u64, operation: &str, text: &str, input_type: &str) -> Result<String, E::Error> {
+        let details = format!("{{\"operation\":{},\"text\":{},\"inputType\":{}}}", crate::js_str(operation), crate::js_str(text), crate::js_str(input_type));
+        Ok(self.private_form_host_result(raw, "hostTextRaw", &details, false)?.unwrap_or_else(|| "rejected".into()))
+    }
+    pub fn dispatch_host_change(&mut self, raw: u64) -> Result<bool, E::Error> {
+        Ok(self.private_form_host_result(raw, "hostChangeRaw", "", false)?.is_some_and(|value| value != "false"))
+    }
+    pub fn dispatch_host_composition(&mut self, raw: u64, phase: &str, text: &str) -> Result<bool, E::Error> {
+        let details = format!("{{\"phase\":{},\"text\":{}}}", crate::js_str(phase), crate::js_str(text));
+        Ok(self.private_form_host_result(raw, "hostCompositionRaw", &details, false)?.is_some_and(|value| value != "false"))
     }
     /// Set the represented realm's private host focus projection.
     pub fn dispatch_form_focus(
@@ -388,5 +447,14 @@ impl<E: ScriptEngine> crate::Runtime<E> {
             modifiers.shift
         );
         self.private_form_host(raw_node_id, "formKeyRaw", &text)
+    }
+    /// Dispatch a host keyboard event without checkpointing; the embedding
+    /// document still has to apply Tab and text defaults for this same turn.
+    pub fn dispatch_host_key_step(&mut self, raw: u64, key: &str, down: bool, repeat: bool, modifiers: FormKeyModifiers) -> Result<bool, E::Error> {
+        let details = format!(
+            "{{\"key\":{},\"down\":{},\"repeat\":{},\"alt\":{},\"ctrl\":{},\"meta\":{},\"shift\":{}}}",
+            crate::js_str(key), down, repeat, modifiers.alt, modifiers.ctrl, modifiers.meta, modifiers.shift
+        );
+        Ok(self.private_form_host_result(raw, "hostKeyRaw", &details, false)?.is_some_and(|value| value != "false"))
     }
 }

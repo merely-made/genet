@@ -428,7 +428,13 @@ pub enum SessionIme {
     Disabled,
 }
 
-/// Input delivered by a host to one retained session.
+/// Input delivered by a host to one retained session. For a printable key,
+/// send `Key` first and then its produced `KeyboardText`. `Key` owns keyboard
+/// events and non-text defaults; `KeyboardText` owns that key's character edit
+/// and can be suppressed by a canceled keydown. `Text` is independent input,
+/// including paste and accessibility, and is never canceled by an earlier key.
+/// An IME commit uses `Ime::Commit`. Send control keys such as Enter only as
+/// `Key`; independent `Text` may contain newlines.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum SessionInput {
     PointerMoved {
@@ -449,6 +455,7 @@ pub enum SessionInput {
         modifiers: SessionModifiers,
         repeat: bool,
     },
+    KeyboardText(String),
     Text(String),
     Ime(SessionIme),
     Focus(bool),
@@ -754,6 +761,14 @@ pub fn dispatch_session_input<F, S: DocumentSession<F> + ?Sized>(
                 session.key_input(key, state, modifiers, repeat),
                 session.editable_focus(),
             ),
+            SessionInput::KeyboardText(text) => {
+                let effect = if session.keyboard_text_input(&text) {
+                    SessionEffect::Handled
+                } else {
+                    SessionEffect::Ignored
+                };
+                SessionInputResult::new(effect, session.editable_focus())
+            },
             SessionInput::Text(text) => {
                 let effect = if session.text_input(&text) {
                     SessionEffect::Handled
@@ -908,6 +923,8 @@ pub trait DocumentSession<F>: Any {
         }
     }
 
+    /// Dispatch a keyboard event and non-text default. Printable text arrives
+    /// separately through `keyboard_text_input` for the same press.
     fn key_input(
         &mut self,
         _key: SessionKey,
@@ -918,6 +935,13 @@ pub trait DocumentSession<F>: Any {
         SessionEffect::Ignored
     }
 
+    /// Insert text paired with the preceding physical key. Override to honor
+    /// cancellation while keeping independent `text_input` available.
+    fn keyboard_text_input(&mut self, text: &str) -> bool {
+        self.text_input(text)
+    }
+
+    /// Insert independent text, including paste or accessibility edits.
     fn text_input(&mut self, _text: &str) -> bool {
         false
     }

@@ -136,6 +136,7 @@ where
             address: navigation.script_visible_url,
             pressed_target: None,
             pointer_active: false,
+            pending_key_text: None,
             external_textures: Vec::new(),
             collection_stats: (0, 0),
             a11y_revision: std::cell::Cell::new(0),
@@ -158,6 +159,8 @@ pub struct ScriptedDocumentSession<E: script_engine_api::ScriptEngine> {
     address: String,
     pressed_target: Option<genet_scripted_dom::NodeId>,
     pointer_active: bool,
+    /// Whether the Text item paired with the last keydown may insert text.
+    pending_key_text: Option<bool>,
     /// Cumulative `(reflectors_unpinned, nodes_collected)` from normal frame
     /// pumps. Reading this never triggers another collection.
     collection_stats: (usize, usize),
@@ -187,6 +190,7 @@ impl<E: script_engine_api::ScriptEngine + 'static> ScriptedDocumentSession<E> {
             address: address.into(),
             pressed_target: None,
             pointer_active: false,
+            pending_key_text: None,
             collection_stats: (0, 0),
             external_textures: Vec::new(),
             a11y_revision: std::cell::Cell::new(0),
@@ -337,6 +341,7 @@ impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
         }
     }
     fn pointer_down(&mut self, x: f32, y: f32) -> SessionClick {
+        self.pending_key_text = None;
         let pressed_target = self.doc.click_target_at(x, y);
         if let Some(node) = pressed_target { let _ = self.doc.focus_host_node(node); }
         self.pressed_target = pressed_target;
@@ -367,7 +372,7 @@ impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
         }
     }
     fn focus_input(&mut self, focused: bool) {
-        if !focused { self.doc.clear_host_focus(); }
+        if !focused { self.doc.clear_host_focus(); self.pending_key_text = None; }
         if !focused && self.pointer_active {
             self.pointer_active = false;
             self.pressed_target = None;
@@ -375,38 +380,105 @@ impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
         }
     }
     fn focus_move(&mut self, direction: document_session_api::SessionFocusDirection) -> bool {
+        self.pending_key_text = None;
         self.doc.move_host_focus(direction == document_session_api::SessionFocusDirection::Backward)
     }
     fn cancel_input(&mut self) -> bool {
+        self.pending_key_text = None;
         let had_pointer = std::mem::replace(&mut self.pointer_active, false)
             || self.pressed_target.take().is_some();
         self.pressed_target = None;
         let dismissed = self.doc.dismiss_validation_notice();
-        self.doc.cancel_text_selection() || had_pointer || dismissed
+        let composition = self.doc.cancel_host_preedit();
+        self.doc.cancel_text_selection() || had_pointer || dismissed || composition
     }
     fn key_input(
         &mut self,
         key: document_session_api::SessionKey,
         state: document_session_api::SessionButtonState,
         modifiers: document_session_api::SessionModifiers,
-        _repeat: bool,
+        repeat: bool,
     ) -> document_session_api::SessionEffect {
         use document_session_api::{SessionButtonState, SessionEffect, SessionKey};
-        if state != SessionButtonState::Pressed { return SessionEffect::Ignored; }
-        if key == SessionKey::Escape && self.cancel_input() { return SessionEffect::Cancelled; }
-        if key == SessionKey::Tab {
-            return if self.doc.move_host_focus(modifiers.shift) { SessionEffect::Handled } else { SessionEffect::Ignored };
-        }
         let name = match &key {
             SessionKey::Character(value) => value.as_str(), SessionKey::Enter => "Enter",
             SessionKey::Space => " ", SessionKey::Escape => "Escape", SessionKey::Backspace => "Backspace",
             SessionKey::Delete => "Delete", SessionKey::ArrowLeft => "ArrowLeft", SessionKey::ArrowRight => "ArrowRight",
             SessionKey::ArrowUp => "ArrowUp", SessionKey::ArrowDown => "ArrowDown", SessionKey::Home => "Home",
             SessionKey::End => "End", SessionKey::PageUp => "PageUp", SessionKey::PageDown => "PageDown",
-            _ => return SessionEffect::Ignored,
+            SessionKey::Tab => "Tab", SessionKey::Unidentified => "Unidentified",
         };
-        if self.doc.dispatch_host_keydown(name, modifiers.alt, modifiers.control, modifiers.meta, modifiers.shift) { SessionEffect::Handled } else { SessionEffect::Ignored }
+        let had_focus = self.doc.host_has_focus();
+        if state == SessionButtonState::Released { self.pending_key_text = None; }
+        let cancelled = self.doc.dispatch_host_key(name, state == SessionButtonState::Pressed, repeat,
+            modifiers.alt, modifiers.control, modifiers.meta, modifiers.shift);
+        if state == SessionButtonState::Released {
+            self.doc.finish_host_key();
+            return if cancelled { SessionEffect::Cancelled } else { SessionEffect::Ignored };
+        }
+        if cancelled {
+            self.pending_key_text = matches!(&key,SessionKey::Character(_) | SessionKey::Space).then_some(false);
+            self.doc.finish_host_key();
+            return SessionEffect::Cancelled;
+        }
+        let unmodified = !modifiers.alt && !modifiers.control && !modifiers.meta;
+        self.pending_key_text = match &key {
+            SessionKey::Character(_) | SessionKey::Space => Some(!self.doc.host_has_preedit()),
+            _ => None,
+        };
+        let escape = matches!(&key, SessionKey::Escape);
+        let handled = match key {
+            SessionKey::Tab => self.doc.move_host_focus(modifiers.shift),
+            SessionKey::Escape => self.cancel_input(),
+            SessionKey::Enter if unmodified && self.doc.host_focused_is_textarea() =>
+                self.doc.host_text_input("insert", "\n", "insertLineBreak"),
+            SessionKey::Enter => had_focus,
+            SessionKey::Character(_) | SessionKey::Space => false,
+            SessionKey::Backspace if unmodified => self.doc.host_text_input("backward", "", "deleteContentBackward"),
+            SessionKey::Delete if unmodified => self.doc.host_text_input("forward", "", "deleteContentForward"),
+            SessionKey::ArrowLeft if unmodified => self.doc.host_text_input("left", "", ""),
+            SessionKey::ArrowRight if unmodified => self.doc.host_text_input("right", "", ""),
+            SessionKey::Home if unmodified => self.doc.host_text_input("home", "", ""),
+            SessionKey::End if unmodified => self.doc.host_text_input("end", "", ""),
+            _ => false,
+        };
+        self.doc.finish_host_key();
+        if handled && escape { SessionEffect::Cancelled }
+        else if handled { SessionEffect::Handled } else { SessionEffect::Ignored }
     }
+
+    fn keyboard_text_input(&mut self, text: &str) -> bool {
+        if self.pending_key_text.take() == Some(false) { return false; }
+        self.text_input(text)
+    }
+
+    fn text_input(&mut self, text: &str) -> bool {
+        !text.is_empty() && self.doc.host_text_input("insert", text, "insertText")
+    }
+
+    fn ime_input(&mut self, ime: document_session_api::SessionIme) -> bool {
+        use document_session_api::SessionIme;
+        self.pending_key_text = None;
+        match ime {
+            SessionIme::Enabled => self.doc.host_editable_focus(),
+            SessionIme::Preedit { text, .. } => {
+                let phase = if self.doc.host_has_preedit() { "compositionupdate" } else { "compositionstart" };
+                self.doc.host_composition(phase, &text)
+            },
+            SessionIme::Commit(text) => {
+                let composing = self.doc.host_has_preedit();
+                let accepted = !text.is_empty() && self.doc.host_text_input("insert", &text,
+                    if composing { "insertCompositionText" } else { "insertText" });
+                if composing { let _ = self.doc.host_composition("compositionend", &text); }
+                accepted
+            },
+            SessionIme::Disabled => {
+                if self.doc.host_has_preedit() { self.doc.host_composition("compositionend", "") } else { false }
+            },
+        }
+    }
+
+    fn editable_focus(&self) -> bool { self.doc.host_editable_focus() }
 
     fn text_target(&self, text: &str) -> Option<SessionTextTarget> {
         let (anchor, focus) = self.doc.text_target(text)?;

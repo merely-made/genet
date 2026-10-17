@@ -80,13 +80,9 @@ fn webgl_context_get_attrib_location_reports_invalid_program() {
 
 #[test]
 fn webgl_context_caches_translation_across_identical_source_pairs() {
-    // Cache key is now source-derived. Two programs built from
-    // the *same* source pair share the same translated entry;
-    // differently-formatted sources (whitespace-only deltas
-    // included) are treated as distinct keys. A future
-    // canonicalization layer could merge them, but it's not a
-    // correctness requirement — webgl-essl re-parses each
-    // unique key cheaply.
+    // Two programs built from the same source pair share the translated
+    // entry. Distinct text has a distinct key; successful shader objects
+    // retain their parsed and checked artifacts for a cold pair link.
     let mut context = make_context(4, 4);
     let first = context
         .create_program_from_essl(
@@ -104,6 +100,61 @@ fn webgl_context_caches_translation_across_identical_source_pairs() {
     assert_ne!(first, second);
     assert_eq!(context.translated_programs.len(), 1);
     assert_eq!(context.get_error(), WebGlError::NoError);
+}
+
+#[test]
+fn compiled_shader_artifacts_survive_links_and_expire_with_source_revision() {
+    let mut context = make_context(4, 4);
+    let vertex = context.create_shader(ShaderStage::Vertex);
+    let fragment = context.create_shader(ShaderStage::Fragment);
+    context.shader_source(vertex, CANONICAL_TRIANGLE_VERTEX_SHADER);
+    context.shader_source(fragment, CANONICAL_TRIANGLE_FRAGMENT_SHADER);
+    context.compile_shader(vertex);
+    context.compile_shader(fragment);
+    assert!(context.shaders[&vertex].compiled.is_some());
+    assert_eq!(
+        context.shaders[&vertex].compiled_revision,
+        Some(context.shaders[&vertex].source_revision)
+    );
+
+    for _ in 0..2 {
+        let program = context.create_program();
+        context.attach_shader(program, vertex);
+        context.attach_shader(program, fragment);
+        context.link_program(program);
+        assert!(context.get_program_link_status(program));
+        assert!(context.shaders[&vertex].compiled.is_some());
+    }
+    assert_eq!(context.translated_programs.len(), 1);
+
+    // The same text still begins a new source revision and needs compilation.
+    context.shader_source(vertex, CANONICAL_TRIANGLE_VERTEX_SHADER);
+    assert!(context.shaders[&vertex].compiled.is_none());
+    assert_eq!(context.shaders[&vertex].compiled_revision, None);
+    let program = context.create_program();
+    context.attach_shader(program, vertex);
+    context.attach_shader(program, fragment);
+    context.link_program(program);
+    assert!(!context.get_program_link_status(program));
+
+    context.compile_shader(vertex);
+    assert!(context.shaders[&vertex].compiled.is_some());
+    context.link_program(program);
+    assert!(context.get_program_link_status(program));
+
+    context.shader_source(vertex, "void main() { discard; }");
+    context.compile_shader(vertex);
+    assert!(!context.get_shader_compile_status(vertex));
+    assert!(context.shaders[&vertex].compiled.is_none());
+    assert_eq!(context.shaders[&vertex].compiled_revision, None);
+    context.link_program(program);
+    assert!(!context.get_program_link_status(program));
+    assert!(
+        context
+            .get_program_info_log(program)
+            .expect("link log")
+            .contains("attached shader did not compile")
+    );
 }
 
 #[test]

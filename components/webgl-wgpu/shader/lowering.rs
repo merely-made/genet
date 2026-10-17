@@ -28,6 +28,26 @@ pub(crate) fn translate_canonical_essl_pair(
     })
 }
 
+pub(crate) fn translate_compiled_essl_pair(
+    vertex: &webgl_essl::CompiledShader,
+    fragment: &webgl_essl::CompiledShader,
+) -> Result<TranslatedProgram, ShaderTranslationError> {
+    let linked = webgl_essl::link_compiled(vertex, fragment).map_err(map_linked_compile_error)?;
+    let reflection = build_program_reflection(&linked.reflection)?;
+    Ok(TranslatedProgram {
+        vertex_wgsl: linked.vertex_wgsl,
+        fragment_wgsl: linked.fragment_wgsl,
+        reflection,
+    })
+}
+
+pub(crate) fn compile_canonical_source(
+    source: &str,
+    stage: EsslStage,
+) -> Result<webgl_essl::CompiledShader, ShaderTranslationError> {
+    webgl_essl::compile_artifact(source, stage).map_err(Into::into)
+}
+
 pub(crate) fn validate_canonical_vertex_source(
     vertex_source: &str,
 ) -> Result<(), ShaderTranslationError> {

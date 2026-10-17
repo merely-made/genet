@@ -23,6 +23,7 @@
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use script_engine_api::{ExecutionObservation, ExecutionPhase};
 
 /// The `flags: [...]` set that shapes how a test is run.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -261,7 +262,8 @@ pub fn body_routes(flags: &Flags) -> Vec<BodyRoute> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Observation {
     Completed,
-    TestError,
+    Execution(ExecutionObservation),
+    HarnessError { phase: ExecutionPhase },
     CompletionFailure,
     Incomplete,
     SetupError,
@@ -288,21 +290,44 @@ pub fn classify(negative: Option<&Negative>, observation: &Observation) -> Outco
                 Outcome::Fail
             }
         },
-        // Neither backend exposes trustworthy phase/constructor identity here.
-        Observation::TestError => {
-            if negative.is_some() {
-                Outcome::Unsupported
+        Observation::Execution(ExecutionObservation::Completed) => {
+            if negative.is_some() { Outcome::Fail } else { Outcome::Pass }
+        },
+        Observation::HarnessError { phase } => {
+            let Some(negative) = negative else { return Outcome::Fail; };
+            if negative.error_type == "Test262Error" &&
+                ((negative.phase == "parse" && *phase == ExecutionPhase::Parse) ||
+                 (negative.phase == "resolution" && *phase == ExecutionPhase::Resolution) ||
+                 (negative.phase == "runtime" && *phase == ExecutionPhase::Runtime)) {
+                Outcome::Pass
             } else {
                 Outcome::Fail
             }
         },
-        Observation::CompletionFailure => {
-            if negative.is_some() {
-                Outcome::Unsupported
-            } else {
-                Outcome::Fail
+        Observation::Execution(ExecutionObservation::Failed { phase, native_error }) => {
+            let Some(negative) = negative else { return Outcome::Fail; };
+            let expected_phase = match negative.phase.as_str() {
+                "parse" => ExecutionPhase::Parse,
+                "resolution" => ExecutionPhase::Resolution,
+                "runtime" => ExecutionPhase::Runtime,
+                _ => return Outcome::Error,
+            };
+            if *phase == ExecutionPhase::Load {
+                return Outcome::Unsupported;
+            }
+            if *phase != expected_phase {
+                return Outcome::Fail;
+            }
+            match native_error {
+                Some(actual) if actual.name() == negative.error_type => Outcome::Pass,
+                Some(_) => Outcome::Fail,
+                None => Outcome::Fail,
             }
         },
+        Observation::Execution(ExecutionObservation::Pending | ExecutionObservation::Unsupported) => {
+            Outcome::Unsupported
+        },
+        Observation::CompletionFailure => Outcome::Fail,
         Observation::Incomplete => Outcome::Fail,
     }
 }
@@ -352,16 +377,30 @@ mod tests {
     }
 
     #[test]
-    fn negative_body_errors_are_unsupported_without_vm_error_identity() {
+    fn negative_body_errors_require_exact_phase_and_native_brand() {
         let negative = Negative {
             phase: "parse".into(),
             error_type: "SyntaxError".into(),
         };
         assert_eq!(
-            classify(Some(&negative), &Observation::TestError),
-            Outcome::Unsupported
+            classify(Some(&negative), &Observation::Execution(ExecutionObservation::Failed {
+                phase: ExecutionPhase::Parse,
+                native_error: Some(script_engine_api::NativeErrorKind::SyntaxError),
+            })),
+            Outcome::Pass
         );
-        assert_eq!(classify(None, &Observation::TestError), Outcome::Fail);
+        assert_eq!(classify(Some(&negative), &Observation::Execution(ExecutionObservation::Failed {
+            phase: ExecutionPhase::Runtime,
+            native_error: Some(script_engine_api::NativeErrorKind::SyntaxError),
+        })), Outcome::Fail);
+        assert_eq!(classify(Some(&negative), &Observation::Execution(ExecutionObservation::Failed {
+            phase: ExecutionPhase::Parse,
+            native_error: Some(script_engine_api::NativeErrorKind::TypeError),
+        })), Outcome::Fail);
+        assert_eq!(classify(Some(&negative), &Observation::Execution(ExecutionObservation::Failed {
+            phase: ExecutionPhase::Parse,
+            native_error: None,
+        })), Outcome::Fail);
     }
 
     #[test]
@@ -380,7 +419,7 @@ mod tests {
         );
         assert_eq!(
             classify(Some(&negative), &Observation::CompletionFailure),
-            Outcome::Unsupported
+            Outcome::Fail
         );
         assert_eq!(
             classify(Some(&negative), &Observation::Completed),

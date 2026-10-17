@@ -147,6 +147,7 @@ mod lowering;
 mod tests;
 
 pub(crate) use lowering::{
-    canonical_essl_cache_key, translate_canonical_essl_pair, validate_canonical_fragment_source,
+    canonical_essl_cache_key, compile_canonical_source, translate_canonical_essl_pair,
+    translate_compiled_essl_pair, validate_canonical_fragment_source,
     validate_canonical_vertex_source,
 };

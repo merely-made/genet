@@ -752,6 +752,8 @@ pub struct LiveryScriptedDocument<E: ScriptEngine> {
     // by carrying one live document through `ViewerApp`.
     rt: Box<Runtime<E>>,
     host_focused_node: Option<NodeId>,
+    host_edit_node: Option<NodeId>,
+    host_preedit: Option<String>,
     bridge: ScriptResourceBridge,
     cssom: Box<LiveryCssom>,
     child_cssoms: std::rc::Rc<
@@ -1141,6 +1143,8 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         let mut document = Self {
             rt: Box::new(rt),
             host_focused_node: None,
+            host_edit_node: None,
+            host_preedit: None,
             bridge: fetcher,
             cssom: Box::new(cssom),
             child_cssoms,
@@ -1427,17 +1431,85 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         host.dom.is_live(node) && host.dom.tree_root(node) == Some(host.dom.document())
             && !host.dom.form_control_is_disabled(node).unwrap_or(false)
     }
-    pub fn clear_host_focus(&mut self) {
+    fn finish_host_edit(&mut self, node: NodeId) {
+        if self.host_preedit.take().is_some() {
+            let _ = self.rt.dispatch_host_composition(node.raw(), "compositionend", "");
+        }
+        if let Some(edited) = self.host_edit_node.take() {
+            if edited == node {
+                let changed = self.with_dom(|dom| dom.form_control_interaction_state(node)
+                    .is_some_and(|state| state.user_edit_pending));
+                if changed { let _ = self.rt.dispatch_host_change(node.raw()); }
+                self.rt.host().borrow_mut().dom.commit_form_control_user_edit(node);
+            }
+        }
+    }
+    fn clear_host_focus_step(&mut self) -> bool {
         if let Some(node) = self.host_focused_node.take() {
-            let _ = self.rt.dispatch_form_focus(node.raw(), false);
+            self.finish_host_edit(node);
+            let _ = self.rt.dispatch_host_focus_step(node.raw(), false);
+            true
+        } else { false }
+    }
+    pub fn clear_host_focus(&mut self) {
+        if self.clear_host_focus_step() {
+            self.rt.finish_host_input();
         }
     }
     pub fn focus_host_node(&mut self, node: NodeId) -> bool {
         if !self.host_focus_is_current(node) { self.clear_host_focus(); return false; }
-        self.clear_host_focus();
-        if self.rt.dispatch_form_focus(node.raw(), true).unwrap_or(false) {
-            self.host_focused_node = Some(node); true
-        } else { false }
+        if self.host_focused_node == Some(node) { return true; }
+        self.clear_host_focus_step();
+        if !self.host_focus_is_current(node) { self.rt.finish_host_input(); return false; }
+        if self.rt.dispatch_host_focus_step(node.raw(), true).unwrap_or(false) {
+            if !self.host_focus_is_current(node) {
+                let _ = self.rt.dispatch_host_focus_step(node.raw(), false);
+                self.rt.finish_host_input();
+                return false;
+            }
+            self.host_focused_node = Some(node);
+            self.rt.finish_host_input();
+            true
+        } else { self.rt.finish_host_input(); false }
+    }
+    pub fn host_editable_focus(&self) -> bool {
+        self.host_focused_node.is_some_and(|node| self.host_focus_is_current(node)
+            && self.with_dom(|dom| dom.can_user_edit_text_control(node)))
+    }
+    pub fn host_has_focus(&self) -> bool { self.host_focused_node.is_some_and(|node| self.host_focus_is_current(node)) }
+    pub fn host_focused_is_textarea(&self) -> bool {
+        self.host_focused_node.is_some_and(|node| self.host_focus_is_current(node)
+            && self.with_dom(|dom| dom.element_name(node).is_some_and(|name| name.local.as_ref() == "textarea")))
+    }
+    pub fn host_text_input(&mut self, operation: &str, text: &str, input_type: &str) -> bool {
+        let Some(node) = self.host_focused_node.filter(|node| self.host_focus_is_current(*node)) else { return false };
+        if !self.with_dom(|dom| dom.can_user_edit_text_control(node)) { return false; }
+        let result = self.rt.dispatch_host_text_edit(node.raw(), operation, text, input_type).unwrap_or_else(|_| "rejected".into());
+        if result != "rejected" { self.host_edit_node = Some(node); }
+        if !self.host_focus_is_current(node) { self.clear_host_focus(); }
+        self.rt.finish_host_input();
+        self.drain_validation_reports();
+        self.flush_dom_capture();
+        result != "rejected"
+    }
+    pub fn host_composition(&mut self, phase: &str, text: &str) -> bool {
+        let Some(node) = self.host_focused_node.filter(|node| self.host_focus_is_current(*node)) else { return false };
+        if !self.with_dom(|dom| dom.can_user_edit_text_control(node)) { return false; }
+        let _ = self.rt.dispatch_host_composition(node.raw(), phase, text);
+        if !self.host_focus_is_current(node) { self.clear_host_focus(); return false; }
+        self.host_preedit = if phase == "compositionend" { None } else { Some(text.into()) };
+        self.rt.finish_host_input();
+        true
+    }
+    pub fn host_has_preedit(&self) -> bool { self.host_preedit.is_some() }
+    pub fn cancel_host_preedit(&mut self) -> bool {
+        if self.host_preedit.is_none() { return false; }
+        if let Some(node) = self.host_focused_node {
+            let _ = self.rt.dispatch_host_composition(node.raw(), "compositionend", "");
+        }
+        self.host_preedit = None;
+        self.rt.finish_host_input();
+        true
     }
     pub fn move_host_focus(&mut self, backward: bool) -> bool {
         let nodes = self.with_dom(|dom| {
@@ -1482,9 +1554,11 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         };
         self.focus_host_node(nodes[next])
     }
-    pub fn dispatch_host_keydown(
+    pub fn dispatch_host_key(
         &mut self,
         key: &str,
+        down: bool,
+        repeat: bool,
         alt: bool,
         ctrl: bool,
         meta: bool,
@@ -1497,11 +1571,13 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             self.clear_host_focus();
             return false;
         }
-        let handled = self
+        let allowed = self
             .rt
-            .dispatch_form_keydown(
+            .dispatch_host_key_step(
                 node.raw(),
                 key,
+                down,
+                repeat,
                 script_runtime_api::FormKeyModifiers {
                     alt,
                     ctrl,
@@ -1513,10 +1589,13 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         if !self.host_focus_is_current(node) {
             self.clear_host_focus();
         }
+        // The caller applies any text and Tab defaults before this checkpoint.
+        // A canceled event is consumed so the shell cannot scroll it.
         self.drain_validation_reports();
         self.flush_dom_capture();
-        handled
+        !allowed
     }
+    pub fn finish_host_key(&mut self) { self.rt.finish_host_input(); self.drain_validation_reports(); self.flush_dom_capture(); }
 
     pub fn click_at(&mut self, x: f32, y: f32) -> bool {
         !matches!(self.click_at_result(x, y), ScriptedClick::Miss)

@@ -100,7 +100,17 @@ pub(crate) fn lower_to_wgsl_with_plan(
     // diagnostics are not surfaced here; the caller is expected to
     // have run [`crate::check::check`] separately if they care.
     let types = crate::check::check(tu).types;
-    let spirv = build_spirv(tu, stage, &types, plan)?;
+    lower_to_wgsl_with_types(tu, stage, &types, plan)
+}
+
+/// Lower with the compiler's checked types, without repeating the type pass.
+pub(crate) fn lower_to_wgsl_with_types(
+    tu: &TranslationUnit,
+    stage: ShaderStage,
+    types: &HashMap<Span, TypeKind>,
+    plan: Option<&crate::reflect::LinkedProgramPlan>,
+) -> Result<String, LoweringError> {
+    let spirv = build_spirv(tu, stage, types, plan)?;
     if std::env::var("WEBGL_ESSL_DUMP_SPIRV").is_ok() {
         use rspirv::binary::Disassemble;
         eprintln!("--- SPIR-V ---\n{}\n", spirv.disassemble());

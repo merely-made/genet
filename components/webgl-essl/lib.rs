@@ -49,6 +49,63 @@ pub use ast::TranslationUnit;
 pub use error::{Error, ErrorKind};
 pub use span::Span;
 
+use std::collections::HashMap;
+
+use ast::TypeKind;
+
+/// One successful shader compilation, tied to its exact source and stage.
+/// The parsed tree and resolved types are retained for pair-dependent linking.
+pub struct CompiledShader {
+    prepared: PreparedShader,
+    wgsl: String,
+    info_log: String,
+}
+
+struct PreparedShader {
+    source: String,
+    stage: validate::ShaderStage,
+    tu: TranslationUnit,
+    types: HashMap<Span, TypeKind>,
+}
+
+impl CompiledShader {
+    pub fn source(&self) -> &str {
+        &self.prepared.source
+    }
+
+    pub fn stage(&self) -> validate::ShaderStage {
+        self.prepared.stage
+    }
+}
+
+/// Compile once and retain the syntax and type facts needed by linking.
+pub fn compile_artifact(
+    source: &str,
+    stage: validate::ShaderStage,
+) -> Result<CompiledShader, CompileError> {
+    let tu = parse_source_for_stage(source, stage).map_err(CompileError::Parse)?;
+    let checked = check::check(&tu);
+    if !checked.diagnostics.is_empty() {
+        return Err(CompileError::Check(checked.diagnostics));
+    }
+    let validation = validate::validate_with_types(&tu, source, stage, &checked.types);
+    if validation.num_errors() > 0 {
+        return Err(CompileError::Validate(validation));
+    }
+    let wgsl = lower::lower_to_wgsl_with_types(&tu, stage, &checked.types, None)
+        .map_err(CompileError::Lower)?;
+    Ok(CompiledShader {
+        prepared: PreparedShader {
+            source: source.to_owned(),
+            stage,
+            tu,
+            types: checked.types,
+        },
+        wgsl,
+        info_log: validation.info_log,
+    })
+}
+
 /// Compile a shader pair under one interface and uniform layout owner.
 pub fn compile_linked(
     vertex_source: &str,
@@ -57,27 +114,75 @@ pub fn compile_linked(
     let vertex = parse_source(vertex_source).map_err(LinkedCompileError::Parse)?;
     let fragment = parse_source_for_stage(fragment_source, validate::ShaderStage::Fragment)
         .map_err(LinkedCompileError::Parse)?;
-    for tu in [&vertex, &fragment] {
-        let checked = check::check(tu);
-        if !checked.diagnostics.is_empty() {
-            return Err(LinkedCompileError::Check(checked.diagnostics));
-        }
+    let vertex_checked = check::check(&vertex);
+    if !vertex_checked.diagnostics.is_empty() {
+        return Err(LinkedCompileError::Check(vertex_checked.diagnostics));
+    }
+    let fragment_checked = check::check(&fragment);
+    if !fragment_checked.diagnostics.is_empty() {
+        return Err(LinkedCompileError::Check(fragment_checked.diagnostics));
     }
     let plan = reflect::LinkedProgramPlan::build(&vertex, &fragment)
         .map_err(|_| LinkedCompileError::Link("stage interface or uniform type conflict".into()))?;
-    let vv = validate::validate(&vertex, vertex_source, validate::ShaderStage::Vertex);
-    let fv = validate::validate(&fragment, fragment_source, validate::ShaderStage::Fragment);
+    let vv = validate::validate_with_types(
+        &vertex,
+        vertex_source,
+        validate::ShaderStage::Vertex,
+        &vertex_checked.types,
+    );
+    let fv = validate::validate_with_types(
+        &fragment,
+        fragment_source,
+        validate::ShaderStage::Fragment,
+        &fragment_checked.types,
+    );
     if vv.num_errors() > 0 || fv.num_errors() > 0 {
         return Err(LinkedCompileError::Validate(format!(
             "vertex: {}\nfragment: {}",
             vv.info_log, fv.info_log
         )));
     }
+    let vertex = PreparedShader {
+        source: vertex_source.to_owned(),
+        stage: validate::ShaderStage::Vertex,
+        tu: vertex,
+        types: vertex_checked.types,
+    };
+    let fragment = PreparedShader {
+        source: fragment_source.to_owned(),
+        stage: validate::ShaderStage::Fragment,
+        tu: fragment,
+        types: fragment_checked.types,
+    };
+    lower_linked(&vertex, &fragment, &plan)
+}
+
+/// Link already compiled shaders without reparsing, checking or validating.
+/// Emission still runs under the pair's shared location and uniform plan.
+pub fn link_compiled(
+    vertex: &CompiledShader,
+    fragment: &CompiledShader,
+) -> Result<LinkedCompileResult, LinkedCompileError> {
+    if vertex.stage() != validate::ShaderStage::Vertex
+        || fragment.stage() != validate::ShaderStage::Fragment
+    {
+        return Err(LinkedCompileError::Link("shader stage mismatch".into()));
+    }
+    let plan = reflect::LinkedProgramPlan::build(&vertex.prepared.tu, &fragment.prepared.tu)
+        .map_err(|_| LinkedCompileError::Link("stage interface or uniform type conflict".into()))?;
+    lower_linked(&vertex.prepared, &fragment.prepared, &plan)
+}
+
+fn lower_linked(
+    vertex: &PreparedShader,
+    fragment: &PreparedShader,
+    plan: &reflect::LinkedProgramPlan,
+) -> Result<LinkedCompileResult, LinkedCompileError> {
     let vertex_wgsl =
-        lower::lower_to_wgsl_with_plan(&vertex, validate::ShaderStage::Vertex, Some(&plan))
+        lower::lower_to_wgsl_with_types(&vertex.tu, vertex.stage, &vertex.types, Some(plan))
             .map_err(LinkedCompileError::Lower)?;
     let fragment_wgsl =
-        lower::lower_to_wgsl_with_plan(&fragment, validate::ShaderStage::Fragment, Some(&plan))
+        lower::lower_to_wgsl_with_types(&fragment.tu, fragment.stage, &fragment.types, Some(plan))
             .map_err(LinkedCompileError::Lower)?;
     let (vertex_layout, vertex_block_size) =
         lower::reflect_emitted_uniform_layout(&vertex_wgsl).map_err(LinkedCompileError::Lower)?;
@@ -88,8 +193,8 @@ pub fn compile_linked(
             "linked stages emitted different uniform layouts".into(),
         ));
     }
-    let vertex_reflection = reflect::reflect(&vertex, validate::ShaderStage::Vertex);
-    let fragment_reflection = reflect::reflect(&fragment, validate::ShaderStage::Fragment);
+    let vertex_reflection = reflect::reflect(&vertex.tu, vertex.stage);
+    let fragment_reflection = reflect::reflect(&fragment.tu, fragment.stage);
     let mut uniforms = Vec::new();
     for uniform in plan.uniforms.iter().filter(|u| u.member_index.is_some()) {
         let member_index = uniform.member_index.expect("filtered linked block member");
@@ -115,9 +220,9 @@ pub fn compile_linked(
             attributes: vertex_reflection.inputs,
             uniforms,
             uniform_block_size: vertex_block_size,
-            varyings: plan.varyings,
+            varyings: plan.varyings.clone(),
             samplers: fragment_reflection.samplers,
-            fragment_float_precision: fragment.fragment_float_precision(),
+            fragment_float_precision: fragment.tu.fragment_float_precision(),
         },
     })
 }
@@ -143,19 +248,10 @@ pub enum LinkedCompileError {
 /// threaded through to the validator so info-log lines render with
 /// real line numbers.
 pub fn compile(source: &str, stage: validate::ShaderStage) -> Result<CompileResult, CompileError> {
-    let tu = parse_source_for_stage(source, stage).map_err(CompileError::Parse)?;
-    let check_result = check::check(&tu);
-    if !check_result.diagnostics.is_empty() {
-        return Err(CompileError::Check(check_result.diagnostics));
-    }
-    let validation = validate::validate(&tu, source, stage);
-    if validation.num_errors() > 0 {
-        return Err(CompileError::Validate(validation));
-    }
-    let wgsl = lower::lower_to_wgsl(&tu, stage).map_err(CompileError::Lower)?;
+    let compiled = compile_artifact(source, stage)?;
     Ok(CompileResult {
-        wgsl,
-        info_log: validation.info_log,
+        wgsl: compiled.wgsl,
+        info_log: compiled.info_log,
     })
 }
 

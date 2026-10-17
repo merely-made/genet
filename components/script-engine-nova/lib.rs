@@ -22,7 +22,8 @@ mod native {
             AbstractModule, Agent, AgentOptions, ArgumentsList, Behaviour, BuiltinFunction,
             BuiltinFunctionArgs,
             EmbedderObject, ExceptionType, Function, GcAgent, GraphLoadingStateRecord, HostDefined,
-            HostHooks, InternalMethods, Job, JsError, ModuleRequest, Object, OrdinaryObject,
+            HostHooks, InternalMethods, Job, JsError, ModuleRequest, ModuleRunOutcome,
+            ModuleRunPhase, Object, OrdinaryObject,
             PromiseCapability, PropertyDescriptor, PropertyKey, Realm, RealmRoot, Referrer,
             RegularFn, SourceTextModule, String as JsString, TypedArray, Value, clear_weak_ref_kept_objects,
             create_builtin_function, finish_loading_imported_module, parse_module, parse_script,
@@ -47,6 +48,8 @@ mod native {
         /// (`None` otherwise). The pointee outlives the call (an `eval_module` arg),
         /// so the deref in `load_imported_module` is sound; single-threaded.
         module_resolver: Cell<Option<*mut ModuleResolver<'static>>>,
+        /// Resolver retained for imports triggered by later promise jobs.
+        owned_module_resolver: RefCell<Option<Box<ModuleResolver<'static>>>>,
         /// Held until the VM finishes its normal module failure path, then
         /// resumed outside `run_in_realm` with its original payload.
         resolver_panic: RefCell<Option<Box<dyn Any + Send>>>,
@@ -181,12 +184,17 @@ mod native {
             let resolved = if self.resolver_panic.borrow().is_some() {
                 None
             } else {
-                self.module_resolver.get().and_then(|ptr| {
-                    // SAFETY: set by `with_resolver` for the call's duration;
-                    // the guard clears it before the borrowed callback drops.
-                    let resolve = unsafe { &mut *ptr };
+                {
                     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        resolve(&specifier, &referrer_url)
+                        if let Some(ptr) = self.module_resolver.get() {
+                            // SAFETY: `with_resolver` clears this pointer before
+                            // its borrowed callback can be dropped.
+                            let resolve = unsafe { &mut *ptr };
+                            resolve(&specifier, &referrer_url)
+                        } else {
+                            self.owned_module_resolver.borrow_mut().as_mut()
+                                .and_then(|resolve| resolve(&specifier, &referrer_url))
+                        }
                     })) {
                         Ok(resolved) => resolved,
                         Err(payload) => {
@@ -194,7 +202,7 @@ mod native {
                             None
                         },
                     }
-                })
+                }
             };
 
             let result = match resolved {
@@ -213,7 +221,7 @@ mod native {
                             .module_realm
                             .get()
                             .map(|realm| realm.bind(gc))
-                            .unwrap_or_else(|| agent.current_realm(gc));
+                            .unwrap_or_else(|| referrer.realm(agent, gc));
                         let src = JsString::from_string(agent, source, gc);
                         match parse_module(
                             agent,
@@ -250,6 +258,7 @@ mod native {
         Box::new(GenetHostHooks {
             jobs,
             module_resolver: Cell::new(None),
+            owned_module_resolver: RefCell::new(None),
             resolver_panic: RefCell::new(None),
             module_cache: RefCell::new(HashMap::new()),
             module_realm: Cell::new(None),
@@ -295,7 +304,8 @@ mod native {
     }
 
     use script_engine_api::{
-        Budget, CallCx, ExecutionCapabilities, HostData, MAIN_REALM, NativeFn, PromiseToken, PumpOutcome, RealmError,
+        Budget, CallCx, ExecutionCapabilities, ExecutionObservation, ExecutionPhase, HostData,
+        MAIN_REALM, ModuleObservation, NativeErrorKind, NativeFn, ObservedExecution, PromiseToken, PumpOutcome, RealmError,
         RealmId, ReflectorData, ScriptEngine, ScriptEngineLive, ScriptEngineSnapshot,
         WINDOW_PROXY_ACCESS_SLOT, WINDOW_PROXY_HANDLER_SLOT, WINDOW_PROXY_TARGET_SLOT,
         WINDOW_PROXY_TRAPS,
@@ -1250,6 +1260,38 @@ mod native {
         }
     }
 
+    fn native_error_kind(agent: &Agent, value: Value<'_>) -> Option<NativeErrorKind> {
+        let Value::Error(error) = value else {
+            return None;
+        };
+        Some(match error.kind(agent) {
+            ExceptionType::Error => NativeErrorKind::Error,
+            ExceptionType::AggregateError => NativeErrorKind::AggregateError,
+            ExceptionType::EvalError => NativeErrorKind::EvalError,
+            ExceptionType::RangeError => NativeErrorKind::RangeError,
+            ExceptionType::ReferenceError => NativeErrorKind::ReferenceError,
+            ExceptionType::SyntaxError => NativeErrorKind::SyntaxError,
+            ExceptionType::TypeError => NativeErrorKind::TypeError,
+            ExceptionType::UriError => NativeErrorKind::URIError,
+        })
+    }
+
+    fn observed_nova_error(
+        agent: &Agent,
+        error: JsError<'_>,
+        phase: ExecutionPhase,
+        release: &ReleaseQueue,
+    ) -> ObservedExecution<NovaValue> {
+        let value = error.value();
+        ObservedExecution {
+            observation: ExecutionObservation::Failed {
+                phase,
+                native_error: native_error_kind(agent, value),
+            },
+            thrown: Some(NovaValue::new(Global::new(agent, value.unbind()), release)),
+        }
+    }
+
     impl ScriptEngine for NovaEngine {
         fn native_worker_backend() -> Option<&'static str> { Some("nova") }
         fn execution_capabilities() -> ExecutionCapabilities {
@@ -1335,6 +1377,37 @@ mod native {
                         .unwrap_or_else(|_| "<unprintable>".to_string());
                     out = Err(format!("evaluation threw: {msg}"));
                 }
+            });
+            out
+        }
+
+        fn observe_script(&mut self, realm: RealmId, source: &str) -> ObservedExecution<Self::Value> {
+            if !self.registry.realms.borrow().contains_key(&realm) {
+                return ExecutionObservation::Unsupported.into();
+            }
+            let registry = self.registry.clone();
+            let release = self.release.clone();
+            let src = source.to_string();
+            let mut out = ObservedExecution::from(ExecutionObservation::Unsupported);
+            self.agent.run_in_realm(&self.realm, |agent, mut gc| {
+                let target = registry.realms.borrow().get(&realm).expect("checked realm")
+                    .get(agent, gc.nogc()).unbind();
+                let current = target.bind(gc.nogc());
+                let source_text = JsString::from_string(agent, src, gc.nogc());
+                let script = match parse_script(agent, source_text, current, false, None, gc.nogc()) {
+                    Ok(script) => script,
+                    Err(_) => {
+                        out = ExecutionObservation::Failed {
+                            phase: ExecutionPhase::Parse,
+                            native_error: Some(NativeErrorKind::SyntaxError),
+                        }.into();
+                        return;
+                    },
+                };
+                out = match script_evaluation(agent, script.unbind(), gc.reborrow()) {
+                    Ok(_) => ExecutionObservation::Completed.into(),
+                    Err(error) => observed_nova_error(agent, error, ExecutionPhase::Runtime, &release),
+                };
             });
             out
         }
@@ -1445,13 +1518,123 @@ mod native {
                             },
                         }
                     }));
-                    hooks.release_module_cache(agent);
+                    if hooks.owned_module_resolver.borrow().is_none() {
+                        hooks.release_module_cache(agent);
+                    }
                     if let Err(payload) = evaluation {
                         std::panic::resume_unwind(payload);
                     }
                 });
             });
             out
+        }
+
+        fn observe_module(
+            &mut self,
+            realm: RealmId,
+            source: &str,
+            base_url: &str,
+            resolve: &mut dyn FnMut(&str, &str) -> Option<(String, String)>,
+        ) -> ModuleObservation<Self::Value> {
+            if !self.registry.realms.borrow().contains_key(&realm) {
+                return ModuleObservation::Final(ExecutionObservation::Unsupported.into());
+            }
+            let hooks = self.hooks;
+            let registry = self.registry.clone();
+            let release = self.release.clone();
+            let src = source.to_string();
+            let base = base_url.to_string();
+            let mut out = ModuleObservation::Final(ExecutionObservation::Unsupported.into());
+            let mut pinned = None;
+            self.agent.run_in_realm(&self.realm, |agent, gc| {
+                pinned = registry.realms.borrow().get(&realm)
+                    .map(|root| root.get(agent, gc.nogc()).unbind());
+            });
+            hooks.with_resolver_in_realm(pinned, resolve, || {
+                self.agent.run_in_realm(&self.realm, |agent, mut gc| {
+                    let evaluation = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        let target = registry.realms.borrow().get(&realm).expect("checked realm")
+                            .get(agent, gc.nogc()).unbind();
+                        let current = target.bind(gc.nogc());
+                        let source_text = JsString::from_string(agent, src, gc.nogc());
+                        let module = match parse_module(
+                            agent,
+                            source_text,
+                            current,
+                            Some(Rc::new(base.clone()) as HostDefined),
+                            gc.nogc(),
+                        ) {
+                            Ok(module) => module,
+                            Err(_) => {
+                                out = ModuleObservation::Final(ExecutionObservation::Failed {
+                                    phase: ExecutionPhase::Parse,
+                                    native_error: Some(NativeErrorKind::SyntaxError),
+                                }.into());
+                                return;
+                            },
+                        };
+                        hooks
+                            .module_cache
+                            .borrow_mut()
+                            .insert(base.clone(), Global::new(agent, module.unbind()));
+                        out = match agent.run_module_observed(module.unbind(), None, gc.reborrow()) {
+                            ModuleRunOutcome::Completed(_) => ModuleObservation::Final(ExecutionObservation::Completed.into()),
+                            ModuleRunOutcome::Pending { phase: ModuleRunPhase::Load, .. } =>
+                                ModuleObservation::Final(ExecutionObservation::Unsupported.into()),
+                            ModuleRunOutcome::Pending { phase: ModuleRunPhase::Evaluate, promise } =>
+                                ModuleObservation::Pending(NovaValue::new(
+                                    Global::new(agent, Value::from(promise.unbind())), &release,
+                                )),
+                            ModuleRunOutcome::Pending { phase: ModuleRunPhase::Link, .. } => unreachable!(),
+                            ModuleRunOutcome::Failed { phase, error } => ModuleObservation::Final(observed_nova_error(
+                                agent,
+                                error,
+                                match phase {
+                                    ModuleRunPhase::Load => ExecutionPhase::Load,
+                                    ModuleRunPhase::Link => ExecutionPhase::Resolution,
+                                    ModuleRunPhase::Evaluate => ExecutionPhase::Runtime,
+                                },
+                                &release,
+                            )),
+                        };
+                    }));
+                    if hooks.owned_module_resolver.borrow().is_none() {
+                        hooks.release_module_cache(agent);
+                    }
+                    if let Err(payload) = evaluation {
+                        std::panic::resume_unwind(payload);
+                    }
+                });
+            });
+            out
+        }
+
+        fn poll_module(&mut self, pending: &Self::Value) -> ObservedExecution<Self::Value> {
+            let mut out = ObservedExecution::from(ExecutionObservation::Unsupported);
+            let release = self.release.clone();
+            self.agent.run_in_realm(&self.realm, |agent, gc| {
+                let Value::Promise(promise) = pending.get(agent, gc.nogc()) else { return; };
+                out = match promise.try_get_result(agent, gc.nogc()) {
+                    Some(Ok(_)) => ExecutionObservation::Completed.into(),
+                    Some(Err(error)) => observed_nova_error(agent, error, ExecutionPhase::Runtime, &release),
+                    None => ExecutionObservation::Pending.into(),
+                };
+            });
+            out
+        }
+
+        fn set_owned_module_resolver(
+            &mut self,
+            resolve: Option<Box<dyn FnMut(&str, &str) -> Option<(String, String)>>>,
+        ) -> bool {
+            // A replacement marks the next independent module graph. Release
+            // the old roots before any new URL can reuse a stale module/realm.
+            let hooks = self.hooks;
+            self.agent.run_in_realm(&self.realm, |agent, _| {
+                hooks.release_module_cache(agent);
+            });
+            *self.hooks.owned_module_resolver.borrow_mut() = resolve;
+            true
         }
 
         /// A module in a named realm. `parse_module` takes the realm the module
@@ -1538,7 +1721,9 @@ mod native {
                             },
                         }
                     }));
-                    hooks.release_module_cache(agent);
+                    if hooks.owned_module_resolver.borrow().is_none() {
+                        hooks.release_module_cache(agent);
+                    }
                     if let Err(payload) = evaluation {
                         std::panic::resume_unwind(payload);
                     }

@@ -20,6 +20,7 @@ members = [
     "components/genet-livery",
     "components/genet-static-dom",
     "components/genet-scripted-dom",
+    "components/genet-events",
     "components/genet-scripted",
     "components/genet-scripted-worker",
     # Render-free live-document extraction and structured reader shapes.

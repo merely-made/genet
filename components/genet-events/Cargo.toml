@@ -1,0 +1,17 @@
+[package]
+rust-version = "1.97.1"
+name = "genet-events"
+version = "0.0.0"
+edition = "2021"
+license = "MPL-2.0"
+# Unpublished until the API settles (native event dispatch plan, ruling 1).
+publish = false
+description = "Engine-neutral DOM event dispatch: listener registry, event path, phases and composedPath over the scripted-DOM arena."
+
+[lib]
+name = "genet_events"
+path = "lib.rs"
+
+[dependencies]
+genet-scripted-dom = { path = "../genet-scripted-dom" }
+layout-dom-api = { path = "../shared/layout-dom" }

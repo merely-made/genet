@@ -4,7 +4,7 @@
   "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
   "policy": "exact",
   "renderer": "livery",
-  "runner_sha256": "f9804e1739e5774a192bc839d445e911cda79c139b590cc6c34d46d9f937fc88",
+  "runner_sha256": "363d6abe361f0567bbd9439f954c62bf17ff926080122f296acfc9a57c68c4a2",
   "subset": "shadow-dom",
   "tests": {
     "shadow-dom/Document-caretPositionFromPoint.tentative.html": {
@@ -401,7 +401,7 @@
         },
         {
           "name": "composedPath() must return an empty array when the event is no longer dispatched",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "composed on EventInit must default to false",
@@ -460,7 +460,7 @@
           "status": "fail"
         }
       ],
-      "subtests_passed": 9,
+      "subtests_passed": 10,
       "subtests_total": 16
     },
     "shadow-dom/HTMLSlotElement-interface.html": {
@@ -743,7 +743,7 @@
       "status": "error"
     },
     "shadow-dom/capturing-and-bubbling-event-listeners-across-shadow-trees.html": {
-      "status": "fail",
+      "status": "pass",
       "subtests": [
         {
           "name": "Capturing event listeners should be invoked before bubbling event listeners on the target without shadow trees",
@@ -751,22 +751,22 @@
         },
         {
           "name": "Capturing event listeners should be invoked before bubbling event listeners when an event is dispatched inside a shadow tree",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Capturing event listeners should be invoked before bubbling event listeners when an event is dispatched inside a doubly nested shadow tree",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Capturing event listeners should be invoked before bubbling event listeners when an event is dispatched via a slot",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Capturing event listeners should be invoked before bubbling event listeners when an event is dispatched inside a shadow tree which passes through another shadow tree",
-          "status": "fail"
+          "status": "pass"
         }
       ],
-      "subtests_passed": 1,
+      "subtests_passed": 5,
       "subtests_total": 5
     },
     "shadow-dom/crashtests/highlight-api-orphan-node-crash.html": {
@@ -4649,18 +4649,18 @@
       "subtests_total": 1
     },
     "shadow-dom/event-composed-path-after-dom-mutation.html": {
-      "status": "fail",
+      "status": "pass",
       "subtests": [
         {
           "name": "Event.composedPath() should return the same result even if DOM is mutated (1/2)",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Event.composedPath() should return the same result even if DOM is mutated (2/2)",
-          "status": "fail"
+          "status": "pass"
         }
       ],
-      "subtests_passed": 0,
+      "subtests_passed": 2,
       "subtests_total": 2
     },
     "shadow-dom/event-composed-path-with-related-target.html": {
@@ -4723,7 +4723,7 @@
       "subtests_total": 13
     },
     "shadow-dom/event-composed-path.html": {
-      "status": "fail",
+      "status": "pass",
       "subtests": [
         {
           "name": "Event Path without ShadowRoots.",
@@ -4755,22 +4755,22 @@
         },
         {
           "name": "Event Path with a slot in an open Shadow Root.",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Event Path with a slot in a closed Shadow Root.",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Event Path with slots in nested ShadowRoots: open > open.",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Event Path with slots in nested ShadowRoots: closed > closed.",
-          "status": "fail"
+          "status": "pass"
         }
       ],
-      "subtests_passed": 7,
+      "subtests_passed": 11,
       "subtests_total": 11
     },
     "shadow-dom/event-composed.html": {
@@ -4883,90 +4883,90 @@
       "subtests_total": 12
     },
     "shadow-dom/event-inside-slotted-node.html": {
-      "status": "fail",
+      "status": "pass",
       "subtests": [
         {
           "name": "Firing an event inside a grand child of a detached open mode shadow host",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Firing an event inside a grand child of a detached closed mode shadow host",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Firing an event inside a grand child of an in-document open mode shadow host",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Firing an event inside a grand child of an in-document closed mode shadow host",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Firing an event on a node with two ancestors with a detached open and open shadow trees with an inner open shadow tree",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Firing an event on a node with two ancestors with a detached open and open shadow trees with an inner closed shadow tree",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Firing an event on a node with two ancestors with a detached open and closed shadow trees with an inner open shadow tree",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Firing an event on a node with two ancestors with a detached open and closed shadow trees with an inner closed shadow tree",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Firing an event on a node with two ancestors with a detached closed and open shadow trees with an inner open shadow tree",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Firing an event on a node with two ancestors with a detached closed and open shadow trees with an inner closed shadow tree",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Firing an event on a node with two ancestors with a detached closed and closed shadow trees with an inner open shadow tree",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Firing an event on a node with two ancestors with a detached closed and closed shadow trees with an inner closed shadow tree",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Firing an event on a node within a open shadow tree that is itself a open shadow tree (the latter being the descendent of a host for a separate open shadow tree)",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Firing an event on a node within a closed shadow tree that is itself a open shadow tree (the latter being the descendent of a host for a separate open shadow tree)",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Firing an event on a node within a open shadow tree that is itself a closed shadow tree (the latter being the descendent of a host for a separate open shadow tree)",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Firing an event on a node within a closed shadow tree that is itself a closed shadow tree (the latter being the descendent of a host for a separate open shadow tree)",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Firing an event on a node within a open shadow tree that is itself a open shadow tree (the latter being the descendent of a host for a separate closed shadow tree)",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Firing an event on a node within a closed shadow tree that is itself a open shadow tree (the latter being the descendent of a host for a separate closed shadow tree)",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Firing an event on a node within a open shadow tree that is itself a closed shadow tree (the latter being the descendent of a host for a separate closed shadow tree)",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Firing an event on a node within a closed shadow tree that is itself a closed shadow tree (the latter being the descendent of a host for a separate closed shadow tree)",
-          "status": "fail"
+          "status": "pass"
         }
       ],
-      "subtests_passed": 0,
+      "subtests_passed": 20,
       "subtests_total": 20
     },
     "shadow-dom/event-on-pseudo-element-crash.html": {
@@ -5005,11 +5005,11 @@
       "subtests": [
         {
           "name": "Event properties post dispatch without ShadowRoots (composed: true).",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Event properties post dispatch without ShadowRoots (composed: false).",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Event properties post dispatch with an open ShadowRoot (composed: true).",
@@ -5017,7 +5017,7 @@
         },
         {
           "name": "Event properties post dispatch with an open ShadowRoot (composed: false).",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Event properties post dispatch with a closed ShadowRoot (composed: true).",
@@ -5025,7 +5025,7 @@
         },
         {
           "name": "Event properties post dispatch with a closed ShadowRoot (composed: false).",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Event properties post dispatch with nested ShadowRoots (composed: true).",
@@ -5033,7 +5033,7 @@
         },
         {
           "name": "Event properties post dispatch with nested ShadowRoots (composed: false).",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Event properties post dispatch with relatedTarget in the same shadow tree. (composed: true)",
@@ -5068,7 +5068,7 @@
           "status": "fail"
         }
       ],
-      "subtests_passed": 0,
+      "subtests_passed": 5,
       "subtests_total": 16
     },
     "shadow-dom/event-with-related-target.html": {
@@ -6584,14 +6584,14 @@
         },
         {
           "name": "Fire slotchange event when assign node to nested slot, ensure event bubbles ups.",
-          "status": "timeout"
+          "status": "pass"
         },
         {
           "name": "Signal a slot change should be done in tree order.",
           "status": "fail"
         }
       ],
-      "subtests_passed": 8,
+      "subtests_passed": 9,
       "subtests_total": 13
     },
     "shadow-dom/imperative-slot-api.html": {
@@ -9391,7 +9391,7 @@
         },
         {
           "name": "slotchange event: A slot is assigned to another slot.",
-          "status": "timeout"
+          "status": "pass"
         },
         {
           "name": "slotchange event: Slotchange should be fired if assigned nodes are changed.",
@@ -9399,10 +9399,10 @@
         },
         {
           "name": "slotchange event: Child content is added to nested slots.",
-          "status": "timeout"
+          "status": "pass"
         }
       ],
-      "subtests_passed": 9,
+      "subtests_passed": 11,
       "subtests_total": 16
     },
     "shadow-dom/slots-fallback-in-document.html": {

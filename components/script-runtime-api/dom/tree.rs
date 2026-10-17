@@ -36,7 +36,7 @@ impl<E: ScriptEngine> NativeFn<E> for DocumentRoot {
 /// node-returning natives: the host (e.g. a hit-test that yields a `NodeId`)
 /// needs a JS handle for a node it found in Rust, with no DOM query to reach it.
 /// `null` if the argument is not a parseable raw id. Paired in the bootstrap with
-/// `wrapNode(...)` and exposed to the host through `__dispatchSynthetic`.
+/// `wrapNode(...)` and exposed to the host through `__dispatchHostEvent`.
 pub(crate) struct ReflectNode;
 impl<E: ScriptEngine> NativeFn<E> for ReflectNode {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {

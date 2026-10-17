@@ -268,3 +268,54 @@ If a gate fails, the phase reverts rather than carrying a fallback dispatcher.
    Phase 2 lands, keeping its scenario table as a permanent test.
    **Ruling (ruled 2026-10-17: as proposed):** mark the 2026-06-01 convergence plan
    superseded after Phase 2.
+
+## 7. Phase 0 and 1 results (2026-10-17)
+
+Baselines are `ports/genet-wpt/expectations/testharness/<subset>_<engine>.json`,
+recorded with the release runner (`--jobs 6`) on the rebased main before any
+Phase 1 code. Subtests passed / total, Boa and Nova identical except where shown.
+
+| Subset | Phase 0 | Phase 1 |
+|---|---|---|
+| `dom/events` | 308/721 Boa, 309/723 Nova | 314/721 Boa, 315/723 Nova |
+| `shadow-dom` | 1462/2237 | 1501/2237 |
+| `uievents` | 20/116 | 20/116 |
+| `pointerevents` | 145/638 | 145/638 |
+| `html/interaction/focus` | 117/639 | 117/639 |
+| `html/semantics/forms/the-input-element` | 904/1457 | 904/1457 |
+| `.../the-button-element` | 42/63 | 42/63 |
+| `.../the-label-element` | 83/159 | 83/159 |
+| `html/semantics/interactive-elements` | 24/512 | 24/512 |
+
+No file regressed in any subset on either engine. `dom/events` and `shadow-dom`
+files that gained passes are the expectation files now committed at the Phase 1
+values; the other subsets keep their Phase 0 files.
+
+What Phase 1 built, and where it differs from the sketch in §2:
+
+- `genet-events` holds the registry, the shadow-including path (slots, closed
+  trees, window), phases, stop/once/passive flags and `composedPath`. The
+  window is keyed per realm, not per object: the WindowProxy outlives a
+  navigation but its listeners must not.
+- A JS callback stays on its target's wrapper (agent-wide `WeakMap`), so it is
+  collected with the wrapper; the registry holds only `(owner, token)`. Rust
+  runs a listener through the dispatching realm's own `evHook`, handed to every
+  native dispatch, so a wrapper whose realm was discarded still works. This is
+  the callback-lifetime shape ruled in §6 item 6; no per-engine rooted handle was
+  needed. Dead nodes' listeners are dropped at the GC tick.
+- Deleted: the JS `fire`, the path walk in `dispatchNodeEvent`, `EventTarget.__fire`,
+  `__composedPathVisible`, the `__listeners` maps and `__dispatchSynthetic`. Host
+  input dispatch now builds its event in a three-line `__dispatchHostEvent` and
+  hands it to the native walk; `dispatchNodeEvent` survives only as the call into it.
+- Activation behaviour is still the JS `formOperations` code, reached from the
+  Rust walk through the same hook (Phase 3 moves it).
+- Not done yet: `relatedTarget` retargeting (the field is not projected), `signal`
+  in `addEventListener` options, and `window.event`.
+- Environment notes: dedicated-worker WPT variants error on every engine at
+  current main ("Worker cancellation is unsupported by this script engine"), so
+  they are baselined as errors. `genet-compositor` does not compile on macOS at
+  current main (`compositor_calayer/errors.rs` and `iosurface.rs` are missing),
+  which blocks `cargo test -p script-runtime-api` through its `webgl_wgpu`
+  dev-dependency; the suite was run with that dev-dependency removed.
+  `frame_arena_boundary` and `cross_arena_replacement` need a WebGL context and
+  fail the same way without Phase 1.

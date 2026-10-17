@@ -305,6 +305,14 @@ pub struct ScriptedDom {
     /// [`shadow::ShadowRootData::host`], kept because `shadowRoot` and
     /// `flat_children` both ask host-first.
     shadow_hosts: std::collections::HashMap<u64, NodeId>,
+    /// Superset of the live checked radio inputs, kept in step wherever
+    /// checkedness, input type or node lifetime changes. Radio reconciliation
+    /// scans this instead of walking the document, so a mutation costs time in
+    /// the number of checked radios and nothing at all when there are none.
+    checked_radios: std::collections::HashSet<NodeId>,
+    /// Checked-radio candidates and parent hops examined by radio
+    /// reconciliation; a deterministic cost counter for tests.
+    radio_scan_visits: std::cell::Cell<u64>,
     /// Slottable store key -> the slot it is assigned to (`assignedSlot`).
     assigned_slots: std::collections::HashMap<u64, NodeId>,
     /// Slot store key -> its assigned nodes, in tree order. The flat tree's hot
@@ -463,6 +471,8 @@ impl ScriptedDom {
             structure_epoch: 0,
             shadow_roots: std::collections::HashMap::new(),
             shadow_hosts: std::collections::HashMap::new(),
+            checked_radios: std::collections::HashSet::new(),
+            radio_scan_visits: std::cell::Cell::new(0),
             assigned_slots: std::collections::HashMap::new(),
             slot_assignments: std::collections::HashMap::new(),
             slot_changes: Vec::new(),
@@ -1189,6 +1199,7 @@ impl ScriptedDom {
             self.drop_subtree(child);
         }
         let i = self.index(node);
+        self.checked_radios.remove(&node);
         self.nodes.remove(&i);
     }
 
@@ -1244,6 +1255,8 @@ impl ScriptedDom {
         self.prune_template_tables();
         let nodes = &self.nodes;
         self.document_modes.retain(|key, _| nodes.contains_key(key));
+        self.checked_radios
+            .retain(|id| nodes.contains_key(&id.raw()));
         pruned
     }
 
@@ -1733,6 +1746,7 @@ impl LayoutDomMut for ScriptedDom {
         };
         let changed = *slot != state;
         *slot = state;
+        self.sync_checked_radio(id);
         if changed {
             self.mutations
                 .push(DomMutation::FormControlStateChanged { node: id });

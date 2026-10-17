@@ -285,17 +285,27 @@ The fresh review covered the production changes, their consumers and regression 
 
 [Post-cut source and probe receipt](receipts/2026-10-16_architecture_post_cut_audit.json). [Retained-code test receipt](receipts/2026-10-16_architecture_reduction_tests.json).
 
-### Disposition of the original findings
+### Current disposition of the findings
 
-| Disposition | IDs | What the retained source establishes |
+Reconciled against local HEAD `20d78e88bff` on 2026-10-16. This table supersedes
+the older 9-addressed / 3-partial / 43-open snapshot and the open-status wording
+in historical evidence below. Addressed means the named source defect or cut,
+with each repair's stated qualification and publication limits retained.
+
+| Disposition | IDs | Current evidence / remaining boundary |
 |---|---|---|
-| Named source defect/cut addressed; qualification limits below still apply | H1, H4, H7, H8, H11, I12, I14, I15, L2 | Removed GL stub and deprecated compositor alias; browser scroll defaults consume input outcomes; canonical dependency gate fails on resolution errors; native PowerShell commands are checked; two stale implementation comments corrected; general shader reflection replaces positional fields; orphan media-thread and obsolete launchers removed; prospective break ledger is test-only. |
-| Partial migration | I1 | Native host calls DOM-owned text editing, including current eligibility and selection collapse. Scripted key input still ignores key releases, consumes Tab before page dispatch, and does not use this editor. Text/IME/editable-focus defaults remain unwired there. |
-| Partial migration | H6 | Setup/execution/completion are separated; async modules use the module route; completion is privately retained; failures cannot satisfy negatives merely through diagnostic text. Actual VM errors still lack trustworthy phase/type, so negative tests report Unsupported. This is safer accounting, not complete Test262 qualification. |
-| Partial migration | L6 | Form/radio predicates and affected-owner walks are shared. Style invalidation and formatting damage retain their own mutation switches and root mapping. Broader DOM dependency classification has not been consolidated. |
-| Still open | I2-I11, I13; R1-R15; L1, L3-L5, L7-L13; H2-H3, H5, H9-H10; W1 | Retained implementations still exhibit the recorded mechanisms. No closure follows from unrelated passing tests or removal counts. |
+| Addressed locally | H1, H4, H7, H8, H11, I3, I4, I5, I12, I14, I15, L2, L3, L4, W1, W2 | Original narrow removals plus retained acquisition, source-relative image identity, non-stealing capture, shared decoded pixels, generated transform/paint ownership and authoritative linked shader layout. Dated repair sections and receipts above contain the tests and limits. |
+| Partial | I1 | Native editing shares DOM defaults; scripted text/IME, key releases and default-action integration remain open. |
+| Partial | I11 | Cache-key lookup no longer recompiles shaders; a source/stage/options-owned compiled-artifact lifecycle remains open. |
+| Partial | H6 | Setup/execution/completion accounting repaired; trustworthy VM error phase/type and complete Test262 qualification remain open. |
+| Partial | L6 | Shared form/radio predicates; broader dependency classification and separate mutation switches remain. |
+| Open | I2, I6-I10, I13; R1-R15; L1, L5, L7-L13; H2-H3, H5, H9-H10 | No later cut or verification closes these findings. |
 
-That is **9 addressed source findings, 3 partial, and 43 still open**, plus new W2 below. Supplemental X1 is partial: the old environment script is removed, while the debugger helper remains. No platform cut was made to H9's Wayland synchronization path.
+**56 findings: 16 addressed locally, 4 partial, 36 open.** Supplemental X1 remains
+partial and is excluded from that count. Supplier publication/Mere adoption,
+the baseline supplier corpus mismatch, existing ignored continuation tests and
+platform/Forms acceptance are separate outstanding obligations, not extra closed
+findings. Current continuation order: I8, I7, L1, then L7; none is pre-closed.
 
 H4 is source-addressed, but the browser callback has not received a fresh wasm/browser interaction test. H8's earlier Windows fake-command result remains dated evidence; it was not rerun on Linux. I12 removes a genuine unused projection and rejection; it does not establish coherent shader linking. The original text gave conflicting ordering for I12 (safe narrow cut versus W1 prerequisite). The precise boundary is: unused-field cleanup may stand independently, while claims of correct linking or subsequent layout optimization require W1/W2 to be resolved.
 
@@ -423,65 +433,66 @@ Relevant existing evidence: [review receipt](receipts/2026-10-16_forms_submissio
 
 ## Consolidated finding register
 
-IDs match the detailed evidence sections. These are issues and removal decisions, not a count of independently reproduced bugs. Related rows share a repair boundary rather than requiring separate frameworks. W1 is the independent review's shader-link finding; the remaining independent observations corroborate I findings and are not counted twice.
+Status is reconciled to `20d78e88bff`; descriptions and cut directions retain the original evidence. IDs match the detailed evidence sections. These are issues and removal decisions, not a count of independently reproduced bugs. Related rows share a repair boundary rather than requiring separate frameworks. W1 is the independent review's shader-link finding; the remaining independent observations corroborate I findings and are not counted twice.
 
-| ID | Finding | Disposition / dependency |
-|---|---|---|
-| I1 | Scripted session lacks native text/IME/default-action integration; Tab is consumed before page keydown | Share actual editable-control defaults and input outcomes; live typing proof precedes Forms acceptance. |
-| I2 | Headless lifecycle tests and live lifecycle state have different owners | Share lifecycle facts; wire freeze/resume before advertising live support. |
-| I3 | Generic DOM synchronization re-resolves all document resources | Retain dependency-aware acquisition results; remove whole-resource resolution from unrelated mutations/style reads. |
-| I4 | Authored image aliases collapse different stylesheet bases | Carry resolved source identity into computed image/paint keys. |
-| I5 | Capture drains rendering's mutation journal | One consumption owner or non-stealing observation cursors; preserve historical capture format. |
-| I6 | Request and response compatibility representations duplicate and discard metadata | Migrate actual callers to a shared host contract; retain transport/VM separation. |
-| I7 | Handwritten origin grammar normalizes malformed URLs inconsistently | Derive tuples from canonical parsed URLs; preserve opaque/inherited origin policy. |
-| I8 | Cache limit checks Content-Length but not accumulated decoded bytes | Stop cache accumulation at configured streamed-byte cap; preserve body delivery. |
-| I9 | Default cookie jar defers public-suffix and prefix restrictions | Complete or explicitly constrain one policy owner; keep injected storage and SameSite context. |
-| I10 | Taproot reconstructs names/roles and estimated geometry | Migrate live consumers to owner projection/retained layout, then delete shadow semantics. |
-| I11 | Shader compilation repeats for validation, cache-key discovery and translation | Retain compiled shader artifacts under source/stage/options identity. |
-| I12 | Obsolete narrow shader reflection still rejects input sets | Remove unused compatibility fields and positional inference; preserve general reflection. |
-| I13 | Raw shader text replacement and precision scanning duplicate compiler grammar | Move supported normalization/reflection into AST ownership. |
-| I14 | Orphan nonworkspace media thread and unused dependency alias remain | Remove after final consumer/API check; preserve history and active media family. |
-| I15 | Inherited Servo benchmark launchers remain as obsolete gates | Retire/archive launchers and instructions; preserve useful imported assets/licenses. |
-| R1 | Runtime selector grammar silently narrows selectors and hides parse errors | Shared selector parser with faithful live-DOM adapter and explicit invalid-list outcome. |
-| R2 | Count/item queries repeat complete selection for every item | One selection with static membership, stable identity and bounded result lifetime. |
-| R3 | JS splits CSS declarations and mirrors a private Rust record codec | Whole-list parse in CSS owner; adequate structured boundary or one specified codec. |
-| R4 | Internal task source-eval and result coercion can erase errors/work | Retained private callable entrypoints with realm/GC ownership and explicit outcomes. |
-| R5 | Parsed script loading/evaluation errors disappear behind scheduling counters | Typed nonfatal execution results and proper exception reporting. |
-| R6 | Parser module resolver drops referrer identity | Resolve/cache using actual importer/final URL and inline document base. |
-| R7 | Worker shutdown detaches uninterruptible VM execution | Enforceable interruption/isolation; truthful lifetime and configurable shutdown policy. |
-| R8 | Budget-shaped API defaults ignore limits | Separate execution interruption from job count; refuse unsupported required bounds. |
-| R9 | Missing WebGL factory manufactures a context-shaped capability | Return unsupported/null when actual graphics capability is absent. |
-| R10 | WebGL objects use public mutable identity and permissive text coercion | Private context-owned brands and genuine value extraction. |
-| R11 | XPath adapter loses attributes, namespaces, mode and detached context | Replace lossy live adapter; preserve language core and real result identity. |
-| R12 | History uses JSON state despite existing structured clone; fallback duplicates history | Share serialization semantics, then migrate fallback owner deliberately. |
-| R13 | Module resolver lifetimes are erased and manually restored without unwind guard | Owned/scoped resolver context and unwind-safe restoration; preserve GC roots. |
-| R14 | Ordinary engine/realm registration leaks process-lifetime allocations | Proper owned registrations or fixed static names; keep required rooted release queues. |
-| R15 | Product elapsed-time API uses timer-driven test-like clock | Explicit host elapsed clock and separate deterministic test profile. |
-| L1 | Two comment strippers remove comment-like text inside quoted CSS strings | Token-aware CSS lexical authority; isolated probe confirms helper corruption. |
-| L2 | Prospective line-break stream runs while Parley still selects lines | Remove unused production work or gate it as explicit experimental diagnostics. |
-| L3 | Paint clones source image payloads and decodes repeatedly | Share versioned resource payload/decoded ownership; preserve invalidation. |
-| L4 | Containing-block transform facts disagree with paint transforms | Shared facts with rule-specific predicates, not one indiscriminate boolean. |
-| L5 | Public estimated geometry diverges from retained text/resource geometry | Use live retained owner for observable geometry; identify estimates explicitly. |
-| L6 | Style invalidation and layout damage separately classify DOM dependencies | Share affected semantic owners; retain different style/formatting root outputs. |
-| L7 | Local retained rendering clones whole style/fragment planes | Borrow/overlay immutable generations while preserving rollback/isolation. |
-| L8 | Per-table ledger publication rebuilds aggregate diagnostics eagerly | Aggregate lazily or by deltas; keep actual divergence/ownership evidence. |
-| L9 | Buckram/backend styles and genuine block fallback debt overlap | Narrow conversion/ownership after accepted contracts replace fallback; retain real flex/grid/backend functions. |
-| L10 | Prospective fragmentation kernel coexists with live unsupported markers | Feature-gate prospective code; retain explicit unsupported results and six continuation repros. |
-| L11 | Logical-axis facts repeat across value/geometry layers | Share small vocabulary if dependency direction permits; otherwise parity witnesses. |
-| L12 | Historical property census is mistaken for current runtime consumption | Label historical or generate/check against current readers; retain honest unsupported classification. |
-| L13 | Feature-enabled font diagnostics construct events before capture check | Avoid discarded collection; keep deterministic font evidence and RAII scope. |
-| H1 | Unused GL capability/handle stubs claim success without work | Delete stub surface after API consumer check; preserve real wgpu Core capability. |
-| H2 | Browser compatibility renderer access bypasses checked ownership | Migrate to browser frame transaction; preserve leases/loss/scope outcomes. |
-| H3 | WPT runs animation callbacks that live session pumps omit | Share production turn contract and pending-work wake facts; preserve virtual clock. |
-| H4 | Browser key route discards typed input outcome and performs scroll defaults | Gate defaults using handled/editable/cancelled outcome, as native host does. |
-| H5 | Native fetch ignores declared byte/deadline/concurrency policy | Wire configurable policy through counted streaming/admission/deadline enforcement. |
-| H6 | Test262 negative/module/async paths can turn setup/wrong failures into passes | Typed setup/execution/completion and shared exact negative matching; combine flags correctly. |
-| H7 | Old profile gates turn cargo failure into empty clean result | Retire obsolete entrance; strengthen canonical CI cone witness with failing controls. |
-| H8 | PowerShell wrappers can continue after native build/bindgen failure | Checked native-command helper and environment restoration; stale outputs must not imply success. |
-| H9 | Dormant Wayland timeline allocation can reject a same-queue route | Conditional cut after queue/release audit and Wayland hardware proof. |
-| H10 | Compositor failures/logged capture fallback lack observable presentation outcome | Typed host-visible display/capture/failure status; preserve real OS consumers. |
-| H11 | Live implementation contains stale proposal/lineage comments | Correct current scope; keep historical receipts as history. |
-| W1 | Independently lowered stages disagree on varying locations and uniform layout | Coherent pair interface/layout before final lowering, or correct distinct stage bindings. Source-derived counterexamples; GPU draw unexecuted. |
+| ID | Current status | Finding | Disposition / dependency |
+|---|---|---|---|
+| I1 | Partial | Scripted session lacks native text/IME/default-action integration; Tab is consumed before page keydown | Share actual editable-control defaults and input outcomes; live typing proof precedes Forms acceptance. |
+| I2 | Open | Headless lifecycle tests and live lifecycle state have different owners | Share lifecycle facts; wire freeze/resume before advertising live support. |
+| I3 | Addressed locally | Generic DOM synchronization re-resolves all document resources | Retain dependency-aware acquisition results; remove whole-resource resolution from unrelated mutations/style reads. |
+| I4 | Addressed locally | Authored image aliases collapse different stylesheet bases | Carry resolved source identity into computed image/paint keys. |
+| I5 | Addressed locally | Capture drains rendering's mutation journal | One consumption owner or non-stealing observation cursors; preserve historical capture format. |
+| I6 | Open | Request and response compatibility representations duplicate and discard metadata | Migrate actual callers to a shared host contract; retain transport/VM separation. |
+| I7 | Open | Handwritten origin grammar normalizes malformed URLs inconsistently | Derive tuples from canonical parsed URLs; preserve opaque/inherited origin policy. |
+| I8 | Open | Cache limit checks Content-Length but not accumulated decoded bytes | Stop cache accumulation at configured streamed-byte cap; preserve body delivery. |
+| I9 | Open | Default cookie jar defers public-suffix and prefix restrictions | Complete or explicitly constrain one policy owner; keep injected storage and SameSite context. |
+| I10 | Open | Taproot reconstructs names/roles and estimated geometry | Migrate live consumers to owner projection/retained layout, then delete shadow semantics. |
+| I11 | Partial | Shader compilation repeats for validation, cache-key discovery and translation | Retain compiled shader artifacts under source/stage/options identity. |
+| I12 | Addressed locally | Obsolete narrow shader reflection still rejects input sets | Remove unused compatibility fields and positional inference; preserve general reflection. |
+| I13 | Open | Raw shader text replacement and precision scanning duplicate compiler grammar | Move supported normalization/reflection into AST ownership. |
+| I14 | Addressed locally | Orphan nonworkspace media thread and unused dependency alias remain | Remove after final consumer/API check; preserve history and active media family. |
+| I15 | Addressed locally | Inherited Servo benchmark launchers remain as obsolete gates | Retire/archive launchers and instructions; preserve useful imported assets/licenses. |
+| R1 | Open | Runtime selector grammar silently narrows selectors and hides parse errors | Shared selector parser with faithful live-DOM adapter and explicit invalid-list outcome. |
+| R2 | Open | Count/item queries repeat complete selection for every item | One selection with static membership, stable identity and bounded result lifetime. |
+| R3 | Open | JS splits CSS declarations and mirrors a private Rust record codec | Whole-list parse in CSS owner; adequate structured boundary or one specified codec. |
+| R4 | Open | Internal task source-eval and result coercion can erase errors/work | Retained private callable entrypoints with realm/GC ownership and explicit outcomes. |
+| R5 | Open | Parsed script loading/evaluation errors disappear behind scheduling counters | Typed nonfatal execution results and proper exception reporting. |
+| R6 | Open | Parser module resolver drops referrer identity | Resolve/cache using actual importer/final URL and inline document base. |
+| R7 | Open | Worker shutdown detaches uninterruptible VM execution | Enforceable interruption/isolation; truthful lifetime and configurable shutdown policy. |
+| R8 | Open | Budget-shaped API defaults ignore limits | Separate execution interruption from job count; refuse unsupported required bounds. |
+| R9 | Open | Missing WebGL factory manufactures a context-shaped capability | Return unsupported/null when actual graphics capability is absent. |
+| R10 | Open | WebGL objects use public mutable identity and permissive text coercion | Private context-owned brands and genuine value extraction. |
+| R11 | Open | XPath adapter loses attributes, namespaces, mode and detached context | Replace lossy live adapter; preserve language core and real result identity. |
+| R12 | Open | History uses JSON state despite existing structured clone; fallback duplicates history | Share serialization semantics, then migrate fallback owner deliberately. |
+| R13 | Open | Module resolver lifetimes are erased and manually restored without unwind guard | Owned/scoped resolver context and unwind-safe restoration; preserve GC roots. |
+| R14 | Open | Ordinary engine/realm registration leaks process-lifetime allocations | Proper owned registrations or fixed static names; keep required rooted release queues. |
+| R15 | Open | Product elapsed-time API uses timer-driven test-like clock | Explicit host elapsed clock and separate deterministic test profile. |
+| L1 | Open | Two comment strippers remove comment-like text inside quoted CSS strings | Token-aware CSS lexical authority; isolated probe confirms helper corruption. |
+| L2 | Addressed locally | Prospective line-break stream runs while Parley still selects lines | Remove unused production work or gate it as explicit experimental diagnostics. |
+| L3 | Addressed locally | Paint clones source image payloads and decodes repeatedly | Share versioned resource payload/decoded ownership; preserve invalidation. |
+| L4 | Addressed locally | Containing-block transform facts disagree with paint transforms | Shared facts with rule-specific predicates, not one indiscriminate boolean. |
+| L5 | Open | Public estimated geometry diverges from retained text/resource geometry | Use live retained owner for observable geometry; identify estimates explicitly. |
+| L6 | Partial | Style invalidation and layout damage separately classify DOM dependencies | Share affected semantic owners; retain different style/formatting root outputs. |
+| L7 | Open | Local retained rendering clones whole style/fragment planes | Borrow/overlay immutable generations while preserving rollback/isolation. |
+| L8 | Open | Per-table ledger publication rebuilds aggregate diagnostics eagerly | Aggregate lazily or by deltas; keep actual divergence/ownership evidence. |
+| L9 | Open | Buckram/backend styles and genuine block fallback debt overlap | Narrow conversion/ownership after accepted contracts replace fallback; retain real flex/grid/backend functions. |
+| L10 | Open | Prospective fragmentation kernel coexists with live unsupported markers | Feature-gate prospective code; retain explicit unsupported results and six continuation repros. |
+| L11 | Open | Logical-axis facts repeat across value/geometry layers | Share small vocabulary if dependency direction permits; otherwise parity witnesses. |
+| L12 | Open | Historical property census is mistaken for current runtime consumption | Label historical or generate/check against current readers; retain honest unsupported classification. |
+| L13 | Open | Feature-enabled font diagnostics construct events before capture check | Avoid discarded collection; keep deterministic font evidence and RAII scope. |
+| H1 | Addressed locally | Unused GL capability/handle stubs claim success without work | Delete stub surface after API consumer check; preserve real wgpu Core capability. |
+| H2 | Open | Browser compatibility renderer access bypasses checked ownership | Migrate to browser frame transaction; preserve leases/loss/scope outcomes. |
+| H3 | Open | WPT runs animation callbacks that live session pumps omit | Share production turn contract and pending-work wake facts; preserve virtual clock. |
+| H4 | Addressed locally | Browser key route discards typed input outcome and performs scroll defaults | Gate defaults using handled/editable/cancelled outcome, as native host does. |
+| H5 | Open | Native fetch ignores declared byte/deadline/concurrency policy | Wire configurable policy through counted streaming/admission/deadline enforcement. |
+| H6 | Partial | Test262 negative/module/async paths can turn setup/wrong failures into passes | Typed setup/execution/completion and shared exact negative matching; combine flags correctly. |
+| H7 | Addressed locally | Old profile gates turn cargo failure into empty clean result | Retire obsolete entrance; strengthen canonical CI cone witness with failing controls. |
+| H8 | Addressed locally | PowerShell wrappers can continue after native build/bindgen failure | Checked native-command helper and environment restoration; stale outputs must not imply success. |
+| H9 | Open | Dormant Wayland timeline allocation can reject a same-queue route | Conditional cut after queue/release audit and Wayland hardware proof. |
+| H10 | Open | Compositor failures/logged capture fallback lack observable presentation outcome | Typed host-visible display/capture/failure status; preserve real OS consumers. |
+| H11 | Addressed locally | Live implementation contains stale proposal/lineage comments | Correct current scope; keep historical receipts as history. |
+| W1 | Addressed locally | Independently lowered stages disagree on varying locations and uniform layout | Coherent pair interface/layout before final lowering, or correct distinct stage bindings. Source-derived counterexamples; GPU draw unexecuted. |
+| W2 | Addressed locally | CPU uniform offsets disagreed with emitted WGSL within a stage | Linked-layout repair now consumes Naga reflection; matrix draw/readback regressions passed. |
 
 Smaller observations remain explicit in the appendices: scheduler trace schema omits the emitted animation-frame boundary; clipboard and random-source comments are stale; invalid custom-method fallback and recursive Fleece input limits remain bounded review questions rather than asserted integrated failures. They are not hidden acceptance passes or reasons for broad deletion.
 

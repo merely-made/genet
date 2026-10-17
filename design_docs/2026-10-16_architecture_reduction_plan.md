@@ -288,3 +288,28 @@ Both source reviews are complete. No supplier/consumer publication, renderer
 atlas-identity reuse, fresh GPU/browser qualification or Forms acceptance claimed.
 See `image_sharing_and_paint_followups` in the maintained post-cut receipt for
 source hashes, exact commands, results, resource limits and dependency provenance.
+
+
+## Remaining boundary cuts after 20d78e88bff
+
+User authorized current-table reconciliation, then I8, I7, L1 and L7. The table
+now distinguishes 16 locally addressed, 4 partial and 36 open findings. No new
+work is counted as closed before source review and retained-path testing.
+
+1. I8: cache owner counts decoded streamed bytes, abandons/releases accumulation
+   above the configured cap while preserving body delivery and clean-EOF rules.
+2. I7: derive tuple origins from the existing URL parser; preserve opaque serials,
+   inheritance and sandbox policy. Regress malformed ports and normalization.
+3. L1: eliminate quote-blind CSS comment preprocessing through tokenizer ownership;
+   preserve quoted strings, escapes and existing stylesheet/declaration behavior.
+4. L7: remove whole retained-plane copies through immutable sharing and selective
+   mutation, preserving rollback, animation sampling, hit testing and retained
+   subtree replacement. Inspect concrete ownership before choosing representation.
+
+Tasks 1 and 2 touch separate components; task 3 may overlap Livery style code
+with task 4, so their implementation is sequenced. Parent owns documentation,
+review integration, all serialized heavy gates and local commits. Cheaper agents
+implement and review; no worker builds or commits. Existing 5 GiB/no-swap,
+150% CPU, one-job, serial-test, shared-lock constraints remain. Tests follow cuts;
+only safety-determining uncertainties justify earlier probes. Preserve external
+receipts and active worktrees. No push or supplier publication in this batch.

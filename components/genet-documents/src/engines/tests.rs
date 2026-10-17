@@ -3256,7 +3256,7 @@ impl T5DocumentFetch {fn new(reply:Option<genet_host_api::ResourceFetchResponse>
 impl ResourceFetcher for T5DocumentFetch {
     fn fetch(&self,_url:&str)->Option<Vec<u8>> {None}
     fn fetch_response(&self,url:&str)->Option<genet_host_api::ResourceResponse> {
-        if url.contains(".css")||url.contains(".png") {return None;}self.reply.clone().map(Into::into)
+        if url.contains(".css")||url.contains(".png") {return None;}self.reply.clone().map(genet_host_api::ResourceFetchResponse::into_legacy_response)
     }
     fn fetch_request(&self,r:&genet_host_api::ResourceRequest)->Option<genet_host_api::ResourceFetchResponse> {
         self.requests.lock().unwrap().push(r.clone());self.reply.clone()

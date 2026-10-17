@@ -54,7 +54,7 @@ genet-winit-host = { path = "../../components/genet-winit-host" }
 # http(s) for the fallback fetch lane, over netfetcher's default transport on a
 # background tokio runtime this host owns. Local addresses never reach it.
 netfetcher = { path = "../../components/netfetcher" }
-tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "time"] }
 url = { workspace = true }
 winit = { workspace = true }
 wgpu = { workspace = true }

@@ -12,7 +12,8 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use browsing_context_api::{
-    ActiveDocument, BrowsingContextId, BrowsingContextTree, FrameAttributes, SandboxFlags,
+    ActiveDocument, BrowsingContextId, BrowsingContextTree, FrameAttributes, HistoryEntry,
+    SandboxFlags, SessionHistory,
 };
 use genet_scripted_dom::html_encoding::{
     DocumentEncoding, HtmlDecodeOptions, decode_html_document,
@@ -28,6 +29,10 @@ use crate::{HostState, SharedHost, Surface, SurfaceError};
 #[derive(Default)]
 pub(crate) struct FrameState {
     pub(crate) tree: Option<BrowsingContextTree>,
+    /// Window realms used without a browsing-context tree still use the same
+    /// session-history owner. The top realm's list moves into the tree when a
+    /// frame, message or navigation first requires one.
+    bare_histories: BTreeMap<RealmId, SessionHistory>,
     /// The realm the **top-level browsing context** is showing right now.
     ///
     /// Distinct from [`MAIN_REALM`], which is the agent's bootstrap realm: the
@@ -103,9 +108,41 @@ pub(crate) struct PendingNavigation {
     target: RealmId,
     request: crate::FetchRequest,
     replace: bool,
+    history_traversal: Option<HistoryTraversal>,
     referrer_policy: String,
     about_base_url: Option<String>,
     source_form: Option<(RealmId, NodeId)>,
+}
+
+/// A document-changing traversal names one entry in one exact history state.
+/// Selection is deferred until the response has been accepted.
+pub(crate) struct HistoryTraversal {
+    source_index: usize,
+    target_index: usize,
+    generation: u64,
+    target_url: String,
+    target_document: u64,
+}
+
+impl HistoryTraversal {
+    pub(crate) fn new(history: &SessionHistory, target_index: usize) -> Self {
+        let entry = &history.entries()[target_index];
+        Self {
+            source_index: history.index(),
+            target_index,
+            generation: history.generation(),
+            target_url: entry.url.clone(),
+            target_document: entry.document,
+        }
+    }
+
+    fn matches(&self, history: &SessionHistory) -> bool {
+        history.index() == self.source_index
+            && history.generation() == self.generation
+            && history.entries().get(self.target_index).is_some_and(|entry| {
+                entry.url == self.target_url && entry.document == self.target_document
+            })
+    }
 }
 
 /// A browsing context's stable identity for `WindowProxy` purposes: the id of
@@ -214,7 +251,16 @@ impl FrameState {
 
     fn initialize(&mut self, url: &str) {
         if self.tree.is_none() {
-            let tree = BrowsingContextTree::new(url);
+            let mut tree = BrowsingContextTree::new(url);
+            if let Some(mut history) = self.bare_histories.remove(&self.top_realm) {
+                // The embedding host may have changed the visible document URL
+                // since the last bare-history operation. Match the current
+                // entry to that URL before the tree takes ownership; its
+                // document and origin are already initialized from `url`.
+                history.current_mut().url = url.to_owned();
+                let top = tree.top();
+                *tree.get_mut(top).expect("top context").history_mut() = history;
+            }
             self.contexts.insert(self.top_realm, tree.top());
             self.tree = Some(tree);
         }
@@ -363,6 +409,7 @@ impl FrameState {
     /// already claimed it, which is what a navigation does before the old realm
     /// is torn down.
     fn release_context(&mut self, realm: RealmId) {
+        self.bare_histories.remove(&realm);
         if let Some(key) = self.context_keys.remove(&realm) {
             if self.context_realms.get(&key) == Some(&realm) {
                 self.context_realms.remove(&key);
@@ -1951,6 +1998,25 @@ pub(crate) fn with_context<E: ScriptEngine, R>(
     Some(f(tree.get_mut(id)?))
 }
 
+/// The explicit history profile for a Window realm without a context tree.
+/// It uses `SessionHistory`, and `initialize` transfers the top realm's owner
+/// into the browsing context instead of dropping its earlier entries.
+pub(crate) fn with_bare_history<E: ScriptEngine, R>(
+    cx: &mut E::CallCx<'_>,
+    f: impl FnOnce(&mut SessionHistory) -> R,
+) -> Option<R> {
+    let host = host::<E>(cx)?;
+    let host = host.borrow();
+    let agent = host.agent.upgrade()?;
+    let url = host.base_url.clone().unwrap_or_else(|| "about:blank".into());
+    drop(host);
+    let mut agent = agent.borrow_mut();
+    let history = agent.frames.bare_histories.entry(cx.current_realm()).or_insert_with(|| {
+        SessionHistory::new(HistoryEntry::for_url(url))
+    });
+    Some(f(history))
+}
+
 /// Resolve an existing navigable only. Auxiliary-context creation remains host-owned.
 pub(crate) fn navigation_target<E: ScriptEngine>(
     cx: &E::CallCx<'_>,
@@ -2005,15 +2071,15 @@ pub(crate) fn navigation_target<E: ScriptEngine>(
         .find_map(|(&realm, &context)| (context == target).then_some(realm))
 }
 
-/// [`navigate_context`], for the history surface: a traversal whose entry names
-/// a different document is a navigation like any other.
-pub(crate) fn navigate_from_call<E: ScriptEngine>(
+/// A history traversal to a different document reuses the normal navigation
+/// lifecycle while keeping the selected entry and its serialized state.
+pub(crate) fn navigate_history_entry<E: ScriptEngine>(
     cx: &mut E::CallCx<'_>,
     realm: RealmId,
     url: &str,
-    replace: bool,
+    traversal: HistoryTraversal,
 ) -> Result<E::Value, E::Error> {
-    navigate_context::<E>(cx, realm, realm, url, replace)
+    queue_navigation::<E>(cx, realm, realm, navigation_get(url), true, None, Some(traversal))
 }
 
 /// A URL with its fragment removed. Two URLs that agree here and differ in
@@ -2068,19 +2134,20 @@ pub(crate) fn navigate_request<E: ScriptEngine>(
     cx: &mut E::CallCx<'_>, from: RealmId, target: RealmId,
     request: crate::FetchRequest, replace: bool,
 ) -> Result<E::Value, E::Error> {
-    queue_navigation::<E>(cx, from, target, request, replace, None)
+    queue_navigation::<E>(cx, from, target, request, replace, None, None)
 }
 
 pub(crate) fn navigate_form_request<E: ScriptEngine>(
     cx: &mut E::CallCx<'_>, from: RealmId, target: RealmId,
     request: crate::FetchRequest, replace: bool, source_form: NodeId,
 ) -> Result<E::Value, E::Error> {
-    queue_navigation::<E>(cx, from, target, request, replace, Some(source_form))
+    queue_navigation::<E>(cx, from, target, request, replace, Some(source_form), None)
 }
 
 fn queue_navigation<E: ScriptEngine>(
     cx: &mut E::CallCx<'_>, from: RealmId, target: RealmId,
     mut request: crate::FetchRequest, replace: bool, source_form: Option<NodeId>,
+    history_traversal: Option<HistoryTraversal>,
 ) -> Result<E::Value, E::Error> {
     let Some(agent) = host::<E>(cx).and_then(|h| h.borrow().agent.upgrade()) else {
         return Ok(cx.undefined());
@@ -2127,14 +2194,14 @@ fn queue_navigation<E: ScriptEngine>(
         return Ok(cx.undefined());
     }
     let current = target_base.unwrap_or_else(|| NO_DOCUMENT_URL.into());
-    if source_form.is_none() && request.method == "GET"
+    if history_traversal.is_none() && source_form.is_none() && request.method == "GET"
         && request.body.is_none()
         && without_fragment(&url) == without_fragment(&current)
         && url != current
     {
         return navigate_fragment::<E>(cx, &agent, target, &url, &current, replace);
     }
-    if source_form.is_none() && request.method == "GET" && request.body.is_none() && url == current && url.contains('#') {
+    if history_traversal.is_none() && source_form.is_none() && request.method == "GET" && request.body.is_none() && url == current && url.contains('#') {
         // Same URL including the fragment: HTML performs the navigation but
         // fires no `hashchange`.
         return Ok(cx.undefined());
@@ -2144,7 +2211,7 @@ fn queue_navigation<E: ScriptEngine>(
     // the teardown both take. A top-level context has no container, so it takes
     // the route next door, which drains on the bootstrap realm instead.
     let Some(container) = container else {
-        return navigate_top_level::<E>(cx, &agent, target, request, replace, source_base, source_form.map(|id| (from, id)));
+        return navigate_top_level::<E>(cx, &agent, target, request, replace, source_base, source_form.map(|id| (from, id)), history_traversal);
     };
     let referrer_policy = {
         let a = agent.borrow();
@@ -2165,6 +2232,7 @@ fn queue_navigation<E: ScriptEngine>(
             target,
             request,
             replace,
+            history_traversal,
             referrer_policy,
             about_base_url: source_base,
             source_form: source_form.map(|id| (from, id)),
@@ -2244,6 +2312,7 @@ fn navigate_top_level<E: ScriptEngine>(
     replace: bool,
     about_base_url: Option<String>,
     source_form: Option<(RealmId, NodeId)>,
+    history_traversal: Option<HistoryTraversal>,
 ) -> Result<E::Value, E::Error> {
     let url = &request.url;
     // HTML abandons a navigation whose URL does not parse. A child could still
@@ -2289,6 +2358,7 @@ fn navigate_top_level<E: ScriptEngine>(
             target,
             request,
             replace,
+            history_traversal,
             referrer_policy: String::new(),
             about_base_url,
             source_form,
@@ -2301,19 +2371,14 @@ fn navigate_top_level<E: ScriptEngine>(
     Ok(cx.undefined())
 }
 
-/// Unload `root`'s document and every document nested under it, ancestor before
-/// descendant, and release their runtime state child-first. `root`'s browsing
-/// context survives - it is the one being navigated - while its descendants'
-/// are destroyed outright.
-///
-/// Returns the realms to discard, which the caller does only once the
-/// replacement realm exists and the context's `WindowProxy` has been repointed
-/// at it: nothing may observe a context with no Window.
-fn unload_for_navigation<E: ScriptEngine>(
+/// Notify outgoing documents while their history and context still describe
+/// the document being left. Authored handlers can change history, so a queued
+/// traversal must revalidate its target after this phase.
+fn notify_navigation_unload<E: ScriptEngine>(
     cx: &mut E::CallCx<'_>,
     agent: &Rc<RefCell<crate::AgentState>>,
     root: RealmId,
-) -> Result<Vec<RealmId>, E::Error> {
+) -> Vec<RealmId> {
     let group = agent.borrow().frames.realm_tree(root);
     for realm in &group {
         let _ = realm_eval::<E>(
@@ -2322,7 +2387,18 @@ fn unload_for_navigation<E: ScriptEngine>(
             "window.dispatchEvent(new Event('pagehide'));             window.dispatchEvent(new Event('unload'))",
         );
     }
-    crate::dom::adoption::preserve_reflectors::<E>(cx, agent, &group)?;
+    group
+}
+
+/// Release the already-notified realms child-first. `root`'s browsing context
+/// survives; descendants are removed. The fallible reflector preparation runs
+/// before the history transaction commits.
+fn release_navigation_realms<E: ScriptEngine>(
+    cx: &mut E::CallCx<'_>,
+    agent: &Rc<RefCell<crate::AgentState>>,
+    root: RealmId,
+    group: Vec<RealmId>,
+) -> Vec<RealmId> {
     let cancel = agent.borrow().cancel_realm_tasks.clone();
     for realm in group.iter().rev() {
         if *realm != root {
@@ -2360,7 +2436,7 @@ fn unload_for_navigation<E: ScriptEngine>(
             }
         }
     }
-    Ok(group)
+    group
 }
 
 /// Perform one queued navigation: unload, new realm, new `Document`, proxy
@@ -2376,6 +2452,7 @@ fn perform_navigation<E: ScriptEngine>(
         target,
         request,
         replace,
+        history_traversal,
         referrer_policy,
         about_base_url,
         source_form,
@@ -2405,6 +2482,13 @@ fn perform_navigation<E: ScriptEngine>(
     let Some((container, scripts, context, outgoing)) = facts else {
         return Ok(());
     };
+    if let Some(traversal) = &history_traversal {
+        let a = agent.borrow();
+        let valid = a.frames.tree.as_ref()
+            .and_then(|tree| tree.get(context))
+            .is_some_and(|context| traversal.matches(context.history()));
+        if !valid { return Ok(()); }
+    }
     if let Some((realm, _)) = source_form {
         // The planned task records its initiating document, not a requirement
         // that the form remain connected after the algorithm has queued it.
@@ -2524,11 +2608,31 @@ fn perform_navigation<E: ScriptEngine>(
         encoding = decoded.encoding;
         Some(decoded.source)
     };
+    if let Some(traversal) = &history_traversal {
+        let a = agent.borrow();
+        let valid = a.frames.tree.as_ref()
+            .and_then(|tree| tree.get(context))
+            .is_some_and(|context| traversal.matches(context.history()));
+        if !valid { return Ok(()); }
+    }
+    let unload_group = notify_navigation_unload::<E>(cx, agent, target);
+    // This is the last fallible preparation step before history selection and
+    // teardown. A callback above may have changed the target; validate again
+    // after preserving the outgoing reflectors.
+    crate::dom::adoption::preserve_reflectors::<E>(cx, agent, &unload_group)?;
     // The new document's origin, and the history join. HTML's initial
     // `about:blank` replaces; everything else obeys the caller.
     {
         let mut a = agent.borrow_mut();
         if let Some(tree) = a.frames.tree.as_mut() {
+            // Host loading may have run arbitrary callbacks. A later history
+            // write or traversal invalidates this queued target before it can
+            // change the selected entry or unload the visible document.
+            if let Some(traversal) = &history_traversal {
+                let valid = tree.get(context)
+                    .is_some_and(|context| traversal.matches(context.history()));
+                if !valid { return Ok(()); }
+            }
             let origin = if blank {
                 tree.get(context)
                     .map(|context| context.document().origin.clone())
@@ -2537,18 +2641,25 @@ fn perform_navigation<E: ScriptEngine>(
                 tree.mint_origin(&url)
             };
             if let Some(context) = tree.get_mut(context) {
-                context.navigate_with(
-                    ActiveDocument {
-                        url: url.clone(),
-                        origin,
-                        initial_about_blank: false,
-                    },
-                    replace,
-                );
+                let document = ActiveDocument {
+                    url: url.clone(),
+                    origin,
+                    initial_about_blank: false,
+                };
+                if let Some(traversal) = history_traversal {
+                    if !context.history_mut().select_if_unchanged(
+                        traversal.target_index, traversal.generation,
+                    ) {
+                        return Ok(());
+                    }
+                    context.activate_traversed_document(document);
+                } else {
+                    context.navigate_with(document, replace);
+                }
             }
         }
     }
-    let discard = unload_for_navigation::<E>(cx, agent, target)?;
+    let discard = release_navigation_realms::<E>(cx, agent, target, unload_group);
     let plan = DocumentPlan {
         encoding,
         decode_options,
@@ -2571,6 +2682,9 @@ fn perform_navigation<E: ScriptEngine>(
         viewport_size,
         seams,
     };
+    // Realm installation remains outside the history transaction: it can fail
+    // after the outgoing realm has been released, and this lifecycle cannot
+    // restore that realm. Do not claim rollback for that failure boundary.
     let opened = open_document_realm::<E>(cx, agent, plan);
     // Only now: the context has a Window again, and the proxy points at it.
     for realm in discard {

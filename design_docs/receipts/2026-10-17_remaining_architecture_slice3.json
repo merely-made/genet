@@ -1,0 +1,178 @@
+{
+  "slice": 3,
+  "base": "1b19cc3c2865deaffaf7403e06a3d17d7f06b67e",
+  "findings": {
+    "addressed": [
+      "I9",
+      "R12"
+    ],
+    "partial": [
+      "I6",
+      "H5"
+    ]
+  },
+  "source_sha256": {
+    "components/genet-documents/src/engines/livery.rs": "4370717a88dd4d3003220cb1497def618b0da41491a14fdfa6422c2047d7a3d9",
+    "components/genet-documents/src/engines/tests.rs": "dfb66d5f819c8015ed7a734c7bba16d7e1ee1ab521757a449ec0b0619d27f1f3",
+    "components/genet-documents/src/fetch.rs": "e1c73e1e86e54687cf596df67b4db70e42177f6288345a773d66460a8e99ce48",
+    "components/genet-host-api/lib.rs": "1b9b7d053dfbd1f9f72e1b7b03bb1082113c720b081b8f7444158e2ab8edf79c",
+    "components/genet-scripted/resource_bridge.rs": "37d6b61fe343508bb6a541c80f4193a5aae1bbc8911bbdc1de448e4cf2e489d4",
+    "components/netfetcher/src/context.rs": "7324c491a9fdab235f62854f40febb5b8fa00148845b9a07f33bea6dcc7f359e",
+    "components/netfetcher/src/cookie_jar.rs": "27f0d8fc8509299372e23011759f1490b23a177c52e10c73e52d2cab541d9680",
+    "components/netfetcher/src/fetch/finalize.rs": "28e68e60836ce95bb51b0f20916eca9884094b6ef08f92c2f624c7747ea6f192",
+    "components/netfetcher/src/fetch/tests.rs": "56228b82e49ec1af6038aab709006890fe104a3f69d7758c16e89e3082b48e8b",
+    "components/script-runtime-api/Cargo.toml": "274b0090a9fb4dd95fe8ac3fc3291d7303f47b891a0bc0a5562b1a06f94735fb",
+    "components/script-runtime-api/fetch.rs": "65abd2a963180c52737a82812dd86ac52f05b3aeca44fa8f3324d7707cb40b8b",
+    "components/script-runtime-api/frames.rs": "f9564f2bb2556e40200bdf257870bfa12292d38538c5a32d251c01bc16d09d64",
+    "components/script-runtime-api/lib.rs": "e6ccee239017e812560dccbe4cc5aed3443d913863dfd6ff6473f2ef35d49d0b",
+    "components/script-runtime-api/platform.rs": "eac64704c0263e49f901a67ada0570fe2229095e47afe8e43c2d88b9b92d8e4a",
+    "components/script-runtime-api/tests/navigation.rs": "308abd5f6c407379d94916287ce828ff04f033923dc702fe0a66f315690f9c85",
+    "components/script-runtime-api/tests/top_level_navigation.rs": "009f28fc075ae473c6ff82312272ac1e0c8741016e150828a43d034b329b396d",
+    "components/shared/browsing-context/lib.rs": "5b9fe05aa3940841f5de4ac13be357fef752f5933d9134fe5ed890e223a79bb6",
+    "ports/ortet/Cargo.toml": "3ef8330a1d23fbf9956673959a5dd4893fca3b675d655c2086e0ae1be33ea480",
+    "ports/ortet/src/fetch.rs": "038b1776995ac37097b07bea3b7a25963bacc3ac88ded13d3a6aaba7a077b697"
+  },
+  "gates": [
+    {
+      "label": "s3-cookie",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s3-cookie.log",
+      "sha256": "25c3b5e7547feed8f5dfcef16e5d57e1db43ced4035a1069dc2d00c23bba0e70",
+      "passed": 16,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s3-final-host-contract",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s3-final-host-contract.log",
+      "sha256": "fa656a8d1833c58aaae49b37d7dea7e65931803158f0ba7171573ca6bbf1fb53",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s3-final-history",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s3-final-history.log",
+      "sha256": "bac749ccfa2e8f9baec2a6557589492c247114435b9c78770f07b5d620b7135d",
+      "passed": 20,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s3-final-navigation",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s3-final-navigation.log",
+      "sha256": "45d90c9312b64370fb59bbe8a06e9861f2a6661b748dfacb062637ef54dd8a3b",
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s3-top-navigation-verified",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s3-top-navigation-verified.log",
+      "sha256": "d89bbb52035a751b4275d87d5e4a0120e429b0930c6d80244a33dfa9073c4324",
+      "passed": 26,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s3-final-context",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s3-final-context.log",
+      "sha256": "5bcf70f91f9f363842bb1db81b5eec8d876d97b73d06c6da3e8d098fdebf37b0",
+      "passed": 16,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s3-final-resource-bridge",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s3-final-resource-bridge.log",
+      "sha256": "16fcf41673f1453158036dd38e9e50eb355073e0d4dae0770c160ce8c8da869a",
+      "passed": 16,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s3-final-local-fetch",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s3-final-local-fetch.log",
+      "sha256": "0291c553ec6fe0b67c8eb4420f5a98903561d996f1c8c161139f472d4b751e50",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s3-final-native-fetch",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s3-final-native-fetch.log",
+      "sha256": "264e64668ff58b458c0e3df4e08ef8b3c4eec794e6a050fbc75d5d04053e819c",
+      "passed": 15,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s3-final-worker-service",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s3-final-worker-service.log",
+      "sha256": "8ecec18b9c4a56bbf94b2b7e6e32357dc599afbe497057fa3cb62c4e3b160a99",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s3-final-net-fetch",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s3-final-net-fetch.log",
+      "sha256": "32b8fe297f6e6c4b61dd8d8939bd0660663f64b40337baebb9daec107d8d0e17",
+      "passed": 24,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "totals": {
+    "passed": 163,
+    "failed": 0,
+    "ignored": 0
+  },
+  "lock_sha256": "5efc527caf20cd1f1ae3532f024bba47160558083a968db4062b683ebcda2110",
+  "resource_limits": {
+    "memory": "5G",
+    "swap": "0",
+    "cpu": "150%",
+    "cargo_jobs": 1,
+    "test_threads": 1,
+    "timeout_seconds": 240
+  },
+  "checks": [
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s3-ortet-check-verified.log",
+      "sha256": "aa3007690ebb0036147665e800492ad275c7b1ff7b32a26d16ff6ecb7910a03f",
+      "result": "passed"
+    }
+  ],
+  "reviews": [
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/slice3-cookie-review.md",
+      "sha256": "01a0761991ed966b2b43b71c8746f539a0a939d469632423f72a42d840210c3e"
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/slice3-fetch-review.md",
+      "sha256": "cc7c1d49478779d3fb78f5ca6a495ac727599e732b638fe84523d62ea34b8721"
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/slice3-history-review.md",
+      "sha256": "4ed86a4fb0f9dca4f40e8ddf8e4913da01f25dfe9a5b07cf48740714f5318323"
+    }
+  ],
+  "excluded_attempts": [
+    {
+      "log": "s3-history.log",
+      "reason": "Mutable CallCx compile correction; final platform gate replaces it."
+    },
+    {
+      "log": "s3-final-top-navigation.log",
+      "reason": "Fixture resource lookup incorrectly included fragment, preventing unload. Fixed lookup and explicit unload assertion; focused two-engine and full26 pass supersede."
+    }
+  ],
+  "boundaries": [
+    "I6 partial: legacy external byte-response callers remain; URL-only fetchers explicitly refuse rich requests rather than fabricate success metadata.",
+    "H5 partial: native configured decoded-byte, elapsed-deadline and admission enforcement tested; browser configured-policy migration remains.",
+    "Pre-spawn reservations are per document bridge; shared native semaphore bounds wire activity across fetcher clones. Worker reservation ends after mailbox delivery, before consumption.",
+    "Native Network failure still aggregates transport, CORS, redirect and SRI failures.",
+    "History realm installation may fail after outgoing realm release; inherited generic navigation has no atomic rollback.",
+    "Cookie tests cover PSL, prefix, persistence, SameSite and domain normalization restrictions; this is not full browser cookie conformance."
+  ]
+}

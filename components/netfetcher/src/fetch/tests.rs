@@ -27,6 +27,7 @@ fn caching_cx() -> FetchContext {
         transport: crate::transport::default_transport(),
         redirect_limit: FetchContext::DEFAULT_REDIRECT_LIMIT,
         cache_max_body_bytes: FetchContext::DEFAULT_CACHE_MAX_BODY_BYTES,
+        response_max_body_bytes: None,
     }
 }
 
@@ -155,6 +156,7 @@ async fn records_set_cookie_through_the_jar() {
         transport: crate::transport::default_transport(),
         redirect_limit: FetchContext::DEFAULT_REDIRECT_LIMIT,
         cache_max_body_bytes: FetchContext::DEFAULT_CACHE_MAX_BODY_BYTES,
+        response_max_body_bytes: None,
     };
     let res = fetch(
         Request::get(format!("{}/c", server.url()).parse().unwrap()),
@@ -479,6 +481,7 @@ async fn records_alt_svc_h3_advertisement() {
         transport: crate::transport::default_transport(),
         redirect_limit: FetchContext::DEFAULT_REDIRECT_LIMIT,
         cache_max_body_bytes: FetchContext::DEFAULT_CACHE_MAX_BODY_BYTES,
+        response_max_body_bytes: None,
     };
     let _ = fetch(Request::get(server.url().parse().unwrap()), &cx)
         .await

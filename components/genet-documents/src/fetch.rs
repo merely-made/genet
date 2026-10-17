@@ -12,7 +12,7 @@
 //! engine components never link a transport.
 
 pub use genet_host_api::ResourceFetchPolicy;
-use genet_host_api::{ResourceFetcher, ResourceResponse};
+use genet_host_api::{ResourceFetchResponse, ResourceFetcher, ResourceRequest, ResourceResponse};
 
 /// The local-scheme [`ResourceFetcher`]: `data:`, `file://`, and bare paths.
 #[derive(Clone, Copy, Debug, Default)]
@@ -35,7 +35,24 @@ impl LocalFetcher {
 /// Whether `url` is one of the schemes this crate serves without a network: an
 /// inline `data:` payload, a `file://` URL, or a bare filesystem path.
 fn is_local(url: &str) -> bool {
-    url.starts_with("data:") || url.starts_with("file://") || !url.contains("://")
+    if url.starts_with("data:") || url.starts_with("file://") {
+        return true;
+    }
+    let Some((prefix, rest)) = url.split_once(':') else {
+        return true;
+    };
+    let bytes = prefix.as_bytes();
+    // A Windows drive is a path even though it has one letter before ':'.
+    if bytes.len() == 1
+        && bytes[0].is_ascii_alphabetic()
+        && (rest.starts_with('/') || rest.starts_with('\\'))
+    {
+        return true;
+    }
+    !(bytes.first().is_some_and(u8::is_ascii_alphabetic)
+        && bytes[1..]
+            .iter()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'-' | b'.')))
 }
 
 impl ResourceFetcher for LocalFetcher {
@@ -46,6 +63,13 @@ impl ResourceFetcher for LocalFetcher {
     fn fetch_response(&self, url: &str) -> Option<ResourceResponse> {
         is_local(url).then(|| fetch_local_response(url)).flatten()
     }
+
+    fn fetch_request(&self, request: &ResourceRequest) -> Option<ResourceFetchResponse> {
+        (is_local(&request.url) && request.is_plain_get())
+            .then(|| fetch_local_response(&request.url))
+            .flatten()
+            .map(ResourceFetchResponse::from_local_plain_get)
+    }
 }
 
 impl<F: ResourceFetcher> ResourceFetcher for LocalFetcherWith<F> {
@@ -53,11 +77,23 @@ impl<F: ResourceFetcher> ResourceFetcher for LocalFetcherWith<F> {
         self.fetch_response(url).map(|response| response.bytes)
     }
 
+    fn max_concurrent_fetches(&self) -> usize {
+        self.fallback.max_concurrent_fetches()
+    }
+
     fn fetch_response(&self, url: &str) -> Option<ResourceResponse> {
         if is_local(url) {
             fetch_local_response(url)
         } else {
             self.fallback.fetch_response(url)
+        }
+    }
+
+    fn fetch_request(&self, request: &ResourceRequest) -> Option<ResourceFetchResponse> {
+        if is_local(&request.url) {
+            LocalFetcher.fetch_request(request)
+        } else {
+            self.fallback.fetch_request(request)
         }
     }
 }
@@ -102,9 +138,9 @@ fn file_url_to_path(after_scheme: &str) -> String {
 mod tests {
     use std::fs;
 
-    use genet_host_api::{ResourceFetcher, ResourceResponse};
+    use genet_host_api::{ResourceFetcher, ResourceRequest, ResourceResponse};
 
-    use super::LocalFetcher;
+    use super::{LocalFetcher, is_local};
 
     #[test]
     fn missing_local_resource_is_a_clean_miss() {
@@ -152,5 +188,31 @@ mod tests {
             ))
         );
         assert!(composed.fetch("/no/such/pelt/file.html").is_none());
+        assert!(composed
+            .fetch_request(&ResourceRequest::plain_get("https://example.invalid/page"))
+            .is_none(), "a byte-only remote fallback cannot invent HTTP metadata");
+    }
+
+    #[test]
+    fn local_plain_get_explicitly_supplies_synthetic_metadata() {
+        let request = ResourceRequest::plain_get("data:text/plain,hello");
+        let response = LocalFetcher.fetch_request(&request).expect("local plain GET");
+        assert_eq!(response.bytes, b"hello");
+        assert_eq!(response.status, 200);
+        assert_eq!(response.response_type, "basic");
+        assert_eq!(response.final_url, request.url);
+        let mut unsupported = request;
+        unsupported.method = "POST".into();
+        assert!(LocalFetcher.fetch_request(&unsupported).is_none());
+    }
+
+    #[test]
+    fn colon_only_schemes_do_not_receive_local_success_metadata() {
+        for address in ["about:blank", "mailto:user@example.test", "custom+scheme:item"] {
+            assert!(!is_local(address));
+            assert!(LocalFetcher.fetch_request(&ResourceRequest::plain_get(address)).is_none());
+        }
+        assert!(is_local("C:\\pages\\a.html"));
+        assert!(is_local("/tmp/a:b.html"));
     }
 }

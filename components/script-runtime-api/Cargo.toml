@@ -18,6 +18,7 @@ name = "script_runtime_api"
 path = "lib.rs"
 
 [dependencies]
+genet-host-api = { workspace = true }
 browsing-context-api = { path = "../shared/browsing-context" }
 script-engine-api = { path = "../script-engine-api" }
 # The DOM the host surface scripts against: a NodeId arena implementing

@@ -1,0 +1,4317 @@
+{
+  "command": "testharness",
+  "engine": "boa",
+  "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
+  "policy": "exact",
+  "renderer": "livery",
+  "runner_sha256": "f89342870cbc035714f6f1511a05e09b036938dc24562949371c7d16c11d66a7",
+  "subset": "pointerevents",
+  "tests": {
+    "pointerevents/bugs/drag_on_added_range_input.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Drag on an added range input element.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/bugs/events_after_lostpointercapture_remove_setcapture_node.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "setPointerCapture target removed by lostpointercapture",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/capturing_boundary_event_handler_at_ua_shadowdom.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Capturing boundary event handler at DIV",
+          "status": "fail"
+        },
+        {
+          "name": "Capturing boundary event handler at VIDEO",
+          "status": "timeout"
+        },
+        {
+          "name": "Capturing boundary event handler at INPUT",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "pointerevents/capturing_boundary_event_handler_at_ua_shadowdom.html?pen": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Capturing boundary event handler at DIV",
+          "status": "fail"
+        },
+        {
+          "name": "Capturing boundary event handler at VIDEO",
+          "status": "timeout"
+        },
+        {
+          "name": "Capturing boundary event handler at INPUT",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "pointerevents/capturing_boundary_event_handler_at_ua_shadowdom.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Capturing boundary event handler at DIV",
+          "status": "timeout"
+        },
+        {
+          "name": "Capturing boundary event handler at VIDEO",
+          "status": "not-run"
+        },
+        {
+          "name": "Capturing boundary event handler at INPUT",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "pointerevents/coalesced_events_attributes.https.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Coalesced list in boundary events",
+          "status": "timeout"
+        },
+        {
+          "name": "Coalesced list in pointer-capture events",
+          "status": "not-run"
+        },
+        {
+          "name": "Coalesced list in pointerdown/move/up events",
+          "status": "not-run"
+        },
+        {
+          "name": "Coalesced list in pointercancel event",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "pointerevents/coalesced_events_attributes.https.html?pen": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Coalesced list in boundary events",
+          "status": "timeout"
+        },
+        {
+          "name": "Coalesced list in pointer-capture events",
+          "status": "not-run"
+        },
+        {
+          "name": "Coalesced list in pointerdown/move/up events",
+          "status": "not-run"
+        },
+        {
+          "name": "Coalesced list in pointercancel event",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "pointerevents/coalesced_events_attributes.https.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Coalesced list in boundary events",
+          "status": "timeout"
+        },
+        {
+          "name": "Coalesced list in pointer-capture events",
+          "status": "not-run"
+        },
+        {
+          "name": "Coalesced list in pointerdown/move/up events",
+          "status": "not-run"
+        },
+        {
+          "name": "Coalesced list in pointercancel event",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "pointerevents/coalesced_events_attributes_on_redispatch.https.html?mouse": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Coalesced list in pointerdown/move/up events",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/coalesced_events_attributes_on_redispatch.https.html?pen": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Coalesced list in pointerdown/move/up events",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/coalesced_events_attributes_on_redispatch.https.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Coalesced list in pointerdown/move/up events",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/coalesced_events_attributes_under_load.https.optional.html?mouse": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Coalesced pointermoves under load",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/coalesced_events_attributes_under_load.https.optional.html?pen": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Coalesced pointermoves under load",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/coalesced_events_attributes_under_load.https.optional.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Coalesced pointermoves under load",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/compat/pointerevent_compat-mouse-events-when-removing-nodes.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Compat mouse events with no node removal",
+          "status": "fail"
+        },
+        {
+          "name": "Compat mouse events with node removal on pointermove",
+          "status": "fail"
+        },
+        {
+          "name": "Compat mouse events with node removal on pointerdown",
+          "status": "fail"
+        },
+        {
+          "name": "Compat mouse events with node removal on pointerup",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "pointerevents/compat/pointerevent_mouse-on-object.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/compat/pointerevent_mouse-pointer-on-scrollbar.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/compat/pointerevent_mouse-pointer-preventdefault-passive.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Canceling passive pointerevents does not affect compat mouseevents",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/compat/pointerevent_mouse-pointer-preventdefault.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Effect of canceling pointerdown on compat mouse events",
+          "status": "fail"
+        },
+        {
+          "name": "Effect of canceling pointermove on compat mouse events",
+          "status": "timeout"
+        },
+        {
+          "name": "Effect of canceling pointerup on compat mouse events",
+          "status": "not-run"
+        },
+        {
+          "name": "Effect of canceling pointerenter on compat mouse events",
+          "status": "not-run"
+        },
+        {
+          "name": "Effect of canceling pointerleave on compat mouse events",
+          "status": "not-run"
+        },
+        {
+          "name": "Effect of canceling pointerover on compat mouse events",
+          "status": "not-run"
+        },
+        {
+          "name": "Effect of canceling pointerout on compat mouse events",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 7
+    },
+    "pointerevents/compat/pointerevent_mouse-pointer-updown-events.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointerup/down events are fired correctly for corresponding mouse events",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/compat/pointerevent_mouse_target_after_pointer_target_host_of_shadow_removed.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "mousemove event should be fired on the host parent when pointermove event listener removes the shadow DOM",
+          "status": "fail"
+        },
+        {
+          "name": "mousedown event should be fired on the host parent when pointerdown event listener removes the shadow DOM",
+          "status": "fail"
+        },
+        {
+          "name": "mouseup event should be fired on the host parent when pointerup event listener removes the shadow DOM",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "pointerevents/compat/pointerevent_mouse_target_after_pointer_target_root_element_in_shadow_removed.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "mousemove event should be fired on the host when pointermove event listener removes the root element in the shadow DOM",
+          "status": "fail"
+        },
+        {
+          "name": "mousedown event should be fired on the host when pointerdown event listener removes the root element in the shadow DOM",
+          "status": "fail"
+        },
+        {
+          "name": "mouseup event should be fired on the host when pointerup event listener removes the root element in the shadow DOM",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "pointerevents/compat/pointerevent_mouse_target_after_pointer_target_slot_removed.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "mousemove event should be fired on the slot parent when pointermove event listener removes the slot",
+          "status": "fail"
+        },
+        {
+          "name": "mousedown event should be fired on the slot parent when pointerdown event listener removes the slot",
+          "status": "fail"
+        },
+        {
+          "name": "mouseup event should be fired on the slot parent when pointerup event listener removes the slot",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "pointerevents/compat/pointerevent_mouseevent_key_pressed.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Pointer events correctly show Alt pressed",
+          "status": "fail"
+        },
+        {
+          "name": "Pointer events correctly show Control pressed",
+          "status": "timeout"
+        },
+        {
+          "name": "Pointer events correctly show Meta pressed",
+          "status": "not-run"
+        },
+        {
+          "name": "Pointer events correctly show Shift pressed",
+          "status": "not-run"
+        },
+        {
+          "name": "Pointer events correctly show Alt,Control,Meta,Shift pressed",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 5
+    },
+    "pointerevents/compat/pointerevent_preventdefault_pointerdown_dblclick.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "dblclick fires after cancelled pointerdown (mouse)",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/compat/pointerevent_preventdefault_pointerdown_dblclick.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "dblclick fires after cancelled pointerdown (touch)",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/compat/pointerevent_touch-action-verification.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/compat/pointerevent_touch-action_two-finger_interaction.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/compat/pointerevent_touch_target_after_pointerdown_target_removed.tentative.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "After a pointerdown listener removes its target",
+          "status": "fail"
+        },
+        {
+          "name": "After a pointerdown listener removes but appends the target to same position again",
+          "status": "fail"
+        },
+        {
+          "name": "After a pointerdown listener moves the target to different position",
+          "status": "fail"
+        },
+        {
+          "name": "After a touchstart listener removes its target",
+          "status": "fail"
+        },
+        {
+          "name": "After a touchstart listener removes but appends the target to same position again",
+          "status": "fail"
+        },
+        {
+          "name": "After a touchstart listener moves the target to different position",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 6
+    },
+    "pointerevents/crashtests/longpress-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "pointerevents/idlharness.https.window.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "idl_test setup",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/inheritance.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Property touch-action has initial value auto",
+          "status": "fail"
+        },
+        {
+          "name": "Property touch-action does not inherit",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "pointerevents/mouse-pointer-boundary-events-for-shadowdom.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "PointerEvent: Verifies that mouse boundary events don't point to shadow-dom",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/parsing/touch-action-computed.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Property touch-action value 'auto'",
+          "status": "fail"
+        },
+        {
+          "name": "Property touch-action value 'none'",
+          "status": "fail"
+        },
+        {
+          "name": "Property touch-action value 'manipulation'",
+          "status": "fail"
+        },
+        {
+          "name": "Property touch-action value 'pan-x'",
+          "status": "fail"
+        },
+        {
+          "name": "Property touch-action value 'pan-y'",
+          "status": "fail"
+        },
+        {
+          "name": "Property touch-action value 'pan-x pan-y'",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 6
+    },
+    "pointerevents/parsing/touch-action-invalid.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "e.style['touch-action'] = \"auto none\" should not set the property value",
+          "status": "fail"
+        },
+        {
+          "name": "e.style['touch-action'] = \"manipulation pan-x\" should not set the property value",
+          "status": "fail"
+        },
+        {
+          "name": "e.style['touch-action'] = \"pan-y pan-x pan-y\" should not set the property value",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "pointerevents/parsing/touch-action-valid.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "e.style['touch-action'] = \"auto\" should set the property value",
+          "status": "pass"
+        },
+        {
+          "name": "e.style['touch-action'] = \"none\" should set the property value",
+          "status": "pass"
+        },
+        {
+          "name": "e.style['touch-action'] = \"manipulation\" should set the property value",
+          "status": "pass"
+        },
+        {
+          "name": "e.style['touch-action'] = \"pan-x\" should set the property value",
+          "status": "pass"
+        },
+        {
+          "name": "e.style['touch-action'] = \"pan-y\" should set the property value",
+          "status": "pass"
+        },
+        {
+          "name": "e.style['touch-action'] = \"pan-y pan-x\" should set the property value",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 5,
+      "subtests_total": 6
+    },
+    "pointerevents/persistentDeviceId/get-persistendeviceid-from-pointer-event.tentative.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "PointerEvent.persistentDeviceId",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/persistentDeviceId/get-persistendeviceid-from-pointer-mouse-event.tentative.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "PointerEvent.persistentDeviceId",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "pointerevents/persistentDeviceId/persistentdeviceid-is-unique-manual.tentative.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "pointerevents/persistentDeviceId/pointer-event-has-persistentdeviceid-from-pointer-event-init.tentative.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "PointerEvent.persistentDeviceId via PointerEventInit",
+          "status": "fail"
+        },
+        {
+          "name": "No persistentDeviceId in PointerEventInit",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "pointerevents/pointer-events-none-skip-scroll-in-iframe.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Wheel-scroll over pointer-events: none scroller skips that scroller",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointer-events-none-skip-scroll-scrollbar.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Wheel-scroll over pointer-events: none scroller skips that scroller",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointer-events-none-skip-scroll-will-change-in-iframe.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Wheel-scroll over pointer-events: none scroller skips that scroller",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointer-events-none-skip-scroll-will-change-scrollbar.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Wheel-scroll over pointer-events: none scroller skips that scroller",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointer-events-none-skip-scroll-will-change.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Wheel-scroll over pointer-events: none scroller skips that scroller",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointer-events-none-skip-scroll.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Wheel-scroll over pointer-events: none scroller skips that scroller",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointer_boundary_events_after_removing_last_over_element_through_innerhtml.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointer boundary events fired",
+          "status": "fail"
+        },
+        {
+          "name": "mouse boundary events fired",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "pointerevents/pointerevent-boundary-event-target-when-hover-generates-content-under-pointer.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Generating text content under pointer",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent-drag-interaction.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Pointercancel should be fired with the expected order when drag operation starts",
+          "status": "timeout"
+        },
+        {
+          "name": "Pointercancel and lostpointercapture should be fired with the expected order when drag operation starts (capture on pointerdown)",
+          "status": "not-run"
+        },
+        {
+          "name": "Pointercancel and lostpointercapture should be fired with the expected order when drag operation starts (capture on mousedown)",
+          "status": "not-run"
+        },
+        {
+          "name": "Pointerevent stream should not get interrupted when drag is prevented.",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "pointerevents/pointerevent_after_target_appended.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointer events from mouse received before/after child attached at pointerdown",
+          "status": "fail"
+        },
+        {
+          "name": "pointer events from mouse received before/after child attached at pointerup",
+          "status": "timeout"
+        },
+        {
+          "name": "pointer events from mouse received before/after child moved at pointerdown",
+          "status": "not-run"
+        },
+        {
+          "name": "pointer events from mouse received before/after child moved at pointerup",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse events from mouse received before/after child attached at mousedown",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse events from mouse received before/after child attached at mouseup",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse events from mouse received before/after child moved at mousedown",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse events from mouse received before/after child moved at mouseup",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 8
+    },
+    "pointerevents/pointerevent_after_target_appended.html?pen": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointer events from pen received before/after child attached at pointerdown",
+          "status": "fail"
+        },
+        {
+          "name": "pointer events from pen received before/after child attached at pointerup",
+          "status": "timeout"
+        },
+        {
+          "name": "pointer events from pen received before/after child moved at pointerdown",
+          "status": "not-run"
+        },
+        {
+          "name": "pointer events from pen received before/after child moved at pointerup",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse events from pen received before/after child attached at mousedown",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse events from pen received before/after child attached at mouseup",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse events from pen received before/after child moved at mousedown",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse events from pen received before/after child moved at mouseup",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 8
+    },
+    "pointerevents/pointerevent_after_target_appended.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointer events from touch received before/after child attached at pointerdown",
+          "status": "timeout"
+        },
+        {
+          "name": "pointer events from touch received before/after child attached at pointerup",
+          "status": "not-run"
+        },
+        {
+          "name": "pointer events from touch received before/after child moved at pointerdown",
+          "status": "not-run"
+        },
+        {
+          "name": "pointer events from touch received before/after child moved at pointerup",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse events from touch received before/after child attached at mousedown",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse events from touch received before/after child attached at mouseup",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse events from touch received before/after child moved at mousedown",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse events from touch received before/after child moved at mouseup",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 8
+    },
+    "pointerevents/pointerevent_after_target_appended_interleaved.tentative.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "mouse events from mouse received before/after child attached at pointerdown",
+          "status": "fail"
+        },
+        {
+          "name": "mouse events from mouse received before/after child attached at pointerup",
+          "status": "timeout"
+        },
+        {
+          "name": "mouse events from mouse received before/after child moved at pointerdown",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse events from mouse received before/after child moved at pointerup",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "pointerevents/pointerevent_after_target_appended_interleaved.tentative.html?pen": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "mouse events from pen received before/after child attached at pointerdown",
+          "status": "fail"
+        },
+        {
+          "name": "mouse events from pen received before/after child attached at pointerup",
+          "status": "timeout"
+        },
+        {
+          "name": "mouse events from pen received before/after child moved at pointerdown",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse events from pen received before/after child moved at pointerup",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "pointerevents/pointerevent_after_target_appended_interleaved.tentative.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "mouse events from touch received before/after child attached at pointerdown",
+          "status": "timeout"
+        },
+        {
+          "name": "mouse events from touch received before/after child attached at pointerup",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse events from touch received before/after child moved at pointerdown",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse events from touch received before/after child moved at pointerup",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "pointerevents/pointerevent_after_target_removed.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointer events from mouse received before/after child removal at pointerdown",
+          "status": "fail"
+        },
+        {
+          "name": "pointer events from mouse received before/after child removal at pointerup",
+          "status": "timeout"
+        },
+        {
+          "name": "mouse events from mouse received before/after child removal at mousedown",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse events from mouse received before/after child removal at mouseup",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "pointerevents/pointerevent_after_target_removed.html?pen": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointer events from pen received before/after child removal at pointerdown",
+          "status": "fail"
+        },
+        {
+          "name": "pointer events from pen received before/after child removal at pointerup",
+          "status": "timeout"
+        },
+        {
+          "name": "mouse events from pen received before/after child removal at mousedown",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse events from pen received before/after child removal at mouseup",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "pointerevents/pointerevent_after_target_removed.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointer events from touch received before/after child removal at pointerdown",
+          "status": "timeout"
+        },
+        {
+          "name": "pointer events from touch received before/after child removal at pointerup",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse events from touch received before/after child removal at mousedown",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse events from touch received before/after child removal at mouseup",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "pointerevents/pointerevent_after_target_removed_from_slot.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "mouse events with remove-slot at pointerdown",
+          "status": "fail"
+        },
+        {
+          "name": "mouse events with remove-filler at pointerdown",
+          "status": "timeout"
+        },
+        {
+          "name": "mouse events with change-slotname at pointerdown",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse events with remove-slot at pointerup",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse events with remove-filler at pointerup",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse events with change-slotname at pointerup",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 6
+    },
+    "pointerevents/pointerevent_after_target_removed_interleaved.tentative.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "mouse events from mouse received before/after child removal at pointerdown",
+          "status": "fail"
+        },
+        {
+          "name": "mouse events from mouse received before/after child removal at pointerup",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "pointerevents/pointerevent_after_target_removed_interleaved.tentative.html?pen": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "mouse events from pen received before/after child removal at pointerdown",
+          "status": "fail"
+        },
+        {
+          "name": "mouse events from pen received before/after child removal at pointerup",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "pointerevents/pointerevent_after_target_removed_interleaved.tentative.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "mouse events from touch received before/after child removal at pointerdown",
+          "status": "timeout"
+        },
+        {
+          "name": "mouse events from touch received before/after child removal at pointerup",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "pointerevents/pointerevent_attributes.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_attributes.html?mouse-right": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_attributes.html?pen": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_attributes.html?pen-right": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_attributes.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_attributes.optional.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_attributes.optional.html?mouse-right": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_attributes.optional.html?pen": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_attributes.optional.html?pen-right": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_attributes.optional.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_auxclick_is_a_pointerevent.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "auxclick using mouse is a PointerEvent with correct properties",
+          "status": "timeout"
+        },
+        {
+          "name": "auxclick using mouse is a PointerEvent with correct properties when no other PointerEvent listeners are present",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "pointerevents/pointerevent_auxclick_is_a_pointerevent.html?pen": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "auxclick using pen is a PointerEvent with correct properties",
+          "status": "timeout"
+        },
+        {
+          "name": "auxclick using pen is a PointerEvent with correct properties when no other PointerEvent listeners are present",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "pointerevents/pointerevent_boundary_events_at_implicit_release_hoverable_pointers.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_boundary_events_attributes_during_drag.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Attributes of boundary events during dragging mouse",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_boundary_events_before_pointerrawupdate.https.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Pointer boundary events should be fired before `pointerrawupdate`",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_boundary_events_in_capturing.html?mouse": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Boundary events around pointer capture and release",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_boundary_events_in_capturing.html?pen": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Boundary events around pointer capture and release",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_boundary_events_in_capturing.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Boundary events around pointer capture and release",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_boundary_events_modifier_no_pointer_movement.html?Alt": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Test altKey of pointer boundary events (modifiers are changed before move)",
+          "status": "pass"
+        },
+        {
+          "name": "Test altKey of pointer boundary events (modifiers are changed after move)",
+          "status": "timeout"
+        },
+        {
+          "name": "Test altKey of pointer boundary events (modifiers are changed before move): altKey of pointerover should be true",
+          "status": "fail"
+        },
+        {
+          "name": "Test altKey of pointer boundary events (modifiers are changed before move): altKey of pointerout should be true",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 4
+    },
+    "pointerevents/pointerevent_boundary_events_modifier_no_pointer_movement.html?Control": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Test ctrlKey of pointer boundary events (modifiers are changed before move)",
+          "status": "pass"
+        },
+        {
+          "name": "Test ctrlKey of pointer boundary events (modifiers are changed after move)",
+          "status": "timeout"
+        },
+        {
+          "name": "Test ctrlKey of pointer boundary events (modifiers are changed before move): ctrlKey of pointerover should be true",
+          "status": "fail"
+        },
+        {
+          "name": "Test ctrlKey of pointer boundary events (modifiers are changed before move): ctrlKey of pointerout should be true",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 4
+    },
+    "pointerevents/pointerevent_boundary_events_modifier_no_pointer_movement.html?Meta": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Test metaKey of pointer boundary events (modifiers are changed before move)",
+          "status": "pass"
+        },
+        {
+          "name": "Test metaKey of pointer boundary events (modifiers are changed after move)",
+          "status": "timeout"
+        },
+        {
+          "name": "Test metaKey of pointer boundary events (modifiers are changed before move): metaKey of pointerover should be true",
+          "status": "fail"
+        },
+        {
+          "name": "Test metaKey of pointer boundary events (modifiers are changed before move): metaKey of pointerout should be true",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 4
+    },
+    "pointerevents/pointerevent_boundary_events_modifier_no_pointer_movement.html?Shift": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Test shiftKey of pointer boundary events (modifiers are changed before move)",
+          "status": "pass"
+        },
+        {
+          "name": "Test shiftKey of pointer boundary events (modifiers are changed after move)",
+          "status": "timeout"
+        },
+        {
+          "name": "Test shiftKey of pointer boundary events (modifiers are changed before move): shiftKey of pointerover should be true",
+          "status": "fail"
+        },
+        {
+          "name": "Test shiftKey of pointer boundary events (modifiers are changed before move): shiftKey of pointerout should be true",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 4
+    },
+    "pointerevents/pointerevent_boundary_events_on_image_map.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointer boundary events when simple over/out",
+          "status": "fail"
+        },
+        {
+          "name": "pointer boundary events when moved from an <area> to the same <area> shared by another <img>",
+          "status": "timeout"
+        },
+        {
+          "name": "pointer boundary events when the <area> is resized",
+          "status": "not-run"
+        },
+        {
+          "name": "pointer boundary events when both <area> and <img> are resized",
+          "status": "not-run"
+        },
+        {
+          "name": "pointer boundary events when usemap is modified",
+          "status": "not-run"
+        },
+        {
+          "name": "pointer boundary events when usemap is modified and <img> is resized",
+          "status": "not-run"
+        },
+        {
+          "name": "pointer boundary events when new <area> is available",
+          "status": "not-run"
+        },
+        {
+          "name": "pointer boundary events when new <area> is available and the <img> is resized",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 8
+    },
+    "pointerevents/pointerevent_bubble_ancestors_none.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "PointerEvent: Events still bubble to ancestors with pointer-events: none ",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_bubble_display_none.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "PointerEvent: Events still bubble to ancestors with display: none ",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_bubble_mousedown_mouseup_different_target.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "PointerEvent: Events still bubble to ancestors with mousedown causes mouseup to be a different target",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_capture_implicit_release_on_parent_doc_while_subdoc_captures-manual.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "pointerevents/pointerevent_capture_implicit_release_on_subdoc_while_parent_doc_captures-manual.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "pointerevents/pointerevent_capture_mouse.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "gotpointercapture event received",
+          "status": "not-run"
+        },
+        {
+          "name": "lostpointercapture event received",
+          "status": "not-run"
+        },
+        {
+          "name": "pointerover event for black rectangle received",
+          "status": "not-run"
+        },
+        {
+          "name": "pointerover event for purple rectangle received",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "pointerevents/pointerevent_capture_mouse_and_release_and_capture_again.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "A pointerout should be fired on the capturing element after losing the capture",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_capture_suppressing_mouse.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Validate pointer events track pointer movement without pointer capture.",
+          "status": "timeout"
+        },
+        {
+          "name": "Test pointer capture.",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "pointerevents/pointerevent_capture_touch_and_release_at_got_capture.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "A pointerout should be fired on the capturing element after losing the capture",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_change-touch-action-onpointerdown_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_click_during_capture.html?mouse-auxclick": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointerdown/up at child1, no capture",
+          "status": "fail"
+        },
+        {
+          "name": "pointerdown/up at child1, capture at child1",
+          "status": "timeout"
+        },
+        {
+          "name": "pointerdown/up at child1, capture at child2",
+          "status": "not-run"
+        },
+        {
+          "name": "pointerdown at child1, pointerup at child2, no capture",
+          "status": "not-run"
+        },
+        {
+          "name": "pointerdown at child1, pointerup at child2, capture at child1",
+          "status": "not-run"
+        },
+        {
+          "name": "pointerdown at child1, pointerup at child2, capture at child2",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 6
+    },
+    "pointerevents/pointerevent_click_during_capture.html?mouse-click": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointerdown/up at child1, no capture",
+          "status": "pass"
+        },
+        {
+          "name": "pointerdown/up at child1, capture at child1",
+          "status": "timeout"
+        },
+        {
+          "name": "pointerdown/up at child1, capture at child2",
+          "status": "not-run"
+        },
+        {
+          "name": "pointerdown at child1, pointerup at child2, no capture",
+          "status": "not-run"
+        },
+        {
+          "name": "pointerdown at child1, pointerup at child2, capture at child1",
+          "status": "not-run"
+        },
+        {
+          "name": "pointerdown at child1, pointerup at child2, capture at child2",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 6
+    },
+    "pointerevents/pointerevent_click_during_parent_capture.html?pointerType=mouse&preventDefault=": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_click_during_parent_capture.html?pointerType=mouse&preventDefault=pointerdown": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_click_during_parent_capture.html?pointerType=touch&preventDefault=": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_click_during_parent_capture.html?pointerType=touch&preventDefault=pointerdown": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_click_during_parent_capture.html?pointerType=touch&preventDefault=touchstart": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_click_is_a_pointerevent.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "click using mouse is a PointerEvent with correct properties",
+          "status": "fail"
+        },
+        {
+          "name": "click using mouse is a PointerEvent with correct properties when no other PointerEvent listeners are present",
+          "status": "timeout"
+        },
+        {
+          "name": "click using mouse is a PointerEvent with correct properties using non-pointing device",
+          "status": "not-run"
+        },
+        {
+          "name": "click using mouse is a PointerEvent with correct properties in a subframe",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "pointerevents/pointerevent_click_is_a_pointerevent.html?pen": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "click using pen is a PointerEvent with correct properties",
+          "status": "fail"
+        },
+        {
+          "name": "click using pen is a PointerEvent with correct properties when no other PointerEvent listeners are present",
+          "status": "timeout"
+        },
+        {
+          "name": "click using pen is a PointerEvent with correct properties in a subframe",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "pointerevents/pointerevent_click_is_a_pointerevent.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "click using touch is a PointerEvent with correct properties",
+          "status": "timeout"
+        },
+        {
+          "name": "click using touch is a PointerEvent with correct properties when no other PointerEvent listeners are present",
+          "status": "not-run"
+        },
+        {
+          "name": "click using touch is a PointerEvent with correct properties in a subframe",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "pointerevents/pointerevent_click_is_a_pointerevent_multiple_clicks.html?mouse": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "click using mouse is a PointerEvent",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_click_is_a_pointerevent_multiple_clicks.html?pen": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "click using pen is a PointerEvent",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_click_is_a_pointerevent_multiple_clicks.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "click using touch is a PointerEvent",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_click_on_chorded_mouse_button.tentative.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Chorded button sequence L-down M-down M-up L-up",
+          "status": "fail"
+        },
+        {
+          "name": "Chorded button sequence M-down L-down L-up M-up",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "pointerevents/pointerevent_coalesced_movement.https.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "pointermove getCoalescedEvents movementX/Y should add up to main event's movementX/Y",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_constructor.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "PointerEvent: Constructor test",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_constructor.https.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "PointerEvent: Constructor test",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_contextmenu_is_a_pointerevent.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "contextmenu using mouse is a PointerEvent with correct properties",
+          "status": "timeout"
+        },
+        {
+          "name": "contextmenu using mouse is a PointerEvent with correct properties when no other PointerEvent listeners are present",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "pointerevents/pointerevent_contextmenu_is_a_pointerevent.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "contextmenu using touch is a PointerEvent with correct properties",
+          "status": "timeout"
+        },
+        {
+          "name": "contextmenu using touch is a PointerEvent with correct properties when no other PointerEvent listeners are present",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "pointerevents/pointerevent_disabled_form_control.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_disabled_form_control.html?pen": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_disabled_form_control.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_element_haspointercapture.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "hasPointerCapture",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_element_haspointercapture.html?pen": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "hasPointerCapture",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_element_haspointercapture.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "hasPointerCapture",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_element_haspointercapture_release_pending_capture.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "hasPointerCapture test after the pending pointer capture element releases pointer capture",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_element_haspointercapture_release_pending_capture.html?pen": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "hasPointerCapture test after the pending pointer capture element releases pointer capture",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_element_haspointercapture_release_pending_capture.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "hasPointerCapture test after the pending pointer capture element releases pointer capture",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_fractional_coordinates.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_fractional_coordinates.html?pen": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_fractional_coordinates.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_fractional_coordinates_untrusted.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "PointerEvent.pointerdown.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerdown.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerdown.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerdown.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerdown.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerdown.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerdown.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerdown.offsetY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerup.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerup.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerup.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerup.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerup.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerup.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerup.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerup.offsetY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointermove.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointermove.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointermove.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointermove.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointermove.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointermove.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointermove.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointermove.offsetY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointercancel.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointercancel.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointercancel.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointercancel.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointercancel.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointercancel.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointercancel.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointercancel.offsetY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.gotpointercapture.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.gotpointercapture.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.gotpointercapture.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.gotpointercapture.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.gotpointercapture.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.gotpointercapture.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.gotpointercapture.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.gotpointercapture.offsetY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.lostpointercapture.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.lostpointercapture.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.lostpointercapture.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.lostpointercapture.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.lostpointercapture.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.lostpointercapture.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.lostpointercapture.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.lostpointercapture.offsetY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerrawupdate.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerrawupdate.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerrawupdate.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerrawupdate.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerrawupdate.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerrawupdate.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerrawupdate.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerrawupdate.offsetY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerover.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerover.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerover.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerover.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerover.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerover.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerover.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerover.offsetY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerout.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerout.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerout.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerout.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerout.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerout.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerout.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerout.offsetY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerenter.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerenter.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerenter.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerenter.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerenter.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerenter.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerenter.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerenter.offsetY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerleave.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerleave.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerleave.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerleave.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.pointerleave.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerleave.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerleave.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.pointerleave.offsetY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.foo.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.foo.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.foo.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.foo.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.foo.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.foo.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.foo.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.foo.offsetY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.click.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.click.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.click.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.click.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.click.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.click.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.click.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.click.offsetY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.auxclick.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.auxclick.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.auxclick.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.auxclick.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.auxclick.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.auxclick.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.auxclick.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.auxclick.offsetY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.contextmenu.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.contextmenu.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.contextmenu.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.contextmenu.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "PointerEvent.contextmenu.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.contextmenu.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.contextmenu.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "PointerEvent.contextmenu.offsetY",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.click.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.click.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.click.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.click.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.click.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.click.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.click.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.click.offsetY",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.auxclick.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.auxclick.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.auxclick.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.auxclick.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.auxclick.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.auxclick.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.auxclick.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.auxclick.offsetY",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.contextmenu.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.contextmenu.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.contextmenu.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.contextmenu.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.contextmenu.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.contextmenu.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.contextmenu.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.contextmenu.offsetY",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mousedown.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mousedown.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mousedown.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mousedown.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mousedown.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mousedown.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mousedown.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mousedown.offsetY",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mousemove.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mousemove.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mousemove.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mousemove.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mousemove.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mousemove.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mousemove.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mousemove.offsetY",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mouseup.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mouseup.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mouseup.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mouseup.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mouseup.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mouseup.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mouseup.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mouseup.offsetY",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mouseover.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mouseover.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mouseover.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mouseover.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mouseover.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mouseover.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mouseover.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mouseover.offsetY",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mouseout.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mouseout.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mouseout.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mouseout.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mouseout.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mouseout.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mouseout.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mouseout.offsetY",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mouseenter.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mouseenter.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mouseenter.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mouseenter.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mouseenter.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mouseenter.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mouseenter.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mouseenter.offsetY",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mouseleave.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mouseleave.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mouseleave.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mouseleave.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.mouseleave.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mouseleave.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mouseleave.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.mouseleave.offsetY",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.dblclick.screenX",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.dblclick.screenY",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.dblclick.clientX",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.dblclick.clientY",
+          "status": "pass"
+        },
+        {
+          "name": "MouseEvent.dblclick.pageX",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.dblclick.pageY",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.dblclick.offsetX",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent.dblclick.offsetY",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 104,
+      "subtests_total": 208
+    },
+    "pointerevents/pointerevent_hit_test_scroll.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Wheel-scroll over pointer-events: none scroller skips that scroller",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_hit_test_scroll_visible_descendant.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Wheel-scroll over pointer-events: auto descendant scrolls pointer-events: none scroller.",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_iframe-touch-action-none_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "touch iframe received pointercancel",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_lostpointercapture_for_disconnected_node.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "lostpointercapture event received",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_lostpointercapture_for_disconnected_node_in_shadow_dom.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_lostpointercapture_for_disconnected_shadow_host.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_lostpointercapture_is_first.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "lostpointercapture is dispatched prior to subsequent events",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_lostpointercapture_remove_setcapture_node.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "setPointerCapture target removed by lostpointercapture",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_mouse_capture_change_hover.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_mouse_pointercapture_inactivate_pointer.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_movementxy.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_movementxy.html?pen": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_movementxy.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_multiple_pointerover_no_pointer_movement.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Pointer boundary events should be fired per pointer",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_multiple_primary_pointers_boundary_events-manual.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "pointerevents/pointerevent_on_event_handlers.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "The default value of onpointerdown is always null",
+          "status": "pass"
+        },
+        {
+          "name": "The onpointerdown content attribute must be compiled into the onpointerdown property",
+          "status": "fail"
+        },
+        {
+          "name": "dispatching a pointerdown event must trigger element.onpointerdown",
+          "status": "pass"
+        },
+        {
+          "name": "The default value of onpointerup is always null",
+          "status": "pass"
+        },
+        {
+          "name": "The onpointerup content attribute must be compiled into the onpointerup property",
+          "status": "fail"
+        },
+        {
+          "name": "dispatching a pointerup event must trigger element.onpointerup",
+          "status": "pass"
+        },
+        {
+          "name": "The default value of onpointercancel is always null",
+          "status": "pass"
+        },
+        {
+          "name": "The onpointercancel content attribute must be compiled into the onpointercancel property",
+          "status": "fail"
+        },
+        {
+          "name": "dispatching a pointercancel event must trigger element.onpointercancel",
+          "status": "pass"
+        },
+        {
+          "name": "The default value of onpointermove is always null",
+          "status": "pass"
+        },
+        {
+          "name": "The onpointermove content attribute must be compiled into the onpointermove property",
+          "status": "fail"
+        },
+        {
+          "name": "dispatching a pointermove event must trigger element.onpointermove",
+          "status": "pass"
+        },
+        {
+          "name": "The default value of onpointerover is always null",
+          "status": "pass"
+        },
+        {
+          "name": "The onpointerover content attribute must be compiled into the onpointerover property",
+          "status": "fail"
+        },
+        {
+          "name": "dispatching a pointerover event must trigger element.onpointerover",
+          "status": "pass"
+        },
+        {
+          "name": "The default value of onpointerout is always null",
+          "status": "pass"
+        },
+        {
+          "name": "The onpointerout content attribute must be compiled into the onpointerout property",
+          "status": "fail"
+        },
+        {
+          "name": "dispatching a pointerout event must trigger element.onpointerout",
+          "status": "pass"
+        },
+        {
+          "name": "The default value of onpointerenter is always null",
+          "status": "pass"
+        },
+        {
+          "name": "The onpointerenter content attribute must be compiled into the onpointerenter property",
+          "status": "fail"
+        },
+        {
+          "name": "dispatching a pointerenter event must trigger element.onpointerenter",
+          "status": "pass"
+        },
+        {
+          "name": "The default value of onpointerleave is always null",
+          "status": "pass"
+        },
+        {
+          "name": "The onpointerleave content attribute must be compiled into the onpointerleave property",
+          "status": "fail"
+        },
+        {
+          "name": "dispatching a pointerleave event must trigger element.onpointerleave",
+          "status": "pass"
+        },
+        {
+          "name": "The default value of ongotpointercapture is always null",
+          "status": "pass"
+        },
+        {
+          "name": "The ongotpointercapture content attribute must be compiled into the ongotpointercapture property",
+          "status": "fail"
+        },
+        {
+          "name": "dispatching a gotpointercapture event must trigger element.ongotpointercapture",
+          "status": "pass"
+        },
+        {
+          "name": "The default value of onlostpointercapture is always null",
+          "status": "pass"
+        },
+        {
+          "name": "The onlostpointercapture content attribute must be compiled into the onlostpointercapture property",
+          "status": "fail"
+        },
+        {
+          "name": "dispatching a lostpointercapture event must trigger element.onlostpointercapture",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 20,
+      "subtests_total": 30
+    },
+    "pointerevents/pointerevent_pointerId_scope.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_pointer_boundary_events_after_reappending_last_over_target.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "After re-appending the last over element at pointerover, pointer boundary events should be fired on the original target again",
+          "status": "fail"
+        },
+        {
+          "name": "After re-appending the last over element at pointerenter, pointer boundary events should be fired on the original target again",
+          "status": "fail"
+        },
+        {
+          "name": "After re-appending the last over element after pointerover, pointer boundary events should be fired on the original target again",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "pointerevents/pointerevent_pointer_boundary_events_after_removing_last_over_element.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "After removing the last over element, redundant pointerenter events should not be fired on the ancestors",
+          "status": "fail"
+        },
+        {
+          "name": "After removing the root element in the shadow under the cursor, pointerleave events should be targeted outside the shadow, but redundant pointerenter events should not be fired",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "pointerevents/pointerevent_pointercancel_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointercancel event received",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_pointercapture-in-custom-element.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_pointercapture-in-shadow-dom.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_pointercapture-not-lost-in-chorded-buttons.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Pointer Events Capture Test - capture not lost due to chorded buttons interaction",
+          "status": "timeout"
+        },
+        {
+          "name": "Pointer Events Capture Test - capture not lost due to combination of left and right chorded buttons interaction.",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "pointerevents/pointerevent_pointercapture_in_frame.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_pointercapture_in_frame.html?pen": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_pointercapture_in_frame.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_pointerenter_does_not_bubble.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointerEnter event does not bubble",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_pointerleave_after_pointercancel_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointerleave event received",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_pointerleave_descendant_over.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointerleave shouldn't be received on descendant's pointerover",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_pointerleave_descendants.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_pointerleave_does_not_bubble.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointerLeave event does not bubble",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_pointerleave_pen-manual.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "pointerevents/pointerevent_pointermove.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointermove event received",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_pointermove_after_pointerup_target_removed.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointermove after pointerup which deletes the overlay should not keep expanding selection",
+          "status": "pass"
+        },
+        {
+          "name": "pointermove after pointerup which deletes the overlay and move focus to the button should not keep expanding selection",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 2
+    },
+    "pointerevents/pointerevent_pointermove_isprimary_same_as_pointerdown.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointermove has same isPrimary as last pointerdown",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_pointermove_isprimary_same_as_pointerdown.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointermove has same isPrimary as last pointerdown",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_pointermove_on_chorded_mouse_button.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointermove events received for button state changes",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_pointerout_after_pointercancel_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointerout event received",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_pointerout_no_pointer_movement.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Layout change under a stationary pointer (a new element appears) fires boundary events and no pointermove event",
+          "status": "fail"
+        },
+        {
+          "name": "Layout change under a stationary pointer (the element disappears) fires boundary events and no pointermove event",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "pointerevents/pointerevent_pointerout_pen.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointerout event received",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_pointerout_received_once.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_pointerrawupdate.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "pointerrawupdate event is not fired",
+          "status": "fail"
+        },
+        {
+          "name": "onpointerrawupdate is not exposed",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 2
+    },
+    "pointerevents/pointerevent_pointerrawupdate.https.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "pointerrawupdate event is fired",
+          "status": "fail"
+        },
+        {
+          "name": "onpointerrawupdate is exposed",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "pointerevents/pointerevent_pointerrawupdate_after_adoption_from_child.https.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "`pointerrawupdate` events should be fired after the element is moved from the parent doc to a child doc",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_pointerrawupdate_after_adoption_from_parent.https.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "`pointerrawupdate` events should be fired after the element is moved from a child doc to the parent doc",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_pointerrawupdate_changes_pointer_capture.https.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Setting pointer capture at `pointerdown` and releasing pointer capture at `pointerrawupdate`",
+          "status": "fail"
+        },
+        {
+          "name": "Setting pointer capture at `pointerrawupdate`",
+          "status": "timeout"
+        },
+        {
+          "name": "Setting pointer capture at `pointerdown` and releasing pointer capture at `gotpointercapture`",
+          "status": "not-run"
+        },
+        {
+          "name": "Setting pointer capture at `lostpointercapture`",
+          "status": "not-run"
+        },
+        {
+          "name": "Test for handling of \"fire a pointer event named pointerrawupdate\"",
+          "status": "not-run"
+        },
+        {
+          "name": "Setting pointer capture at `pointerdown` and releasing pointer capture at `gotpointercapture` when no `pointerrawupdate` event listener",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 6
+    },
+    "pointerevents/pointerevent_pointerrawupdate_coalesced_events_attributes.https.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Simple test for getCoalescedEvents() of `pointerrawupdate`",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_pointerrawupdate_coalesced_events_attributes.https.html?pen": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Simple test for getCoalescedEvents() of `pointerrawupdate`",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_pointerrawupdate_coalesced_events_attributes.https.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Simple test for getCoalescedEvents() of `pointerrawupdate`",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_pointerrawupdate_flush_pointercapture.https.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Pointer capture state should be updated before `pointerrawupdate`",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_pointerrawupdate_remove_target.https.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "\"pointermove\" and its preceding boundary events should be fired on parent if \"pointerrawupdate\" event listener removes its target",
+          "status": "timeout"
+        },
+        {
+          "name": "\"pointermove\" and its preceding boundary events should be fired on ancestor if \"pointerrawupdate\" event listener removes its target parent",
+          "status": "not-run"
+        },
+        {
+          "name": "\"pointermove\" and its preceding boundary events should be fired on parent if \"pointerrawupdate\" event listener removes its document",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "pointerevents/pointerevent_predicted_coalesced_targets-manual.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "pointerevents/pointerevent_range_input.html?mouse": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Horizontal drag on a horizontal slider.",
+          "status": "fail"
+        },
+        {
+          "name": "Vertical drag on a horizontal slider.",
+          "status": "fail"
+        },
+        {
+          "name": "Vertical drag on a horizontal slider with touch-action:none.",
+          "status": "fail"
+        },
+        {
+          "name": "Vertical drag on a vertical slider.",
+          "status": "fail"
+        },
+        {
+          "name": "Horizontal drag on a vertical slider.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 5
+    },
+    "pointerevents/pointerevent_range_input.html?touch": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Horizontal drag on a horizontal slider.",
+          "status": "fail"
+        },
+        {
+          "name": "Vertical drag on a horizontal slider.",
+          "status": "fail"
+        },
+        {
+          "name": "Vertical drag on a horizontal slider with touch-action:none.",
+          "status": "fail"
+        },
+        {
+          "name": "Vertical drag on a vertical slider.",
+          "status": "fail"
+        },
+        {
+          "name": "Horizontal drag on a vertical slider.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 5
+    },
+    "pointerevents/pointerevent_releasepointercapture_events_to_original_target.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_releasepointercapture_events_to_original_target.html?pen": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_releasepointercapture_events_to_original_target.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_releasepointercapture_invalid_pointerid.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "releasePointerCapture: DOMException NotFoundError",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_releasepointercapture_onpointercancel_touch.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointer capture is released on pointercancel",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_releasepointercapture_onpointerup_mouse.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_releasepointercapture_pointerup_mouse.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_releasepointercapture_pointerup_touch.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "releasePointerCapture on pointerup",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_releasepointercapture_release_right_after_capture.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Release pointer capture right after setpointercapture",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_releasepointercapture_release_right_after_capture.html?pen": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Release pointer capture right after setpointercapture",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_releasepointercapture_release_right_after_capture.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Release pointer capture right after setpointercapture",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_root_computed_style.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "pointerevent_root_computed_style",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_root_hit_test.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "pointerevent_root_hit_test",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_sequence_at_implicit_release_on_click.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_sequence_at_implicit_release_on_click.html?pen": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_sequence_at_implicit_release_on_click.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_sequence_at_implicit_release_on_drag.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_setpointercapture_disconnected.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "setPointerCapture: DOMException InvalidStateError",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_setpointercapture_inactive_button_mouse.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "setPointerCapture + inactive button state",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_setpointercapture_invalid_pointerid.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "setPointerCapture: DOMException NotFoundError",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_setpointercapture_override_pending_capture_element.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "setPointerCapture: override the pending pointer capture element",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_setpointercapture_override_pending_capture_element.html?pen": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "setPointerCapture: override the pending pointer capture element",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_setpointercapture_override_pending_capture_element.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "setPointerCapture: override the pending pointer capture element",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_setpointercapture_pointerup_mouse.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_setpointercapture_pointerup_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "setPointerCapture on pointerup",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_setpointercapture_relatedtarget.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_setpointercapture_to_same_element_twice.html?mouse": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "A repeated setPointerCapture call does not redispatch capture events",
+          "status": "fail"
+        },
+        {
+          "name": "A failed setPointerCapture call does not affect existing capture",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "pointerevents/pointerevent_setpointercapture_to_same_element_twice.html?pen": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "A repeated setPointerCapture call does not redispatch capture events",
+          "status": "fail"
+        },
+        {
+          "name": "A failed setPointerCapture call does not affect existing capture",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "pointerevents/pointerevent_setpointercapture_to_same_element_twice.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "A repeated setPointerCapture call does not redispatch capture events",
+          "status": "timeout"
+        },
+        {
+          "name": "A failed setPointerCapture call does not affect existing capture",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "pointerevents/pointerevent_suppress_compat_events_on_click.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Suppress compat mouse events on click",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_suppress_compat_events_on_drag_mouse.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Suppress compat mouse events on drag",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_target_at_clicking_link_in_image_map.html?capture=": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Event targets of clicking a link in an image map",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_target_at_clicking_link_in_image_map.html?capture=area": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Event targets of clicking a link in an image map",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_tiltX_tiltY_to_azimuth_altitude.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "tiltX,tiltY to azimuth/altitude when tiltX=0 and tiltY=0",
+          "status": "fail"
+        },
+        {
+          "name": "tiltX,tiltY to azimuth/altitude when tiltX=0 and tiltY=90",
+          "status": "fail"
+        },
+        {
+          "name": "tiltX,tiltY to azimuth/altitude when tiltX=0 and tiltY=-90",
+          "status": "fail"
+        },
+        {
+          "name": "tiltX,tiltY to azimuth/altitude when tiltX=90 and tiltY=0",
+          "status": "fail"
+        },
+        {
+          "name": "tiltX,tiltY to azimuth/altitude when tiltX=90 and tiltY=90",
+          "status": "fail"
+        },
+        {
+          "name": "tiltX,tiltY to azimuth/altitude when tiltX=90 and tiltY=-90",
+          "status": "fail"
+        },
+        {
+          "name": "tiltX,tiltY to azimuth/altitude when tiltX=-90 and tiltY=0",
+          "status": "fail"
+        },
+        {
+          "name": "tiltX,tiltY to azimuth/altitude when tiltX=-90 and tiltY=90",
+          "status": "fail"
+        },
+        {
+          "name": "tiltX,tiltY to azimuth/altitude when tiltX=-90 and tiltY=-90",
+          "status": "fail"
+        },
+        {
+          "name": "tiltX,tiltY to azimuth/altitude when tiltX=0 and tiltY=45",
+          "status": "fail"
+        },
+        {
+          "name": "tiltX,tiltY to azimuth/altitude when tiltX=0 and tiltY=-45",
+          "status": "fail"
+        },
+        {
+          "name": "tiltX,tiltY to azimuth/altitude when tiltX=45 and tiltY=0",
+          "status": "fail"
+        },
+        {
+          "name": "tiltX,tiltY to azimuth/altitude when tiltX=-45 and tiltY=0",
+          "status": "fail"
+        },
+        {
+          "name": "tiltX/tiltY to azimuth/altitude when tiltX/tiltY are not populated",
+          "status": "fail"
+        },
+        {
+          "name": "azimuth/altitude to tiltX/tiltY when azimuth=0 and altitude=0",
+          "status": "fail"
+        },
+        {
+          "name": "azimuth/altitude to tiltX/tiltY when azimuth=0 and altitude=0.7853981633974483",
+          "status": "fail"
+        },
+        {
+          "name": "azimuth/altitude to tiltX/tiltY when azimuth=0 and altitude=1.5707963267948966",
+          "status": "pass"
+        },
+        {
+          "name": "azimuth/altitude to tiltX/tiltY when azimuth=1.5707963267948966 and altitude=0",
+          "status": "fail"
+        },
+        {
+          "name": "azimuth/altitude to tiltX/tiltY when azimuth=1.5707963267948966 and altitude=0.7853981633974483",
+          "status": "fail"
+        },
+        {
+          "name": "azimuth/altitude to tiltX/tiltY when azimuth=3.141592653589793 and altitude=0",
+          "status": "fail"
+        },
+        {
+          "name": "azimuth/altitude to tiltX/tiltY when azimuth=3.141592653589793 and altitude=0.7853981633974483",
+          "status": "fail"
+        },
+        {
+          "name": "azimuth/altitude to tiltX/tiltY when azimuth=4.71238898038469 and altitude=0",
+          "status": "fail"
+        },
+        {
+          "name": "azimuth/altitude to tiltX/tiltY when azimuth=4.71238898038469 and altitude=0.7853981633974483",
+          "status": "fail"
+        },
+        {
+          "name": "If only one of the values (tiltX, tiltY) or (azimuthAngle, altitudeAngle) is available the other one is set to the default value",
+          "status": "fail"
+        },
+        {
+          "name": "If one of the values in both sets is provided, the other value in the set is initialized with the default value",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 25
+    },
+    "pointerevents/pointerevent_to_slotted_target.html?mouse": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Pointer events from mouse to slotted element and shadow-host",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_to_slotted_target.html?pen": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Pointer events from pen to slotted element and shadow-host",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_to_slotted_target.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Pointer events from touch to slotted element and shadow-host",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_touch-action-auto-css_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_touch-action-button-none-test_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_touch-action-illegal.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_touch-action-inherit_child-auto-child-none_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "touch-action attribute test",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_touch-action-inherit_child-none_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "touch-action attribute test",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_touch-action-inherit_child-pan-x-child-pan-x_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "touch-action attribute test",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_touch-action-inherit_child-pan-x-child-pan-y_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "touch-action attribute test",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_touch-action-inherit_highest-parent-none_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_touch-action-inherit_parent-none_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_touch-action-keyboard.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_touch-action-modified_touch.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "No scrolling after deleting touch-action:none after pointerdown",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_touch-action-mouse.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_touch-action-none-css_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "touch-action attribute test",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_touch-action-none-on-body-when-style-propagates-to-viewport_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_touch-action-pan-down-css_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "touch-action attribute test",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_touch-action-pan-left-css_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "touch-action attribute test",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_touch-action-pan-right-css_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "touch-action attribute test",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_touch-action-pan-up-css_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "touch-action attribute test",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_touch-action-pan-x-css_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "touch-action attribute test",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_touch-action-pan-x-pan-y-pan-y_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "touch-action attribute test",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_touch-action-pan-x-pan-y_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_touch-action-pan-y-css_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "touch-action attribute test",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_touch-action-rotated-divs_touch-manual.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "pointerevents/pointerevent_touch-action-span-none-test_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_touch-action-svg-none-test_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_touch-action-table-none-test_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_touch-action-verification.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerevent_touch-adjustment_click_target.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Touch-generated events should have the same target",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerevent_touch-propagates-when-target-is-video_touch.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Touch-generated events should propagate to the parent when a video element is the target",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerlock/pointerevent_coordinates_when_locked.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerlock/pointerevent_getCoalescedEvents_when_pointerlocked.https.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerlock/pointerevent_getPredictedEvents_when_pointerlocked-manual.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "pointerevents/pointerlock/pointerevent_movementxy_with_pointerlock.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerlock/pointerevent_pointerlock_after_pointercapture.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerlock/pointerevent_pointerlock_supercedes_capture.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "pointerevents/pointerlock/pointerevent_pointermove_in_pointerlock.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointermove event received",
+          "status": "not-run"
+        },
+        {
+          "name": "pointermove event received inner frame",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "pointerevents/pointerlock/pointerevent_pointermove_on_chorded_mouse_button_when_locked.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointer locked pointermove events received for button state changes",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerlock/pointerevent_pointerrawupdate_in_pointerlock.https.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointerrawupdate event received",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointermove_after_pointerover_target_removed.tentative.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "\"pointermove\" should not be fired when the preceding \"pointerover\" caused removing its target",
+          "status": "fail"
+        },
+        {
+          "name": "\"pointermove\" should not be fired when the preceding \"pointerover\" caused replacing its target",
+          "status": "fail"
+        },
+        {
+          "name": "\"pointermove\" should not be fired when the preceding \"pointerover\" caused removing the parent of its target",
+          "status": "fail"
+        },
+        {
+          "name": "\"pointermove\" should not be fired when the preceding \"pointerover\" caused replacing the parent of its target",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "pointerevents/pointerup_after_pointerdown_target_removed.html?mouse": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "pointerup event from mouse fired after pointerdown target is removed",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerup_after_pointerdown_target_removed.html?pen": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "pointerup event from pen fired after pointerdown target is removed",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerup_after_pointerdown_target_removed.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "pointerup event from touch fired after pointerdown target is removed",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "pointerevents/pointerup_button_value_matches_corresponding_pointerdown.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Test that the 'button' property of a pointerup event matches the 'button' property of the corresponding pointerdown event",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "pointerevents/predicted_events_attributes.html?mouse": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Predicted list in boundary events",
+          "status": "timeout"
+        },
+        {
+          "name": "Predicted list in pointer-capture events",
+          "status": "not-run"
+        },
+        {
+          "name": "Predicted list in pointerdown/move/up events",
+          "status": "not-run"
+        },
+        {
+          "name": "Predicted list in pointercancel event",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "pointerevents/predicted_events_attributes.html?pen": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Predicted list in boundary events",
+          "status": "timeout"
+        },
+        {
+          "name": "Predicted list in pointer-capture events",
+          "status": "not-run"
+        },
+        {
+          "name": "Predicted list in pointerdown/move/up events",
+          "status": "not-run"
+        },
+        {
+          "name": "Predicted list in pointercancel event",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "pointerevents/predicted_events_attributes.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Predicted list in boundary events",
+          "status": "timeout"
+        },
+        {
+          "name": "Predicted list in pointer-capture events",
+          "status": "not-run"
+        },
+        {
+          "name": "Predicted list in pointerdown/move/up events",
+          "status": "not-run"
+        },
+        {
+          "name": "Predicted list in pointercancel event",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "pointerevents/touch-action-with-swipe-dir-change.html?touch": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "touch-action:auto with right,down swipe",
+          "status": "timeout"
+        },
+        {
+          "name": "touch-action:auto with down,right swipe",
+          "status": "not-run"
+        },
+        {
+          "name": "touch-action:pan-x with right,down swipe",
+          "status": "not-run"
+        },
+        {
+          "name": "touch-action:pan-x with down,right swipe",
+          "status": "not-run"
+        },
+        {
+          "name": "touch-action:pan-y with right,down swipe",
+          "status": "not-run"
+        },
+        {
+          "name": "touch-action:pan-y with down,right swipe",
+          "status": "not-run"
+        },
+        {
+          "name": "touch-action:none with right,down swipe",
+          "status": "not-run"
+        },
+        {
+          "name": "touch-action:none with down,right swipe",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 8
+    }
+  },
+  "version": 1
+}

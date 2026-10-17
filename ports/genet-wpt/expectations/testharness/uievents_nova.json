@@ -1,0 +1,954 @@
+{
+  "command": "testharness",
+  "engine": "nova",
+  "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
+  "policy": "exact",
+  "renderer": "livery",
+  "runner_sha256": "f89342870cbc035714f6f1511a05e09b036938dc24562949371c7d16c11d66a7",
+  "subset": "uievents",
+  "tests": {
+    "uievents/click/auxclick_event.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "auxclick event sequence received.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "uievents/click/click_event_target_child_parent.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Click targets the nearest common ancestor",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "uievents/click/click_event_target_siblings.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Click targets the nearest common ancestor",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "uievents/click/click_events_on_input.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Test click and auxclick on input element",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "uievents/click/contextmenu_event.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Test contextmenu dispatched after mousedown",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "uievents/click/dblclick_event_mouse.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "dblclick event for the mouse pointer type",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "uievents/click/dblclick_event_on_text_control_inputs.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "dblclick event on a text input",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "uievents/constructors/inputevent-constructor.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "InputEvent constructor without InputEventInit.",
+          "status": "fail"
+        },
+        {
+          "name": "InputEvent construtor with InputEventInit where data is null",
+          "status": "fail"
+        },
+        {
+          "name": "InputEvent construtor with InputEventInit where data is empty string",
+          "status": "fail"
+        },
+        {
+          "name": "InputEvent construtor with InputEventInit where data is non empty string",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "uievents/historical.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "WheelEvent#initWheelEvent",
+          "status": "pass"
+        },
+        {
+          "name": "WheelEvent#initWebKitWheelEvent",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 2
+    },
+    "uievents/idlharness.window.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "idl_test setup",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "uievents/interface/click-event-manual.htm": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "uievents/interface/click-event.htm": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "synthetic click event is a PointerEvent",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "uievents/interface/dblclick-event-manual.htm": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "uievents/interface/keyboard-accesskey-click-event.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Test that the Keyboard generated click does not fire pointer or mouse events for button",
+          "status": "timeout"
+        },
+        {
+          "name": "Test that the Keyboard generated click does not fire pointer or mouse events for inputbutton",
+          "status": "not-run"
+        },
+        {
+          "name": "Test that the Keyboard generated click does not fire pointer or mouse events for label",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "uievents/interface/keyboard-click-event.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Test that the Keyboard generated click does not fire pointer or mouse events for button when pressing space key",
+          "status": "timeout"
+        },
+        {
+          "name": "Test that the Keyboard generated click does not fire pointer or mouse events for inputbutton when pressing space key",
+          "status": "not-run"
+        },
+        {
+          "name": "Test that the Keyboard generated click does not fire pointer or mouse events for button when pressing enter key",
+          "status": "not-run"
+        },
+        {
+          "name": "Test that the Keyboard generated click does not fire pointer or mouse events for inputbutton when pressing enter key",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "uievents/keyboard/key-101en-us-manual.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "uievents/keyboard/key-102fr-fr-manual.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "uievents/keyboard/keyboardevent-composed.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "uievents/keyboard/keyboardevent-legacy.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "KeyboardEvent constructor should initialize legacy keyCode and charCode",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "uievents/keyboard/keypress-not-fired-for-modifier-shortcuts.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "uievents/keyboard/modifier-keys-combinations.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "uievents/keyboard/modifier-keys.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "uievents/legacy-domevents-tests/approved/dispatchEvent.click.checkbox.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Checkbox state is unchanged before the synthetic click event is dispatched",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "uievents/legacy-domevents-tests/approved/stopImmediatePropagation.effect.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Test Description: stopImmediatePropagation() prevents other event listeners from being triggered and, unlike Event.stopPropagation(), its effect must be immediate. Once it has been called, further calls to this method have no additional effect.",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "uievents/legacy-domevents-tests/approved/stopPropagation.deferred.effect.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Test Description: stopPropagation() prevents other event listeners from being triggered but its effect must be deferred until all event listeners attached on the Event.currentTarget have been triggered.",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "uievents/legacy-domevents-tests/submissions/Microsoft/converted/EventListener.dispatch.new.event.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Test Description: Implementations of the DOM event model must be reentrant. Event listeners may perform actions that cause additional events to be dispatched. Such events are handled in a synchronous manner, the event propagation that causes the event listener to be triggered must resume only after the event dispatch of the new event is completed.",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "uievents/legacy/Event-subclasses-init.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Call initUIEvent without parameters",
+          "status": "fail"
+        },
+        {
+          "name": "Call initMouseEvent without parameters",
+          "status": "fail"
+        },
+        {
+          "name": "Call initKeyboardEvent without parameters",
+          "status": "fail"
+        },
+        {
+          "name": "Call initCompositionEvent without parameters",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "uievents/mouse/attributes.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "MouseEvent attributes",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "uievents/mouse/cancel-mousedown-in-subframe.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Child frame receives mousedown/mouseup when mousedown is not-canceled",
+          "status": "timeout"
+        },
+        {
+          "name": "Child frame receives mousedown/mouseup when mousedown is canceled",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "uievents/mouse/crashtests/retrieve_coords_after_moving_target_outside_subdoc_and_hide_the_subdoc.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "uievents/mouse/layer-coords-transform.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "uievents/mouse/layout_change_should_fire_mouseover.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Tests that the mouseover event is fired and the element has a hover effect when the element underneath the mouse cursor is changed.",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "uievents/mouse/mouse_boundary_events_after_reappending_last_over_target.tentative.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "After re-appending the last over element at mouseover, mouse boundary events should be fired as just over on the target",
+          "status": "fail"
+        },
+        {
+          "name": "After re-appending the last over element at mouseenter, mouse boundary events should not be fired",
+          "status": "fail"
+        },
+        {
+          "name": "After re-appending the last over element after mouseover, mouse boundary events should not be fired",
+          "status": "fail"
+        },
+        {
+          "name": "After re-appending the last over element to outside the deepest mouseenter target (but keeps it as under the cursor) at mouseover, mouse boundary events should be fired on it again to correct the following mouseleave targets",
+          "status": "fail"
+        },
+        {
+          "name": "After re-appending the last over element to outside the deepest mouseenter target at mouseover, mouse boundary events should be fired only on the element under the cursor",
+          "status": "fail"
+        },
+        {
+          "name": "After re-appending the last over element to the deepest mouseenter target without the original parent at mouseover, mouse boundary events should not be fired",
+          "status": "fail"
+        },
+        {
+          "name": "After re-appending the last over element to outside the deepest mouseenter target (but keeps under the cursor) after mouseover, mouse boundary events should be fired on it again to correct the following mouseleave event targets",
+          "status": "fail"
+        },
+        {
+          "name": "After re-appending the last over element to outside the deepest mouseenter target after mouseover, mouse boundary events should be fired only on the element under the cursor",
+          "status": "fail"
+        },
+        {
+          "name": "After re-appending the last over element to the deepest mouseenter target without the original parent after mouseover, mouse boundary events should not be fired",
+          "status": "fail"
+        },
+        {
+          "name": "After removing and re-appending the last over element with flushing layout after mouseover, mouse boundary events should not be fired",
+          "status": "fail"
+        },
+        {
+          "name": "After removing after mouseover and re-appending the last over element at next animation frame, mouse boundary events should be fired",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 11
+    },
+    "uievents/mouse/mouse_boundary_events_after_removing_last_over_element.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "After removing the last over element, redundant mouseenter events should not be fired on the ancestors",
+          "status": "fail"
+        },
+        {
+          "name": "After removing the root element in the shadow under the cursor, mouseleave events should be targeted outside the shadow, but redundant mouseenter events should not be fired",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "uievents/mouse/mouse_boundary_events_modifier_no_mouse_movement.html?Alt": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Test altKey of mouse boundary events (modifiers are changed before move)",
+          "status": "pass"
+        },
+        {
+          "name": "Test altKey of mouse boundary events (modifiers are changed after move)",
+          "status": "timeout"
+        },
+        {
+          "name": "Test altKey of mouse boundary events (modifiers are changed before move): altKey of mouseover should be true",
+          "status": "fail"
+        },
+        {
+          "name": "Test altKey of mouse boundary events (modifiers are changed before move): altKey of mouseout should be true",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 4
+    },
+    "uievents/mouse/mouse_boundary_events_modifier_no_mouse_movement.html?Control": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Test ctrlKey of mouse boundary events (modifiers are changed before move)",
+          "status": "pass"
+        },
+        {
+          "name": "Test ctrlKey of mouse boundary events (modifiers are changed after move)",
+          "status": "timeout"
+        },
+        {
+          "name": "Test ctrlKey of mouse boundary events (modifiers are changed before move): ctrlKey of mouseover should be true",
+          "status": "fail"
+        },
+        {
+          "name": "Test ctrlKey of mouse boundary events (modifiers are changed before move): ctrlKey of mouseout should be true",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 4
+    },
+    "uievents/mouse/mouse_boundary_events_modifier_no_mouse_movement.html?Meta": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Test metaKey of mouse boundary events (modifiers are changed before move)",
+          "status": "pass"
+        },
+        {
+          "name": "Test metaKey of mouse boundary events (modifiers are changed after move)",
+          "status": "timeout"
+        },
+        {
+          "name": "Test metaKey of mouse boundary events (modifiers are changed before move): metaKey of mouseover should be true",
+          "status": "fail"
+        },
+        {
+          "name": "Test metaKey of mouse boundary events (modifiers are changed before move): metaKey of mouseout should be true",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 4
+    },
+    "uievents/mouse/mouse_boundary_events_modifier_no_mouse_movement.html?Shift": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Test shiftKey of mouse boundary events (modifiers are changed before move)",
+          "status": "pass"
+        },
+        {
+          "name": "Test shiftKey of mouse boundary events (modifiers are changed after move)",
+          "status": "timeout"
+        },
+        {
+          "name": "Test shiftKey of mouse boundary events (modifiers are changed before move): shiftKey of mouseover should be true",
+          "status": "fail"
+        },
+        {
+          "name": "Test shiftKey of mouse boundary events (modifiers are changed before move): shiftKey of mouseout should be true",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 4
+    },
+    "uievents/mouse/mouse_boundary_events_on_image_map.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "mouse boundary events when simple over/out",
+          "status": "fail"
+        },
+        {
+          "name": "mouse boundary events when moved from an <area> to the same <area> shared by another <img>",
+          "status": "timeout"
+        },
+        {
+          "name": "mouse boundary events when the <area> is resized",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse boundary events when both <area> and <img> are resized",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse boundary events when usemap is modified",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse boundary events when usemap is modified and <img> is resized",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse boundary events when new <area> is available",
+          "status": "not-run"
+        },
+        {
+          "name": "mouse boundary events when new <area> is available and the <img> is resized",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 8
+    },
+    "uievents/mouse/mouse_buttons_back_forward.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Tests that the mouseup is preventable.",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "uievents/mouse/mouseenter-mouseleave-on-drag.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Test dragging across inner div",
+          "status": "fail"
+        },
+        {
+          "name": "Test dragging into inner div",
+          "status": "timeout"
+        },
+        {
+          "name": "Test dragging out of inner div",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "uievents/mouse/mouseevent_move_button.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "mouse events fired without button state",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "uievents/mouse/mousemove-action-interpolation.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Mousemove should transition smoothly over specified duration",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "uievents/mouse/mousemove_after_mouseover_target_removed.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "\"mousemove\" should be fired on the parent of \"mouseover\" target which was removed at \"mouseover\"",
+          "status": "fail"
+        },
+        {
+          "name": "\"mousemove\" should be fired on the parent of \"mouseover\" target which was replaced at \"mouseover\" (rather than new child)",
+          "status": "fail"
+        },
+        {
+          "name": "\"mousemove\" should be fired on the grandparent of \"mouseover\" target which was removed at \"mouseover\" with the parent",
+          "status": "fail"
+        },
+        {
+          "name": "\"mousemove\" should be fired on the grandparent of \"mouseover\" target which was replaced at \"mouseover\" with the parent",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "uievents/mouse/mousemove_prevent_default_action.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "selectionchange event firing when mousemove event is prevented",
+          "status": "fail"
+        },
+        {
+          "name": "dragstart event firing when mousemove event is prevented",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "uievents/mouse/mouseover-at-removing-mousedown-target.html?duration=16": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "uievents/mouse/mouseover-at-removing-mousedown-target.html?duration=42": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "uievents/mouse/offset_and_page_after_dispatch.tentative.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Click on the target without moving the mouse cursor",
+          "status": "pass"
+        },
+        {
+          "name": "mousedown offset point should equal mouseup offset point",
+          "status": "pass"
+        },
+        {
+          "name": "mousedown page point should equal mouseup page point",
+          "status": "pass"
+        },
+        {
+          "name": "mousedown: offset point should not equal its page point",
+          "status": "fail"
+        },
+        {
+          "name": "mouseup: offset point should not equal its page point",
+          "status": "fail"
+        },
+        {
+          "name": "mousedown: offset and page points should not be changed after dispatch",
+          "status": "pass"
+        },
+        {
+          "name": "mouseup: offset and page points should not be changed after dispatch",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 5,
+      "subtests_total": 7
+    },
+    "uievents/mouse/synthetic-mouse-enter-leave-over-out-button-state-after-target-removed.tentative.html?buttonType=LEFT&button=0&buttons=1": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "uievents/mouse/synthetic-mouse-enter-leave-over-out-button-state-after-target-removed.tentative.html?buttonType=MIDDLE&button=1&buttons=4": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "uievents/order-of-events/focus-events/focus-automated-blink-webkit.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Focus-related events should fire in the correct order (same DocumentOwner)",
+          "status": "not-run"
+        },
+        {
+          "name": "Focus-related events should fire in the correct order (different DocumentOwner)",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "uievents/order-of-events/focus-events/focus-contained.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Focus-related events should fire in the correct order",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "uievents/order-of-events/focus-events/focus-management-expectations.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Keydown to focus should not trigger activation",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "uievents/order-of-events/focus-events/focus.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Focus-related events should fire in the correct order",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "uievents/order-of-events/focus-events/legacy-manual.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "uievents/order-of-events/mouse-events/click-cancel.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Default action is canceled if the click event is canceled.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "uievents/order-of-events/mouse-events/click-on-body.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Clicking on the body element itself should fire a click event targeted at the body element",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "uievents/order-of-events/mouse-events/click-on-div.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Clicking on a div element and having a click event listener on only document",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "uievents/order-of-events/mouse-events/click-on-html.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Clicking on the html element itself should fire a click event targeted at the html element",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "uievents/order-of-events/mouse-events/click-order.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Click-related events should fire in the correct order",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "uievents/order-of-events/mouse-events/mouseevents-mousemove.htm": {
+      "reason": "harness-incomplete",
+      "status": "error"
+    },
+    "uievents/order-of-events/mouse-events/mousemove-across.html": {
+      "reason": "harness-incomplete",
+      "status": "error"
+    },
+    "uievents/order-of-events/mouse-events/mousemove-between.html": {
+      "reason": "harness-incomplete",
+      "status": "error"
+    },
+    "uievents/order-of-events/mouse-events/mouseover-out.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Mouseover/out events",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "uievents/order-of-events/mouse-events/wheel-basic.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "wheel event test",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "uievents/order-of-events/mouse-events/wheel-multiple-sources-deadlock.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Simultaneous wheel events in different directions should not deadlock.",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "uievents/order-of-events/mouse-events/wheel-scrolling.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "wheel scrolling test",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "uievents/textInput/api.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "No constructor",
+          "status": "fail"
+        },
+        {
+          "name": "document.CreateEvent('TextEvent') prototype chain",
+          "status": "fail"
+        },
+        {
+          "name": "initTextEvent() no arguments",
+          "status": "pass"
+        },
+        {
+          "name": "initTextEvent('foo')",
+          "status": "fail"
+        },
+        {
+          "name": "initTextEvent('foo', true, true, window, 'bar')",
+          "status": "fail"
+        },
+        {
+          "name": "case sensitivity: textInput vs textinput",
+          "status": "fail"
+        },
+        {
+          "name": "execCommand('insertText', false, 'a'), <input>",
+          "status": "fail"
+        },
+        {
+          "name": "execCommand('insertText', false, 'a'), <textarea>",
+          "status": "fail"
+        },
+        {
+          "name": "execCommand('insertText', false, 'a'), <div contenteditable=\"\">",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 9
+    },
+    "uievents/textInput/backspace.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "uievents/textInput/basic.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "uievents/textInput/delete-selection.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "uievents/textInput/delete.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "uievents/textInput/enter-input.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "uievents/textInput/enter-textarea-contenteditable.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "uievents/textInput/smiley-manual.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "uievents/ui_event_pseudo_target.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "pseudoTarget on UIEvent.prototype",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent inherits pseudoTarget",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    }
+  },
+  "version": 1
+}

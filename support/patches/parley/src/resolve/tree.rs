@@ -212,6 +212,16 @@ impl<B: Brush> TreeStyleBuilder<B> {
 
         self.push_uncommitted_text(true);
 
+        // An empty layout still has the root style. Resolve it here because
+        // push_uncommitted_text only creates a style run for nonempty text.
+        if self.style_runs.is_empty() {
+            let style_index = self.resolve_current_style_id();
+            self.style_runs.push(StyleRun {
+                style_index,
+                range: 0..0,
+            });
+        }
+
         style_table.clear();
         style_runs.clear();
         style_table.extend_from_slice(&self.style_table);

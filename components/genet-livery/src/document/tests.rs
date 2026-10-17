@@ -1214,6 +1214,77 @@ fn retained_root_formatter_replaces_a_fixed_size_table_and_its_paint_plane() {
 }
 
 #[test]
+fn retained_nested_auto_table_remeasures_outer_columns_like_fresh_layout() {
+    let html = |inner_text: &str| {
+        format!(
+            "<html><body><div id=host><span id=outer>\
+             <span class=row><span id=c1 class=cell>Row 1, Col 1</span>\
+             <span id=c2 class=cell>Row 1, Col 2</span>\
+             <span id=inner>{inner_text}</span></span>\
+             <span class=row><span class=cell>Row 22, Col 1</span>\
+             <span class=cell>Row 22, Col 2</span>\
+             <span class=cell>Row 22, Col 3</span></span>\
+             </span></div></body></html>"
+        )
+    };
+    let styles = || {
+        StyleSet::cambium(&["html, body { margin:0; font:16px monospace; } \
+             #host { width:600px; } #outer { display:table; width:600px; border-spacing:0; } \
+             .row { display:table-row; } .cell { display:table-cell; } \
+             #inner { display:table; border-spacing:0; }"])
+    };
+    let geometry = |document: &LiveryDocument<ScriptedDom>| {
+        let layout = document.layout.as_ref().expect("completed table frame");
+        ["c1", "c2", "inner"].map(|id| {
+            layout
+                .fragments
+                .get(by_id(document.dom(), id))
+                .unwrap_or_else(|| panic!("fragment for #{id}"))
+                .physical_rect()
+        })
+    };
+    let mut dom = ScriptedDom::from_serialized_document(&html("short label"));
+    dom.drain_mutations(&mut Vec::new());
+    let mut retained = LiveryDocument::new(dom, styles(), Device::screen(640.0, 240.0));
+    bind_ahem_generics(&mut retained);
+    retained.frame(640, 240).expect("initial retained frame");
+    let initial = geometry(&retained);
+
+    let final_text = "word ".repeat(40);
+    retained.mutate_dom(|dom| {
+        let inner = by_id(dom, "inner");
+        let text = dom.dom_children(inner).next().expect("inner table text");
+        dom.set_text(text, &final_text);
+    });
+    retained.frame(640, 240).expect("mutated retained frame");
+    let changed = geometry(&retained);
+    assert!(changed[2].width > initial[2].width + 10.0);
+    assert!(
+        changed[2].width <= 600.5,
+        "inner table keeps its used width"
+    );
+
+    let mut fresh_dom = ScriptedDom::from_serialized_document(&html(&final_text));
+    fresh_dom.drain_mutations(&mut Vec::new());
+    let mut fresh = LiveryDocument::new(fresh_dom, styles(), Device::screen(640.0, 240.0));
+    bind_ahem_generics(&mut fresh);
+    fresh.frame(640, 240).expect("fresh final frame");
+    let expected = geometry(&fresh);
+    for (index, id) in ["c1", "c2", "inner"].into_iter().enumerate() {
+        let retained_rect = changed[index];
+        let fresh_rect = expected[index];
+        assert_near(retained_rect.x, fresh_rect.x, &format!("#{id} x"));
+        assert_near(
+            retained_rect.width,
+            fresh_rect.width,
+            &format!("#{id} width"),
+        );
+    }
+    retained.frame(640, 240).expect("cached retained frame");
+    assert_eq!(geometry(&retained), changed);
+}
+
+#[test]
 fn retained_root_formatter_replaces_a_captioned_fixed_size_table() {
     let initial = "<html><body><table id=table><caption id=caption>caption</caption><tbody><tr id=row><td id=first></td></tr></tbody></table><div id=outside></div></body></html>";
     let final_document = "<html><body><table id=table><caption id=caption>caption</caption><tbody><tr id=row><td id=first></td><td id=second></td></tr></tbody></table><div id=outside></div></body></html>";

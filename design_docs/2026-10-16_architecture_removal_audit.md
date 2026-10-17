@@ -568,8 +568,10 @@ with each repair's stated qualification and publication limits retained.
 the baseline supplier corpus mismatch, existing ignored continuation tests and
 platform/Forms acceptance are separate outstanding obligations, not extra closed
 findings. R4, R5, H3 and R15 now have local retained-path verification. The prior
-R6, R13, L8 and L13 continuation retains its separately recorded baseline
-font-test failure. Broader standards, runtime, input and platform qualification remains separate from the named cuts.
+R6, R13, L8 and L13 continuation recorded a baseline font-test failure;
+that Parley failure and the nested-table distribution failure are now repaired.
+The [layout/font receipt](receipts/2026-10-17_layout_font_repairs.json) records
+61 Parley, 110 Buckram table and 387 Livery passes, with two existing Livery ignores. Broader standards, runtime, input and platform qualification remains separate from the named cuts.
 
 H4 now has a fresh Chromium/Wasm interaction witness for the default Livery route: trusted keys, visible typing, editable default suppression, product scroll pixels and browser scroll fallback passed on AMD hardware. Authored-script cancellation and physical IME remain separate; see the [qualification receipt](receipts/2026-10-17_x1_qualification.json). H8's earlier Windows fake-command result remains dated evidence; it was not rerun on Linux. I12 removes a genuine unused projection and rejection; it does not establish coherent shader linking. The original text gave conflicting ordering for I12 (safe narrow cut versus W1 prerequisite). The precise boundary is: unused-field cleanup may stand independently, while claims of correct linking or subsequent layout optimization require W1/W2 to be resolved.
 

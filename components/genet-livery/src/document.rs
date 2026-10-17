@@ -7,6 +7,7 @@
 //! Retained Livery document ownership.
 
 use std::{
+    borrow::Cow,
     collections::{HashMap, HashSet},
     hash::Hash,
 };

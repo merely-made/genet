@@ -2350,6 +2350,77 @@ fn retained_document_uses_intrinsic_positioned_width_between_insets() {
 }
 
 #[test]
+fn ordinary_paint_and_queries_borrow_retained_planes_until_sampling_needs_a_copy() {
+    let mut dom = ScriptedDom::from_serialized_document(
+        "<html><body><div id=target>target</div><div style='height: 240px'></div></body></html>",
+    );
+    dom.drain_mutations(&mut Vec::new());
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&["html, body { margin: 0; padding: 0; } #target { height: 20px; }"]),
+        Device::screen(160.0, 80.0),
+    );
+    document.frame(160, 80).expect("initial frame");
+    let target = by_id(document.dom(), "target");
+    let layout = document.layout.as_ref().expect("retained layout");
+    let style_owner = &layout.styles as *const _;
+    let fragment_owner = &layout.fragments as *const _;
+    assert!(matches!(
+        document.sampled_paint_styles(layout),
+        std::borrow::Cow::Borrowed(_)
+    ));
+    let active = document.sticky_layout(layout);
+    assert!(matches!(&active, std::borrow::Cow::Borrowed(_)));
+    assert!(std::ptr::eq(active.as_ref(), &layout.fragments));
+    assert_eq!(document.hit_test(10.0, 10.0), Some(target));
+    assert!(document.scroll_at(10.0, 10.0, 0.0, 30.0));
+    document
+        .paint_active_layout(160, 80)
+        .expect("ordinary repaint");
+    let layout = document
+        .layout
+        .as_ref()
+        .expect("retained layout after repaint");
+    assert_eq!(&layout.styles as *const _, style_owner);
+    assert_eq!(&layout.fragments as *const _, fragment_owner);
+
+    let base_opacity = layout
+        .styles
+        .get(target)
+        .expect("target style")
+        .get(PropertyId::Opacity);
+    assert!(document.animate_opacity(target, 0.2, 0.8, 0.0, 1000.0));
+    assert!(document.pump(500.0));
+    let layout = document.layout.as_ref().expect("retained animated layout");
+    let sampled = document.sampled_paint_styles(layout);
+    assert!(matches!(&sampled, std::borrow::Cow::Owned(_)));
+    assert_ne!(
+        sampled
+            .get(target)
+            .expect("sampled style")
+            .get(PropertyId::Opacity),
+        base_opacity
+    );
+    document
+        .paint_active_layout(160, 80)
+        .expect("animation repaint");
+    let layout = document
+        .layout
+        .as_ref()
+        .expect("retained layout after animation");
+    assert_eq!(
+        layout
+            .styles
+            .get(target)
+            .expect("base style")
+            .get(PropertyId::Opacity),
+        base_opacity
+    );
+    assert_eq!(&layout.styles as *const _, style_owner);
+    assert_eq!(&layout.fragments as *const _, fragment_owner);
+}
+
+#[test]
 fn sticky_scrolls_its_retained_fragment_without_relayout() {
     let mut dom = ScriptedDom::from_serialized_document(
         "<html><body><div id=spacer></div><div id=sticky>sticky</div><div id=tail></div></body></html>",
@@ -2379,6 +2450,7 @@ fn sticky_scrolls_its_retained_fragment_without_relayout() {
     document.frame(160, 80).expect("scrolled sticky frame");
 
     let active = document.sticky_layout(document.layout.as_ref().expect("retained layout"));
+    assert!(matches!(&active, std::borrow::Cow::Owned(_)));
     let sticky_rect = active
         .get(sticky)
         .map(|fragment| fragment.physical_rect())

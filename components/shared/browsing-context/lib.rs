@@ -66,54 +66,17 @@ pub enum Origin {
 
 impl Origin {
     /// The origin of `url`, or an opaque origin when the URL has no tuple
-    /// origin (`data:`, `about:`, `blob:` without a parsable inner URL, or an
+    /// origin (`data:`, `about:`, `blob:` without a tuple inner URL, or an
     /// unparsable spelling). `opaque_serial` distinguishes this opaque origin
     /// from every other; callers mint it from the tree's counter.
     pub fn of_url(url: &str, opaque_serial: u64) -> Self {
-        let Some((scheme, rest)) = url.split_once(':') else {
-            return Origin::Opaque(opaque_serial);
-        };
-        let scheme = scheme.to_ascii_lowercase();
-        // `file:` is treated as opaque, which is what browsers converged on
-        // and what the sandboxing tests assume; `about:` and `data:` have no
-        // tuple origin at all.
-        if !matches!(scheme.as_str(), "http" | "https" | "ws" | "wss" | "ftp") {
-            return Origin::Opaque(opaque_serial);
-        }
-        let Some(rest) = rest.strip_prefix("//") else {
-            return Origin::Opaque(opaque_serial);
-        };
-        let authority = rest
-            .split(['/', '?', '#'])
-            .next()
-            .unwrap_or_default()
-            .rsplit('@')
-            .next()
-            .unwrap_or_default();
-        if authority.is_empty() {
-            return Origin::Opaque(opaque_serial);
-        }
-        // An IPv6 literal keeps its brackets and hides the port colon inside
-        // them, so split after the closing bracket rather than on the first
-        // colon.
-        let (host, port) = match authority.strip_prefix('[') {
-            Some(inner) => match inner.split_once(']') {
-                Some((host, rest)) => (
-                    format!("[{host}]"),
-                    rest.strip_prefix(':').and_then(|p| p.parse().ok()),
-                ),
-                None => (authority.to_owned(), None),
+        match url::Url::parse(url).map(|url| url.origin()) {
+            Ok(url::Origin::Tuple(scheme, host, port)) => Origin::Tuple {
+                port: (Some(port) != default_port(&scheme)).then_some(port),
+                scheme,
+                host: host.to_string(),
             },
-            None => match authority.split_once(':') {
-                Some((host, port)) => (host.to_owned(), port.parse().ok()),
-                None => (authority.to_owned(), None),
-            },
-        };
-        let port = port.filter(|port| Some(*port) != default_port(&scheme));
-        Origin::Tuple {
-            scheme,
-            host: host.to_ascii_lowercase(),
-            port,
+            Ok(url::Origin::Opaque(_)) | Err(_) => Origin::Opaque(opaque_serial),
         }
     }
 
@@ -811,6 +774,48 @@ mod tests {
             Origin::of_url("https://[::1]:8443/", 0).serialize(),
             "https://[::1]:8443"
         );
+    }
+
+    #[test]
+    fn a_tuple_origin_uses_the_url_parsers_host_normalization() {
+        assert_eq!(
+            Origin::of_url("https://BÜCHER.example/path", 0).serialize(),
+            "https://xn--bcher-kva.example"
+        );
+        assert_eq!(
+            Origin::of_url("http://127.1/path", 0).serialize(),
+            "http://127.0.0.1"
+        );
+        assert_eq!(
+            Origin::of_url(r"https:\\EXAMPLE.com\path", 0).serialize(),
+            "https://example.com"
+        );
+    }
+
+    #[test]
+    fn invalid_authorities_get_distinct_opaque_origins() {
+        for url in [
+            "http://example.com:invalid/",
+            "http://example.com:65536/",
+            "http://[::1/",
+        ] {
+            let first = Origin::of_url(url, 1);
+            let second = Origin::of_url(url, 2);
+            assert_eq!(first, Origin::Opaque(1), "{url}");
+            assert!(!first.is_same_origin(&second), "{url}");
+        }
+    }
+
+    #[test]
+    fn blob_urls_use_their_inner_url_origin_when_it_is_a_tuple() {
+        let blob = Origin::of_url("blob:https://EXAMPLE.com:443/id", 0);
+        let inner = Origin::of_url("https://example.com/path", 1);
+        assert!(blob.is_same_origin(&inner));
+        assert_eq!(blob.serialize(), "https://example.com");
+
+        for url in ["blob:about:blank", "blob:file:///tmp/a", "blob:invalid"] {
+            assert_eq!(Origin::of_url(url, 2), Origin::Opaque(2), "{url}");
+        }
     }
 
     #[test]

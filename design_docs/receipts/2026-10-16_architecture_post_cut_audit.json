@@ -5577,5 +5577,166 @@
       },
       "cleanup": "Pristine baseline control worktree removed after preserving provenance. Active worktrees and shared build caches preserved. Approximately 471 GiB free after builds; no further deletion needed."
     }
+  },
+  "boundary_ownership_repairs": {
+    "base_commit": "8a89a8bcdb8888093d9bf0463bf310fef764b72b",
+    "findings": [
+      "I7",
+      "I8",
+      "L1",
+      "L7"
+    ],
+    "source_sha256": {
+      "components/genet-livery/Cargo.toml": "41e5b034405c15cfe38f3bd671ed1fbc245b000e8eed719381fc3537b9a52e8f",
+      "components/genet-livery/src/document.rs": "d3669d8eaaf2fe20de5130781ffb7bcdf4656760b31f408cc28e314a6f6302d6",
+      "components/genet-livery/src/document/frame.rs": "1e9f172b2a92b1228fe82e0a9a4139cc1a3d6da0950c5a6e5ce47997cc71cdec",
+      "components/genet-livery/src/document/tests.rs": "0239e825ef0bfc415d9314b68f9143ce8a57d015c8fdc035967807845446ca80",
+      "components/genet-livery/src/layout/query.rs": "ada89c9c5ca3d68926a406886fe9aba829005c370ba5679e9107fe6023d0f6ad",
+      "components/genet-livery/tests/retained_cpu_raster.rs": "702e3909de68e88954a22790fcf6ce5f4ac7e842cd0d12dc7cdc880e43ea42a4",
+      "components/livery/src/cascade.rs": "0c6188933520da28aa785c83fd118277f325fd4c68897fb49ed48f01d9cdc737",
+      "components/livery/src/css_comments.rs": "6ef73c84f3245d5e7101f669f1103e1c091a72f8aa53fb41cc028deaf82ee5cf",
+      "components/livery/src/lib.rs": "e77e9ff8fb9309679e91a6eece7c0962a93935f37473fedc475c8c8bacb4736a",
+      "components/livery/src/stylesheet.rs": "9ed6cc4c7ddfcf763bf3e18b731dda2f26755b8f129f7039bdb2558635241b2f",
+      "components/livery/tests/cascade.rs": "9888ef8ecdc4338386bb283abcafb958d0c82bf0cb16dafcaac30ad0a860f41f",
+      "components/livery/tests/selectors.rs": "43299118d6dcd88a2f34fd5c3b1d9ca0fcec6112dad2a722de7b402b44fbdc86",
+      "components/livery/tests/stylesheet.rs": "ceaf54ba2c1daaf90be3f891f6d444231e8f599ef91047fff19780aac8f552f9",
+      "components/netfetcher/src/context.rs": "9ff83578cc02f4e36fd50c6140888c22d2a26b91a4258c8916f170a271b3f011",
+      "components/netfetcher/src/fetch/cache_phase.rs": "6d771d946b6ef9bae3cc300631d7dd4f727ff02d1476a95edf1d97f5a9560f1e",
+      "components/netfetcher/src/fetch/finalize.rs": "1f86d40febba794ff05e72e932e12a2b701fa68fb1e6da4bb74a1351e011437a",
+      "components/netfetcher/src/fetch/tests.rs": "c5f85445b917c06c27681ad128d591d14847510e58bef216e8c6ac37e46f6d60",
+      "components/shared/browsing-context/Cargo.toml": "bf2bd3d4ff5a7d614939b1891f051057b60e7f98c7027e2e4e1877ba292827c1",
+      "components/shared/browsing-context/lib.rs": "2c3b194011b225da3023c971008f7b7c512ca08d54e5e8c72d1008557b26fde4"
+    },
+    "gates": [
+      {
+        "label": "cache-final",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261016/boundary-cuts/cache-final.log",
+        "sha256": "3c3baa8ff9c7cea1610781ddfee16cc27df548b6116801b90bd2ffcbfe4baace",
+        "passed": 87,
+        "failed": 0,
+        "ignored": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p netfetcher --lib -- --test-threads=1",
+        "max_process_rss_kib": 682304,
+        "swaps": 0
+      },
+      {
+        "label": "origin",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261016/boundary-cuts/origin.log",
+        "sha256": "b0c018fbea0a0e73b28134dc940f0e6e3b735b2b9a78ee2a950fd27cab1e6e94",
+        "passed": 16,
+        "failed": 0,
+        "ignored": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p browsing-context-api --lib -- --test-threads=1",
+        "max_process_rss_kib": 163916,
+        "swaps": 0
+      },
+      {
+        "label": "css-final",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261016/boundary-cuts/css-final.log",
+        "sha256": "e21ac72f46a844f5d82a6661b21aeb028dd0e7017b3f1c2ae39f51b787834c9e",
+        "passed": 81,
+        "failed": 0,
+        "ignored": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p livery --lib --test cascade --test stylesheet --test selectors --test custom_properties -- --test-threads=1",
+        "max_process_rss_kib": 345756,
+        "swaps": 0
+      },
+      {
+        "label": "retained",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261016/boundary-cuts/retained.log",
+        "sha256": "0fdce91dc02215731d45a69196ae22df9135adfffb11c8e997e2f4af619cd77b",
+        "passed": 346,
+        "failed": 0,
+        "ignored": 2,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-livery --lib --test retained_cpu_raster -- --test-threads=1",
+        "max_process_rss_kib": 803716,
+        "swaps": 0
+      },
+      {
+        "label": "retained-integrations",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261016/boundary-cuts/retained-integrations.log",
+        "sha256": "d8b9d2511ff745069bcdf7bab8abdddb829dc3fa865b8a8f60e31e9e2a098dcd",
+        "passed": 155,
+        "failed": 0,
+        "ignored": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-livery --test paint --test interaction --test transform_context --test transforms_3d --test out_of_flow_placement --test grid_abspos --test positioned_block_children --test anonymous_tables --test k5d_nested_inline_positioning --test replaced_image --test image_source_animation --test shadow_flat_tree -- --test-threads=1",
+        "max_process_rss_kib": 428684,
+        "swaps": 0
+      },
+      {
+        "label": "native-documents",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261016/boundary-cuts/native-documents.log",
+        "sha256": "da6a4b98d8201c9cdbf60287b58bb0bc9796effe931d767e743bb2d0dc67fd9a",
+        "passed": 93,
+        "failed": 0,
+        "ignored": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-documents --features livery --lib -- --test-threads=1",
+        "max_process_rss_kib": 570288,
+        "swaps": 0
+      },
+      {
+        "label": "scripted-cssom",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261016/boundary-cuts/scripted-cssom.log",
+        "sha256": "5243de4d07c48ad4eade4019974c88be170503753e29bdf191082b145748bbe9",
+        "passed": 11,
+        "failed": 0,
+        "ignored": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-scripted --lib cssom -- --test-threads=1",
+        "max_process_rss_kib": 769040,
+        "swaps": 0
+      }
+    ],
+    "total_passed": 789,
+    "total_ignored": 2,
+    "reviews": [
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/boundary-cuts/review-network.md",
+        "sha256": "e790966ae3fb9aa542f3ac1bb321bdcb66868cbe0a3f0ec74fc0080f149eadc2"
+      },
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/boundary-cuts/review-livery.md",
+        "sha256": "5ef9219d4ee5d0359ec7e502742f1c7a79dd7febded9e30e4719f1c93c68f516"
+      }
+    ],
+    "lock_snapshot": {
+      "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/boundary-cuts/Cargo.lock.final",
+      "sha256": "0600a9b8467bf8db5ea8b7df64f88b1de0a44a1803259331d024d4901f7b9b75"
+    },
+    "resource_limits": {
+      "cargo_jobs": 1,
+      "test_threads": 1,
+      "memory_max": "5G",
+      "memory_swap_max": 0,
+      "cpu_quota": "150%",
+      "nice": 10,
+      "timeout_seconds": 240,
+      "lock": "/home/markik/Code/testing/machine-heavy.lock"
+    },
+    "limitations": [
+      "CPU raster only; no fresh GPU/browser/platform/Forms qualification",
+      "No measured performance claim; animation/sticky/transactional isolation copies remain",
+      "NetRender supplier e8cda06efc11c11595f2fa1bb30bce7e72979537 remains local unpublished",
+      "H5 native whole-response buffering is separate and open"
+    ],
+    "review_corrections": [
+      "Rejected CSS whitespace replacement that changed compound selectors",
+      "Replaced recursive CSS traversal with iterative token consumption",
+      "Added mid-stream cache error buffer-release regression"
+    ],
+    "earlier_logs": [
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/boundary-cuts/cache.log",
+        "sha256": "428aedd26cd205d6dbd28e230ef4141d73ac84800bb8c625313b895134adfb89"
+      },
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/boundary-cuts/css.log",
+        "sha256": "6751f902dc8b06c6d388edd1a58e0ca484e1f8c8d1b3fe832c6190970939b124"
+      },
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/boundary-cuts/origin-consumer.log",
+        "sha256": "ebc70a35ee716d1786902c2dd533d02f072f4760014b165f2d6f3bb903e9f456"
+      }
+    ],
+    "lock_changes": "Canonical origin URL dependency; CPU raster dev-dependencies activate four previously absent packages from existing pinned supplier graph. No root supplier pin changes."
   }
 }

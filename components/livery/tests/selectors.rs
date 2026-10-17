@@ -12,7 +12,7 @@ use livery::selector::{
 use livery::{
     cascade::{CascadeLayer, Origin},
     media::Device,
-    stylesheet::{StyleRule, cascade_rules},
+    stylesheet::{StyleRule, Stylesheet, cascade_rules},
     values::Color,
 };
 
@@ -187,6 +187,27 @@ fn fixture() -> (ElementRef, ElementRef) {
         },
         ElementRef { dom, id: 3 },
     )
+}
+
+#[test]
+fn comment_between_type_and_class_keeps_a_compound_selector() {
+    let sheet = Stylesheet::parse("button/**/.primary { color: red; }", Origin::Author);
+    assert!(sheet.diagnostics().is_empty(), "{:?}", sheet.diagnostics());
+    assert_eq!(sheet.rules().len(), 1);
+    assert_eq!(sheet.rules()[0].selector_text(), "button.primary");
+    let (primary, plain) = fixture();
+    let device = Device::screen(800.0, 600.0);
+    assert_eq!(
+        sheet.rules()[0]
+            .matched_declarations(&primary, &device)
+            .len(),
+        1
+    );
+    assert!(
+        sheet.rules()[0]
+            .matched_declarations(&plain, &device)
+            .is_empty()
+    );
 }
 
 #[test]

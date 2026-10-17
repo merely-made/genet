@@ -8,6 +8,7 @@ use livery::PropertyValue;
 use livery::cascade::{
     CascadeLayer, MatchedDeclaration, Origin, Specificity, cascade, parse_declaration_block,
 };
+use livery::custom::CustomDeclaredValue;
 use livery::values::{
     Color, FlexDirection, FlexWrap, FontFamily, FontFeatureSettings, FontSize, FontStyle,
     FontVariantLigatures, FontWeight, Length, LengthPercentage, LineHeight, Margin, Overflow, Size,
@@ -32,6 +33,74 @@ fn matched(
         source_order,
         source_url: None,
     }
+}
+
+#[test]
+fn declaration_comments_respect_strings_nested_blocks_and_token_boundaries() {
+    let block = parse_declaration_block(
+        r#"--quoted: "a/*keep*/b";
+           --escaped: "say \"/*keep too*/\"";
+           --nested: outer(inner("/*deep*/"), 1/**/px);
+           --url: url(https://example.test/*literal*/x);
+           color: re/**/d;
+           width: 1/**/px;
+           color: red;"#,
+    );
+
+    assert_eq!(block.custom.len(), 4);
+    assert_eq!(
+        block.custom[0].value,
+        CustomDeclaredValue::Value(r#""a/*keep*/b""#.to_owned())
+    );
+    assert_eq!(
+        block.custom[1].value,
+        CustomDeclaredValue::Value(r#""say \"/*keep too*/\"""#.to_owned())
+    );
+    let CustomDeclaredValue::Value(nested) = &block.custom[2].value else {
+        panic!("expected the nested custom value");
+    };
+    assert!(nested.contains(r#"inner("/*deep*/")"#), "{nested}");
+    assert!(nested.contains("1/**/px"), "{nested}");
+    assert_eq!(
+        block.custom[3].value,
+        CustomDeclaredValue::Value("url(https://example.test/*literal*/x)".to_owned())
+    );
+    assert_eq!(block.errors.len(), 2, "{:?}", block.errors);
+    assert_eq!(block.declarations.len(), 1);
+    assert_eq!(block.declarations[0].property.metadata().name, "color");
+}
+
+#[test]
+fn unterminated_comment_consumes_declaration_tail() {
+    let block = parse_declaration_block("color: red; width: 1px/* never closed");
+    assert!(block.errors.is_empty(), "{:?}", block.errors);
+    assert_eq!(block.declarations.len(), 2);
+    assert_eq!(block.declarations[1].property.metadata().name, "width");
+}
+
+#[test]
+fn deeply_nested_comments_use_a_bounded_stack() {
+    let mut css = String::from("--deep: ");
+    for _ in 0..8192 {
+        css.push_str("f(");
+    }
+    css.push_str(r#"v/*drop*/, "/*quoted*/", re/**/d, div/**/.x"#);
+    for _ in 0..8192 {
+        css.push(')');
+    }
+
+    let block = parse_declaration_block(&css);
+    assert!(block.errors.is_empty(), "{:?}", block.errors);
+    let [declaration] = block.custom.as_slice() else {
+        panic!("expected one custom declaration");
+    };
+    let CustomDeclaredValue::Value(value) = &declaration.value else {
+        panic!("expected the nested custom value");
+    };
+    assert!(!value.contains("drop"));
+    assert!(value.contains(r#""/*quoted*/""#));
+    assert!(value.contains("re/**/d"));
+    assert!(value.contains("div.x"));
 }
 
 #[test]

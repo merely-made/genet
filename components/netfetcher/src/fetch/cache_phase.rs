@@ -89,13 +89,14 @@ pub(super) fn over_cache_size_cap(cx: &FetchContext, headers: &[(String, String)
 }
 
 /// A body stream that tees the decoded chunks it yields into the HTTP cache.
-/// Passes every chunk through unchanged while accumulating it; on clean
-/// end-of-stream (the consumer read the whole body) it stores the entry. A
-/// mid-stream error, or a body the consumer abandons before completion, is never
-/// stored — so the cache never holds a partial or corrupt response.
+/// Passes every chunk through unchanged while accumulating up to `max_body_bytes`;
+/// on clean end-of-stream (the consumer read the whole body) it stores the entry.
+/// An oversized decoded body, a mid-stream error, or a body the consumer
+/// abandons before completion is never stored.
 pub(super) struct CachingBody {
     pub(super) inner: BodyStream,
     pub(super) acc: BytesMut,
+    pub(super) max_body_bytes: u64,
     pub(super) cache: Arc<dyn HttpCache>,
     pub(super) key: String,
     pub(super) status: u16,
@@ -117,11 +118,27 @@ impl Stream for CachingBody {
         match this.inner.as_mut().poll_next(cx) {
             Poll::Pending => Poll::Pending,
             Poll::Ready(Some(Ok(bytes))) => {
-                this.acc.extend_from_slice(&bytes);
+                if !this.poisoned {
+                    let within_cap = this
+                        .acc
+                        .len()
+                        .checked_add(bytes.len())
+                        .and_then(|len| u64::try_from(len).ok())
+                        .is_some_and(|len| len <= this.max_body_bytes);
+                    if within_cap {
+                        this.acc.extend_from_slice(&bytes);
+                    } else {
+                        // Drop the allocation immediately; the remaining body still
+                        // streams to the caller without occupying cache memory.
+                        this.acc = BytesMut::new();
+                        this.poisoned = true;
+                    }
+                }
                 Poll::Ready(Some(Ok(bytes)))
             },
             Poll::Ready(Some(Err(e))) => {
                 this.poisoned = true; // a decode/transport error: do not cache
+                this.acc = BytesMut::new();
                 this.done = true;
                 Poll::Ready(Some(Err(e)))
             },

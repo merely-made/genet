@@ -1,6 +1,55 @@
 # Genet architecture and removal audit
 
 
+## I7/I8/L1/L7 boundary ownership repairs, 2026-10-16
+
+Four further cuts are implemented and independently source-reviewed:
+
+- **I8:** cache accumulation enforces the configured decoded-byte cap before
+  copying a chunk. Crossing it releases the cache buffer and continues body
+  delivery. Errors release partial storage and preserve the original error.
+  Unknown lengths, compressed expansion, equality and zero caps are covered.
+  This does not close H5's separate native whole-response buffering gap.
+- **I7:** the existing URL parser owns canonical origin tuples, including IDNA,
+  numeric IPv4, effective ports and tuple-origin blob URLs. Malformed URLs remain
+  opaque using the caller's serial; inherited and sandboxed origin policy stays
+  with the browsing-context owner.
+- **L1:** stylesheet and declaration paths share one cssparser-based comment
+  helper. Strings and URLs retain literal markers; required token separators
+  survive without turning compound selectors into descendant selectors. The
+  helper walks tokens iteratively, including deeply nested declarations. The
+  existing stylesheet/declaration grammars are not replaced by this cut.
+- **L7:** ordinary paint and hit queries borrow retained styles and fragments;
+  local formatting borrows the old planes until an accepted candidate needs a
+  transactional copy. Sticky placement scans the same geometry before mutation.
+  Animated styles, sticky geometry and rollback/publication still copy where
+  isolation requires it. This is a source ownership improvement, not a measured
+  performance claim.
+
+Review rejected a whitespace-replacement draft that changed selector adjacency,
+then caught recursive comment traversal; both were corrected before the final
+CSS gate. Review also requested a cache stream-error release regression. Raw
+intermediate and final evidence remains in the external boundary-cuts directory.
+
+Final gates passed **789 tests, zero failures, two existing ignores**: 87 cache,
+16 origin, 81 CSS, 345 retained library, 155 retained integration, 93 native
+document, 11 scripted CSSOM and one actual CPU raster test. The raster changed
+an opaque red pixel to blue after a background-only mutation, with unchanged
+layout generation and hit target. The earlier six-test origin-consumer gate is
+retained separately and excluded from this total.
+
+All gates used the shared lock, one Cargo job, serial tests, 5 GiB memory cap,
+zero swap allowance, 150% CPU quota and nice 10. Maximum process RSS was
+803,716 KiB; every gate reported zero swaps. Shared caches/worktrees were
+preserved, with about 471 GiB free disk.
+
+Qualification results and source hashes are recorded in
+`boundary_ownership_repairs` in the
+[audit receipt](receipts/2026-10-16_architecture_post_cut_audit.json).
+Fresh GPU, browser, Windows, Wasm and Forms acceptance remain outside this batch.
+The existing unpublished NetRender supplier dependency remains unchanged.
+
+
 ## L3 image sharing and remaining L4 paint repairs, 2026-10-16
 
 **All three residuals from the previous L4 cut are repaired locally.** This
@@ -287,25 +336,27 @@ The fresh review covered the production changes, their consumers and regression 
 
 ### Current disposition of the findings
 
-Reconciled against local HEAD `20d78e88bff` on 2026-10-16. This table supersedes
+Reconciled against `8a89a8bcdb8` plus the source-hashed I7/I8/L1/L7 repair
+snapshot on 2026-10-16. This table supersedes
 the older 9-addressed / 3-partial / 43-open snapshot and the open-status wording
 in historical evidence below. Addressed means the named source defect or cut,
 with each repair's stated qualification and publication limits retained.
 
 | Disposition | IDs | Current evidence / remaining boundary |
 |---|---|---|
-| Addressed locally | H1, H4, H7, H8, H11, I3, I4, I5, I12, I14, I15, L2, L3, L4, W1, W2 | Original narrow removals plus retained acquisition, source-relative image identity, non-stealing capture, shared decoded pixels, generated transform/paint ownership and authoritative linked shader layout. Dated repair sections and receipts above contain the tests and limits. |
+| Addressed locally | H1, H4, H7, H8, H11, I3, I4, I5, I7, I8, I12, I14, I15, L1, L2, L3, L4, L7, W1, W2 | Original narrow removals plus retained acquisition, source-relative image identity, non-stealing capture, shared decoded pixels, generated transform/paint ownership, canonical origins, bounded decoded cache accumulation, shared CSS comment lexing, borrowed retained planes and authoritative linked shader layout. Dated repair sections and receipts above contain the tests and limits. |
 | Partial | I1 | Native editing shares DOM defaults; scripted text/IME, key releases and default-action integration remain open. |
 | Partial | I11 | Cache-key lookup no longer recompiles shaders; a source/stage/options-owned compiled-artifact lifecycle remains open. |
 | Partial | H6 | Setup/execution/completion accounting repaired; trustworthy VM error phase/type and complete Test262 qualification remain open. |
 | Partial | L6 | Shared form/radio predicates; broader dependency classification and separate mutation switches remain. |
-| Open | I2, I6-I10, I13; R1-R15; L1, L5, L7-L13; H2-H3, H5, H9-H10 | No later cut or verification closes these findings. |
+| Open | I2, I6, I9-I10, I13; R1-R15; L5, L8-L13; H2-H3, H5, H9-H10 | No later cut or verification closes these findings. |
 
-**56 findings: 16 addressed locally, 4 partial, 36 open.** Supplemental X1 remains
+**56 findings: 20 addressed locally, 4 partial, 32 open.** Supplemental X1 remains
 partial and is excluded from that count. Supplier publication/Mere adoption,
 the baseline supplier corpus mismatch, existing ignored continuation tests and
 platform/Forms acceptance are separate outstanding obligations, not extra closed
-findings. Current continuation order: I8, I7, L1, then L7; none is pre-closed.
+findings. The I8, I7, L1 and L7 continuation is now locally verified; larger runtime,
+input, policy and layout findings remain open.
 
 H4 is source-addressed, but the browser callback has not received a fresh wasm/browser interaction test. H8's earlier Windows fake-command result remains dated evidence; it was not rerun on Linux. I12 removes a genuine unused projection and rejection; it does not establish coherent shader linking. The original text gave conflicting ordering for I12 (safe narrow cut versus W1 prerequisite). The precise boundary is: unused-field cleanup may stand independently, while claims of correct linking or subsequent layout optimization require W1/W2 to be resolved.
 
@@ -443,8 +494,8 @@ Status is reconciled to `20d78e88bff`; descriptions and cut directions retain th
 | I4 | Addressed locally | Authored image aliases collapse different stylesheet bases | Carry resolved source identity into computed image/paint keys. |
 | I5 | Addressed locally | Capture drains rendering's mutation journal | One consumption owner or non-stealing observation cursors; preserve historical capture format. |
 | I6 | Open | Request and response compatibility representations duplicate and discard metadata | Migrate actual callers to a shared host contract; retain transport/VM separation. |
-| I7 | Open | Handwritten origin grammar normalizes malformed URLs inconsistently | Derive tuples from canonical parsed URLs; preserve opaque/inherited origin policy. |
-| I8 | Open | Cache limit checks Content-Length but not accumulated decoded bytes | Stop cache accumulation at configured streamed-byte cap; preserve body delivery. |
+| I7 | Addressed locally | Handwritten origin grammar normalizes malformed URLs inconsistently | Derive tuples from canonical parsed URLs; preserve opaque/inherited origin policy. |
+| I8 | Addressed locally | Cache limit checks Content-Length but not accumulated decoded bytes | Stop cache accumulation at configured streamed-byte cap; preserve body delivery. |
 | I9 | Open | Default cookie jar defers public-suffix and prefix restrictions | Complete or explicitly constrain one policy owner; keep injected storage and SameSite context. |
 | I10 | Open | Taproot reconstructs names/roles and estimated geometry | Migrate live consumers to owner projection/retained layout, then delete shadow semantics. |
 | I11 | Partial | Shader compilation repeats for validation, cache-key discovery and translation | Retain compiled shader artifacts under source/stage/options identity. |
@@ -467,13 +518,13 @@ Status is reconciled to `20d78e88bff`; descriptions and cut directions retain th
 | R13 | Open | Module resolver lifetimes are erased and manually restored without unwind guard | Owned/scoped resolver context and unwind-safe restoration; preserve GC roots. |
 | R14 | Open | Ordinary engine/realm registration leaks process-lifetime allocations | Proper owned registrations or fixed static names; keep required rooted release queues. |
 | R15 | Open | Product elapsed-time API uses timer-driven test-like clock | Explicit host elapsed clock and separate deterministic test profile. |
-| L1 | Open | Two comment strippers remove comment-like text inside quoted CSS strings | Token-aware CSS lexical authority; isolated probe confirms helper corruption. |
+| L1 | Addressed locally | Two comment strippers remove comment-like text inside quoted CSS strings | Token-aware CSS lexical authority; isolated probe confirms helper corruption. |
 | L2 | Addressed locally | Prospective line-break stream runs while Parley still selects lines | Remove unused production work or gate it as explicit experimental diagnostics. |
 | L3 | Addressed locally | Paint clones source image payloads and decodes repeatedly | Share versioned resource payload/decoded ownership; preserve invalidation. |
 | L4 | Addressed locally | Containing-block transform facts disagree with paint transforms | Shared facts with rule-specific predicates, not one indiscriminate boolean. |
 | L5 | Open | Public estimated geometry diverges from retained text/resource geometry | Use live retained owner for observable geometry; identify estimates explicitly. |
 | L6 | Partial | Style invalidation and layout damage separately classify DOM dependencies | Share affected semantic owners; retain different style/formatting root outputs. |
-| L7 | Open | Local retained rendering clones whole style/fragment planes | Borrow/overlay immutable generations while preserving rollback/isolation. |
+| L7 | Addressed locally | Local retained rendering clones whole style/fragment planes | Borrow/overlay immutable generations while preserving rollback/isolation. |
 | L8 | Open | Per-table ledger publication rebuilds aggregate diagnostics eagerly | Aggregate lazily or by deltas; keep actual divergence/ownership evidence. |
 | L9 | Open | Buckram/backend styles and genuine block fallback debt overlap | Narrow conversion/ownership after accepted contracts replace fallback; retain real flex/grid/backend functions. |
 | L10 | Open | Prospective fragmentation kernel coexists with live unsupported markers | Feature-gate prospective code; retain explicit unsupported results and six continuation repros. |

@@ -2523,6 +2523,13 @@ mod phase_c_document_encoding_fixtures {
         requests: Arc<Mutex<Vec<String>>>,
     }
     impl ResourceFetcher for Pages {
+        fn fetch_request(
+            &self,
+            _request: &genet_host_api::ResourceRequest,
+        ) -> Option<genet_host_api::ResourceFetchResponse> {
+            None
+        }
+
         fn fetch(&self, url: &str) -> Option<Vec<u8>> {
             self.fetch_response(url).map(|response| response.bytes)
         }
@@ -2739,6 +2746,13 @@ mod phase_c_document_encoding_fixtures {
         requests: Arc<Mutex<Vec<String>>>,
     }
     impl ResourceFetcher for EmptyFrames {
+        fn fetch_request(
+            &self,
+            _request: &genet_host_api::ResourceRequest,
+        ) -> Option<genet_host_api::ResourceFetchResponse> {
+            None
+        }
+
         fn fetch(&self, url: &str) -> Option<Vec<u8>> {
             self.fetch_response(url).map(|response| response.bytes)
         }
@@ -2860,6 +2874,13 @@ mod phase_c_t5_editor_clip_fix2_controls {
     #[derive(Clone)]
     struct NoFetch;
     impl ResourceFetcher for NoFetch {
+        fn fetch_request(
+            &self,
+            _request: &genet_host_api::ResourceRequest,
+        ) -> Option<genet_host_api::ResourceFetchResponse> {
+            None
+        }
+
         fn fetch(&self, _: &str) -> Option<Vec<u8>> { None }
     }
 

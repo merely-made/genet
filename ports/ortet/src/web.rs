@@ -38,30 +38,49 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, spawn_local};
 use web_sys::{
-    Event, EventTarget, HtmlCanvasElement, KeyboardEvent, PointerEvent, Response, WheelEvent,
+    AbortController, AbortSignal, Event, EventTarget, HtmlCanvasElement, KeyboardEvent,
+    PointerEvent, Response, WheelEvent,
 };
 
-/// Browser-host bounds for one navigation.  The defaults retain the shared
-/// host response cap and make the aggregate/resource caps explicit here.
+/// Browser-host bounds for one navigation. The remote fetch policy is the
+/// same host contract the native transport consumes. Aggregate byte and
+/// resource counts belong to this browser document preparation path.
 #[wasm_bindgen]
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct BrowserResourceLimits {
-    max_response_bytes: u32,
+    policy: ResourceFetchPolicy,
     max_total_bytes: u32,
     max_resources: u32,
+    active_fetches: Rc<Cell<usize>>,
 }
 
 impl Default for BrowserResourceLimits {
     fn default() -> Self {
         let policy = ResourceFetchPolicy::default();
         Self {
-            max_response_bytes: policy.max_response_bytes.min(u32::MAX as usize) as u32,
+            policy,
             max_total_bytes: policy
                 .max_response_bytes
                 .saturating_mul(4)
                 .min(u32::MAX as usize) as u32,
             max_resources: 64,
+            active_fetches: Rc::new(Cell::new(0)),
         }
+    }
+}
+
+impl BrowserResourceLimits {
+    fn validate(&self) -> Result<(), JsValue> {
+        // Fetch's followed redirects expose only the final response. The
+        // browser's fixed redirect limit is 20; a different host cap cannot
+        // be counted or enforced through this API.
+        if self.policy.max_redirects != ResourceFetchPolicy::default().max_redirects {
+            return Err(JsValue::from_str("browser fetch cannot enforce a custom redirect limit"));
+        }
+        if self.policy.timeout.as_millis() > i32::MAX as u128 {
+            return Err(JsValue::from_str("browser fetch timeout exceeds timer range"));
+        }
+        Ok(())
     }
 }
 
@@ -70,10 +89,28 @@ impl BrowserResourceLimits {
     #[wasm_bindgen(constructor)]
     pub fn new(max_response_bytes: u32, max_total_bytes: u32, max_resources: u32) -> Self {
         Self {
-            max_response_bytes,
+            policy: ResourceFetchPolicy {
+                max_response_bytes: max_response_bytes as usize,
+                ..ResourceFetchPolicy::default()
+            },
             max_total_bytes,
             max_resources,
+            active_fetches: Rc::new(Cell::new(0)),
         }
+    }
+
+    /// Configure the same remote-request policy used by the native host.
+    /// The browser owns redirect following and supports only its fixed cap.
+    pub fn set_fetch_policy(&mut self, max_redirects: u32, max_concurrent_fetches: u32,
+        timeout_ms: u32) -> Result<(), JsValue> {
+        let mut policy = self.policy;
+        policy.max_redirects = max_redirects;
+        policy.max_concurrent_fetches = max_concurrent_fetches as usize;
+        policy.timeout = std::time::Duration::from_millis(timeout_ms as u64);
+        let candidate = Self { policy, ..self.clone() };
+        candidate.validate()?;
+        self.policy = policy;
+        Ok(())
     }
 }
 
@@ -92,12 +129,13 @@ pub async fn start_with_limits(
     address: String,
     limits: BrowserResourceLimits,
 ) -> Result<(), JsValue> {
+    limits.validate()?;
     let (layout_width, layout_height, scale, physical_width, physical_height) =
         canvas_size(&canvas)?;
     canvas.set_width(physical_width);
     canvas.set_height(physical_height);
     canvas.set_tab_index(0);
-    let loaded = load_session(&address, layout_width, layout_height, limits).await?;
+    let loaded = load_session(&address, layout_width, layout_height, limits.clone()).await?;
     let options = NetrenderOptions {
         tile_cache_size: Some(64),
         enable_vello: true,
@@ -474,11 +512,11 @@ fn launch_pending_navigation(host: &Rc<RefCell<WebOrtet>>) {
                     .any(|target| encoded.target.eq_ignore_ascii_case(target)) {
                     web_sys::console::warn_1(&JsValue::from_str("[ortet] unsupported native form target")); return None;
                 }
-                if let Err(error) = browser_request(&encoded.request) { web_sys::console::warn_1(&error); return None; }
+                if let Err(error) = browser_request(&encoded.request, None) { web_sys::console::warn_1(&error); return None; }
                 (encoded.request.url.clone(), Some(encoded.request))
             },
         };
-        Some((host.navigation_generation, address, request, host.layout_width, host.layout_height, host.browser_limits))
+        Some((host.navigation_generation, address, request, host.layout_width, host.layout_height, host.browser_limits.clone()))
     })() else { return; };
     let host = host.clone();
     spawn_local(async move {
@@ -582,7 +620,7 @@ async fn fetch_browser_response(
 
 /// Translate a native navigation into the browser's supported source-fetch lane.
 /// The neutral record retains native intent and the raw source URL for eligibility.
-fn browser_request(request: &SessionDocumentRequest) -> Result<web_sys::Request, JsValue> {
+fn browser_request(request: &SessionDocumentRequest, signal: Option<&AbortSignal>) -> Result<web_sys::Request, JsValue> {
     let window = web_sys::window().ok_or_else(|| JsValue::from_str("browser window unavailable"))?;
     let outer_origin = window.location().origin()?;
     let initiator = web_sys::Url::new(&request.referrer)?;
@@ -608,6 +646,9 @@ fn browser_request(request: &SessionDocumentRequest) -> Result<web_sys::Request,
         return Err(JsValue::from_str("unsupported browser cache and mode combination"));
     }
     let init = web_sys::RequestInit::new();
+    if let Some(signal) = signal {
+        js_sys::Reflect::set(init.as_ref(), &JsValue::from_str("signal"), signal.as_ref())?;
+    }
     for (key, value) in [("method", request.method.as_str()), ("cache", request.cache.as_str()),
         ("redirect", request.redirect.as_str()), ("mode", mode), ("referrer", request.referrer.as_str()),
         ("referrerPolicy", request.referrer_policy.as_str()), ("credentials", request.credentials.as_str()),
@@ -630,26 +671,106 @@ fn browser_request(request: &SessionDocumentRequest) -> Result<web_sys::Request,
     web_sys::Request::new_with_str_and_init(&request.url, &init)
 }
 
+struct BrowserFetchPermit {
+    active: Rc<Cell<usize>>,
+}
+
+impl Drop for BrowserFetchPermit {
+    fn drop(&mut self) {
+        self.active.set(self.active.get() - 1);
+    }
+}
+
+/// One elapsed deadline includes admission, response headers and every body
+/// read. Aborting the request also stops a pending browser stream read.
+struct BrowserFetchDeadline {
+    window: web_sys::Window,
+    controller: AbortController,
+    timer_id: i32,
+    _callback: Closure<dyn FnMut()>,
+    expired: Rc<Cell<bool>>,
+    ends_at_ms: f64,
+}
+
+impl BrowserFetchDeadline {
+    fn new(window: &web_sys::Window, timeout: std::time::Duration) -> Result<Self, JsValue> {
+        let performance = window.performance().ok_or_else(|| JsValue::from_str("browser clock unavailable"))?;
+        let expired = Rc::new(Cell::new(false));
+        let controller = AbortController::new()?;
+        let abort = controller.clone();
+        let timeout_expired = Rc::clone(&expired);
+        let callback = Closure::<dyn FnMut()>::new(move || {
+            timeout_expired.set(true);
+            abort.abort();
+        });
+        let timer_id = window.set_timeout_with_callback_and_timeout_and_arguments_0(
+            callback.as_ref().unchecked_ref(), timeout.as_millis() as i32,
+        )?;
+        Ok(Self {
+            window: window.clone(),
+            controller,
+            timer_id,
+            _callback: callback,
+            expired,
+            ends_at_ms: performance.now() + timeout.as_secs_f64() * 1000.0,
+        })
+    }
+
+    fn check(&self) -> Result<(), JsValue> {
+        if self.expired.get()
+            || self.window.performance().is_some_and(|clock| clock.now() >= self.ends_at_ms)
+        {
+            Err(JsValue::from_str("browser fetch deadline exceeded"))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn transport_error(&self, error: JsValue) -> JsValue {
+        self.check().err().unwrap_or(error)
+    }
+}
+
+impl Drop for BrowserFetchDeadline {
+    fn drop(&mut self) {
+        self.window.clear_timeout_with_handle(self.timer_id);
+        self.controller.abort();
+    }
+}
+
 async fn fetch_browser_request(url: &str, outbound: Option<&SessionDocumentRequest>,
     limits: &BrowserResourceLimits, total_bytes: &mut usize) -> Result<ResourceResponse, JsValue> {
+    limits.validate()?;
     let window =
         web_sys::window().ok_or_else(|| JsValue::from_str("browser window is unavailable"))?;
-    let fetch = match outbound { Some(request) => window.fetch_with_request(&browser_request(request)?),
-        None => window.fetch_with_str(url) };
-    let response = JsFuture::from(fetch)
-        .await?
+    let deadline = BrowserFetchDeadline::new(&window, limits.policy.timeout)?;
+    if limits.policy.max_concurrent_fetches == 0 {
+        return Err(JsValue::from_str("browser fetch admission capacity is zero"));
+    }
+    while limits.active_fetches.get() >= limits.policy.max_concurrent_fetches {
+        deadline.check()?;
+        gloo_timers::future::TimeoutFuture::new(16).await;
+    }
+    deadline.check()?;
+    limits.active_fetches.set(limits.active_fetches.get() + 1);
+    let _permit = BrowserFetchPermit { active: Rc::clone(&limits.active_fetches) };
+    let signal = deadline.controller.signal();
+    let request = match outbound {
+        Some(request) => browser_request(request, Some(&signal))?,
+        None => {
+            let init = web_sys::RequestInit::new();
+            js_sys::Reflect::set(init.as_ref(), &JsValue::from_str("signal"), signal.as_ref())?;
+            web_sys::Request::new_with_str_and_init(url, &init)?
+        },
+    };
+    deadline.check()?;
+    let response = JsFuture::from(window.fetch_with_request(&request))
+        .await.map_err(|error| deadline.transport_error(error))?
         .dyn_into::<Response>()?;
+    deadline.check()?;
     let kind = js_sys::Reflect::get(response.as_ref(), &JsValue::from_str("type"))?.as_string().unwrap_or_default();
     if matches!(response.status(), 0 | 204 | 205) || !matches!(kind.as_str(), "basic" | "cors" | "default") {
         return Err(JsValue::from_str("browser response cannot install a document"));
-    }
-    if response
-        .headers()
-        .get("content-length")?
-        .and_then(|length| length.parse::<usize>().ok())
-        .is_some_and(|length| length > limits.max_response_bytes as usize)
-    {
-        return Err(JsValue::from_str("browser response byte limit exceeded"));
     }
     let final_url = if response.url().is_empty() {
         url.to_owned()
@@ -658,6 +779,7 @@ async fn fetch_browser_request(url: &str, outbound: Option<&SessionDocumentReque
     };
     let content_type = response.headers().get("content-type")?;
     let Some(body) = response.body() else {
+        deadline.check()?;
         return Ok(ResourceResponse { final_url, content_type, bytes: Vec::new() });
     };
     let reader = body
@@ -665,7 +787,8 @@ async fn fetch_browser_request(url: &str, outbound: Option<&SessionDocumentReque
         .dyn_into::<web_sys::ReadableStreamDefaultReader>()?;
     let mut bytes = Vec::new();
     loop {
-        let read = JsFuture::from(reader.read()).await?;
+        let read = JsFuture::from(reader.read()).await.map_err(|error| deadline.transport_error(error))?;
+        deadline.check()?;
         if js_sys::Reflect::get(&read, &JsValue::from_str("done"))?
             .as_bool()
             .unwrap_or(false)
@@ -675,7 +798,7 @@ async fn fetch_browser_request(url: &str, outbound: Option<&SessionDocumentReque
         let chunk =
             js_sys::Uint8Array::new(&js_sys::Reflect::get(&read, &JsValue::from_str("value"))?);
         let length = chunk.length() as usize;
-        if bytes.len().saturating_add(length) > limits.max_response_bytes as usize
+        if bytes.len().saturating_add(length) > limits.policy.max_response_bytes
             || total_bytes.saturating_add(length) > limits.max_total_bytes as usize
         {
             let _ = reader.cancel();
@@ -684,6 +807,7 @@ async fn fetch_browser_request(url: &str, outbound: Option<&SessionDocumentReque
         bytes.extend_from_slice(&chunk.to_vec());
         *total_bytes += length;
     }
+    deadline.check()?;
     Ok(ResourceResponse {
         final_url,
         content_type,
@@ -703,6 +827,45 @@ fn redirected_navigation_address(requested: &str, final_url: &str) -> String {
     if final_url.contains('#') { return final_url.to_owned(); }
     requested.split_once('#').map_or_else(|| final_url.to_owned(),
         |(_, fragment)| format!("{final_url}#{fragment}"))
+}
+
+/// Browser-only receipt hook. It calls the same fetch function as document
+/// preparation, while allowing concurrent requests before a renderer starts.
+#[cfg(feature = "browser-fetch-fixture")]
+#[wasm_bindgen]
+pub struct BrowserFetchFixture {
+    limits: BrowserResourceLimits,
+}
+
+#[cfg(feature = "browser-fetch-fixture")]
+#[wasm_bindgen]
+impl BrowserFetchFixture {
+    #[wasm_bindgen(constructor)]
+    pub fn new(limits: BrowserResourceLimits) -> Result<Self, JsValue> {
+        limits.validate()?;
+        Ok(Self { limits })
+    }
+
+    pub fn fetch(&self, url: String) -> js_sys::Promise {
+        let limits = self.limits.clone();
+        wasm_bindgen_futures::future_to_promise(async move {
+            let mut total_bytes = 0;
+            let response = fetch_browser_request(&url, None, &limits, &mut total_bytes).await?;
+            Ok(JsValue::from_f64(response.bytes.len() as f64))
+        })
+    }
+
+    /// Exercise a queued request's own deadline while another request holds
+    /// the same admission pool. This override is confined to receipt builds.
+    pub fn fetch_with_timeout(&self, url: String, timeout_ms: u32) -> js_sys::Promise {
+        let mut limits = self.limits.clone();
+        limits.policy.timeout = std::time::Duration::from_millis(timeout_ms as u64);
+        wasm_bindgen_futures::future_to_promise(async move {
+            let mut total_bytes = 0;
+            let response = fetch_browser_request(&url, None, &limits, &mut total_bytes).await?;
+            Ok(JsValue::from_f64(response.bytes.len() as f64))
+        })
+    }
 }
 
 /// Real-WebGPU lifecycle probe used by `tests/web/checked_frame.html`.

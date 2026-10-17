@@ -127,7 +127,7 @@ mod tests {
 }
 
 /// A host-owned request, independent of the runtime and transport implementation.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ResourceRequest {
     pub url: String,
     pub method: String,
@@ -282,11 +282,10 @@ pub trait ResourceFetcher {
         ResourceFetchPolicy::default().max_concurrent_fetches
     }
 
-    /// A URL-only implementation does not imply an HTTP 200 response. Hosts
-    /// that serve local plain GETs may opt in with `from_local_plain_get`.
-    fn fetch_request(&self, _request: &ResourceRequest) -> Option<ResourceFetchResponse> {
-        None
-    }
+    /// Answer a full host request without silently dropping its method, body,
+    /// policy or response metadata. A byte-only implementation must explicitly
+    /// return `None`; local plain GETs can use `from_local_plain_get`.
+    fn fetch_request(&self, request: &ResourceRequest) -> Option<ResourceFetchResponse>;
 
     /// Fetch `url` with its redirect-final identity and response type. Existing
     /// byte-only hosts remain valid: their requested URL is the final identity and
@@ -306,6 +305,10 @@ mod request_compatibility {
         fn fetch(&self, _: &str) -> Option<Vec<u8>> {
             self.0.set(self.0.get() + 1);
             Some(vec![0, 128, 255])
+        }
+
+        fn fetch_request(&self, _: &ResourceRequest) -> Option<ResourceFetchResponse> {
+            None
         }
     }
     fn plain() -> ResourceRequest {
@@ -337,6 +340,9 @@ mod request_compatibility {
             );
         }
         assert_eq!(fetcher.0.get(), 0);
-        assert_eq!(fetcher.fetch("https://host.test/resource"), Some(vec![0, 128, 255]));
+        assert_eq!(
+            fetcher.fetch("https://host.test/resource"),
+            Some(vec![0, 128, 255])
+        );
     }
 }

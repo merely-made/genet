@@ -43,6 +43,7 @@ members = [
     "components/script-engine-nova",
     "components/script-engine-piccolo",
     "components/script-runtime-api",
+    "components/genet-worker-process",
     # Livery carries three Parley 0.10 extensions that downstream hosts must
     # resolve from the same source. Published as `genet-parley` on 2026-09-14
     # (with its sibling `genet-fontique`, an implicit member through parley's

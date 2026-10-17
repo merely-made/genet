@@ -23,6 +23,7 @@ h3 = ["hyper-transport", "murm-wire/h3"]
 websocket = ["dep:tokio-tungstenite", "dep:murm-wire", "murm-wire/websocket"]
 
 [dependencies]
+genet-host-api = { path = "../genet-host-api", version = "0.2.0" }
 murm-wire = { git = "https://github.com/merely-made/murm.git", branch = "main", version = "0.1.0", default-features = false, optional = true }
 url = "2.5"
 bytes = "1"

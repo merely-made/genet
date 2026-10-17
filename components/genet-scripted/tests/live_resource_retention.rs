@@ -36,6 +36,13 @@ impl CountingFetcher {
 }
 
 impl ResourceFetcher for CountingFetcher {
+    fn fetch_request(
+        &self,
+        _request: &genet_host_api::ResourceRequest,
+    ) -> Option<genet_host_api::ResourceFetchResponse> {
+        None
+    }
+
     fn fetch(&self, url: &str) -> Option<Vec<u8>> {
         self.calls.borrow_mut().push(url.to_owned());
         self.responses.borrow().get(url).cloned().flatten()
@@ -62,6 +69,13 @@ impl RedirectingFetcher {
 }
 
 impl ResourceFetcher for RedirectingFetcher {
+    fn fetch_request(
+        &self,
+        _request: &genet_host_api::ResourceRequest,
+    ) -> Option<genet_host_api::ResourceFetchResponse> {
+        None
+    }
+
     fn fetch(&self, url: &str) -> Option<Vec<u8>> {
         self.fetch_response(url).map(|response| response.bytes)
     }

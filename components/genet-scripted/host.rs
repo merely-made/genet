@@ -18,4 +18,8 @@ pub struct ScriptedDocumentOptions {
     pub validation_message_catalog: ValidationMessageCatalog,
     /// Explicit worker lifetime contract, installed before parser scripts.
     pub worker_policy: WorkerPolicy,
+    /// Native helper for killable worker trees. Absent means required
+    /// cancellation refuses Worker creation before executing authored script.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub worker_process_launcher: Option<script_runtime_api::WorkerProcessLauncher>,
 }

@@ -1070,6 +1070,13 @@ mod tests {
     fn url_only_host_refuses_rich_requests_without_claiming_http_success() {
         struct UrlOnly(Arc<AtomicUsize>);
         impl ResourceFetcher for UrlOnly {
+            fn fetch_request(
+                &self,
+                _request: &genet_host_api::ResourceRequest,
+            ) -> Option<genet_host_api::ResourceFetchResponse> {
+                None
+            }
+
             fn fetch(&self, _: &str) -> Option<Vec<u8>> {
                 self.0.fetch_add(1, Ordering::Relaxed);
                 Some(b"legacy".to_vec())
@@ -1159,6 +1166,13 @@ mod tests {
     fn classic_script_loading_decodes_the_declared_charset() {
         struct Latin1Script;
         impl ResourceFetcher for Latin1Script {
+            fn fetch_request(
+                &self,
+                _request: &genet_host_api::ResourceRequest,
+            ) -> Option<genet_host_api::ResourceFetchResponse> {
+                None
+            }
+
             fn fetch(&self, _url: &str) -> Option<Vec<u8>> {
                 Some(vec![0xe9])
             }

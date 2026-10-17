@@ -51,6 +51,13 @@ use crate::timing::{FrameTiming, Phase, TimingLog, TimingSummary, json_string};
 #[cfg(feature = "scripted")]
 use crate::webgl::WebGlHost;
 
+#[cfg(feature = "scripted")]
+fn worker_helper(backend: script_runtime_api::WorkerBackend) -> Option<script_runtime_api::WorkerProcessLauncher> {
+    let executable = std::env::var_os("GENET_WORKER_HELPER")?;
+    let executable = std::path::PathBuf::from(executable);
+    executable.is_absolute().then(|| script_runtime_api::WorkerProcessLauncher::new(executable, backend))
+}
+
 /// The actual session-transition owner, borrowed by window and headless hosts.
 struct SessionDriver<'a> {
     engine: &'a dyn SessionEngine<Scene>,
@@ -310,12 +317,15 @@ fn make_engine_with_wake(
                         fetcher,
                         wake,
                     );
-                Ok(Box::new(match webgl {
-                    Some(webgl) => {
-                        engine.with_options_factory(move |_| Ok(webgl.scripted_document_options()))
-                    },
-                    None => engine,
-                }))
+                let launcher = worker_helper(script_runtime_api::WorkerBackend::Boa);
+                Ok(Box::new(engine.with_options_factory(move |_| {
+                    let mut options = webgl.as_ref().map_or_else(
+                        genet_scripted::ScriptedDocumentOptions::default,
+                        WebGlHost::scripted_document_options,
+                    );
+                    options.worker_process_launcher = launcher.clone();
+                    Ok(options)
+                })))
             }
             #[cfg(not(feature = "scripted"))]
             {
@@ -335,12 +345,15 @@ fn make_engine_with_wake(
                         fetcher,
                         wake,
                     );
-                Ok(Box::new(match webgl {
-                    Some(webgl) => {
-                        engine.with_options_factory(move |_| Ok(webgl.scripted_document_options()))
-                    },
-                    None => engine,
-                }))
+                let launcher = worker_helper(script_runtime_api::WorkerBackend::Nova);
+                Ok(Box::new(engine.with_options_factory(move |_| {
+                    let mut options = webgl.as_ref().map_or_else(
+                        genet_scripted::ScriptedDocumentOptions::default,
+                        WebGlHost::scripted_document_options,
+                    );
+                    options.worker_process_launcher = launcher.clone();
+                    Ok(options)
+                })))
             }
             #[cfg(all(feature = "scripted-nova", not(target_pointer_width = "64")))]
             {

@@ -755,6 +755,7 @@ impl CallCx for BoaCallCx<'_> {
 }
 
 impl ScriptEngine for BoaEngine {
+    fn native_worker_backend() -> Option<&'static str> { Some("boa") }
     type Value = JsValue;
     type Error = JsError;
     type CallCx<'a> = BoaCallCx<'a>;

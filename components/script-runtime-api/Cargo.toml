@@ -40,6 +40,7 @@ url = { workspace = true }
 # adapter and keeps the engine reusable.
 xpath = { workspace = true }
 encoding_rs = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]
 # Regenerates dom/html_interfaces_generated.rs from WPT's vendored WebIDL so the
@@ -59,6 +60,7 @@ pollster = "0.4"
 # getrandom (see the sonic-rs patch note in the root manifest); a wasm host
 # installs the browser's source through Runtime::set_random_source.
 getrandom = "0.4"
+serde_json = { workspace = true }
 
 [target.'cfg(target_pointer_width = "64")'.dev-dependencies]
 script-engine-nova = { path = "../script-engine-nova" }

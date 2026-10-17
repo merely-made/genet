@@ -1,5 +1,17 @@
 # Genet architecture and removal audit
 
+## Remaining R7/I6/H5: 2026-10-17
+
+**R7, I6 and H5 are addressed locally within the following boundaries.** Required-cancellation native workers use one supervised helper process per top-level worker tree, with the same engine as the page. Descendant Workers remain inside that helper. Terminate and runtime/document drop reap the process and join its IPC bridges; parent-pipe loss stops the helper independently of script execution. The host selects an absolute helper path explicitly. Ortet accepts `GENET_WORKER_HELPER`; missing or invalid configuration refuses creation. Trusted cooperative threads remain an explicit option with truthful detachment reporting.
+
+The process protocol bounds frames and queues, validates engine/version, and times out blocked startup writes. Queue saturation is a terminal worker error after structured transfers commit; the helper is retired and the page receives an asynchronous error. Reports distinguish successful exit, killed/reaped, crashed/reaped and uncertain reaping. This is a native lifetime boundary, not a script execution-time budget or an OS sandbox. The configured executable must be the trusted built-in helper; arbitrary wrappers that spawn independent processes are outside this contract. Browser worker deployment and Windows/macOS lifecycle were not qualified.
+
+The host-owned request is now required at every ResourceFetcher implementation. Netfetcher owns the native policy conversion used by Ortet and both Mere HTTP producers. Methods, bodies, headers, response status and redirect-final identity survive the live path; malformed method tokens cannot silently become GET. Byte-document views and snapshots remain deliberate lossy adapters. They explicitly refuse rich requests when metadata is unavailable; local file/data responses and controlled local fixtures retain explicit synthetic responses. Mere's byte-document MIME essence contract is preserved while rich responses retain full Content-Type.
+
+Browser and native adapters consume ResourceFetchPolicy for decoded-byte limits, elapsed deadlines and shared admission. Admission waits consume the deadline. Browser Fetch hides intermediate redirects, so custom redirect caps are refused rather than claimed. Existing aggregate document budgets and navigation ownership remain.
+
+Verification: **227 passing native unit/retained/regression tests**, **36 distinct isolated worker scenarios across Boa and Nova**, and **12 actual-browser fetch-policy checks plus a GPU draw**. Worker fixtures cover startup, callback, timer, self-replenishing microtasks, nested workers, runtime/document drop, parent disappearance, retained resource callbacks, blocked handshake writes, queue pressure and invalid queue configuration. Linux fixtures assert helper reaping and bridge-thread removal before the test process exits. The AMD WebGPU page receipt verifies redirected HTML, nested CSS imports, authored font, image, denied response and budget refusal with pixel readback. Source hashes, final consumer checks, corrected attempts and publication limits are recorded in the [remaining-three receipt](receipts/2026-10-17_remaining_three_ownership.json). All heavy gates remain serialized with one Cargo job, serial tests, nice 10, 5 GiB maximum memory, no swap allowance and 150% CPU quota.
+
 ## Slice 5: L9/H2/H9/H10, 2026-10-17
 
 **L9, H2, H9 and H10 are addressed locally within the evidence below.** Buckram's single-style adapter now names Taffy directly; caller context/source ownership and real backend fallbacks remain. Ortet owns checked browser frame admission through raster, composition, completion and presentation. Content/size revisions reject stale frames; a typed reconfigured-surface outcome permits one bounded retry. The infallible wasm renderer getter is removed and actual Mere/Turnstone callers are migrated.
@@ -525,24 +537,21 @@ The fresh review covered the production changes, their consumers and regression 
 ### Current disposition of the findings
 
 Reconciled against `ec5d8b997aa`, the source-hashed slice 2 repair snapshot and
-the source-hashed slice 3 and cross-repository slices 4 and 5 repair snapshots on 2026-10-17. This table supersedes
+the source-hashed slice 3, cross-repository slices 4 and 5, and remaining R7/I6/H5 repair snapshots on 2026-10-17. This table supersedes
 the older 9-addressed / 3-partial / 43-open snapshot and the open-status wording
 in historical evidence below. Addressed means the named source defect or cut,
 with each repair's stated qualification and publication limits retained.
 
 | Disposition | IDs | Current evidence / remaining boundary |
 |---|---|---|
-| Addressed locally | L9, H2, H9, H10, I10, R10, R11, L5, H1, H3, H4, H7, H8, H11, I2, I3, I4, I5, I7, I8, I9, I12, I13, I14, I15, L1, L2, L3, L4, L7, L8, L10, L11, L12, L13, R1, R2, R3, R4, R5, R6, R8, R9, R12, R13, R14, R15, W1, W2 | Original narrow removals plus retained acquisition, source-relative image identity, non-stealing capture, shared decoded pixels, generated transform/paint ownership, canonical origins, bounded decoded cache accumulation, default cookie storage restrictions, structured history state and bare-runtime ownership, shared CSS comment lexing, borrowed retained planes, authoritative linked shader layout, importer identity, scoped resolver/root cleanup, table-owned aggregation, capture admission, shared selector grammar, static query membership, whole-list declaration parsing and fallible context creation, retained task dispatch, parser failure reporting, production animation-frame scheduling and host elapsed clocks. Dated repair sections and receipts above contain the tests and limits. |
+| Addressed locally | R7, I6, H5, L9, H2, H9, H10, I10, R10, R11, L5, H1, H3, H4, H7, H8, H11, I2, I3, I4, I5, I7, I8, I9, I12, I13, I14, I15, L1, L2, L3, L4, L7, L8, L10, L11, L12, L13, R1, R2, R3, R4, R5, R6, R8, R9, R12, R13, R14, R15, W1, W2 | Original narrow removals plus retained acquisition, source-relative image identity, non-stealing capture, shared decoded pixels, generated transform/paint ownership, canonical origins, bounded decoded cache accumulation, default cookie storage restrictions, structured history state and bare-runtime ownership, shared CSS comment lexing, borrowed retained planes, authoritative linked shader layout, importer identity, scoped resolver/root cleanup, table-owned aggregation, capture admission, shared selector grammar, static query membership, whole-list declaration parsing and fallible context creation, retained task dispatch, parser failure reporting, production animation-frame scheduling and host elapsed clocks. Dated repair sections and receipts above contain the tests and limits. |
 | Partial | I1 | Native editing shares DOM defaults; scripted text/IME, key releases and default-action integration remain open. |
-| Partial | I6 | Rich/legacy conversion is explicit and URL-only fetchers no longer fabricate response metadata; external byte-only callers still need migration. |
 | Partial | I11 | Cache-key lookup no longer recompiles shaders; a source/stage/options-owned compiled-artifact lifecycle remains open. |
-| Partial | H5 | Native byte, deadline and admission limits are enforced; browser policy wiring remains absent, so one host-configured policy is not shared across adapters. |
 | Partial | H6 | Setup/execution/completion accounting repaired; trustworthy VM error phase/type and complete Test262 qualification remain open. |
 | Partial | L6 | Shared form/radio predicates; broader dependency classification and separate mutation switches remain. |
-| Partial | R7 | Default workers refuse unsupported required cancellation; explicit trusted cooperative workers can still detach uninterruptible VM work. Direct shutdown counts do not track descendants. |
-| Open | None | Seven partial findings retain their stated remaining work. |
+| Open | None | Four partial findings retain their stated remaining work: I1, I11, H6 and L6. |
 
-**56 findings: 49 addressed locally, 7 partial, 0 open.** Supplemental X1 remains
+**56 findings: 52 addressed locally, 4 partial, 0 open.** Supplemental X1 remains
 partial and is excluded from that count. The pinned NetRender supplier revision is now published and adopted by Mere/Turnstone;
 the baseline supplier corpus mismatch, existing ignored continuation tests and
 platform/Forms acceptance are separate outstanding obligations, not extra closed
@@ -692,7 +701,7 @@ observations corroborate I findings and are not counted twice.
 | I3 | Addressed locally | Generic DOM synchronization re-resolves all document resources | Retain dependency-aware acquisition results; remove whole-resource resolution from unrelated mutations/style reads. |
 | I4 | Addressed locally | Authored image aliases collapse different stylesheet bases | Carry resolved source identity into computed image/paint keys. |
 | I5 | Addressed locally | Capture drains rendering's mutation journal | One consumption owner or non-stealing observation cursors; preserve historical capture format. |
-| I6 | Partial | Request and response compatibility representations duplicate and discard metadata | Explicit rich/legacy conversion and no fabricated URL-only success are in place; migrate external byte-only callers to the shared host contract. |
+| I6 | Addressed locally (remaining three) | Request and response compatibility representations duplicate and discard metadata | Shared host request and native conversion owner; live HTTP producers preserve metadata. Byte snapshots explicitly refuse rich requests, with deliberate local and lossy adapters. |
 | I7 | Addressed locally | Handwritten origin grammar normalizes malformed URLs inconsistently | Derive tuples from canonical parsed URLs; preserve opaque/inherited origin policy. |
 | I8 | Addressed locally | Cache limit checks Content-Length but not accumulated decoded bytes | Stop cache accumulation at configured streamed-byte cap; preserve body delivery. |
 | I9 | Addressed locally | Default cookie jar defers public-suffix and prefix restrictions | Default jar now enforces suffix and prefix restrictions at storage/retrieval; injected storage and SameSite context remain. |
@@ -708,7 +717,7 @@ observations corroborate I findings and are not counted twice.
 | R4 | Addressed locally | Internal task source-eval and result coercion can erase errors/work | Retained private callable entrypoints with realm/GC ownership and explicit outcomes. |
 | R5 | Addressed locally | Parsed script loading/evaluation errors disappear behind scheduling counters | Typed nonfatal execution results and proper exception reporting. |
 | R6 | Addressed locally | Parser module resolver drops referrer identity | Resolve/cache using actual importer/final URL and inline document base. |
-| R7 | Partial | Worker shutdown detaches uninterruptible VM execution | Enforceable interruption/isolation; truthful lifetime and configurable shutdown policy. |
+| R7 | Addressed locally (remaining three) | Worker shutdown detaches uninterruptible VM execution | Supervised native helper owns the worker tree; terminate/drop reap it and join bridges. Trusted cooperative mode remains explicit; built-in-helper and Linux qualification boundaries apply. |
 | R8 | Addressed locally | Budget-shaped API defaults ignore limits | Separate execution interruption from job count; refuse unsupported required bounds. |
 | R9 | Addressed locally | Missing WebGL factory manufactures a context-shaped capability | Return unsupported/null when actual graphics capability is absent. |
 | R10 | Addressed locally (slice 4) | WebGL objects use public mutable identity and permissive text coercion | Private context-owned brands and genuine value extraction. |
@@ -734,7 +743,7 @@ observations corroborate I findings and are not counted twice.
 | H2 | Addressed locally (slice 5) | Browser compatibility renderer access bypasses checked ownership | Migrate to browser frame transaction; preserve leases/loss/scope outcomes. |
 | H3 | Addressed locally | WPT runs animation callbacks that live session pumps omit | Share production turn contract and pending-work wake facts; preserve virtual clock. |
 | H4 | Addressed locally | Browser key route discards typed input outcome and performs scroll defaults | Gate defaults using handled/editable/cancelled outcome, as native host does. |
-| H5 | Partial | Native fetch ignores declared byte/deadline/concurrency policy | Native counted bytes, elapsed deadline and admission are in place; wire the same host-configured policy through the browser adapter. |
+| H5 | Addressed locally (remaining three) | Native fetch ignores declared byte/deadline/concurrency policy | Shared configured policy enforces decoded bytes, elapsed deadlines and admission on native/browser paths; custom browser redirect caps explicitly refuse. |
 | H6 | Partial | Test262 negative/module/async paths can turn setup/wrong failures into passes | Typed setup/execution/completion and shared exact negative matching; combine flags correctly. |
 | H7 | Addressed locally | Old profile gates turn cargo failure into empty clean result | Retire obsolete entrance; strengthen canonical CI cone witness with failing controls. |
 | H8 | Addressed locally | PowerShell wrappers can continue after native build/bindgen failure | Checked native-command helper and environment restoration; stale outputs must not imply success. |

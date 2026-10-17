@@ -293,6 +293,13 @@ fn synchronize_live_styles(host: &HostState, state: &mut LiveryState) {
 struct NoResourceFetch;
 
 impl ResourceFetcher for NoResourceFetch {
+    fn fetch_request(
+        &self,
+        _request: &genet_host_api::ResourceRequest,
+    ) -> Option<genet_host_api::ResourceFetchResponse> {
+        None
+    }
+
     fn fetch(&self, _url: &str) -> Option<Vec<u8>> {
         None
     }
@@ -2045,6 +2052,13 @@ mod tests {
     struct LiveSheetFetch;
 
     impl ResourceFetcher for LiveSheetFetch {
+        fn fetch_request(
+            &self,
+            _request: &genet_host_api::ResourceRequest,
+        ) -> Option<genet_host_api::ResourceFetchResponse> {
+            None
+        }
+
         fn fetch(&self, url: &str) -> Option<Vec<u8>> {
             match url {
                 "https://example.test/docs/theme.css" => Some(b".card { color: green; }".to_vec()),
@@ -2066,6 +2080,13 @@ mod tests {
     }
 
     impl ResourceFetcher for LiveAssetFetch {
+        fn fetch_request(
+            &self,
+            _request: &genet_host_api::ResourceRequest,
+        ) -> Option<genet_host_api::ResourceFetchResponse> {
+            None
+        }
+
         fn fetch(&self, url: &str) -> Option<Vec<u8>> {
             match url {
                 "https://example.test/docs/poster.png" => Some(self.image.borrow().clone()),
@@ -2078,6 +2099,13 @@ mod tests {
     struct RelativeImageFetch;
 
     impl ResourceFetcher for RelativeImageFetch {
+        fn fetch_request(
+            &self,
+            _request: &genet_host_api::ResourceRequest,
+        ) -> Option<genet_host_api::ResourceFetchResponse> {
+            None
+        }
+
         fn fetch(&self, url: &str) -> Option<Vec<u8>> {
             match url {
                 "https://example.test/parent/poster.png" => Some(

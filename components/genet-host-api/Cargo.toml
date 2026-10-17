@@ -17,5 +17,8 @@ name = "genet_host_api"
 path = "lib.rs"
 bench = false
 
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)', 'cfg(llvm_pgo)'] }

@@ -41,6 +41,13 @@ impl CountingFetcher {
 }
 
 impl ResourceFetcher for CountingFetcher {
+    fn fetch_request(
+        &self,
+        _request: &genet_host_api::ResourceRequest,
+    ) -> Option<genet_host_api::ResourceFetchResponse> {
+        None
+    }
+
     fn fetch(&self, url: &str) -> Option<Vec<u8>> {
         self.calls.lock().expect("fetch calls").push(url.to_owned());
         (url == "https://journal.test/theme.css").then(|| b".card.active { color: red; }".to_vec())

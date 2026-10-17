@@ -29,6 +29,7 @@ pub use genet_host_api::ResourceRequest as FetchRequest;
 
 /// The result handed back to script. A Fetch *network error* is
 /// `network_error == true` (script sees a rejected promise / `TypeError`).
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct FetchOutcome {
     pub network_error: bool,
     pub status: u16,

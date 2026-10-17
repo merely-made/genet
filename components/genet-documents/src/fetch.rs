@@ -173,6 +173,13 @@ mod tests {
     fn remote_schemes_are_the_fallbacks_and_never_the_filesystem() {
         struct Canned;
         impl ResourceFetcher for Canned {
+            fn fetch_request(
+                &self,
+                _request: &genet_host_api::ResourceRequest,
+            ) -> Option<genet_host_api::ResourceFetchResponse> {
+                None
+            }
+
             fn fetch(&self, url: &str) -> Option<Vec<u8>> {
                 Some(url.as_bytes().to_vec())
             }

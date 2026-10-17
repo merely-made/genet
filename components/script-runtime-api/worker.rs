@@ -2,7 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-//! Dedicated workers: a second agent of the same engine on its own thread.
+//! Dedicated workers: a second agent of the same engine in a supervised
+//! process on native hosts, or a thread under the explicit trusted policy.
 //!
 //! Both engines are `!Send`, so nothing engine-shaped crosses the boundary. The
 //! worker thread constructs its own [`Runtime`] and owns it for its whole life;
@@ -29,17 +30,25 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, TryRecvError, channel};
+use std::sync::mpsc::{
+    Receiver, RecvTimeoutError, Sender, SyncSender, TryRecvError, TrySendError, channel,
+    sync_channel,
+};
 use std::time::{Duration, Instant};
 
 use script_engine_api::{CallCx, NativeFn, ScriptEngine};
+use serde::{Deserialize, Serialize};
+
+#[cfg(not(target_arch = "wasm32"))]
+use crate::worker_process::{ProcessExit, WorkerProcessHandle};
 
 use crate::{FetchHandler, FetchOutcome, FetchRequest, HostState, Runtime, SharedHost, js_str};
 
 /// A host must explicitly accept cooperative shutdown for trusted scripts.
-/// The default requires cancellation of running VM work; currently no backend
-/// provides that complete worker guarantee, so creation is refused.
+/// The default requires an explicitly configured native helper process so
+/// running VM work and its nested worker tree can be killed and reaped.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkerPolicy {
     RequireCancellation,
@@ -55,13 +64,22 @@ impl Default for WorkerPolicy {
     }
 }
 
-/// Results for worker threads directly owned by one runtime. Descendants
-/// started inside them are not counted and may still execute after a join.
+/// Results for directly owned worker threads and root helper processes.
+/// Descendants inside a helper are reclaimed with its process; trusted thread
+/// descendants are untracked and may still execute after the root is joined.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct WorkerShutdownReport {
     pub direct_joined: usize,
     pub direct_detached: usize,
-    /// True when direct workers might have spawned untracked descendants.
+    /// Root worker processes that exited and were reaped without a kill.
+    pub processes_joined: usize,
+    /// Root worker processes killed and reaped, immediately or after grace.
+    pub processes_killed: usize,
+    /// Root worker processes that exited nonzero and were reaped.
+    pub processes_crashed: usize,
+    /// A process could not be reaped; ownership must not be claimed.
+    pub processes_failed: usize,
+    /// True when trusted worker threads might have spawned untracked descendants.
     pub descendants_untracked: bool,
 }
 
@@ -113,6 +131,7 @@ pub trait ScriptResourceLoader {
 }
 
 /// Page -> worker.
+#[derive(Serialize, Deserialize)]
 pub(crate) enum ToWorker {
     Message(String),
     PortMessage(String, String),
@@ -121,6 +140,7 @@ pub(crate) enum ToWorker {
 }
 
 /// Worker -> page.
+#[derive(Serialize, Deserialize)]
 pub(crate) enum FromWorker {
     Message(String),
     PortMessage(String, String),
@@ -134,22 +154,83 @@ pub(crate) enum FromWorker {
     Closed,
 }
 
+/// Native process IPC uses bounded nonblocking queues. A full queue marks the
+/// bridge failed, so the owner kills the process instead of losing a message.
+pub(crate) enum WorkerSender<T> {
+    Thread(Sender<T>),
+    Process {
+        tx: SyncSender<T>,
+        failed: Arc<AtomicBool>,
+        child_side: bool,
+    },
+}
+
+impl<T> Clone for WorkerSender<T> {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Thread(tx) => Self::Thread(tx.clone()),
+            Self::Process {
+                tx,
+                failed,
+                child_side,
+            } => Self::Process {
+                tx: tx.clone(),
+                failed: failed.clone(),
+                child_side: *child_side,
+            },
+        }
+    }
+}
+
+impl<T> WorkerSender<T> {
+    pub(crate) fn send(&self, message: T) -> Result<(), ()> {
+        match self {
+            Self::Thread(tx) => tx.send(message).map_err(|_| ()),
+            Self::Process {
+                tx,
+                failed,
+                child_side,
+            } => match tx.try_send(message) {
+                Ok(()) => Ok(()),
+                Err(TrySendError::Full(_)) => {
+                    failed.store(true, Ordering::Release);
+                    if *child_side {
+                        std::process::exit(2);
+                    }
+                    Err(())
+                },
+                Err(TrySendError::Disconnected(_)) => {
+                    failed.store(true, Ordering::Release);
+                    if *child_side {
+                        std::process::exit(2);
+                    }
+                    Err(())
+                },
+            },
+        }
+    }
+}
+
 /// What the spawning thread hands the worker thread. Every field is `Send`; no
 /// engine type appears, which is why the spawn compiles without an engine bound.
 pub(crate) struct WorkerBoot {
-    url: String,
-    name: String,
-    rx: Receiver<ToWorker>,
-    tx: Sender<FromWorker>,
-    wake: Option<Arc<dyn Fn() + Send + Sync>>,
-    policy: WorkerPolicy,
+    pub(crate) url: String,
+    pub(crate) name: String,
+    pub(crate) rx: Receiver<ToWorker>,
+    pub(crate) tx: WorkerSender<FromWorker>,
+    pub(crate) wake: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub(crate) policy: WorkerPolicy,
 }
 
 /// The page's handle on one live worker.
 pub(crate) struct WorkerHandle {
-    tx: Sender<ToWorker>,
+    tx: WorkerSender<ToWorker>,
     rx: Receiver<FromWorker>,
     join: Option<std::thread::JoinHandle<()>>,
+    #[cfg(not(target_arch = "wasm32"))]
+    process: Option<WorkerProcessHandle>,
+    #[cfg(not(target_arch = "wasm32"))]
+    bridge_failed: Option<Arc<AtomicBool>>,
     /// The worker reported it had nothing left to do. The page's drive loop may
     /// quiesce only when every worker is idle: the worker cannot wake itself.
     idle: bool,
@@ -157,6 +238,8 @@ pub(crate) struct WorkerHandle {
     /// Messages sent to this worker; compared against the count in `Idle`.
     sent: Arc<AtomicU64>,
     shutdown_grace: Duration,
+    /// Maximum envelopes admitted to the page event queue per pump turn.
+    pump_limit: usize,
 }
 
 /// Process-unique ids for cross-agent message ports.
@@ -164,7 +247,7 @@ static NEXT_PORT_ID: AtomicU64 = AtomicU64::new(1);
 
 /// The worker thread's end of the link, shared by its fetch handler and its loop.
 pub(crate) struct WorkerLink {
-    tx: Sender<FromWorker>,
+    tx: WorkerSender<FromWorker>,
     rx: Receiver<ToWorker>,
     wake: Option<Arc<dyn Fn() + Send + Sync>>,
     /// Envelopes waiting for `__ws_take`.
@@ -404,7 +487,7 @@ pub(crate) fn worker_main<E: ScriptEngine>(boot: WorkerBoot) {
 fn run_worker_loop<E: ScriptEngine>(
     rt: &mut Runtime<E>,
     link: &Rc<RefCell<WorkerLink>>,
-    tx: &Sender<FromWorker>,
+    tx: &WorkerSender<FromWorker>,
     wake: Option<&Arc<dyn Fn() + Send + Sync>>,
     clock_start: Instant,
 ) {
@@ -536,9 +619,30 @@ impl<E: ScriptEngine> NativeFn<E> for WorkerCreate {
         .unwrap_or(url);
         let name = arg_string::<E>(cx, 1)?;
         let policy = with_host::<E, _>(cx, |h| h.worker_policy).unwrap_or_default();
-        // There is no worker interruption or process-isolation contract yet.
-        // VM fuel for one eval and counting completed jobs cannot provide it.
+        // Required cancellation admits only a configured killable process.
+        // VM fuel or completed-job counts do not interrupt arbitrary callbacks.
+        #[cfg(not(target_arch = "wasm32"))]
+        let launcher = with_host::<E, _>(cx, |h| h.worker_process_launcher.clone()).flatten();
+        #[cfg(target_arch = "wasm32")]
         if matches!(policy, WorkerPolicy::RequireCancellation) {
+            return cx.make_string("-2");
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if matches!(policy, WorkerPolicy::RequireCancellation) && launcher.is_none() {
+            return cx.make_string("-2");
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if matches!(policy, WorkerPolicy::RequireCancellation)
+            && launcher.as_ref().is_some_and(|launcher| !launcher.valid())
+        {
+            return cx.make_string("-1");
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if matches!(policy, WorkerPolicy::RequireCancellation)
+            && launcher.as_ref().is_some_and(|launcher| {
+                E::native_worker_backend() != Some(launcher.backend.as_str())
+            })
+        {
             return cx.make_string("-2");
         }
         let spawn = with_host::<E, _>(cx, |h| h.worker_spawn).flatten();
@@ -546,8 +650,58 @@ impl<E: ScriptEngine> NativeFn<E> for WorkerCreate {
         let Some(spawn) = spawn else {
             return cx.make_string("-1");
         };
-        let (tx_to, rx_to) = channel::<ToWorker>();
-        let (tx_from, rx_from) = channel::<FromWorker>();
+        #[cfg(not(target_arch = "wasm32"))]
+        let process_mode = matches!(policy, WorkerPolicy::RequireCancellation);
+        #[cfg(not(target_arch = "wasm32"))]
+        let failed = Arc::new(AtomicBool::new(false));
+        #[cfg(not(target_arch = "wasm32"))]
+        let (tx_to, rx_to) = if process_mode {
+            let limit = launcher
+                .as_ref()
+                .expect("required launcher")
+                .max_queued_messages;
+            let (tx, rx) = sync_channel(limit);
+            (
+                WorkerSender::Process {
+                    tx,
+                    failed: failed.clone(),
+                    child_side: false,
+                },
+                rx,
+            )
+        } else {
+            let (tx, rx) = channel();
+            (WorkerSender::Thread(tx), rx)
+        };
+        #[cfg(target_arch = "wasm32")]
+        let (tx_to, rx_to) = {
+            let (tx, rx) = channel();
+            (WorkerSender::Thread(tx), rx)
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        let (tx_from, rx_from) = if process_mode {
+            let limit = launcher
+                .as_ref()
+                .expect("required launcher")
+                .max_queued_messages;
+            let (tx, rx) = sync_channel(limit);
+            (
+                WorkerSender::Process {
+                    tx,
+                    failed: failed.clone(),
+                    child_side: false,
+                },
+                rx,
+            )
+        } else {
+            let (tx, rx) = channel();
+            (WorkerSender::Thread(tx), rx)
+        };
+        #[cfg(target_arch = "wasm32")]
+        let (tx_from, rx_from) = {
+            let (tx, rx) = channel();
+            (WorkerSender::Thread(tx), rx)
+        };
         let sent = Arc::new(AtomicU64::new(0));
         let boot = WorkerBoot {
             url,
@@ -557,11 +711,38 @@ impl<E: ScriptEngine> NativeFn<E> for WorkerCreate {
             wake,
             policy,
         };
+        #[cfg(not(target_arch = "wasm32"))]
+        let pump_limit = launcher
+            .as_ref()
+            .map_or(usize::MAX, |launcher| launcher.max_queued_messages);
+        #[cfg(target_arch = "wasm32")]
+        let pump_limit = usize::MAX;
+        #[cfg(not(target_arch = "wasm32"))]
+        let (join, process) = if let Some(launcher) =
+            launcher.filter(|_| matches!(policy, WorkerPolicy::RequireCancellation))
+        {
+            match WorkerProcessHandle::spawn(boot, &launcher, failed.clone()) {
+                Ok(process) => (None, Some(process)),
+                Err(_) => return cx.make_string("-1"),
+            }
+        } else {
+            let join = std::thread::Builder::new()
+                .name("genet-worker".to_owned())
+                .spawn(move || spawn(boot))
+                .ok();
+            (join, None)
+        };
+        #[cfg(target_arch = "wasm32")]
         let join = std::thread::Builder::new()
             .name("genet-worker".to_owned())
             .spawn(move || spawn(boot))
             .ok();
         if join.is_none() {
+            #[cfg(not(target_arch = "wasm32"))]
+            if process.is_none() {
+                return cx.make_string("-1");
+            }
+            #[cfg(target_arch = "wasm32")]
             return cx.make_string("-1");
         }
         let id = with_host::<E, _>(cx, |h| {
@@ -569,6 +750,10 @@ impl<E: ScriptEngine> NativeFn<E> for WorkerCreate {
                 tx: tx_to,
                 rx: rx_from,
                 join,
+                #[cfg(not(target_arch = "wasm32"))]
+                process,
+                #[cfg(not(target_arch = "wasm32"))]
+                bridge_failed: process_mode.then_some(failed),
                 idle: false,
                 alive: true,
                 sent,
@@ -576,6 +761,7 @@ impl<E: ScriptEngine> NativeFn<E> for WorkerCreate {
                     WorkerPolicy::TrustedCooperative { shutdown_grace, .. } => shutdown_grace,
                     WorkerPolicy::RequireCancellation => Duration::ZERO,
                 },
+                pump_limit,
             });
             h.workers.len() - 1
         });
@@ -591,14 +777,27 @@ impl<E: ScriptEngine> NativeFn<E> for WorkerPost {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
         let id: usize = arg_string::<E>(cx, 0)?.parse().unwrap_or(usize::MAX);
         let payload = arg_string::<E>(cx, 1)?;
-        with_host::<E, _>(cx, |h| {
+        let accepted = with_host::<E, _>(cx, |h| {
             if let Some(w) = h.workers.get_mut(id) {
-                w.idle = false;
-                w.sent.fetch_add(1, Ordering::Relaxed);
-                let _ = w.tx.send(ToWorker::Message(payload));
+                w.sent.fetch_add(1, Ordering::Release);
+                if w.tx.send(ToWorker::Message(payload)).is_ok() {
+                    w.idle = false;
+                    return true;
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                if w.process.is_some() {
+                    // Serialization has already committed transfers. A full or
+                    // broken process link is a terminal worker error, reported
+                    // asynchronously, rather than a synchronous refused send.
+                    w.idle = false;
+                    return true;
+                }
+                w.sent.fetch_sub(1, Ordering::Release);
             }
-        });
-        Ok(cx.undefined())
+            false
+        })
+        .unwrap_or(false);
+        cx.make_string(if accepted { "1" } else { "0" })
     }
 }
 
@@ -608,8 +807,18 @@ impl<E: ScriptEngine> NativeFn<E> for WorkerTerminate {
         let id: usize = arg_string::<E>(cx, 0)?.parse().unwrap_or(usize::MAX);
         with_host::<E, _>(cx, |h| {
             if let Some(w) = h.workers.get_mut(id) {
-                w.sent.fetch_add(1, Ordering::Relaxed);
-                let _ = w.tx.send(ToWorker::Terminate);
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(process) = w.process.as_mut() {
+                    // Process termination bypasses a full data queue.
+                    w.alive = false;
+                    w.idle = true;
+                    let _ = process.shutdown(true);
+                    return;
+                }
+                w.sent.fetch_add(1, Ordering::Release);
+                if w.tx.send(ToWorker::Terminate).is_err() {
+                    w.sent.fetch_sub(1, Ordering::Release);
+                }
                 w.alive = false;
                 w.idle = true;
             }
@@ -657,20 +866,33 @@ impl<E: ScriptEngine> NativeFn<E> for PortForward {
         let port = arg_string::<E>(cx, 0)?;
         let payload = arg_string::<E>(cx, 1)?;
         let minted = arg_string::<E>(cx, 2)?;
-        with_host::<E, _>(cx, |h| {
+        let accepted = with_host::<E, _>(cx, |h| {
             let Some(worker) = h.port_route(&port) else {
-                return;
+                return false;
             };
-            for id in minted.split(',').filter(|s| !s.is_empty()) {
-                h.port_routes.push((id.to_owned(), worker));
-            }
             if let Some(w) = h.workers.get_mut(worker) {
-                w.idle = false;
-                w.sent.fetch_add(1, Ordering::Relaxed);
-                let _ = w.tx.send(ToWorker::PortMessage(port, payload));
+                w.sent.fetch_add(1, Ordering::Release);
+                if w.tx.send(ToWorker::PortMessage(port, payload)).is_ok() {
+                    w.idle = false;
+                    for id in minted.split(',').filter(|s| !s.is_empty()) {
+                        h.port_routes.push((id.to_owned(), worker));
+                    }
+                    return true;
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                if w.process.is_some() {
+                    w.idle = false;
+                    for id in minted.split(',').filter(|s| !s.is_empty()) {
+                        h.port_routes.push((id.to_owned(), worker));
+                    }
+                    return true;
+                }
+                w.sent.fetch_sub(1, Ordering::Release);
             }
-        });
-        Ok(cx.undefined())
+            false
+        })
+        .unwrap_or(false);
+        cx.make_string(if accepted { "1" } else { "0" })
     }
 }
 
@@ -691,11 +913,15 @@ struct WsEmit;
 impl<E: ScriptEngine> NativeFn<E> for WsEmit {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
         let payload = arg_string::<E>(cx, 0)?;
-        with_link::<E, _>(cx, |l| {
-            let _ = l.tx.send(FromWorker::Message(payload));
-            l.notify();
-        });
-        Ok(cx.undefined())
+        let accepted = with_link::<E, _>(cx, |l| {
+            let accepted = l.tx.send(FromWorker::Message(payload)).is_ok();
+            if accepted {
+                l.notify();
+            }
+            accepted
+        })
+        .unwrap_or(false);
+        cx.make_string(if accepted { "1" } else { "0" })
     }
 }
 
@@ -706,29 +932,40 @@ impl<E: ScriptEngine> NativeFn<E> for WsPortForward {
         let payload = arg_string::<E>(cx, 1)?;
         let minted = arg_string::<E>(cx, 2)?;
         // A nested worker owns this port; otherwise it belongs to the page.
-        let nested = with_host::<E, _>(cx, |h| {
+        let route = with_host::<E, _>(cx, |h| {
             let Some(worker) = h.port_route(&port) else {
-                return false;
+                return 0;
             };
-            for id in minted.split(',').filter(|s| !s.is_empty()) {
-                h.port_routes.push((id.to_owned(), worker));
-            }
             if let Some(w) = h.workers.get_mut(worker) {
-                w.idle = false;
-                w.sent.fetch_add(1, Ordering::Relaxed);
-                let _ =
-                    w.tx.send(ToWorker::PortMessage(port.clone(), payload.clone()));
+                w.sent.fetch_add(1, Ordering::Release);
+                if w.tx
+                    .send(ToWorker::PortMessage(port.clone(), payload.clone()))
+                    .is_ok()
+                {
+                    w.idle = false;
+                    for id in minted.split(',').filter(|s| !s.is_empty()) {
+                        h.port_routes.push((id.to_owned(), worker));
+                    }
+                    return 1;
+                }
+                w.sent.fetch_sub(1, Ordering::Release);
             }
-            true
+            2
         })
-        .unwrap_or(false);
-        if !nested {
+        .unwrap_or(2);
+        let accepted = if route == 0 {
             with_link::<E, _>(cx, |l| {
-                let _ = l.tx.send(FromWorker::PortMessage(port, payload));
-                l.notify();
-            });
-        }
-        Ok(cx.undefined())
+                let accepted = l.tx.send(FromWorker::PortMessage(port, payload)).is_ok();
+                if accepted {
+                    l.notify();
+                }
+                accepted
+            })
+            .unwrap_or(false)
+        } else {
+            route == 1
+        };
+        cx.make_string(if accepted { "1" } else { "0" })
     }
 }
 
@@ -784,16 +1021,36 @@ pub(crate) fn pump_in_realm<E: ScriptEngine>(
     {
         let mut h = host.borrow_mut();
         for i in 0..h.workers.len() {
-            loop {
+            #[cfg(not(target_arch = "wasm32"))]
+            if h.workers[i]
+                .bridge_failed
+                .as_ref()
+                .is_some_and(|failed| failed.swap(false, Ordering::AcqRel))
+            {
+                let w = &mut h.workers[i];
+                w.alive = false;
+                w.idle = true;
+                if let Some(process) = w.process.as_mut() {
+                    let _ = process.shutdown(true);
+                }
+                h.worker_events.push_back(format!("{{\"k\":\"e\",\"w\":{i},\"d\":\"Worker process transport failed or exceeded its configured bound.\"}}"));
+            }
+            let mut drained = 0;
+            while drained < h.workers[i].pump_limit {
                 let msg = match h.workers[i].rx.try_recv() {
                     Ok(m) => m,
                     Err(TryRecvError::Empty) => break,
                     Err(TryRecvError::Disconnected) => {
                         h.workers[i].alive = false;
                         h.workers[i].idle = true;
+                        #[cfg(not(target_arch = "wasm32"))]
+                        if let Some(process) = h.workers[i].process.as_mut() {
+                            let _ = process.shutdown(true);
+                        }
                         break;
                     },
                 };
+                drained += 1;
                 match msg {
                     // Only quiesce on a report that has seen everything sent.
                     FromWorker::Idle(seen) => {
@@ -802,6 +1059,10 @@ pub(crate) fn pump_in_realm<E: ScriptEngine>(
                     FromWorker::Closed => {
                         h.workers[i].alive = false;
                         h.workers[i].idle = true;
+                        #[cfg(not(target_arch = "wasm32"))]
+                        if let Some(process) = h.workers[i].process.as_mut() {
+                            let _ = process.shutdown(false);
+                        }
                     },
                     FromWorker::Message(p) => {
                         h.workers[i].idle = false;
@@ -846,7 +1107,14 @@ pub(crate) fn pump_in_realm<E: ScriptEngine>(
             let deferred_sent = Arc::clone(&sent);
             let complete = Box::new(move |out: FetchOutcome| {
                 deferred_sent.fetch_add(1, Ordering::Release);
-                let _ = deferred_tx.send(ToWorker::Resource(id, Box::new(out)));
+                if deferred_tx
+                    .send(ToWorker::Resource(id, Box::new(out)))
+                    .is_ok()
+                {
+                    // Delivery owns the reserved count.
+                } else {
+                    deferred_sent.fetch_sub(1, Ordering::Release);
+                }
                 if let Some(wake) = resource_wake {
                     wake(resource_url);
                 } else if let Some(wake) = wake {
@@ -860,7 +1128,11 @@ pub(crate) fn pump_in_realm<E: ScriptEngine>(
         if let Some(req) = fallback {
             let out = load_resource(loader, fetch, req);
             sent.fetch_add(1, Ordering::Release);
-            let _ = tx.send(ToWorker::Resource(id, Box::new(out)));
+            if tx.send(ToWorker::Resource(id, Box::new(out))).is_ok() {
+                // Delivery owns the reserved count.
+            } else {
+                sent.fetch_sub(1, Ordering::Release);
+            }
         }
         work += 1;
     }
@@ -916,21 +1188,51 @@ pub(crate) fn shutdown(host: &SharedHost) -> WorkerShutdownReport {
         let mut h = host.borrow_mut();
         h.workers
             .iter_mut()
-            .filter_map(|w| {
-                w.sent.fetch_add(1, Ordering::Relaxed);
-                let _ = w.tx.send(ToWorker::Terminate);
+            .map(|w| {
+                w.sent.fetch_add(1, Ordering::Release);
+                if w.tx.send(ToWorker::Terminate).is_ok() {
+                    // Delivery owns the reserved count.
+                } else {
+                    w.sent.fetch_sub(1, Ordering::Release);
+                }
                 w.alive = false;
-                w.join.take().map(|join| (join, w.shutdown_grace))
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    (
+                        w.join.take().map(|join| (join, w.shutdown_grace)),
+                        w.process.take(),
+                    )
+                }
+                #[cfg(target_arch = "wasm32")]
+                {
+                    w.join.take().map(|join| (join, w.shutdown_grace))
+                }
             })
             .collect()
     };
     // A worker spinning inside script cannot observe the cooperative signal.
     // The grace only bounds the caller's wait; it does not reclaim that thread.
     let mut report = WorkerShutdownReport {
-        descendants_untracked: !handles.is_empty(),
         ..WorkerShutdownReport::default()
     };
-    for (join, grace) in handles {
+    for handle in handles {
+        #[cfg(not(target_arch = "wasm32"))]
+        let (thread, process) = handle;
+        #[cfg(target_arch = "wasm32")]
+        let thread = handle;
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(mut process) = process {
+            match process.shutdown(false) {
+                ProcessExit::Graceful => report.processes_joined += 1,
+                ProcessExit::Killed => report.processes_killed += 1,
+                ProcessExit::Crashed => report.processes_crashed += 1,
+                ProcessExit::Failed => report.processes_failed += 1,
+            }
+        }
+        let Some((join, grace)) = thread else {
+            continue;
+        };
+        report.descendants_untracked = true;
         let started = Instant::now();
         while !join.is_finished() && started.elapsed() < grace {
             std::thread::sleep(Duration::from_millis(2));
@@ -1002,8 +1304,10 @@ const WORKER_HOST_BOOTSTRAP: &str = r#"
     var transfer = globalThis.__normalizeTransfer(transferOrOptions);
     var payload = globalThis.__scSerialize(message, transfer);
     var minted = globalThis.__portTakePending();
+    if (__worker_post(String(this._id), payload) === '0') {
+      throw new DOMException('Worker message queue is full or closed.', 'QuotaExceededError');
+    }
     for (var i = 0; i < minted.length; i++) __worker_bind_port(String(this._id), minted[i]);
-    __worker_post(String(this._id), payload);
   };
   Worker.prototype.terminate = function() {
     if (this._terminated) return;
@@ -1021,7 +1325,7 @@ const WORKER_HOST_BOOTSTRAP: &str = r#"
   // Routed by the host, so `MessagePort` needs no knowledge of the link. The
   // worker scope reassigns this to its own sink.
   globalThis.__portForward = function(id, payload, minted) {
-    __port_forward_page(id, payload, minted);
+    return __port_forward_page(id, payload, minted);
   };
 
   // Dispatch everything the host drained off the worker links. One task per
@@ -1130,10 +1434,12 @@ const WORKER_SCOPE_BOOTSTRAP: &str = r#"
     var transfer = globalThis.__normalizeTransfer(transferOrOptions);
     var payload = globalThis.__scSerialize(message, transfer);
     var minted = globalThis.__portTakePending();
-    __ws_emit(payload, minted.join(','));
+    if (__ws_emit(payload, minted.join(',')) === '0') {
+      throw new DOMException('Worker message queue is full or closed.', 'QuotaExceededError');
+    }
   };
   globalThis.__portForward = function(id, payload, minted) {
-    __ws_port_forward(id, payload, minted);
+    return __ws_port_forward(id, payload, minted);
   };
   globalThis.close = function() { __ws_close(); };
 
@@ -1212,13 +1518,18 @@ mod shutdown_tests {
         let (_reply_tx, reply_rx) = channel();
         let host = Rc::new(RefCell::new(HostState::default()));
         host.borrow_mut().workers.push(WorkerHandle {
-            tx,
+            tx: WorkerSender::Thread(tx),
             rx: reply_rx,
             join: Some(join),
+            #[cfg(not(target_arch = "wasm32"))]
+            process: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            bridge_failed: None,
             idle: false,
             alive: true,
             sent: Arc::new(AtomicU64::new(0)),
             shutdown_grace: Duration::ZERO,
+            pump_limit: usize::MAX,
         });
         let report = shutdown(&host);
         cleanup.release();
@@ -1228,6 +1539,7 @@ mod shutdown_tests {
                 direct_joined: 0,
                 direct_detached: 1,
                 descendants_untracked: true,
+                ..WorkerShutdownReport::default()
             }
         );
     }
@@ -1258,13 +1570,18 @@ mod shutdown_tests {
             });
             let nested = Rc::new(RefCell::new(HostState::default()));
             nested.borrow_mut().workers.push(WorkerHandle {
-                tx: nested_tx,
+                tx: WorkerSender::Thread(nested_tx),
                 rx: reply_rx,
                 join: Some(inner),
+                #[cfg(not(target_arch = "wasm32"))]
+                process: None,
+                #[cfg(not(target_arch = "wasm32"))]
+                bridge_failed: None,
                 idle: false,
                 alive: true,
                 sent: Arc::new(AtomicU64::new(0)),
                 shutdown_grace: Duration::ZERO,
+                pump_limit: usize::MAX,
             });
             ready_tx.send(()).unwrap();
             let _ = outer_rx.recv_timeout(Duration::from_secs(2));
@@ -1274,13 +1591,18 @@ mod shutdown_tests {
         let (_reply_tx, reply_rx) = channel();
         let parent = Rc::new(RefCell::new(HostState::default()));
         parent.borrow_mut().workers.push(WorkerHandle {
-            tx: outer_tx,
+            tx: WorkerSender::Thread(outer_tx),
             rx: reply_rx,
             join: Some(outer),
+            #[cfg(not(target_arch = "wasm32"))]
+            process: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            bridge_failed: None,
             idle: false,
             alive: true,
             sent: Arc::new(AtomicU64::new(0)),
             shutdown_grace: Duration::from_secs(2),
+            pump_limit: usize::MAX,
         });
         let direct = shutdown(&parent);
         let nested = inner_report_rx

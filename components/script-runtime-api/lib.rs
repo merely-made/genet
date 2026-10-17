@@ -97,6 +97,8 @@ mod timing;
 mod webgl;
 mod websocket;
 mod worker;
+#[cfg(not(target_arch = "wasm32"))]
+mod worker_process;
 
 pub use crypto::RandomSource;
 pub use dom::markup_insertion::{MarkupState, ReadyState};
@@ -113,6 +115,8 @@ pub use platform::StorageProvider;
 pub use webgl::{WebGlFactory, WebGlHandler};
 pub use websocket::{WebSocketHandler, WebSocketRequest};
 pub use worker::{ScriptResourceLoader, WorkerPolicy, WorkerShutdownReport};
+#[cfg(not(target_arch = "wasm32"))]
+pub use worker_process::{WorkerBackend, WorkerProcessLauncher, run_worker_process};
 
 pub use genet_scripted_dom::{ValidationMessageCatalog, ValidationMessageKind};
 
@@ -359,6 +363,8 @@ pub struct HostState {
     /// Required cancellation is the default. Hosts that trust their worker
     /// scripts must opt into cooperative shutdown explicitly.
     worker_policy: WorkerPolicy,
+    #[cfg(not(target_arch = "wasm32"))]
+    worker_process_launcher: Option<std::sync::Arc<WorkerProcessLauncher>>,
     /// Host wake sink copied into each worker so an idle/message transition
     /// wakes a sleeping UI event loop.
     pub(crate) worker_wake: Option<std::sync::Arc<dyn Fn() + Send + Sync>>,
@@ -1142,6 +1148,8 @@ impl<E: ScriptEngine> Runtime<E> {
                 host.script_loader = parent.script_loader.clone();
             }
             host.worker_policy = parent.worker_policy;
+            #[cfg(not(target_arch = "wasm32"))]
+            { host.worker_process_launcher = parent.worker_process_launcher.clone(); }
             if host.worker_wake.is_none() {
                 host.worker_wake = parent.worker_wake.clone();
             }
@@ -2231,8 +2239,8 @@ impl<E: ScriptEngine> Runtime<E> {
     }
 
     /// Choose the native worker lifetime contract before creating workers.
-    /// `RequireCancellation` refuses creation unless the backend can interrupt
-    /// startup, callbacks, and jobs. `TrustedCooperative` permits workers that
+    /// `RequireCancellation` admits a native worker only when a matching
+    /// helper process is configured. `TrustedCooperative` permits workers that
     /// may detach after `shutdown_grace` if script does not yield.
     pub fn set_worker_policy(&mut self, policy: WorkerPolicy) {
         self.host.borrow_mut().worker_policy = policy;
@@ -2241,8 +2249,20 @@ impl<E: ScriptEngine> Runtime<E> {
         }
     }
 
-    /// Stop directly owned native workers and report joined/detached counts.
-    /// Descendants created inside workers are outside this count.
+    /// Install the native helper chosen by the host before authored scripts
+    /// create Workers. Without it, required cancellation refuses creation.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn set_worker_process_launcher(&mut self, launcher: WorkerProcessLauncher) {
+        let launcher = std::sync::Arc::new(launcher);
+        self.host.borrow_mut().worker_process_launcher = Some(launcher.clone());
+        for host in self.child_hosts().values() {
+            host.borrow_mut().worker_process_launcher = Some(launcher.clone());
+        }
+    }
+
+    /// Stop directly owned workers and report thread and process outcomes.
+    /// Descendants inside a helper process are reclaimed with that process;
+    /// descendants of trusted worker threads remain untracked.
     pub fn shutdown_workers(&mut self) -> WorkerShutdownReport {
         let hosts: Vec<SharedHost> = self.agent.borrow().host_lifetimes.iter()
             .filter_map(|host| host.upgrade()).collect();
@@ -2251,6 +2271,10 @@ impl<E: ScriptEngine> Runtime<E> {
             let one = worker::shutdown(&host);
             report.direct_joined += one.direct_joined;
             report.direct_detached += one.direct_detached;
+            report.processes_joined += one.processes_joined;
+            report.processes_killed += one.processes_killed;
+            report.processes_crashed += one.processes_crashed;
+            report.processes_failed += one.processes_failed;
             report.descendants_untracked |= one.descendants_untracked;
         }
         report
@@ -2548,8 +2572,8 @@ impl<E: ScriptEngine> Runtime<E> {
 }
 
 impl<E: ScriptEngine> Drop for Runtime<E> {
-    /// Cooperative workers are asked to exit. Trusted workers that do not
-    /// yield can detach; callers needing counts can use `shutdown_workers`.
+    /// Native helper processes are reaped. Trusted workers that do not yield
+    /// can detach; callers needing counts can use `shutdown_workers`.
     fn drop(&mut self) {
         let hosts: Vec<SharedHost> = self
             .agent
@@ -2606,6 +2630,8 @@ impl<E: ScriptEngineSnapshot> Runtime<E> {
         // fresh top-level browsing context, not a copy of the donor's.
         let top = self.top_realm();
         let worker_policy = self.host.borrow().worker_policy;
+        #[cfg(not(target_arch = "wasm32"))]
+        let worker_process_launcher = self.host.borrow().worker_process_launcher.clone();
         let boot_host: SharedHost = Rc::new(RefCell::new(HostState::default()));
         let agent = Rc::new(RefCell::new(AgentState::default()));
         agent.borrow_mut().performance_clock = self.agent.borrow().performance_clock.clone();
@@ -2613,6 +2639,8 @@ impl<E: ScriptEngineSnapshot> Runtime<E> {
             let mut boot = boot_host.borrow_mut();
             boot.agent = Rc::downgrade(&agent);
             boot.worker_policy = worker_policy;
+            #[cfg(not(target_arch = "wasm32"))]
+            { boot.worker_process_launcher = worker_process_launcher.clone(); }
             boot.worker_spawn = Some(worker::worker_main::<E> as fn(_));
         }
         agent.borrow_mut().register(MAIN_REALM, boot_host.clone());
@@ -2631,6 +2659,8 @@ impl<E: ScriptEngineSnapshot> Runtime<E> {
             let host: SharedHost = Rc::new(RefCell::new(HostState {
                 viewport_size: self.host.borrow().viewport_size,
                 worker_policy,
+                #[cfg(not(target_arch = "wasm32"))]
+                worker_process_launcher,
                 worker_spawn: Some(worker::worker_main::<E> as fn(_)),
                 agent: Rc::downgrade(&agent),
                 ..HostState::default()

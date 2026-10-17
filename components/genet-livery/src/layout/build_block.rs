@@ -151,7 +151,9 @@ where
     pub(in crate::layout) fn measure_cell_intrinsics(
         &mut self,
         cell_node: AlgorithmNodeId,
+        nested_tables: &HashMap<AlgorithmNodeId, IntrinsicTableWrapper>,
     ) -> Option<IntrinsicSizes> {
+        let nested_tables = nested_table_wrappers_in_cell(&self.tree, cell_node, nested_tables);
         let style = self.tree.style_mut(cell_node);
         let saved = (style.size.width, style.min_size.width, style.max_size.width);
         style.size.width = Dimension::auto();
@@ -165,10 +167,19 @@ where
                 .reduce(f32::max)
                 .unwrap_or_else(|| tree.unrounded_layout(cell_node).width)
         };
+        for table in &nested_tables {
+            set_query_table_wrapper_width(&mut self.tree, table.node, table.sizes.min_content);
+        }
         self.measure_intrinsic_width(cell_node, AlgorithmAvailableSpace::MinContent);
         let min = direct_child_width(&self.tree);
+        for table in &nested_tables {
+            set_query_table_wrapper_width(&mut self.tree, table.node, table.sizes.max_content);
+        }
         self.measure_intrinsic_width(cell_node, AlgorithmAvailableSpace::MaxContent);
         let max = direct_child_width(&self.tree);
+        for table in &nested_tables {
+            set_query_table_wrapper_width(&mut self.tree, table.node, table.used);
+        }
         let style = self.tree.style_mut(cell_node);
         (style.size.width, style.min_size.width, style.max_size.width) = saved;
         IntrinsicSizes::new(min, max.max(min))
@@ -280,6 +291,7 @@ where
     pub(in crate::layout) fn apply_buckram_table_layout(&mut self) {
         let mut pendings = std::mem::take(&mut self.pending_tables);
         let mut aggregate = std::mem::take(&mut self.table_shadow);
+        let mut intrinsic_wrappers = HashMap::new();
         for pending in &mut pendings {
             self.table_shadow = TableShadowLedger::default();
             {
@@ -315,7 +327,11 @@ where
                     .cell_nodes
                     .clone()
                     .into_iter()
-                    .map(|cell_node| cell_node.and_then(|node| self.measure_cell_intrinsics(node)))
+                    .map(|cell_node| {
+                        cell_node.and_then(|node| {
+                            self.measure_cell_intrinsics(node, &intrinsic_wrappers)
+                        })
+                    })
                     .collect::<Vec<_>>();
                 let caption_min = self.measure_caption_min(&pending.captions.clone());
                 let columns = buckram_table_columns(
@@ -333,6 +349,20 @@ where
                 );
                 pending.assigned = columns;
                 self.size_wrapper_from_grid(pending);
+                if matches!(pending.table_style.width, CssSize::Auto)
+                    && let (Some(wrapper), Some(inline)) =
+                        (pending.wrapper, pending.assigned.as_ref())
+                    && let Some(sizes) = inline.wrapper_intrinsic_sizes
+                {
+                    intrinsic_wrappers.insert(
+                        wrapper,
+                        IntrinsicTableWrapper {
+                            node: wrapper,
+                            sizes,
+                            used: inline.used_grid_inline_size,
+                        },
+                    );
+                }
             }
             self.apply_buckram_table_rows(std::slice::from_mut(pending));
             aggregate.record_table(pending.table, std::mem::take(&mut self.table_shadow));

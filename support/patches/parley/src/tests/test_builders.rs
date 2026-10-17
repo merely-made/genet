@@ -11,9 +11,9 @@ use peniko::{Blob, color::palette};
 
 use super::utils::{ColorBrush, asserts::assert_eq_layout_data};
 use crate::{
-    FontContext, FontFamily, FontFeatures, FontVariations, Layout, LayoutContext, LineHeight,
-    OverflowWrap, RangedBuilder, StyleProperty, StyleRunBuilder, TextStyle, TextWrapMode,
-    TreeBuilder, WordBreak,
+    FontContext, FontFamily, FontFeatures, FontVariations, InlineBox, InlineBoxKind, Layout,
+    LayoutContext, LineHeight, OverflowWrap, RangedBuilder, StyleProperty, StyleRunBuilder,
+    TextStyle, TextWrapMode, TreeBuilder, WhiteSpaceCollapse, WordBreak,
 };
 
 // These tests compare builder output, not a particular font's metrics. Use
@@ -449,7 +449,7 @@ fn builders_empty() {
     let scale = 1.;
     let quantize = false;
     let max_advance = Some(50.);
-    let root_style = create_root_style();
+    let root_style = TextStyle::default();
 
     let with_ranged_builder = |_rb: &mut RangedBuilder<'_, ColorBrush>| {};
     let with_tree_builder = |_tb: &mut TreeBuilder<'_, ColorBrush>| {};
@@ -464,6 +464,62 @@ fn builders_empty() {
         with_tree_builder,
         true,
     );
+}
+
+/// Empty tree layouts retain the resolved root style, including scaled tab stops.
+#[test]
+fn empty_tree_layout_keeps_custom_root_style() {
+    let mut fcx = create_font_context();
+    let mut lcx: LayoutContext<ColorBrush> = LayoutContext::new();
+    let mut prior = lcx.tree_builder(&mut fcx, 1.0, false, &TextStyle::default());
+    prior.push_text("warmup");
+    let _ = prior.build();
+
+    let mut root_style = create_root_style();
+    root_style.tab_size = 37.0;
+    let mut builder = lcx.tree_builder(&mut fcx, 2.0, false, &root_style);
+    builder.set_white_space_mode(WhiteSpaceCollapse::Collapse);
+    let child_style = [StyleProperty::TabSize(9.0)];
+    builder.push_style_modification_span(&child_style);
+    builder.push_text("   ");
+    builder.pop_style_span();
+    let (mut layout, text) = builder.build();
+
+    assert!(text.is_empty());
+    assert!(!layout.data.runs.is_empty());
+    assert_eq!(layout.data.styles.len(), 1);
+    assert_eq!(layout.data.styles[0].tab_size, 74.0);
+    assert_eq!(layout.data.styles[0].brush, root_style.brush);
+    layout.break_all_lines(Some(1.0));
+    assert_eq!(layout.get(0).unwrap().metrics().line_height, 60.0);
+    assert_eq!(layout.height(), 60.0);
+}
+
+#[test]
+fn empty_tree_text_with_inline_box_keeps_root_and_box_metrics() {
+    let mut fcx = create_font_context();
+    let mut lcx: LayoutContext<ColorBrush> = LayoutContext::new();
+    let mut root_style = TextStyle::default();
+    root_style.tab_size = 29.0;
+    let inline_box = InlineBox {
+        id: 1,
+        kind: InlineBoxKind::InFlow,
+        index: 0,
+        width: 12.0,
+        height: 7.0,
+    };
+    let mut builder = lcx.tree_builder(&mut fcx, 1.0, false, &root_style);
+    builder.push_inline_box(inline_box.clone());
+    let (mut layout, text) = builder.build();
+
+    assert!(text.is_empty());
+    assert_eq!(layout.data.styles.len(), 1);
+    assert_eq!(layout.data.styles[0].tab_size, 29.0);
+    assert_eq!(layout.inline_boxes(), &[inline_box]);
+    layout.break_all_lines(Some(50.0));
+    let metrics = *layout.get(0).unwrap().metrics();
+    assert_eq!(metrics.advance, 12.0);
+    assert_eq!(metrics.ascent, 7.0);
 }
 
 /// Test that all the builders behave the same with mixed styles.

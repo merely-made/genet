@@ -258,14 +258,9 @@ fn inferred_cells_with_nested_tables_match_html_table_glyphs() {
     assert_glyph_points_match(generated, html);
 }
 
-/// Recorded defect, found while making the test above font-independent. When
-/// the table's content is wider than its container, a nested `display: table`
-/// inside an inferred cell leaves the outer columns summing to less than the
-/// table's width, where the same cells as plain `display: table-cell` (or an
-/// HTML table) share the whole width equally. CSS gives all three the same
-/// column distribution.
+/// A nested auto-width table contributes its intrinsic width to the outer
+/// cell. Its selected layout width must not bias the outer column measures.
 #[test]
-#[ignore = "known defect: constrained outer-table column distribution changes when a cell holds a nested display:table"]
 fn nested_table_cell_does_not_change_constrained_column_distribution() {
     let rows = |third: &str| {
         format!(
@@ -282,21 +277,74 @@ fn nested_table_cell_does_not_change_constrained_column_distribution() {
         &rows("<span style='display:table-cell'>Row 1, Col 3</span>"),
         ahem_text_system(),
     );
-    let nested = render_with_text_system(
-        "relative",
-        "",
-        &rows("<span style='display:table'>Row 1, Col 3</span>"),
-        ahem_text_system(),
-    );
-    for id in ["c1", "c2"] {
-        let (plain, nested) = (plain.normalized_rect(id), nested.normalized_rect(id));
-        assert!(
-            (plain.2 - nested.2).abs() <= 0.5,
-            "#{id} width: plain cells {}, nested table {}",
-            plain.2,
-            nested.2
+    for constraints in ["", "min-width:1px", "max-width:10000px"] {
+        let nested = render_with_text_system(
+            "relative",
+            "",
+            &rows(&format!(
+                "<span style='display:table;{constraints}'>Row 1, Col 3</span>"
+            )),
+            ahem_text_system(),
         );
+        for id in ["c1", "c2"] {
+            let (plain, nested) = (plain.normalized_rect(id), nested.normalized_rect(id));
+            assert!(
+                (plain.2 - nested.2).abs() <= 0.5,
+                "#{id} width with {constraints:?}: plain cells {}, nested table {}",
+                plain.2,
+                nested.2
+            );
+        }
     }
+}
+
+#[test]
+fn active_nested_table_minimum_constrains_outer_column() {
+    let row = |minimum: &str| {
+        format!(
+            "<span style='display:table-row'>\
+             <span id=c1 style='display:table-cell'>Row 1, Col 1</span>\
+             <span style='display:table-cell'>Row 1, Col 2</span>\
+             <span style='display:table;{minimum}'>Row 1, Col 3</span></span>\
+             <span style='display:table-row'>\
+             <span style='display:table-cell'>Row 22, Col 1</span>\
+             <span style='display:table-cell'>Row 22, Col 2</span>\
+             <span style='display:table-cell'>Row 22, Col 3</span></span>"
+        )
+    };
+    let automatic = render_with_text_system("relative", "", &row(""), ahem_text_system());
+    let minimum =
+        render_with_text_system("relative", "", &row("min-width:400px"), ahem_text_system());
+    let auto_first = automatic.normalized_rect("c1").2;
+    let minimum_first = minimum.normalized_rect("c1").2;
+    assert!(
+        minimum_first + 10.0 < auto_first,
+        "an active 400px nested minimum constrains its column: auto {auto_first}, min {minimum_first}"
+    );
+}
+
+#[test]
+fn explicit_width_nested_table_still_constrains_its_outer_column() {
+    let row = |width: &str| {
+        format!(
+            "<span style='display:table-row'>\
+             <span id=c1 style='display:table-cell'>Row 1, Col 1</span>\
+             <span style='display:table-cell'>Row 1, Col 2</span>\
+             <span id=nested style='display:table;{width}'>Row 1, Col 3</span></span>"
+        )
+    };
+    let automatic = render_with_text_system("relative", "", &row(""), ahem_text_system());
+    let explicit = render_with_text_system("relative", "", &row("width:400px"), ahem_text_system());
+    let automatic_first = automatic.normalized_rect("c1").2;
+    let explicit_first = explicit.normalized_rect("c1").2;
+    assert!(
+        explicit_first + 10.0 < automatic_first,
+        "an authored nested width must constrain its column: auto {automatic_first}, 400px {explicit_first}"
+    );
+    assert!(
+        (explicit.normalized_rect("nested").2 - 400.0).abs() <= 0.5,
+        "the nested table keeps its authored 400px width"
+    );
 }
 
 #[test]

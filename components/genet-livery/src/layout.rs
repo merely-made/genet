@@ -123,6 +123,41 @@ pub(crate) use tables::TablePaintModel;
 /// Physical geometry used at the DOM compatibility edge and by inline atoms.
 pub(crate) type Fragment = PhysicalRect;
 
+/// An already sized auto-width table inside a cell being measured for another
+/// table. Its wrapper uses the selected width for layout, but contributes the
+/// table's intrinsic pair to the outer cell's min/max-content queries.
+#[derive(Clone, Copy)]
+struct IntrinsicTableWrapper {
+    node: AlgorithmNodeId,
+    sizes: IntrinsicSizes,
+    used: f32,
+}
+
+fn set_query_table_wrapper_width<Context, Source>(
+    tree: &mut AlgorithmTree<Context, Source>,
+    wrapper: AlgorithmNodeId,
+    width: f32,
+) {
+    tree.style_mut(wrapper).size.width = Dimension::length(width);
+    tree.set_table_wrapper_inline_size(wrapper, width);
+}
+
+fn nested_table_wrappers_in_cell<Context, Source>(
+    tree: &AlgorithmTree<Context, Source>,
+    root: AlgorithmNodeId,
+    wrappers: &HashMap<AlgorithmNodeId, IntrinsicTableWrapper>,
+) -> Vec<IntrinsicTableWrapper> {
+    let mut pending = vec![root];
+    let mut nested = Vec::new();
+    while let Some(node) = pending.pop() {
+        if let Some(table) = wrappers.get(&node) {
+            nested.push(*table);
+        }
+        pending.extend_from_slice(tree.children(node));
+    }
+    nested
+}
+
 /// The static physical rectangle and content-scroll offset of one sticky
 /// scrollport. The offset is added in layout space before ordinary scroll
 /// painting translates its descendants back toward the viewport.

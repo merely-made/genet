@@ -24,7 +24,7 @@ mod native {
             EmbedderObject, ExceptionType, Function, GcAgent, GraphLoadingStateRecord, HostDefined,
             HostHooks, InternalMethods, Job, JsError, ModuleRequest, Object, OrdinaryObject,
             PromiseCapability, PropertyDescriptor, PropertyKey, Realm, RealmRoot, Referrer,
-            RegularFn, SourceTextModule, String as JsString, Value, clear_weak_ref_kept_objects,
+            RegularFn, SourceTextModule, String as JsString, TypedArray, Value, clear_weak_ref_kept_objects,
             create_builtin_function, finish_loading_imported_module, parse_module, parse_script,
             proxy_create, script_evaluation,
         },
@@ -555,6 +555,52 @@ mod native {
                 Ok(s) => Ok(s.to_string_lossy(self.agent).into_owned()),
                 Err(_) => Err("toString threw".to_string()),
             }
+        }
+
+        fn value_to_number(&mut self, value: &Self::Value) -> Result<f64, Self::Error> {
+            let v = value.get(self.agent, self.gc.nogc()).unbind();
+            v.to_real(self.agent, self.gc.reborrow())
+                .map_err(|_| "toNumber threw".to_string())
+        }
+
+        fn copy_float32_array(&mut self, value: &Self::Value) -> Result<Vec<f32>, Self::Error> {
+            let Value::Float32Array(array) = value.get(self.agent, self.gc.nogc()) else {
+                return Err("Float32Array required".to_string());
+            };
+            let typed = TypedArray::from(array);
+            let buffer = typed.get_viewed_array_buffer(self.agent);
+            if buffer.is_detached(self.agent) {
+                return Err("detached Float32Array".to_string());
+            }
+            let offset = typed.byte_offset(self.agent);
+            let bytes = buffer.as_slice(self.agent);
+            let length = typed.array_length(self.agent)
+                .unwrap_or_else(|| bytes.len().saturating_sub(offset) / 4);
+            let end = offset.checked_add(length.saturating_mul(4))
+                .filter(|end| *end <= bytes.len())
+                .ok_or_else(|| "out-of-bounds Float32Array".to_string())?;
+            Ok(bytes[offset..end].chunks_exact(4)
+                .map(|chunk| f32::from_ne_bytes(chunk.try_into().unwrap()))
+                .collect())
+        }
+
+        fn copy_uint8_array(&mut self, value: &Self::Value) -> Result<Vec<u8>, Self::Error> {
+            let Value::Uint8Array(array) = value.get(self.agent, self.gc.nogc()) else {
+                return Err("Uint8Array required".to_string());
+            };
+            let typed = TypedArray::from(array);
+            let buffer = typed.get_viewed_array_buffer(self.agent);
+            if buffer.is_detached(self.agent) {
+                return Err("detached Uint8Array".to_string());
+            }
+            let offset = typed.byte_offset(self.agent);
+            let bytes = buffer.as_slice(self.agent);
+            let length = typed.array_length(self.agent)
+                .unwrap_or_else(|| bytes.len().saturating_sub(offset));
+            let end = offset.checked_add(length)
+                .filter(|end| *end <= bytes.len())
+                .ok_or_else(|| "out-of-bounds Uint8Array".to_string())?;
+            Ok(bytes[offset..end].to_vec())
         }
 
         fn reflector_data(&mut self, value: &Self::Value) -> Option<ReflectorData> {

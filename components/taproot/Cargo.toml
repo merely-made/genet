@@ -17,6 +17,9 @@ path = "lib.rs"
 default = ["image-decode"]
 # Forwards genet-livery's image decoding; see its `image-decode` feature.
 image-decode = ["genet-livery/image-decode"]
+# Synthetic DOM/layout probes for compatibility tests only. Production
+# selectors must use the host's retained projection and painted geometry.
+estimated-probe-fixtures = []
 
 [dependencies]
 document-session-api = { version = "0.1.0", path = "../shared/document-session-api" }

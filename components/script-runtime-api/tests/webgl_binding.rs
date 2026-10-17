@@ -14,7 +14,8 @@ use std::collections::HashMap;
 
 use script_engine_api::ScriptEngine;
 use script_engine_boa::BoaEngine;
-use script_runtime_api::{Runtime, WebGlHandler};
+use script_engine_nova::NovaEngine;
+use script_runtime_api::{NoScriptLoader, Runtime, WebGlHandler};
 use webgl_wgpu::{
     BufferTarget, BufferUsage, PrimitiveMode, ShaderStage, WebGlBufferId, WebGlCanvas,
     WebGlCanvasDescriptor, WebGlContext, WebGlError, WebGlProgramId, WebGlShaderId, WebGlTextureId,
@@ -444,6 +445,159 @@ fn read(rt: &mut Runtime<BoaEngine>, expr: &str) -> String {
         .expect("value_to_string")
 }
 
+fn run_in_top<E: ScriptEngine>(rt: &mut Runtime<E>, source: &str) {
+    let top = rt.top_realm();
+    rt.engine_mut()
+        .eval_in_realm(top, source)
+        .unwrap_or_else(|error| panic!("WebGL script failed: {error:?}"));
+}
+
+fn private_webgl_identity<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.set_webgl_factory(Box::new(|w, h| Some(Box::new(WgpuWebGl::new(w, h)))));
+    run_in_top(&mut rt, r#"
+      function check(ok, message) { if (!ok) throw new Error(message); }
+      function rejects(f, message) {
+        try { f(); } catch (error) { if (error instanceof TypeError) return; throw error; }
+        throw new Error(message);
+      }
+      check(Object.getOwnPropertyNames(globalThis).filter(function(name) {
+              return name.indexOf('__webgl_') === 0;
+            }).length === 0 &&
+            typeof __webgl_bind_buffer === 'undefined' &&
+            Object.getOwnPropertyDescriptor(globalThis, '__webgl_bind_buffer') === undefined,
+            'native sink visible');
+      var a = __createWebGLContext(4, 4), b = __createWebGLContext(4, 4);
+      check(a && b && a !== b && !('_ctx' in a), 'private context identity');
+      rejects(function(){ WebGLRenderingContext.prototype.clear.call({_ctx: 0}, 0); },
+              'forged context accepted');
+      rejects(function(){ WebGLRenderingContext.prototype.texParameteri.call({}, 0, 0, 0); },
+              'forged no-op receiver accepted');
+      rejects(function(){ new WebGLBuffer(); }, 'public resource constructor accepted');
+      var ab = a.createBuffer(), bb = b.createBuffer();
+      check(a.isBuffer(ab) && !a.isBuffer(bb), 'buffer owner');
+      rejects(function(){ a.bindBuffer(a.ARRAY_BUFFER, {_id: 1}); }, 'duck buffer accepted');
+      rejects(function(){ a.bindBuffer(a.ARRAY_BUFFER, Object.create(WebGLBuffer.prototype)); },
+              'prototype buffer accepted');
+      rejects(function(){ a.bindBuffer(a.ARRAY_BUFFER, bb); }, 'foreign buffer accepted');
+      a._ctx = 1; a._id = 9000; ab._id = 9000;
+      a.clearColor(1, 0, 0, 1); a.clear(a.COLOR_BUFFER_BIT);
+      b.clearColor(0, 0, 1, 1); b.clear(b.COLOR_BUFFER_BIT);
+      var ap = a.readPixels(0, 0, 1, 1, 0, 0), bp = b.readPixels(0, 0, 1, 1, 0, 0);
+      check(ap[0] === 255 && ap[2] === 0 && bp[0] === 0 && bp[2] === 255,
+            'modified ctx redirected drawing');
+      a.bindBuffer(a.ARRAY_BUFFER, ab);
+      a.bufferData(a.ARRAY_BUFFER, new Float32Array([0, 1, 2, 3]).subarray(1, 3), a.STATIC_DRAW);
+      rejects(function(){ a.viewport(NaN, 0, 1, 1); }, 'nonfinite viewport accepted');
+      rejects(function(){ a.drawArrays(a.TRIANGLES, 0, Infinity); }, 'nonfinite draw count accepted');
+      var bs = b.createShader(b.VERTEX_SHADER), bprog = b.createProgram(), bt = b.createTexture();
+      rejects(function(){ a.shaderSource(bs, 'void main(){}'); }, 'foreign shader accepted');
+      rejects(function(){ a.useProgram(bprog); }, 'foreign program accepted');
+      rejects(function(){ a.bindTexture(a.TEXTURE_2D, bt); }, 'foreign texture accepted');
+      var changedShader = a.createShader(a.VERTEX_SHADER);
+      rejects(function(){ a.shaderSource(changedShader, {toString:function(){
+        a.deleteShader(changedShader); return 'void main(){}';
+      }}); }, 'shader deletion during source coercion accepted');
+      function linked(gl) {
+        var vs=gl.createShader(gl.VERTEX_SHADER),fs=gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(vs,'attribute vec2 p;void main(){gl_Position=vec4(p,0.0,1.0);}');
+        gl.shaderSource(fs,'precision mediump float;uniform vec4 u;void main(){gl_FragColor=u;}');
+        gl.compileShader(vs);gl.compileShader(fs);
+        var program=gl.createProgram();gl.attachShader(program,vs);gl.attachShader(program,fs);
+        gl.linkProgram(program);
+        check(gl.getShaderParameter(vs,gl.COMPILE_STATUS) &&
+              gl.getShaderParameter(fs,gl.COMPILE_STATUS) &&
+              gl.getProgramParameter(program,gl.LINK_STATUS), 'shader/link diagnostics');
+        return program;
+      }
+      var aprog=linked(a), validBprog=linked(b);
+      var aloc=a.getUniformLocation(aprog,'u'), bloc=b.getUniformLocation(validBprog,'u');
+      check(aloc !== null && bloc !== null, 'uniform locations');
+      rejects(function(){ a.uniform4f(bloc,1,0,0,1); }, 'foreign uniform location accepted');
+      aloc._loc=999;
+      a.uniform4f(aloc,1,0,0,1);
+      rejects(function(){ a.uniform4f(aloc,{valueOf:function(){
+        a.linkProgram(aprog); return 1;
+      }},0,0,1); }, 'uniform relink during value coercion accepted');
+      rejects(function(){ a.uniform4f(aloc,1,0,0,1); }, 'stale uniform location accepted');
+      a.deleteBuffer(ab);
+      check(!a.isBuffer(ab), 'deleted buffer still live');
+      rejects(function(){ a.bindBuffer(a.ARRAY_BUFFER, ab); }, 'stale buffer accepted');
+    "#);
+}
+
+#[test]
+fn private_webgl_identity_boa() { private_webgl_identity::<BoaEngine>(); }
+
+#[test]
+fn private_webgl_identity_nova() { private_webgl_identity::<NovaEngine>(); }
+
+fn borrowed_webgl_method_uses_receiver_realm<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.parse_document_interleaved("<body></body>", &NoScriptLoader);
+    run_in_top(&mut rt, "var frame=document.createElement('iframe');frame.srcdoc='<body></body>';document.body.appendChild(frame);");
+    rt.run_event_loop(100).expect("initialize child");
+    let child = rt.frame_realms(rt.top_realm()).first().map(|(_, realm)| *realm)
+        .expect("child realm");
+    rt.host_in_realm(child).expect("child host").borrow_mut().webgl_factory =
+        Some(Box::new(|w, h| Some(Box::new(WgpuWebGl::new(w, h)))));
+    run_in_top(&mut rt, r#"
+      var heldCreator = frame.contentWindow.__createWebGLContext;
+      var heldChildTypeError = frame.contentWindow.TypeError;
+      var heldGl = heldCreator(4, 4);
+      if (!heldGl) throw new Error('child context missing');
+      WebGLRenderingContext.prototype.clearColor.call(heldGl, 0, 1, 0, 1);
+      WebGLRenderingContext.prototype.clear.call(heldGl, heldGl.COLOR_BUFFER_BIT);
+      var pixel = heldGl.readPixels(0, 0, 1, 1, 0, 0);
+      if (pixel[0] !== 0 || pixel[1] !== 255 || pixel[2] !== 0)
+        throw new Error('borrowed method missed child host');
+      frame.remove();
+    "#);
+    rt.run_event_loop(100).expect("retire child");
+    run_in_top(&mut rt, r#"
+      var refused = false;
+      try { WebGLRenderingContext.prototype.clear.call(heldGl, heldGl.COLOR_BUFFER_BIT); }
+      catch (error) { refused = error instanceof TypeError; }
+      if (!refused) throw new Error('held child context remained live after teardown');
+      refused = false;
+      try { heldCreator(4, 4); }
+      catch (error) { refused = error instanceof heldChildTypeError; }
+      if (!refused) throw new Error('retired child creator remained live');
+    "#);
+}
+
+#[test]
+fn borrowed_webgl_method_uses_receiver_realm_boa() {
+    borrowed_webgl_method_uses_receiver_realm::<BoaEngine>();
+}
+
+#[test]
+fn borrowed_webgl_method_uses_receiver_realm_nova() {
+    borrowed_webgl_method_uses_receiver_realm::<NovaEngine>();
+}
+
+#[test]
+fn snapshot_retires_inherited_webgl_context_nova() {
+    let mut template = Runtime::<NovaEngine>::new().expect("runtime");
+    template.set_webgl_factory(Box::new(|w, h| Some(Box::new(WgpuWebGl::new(w, h)))));
+    run_in_top(&mut template, "var inheritedGl=__createWebGLContext(4,4);if(!inheritedGl)throw new Error('template context');");
+    let mut clone = template.snapshot_clone().expect("snapshot");
+    clone.set_webgl_factory(Box::new(|w, h| Some(Box::new(WgpuWebGl::new(w, h)))));
+    run_in_top(&mut clone, r#"
+      var refused=false;
+      try { inheritedGl.clear(inheritedGl.COLOR_BUFFER_BIT); }
+      catch(error) { refused=error instanceof TypeError; }
+      if(!refused)throw new Error('snapshot reused donor context');
+      var freshGl=__createWebGLContext(4,4);
+      if(!freshGl)throw new Error('fresh context refused');
+      freshGl.clearColor(1,0,0,1);freshGl.clear(freshGl.COLOR_BUFFER_BIT);
+      if(freshGl.readPixels(0,0,1,1,0,0)[0]!==255)
+        throw new Error('fresh context did not draw');
+      if(typeof __webgl_clear!=='undefined')throw new Error('snapshot exposed sink');
+    "#);
+    run_in_top(&mut template, "inheritedGl.clearColor(0,0,1,1);inheritedGl.clear(inheritedGl.COLOR_BUFFER_BIT);if(inheritedGl.readPixels(0,0,1,1,0,0)[2]!==255)throw new Error('donor retired');");
+}
+
 #[test]
 fn webgl_js_surface_draws_uniform_color_triangle_end_to_end() {
     let mut rt = Runtime::<BoaEngine>::new().expect("runtime");
@@ -685,7 +839,7 @@ fn html_canvas_get_context_returns_null_without_webgl_factory() {
 #[test]
 fn two_canvases_get_independent_contexts() {
     // Each getContext('webgl') invokes the factory afresh, so two canvases
-    // hold distinct contexts with distinct registry indices and distinct
+    // hold distinct contexts and distinct
     // underlying wgpu framebuffers. Drawing a different color into each and
     // reading both back proves they don't alias.
     let mut rt = Runtime::<BoaEngine>::new().expect("runtime");
@@ -719,7 +873,7 @@ fn two_canvases_get_independent_contexts() {
         }
         var a = makeCanvas();
         var b = makeCanvas();
-        var distinct = (a._ctx !== b._ctx);
+        var distinct = (a !== b);
         // Big covering triangle so the center pixel is always inside.
         drawColor(a, 1.0, 0.0, 0.0);  // red into context A
         drawColor(b, 0.0, 0.0, 1.0);  // blue into context B
@@ -727,7 +881,6 @@ fn two_canvases_get_independent_contexts() {
         var pb = b.readPixels(8, 8, 1, 1, 0, 0);
         var bag = {
             distinct: distinct,
-            aCtx: a._ctx, bCtx: b._ctx,
             ar: pa[0], ag: pa[1], ab: pa[2],
             br: pb[0], bg: pb[1], bb: pb[2],
         };
@@ -735,8 +888,6 @@ fn two_canvases_get_independent_contexts() {
     rt.eval(setup).expect("setup");
 
     assert_eq!(read(&mut rt, "String(bag.distinct)"), "true");
-    assert_eq!(read(&mut rt, "String(bag.aCtx)"), "0");
-    assert_eq!(read(&mut rt, "String(bag.bCtx)"), "1");
     // Context A is red, context B is blue — no aliasing.
     assert_eq!(read(&mut rt, "String(bag.ar)"), "255");
     assert_eq!(read(&mut rt, "String(bag.ab)"), "0");

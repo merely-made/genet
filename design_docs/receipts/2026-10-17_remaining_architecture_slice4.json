@@ -1,0 +1,395 @@
+{
+  "slice": 4,
+  "findings": {
+    "addressed": [
+      "R10",
+      "R11",
+      "L5",
+      "I10"
+    ],
+    "partial": []
+  },
+  "repositories": {
+    "genet": {
+      "base": "b297293650c97c3c33d285fee1e26363eab4b6ed",
+      "source_sha256": {
+        "components/genet-livery/src/layout.rs": "390912b990112e77dfa9bbdf65cba09cde9948123ba895ea5b86003159975db8",
+        "components/genet-livery/src/layout/tests.rs": "54afa1badd6318d1e2e9f640f760a444c657f68387b762712e7779dff09ad6d5",
+        "components/genet-livery/src/layout/transaction.rs": "3e6534ffe1922dc200259c7b46c38f6f87330ed49bf0ff547fd1300438ed700f",
+        "components/genet-livery/src/lib.rs": "5b5c0780fa47ae0d92a06d156814657a288d194187346b8dafe3ca9aec44b415",
+        "components/genet-scripted/livery.rs": "511dd21628d6730ab235f01d4c84ce7972468ebe32906b8a7d4cfc3061f399ff",
+        "components/script-engine-api/lib.rs": "f23e8d6b5e23b7c2ca766119e2d0894e83499c2bc8a3e1cb031ce8c9f01b6322",
+        "components/script-engine-boa/lib.rs": "76927225efc165408a14913e340f4a4dd28c941ecb904b93d1b1e153f4b51f90",
+        "components/script-engine-nova/lib.rs": "84072e8726678766eb69f6a4d68cd8da87aa0a15fed1bdb19ccecb5498ef4055",
+        "components/script-engine-piccolo/lib.rs": "6f5df32cc6ca16c2922c09a078a6338387670e6c2a66979af7e3226e1b5f242c",
+        "components/script-runtime-api/dom/bootstrap.js": "734dd93ffe1cb44de2ffe95df3c217557f137dd0eaf08103c3bc853e2f0f555a",
+        "components/script-runtime-api/dom/mod.rs": "a2b8d4228b82395d2523ca036d54b9973e6168111c3907831db8e0718ab8ad41",
+        "components/script-runtime-api/dom/tests.rs": "8314ca60fd49e3698686830d80fc1d5e589669ed714770c95fdf9e247f61a02e",
+        "components/script-runtime-api/dom/xpath_eval.rs": "59e058c7d6a82903254637807d8b7d3e1a3fdac7189bbec29dbe0b63ef94ab09",
+        "components/script-runtime-api/frames.rs": "81c3ecfdb6f063d74a1e8d1c4db84bcf069367ce8c2be66bf5b3ee288116d65b",
+        "components/script-runtime-api/lib.rs": "b95f371ef272a98c8c022f8be67ef1acc6aa50b48e3968bf60f344c30c917c6e",
+        "components/script-runtime-api/tests/webgl_binding.rs": "284288953f5449acbd470212959a113190860c9038e0d3a2e28fe829496e461f",
+        "components/script-runtime-api/webgl/bootstrap.js": "d2d6a64ffda4109d3c196a9df68758679027233f544cef664c6bed028fc39eeb",
+        "components/script-runtime-api/webgl/commands.rs": "eead80874788513a1034849e23f41c815c0a2828254a0f37002f4797d6380622",
+        "components/script-runtime-api/webgl/mod.rs": "6089fcbbde985bf2007ad5df32e617fba687a678c3e83affae9f0b4c61bfb728",
+        "components/taproot/Cargo.toml": "574ce7b2dc0c0ee8bd8c9cf310ca409d96bc9621f10236adf663a1fbefa37781",
+        "components/taproot/lib.rs": "b0f16432d4eb764e5537d85bc80f6af70cd5c68ff4813da568d3daf2c4c1cf45",
+        "components/taproot/projection.rs": "e8c3365413287bef1eaaf273845b7604e34fcb57143fa8b0248b1b06a25a5c2b",
+        "components/taproot/scenario.rs": "64533cc302a9d8286f656c9818e9b0a7221e6adb5e92e5b040827880b15333ae"
+      }
+    },
+    "mere": {
+      "base": "175c4148a2575c1d5095e98df7864c02502f6366",
+      "source_sha256": {
+        "Cargo.toml": "1ae92b96b62c975fa38e2ca60bd4c97fc692fa4fd7014d589fe1320073c02fa4",
+        "crates/cambium/cambium-genet-winit-host/Cargo.toml": "d70dcf97b9179177a060ebe744fba3db7fe6c3a9db1abf537cd3c94bad51e455",
+        "crates/cambium/cambium-genet-winit-host/src/harness.rs": "7839e06bb5a201fbde7ea25659721eedee485a8aed7ff7dc0bf0ef195ce1f232",
+        "crates/cambium/cambium-genet-winit-host/tests/host_fonts.rs": "6cb36ca39b4bc220f94129f3eb91720707ed5463bddc5a5e6b42243f501276da",
+        "crates/cambium/cambium-genet-winit-host/tests/scenario.rs": "50aee7d486b41c886381216f46f6b65d197b27f9e50d43c682799463efb2f69a",
+        "crates/cambium/cambium-genet-winit-host/tests/status_bar_collapse.rs": "45ff824c74c9ef5a6b0495c6a6528916d1232688653088779d0c6c2243cca1e1",
+        "crates/cambium/cambium-genet-winit-host/tests/ui_zoom.rs": "050abf4ea018ba13f00e6f8d733971d14dd0f16552b99d03b89f748cb70ad465",
+        "crates/cambium/cambium-genet-winit-host/tests/workbench_collapse.rs": "2a3dee2857e0fab05d5a80aa2045a8924c81fb7c49d629ce73b53651a16f8db7",
+        "crates/cambium/mesquite/Cargo.toml": "450de1f7a80f31603f3ed5e09677d5513c7e27e58da92139507be8e186b5c177",
+        "crates/cambium/mesquite/src/probe.rs": "660b253ded46ed0b682828b769fa98ea6af756fec933c5a4decec070253b9bb4",
+        "crates/cambium/tabard-workshop/Cargo.toml": "727e74a26ca5db3fcc17ff7bc70a6d3a14950ff9cc34bce4ca15d2a3ba5f8a45",
+        "crates/cambium/tabard-workshop/src/native_host.rs": "5efc27d08db1c12c22c18a1e51cb44d78064f06a145d8de8899174bdaa7c9ffe",
+        "crates/cambium/tabard-workshop/tests/instrument.rs": "ef2008566b4a95dc853c7c9b672fc98711a2f3717bfec9223e48cb5719f420f4",
+        "crates/cambium/tabard-workshop/tests/key_release.rs": "54c3341f6c87b6813a4158106ffdfc43973a3f3ba0fab48b6256dea127ab5d83",
+        "crates/cambium/tabard-workshop/tests/release_host_acceptance.rs": "8696a0c8ca8dc0f4f2e34f2fcafbd63553d6701a19790acef525db9aef226863",
+        "crates/cambium/tabard-workshop/tests/shared_components.rs": "6d9440e4eb7e49c7774226f3fb79af3d5e4a16e08ba610402ab4ff26483cb0aa",
+        "crates/cambium/tabard-workshop/tests/surface.rs": "0e5feecc31e266498dd9198a18664a64e612248c9f949d5fabca8ab84e65eff0",
+        "crates/cambium/tabard-workshop/tests/usability.rs": "d7d9dab6dea2fa3862bf6d19568ab8a9e52382ea91db0e6df2a7f047a0073e21",
+        "crates/canvas/pictograph/src/canvas.rs": "85ede1535d190ca4cdb23d729423170db81a63e020284121ac05f0cc43846104",
+        "crates/canvas/pictograph/src/canvas/frame.rs": "d20508d02c4fdafbdf2abbdffaed0acad852da79d891ad8633f42a66d3f14223",
+        "crates/canvas/pictograph/src/canvas/nodes.rs": "8d55bd4c945fb489e5d11c34fcc34e1728e7fbf03b5ba78dcbef6fd5a7f876dc",
+        "crates/canvas/pictograph/src/canvas/resolved_image_cache.rs": "a5426f7e91a11f5a3e45809c7b6667d5b866a8b5242aa86316c2ba82d0d0dfa7",
+        "crates/graphshell/graphshell-client/Cargo.toml": "6ebef90dd2f81ce050dff140ba651550df954354b36c61410aeed07a5eafc56e",
+        "crates/graphshell/graphshell-client/src/frozen.rs": "dd21702a22afc4916faa7cd529968f5c6b15830a39a4857508b5e2afd773b354",
+        "crates/inker/document-canvas/Cargo.toml": "e01af2b5abc8068204c884c026f240794316e3322edec5ac60bf8037a050cb82",
+        "crates/inker/document-canvas/src/paint_list.rs": "9fac6d7935f302fb18713ef2061bcccb584dcd54eab1f95a7f942488c902a2c2",
+        "crates/inker/document-canvas/src/types.rs": "2ad0dee87746f1efb06a6e395df6df9f2675d8751f4b31e0d5bc7a15b806114a",
+        "crates/system/document-lanes/src/smolweb.rs": "aed02d1c4403b639d5cc9b64ac49f3fb37d5b9db2e55e714289f0665ae569e22",
+        "ports/dramatis/Cargo.toml": "f3fa275efb2a37bbddbd936653c507f01399ed8f63119f00c20f8bd4056f6038",
+        "ports/dramatis/tests/interaction.rs": "afc78a690c00973a42e0b9a2d7b25b0261c5354c366e73ec3ef4956552b9fc19",
+        "ports/graphshell/src/web_tree.rs": "d0cb36cde687690407a48be960d17c3c582e7d03ddce4d2bd031169923e3a64d",
+        "ports/graphshell/src/web_tree/appearance.rs": "e3c3e4acc2d45aa5c36716f98bfc276ced9d1d7695d49ea608331c430b5f9580",
+        "ports/graphshell/src/web_tree/commands.rs": "268147e51cfe06e86becd1a945cf3be9475f16bf3639c1fbeafa757db36a06bb",
+        "ports/graphshell/src/web_tree/coupling.rs": "bf199c957d1347d72bcb2df0276865c67166aad04ac071e4ce9e69894f7384ca",
+        "ports/graphshell/src/web_tree/field_inspection.rs": "f658729d904df2e684f45e43fdd856f307de7365c684de4a79c5aa521a8f4ca8",
+        "ports/graphshell/src/web_tree/gestures.rs": "9c0d23e623e4c95b5678d59c6f8cf813d4f147a282e8cccc01200eae7cef25ad",
+        "ports/graphshell/src/web_tree/lane.rs": "5fcbd760c30b428f4cf778b02933537dd8a7f2b2c305649d984edba7499f802e",
+        "ports/graphshell/src/web_tree/presentation.rs": "ddba55ba97f5f6f10bdd8bcc52171af48bc14a8513ef560c024ea07370381a73",
+        "ports/graphshell/src/web_tree/product/fields.rs": "d12d4dd8e81113650813ab62ccef41b1c250ef2febcda91066b84b02dde2f05a",
+        "ports/graphshell/src/web_tree/promoted_links.rs": "d977205652307755edf0da395d8d3b23cc3d7fda8dd098e5399a52560da5ce26",
+        "ports/graphshell/src/web_tree/query_view.rs": "b4a5dd4a46b1ae1fac9e40e3c4b32930b2e33cb4e52c3a25337af813d4ea18f8",
+        "ports/graphshell/web/Cargo.toml": "312b28a1e5e3d8d8f5d7b4d0fba9b5c1718b1b1c0c15cee4479be9f26c1506ba",
+        "ports/tabard/desktop/examples/native_shared_recovery.rs": "cceeffe53a61b9bd803c1510f59a127b51455f7090fab078945eac10cc4b790c",
+        "ports/tabard/desktop/tests/workshop_routing.rs": "6cc1cd38c394c12037c3d3a57a68035ff7870bdbd470876f3a5ec422f30c0f9f"
+      }
+    },
+    "turnstone": {
+      "base": "2d045d9479adda033c309340da6719a535b70cb6",
+      "source_sha256": {
+        "Cargo.toml": "5e390da44595e869703eacfe4395dfc713060d113c652440faf82c11dd3fa34d",
+        "src/cambium_pane.rs": "0082010226c8faec3716e8decca78b4f84e742ece7cfcdb58c37f8a6731e8a88",
+        "src/contributed_surface/tests.rs": "37b1aa1bac8cc538c7cc8cb21e27c967df47632cb61f9863fd059667f8a781ab",
+        "src/inspector_pane.rs": "160b2027281038e647cd540490c6a4db4298dc4aaae79feaa22f3d87b3b25dd5",
+        "src/inspector_pane/tests.rs": "7992d2fd9de77a49f294af8216f88144a172029c59a409a0d2483ffeb4d60fc7",
+        "src/knot_authoring.rs": "4dfc2d727105e00f567c76cecfa79f58e25749ecf9487f7b068075adc8eed6e9",
+        "src/outer_frame.rs": "d3307f1fc81cbb1117cece85aeb0190ad33a43f3f84d42a49d44f52c22905402",
+        "src/sections.rs": "6471e4c5c9260c4156b706347138dd9301f4230bc8c780f0357fbbd738f17e32",
+        "src/settings_pane.rs": "3edbd6a9abc90e842c4f29fd3e3322f5dfeec200d3d454e02bfcb4d1e3b9898d",
+        "src/share_reader_pane.rs": "9d1ebb3cf7c3058d6013ea8d423069270ea362ce0d6a88cac4777857127591b7",
+        "src/shell/contributed_automation.rs": "8ddaa657d90093aec6ea178b4eae69df4ad5862c57d1407375a44cd3022e7100",
+        "src/shell/drive.rs": "2d537f68b16d4ac2d2516e0446318e7281d50d4e36d593add3de6cbb8897aece",
+        "src/shell/gestures.rs": "258e1ff279fbeabfc738eb6f34ebb5a6f4e79e00f62be5db2c346d5377e34b59",
+        "src/shell/outer_workspace.rs": "d8d4a673618d5610fc3982845fa3e08264861ee3843b06fe69b3a3d739cdbf4e",
+        "src/shell/renderers.rs": "dcfa491498dd65be85580a4a2d7152fddb6613489778eb41e584596dfdea6e76",
+        "src/sky_surface/tests.rs": "3917c876f78ce4d4a0d702199444336c95f8c1e8751ed35c580e1ccfbdce748f",
+        "src/swatch_pane/mod.rs": "35cb6c7cee2a20392ad097cb8e214f8518bf4cc0c9af0f857a2902ea42417857",
+        "src/trail_pane.rs": "d1fcefcf7c641d3db27412334105750fc8868eff9da6b5c64cf50841c2f46936",
+        "src/transcript_pane.rs": "8a700f7575875315f59372833e26befc6d765a22bca35bbf6d5aa0840bfc1fec",
+        "src/ui.rs": "b492bc7bb2e61fe63051b99f23f074fc2ea4d3de4cf268d74955a533b084c94d",
+        "src/workbench_pane.rs": "5caf4c4c8c144e2c473af18ae28f63807f78f3bb6fcd412fef25eb8c3979916d"
+      }
+    }
+  },
+  "gates": [
+    {
+      "label": "s4-xpath-verified",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s4-xpath-verified.log",
+      "sha256": "a3788ffb7f0fdb4b8fefeb47f0d058b7120c25f1c42cbda14a4df8823f62de18",
+      "exit_code": 0,
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s4-dom-node-model",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s4-dom-node-model.log",
+      "sha256": "bd9a5e3220f6c1c0453a7d8129fd0e58b914545665f55911f99998a0b0c04668",
+      "exit_code": 0,
+      "passed": 18,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s4-webgl-verified",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s4-webgl-verified.log",
+      "sha256": "5022747d6c8da98678e7ce8e39352c962e6b520d8832247f3375df6f3c5633f7",
+      "exit_code": 101,
+      "passed": 12,
+      "failed": 2,
+      "ignored": 0,
+      "qualification": "Only 12 passing cases count here. Two cross-realm fixture assertions were corrected and pass in s4-webgl-borrowed-verified; production source unchanged."
+    },
+    {
+      "label": "s4-webgl-borrowed-verified",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s4-webgl-borrowed-verified.log",
+      "sha256": "a98a1f6bf7ead1d1f0ebeb700b87ba09223bb74a36a7cc595957d222de498d7f",
+      "exit_code": 0,
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s4-livery-used",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s4-livery-used.log",
+      "sha256": "be953026aa83150228bcf5a4d1a92444136635f592ca06c438288a935e6dd99c",
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s4-livery-table",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s4-livery-table.log",
+      "sha256": "291690e6301e5c25da48481e4729078f06c9b44fcc9ddc245f3e915f525dc186",
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s4-cssom-used-verified",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s4-cssom-used-verified.log",
+      "sha256": "e92cf0e4f4c79e1cd26e75e1b1f82fd0f87d630f580a57fd97fed4af47fd7493",
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s4-cssom-child-base",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s4-cssom-child-base.log",
+      "sha256": "d0042a025045bb3cdfa766378325ee0d9fd817dc6214c0e80dc1938f3e2fd8b4",
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s4-cssom-child-viewport",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s4-cssom-child-viewport.log",
+      "sha256": "5c1f67531d761d436b1e4cef8a5ddf5e31139febe12a6ac157812aff992b9a5e",
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s4-taproot-verified",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s4-taproot-verified.log",
+      "sha256": "5494d65fd822e680060b89723af6cfcbacda25eac64410c8009ebe35fd1c82d7",
+      "exit_code": 0,
+      "passed": 42,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s4-taproot-no-fallback",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s4-taproot-no-fallback.log",
+      "sha256": "fc345ab60328b9e1ba07b35d7567924a9e9c0ff9c62a6a20491f6826bc948748",
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s4-ortet-webgl",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s4-ortet-webgl.log",
+      "sha256": "b0e6cc310a07a475fc5da948be75a0cfdbf983f755d27ae0232ac44ce83a2960",
+      "exit_code": 0,
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s4-piccolo",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s4-piccolo.log",
+      "sha256": "5dc6d3ad602047dc886e2cb3452f7bd342469dc2ea8d55fc3fa79925e9aaa3a9",
+      "exit_code": 0
+    },
+    {
+      "label": "s4-ortet-check",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s4-ortet-check.log",
+      "sha256": "ba3c50903857b8d0182ea0b43d6716d2dece1add82cf1cbf455d092c3835b482",
+      "exit_code": 0
+    },
+    {
+      "label": "s4-mere-scenario",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s4-mere-scenario.log",
+      "sha256": "f7940e930b0e9b429ea1b69ad0a63b36f7fc0bbd9050352749b0b0c462068be3",
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s4-mere-image-sharing",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s4-mere-image-sharing.log",
+      "sha256": "888b5a839589a7ecd2c22e25c0e71719d266d08f0be67558c672fdd060adb648",
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s4-mere-workshop-verified",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s4-mere-workshop-verified.log",
+      "sha256": "d35e690df6712a92ed6bcb3a524f3d315461586ed9229fcc2b623e106b50acb8",
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s4-mere-graphshell-continued",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s4-mere-graphshell-continued.log",
+      "sha256": "2b1589c9f0cdfcd343626107810160ded26c41fc792f380fec2eb3eb01effc9b",
+      "exit_code": 0
+    },
+    {
+      "label": "s4-turnstone-selector_resolution_waits_for_current_paint-verified",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s4-turnstone-selector_resolution_waits_for_current_paint-verified.log",
+      "sha256": "c852cefb6e57caeeb7b6d2f446cb73f157cc0c6a7071dcef25affc139257c026",
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s4-turnstone-unscoped_selector_uses_a_standalone_panes_retained_route",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s4-turnstone-unscoped_selector_uses_a_standalone_panes_retained_route.log",
+      "sha256": "77c37d154fbc4e1d2f9d521329051ba1c09cfa807cac187167d99bbc38956522",
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s4-turnstone-frame_selector_rejects_body_slots_and_uses_header_hit",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s4-turnstone-frame_selector_rejects_body_slots_and_uses_header_hit.log",
+      "sha256": "35b3d11d32d822bb53b10bff97ebdafacb9818f4d5552688c3578ff0691b2004",
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s4-turnstone-retained_selector_prefers_the_accessible_name_and_its_painted_owner",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s4-turnstone-retained_selector_prefers_the_accessible_name_and_its_painted_owner.log",
+      "sha256": "62ac40ad2b63dc1943645a0cd512a575de886ebcadd3477722cd5f78c94782d7",
+      "exit_code": 0,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s4-turnstone-roster-verified",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s4-turnstone-roster-verified.log",
+      "sha256": "5cfb6e4e59cfc4d1dd7a7558eb6c1cf82bae5badfc220b0de4e7b3c0ed66ced3",
+      "exit_code": 0,
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "passed_test_cases": 102,
+  "unresolved_test_failures": 0,
+  "ignored": 0,
+  "resources": {
+    "serialization": "/home/markik/Code/testing/machine-heavy.lock",
+    "memory": "5G",
+    "swap": "0",
+    "cpu": "150%",
+    "cargo_jobs": 1,
+    "test_threads": 1,
+    "nice": 10,
+    "gate_timeout_seconds": [
+      240,
+      600
+    ]
+  },
+  "retained_failed_attempts": [
+    {
+      "label": "s4-xpath",
+      "reason": "Nova typed-array extraction initially used unavailable methods; corrected to the pinned public TypedArray API before verified gates.",
+      "log_sha256": "7baa1fd130bd6267a8a145a20a485c02f5b74ed757cdbb92c0daca102198e6c6"
+    },
+    {
+      "label": "s4-webgl-draw",
+      "reason": "New child fixture lacked parsed body; corrected.",
+      "log_sha256": "9d32f96c67fe081d0b8e4e2af3f3ec8ad2d69c4e10dce7b421e69cfa3bceed20"
+    },
+    {
+      "label": "s4-webgl-verified",
+      "reason": "Twelve cases passed; two cross-realm catches incorrectly checked the parent TypeError constructor. Fixture now checks captured child constructor; both pass in focused rerun. Production source unchanged.",
+      "log_sha256": "5022747d6c8da98678e7ce8e39352c962e6b520d8832247f3375df6f3c5633f7"
+    },
+    {
+      "label": "s4-cssom-used",
+      "reason": "Fixture parent identifier selected Window.parent, not the element; corrected explicit lookup.",
+      "log_sha256": "1d4bc393ab1f430bf820e679eb0ae3ef35e9efaf98dca4334a4e5bde3307dfb8"
+    },
+    {
+      "label": "s4-taproot",
+      "reason": "Legacy scenario mock now explicitly opts into fixture-only estimated resolver; normal fallback stays removed.",
+      "log_sha256": "85a86451e778d8d82de7fb18a2eb34d1b5ebe0f04ceadcb6fd27f1a026c7c683"
+    },
+    {
+      "label": "s4-mere-workshop",
+      "reason": "Required supplier image API adoption: source image owners now share Arc buffers; pointer identity regression passes.",
+      "log_sha256": "b0fff29ea58fd7e0136092fc2e17a21951b80ec1819fde208481c37ebb497093"
+    },
+    {
+      "label": "s4-mere-graphshell",
+      "reason": "Dependency compilation reached 240-second watchdog; resumed with same memory/CPU limits and 600-second bound, passed.",
+      "log_sha256": "1f09491353cac2a4a7269c1ee3bbec4ca4091b7bc1bbeff86ee6cb44fc88459e"
+    },
+    {
+      "label": "s4-turnstone-selector_resolution_waits_for_current_paint",
+      "reason": "Dependency compilation reached 600-second watchdog; retained artifacts reused.",
+      "log_sha256": "4b9839c1a4e68e46251075ecc20c4c7dfe4ac71a3894c7eed523329e51e814d5"
+    },
+    {
+      "label": "s4-turnstone-selector_resolution_waits_for_current_paint-continued",
+      "reason": "Two missing trait imports corrected before verified test.",
+      "log_sha256": "08b065c8e6384f83c43c0abde25f02a4757ce4f36a3c64a42c7bda61e70e7712"
+    },
+    {
+      "label": "s4-turnstone-a_roster_cell_resolves_by_text",
+      "reason": "New assertion conflated first-match convenience and ambiguity-refusing inline contracts. Unique address query now compares them; broad query asserts their original distinct contracts. All eight roster tests pass.",
+      "log_sha256": "4e7997144def010847d901d6286a9d6e677f976f69092efb75c9e2e3985503f2"
+    }
+  ],
+  "qualifications": [
+    "102 passing test cases across focused reruns; the superseded full WebGL invocation itself exited 101. Its twelve successful unchanged cases and the two corrected focused cases are counted separately.",
+    "Actual GPU triangle and textured-quad draws ran; browser Graphshell check is compilation evidence, not browser interaction or OS presentation qualification.",
+    "Live CSSOM shares shaped text and loaded-image geometry; the existing container-query estimate phase remains shared with paint.",
+    "Normal Taproot fallback is removed. Estimated semantics and layout remain off by default for explicitly enabled synthetic fixtures.",
+    "Mere retains its current projection freshness lifecycle; no universal revision protocol was introduced. Turnstone explicitly rejects stale/unavailable snapshots.",
+    "Downstream tests used external local-path patches over these source hashes. Portable Git-only lockfiles will be adopted in the immediately following Mere and Turnstone publication commits, with dependency-graph equivalence checked.",
+    "The original ignored continuation fixtures, Forms/platform limits, supplier corpus mismatch and prior font-test residual are unchanged."
+  ]
+}

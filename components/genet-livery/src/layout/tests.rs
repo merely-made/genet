@@ -3175,7 +3175,7 @@ fn k4e4_used_height_of_a_captioned_table_is_the_grids() {
         }
         find(&dom, dom.document()).expect("the table exists")
     };
-    let used = used_value_context(&dom, &styles, 320.0, 240.0, table)
+    let used = estimated_used_value_context(&dom, &styles, 320.0, 240.0, table)
         .expect("layout")
         .expect("the table has a fragment");
 
@@ -3184,6 +3184,77 @@ fn k4e4_used_height_of_a_captioned_table_is_the_grids() {
         (used.border_box.1 - 40.0).abs() < 0.5,
         "the used height is the grid's, without the caption: {used:?}"
     );
+    let mut text = TextSystem::new();
+    let retained = used_value_context_with_text_system(
+        &dom,
+        &styles,
+        320.0,
+        240.0,
+        ViewportSizes::uniform(320.0, 240.0),
+        &mut text,
+        &HashMap::new(),
+        table,
+    )
+    .expect("retained layout")
+    .expect("retained table grid");
+    assert!((retained.border_box.0 - 200.0).abs() < 0.5, "{retained:?}");
+    assert!((retained.border_box.1 - 40.0).abs() < 0.5, "{retained:?}");
+}
+
+#[test]
+fn live_used_values_match_shaped_text_and_loaded_image_fragments() {
+    let dom = StaticDocument::parse(
+        "<body style='margin:0'><div id=parent style='width:64px'>\
+         <div id=text style='font:16px monospace'>aaaa aaaa aaaa aaaa</div>\
+         <img id=image src='fixture.png'></div></body>",
+    );
+    let device = Device::screen(320.0, 240.0);
+    let styles = resolve_styles(
+        &dom,
+        &StyleSet::cambium(&[]),
+        &device,
+        &InteractionStates::default(),
+    );
+    let images = HashMap::from([(
+        "fixture.png".to_string(),
+        include_bytes!("../../../../tests/wpt/webgl/tests/resources/3x3.png").to_vec(),
+    )]);
+    let mut retained_text = ahem_text_system();
+    let (_, retained) = layout_with_text_system(
+        &dom,
+        &styles,
+        320.0,
+        240.0,
+        device.viewport_sizes,
+        &mut retained_text,
+        &images,
+    )
+    .expect("retained layout");
+    for id in ["parent", "text", "image"] {
+        let node = node_by_id(&dom, dom.document(), id).expect("fixture node");
+        let painted = retained.principal_fragment(node).expect("retained fragment");
+        let mut query_text = ahem_text_system();
+        let used = used_value_context_with_text_system(
+            &dom,
+            &styles,
+            320.0,
+            240.0,
+            device.viewport_sizes,
+            &mut query_text,
+            &images,
+            node,
+        )
+        .expect("used-value layout")
+        .expect("used-value fragment");
+        assert!(
+            (used.border_box.0 - painted.width).abs() < 0.5
+                && (used.border_box.1 - painted.height).abs() < 0.5,
+            "{id}: used={used:?}, retained={painted:?}"
+        );
+    }
+    let image = node_by_id(&dom, dom.document(), "image").unwrap();
+    let painted = retained.principal_fragment(image).unwrap();
+    assert!(painted.width > 0.0 && painted.height > 0.0);
 }
 
 /// K4e4: an inline-table occupies line space as an atom.

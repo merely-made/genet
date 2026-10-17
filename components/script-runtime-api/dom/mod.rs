@@ -270,7 +270,9 @@ pub(crate) fn install_dom_surface<E: ScriptEngine>(
     engine.set_function::<InsertRule>("__insertRule", 3)?;
     engine.set_function::<DeleteRule>("__deleteRule", 2)?;
     engine.set_function::<MatchMedia>("__matchMedia", 1)?;
-    engine.set_function::<EvaluateXPath>("__xpathEvaluate", 2)?;
+    engine.set_function::<EvaluateXPath>("__xpathEvaluate", 4)?;
+    engine.set_function::<xpath_eval::XPathMutationCursor>("__xpathMutationCursor", 1)?;
+    engine.set_function::<xpath_eval::XPathIteratorInvalidated>("__xpathIteratorInvalidated", 2)?;
     engine.set_function::<adoption::RegisterHooks>("__domRegisterHooks", 1)?;
     engine.set_function::<adoption::AgentDispatch>("__domAgentDispatch", 5)?;
     engine.set_function::<mutation_observer::SetObserving>("__moObserving", 1)?;

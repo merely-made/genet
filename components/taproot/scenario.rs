@@ -482,6 +482,10 @@ mod tests {
                 sheet: "",
             }])
         }
+        fn selector_target(&self, selector: &Selector) -> crate::SelectorTarget {
+            self.with_surfaces(|surfaces| crate::resolve_estimated_fixture(surfaces, selector))
+                .map_or(crate::SelectorTarget::Miss, crate::SelectorTarget::Hit)
+        }
         fn snapshot(&self) -> ProbeSnapshot {
             ProbeSnapshot::default()
                 .with_focus("Example Domain")

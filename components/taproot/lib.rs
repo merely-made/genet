@@ -18,26 +18,21 @@
 //! behind a small trait (added as consumers pull it; this first slice is the
 //! resolver every one of those verbs stands on).
 //!
-//! A [`ProbeSurface`] is one retained runner's DOM plus where it sits in the
-//! window and the sheet it lays out under. An app with several runners (turnstone:
-//! chrome, roster grid, gloss, trail) lists one each; [`resolve`] searches them
-//! in order and returns the first match's centre. Because the resolution is one
-//! function over all surfaces, an app stops needing a bespoke geometry lookup
-//! per widget — the point the extraction *simplifies* the consumer, not just
-//! shares code.
+//! A [`ProbeSurface`] is one runner's DOM and authored sheet, available for
+//! text assertions and fixture inventory. The host supplies selector targets
+//! from its retained accessibility projection and painted geometry.
 //!
 //! [`ScriptedDom`]: genet_scripted_dom::ScriptedDom
 //!
-//! Hosts with retained accessibility semantics should use
-//! [`matching_with_projection`] for role/name targets, then pair its results
-//! with their own live geometry. [`matching`] and [`resolve`] retain the legacy
-//! DOM policy for callers that have not adopted an owner projection.
+//! Use [`matching_with_projection`] for role/name targets, then pair its
+//! results with the host's live geometry. [`matching_classes`] covers DOM class
+//! selectors. Estimated semantic and layout probes are fixture-only.
 
 use std::collections::BTreeMap;
 
-use genet_livery::{
-    Device, InteractionStates, StylePlane, StyleSet, layout, rendered_visible, resolve_styles,
-};
+use genet_livery::{Device, InteractionStates, StylePlane, StyleSet, rendered_visible, resolve_styles};
+#[cfg(any(test, feature = "estimated-probe-fixtures"))]
+use genet_livery::layout;
 use genet_scripted_dom::{NodeId, ScriptedDom};
 use layout_dom_api::{LayoutDom, LocalName, Namespace};
 
@@ -97,8 +92,7 @@ impl Selector {
         }
     }
 
-    /// Select by role. [`matching_with_projection`] uses the owner-computed
-    /// role; [`matching`] retains explicit/native DOM compatibility rules.
+    /// Select by the owner-computed role through [`matching_with_projection`].
     pub fn role(role: impl Into<String>) -> Self {
         Self {
             surface: None,
@@ -146,10 +140,8 @@ pub struct Hit {
 
 /// An application's authoritative answer for a selector it can lay out itself.
 ///
-/// [`Unsupported`](Self::Unsupported) retains the ordinary retained-surface
-/// resolver. [`Miss`](Self::Miss) is final: the host knows this selector has no
-/// laid-out target, so probe must not make a second, potentially stale match in
-/// its retained DOM surfaces.
+/// [`Unsupported`](Self::Unsupported) means this host cannot resolve the
+/// selector. [`Miss`](Self::Miss) is an authoritative current miss.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SelectorTarget {
     /// This app has no host-owned selector geometry for the request.
@@ -192,6 +184,7 @@ fn child_text(dom: &ScriptedDom, node: NodeId) -> String {
 
 /// Whether `node` or an ancestor carries `aria-hidden="true"`: such a node has
 /// no exposed role, though it may still be drawn and clickable.
+#[cfg(any(test, feature = "estimated-probe-fixtures"))]
 fn aria_hidden(dom: &ScriptedDom, node: NodeId) -> bool {
     let mut current = Some(node);
     while let Some(id) = current {
@@ -203,21 +196,10 @@ fn aria_hidden(dom: &ScriptedDom, node: NodeId) -> bool {
     false
 }
 
-fn matches(dom: &ScriptedDom, node: NodeId, sel: &Selector) -> bool {
+fn matches_class(dom: &ScriptedDom, node: NodeId, sel: &Selector) -> bool {
     let by_kind = match &sel.matcher {
         Match::Class(c) => dom.has_class(node, c),
-        Match::Role(_) if aria_hidden(dom, node) => false,
-        Match::Role(r) => {
-            attr(dom, node, "role").as_deref() == Some(r.as_str())
-                || (r == "button"
-                    && dom
-                        .element_name(node)
-                        .is_some_and(|name| name.local.as_ref() == "button"))
-                || (r == "textbox"
-                    && dom
-                        .element_name(node)
-                        .is_some_and(|name| name.local.as_ref() == "textarea"))
-        },
+        Match::Role(_) => panic!("role selectors require matching_with_projection"),
     };
     if !by_kind {
         return false;
@@ -236,18 +218,12 @@ fn matches(dom: &ScriptedDom, node: NodeId, sel: &Selector) -> bool {
     text_ok && attr_ok
 }
 
-/// Every matching element in pre-order (document order). The caller takes the
-/// first one that also has a laid-out box. Public so a host that retains its
-/// own live layout (the winit-host harness) can pair this DOM match with the
-/// laid-out rectangle it already owns, instead of re-deriving a second layout
-/// whose font metrics may disagree with the shipping one.
-/// This is the legacy DOM matcher. Hosts with semantic projections should use
-/// [`matching_with_projection`] for shared accessibility role/name truth.
-/// Role selectors skip `aria-hidden` subtrees, which expose no role. This
-/// matcher reads no styles; [`resolve`] also requires a rendered, visible box.
-pub fn matching(dom: &ScriptedDom, sel: &Selector) -> Vec<NodeId> {
+/// Match a class selector in DOM order. Role selectors must use the retained
+/// accessibility projection through [`matching_with_projection`]; passing one
+/// here is a caller error, not an authoritative miss.
+pub fn matching_classes(dom: &ScriptedDom, sel: &Selector) -> Vec<NodeId> {
     fn walk(dom: &ScriptedDom, node: NodeId, sel: &Selector, out: &mut Vec<NodeId>) {
-        if matches(dom, node, sel) {
+        if matches_class(dom, node, sel) {
             out.push(node);
         }
         for child in dom.dom_children(node) {
@@ -269,11 +245,10 @@ fn surface_styles(surface: &ProbeSurface) -> StylePlane<NodeId> {
     )
 }
 
-/// Resolve `sel` to the window-space centre of the first matching element
-/// across `surfaces` (searched in the order given) that a person could click:
-/// laid out and rendered visible (no `visibility: hidden`). `None` when nothing
-/// matches, or no match is on screen (a driver treats that as a miss).
-pub fn resolve(surfaces: &[ProbeSurface], sel: &Selector) -> Option<Hit> {
+/// A deliberately estimated resolver for synthetic tests. This feature is
+/// disabled in production; hosts must supply retained painted geometry.
+#[cfg(any(test, feature = "estimated-probe-fixtures"))]
+pub fn resolve_estimated_fixture(surfaces: &[ProbeSurface], sel: &Selector) -> Option<Hit> {
     for surface in surfaces {
         if !sel.matches_surface(surface.name) {
             continue;
@@ -282,7 +257,7 @@ pub fn resolve(surfaces: &[ProbeSurface], sel: &Selector) -> Option<Hit> {
         let Ok(layout) = layout(surface.dom, &styles, surface.rect[2], surface.rect[3]) else {
             continue;
         };
-        for node in matching(surface.dom, sel) {
+        for node in matching_estimated_fixture(surface.dom, sel) {
             if !rendered_visible(surface.dom, &styles, node) {
                 continue;
             }
@@ -298,6 +273,45 @@ pub fn resolve(surfaces: &[ProbeSurface], sel: &Selector) -> Option<Hit> {
         }
     }
     None
+}
+
+/// Legacy role inference retained only for synthetic compatibility fixtures.
+#[cfg(any(test, feature = "estimated-probe-fixtures"))]
+pub fn matching_estimated_fixture(dom: &ScriptedDom, sel: &Selector) -> Vec<NodeId> {
+    if let Match::Class(_) = &sel.matcher {
+        return matching_classes(dom, sel);
+    }
+    let Match::Role(role) = &sel.matcher else {
+        unreachable!();
+    };
+    let mut out = Vec::new();
+    fn walk(dom: &ScriptedDom, node: NodeId, sel: &Selector, role: &str, out: &mut Vec<NodeId>) {
+        if !aria_hidden(dom, node)
+            && (attr(dom, node, "role").as_deref() == Some(role)
+                || (role == "button"
+                    && dom
+                        .element_name(node)
+                        .is_some_and(|name| name.local.as_ref() == "button"))
+                || (role == "textbox"
+                    && dom
+                        .element_name(node)
+                        .is_some_and(|name| name.local.as_ref() == "textarea")))
+            && sel.text.as_ref().is_none_or(|text| {
+                child_text(dom, node).contains(text)
+                    || attr(dom, node, "aria-label").is_some_and(|label| label.contains(text))
+            })
+            && sel.attr.as_ref().is_none_or(|(name, value)| {
+                attr(dom, node, name).is_some_and(|actual| actual.contains(value))
+            })
+        {
+            out.push(node);
+        }
+        for child in dom.dom_children(node) {
+            walk(dom, child, sel, role, out);
+        }
+    }
+    walk(dom, dom.document(), sel, role, &mut out);
+    out
 }
 
 /// Whether `substr` appears in rendered text across `surfaces`: the basis for
@@ -355,27 +369,23 @@ impl ProbeSnapshot {
 /// generic driver (the scenario parser, the verb loop, selector resolution)
 /// lives in this crate and calls these; everything an app must supply is here:
 /// its retained DOMs, a typed snapshot, its event stream, a named-command entry
-/// point, and pointer delivery routed through its own surface plan.
+/// point, selector targets from retained geometry, and pointer delivery.
 ///
 /// Implementing it also grants the [`AutomatableExt`] provided methods
 /// ([`resolve`](AutomatableExt::resolve), [`click`](AutomatableExt::click)) for
-/// free — the point of the extraction: an app lists its surfaces and stops
-/// owning per-widget geometry lookups.
+/// free once the host supplies its selector targets.
 pub trait Automatable {
-    /// Provide the retained cambium surfaces to a visitor, for it to search and
-    /// hit-test this frame. A visitor rather than a returned `Vec` because an
+    /// Provide cambium surfaces to a visitor for text assertions and scope
+    /// inventory. A visitor rather than a returned `Vec` because an
     /// app's DOMs are typically behind `RefCell` (cambium's `DomHandle` is
     /// `Rc<RefCell<ScriptedDom>>`): the borrow guards live only for the closure,
     /// so a returned `Vec<ProbeSurface>` borrowing through them could not
-    /// compile. The generic driver reaches surfaces only through here. (This
-    /// shape is the first correction the real consumer made to the abstract
-    /// trait — the mock held a plain DOM and hid it.)
+    /// compile.
     fn with_surfaces<R>(&self, f: impl FnOnce(&[ProbeSurface<'_>]) -> R) -> R;
 
-    /// Resolve a selector against host-owned layout when the host has an
-    /// authoritative answer. The default leaves resolution to retained probe
-    /// surfaces for existing consumers. A matching host Hit does not require
-    /// a corresponding probe surface in [`Self::with_surfaces`].
+    /// Resolve a selector against host-owned retained layout and accessibility
+    /// semantics. The default is unsupported. A matching host Hit does not
+    /// require a corresponding probe surface in [`Self::with_surfaces`].
     fn selector_target(&self, _sel: &Selector) -> SelectorTarget {
         SelectorTarget::Unsupported
     }
@@ -444,7 +454,7 @@ pub trait AutomatableExt: Automatable {
     /// Resolve `sel` to a window point across this app's surfaces.
     fn resolve(&self, sel: &Selector) -> Option<Hit> {
         match self.selector_target(sel) {
-            SelectorTarget::Unsupported => self.with_surfaces(|surfaces| resolve(surfaces, sel)),
+            SelectorTarget::Unsupported => None,
             SelectorTarget::Miss => None,
             SelectorTarget::Hit(hit) => sel.matches_surface(hit.surface).then_some(hit),
         }
@@ -460,7 +470,7 @@ pub trait AutomatableExt: Automatable {
                 SelectorTarget::Hit(hit) if !sel.matches_surface(hit.surface) => return false,
                 SelectorTarget::Hit(_) => {},
                 // Miss may describe an offscreen target the hook can reveal.
-                // Unsupported retains legacy hooks; both still need known scope.
+                // Unsupported retains host hooks; both still need known scope.
                 SelectorTarget::Miss | SelectorTarget::Unsupported => {
                     if !self.with_surfaces(|surfaces| {
                         surfaces
@@ -584,7 +594,7 @@ mod tests {
     fn resolves_a_text_labelled_tab_to_its_window_centre() {
         let dom = strip_dom();
         let s = surfaces(&dom);
-        let hit = resolve(&s, &Selector::class("tab").containing("Links"))
+        let hit = resolve_estimated_fixture(&s, &Selector::class("tab").containing("Links"))
             .expect("the Links tab must resolve");
         assert_eq!(hit.surface, "strip");
         // Second tab: left 80..160, centre x=120; + surface origin 500 = 620.
@@ -607,7 +617,7 @@ mod tests {
         let dom = strip_dom();
         let s = surfaces(&dom);
         // Both nodes share this label; the resolver returns the first in order.
-        let hit = resolve(
+        let hit = resolve_estimated_fixture(
             &s,
             &Selector::class("graph-canvas-swatch-node").containing("Example Domain"),
         )
@@ -621,7 +631,7 @@ mod tests {
         let s = surfaces(&dom);
         // The two nodes share a label; only their `data-key` (url) tells them
         // apart. Selecting on it resolves the SECOND node, not the first.
-        let hit = resolve(
+        let hit = resolve_estimated_fixture(
             &s,
             &Selector::class("graph-canvas-swatch-node").with_attr("data-key", "example.org"),
         )
@@ -633,7 +643,7 @@ mod tests {
     fn a_role_selector_finds_the_first_tab() {
         let dom = strip_dom();
         let s = surfaces(&dom);
-        let hit = resolve(&s, &Selector::role("tab")).expect("role=tab must resolve");
+        let hit = resolve_estimated_fixture(&s, &Selector::role("tab")).expect("role=tab must resolve");
         assert_eq!(hit.point.0, 540.0, "first tab centre x = 40 + surface 500");
     }
 
@@ -641,7 +651,7 @@ mod tests {
     fn a_button_role_selector_honors_the_native_button_role() {
         let dom = strip_dom();
         let s = surfaces(&dom);
-        let hit = resolve(&s, &Selector::role("button").containing("Example Domain"))
+        let hit = resolve_estimated_fixture(&s, &Selector::role("button").containing("Example Domain"))
             .expect("a native button has the button role without a redundant role attribute");
         assert_eq!(hit.point, swatch_centre(200.0));
     }
@@ -658,7 +668,7 @@ mod tests {
         );
         dom.append_child(root, textarea);
         let s = surfaces(&dom);
-        let hit = resolve(&s, &Selector::role("textbox"))
+        let hit = resolve_estimated_fixture(&s, &Selector::role("textbox"))
             .expect("a native textarea has the textbox role without a redundant role attribute");
         assert_eq!(hit.point, (570.0, 110.0));
     }
@@ -667,8 +677,8 @@ mod tests {
     fn a_miss_returns_none() {
         let dom = strip_dom();
         let s = surfaces(&dom);
-        assert!(resolve(&s, &Selector::class("tab").containing("Nope")).is_none());
-        assert!(resolve(&s, &Selector::role("separator")).is_none());
+        assert!(resolve_estimated_fixture(&s, &Selector::class("tab").containing("Nope")).is_none());
+        assert!(resolve_estimated_fixture(&s, &Selector::role("separator")).is_none());
     }
 
     #[test]
@@ -713,7 +723,7 @@ mod tests {
             Selector::role("button").containing("Go"),
             Selector::class("go"),
         ] {
-            let hit = resolve(&s, &sel).expect("the visible button resolves");
+            let hit = resolve_estimated_fixture(&s, &sel).expect("the visible button resolves");
             assert_eq!(hit.point, (620.0, 20.0), "not the hidden decoy at x=520");
         }
     }
@@ -722,14 +732,14 @@ mod tests {
     fn an_aria_hidden_button_has_no_role_but_a_class_still_clicks_it() {
         let dom = decoy_dom("", Some(("aria-hidden", "true")));
         let s = surfaces(&dom);
-        let by_role = resolve(&s, &Selector::role("button").containing("Go")).expect("role hit");
+        let by_role = resolve_estimated_fixture(&s, &Selector::role("button").containing("Go")).expect("role hit");
         assert_eq!(
             by_role.point,
             (620.0, 20.0),
             "aria-hidden exposes no button role"
         );
         // It is still drawn and hit-testable, so a class selector reaches it.
-        let by_class = resolve(&s, &Selector::class("go")).expect("class hit");
+        let by_class = resolve_estimated_fixture(&s, &Selector::class("go")).expect("class hit");
         assert_eq!(by_class.point, (520.0, 20.0));
     }
 
@@ -744,7 +754,7 @@ mod tests {
         dom.append_child(wrapper, first);
         let real = dom.dom_children(root).next().expect("real button");
         dom.insert_before(root, wrapper, Some(real));
-        assert_eq!(matching(&dom, &Selector::role("button")), vec![real]);
+        assert_eq!(matching_estimated_fixture(&dom, &Selector::role("button")), vec![real]);
     }
 
     #[test]
@@ -803,6 +813,10 @@ mod tests {
                     sheet: "",
                 }])
             }
+            fn selector_target(&self, sel: &Selector) -> SelectorTarget {
+                self.with_surfaces(|surfaces| resolve_estimated_fixture(surfaces, sel))
+                    .map_or(SelectorTarget::Miss, SelectorTarget::Hit)
+            }
             fn snapshot(&self) -> ProbeSnapshot {
                 ProbeSnapshot::default().with_field("tabs", "2")
             }
@@ -826,7 +840,7 @@ mod tests {
             pressed: None,
             released: None,
         };
-        // The provided `click` resolves and delivers, with no app-written geometry.
+        // The provided `click` delivers the fixture's explicitly supplied hit.
         let hit = app.click(&Selector::class("tab").containing("Links"));
         assert!(hit, "the Links tab must be found and clicked");
         assert_eq!(app.pressed, Some((620.0, 22.0)));
@@ -910,10 +924,10 @@ mod tests {
         let mut surfaces = surfaces(&dom);
         surfaces.insert(0, other);
         let selector = Selector::class("tab").containing("Links");
-        assert_eq!(resolve(&surfaces, &selector).unwrap().surface, "other");
+        assert_eq!(resolve_estimated_fixture(&surfaces, &selector).unwrap().surface, "other");
         let scoped = selector.clone().on_surface("strip");
-        assert_eq!(resolve(&surfaces, &scoped).unwrap().point, (620.0, 22.0));
-        assert!(resolve(&surfaces, &selector.on_surface("absent")).is_none());
+        assert_eq!(resolve_estimated_fixture(&surfaces, &scoped).unwrap().point, (620.0, 22.0));
+        assert!(resolve_estimated_fixture(&surfaces, &selector.on_surface("absent")).is_none());
     }
 
     #[test]
@@ -998,6 +1012,37 @@ mod tests {
 
         assert_eq!(app.resolve(&selector), None);
         assert!(!app.click(&selector));
+        assert_eq!(app.pressed, None);
+        assert_eq!(app.released, None);
+    }
+
+    #[test]
+    fn unsupported_host_selector_never_synthesizes_probe_geometry() {
+        let mut app = HostSelectorApp {
+            // This surface matches the selector and the fixture resolver can
+            // find its tab. The ordinary path needs an explicit host owner.
+            dom: strip_dom(),
+            probe_inventory: true,
+            target: SelectorTarget::Unsupported,
+            click_result: None,
+            click_calls: 0,
+            pressed: None,
+            released: None,
+        };
+        for selector in [
+            Selector::class("tab").containing("Links"),
+            Selector::class("tab")
+                .containing("Links")
+                .on_surface("strip"),
+        ] {
+            assert!(
+                app.with_surfaces(|surfaces| resolve_estimated_fixture(surfaces, &selector))
+                    .is_some()
+            );
+            assert_eq!(app.resolve(&selector), None);
+            assert!(!app.click(&selector));
+        }
+        assert_eq!(app.click_calls, 2);
         assert_eq!(app.pressed, None);
         assert_eq!(app.released, None);
     }

@@ -13,9 +13,9 @@
 //!
 //! Multi-context: each uncached `getContext` call invokes the factory with the
 //! canvas's width/height and pushes a successful handler into a per-runtime registry;
-//! the JS context object carries the registry index (`_ctx`), and every sink
-//! call passes it as its first argument so the sink routes to the right
-//! handler. A missing factory or one that refuses creation gives JS no context;
+//! the JS bootstrap keeps the registry index in an agent-private context brand,
+//! and every captured sink call passes it as its first argument. A missing
+//! factory or one that refuses creation gives JS no context;
 //! a negative / out-of-range index from a stale context makes a sink return its
 //! default.
 
@@ -183,10 +183,10 @@ use commands::*;
 // arg parsing helpers
 // ---------------------------------------------------------------------
 
-/// Parse the context registry index from arg 0. Negative / unparseable yields
-/// `-1`, which `with_webgl_ctx` treats as "no context".
+/// Parse the context registry index from the private bootstrap's captured sink.
 fn parse_ctx<E: ScriptEngine>(cx: &mut E::CallCx<'_>) -> Result<i64, E::Error> {
-    Ok(parse_string::<E>(cx, 0)?.parse::<i64>().unwrap_or(-1))
+    parse_string::<E>(cx, 0)?.parse::<i64>()
+        .map_err(|_| cx.error("invalid WebGL context handle"))
 }
 
 fn parse_string<E: ScriptEngine>(cx: &mut E::CallCx<'_>, index: usize) -> Result<String, E::Error> {
@@ -195,25 +195,31 @@ fn parse_string<E: ScriptEngine>(cx: &mut E::CallCx<'_>, index: usize) -> Result
 }
 
 fn parse_f32<E: ScriptEngine>(cx: &mut E::CallCx<'_>, index: usize) -> Result<f32, E::Error> {
-    Ok(parse_string::<E>(cx, index)?.parse().unwrap_or(0.0))
+    let arg = cx.arg(index);
+    Ok(cx.value_to_number(&arg)? as f32)
 }
 
 fn parse_i32<E: ScriptEngine>(cx: &mut E::CallCx<'_>, index: usize) -> Result<i32, E::Error> {
-    Ok(parse_string::<E>(cx, index)?
-        .parse::<f64>()
-        .map(|v| v as i32)
-        .unwrap_or(0))
+    let arg = cx.arg(index);
+    let value = cx.value_to_number(&arg)?;
+    if !value.is_finite() || value.fract() != 0.0 || value < i32::MIN as f64 || value > i32::MAX as f64 {
+        return Err(cx.error("WebGL signed integer required"));
+    }
+    Ok(value as i32)
 }
 
 fn parse_u32<E: ScriptEngine>(cx: &mut E::CallCx<'_>, index: usize) -> Result<u32, E::Error> {
-    Ok(parse_string::<E>(cx, index)?
-        .parse::<f64>()
-        .map(|v| v.max(0.0) as u32)
-        .unwrap_or(0))
+    let arg = cx.arg(index);
+    let value = cx.value_to_number(&arg)?;
+    if !value.is_finite() || value.fract() != 0.0 || value < 0.0 || value > u32::MAX as f64 {
+        return Err(cx.error("WebGL unsigned integer required"));
+    }
+    Ok(value as u32)
 }
 
 fn parse_u64<E: ScriptEngine>(cx: &mut E::CallCx<'_>, index: usize) -> Result<u64, E::Error> {
-    Ok(parse_string::<E>(cx, index)?.parse().unwrap_or(0))
+    parse_string::<E>(cx, index)?.parse()
+        .map_err(|_| cx.error("invalid WebGL resource handle"))
 }
 
 fn parse_optional_u64<E: ScriptEngine>(
@@ -221,23 +227,17 @@ fn parse_optional_u64<E: ScriptEngine>(
     index: usize,
 ) -> Result<Option<u64>, E::Error> {
     let s = parse_string::<E>(cx, index)?;
-    if s.is_empty() || s == "0" {
+    if s == "0" {
         Ok(None)
     } else {
-        Ok(s.parse().ok())
+        s.parse().map(Some)
+            .map_err(|_| cx.error("invalid WebGL resource handle"))
     }
 }
 
 fn parse_bool<E: ScriptEngine>(cx: &mut E::CallCx<'_>, index: usize) -> Result<bool, E::Error> {
     let s = parse_string::<E>(cx, index)?;
     Ok(matches!(s.as_str(), "1" | "true"))
-}
-
-fn parse_f32_list(input: &str) -> Vec<f32> {
-    if input.is_empty() {
-        return Vec::new();
-    }
-    input.split(',').filter_map(|s| s.parse().ok()).collect()
 }
 
 fn binary_string(bytes: &[u8]) -> String {
@@ -296,9 +296,9 @@ pub(crate) fn install_webgl_surface<E: ScriptEngine>(
 /// GLenum constants documented in the WebGL 1.0 spec (the subset the
 /// Triangle-class smoke uses; broader conformance lands as the trait grows).
 ///
-/// Each `WebGLRenderingContext` carries a registry index (`_ctx`) minted by
+/// Each `WebGLRenderingContext` has an agent-private registry index minted by
 /// `__webgl_create_context(width, height)`; every method threads it as the
-/// leading sink argument. `HTMLCanvasElement.getContext('webgl')` (in dom.rs)
+/// leading captured sink argument. `HTMLCanvasElement.getContext('webgl')` (in dom.rs)
 /// requests one with the canvas's drawing-buffer size; the
 /// `__createWebGLContext(w, h)` helper is for host code / tests that want a
 /// bare context.

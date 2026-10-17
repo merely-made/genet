@@ -171,7 +171,7 @@ impl<'cx, E: ScriptEngine + 'cx> Surface<'_, 'cx, E> {
         // These setup-only aliases are captured by trusted bootstrap and then
         // deleted. Predeclare their flags before a value-only native installer
         // can create a nonconfigurable property. A refusal aborts registration.
-        if matches!(
+        if name.starts_with("__webgl_") || matches!(
             name,
             "__formFileAllocate"
                 | "__formFilesReplace"
@@ -329,9 +329,9 @@ pub struct HostState {
     /// [`Runtime::set_webgl_factory`]; invoked with the canvas drawing-buffer
     /// size. Only successful results enter [`Self::webgl_contexts`].
     pub webgl_factory: Option<WebGlFactory>,
-    /// Live WebGL contexts, indexed by the registry id the JS context object
-    /// carries (`_ctx`). Each `__webgl_*` sink routes to one of these by its
-    /// leading context-id argument. Grows by one per `getContext('webgl')`.
+    /// Live WebGL contexts, indexed by the id in the JS bootstrap's private
+    /// context brand. Each captured `__webgl_*` sink routes by its leading
+    /// context-id argument. Grows by one per `getContext('webgl')`.
     pub webgl_contexts: Vec<Box<dyn WebGlHandler>>,
     /// Canvas elements that have minted a live drawing context, by raw node id.
     /// A context's registry index means something only in *this* host, and the
@@ -2654,6 +2654,7 @@ impl<E: ScriptEngineSnapshot> Runtime<E> {
         if top != MAIN_REALM {
             task_hooks.extend(restored_task_hooks(&mut engine, top, REALM_TASK_HOOKS)?);
         }
+        engine.eval(&format!("(function(){{var lives=globalThis.__agentTimers.webglRealmLifetimes;if(!lives)return;for(var id in lives)lives[id].current.live=false;if(lives[{MAIN_REALM}])lives[{MAIN_REALM}].current={{live:true}};if(lives[{top}])lives[{top}].current={{live:true}};}})()"))?;
         engine.eval("delete globalThis.__agentTimers")?;
         agent.borrow_mut().timer_state = Some(Rc::new(timer_state));
         agent.borrow_mut().cancel_realm_tasks = Some(Rc::new(cancel_realm_tasks));
@@ -2855,6 +2856,9 @@ const EVENT_LOOP_BOOTSTRAP: &str = r#"
     state = globalThis.__agentTimers = {
       timers: queue, nextId: 1, now: 0, domNodes: new WeakSet(),
       domWrappers: new WeakMap(), domWrapperGroups: new WeakMap(), domOwners: new WeakMap(),
+      domDocumentModes: new WeakMap(), domAttrViews: new WeakMap(), domAttrNodes: new WeakSet(),
+      domAttrSlots: new WeakMap(),
+      domXPathResults: new WeakMap(),
       domTemplateContents: new WeakMap(), domEventTrust: new WeakMap(),
       domMouseEvents: new WeakMap(), domNodeDispatch: new WeakMap(), domFormRefs: new WeakMap(),
       domValidityObjects: new WeakMap(), domValidityOwners: new WeakMap(),
@@ -3691,6 +3695,11 @@ const SHELL_GLOBALS_BOOTSTRAP: &str = r#"
     var cancelSplice = Array.prototype.splice;
     rafState.cancelRealm = function(id) {
       var target = rafNumber(id);
+      var webglLives = rafState.webglRealmLifetimes;
+      if (webglLives && webglLives[target]) {
+        webglLives[target].current.live = false;
+        webglLives[target].closed = true;
+      }
       for (var t = cancelTimers.length - 1; t >= 0; t--) {
         if (cancelTimers[t].realm === target) rafApply(cancelSplice, cancelTimers, [t, 1]);
       }

@@ -13,7 +13,7 @@ use super::*;
 ///
 /// A role selector's `containing` filter searches only the computed accessible
 /// name. Missing and hidden projected nodes are authoritative misses, even when
-/// raw DOM attributes would match. Class selectors keep [`matching`]'s shallow
+/// raw DOM attributes would match. Class selectors keep [`matching_classes`]'s shallow
 /// DOM text/`aria-label` behavior, and attribute filters always inspect the DOM.
 /// [`text_present`] is unchanged.
 ///
@@ -27,7 +27,7 @@ pub fn matching_with_projection(
     projection: &DocumentA11yProjection,
 ) -> Vec<NodeId> {
     let Match::Role(role) = &sel.matcher else {
-        return matching(dom, sel);
+        return matching_classes(dom, sel);
     };
     let nodes: BTreeMap<_, _> = projection
         .nodes()
@@ -310,7 +310,7 @@ mod tests {
         }
         assert!(matching_with_projection(&dom, &Selector::role("button"), &projection).is_empty());
         assert_eq!(
-            matching(&dom, &Selector::role("button")),
+            matching_estimated_fixture(&dom, &Selector::role("button")),
             [checkbox],
             "legacy DOM policy remains explicit"
         );
@@ -416,7 +416,7 @@ mod tests {
             ),
             [button]
         );
-        assert!(matching(&dom, &Selector::role("button").containing("[Save]")).is_empty());
+        assert!(matching_estimated_fixture(&dom, &Selector::role("button").containing("[Save]")).is_empty());
     }
 
     #[test]
@@ -435,7 +435,7 @@ mod tests {
             matching_prefer_exact_with_projection(&dom, &selector, &projection),
             [detail]
         );
-        assert_eq!(matching(&dom, &selector), [workbench, detail]);
+        assert_eq!(matching_estimated_fixture(&dom, &selector), [workbench, detail]);
     }
 
     #[test]

@@ -36,7 +36,9 @@ where
 
     let boxes = GeneratedBoxTree::from_dom(dom, styles);
     let Some(root_box) = retained_root_box(&boxes, node) else {
-        return Ok(RetainedRootFormatting::Unsupported);
+        // An inline-formatting node (text under a block container) cannot be
+        // a root; its nearest admitted ancestor can.
+        return Ok(RetainedRootFormatting::PromoteParent);
     };
     let table_root = boxes[root_box].display.internal_table == Some(InternalTableRole::Wrapper);
     if !(table_root && supports_retained_table_root_formatting(&boxes, root_box)
@@ -202,13 +204,13 @@ where
     if !same_retained_root_size(local_rect, retained_rect) {
         return Ok(RetainedRootFormatting::PromoteParent);
     }
-    fragments.translate_subtree(
-        *local_root,
-        PhysicalOffset {
-            x: retained_rect.x - local_rect.x,
-            y: retained_rect.y - local_rect.y,
-        },
-    );
+    let offset = PhysicalOffset {
+        x: retained_rect.x - local_rect.x,
+        y: retained_rect.y - local_rect.y,
+    };
+    fragments.translate_subtree(*local_root, offset);
+    // Shaped text was placed against the local origin; keep it in lockstep.
+    text_frame.translate_subtree(dom, node, (offset.x, offset.y));
     fragments.flush_overflow();
     drop(state);
 

@@ -69,3 +69,18 @@ subtree, refuses geometry-only reuse when text needs reshaping, proves
 geometry-only leaf resize and scroll exports, and matches fresh-final paint.
 Row 3 is closed. The broader K5h damage-class matrix remains open in its own
 plan.
+
+## 2026-10-17 addendum: selected-root relayout text translation
+
+The selected-root formatter (`layout_retained_formatting_root`) shaped its
+local text frame at the local origin and translated only the fragments to the
+retained origin, so changed text painted at y=0 instead of its row. It now
+calls `TextFrame::translate_subtree` with the same offset. Receipt:
+`retained_text_edit_in_a_keyed_flex_row_list_paints_like_fresh_layout` (100
+rows) and the 1,000-row variant compare the retained paint list with a fresh
+final document; the former failed before the fix.
+
+A node whose principal box is not a Block, Flex or Grid formatting root (text
+under a block container) now returns `PromoteParent` instead of `Unsupported`,
+so it reaches the nearest admitted ancestor; see
+`retained_text_edit_under_a_block_cell_promotes_and_paints_like_fresh_layout`.

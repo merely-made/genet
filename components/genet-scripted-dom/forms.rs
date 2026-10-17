@@ -226,6 +226,7 @@ impl ScriptedDom {
         };
         state.checked = checked;
         state.dirty_checkedness = true;
+        self.sync_checked_radio(id);
         if radio {
             self.uncheck_radio_group(id);
         }
@@ -262,6 +263,7 @@ impl ScriptedDom {
                 state.checked = checked;
                 state.dirty_checkedness = false;
                 set_selection_support(state, &kind, false);
+                self.sync_checked_radio(id);
                 let radio = kind == "radio" && checked;
                 if radio {
                     self.uncheck_radio_group(id);
@@ -334,6 +336,7 @@ impl ScriptedDom {
             }
             dst.custom_validity_message.clear();
         }
+        self.sync_checked_radio(target);
         self.reset_interaction_state(target);
         // HTML input cloning steps do not propagate selected files.
         if src_name.local.as_ref() == "input" {
@@ -445,6 +448,7 @@ impl ScriptedDom {
             {
                 let checked = self.has_input_attribute(id, "checked");
                 self.node_mut(id).form_control.as_mut().unwrap().checked = checked;
+                self.sync_checked_radio(id);
                 if checked && self.input_type(id) == "radio" {
                     self.uncheck_radio_group(id);
                 }
@@ -513,6 +517,7 @@ impl ScriptedDom {
                     &new_type,
                     true,
                 );
+                self.sync_checked_radio(id);
                 if new_type == "radio" && self.node(id).form_control.as_ref().unwrap().checked {
                     self.uncheck_radio_group(id);
                 }
@@ -678,47 +683,106 @@ impl ScriptedDom {
         None
     }
 
-    /// Capture checked radios in the affected ordinary trees, traversing each
-    /// host's shadow root as another tree. Call before topology or `id` changes.
+    /// Record whether `id` is currently a checked radio input. Every write to
+    /// checkedness or input type calls this, which keeps `checked_radios` a
+    /// superset of the live checked radios.
+    pub(super) fn sync_checked_radio(&mut self, id: NodeId) {
+        let checked = self.is_html_input(id)
+            && self.input_type(id) == "radio"
+            && self
+                .node(id)
+                .form_control
+                .as_ref()
+                .is_some_and(|state| state.checked);
+        if checked {
+            self.checked_radios.insert(id);
+        } else {
+            self.checked_radios.remove(&id);
+        }
+    }
+
+    /// Whether `id`'s ordinary tree is one of `roots`, or hangs from one through
+    /// a chain of shadow hosts.
+    fn radio_tree_affected(&self, id: NodeId, roots: &[NodeId]) -> bool {
+        let mut root = self.radio_tree_root(id);
+        loop {
+            if roots.contains(&root) {
+                return true;
+            }
+            match self.shadow_host_of(root) {
+                Some(host) => root = self.radio_tree_root(host),
+                None => return false,
+            }
+        }
+    }
+
+    fn radio_tree_root(&self, id: NodeId) -> NodeId {
+        let mut root = id;
+        while let Some(parent) = self.parent(root) {
+            self.radio_scan_visits.set(self.radio_scan_visits.get() + 1);
+            root = parent;
+        }
+        root
+    }
+
+    /// Capture checked radios in the affected ordinary trees, including shadow
+    /// trees hanging from them. Call before topology or `id` changes. Costs
+    /// time in the number of checked radios, not in the size of the document.
     pub(super) fn snapshot_radio_associations(
         &self,
         seeds: &[NodeId],
     ) -> Vec<RadioAssociationSnapshot> {
-        let mut stack = Vec::new();
-        for seed in seeds.iter().rev().copied() {
+        if self.checked_radios.is_empty() {
+            return Vec::new();
+        }
+        let mut roots = Vec::new();
+        for seed in seeds.iter().copied() {
             if self.try_index(seed).is_some() {
-                stack.push(self.form_control_tree_root(seed));
+                let root = self.radio_tree_root(seed);
+                if !roots.contains(&root) {
+                    roots.push(root);
+                }
             }
         }
-        let mut seen = std::collections::HashSet::new();
         let mut out = Vec::new();
-        while let Some(root) = stack.pop() {
-            if self.try_index(root).is_none() || !seen.insert(root) {
+        for id in self.checked_radios.iter().copied() {
+            self.radio_scan_visits.set(self.radio_scan_visits.get() + 1);
+            if self.try_index(id).is_none()
+                || !self.is_html_input(id)
+                || self.input_type(id) != "radio"
+                || !self
+                    .node(id)
+                    .form_control
+                    .as_ref()
+                    .is_some_and(|state| state.checked)
+                || !self.radio_tree_affected(id, &roots)
+            {
                 continue;
             }
-            let mut descendants = Vec::new();
-            collect_descendants(self, root, &mut descendants);
-            for id in descendants {
-                if self.is_html_input(id)
-                    && self.input_type(id) == "radio"
-                    && self
-                        .node(id)
-                        .form_control
-                        .as_ref()
-                        .is_some_and(|state| state.checked)
-                {
-                    out.push(RadioAssociationSnapshot {
-                        node: id,
-                        form_owner: self.form_control_form_owner(id),
-                        connected: self.is_connected_through_shadow_hosts(id),
-                    });
-                }
-                if let Some(shadow_root) = self.shadow_root(id) {
-                    stack.push(shadow_root);
-                }
-            }
+            out.push(RadioAssociationSnapshot {
+                node: id,
+                form_owner: self.form_control_form_owner(id),
+                connected: self.is_connected_through_shadow_hosts(id),
+            });
         }
         out
+    }
+
+    /// Child indices from the tree root down to `id`: lexicographic order is
+    /// tree order within one tree.
+    fn radio_tree_path(&self, id: NodeId) -> Vec<usize> {
+        let mut path = Vec::new();
+        let mut node = id;
+        while let Some(parent) = self.parent(node) {
+            path.push(
+                self.dom_children(parent)
+                    .position(|child| child == node)
+                    .unwrap_or(0),
+            );
+            node = parent;
+        }
+        path.reverse();
+        path
     }
 
     /// Reconcile only checked radios whose form owner changed or which became
@@ -732,7 +796,12 @@ impl ScriptedDom {
     ) {
         let old: std::collections::HashMap<_, _> =
             before.iter().map(|item| (item.node, *item)).collect();
-        let after = self.snapshot_radio_associations(seeds);
+        let mut after = self.snapshot_radio_associations(seeds);
+        #[cfg(test)]
+        tests::assert_snapshot_matches_full_walk(self, seeds, &after);
+        if after.len() > 1 {
+            after.sort_by_cached_key(|item| (self.radio_tree_path(item.node), item.node.raw()));
+        }
         for current in after.into_iter().rev() {
             // A remove/release may retire a snapshotted node. The post scan
             // checks roots, and this guard also protects stale candidate IDs.
@@ -844,6 +913,7 @@ impl ScriptedDom {
                 .is_some_and(|state| state.checked);
             if changed {
                 self.node_mut(peer).form_control.as_mut().unwrap().checked = false;
+                self.checked_radios.remove(&peer);
                 self.mutations
                     .push(crate::DomMutation::FormControlStateChanged { node: peer });
             }
@@ -975,6 +1045,159 @@ mod tests {
     }
     fn attr(local: markup5ever::LocalName) -> QualName {
         QualName::new(None, ns!(), local)
+    }
+
+    thread_local! {
+        static SKIP_ORACLE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    }
+
+    /// The pre-index snapshot: every checked radio in the seeds' trees and the
+    /// shadow trees below them, found by walking the whole tree. Every reconcile
+    /// in a test run is checked against it unless a cost test opts out.
+    pub(super) fn assert_snapshot_matches_full_walk(
+        dom: &ScriptedDom,
+        seeds: &[NodeId],
+        indexed: &[RadioAssociationSnapshot],
+    ) {
+        if SKIP_ORACLE.with(|skip| skip.get()) {
+            return;
+        }
+        let mut stack: Vec<_> = seeds
+            .iter()
+            .rev()
+            .filter(|seed| dom.try_index(**seed).is_some())
+            .map(|seed| dom.form_control_tree_root(*seed))
+            .collect();
+        let mut seen = std::collections::HashSet::new();
+        let mut full = std::collections::HashSet::new();
+        while let Some(root) = stack.pop() {
+            if dom.try_index(root).is_none() || !seen.insert(root) {
+                continue;
+            }
+            let mut descendants = Vec::new();
+            collect_descendants(dom, root, &mut descendants);
+            for id in descendants {
+                if dom.is_html_input(id)
+                    && dom.input_type(id) == "radio"
+                    && dom.node(id).form_control.as_ref().is_some_and(|s| s.checked)
+                {
+                    full.insert((id, dom.form_control_form_owner(id)));
+                }
+                if let Some(shadow_root) = dom.shadow_root(id) {
+                    stack.push(shadow_root);
+                }
+            }
+        }
+        let indexed: std::collections::HashSet<_> =
+            indexed.iter().map(|item| (item.node, item.form_owner)).collect();
+        assert_eq!(indexed, full, "checked-radio index missed or invented a radio");
+    }
+
+    fn radio(dom: &mut ScriptedDom, name: &str) -> NodeId {
+        let radio = dom.create_element(tag(local_name!("input")));
+        dom.set_attribute(radio, attr(local_name!("type")), "radio");
+        dom.set_attribute(radio, attr(local_name!("name")), name);
+        radio
+    }
+
+    /// Append `rows` rows of four elements under a wrapper, with `build` hooks
+    /// for nesting: `nested` hangs every row under a fresh container level.
+    fn build_tree(dom: &mut ScriptedDom, rows: usize, nested: bool) -> NodeId {
+        let document = dom.document();
+        let list = dom.create_element(tag(local_name!("div")));
+        dom.append_child(document, list);
+        let mut parent = list;
+        for i in 0..rows {
+            if nested && i % 8 == 0 {
+                let level = dom.create_element(tag(local_name!("section")));
+                dom.append_child(list, level);
+                parent = level;
+            }
+            let row = dom.create_element(tag(local_name!("div")));
+            let label = dom.create_element(tag(local_name!("span")));
+            let text = dom.create_text("row");
+            let input = dom.create_element(tag(local_name!("input")));
+            dom.set_attribute(input, attr(local_name!("id")), &format!("i{i}"));
+            dom.append_child(label, text);
+            dom.append_child(row, label);
+            dom.append_child(row, input);
+            dom.append_child(parent, row);
+        }
+        list
+    }
+
+    #[test]
+    fn building_documents_without_radios_never_scans_for_them() {
+        SKIP_ORACLE.with(|skip| skip.set(true));
+        for nested in [false, true] {
+            for rows in [100, 400, 1600] {
+                let mut dom = ScriptedDom::new();
+                let list = build_tree(&mut dom, rows, nested);
+                let row = dom.dom_children(list).next().unwrap();
+                dom.remove_child(row);
+                dom.set_attribute(list, attr(local_name!("id")), "list");
+                assert_eq!(
+                    dom.radio_scan_visits.get(),
+                    0,
+                    "{rows} rows, nested={nested}: reconcile inspected a node"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn radio_reconciliation_cost_follows_checked_radios_not_document_size() {
+        SKIP_ORACLE.with(|skip| skip.set(true));
+        let visits = |rows: usize| {
+            let mut dom = ScriptedDom::new();
+            let list = build_tree(&mut dom, rows, true);
+            let mut radios = Vec::new();
+            for group in 0..3 {
+                let r = radio(&mut dom, &format!("g{group}"));
+                dom.append_child(list, r);
+                assert!(dom.set_form_control_checked(r, true));
+                radios.push(r);
+            }
+            let before = dom.radio_scan_visits.get();
+            // One more row per mutation batch; each append reconciles.
+            let extra = build_tree(&mut dom, rows, true);
+            let _ = extra;
+            for r in &radios {
+                assert!(dom.form_control_state(*r).unwrap().checked);
+            }
+            dom.radio_scan_visits.get() - before
+        };
+        let small = visits(200);
+        let large = visits(800);
+        // Four times the mutations over a four times larger document: linear
+        // work is about 4x (plus a small depth term), the old walk was ~16x.
+        assert!(small > 0);
+        assert!(
+            large <= small * 6,
+            "radio scan cost grew superlinearly: {small} -> {large}"
+        );
+    }
+
+    #[test]
+    fn checked_radio_index_follows_type_checkedness_and_removal() {
+        let mut dom = ScriptedDom::new();
+        let document = dom.document();
+        let a = radio(&mut dom, "g");
+        let b = radio(&mut dom, "g");
+        dom.append_child(document, a);
+        dom.append_child(document, b);
+        assert!(dom.checked_radios.is_empty());
+        dom.set_form_control_checked(a, true);
+        assert!(dom.checked_radios.contains(&a));
+        dom.set_form_control_checked(b, true);
+        assert!(!dom.checked_radios.contains(&a), "group uncheck leaves index");
+        assert!(dom.checked_radios.contains(&b));
+        dom.set_attribute(b, attr(local_name!("type")), "checkbox");
+        assert!(dom.checked_radios.is_empty());
+        dom.set_attribute(b, attr(local_name!("type")), "radio");
+        assert!(dom.checked_radios.contains(&b));
+        dom.remove(b);
+        assert!(!dom.checked_radios.contains(&b));
     }
 
     #[test]

@@ -6,6 +6,7 @@
 
 //! DOM-neutral declaration parsing and cascade ordering.
 
+use cssparser::{Parser, ParserInput};
 use std::{cmp::Ordering, fmt};
 
 use crate::custom::{
@@ -136,6 +137,15 @@ pub struct DeclarationBlock {
     pub errors: Vec<DeclarationError>,
 }
 
+/// One authored declaration before property-specific value parsing. The list
+/// preserves source order and custom-property case for CSSOM consumers.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ParsedDeclaration {
+    pub name: String,
+    pub value: String,
+    pub important: bool,
+}
+
 fn split_top_level(input: &str, delimiter: char) -> Vec<&str> {
     let mut parts = Vec::new();
     let mut start = 0;
@@ -143,10 +153,12 @@ fn split_top_level(input: &str, delimiter: char) -> Vec<&str> {
     let mut quote = None;
     let mut escaped = false;
     for (index, ch) in input.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
         if let Some(active_quote) = quote {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
+            if ch == '\\' {
                 escaped = true;
             } else if ch == active_quote {
                 quote = None;
@@ -154,6 +166,7 @@ fn split_top_level(input: &str, delimiter: char) -> Vec<&str> {
             continue;
         }
         match ch {
+            '\\' => escaped = true,
             '\'' | '"' => quote = Some(ch),
             '(' | '[' | '{' => depth += 1,
             ')' | ']' | '}' => depth = depth.saturating_sub(1),
@@ -217,14 +230,72 @@ fn split_components(input: &str) -> Vec<&str> {
 
 fn strip_important(value: &str) -> (&str, bool) {
     let trimmed = value.trim();
-    let Some(bang) = trimmed.rfind('!') else {
+    let parts = split_top_level(trimmed, '!');
+    let Some(tail) = parts.last() else {
         return (trimmed, false);
     };
-    if trimmed[bang + 1..].trim().eq_ignore_ascii_case("important") {
+    if parts.len() > 1 && tail.trim().eq_ignore_ascii_case("important") {
+        let bang = trimmed.len() - tail.len() - 1;
         (trimmed[..bang].trim_end(), true)
     } else {
         (trimmed, false)
     }
+}
+
+fn parse_declaration_syntax(input: &str) -> Vec<Result<ParsedDeclaration, DeclarationError>> {
+    let clean = crate::css_comments::without_comments(input);
+    split_top_level(&clean, ';')
+        .into_iter()
+        .filter_map(|raw| {
+            let declaration = raw.trim();
+            if declaration.is_empty() {
+                return None;
+            }
+            let colon = split_top_level(declaration, ':').first().map(|head| head.len())?;
+            if colon == declaration.len() {
+                return Some(Err(DeclarationError {
+                    name: declaration.to_owned(),
+                    value: String::new(),
+                    kind: DeclarationErrorKind::MalformedDeclaration,
+                }));
+            }
+            let raw_name = declaration[..colon].trim();
+            let mut parser_input = ParserInput::new(raw_name);
+            let mut parser = Parser::new(&mut parser_input);
+            let name = parser
+                .expect_ident_cloned()
+                .ok()
+                .filter(|_| parser.expect_exhausted().is_ok());
+            let (value, important) = strip_important(&declaration[colon + 1..]);
+            let Some(name) = name.filter(|name| name.len() != 2 || !name.starts_with("--")) else {
+                return Some(Err(DeclarationError {
+                    name: raw_name.to_owned(),
+                    value: value.to_owned(),
+                    kind: DeclarationErrorKind::MalformedDeclaration,
+                }));
+            };
+            let name = if name.starts_with("--") {
+                name.to_string()
+            } else {
+                name.to_ascii_lowercase()
+            };
+            Some(Ok(ParsedDeclaration {
+                name,
+                value: value.to_owned(),
+                important,
+            }))
+        })
+        .collect()
+}
+
+/// Parse one complete declaration list using the cascade parser's comment,
+/// delimiter, identifier, and priority rules. Invalid syntax is skipped; value
+/// validation remains the selected CSS engine's separate responsibility.
+pub fn parse_cssom_declarations(input: &str) -> Vec<ParsedDeclaration> {
+    parse_declaration_syntax(input)
+        .into_iter()
+        .filter_map(Result::ok)
+        .collect()
 }
 
 fn push_longhand(block: &mut DeclarationBlock, name: &str, value: &str, important: bool) -> bool {
@@ -1294,38 +1365,20 @@ fn expand_css_wide_shorthand(
 /// Parse a style-rule declaration block. Invalid declarations are retained as
 /// diagnostics while valid declarations continue through CSS error recovery.
 pub fn parse_declaration_block(input: &str) -> DeclarationBlock {
-    let clean = crate::css_comments::without_comments(input);
     let mut block = DeclarationBlock::default();
-    for raw in split_top_level(&clean, ';') {
-        let declaration = raw.trim();
-        if declaration.is_empty() {
-            continue;
-        }
-        let Some(colon) = split_top_level(declaration, ':')
-            .first()
-            .map(|head| head.len())
-        else {
-            continue;
-        };
-        if colon == declaration.len() {
-            block.errors.push(DeclarationError {
-                name: declaration.to_owned(),
-                value: String::new(),
-                kind: DeclarationErrorKind::MalformedDeclaration,
-            });
-            continue;
-        }
-        let raw_name = declaration[..colon].trim();
-        let (value, important) = strip_important(&declaration[colon + 1..]);
-        if let Some(custom_tail) = raw_name.strip_prefix("--") {
-            if custom_tail.is_empty() {
-                block.errors.push(DeclarationError {
-                    name: raw_name.to_owned(),
-                    value: value.to_owned(),
-                    kind: DeclarationErrorKind::MalformedDeclaration,
-                });
+    for parsed in parse_declaration_syntax(input) {
+        let ParsedDeclaration {
+            name,
+            value,
+            important,
+        } = match parsed {
+            Ok(declaration) => declaration,
+            Err(error) => {
+                block.errors.push(error);
                 continue;
-            }
+            },
+        };
+        if name.starts_with("--") {
             // Custom property names stay case-sensitive; CSS-wide keywords
             // in the value position keep their usual meaning.
             let declared = match value.trim().to_ascii_lowercase().as_str() {
@@ -1335,18 +1388,17 @@ pub fn parse_declaration_block(input: &str) -> DeclarationBlock {
                 _ => CustomDeclaredValue::Value(value.trim().to_owned()),
             };
             block.custom.push(CustomDeclaration {
-                name: raw_name.to_owned(),
+                name,
                 value: declared,
                 important,
             });
             continue;
         }
-        let name = raw_name.to_ascii_lowercase();
-        if push_longhand(&mut block, &name, value, important) {
+        if push_longhand(&mut block, &name, &value, important) {
             continue;
         }
         if let Some(shorthand) = ShorthandId::from_css_name(&name)
-            && contains_var(value)
+            && contains_var(&value)
         {
             // The fork's WithVariables shape: every expanded longhand
             // carries the raw shorthand value and re-expands after
@@ -1355,7 +1407,7 @@ pub fn parse_declaration_block(input: &str) -> DeclarationBlock {
                 block.declarations.push(Declaration {
                     property: *longhand,
                     value: DeclaredValue::Pending(PendingSubstitution {
-                        raw: value.to_owned(),
+                        raw: value.clone(),
                         from_shorthand: Some(shorthand),
                     }),
                     important,
@@ -1373,7 +1425,7 @@ pub fn parse_declaration_block(input: &str) -> DeclarationBlock {
             };
             block.errors.push(DeclarationError {
                 name,
-                value: value.to_owned(),
+                value: value.clone(),
                 kind,
             });
             continue;
@@ -1382,14 +1434,14 @@ pub fn parse_declaration_block(input: &str) -> DeclarationBlock {
             value.to_ascii_lowercase().as_str(),
             "initial" | "inherit" | "unset"
         ) {
-            expand_css_wide_shorthand(&mut block, shorthand, value, important);
-        } else if expand_box_shorthand(&mut block, shorthand, value, important) {
+            expand_css_wide_shorthand(&mut block, shorthand, &value, important);
+        } else if expand_box_shorthand(&mut block, shorthand, &value, important) {
         } else if shorthand == ShorthandId::Background {
-            expand_background(&mut block, value, important);
+            expand_background(&mut block, &value, important);
         } else if shorthand == ShorthandId::Transition {
-            expand_transition(&mut block, value, important);
+            expand_transition(&mut block, &value, important);
         } else if shorthand == ShorthandId::Animation {
-            expand_animation(&mut block, value, important);
+            expand_animation(&mut block, &value, important);
         } else if matches!(
             shorthand,
             ShorthandId::Border
@@ -1398,26 +1450,26 @@ pub fn parse_declaration_block(input: &str) -> DeclarationBlock {
                 | ShorthandId::BorderBottom
                 | ShorthandId::BorderLeft
         ) {
-            expand_border(&mut block, shorthand, value, important);
+            expand_border(&mut block, shorthand, &value, important);
         } else if matches!(
             shorthand,
             ShorthandId::GridRow | ShorthandId::GridColumn | ShorthandId::GridArea
         ) {
-            expand_grid_placement(&mut block, shorthand, value, important);
+            expand_grid_placement(&mut block, shorthand, &value, important);
         } else if matches!(shorthand, ShorthandId::Grid | ShorthandId::GridTemplate) {
-            expand_grid_template(&mut block, shorthand, value, important);
+            expand_grid_template(&mut block, shorthand, &value, important);
         } else if shorthand == ShorthandId::PlaceItems {
-            expand_place_items(&mut block, value, important);
+            expand_place_items(&mut block, &value, important);
         } else if shorthand == ShorthandId::WhiteSpace {
-            expand_white_space(&mut block, value, important);
+            expand_white_space(&mut block, &value, important);
         } else if shorthand == ShorthandId::Font {
-            expand_font(&mut block, value, important);
+            expand_font(&mut block, &value, important);
         } else if shorthand == ShorthandId::Flex {
-            expand_flex(&mut block, value, important);
+            expand_flex(&mut block, &value, important);
         } else if shorthand == ShorthandId::FlexFlow {
-            expand_flex_flow(&mut block, value, important);
+            expand_flex_flow(&mut block, &value, important);
         } else if shorthand == ShorthandId::Columns {
-            expand_columns(&mut block, value, important);
+            expand_columns(&mut block, &value, important);
         }
     }
     block

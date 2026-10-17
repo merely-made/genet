@@ -553,7 +553,7 @@ mod tests {
                 key: old_key,
                 width: 1,
                 height: 1,
-                data: vec![255, 255, 255, 255],
+                data: vec![255, 255, 255, 255].into(),
             }],
         };
 

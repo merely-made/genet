@@ -17,6 +17,8 @@ impl<E: ScriptEngine> NativeFn<E> for CreateContext {
         let width = parse_u32::<E>(cx, 0)?;
         let height = parse_u32::<E>(cx, 1)?;
         let id = create_webgl_context::<E>(cx, width, height);
+        // -1 is only an internal failure signal. The JS creation helper
+        // returns null and never exposes a context object for it.
         cx.make_string(
             &id.map(|i| i.to_string())
                 .unwrap_or_else(|| "-1".to_string()),

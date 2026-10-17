@@ -223,10 +223,9 @@ pub(crate) fn install_dom_surface<E: ScriptEngine>(
     engine.set_function::<NodeRawId>("__nodeRawId", 1)?;
     engine.set_function::<adoption::NoteCanvasContext>("__noteCanvasContext", 1)?;
     engine.set_function::<RemoveAttribute>("__removeAttribute", 2)?;
-    engine.set_function::<Matches>("__matches", 2)?;
-    engine.set_function::<QuerySelector>("__querySelector", 2)?;
-    engine.set_function::<QuerySelectorAllCount>("__querySelectorAllCount", 2)?;
-    engine.set_function::<QuerySelectorAllItem>("__querySelectorAllItem", 3)?;
+    engine.set_function::<Matches>("__matches", 3)?;
+    engine.set_function::<QuerySelector>("__querySelector", 3)?;
+    engine.set_function::<QuerySelectorAll>("__querySelectorAll", 4)?;
     engine.set_function::<FirstChild>("__firstChild", 1)?;
     engine.set_function::<LastChild>("__lastChild", 1)?;
     engine.set_function::<NextSibling>("__nextSibling", 1)?;
@@ -244,6 +243,7 @@ pub(crate) fn install_dom_surface<E: ScriptEngine>(
     engine.set_function::<CreateElementNS>("__createElementNS", 2)?;
     engine.set_function::<AttributeNames>("__attributeNames", 1)?;
     engine.set_function::<InlineStyleValue>("__inlineStyleValue", 2)?;
+    engine.set_function::<InlineStyleDeclarations>("__inlineStyleDeclarations", 1)?;
     engine.set_function::<InlineStyleShorthandComponents>("__inlineStyleShorthandComponents", 1)?;
     engine.set_function::<InlineStyleShorthands>("__inlineStyleShorthands", 0)?;
     engine.set_function::<InlineStyleShorthandValue>("__inlineStyleShorthandValue", 2)?;
@@ -406,9 +406,11 @@ fn host_inline_style<E: ScriptEngine>(
     handler
 }
 
-/// Escape a CSS text field for the compact line protocol shared with the JS
-/// bootstrap.  Escaping keeps embedded tabs/newlines from changing record
-/// boundaries without making the protocol depend on a JSON implementation.
+/// Inline-style record protocol: rows are separated by raw LF, fields by raw
+/// TAB, and every field escapes backslash, LF, CR, TAB as \\, \n, \r, \t.
+/// Empty record means zero rows. A decoder must reject a malformed escape or
+/// unexpected field count before applying any row. The status record returned
+/// by `__inlineStyleValue` has an unescaped kind line and one escaped payload.
 fn escape_inline_style_field(value: &str) -> String {
     let mut escaped = String::with_capacity(value.len());
     for character in value.chars() {
@@ -427,6 +429,9 @@ fn unescape_inline_style_field(value: &str) -> Option<String> {
     let mut unescaped = String::with_capacity(value.len());
     let mut characters = value.chars();
     while let Some(character) = characters.next() {
+        if matches!(character, '\n' | '\r' | '\t') {
+            return None;
+        }
         if character != '\\' {
             unescaped.push(character);
             continue;
@@ -442,39 +447,58 @@ fn unescape_inline_style_field(value: &str) -> Option<String> {
     Some(unescaped)
 }
 
-fn encode_inline_style_components(
-    components: impl IntoIterator<Item = (String, String)>,
-) -> String {
-    components
+fn encode_inline_style_rows(rows: impl IntoIterator<Item = Vec<String>>) -> String {
+    rows
         .into_iter()
-        .map(|(name, value)| {
-            format!(
-                "{}\t{}",
-                escape_inline_style_field(&name),
-                escape_inline_style_field(&value)
-            )
+        .map(|row| {
+            row.iter()
+                .map(|field| escape_inline_style_field(field))
+                .collect::<Vec<_>>()
+                .join("\t")
         })
         .collect::<Vec<_>>()
         .join("\n")
 }
 
-fn decode_inline_style_components(record: &str) -> Option<Vec<(String, String)>> {
+fn decode_inline_style_rows(record: &str, width: usize) -> Option<Vec<Vec<String>>> {
     if record.is_empty() {
         return Some(Vec::new());
     }
     record
         .split('\n')
         .map(|line| {
-            let (name, value) = line.split_once('\t')?;
-            if value.contains('\t') {
-                return None;
-            }
-            Some((
-                unescape_inline_style_field(name)?,
-                unescape_inline_style_field(value)?,
-            ))
+            let fields = line
+                .split('\t')
+                .map(unescape_inline_style_field)
+                .collect::<Option<Vec<_>>>()?;
+            (fields.len() == width).then_some(fields)
         })
         .collect()
+}
+
+/// `__inlineStyleDeclarations(text)` -> ordered name/value/priority rows parsed
+/// as a whole by Livery's CSS declaration grammar. `priority` is exactly
+/// `important` or empty; unsupported property values remain authored text.
+struct InlineStyleDeclarations;
+impl<E: ScriptEngine> NativeFn<E> for InlineStyleDeclarations {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let source = cx.arg(0);
+        let text = cx.value_to_string(&source)?;
+        let rows = livery::cascade::parse_cssom_declarations(&text)
+            .into_iter()
+            .map(|declaration| {
+                vec![
+                    declaration.name,
+                    declaration.value,
+                    if declaration.important {
+                        "important".to_string()
+                    } else {
+                        String::new()
+                    },
+                ]
+            });
+        cx.make_string(&encode_inline_style_rows(rows))
+    }
 }
 
 /// `__inlineStyleValue(property, value)` -> an escaped line record consumed by
@@ -498,7 +522,10 @@ impl<E: ScriptEngine> NativeFn<E> for InlineStyleValue {
             },
             InlineStyleValueResult::SupportedDeferred => "deferred\n".to_string(),
             InlineStyleValueResult::Expanded(components) => {
-                format!("expanded\n{}", encode_inline_style_components(components))
+                let rows = components
+                    .into_iter()
+                    .map(|(name, value)| vec![name, value]);
+                format!("expanded\n{}", encode_inline_style_rows(rows))
             },
         };
         cx.make_string(&record)
@@ -515,12 +542,11 @@ impl<E: ScriptEngine> NativeFn<E> for InlineStyleShorthandComponents {
         let components = host_inline_style::<E>(cx)
             .map(|handler| handler.shorthand_components(&property))
             .unwrap_or_default();
+        if components.iter().any(String::is_empty) {
+            return Err(cx.error("Malformed native CSS shorthand metadata"));
+        }
         cx.make_string(
-            &components
-                .into_iter()
-                .map(|component| escape_inline_style_field(&component))
-                .collect::<Vec<_>>()
-                .join("\n"),
+            &encode_inline_style_rows(components.into_iter().map(|component| vec![component])),
         )
     }
 }
@@ -533,12 +559,11 @@ impl<E: ScriptEngine> NativeFn<E> for InlineStyleShorthands {
         let shorthands = host_inline_style::<E>(cx)
             .map(|handler| handler.shorthands())
             .unwrap_or_default();
+        if shorthands.iter().any(String::is_empty) {
+            return Err(cx.error("Malformed native CSS shorthand metadata"));
+        }
         cx.make_string(
-            &shorthands
-                .into_iter()
-                .map(|shorthand| escape_inline_style_field(&shorthand))
-                .collect::<Vec<_>>()
-                .join("\n"),
+            &encode_inline_style_rows(shorthands.into_iter().map(|shorthand| vec![shorthand])),
         )
     }
 }
@@ -553,8 +578,13 @@ impl<E: ScriptEngine> NativeFn<E> for InlineStyleShorthandValue {
         let property = cx.value_to_string(&property_value)?;
         let record_value = cx.arg(1);
         let record = cx.value_to_string(&record_value)?;
-        let value = decode_inline_style_components(&record)
-            .and_then(|components| {
+        let value = decode_inline_style_rows(&record, 2)
+            .filter(|rows| rows.iter().all(|row| !row[0].is_empty()))
+            .and_then(|rows| {
+                let components = rows
+                    .into_iter()
+                    .map(|row| (row[0].clone(), row[1].clone()))
+                    .collect::<Vec<_>>();
                 host_inline_style::<E>(cx)
                     .and_then(|handler| handler.reconstruct_shorthand(&property, &components))
             })

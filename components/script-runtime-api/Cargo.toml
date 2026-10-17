@@ -26,8 +26,10 @@ genet-scripted-dom = { path = "../genet-scripted-dom" }
 # The HTML and XML parsers behind DOMParser.parseFromString; the parsed tree is
 # copied into the scripted arena as a new Document.
 genet-static-dom = { path = "../genet-static-dom" }
+livery = { path = "../livery" }
 # QualName / Namespace / LocalName for create_element.
 layout-dom-api = { path = "../shared/layout-dom" }
+cadency = { path = "../cadency" }
 # Prefix (not re-exported by layout-dom-api) for createElementNS qualified names.
 markup5ever = { workspace = true }
 # WHATWG URL resolution for the document base URL + relative `fetch()` / `Request`

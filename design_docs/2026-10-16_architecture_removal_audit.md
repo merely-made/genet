@@ -535,7 +535,7 @@ I1, I11, H6 and L6 now have their named source cuts and retained-path evidence. 
 - **H6:** execution results retain phase, native error identity and the rooted thrown value. The runner separately owns harness identity and completion, retains module resolvers through delayed jobs, and gives entry/import paths one canonical identity. Infrastructure failures cannot satisfy negatives. The 16-test classifier matrix was qualified by 15 passing cases plus the corrected negative-identity rerun; the former ignored real-corpus parser test was explicitly run. Final engine adapter tests passed 27 Boa + 12 Nova. Nine selected actual corpus files passed on both engines with no exclusions/timeouts. These runs exposed and repaired Vano discarding top-level-await rejection values, duplicate circular entry identity, and unsupported harness error identity. The Bole native-brand supplier regression also passed. Full Test262 conformance was not run or claimed.
 - **L6:** one mutation dependency walk emits semantic owners and boundaries to separate style and formatting-root consumers. Former/current parents, removed subtrees, old radio types, external form owners and ID blockers remain represented. **85 document tests and five invalidation tests passed**, including retained-versus-fresh selector, geometry, paint and extent witnesses.
 
-Physical IME interaction, full InputEvent/CompositionEvent interfaces, the separately approved native event-dispatch convergence plan, Forms acceptance and supplemental X1 remain separate obligations. Raw failed and successful receipts are retained under `testing/audits/genet-architecture-20261017/four-partials` outside the repository. Builds used one Cargo job/test thread, the shared machine lock, 5 GiB memory and zero swap allowance, with 150% CPU quota. Turnstone passed all eight retained-pane tests on Rust 1.99.1 after a bounded cold-build timeout and warm continuation. Supplier revisions and publication graph verification are recorded in the receipt; downstream adoption follows this Genet commit.
+Physical IME interaction, full InputEvent/CompositionEvent interfaces, the separately approved native event-dispatch convergence plan and Forms acceptance remain separate obligations. Raw failed and successful receipts are retained under `testing/audits/genet-architecture-20261017/four-partials` outside the repository. Builds used one Cargo job/test thread, the shared machine lock, 5 GiB memory and zero swap allowance, with 150% CPU quota. Turnstone passed all eight retained-pane tests on Rust 1.99.1 after a bounded cold-build timeout and warm continuation. Supplier revisions and publication graph verification are recorded in the receipt; downstream adoption follows this Genet commit.
 
 ## Post-cut re-audit, 2026-10-16
 
@@ -546,6 +546,8 @@ The fresh review covered the production changes, their consumers and regression 
 [Post-cut source and probe receipt](receipts/2026-10-16_architecture_post_cut_audit.json). [Retained-code test receipt](receipts/2026-10-16_architecture_reduction_tests.json).
 
 ### Current disposition of the findings
+
+The [current qualification ledger](2026-10-17_architecture_qualification.md) separates remaining runtime/platform gates from historical caveats and completed source cuts.
 
 Reconciled against `ec5d8b997aa`, the source-hashed slice 2 repair snapshot and
 the source-hashed slice 3, cross-repository slices 4 and 5, and remaining R7/I6/H5 and four-partial repair snapshots on 2026-10-17. This table supersedes
@@ -560,17 +562,16 @@ with each repair's stated qualification and publication limits retained.
 | Addressed locally | I11 | Source/stage-owned compiled artifacts survive linking; invalidation, reflection and actual GPU draw/readback qualified. |
 | Addressed locally | H6 | Typed VM outcomes, native/private harness identity, delayed module lifetime and canonical module identity; classifier regressions and selected real corpus qualified. Full VM conformance remains separate. |
 | Addressed locally | L6 | Shared mutation dependency classification feeds separate style/layout root policies; retained versus fresh witnesses passed. |
-| Partial / Open | None | No named source finding remains partial or open in this 56-finding register; qualification boundaries and supplemental X1 remain explicit. |
+| Partial / Open | None | No named source finding remains partial or open in this 56-finding register; qualification boundaries remain explicit; supplemental X1 is removed. |
 
-**56 findings: 56 addressed locally, 0 partial, 0 open.** Supplemental X1 remains
-partial and is excluded from that count. The pinned NetRender supplier revision is now published and adopted by Mere/Turnstone;
+**56 findings: 56 addressed locally, 0 partial, 0 open.** Supplemental X1 is also addressed: the retired environment script and unused vendored debugger helper are removed. It remains outside that count. The pinned NetRender supplier revision is now published and adopted by Mere/Turnstone;
 the baseline supplier corpus mismatch, existing ignored continuation tests and
 platform/Forms acceptance are separate outstanding obligations, not extra closed
 findings. R4, R5, H3 and R15 now have local retained-path verification. The prior
 R6, R13, L8 and L13 continuation retains its separately recorded baseline
 font-test failure. Broader standards, runtime, input and platform qualification remains separate from the named cuts.
 
-H4 is source-addressed, but the browser callback has not received a fresh wasm/browser interaction test. H8's earlier Windows fake-command result remains dated evidence; it was not rerun on Linux. I12 removes a genuine unused projection and rejection; it does not establish coherent shader linking. The original text gave conflicting ordering for I12 (safe narrow cut versus W1 prerequisite). The precise boundary is: unused-field cleanup may stand independently, while claims of correct linking or subsequent layout optimization require W1/W2 to be resolved.
+H4 now has a fresh Chromium/Wasm interaction witness for the default Livery route: trusted keys, visible typing, editable default suppression, product scroll pixels and browser scroll fallback passed on AMD hardware. Authored-script cancellation and physical IME remain separate; see the [qualification receipt](receipts/2026-10-17_x1_qualification.json). H8's earlier Windows fake-command result remains dated evidence; it was not rerun on Linux. I12 removes a genuine unused projection and rejection; it does not establish coherent shader linking. The original text gave conflicting ordering for I12 (safe narrow cut versus W1 prerequisite). The precise boundary is: unused-field cleanup may stand independently, while claims of correct linking or subsequent layout optimization require W1/W2 to be resolved.
 
 ### W2: CPU uniform layout disagrees with emitted WGSL within one stage
 
@@ -829,7 +830,9 @@ The root `Cargo.toml` owns workspace composition and source patches; preserve it
 
 Root formatting, toolchain, licensing, nextest and dependency-policy files are configuration with distinct consumers. Keep them. The nextest default has a finite slow-test termination policy; it does not prove backend interruption inside the application. `deny.toml` contains inherited advisory exemptions and duplicate-version allowances with historical explanations. This audit did not run cargo-deny, verify current advisory status or certify the dependency graph secure. Revalidate active exemptions against the actual resolved graph when changing that policy; old comments are not a current justification.
 
-**X1, additional legacy cut candidate:** `.cargo-check-logs/cargo-check-env.ps1` still advertises retired `servo-layout`/`servo` and mozjs build setup; `third_party/mozdebug` is a debugger-discovery helper whose Python module imports mozinfo. Searches of current components, ports, support, scripts, workflows, root README/manifest and canonical index found no current references to either. Retire the environment script as historical build evidence; consider removing the vendored helper after verifying manual/external tooling consumers. Do not infer that an unreferenced manual utility is unreachable everywhere. Neither was executed. The Blink import shell script is different: it imports a pinned Chromium fixture corpus and license. Preserve import provenance and assets; an importer is not a current benchmark acceptance runner.
+**X1, addressed 2026-10-17:** The old environment script was removed in `4c7869e1f6a`; the three-file debugger helper and its current-license inventory row are now removed. Fresh tracked-source searches across Genet, Mere and Turnstone found only historical documentation and the license row, with no active consumer or supported debugger launcher. Git retains the removed source and patch. Unknown private external scripts were not inventoried; the repository no longer promises this unreferenced vendored Python utility.
+
+Original finding (historical): `.cargo-check-logs/cargo-check-env.ps1` still advertises retired `servo-layout`/`servo` and mozjs build setup; `third_party/mozdebug` is a debugger-discovery helper whose Python module imports mozinfo. Searches of current components, ports, support, scripts, workflows, root README/manifest and canonical index found no current references to either. Retire the environment script as historical build evidence; consider removing the vendored helper after verifying manual/external tooling consumers. Do not infer that an unreferenced manual utility is unreachable everywhere. Neither was executed. The Blink import shell script is different: it imports a pinned Chromium fixture corpus and license. Preserve import provenance and assets; an importer is not a current benchmark acceptance runner.
 
 ## Coverage by workspace package
 

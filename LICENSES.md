@@ -44,7 +44,6 @@ relicensed, and nothing here receives a Merely copyright line.
 | `components/malloc_size_of` | MIT OR Apache-2.0 | [servo/servo](https://github.com/servo/servo) (`components/malloc_size_of`) | `LICENSE-MIT`, `LICENSE-APACHE` in-tree |
 | `components/default-resources/resources` | MPL-2.0 | [servo/servo](https://github.com/servo/servo) (`resources/`) | Servo's |
 | `resources` | MPL-2.0 | [servo/servo](https://github.com/servo/servo) (`resources/`, including the about:license page that quotes the MPL text) | Servo's |
-| `third_party/mozdebug` | MPL-2.0 | Mozilla (`mozdebug`) | in-tree headers |
 | `tests/wpt` | BSD-3-Clause | [web-platform-tests/wpt](https://github.com/web-platform-tests/wpt) | `tests/wpt/tests/LICENSE.md` |
 | `tests/blink_perf_tests` | BSD-3-Clause | Chromium (Blink performance tests) | `tests/blink_perf_tests/LICENSE_FOR_ABOUT_CREDITS` |
 | `tests/html` | MPL-2.0 | [servo/servo](https://github.com/servo/servo) (`tests/html`) | Servo's |

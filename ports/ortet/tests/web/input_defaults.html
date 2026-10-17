@@ -1,0 +1,145 @@
+<!-- Copyright 2026 Mark Alan Boykin
+     This Source Code Form is subject to the terms of the Mozilla Public
+     License, v. 2.0. If a copy of the MPL was not distributed with this
+     file, You can obtain one at https://mozilla.org/MPL/2.0/.
+     SPDX-License-Identifier: MPL-2.0 -->
+<!doctype html>
+<meta charset="utf-8">
+<title>Ortet browser key defaults receipt</title>
+<style>
+  html, body { margin: 0; background: #e8edf2; }
+  #ortet { display: block; width: 640px; height: 400px; }
+  #receipt, #scope { margin: 8px; white-space: pre-wrap; }
+  #host-spacer { height: 1600px; }
+</style>
+<canvas id="ortet" tabindex="0" aria-label="Ortet key defaults fixture"></canvas>
+<pre id="receipt" data-status="pending">ORTET_INPUT_DEFAULTS pending</pre>
+<p id="scope">Script-cancelled authored JavaScript keys are outside this script-free Livery fixture.</p>
+<div id="host-spacer" aria-hidden="true"></div>
+<script type="module">
+  const canvas = document.querySelector("#ortet");
+  const receipt = document.querySelector("#receipt");
+  const observed = [];
+
+  // All coordinates are CSS pixels from the canvas top-left. The HTML loaded
+  // by Ortet positions these targets explicitly; the browser page never
+  // replaces a session callback or reaches into a private Rust/Wasm API.
+  const targets = Object.freeze({
+    input: Object.freeze({ x: 90, y: 52 }),
+    textarea: Object.freeze({ x: 90, y: 138 }),
+    noneditable: Object.freeze({ x: 90, y: 270 }),
+  });
+
+  // Bubble observes the result after Ortet's target keydown listener ran.
+  // Playwright can compare this log with the returned canvas image and the
+  // outer browser scroll position after each real keyboard action.
+  document.addEventListener("keydown", event => {
+    if (event.target !== canvas) return;
+    observed.push({
+      key: event.key,
+      defaultPrevented: event.defaultPrevented,
+      isTrusted: event.isTrusted,
+      outerScrollY: window.scrollY,
+    });
+    if (observed.length > 64) observed.shift();
+  });
+
+  const nextFrames = async (count = 3) => {
+    for (let frame = 0; frame < count; frame++) {
+      await new Promise(requestAnimationFrame);
+    }
+  };
+
+  async function capture() {
+    await nextFrames();
+    const image = new Image();
+    image.src = canvas.toDataURL("image/png");
+    await image.decode();
+    const copy = new OffscreenCanvas(canvas.width, canvas.height);
+    const context = copy.getContext("2d", { willReadFrequently: true });
+    context.drawImage(image, 0, 0);
+    const { data, width, height } = context.getImageData(0, 0, copy.width, copy.height);
+    // The right strip is away from the controls and caret. It contains a red
+    // top marker and a blue lower marker, so a product scroll changes it.
+    let stripHash = 0x811c9dc5;
+    let coloredStripPixels = 0;
+    for (let y = 0; y < height; y++) {
+      for (let x = Math.floor(width * 0.72); x < Math.floor(width * 0.97); x++) {
+        const at = (y * width + x) * 4;
+        for (let channel = 0; channel < 4; channel++) {
+          stripHash = Math.imul(stripHash ^ data[at + channel], 0x01000193);
+        }
+        if (data[at] > data[at + 1] + 35 || data[at + 2] > data[at + 1] + 35) {
+          coloredStripPixels++;
+        }
+      }
+    }
+    const scale = width / 640;
+    const ink = (left, top, right, bottom) => {
+      let count = 0;
+      for (let y = Math.ceil(top * scale); y < Math.floor(bottom * scale); y++) {
+        for (let x = Math.ceil(left * scale); x < Math.floor(right * scale); x++) {
+          const at = (y * width + x) * 4;
+          if (data[at] < 100 && data[at + 1] < 100 && data[at + 2] < 100 && data[at + 3] === 255) count++;
+        }
+      }
+      return count;
+    };
+    return {
+      controlInk: {input: ink(44, 36, 316, 64), textarea: ink(44, 110, 316, 190)},
+      stripHash: (stripHash >>> 0).toString(16).padStart(8, "0"),
+      coloredStripPixels,
+      outerScrollY: window.scrollY,
+      canvasRect: canvas.getBoundingClientRect().toJSON(),
+      events: observed.slice(),
+    };
+  }
+
+  window.ortetInputFixture = { targets, observed, capture };
+
+  const embedded = `<!doctype html><meta charset="utf-8"><style>
+    @font-face { font-family: InputAhem; src: url(data:font/ttf;base64,FONT_DATA) format("truetype"); }
+    html, body { margin: 0; padding: 0; }
+    input, textarea { font: 14px InputAhem; color: #111; background: white; }
+    body { height: 2200px; background: #fbfaf5; font: 14px InputAhem; }
+    #input { position: absolute; top: 32px; left: 40px; width: 280px; height: 34px; }
+    #textarea { position: absolute; top: 106px; left: 40px; width: 280px; height: 88px; }
+    #plain { position: absolute; top: 246px; left: 40px; width: 300px; height: 48px;
+             background: #cde3d5; color: #172d22; }
+    #top-marker { position: absolute; top: 325px; left: 450px; width: 174px;
+                  height: 55px; background: #b72735; }
+    #bottom-marker { position: absolute; top: 1820px; left: 450px; width: 174px;
+                     height: 80px; background: #284cc4; }
+  </style>
+  <input id="input" type="text" value="cedar birch maple" aria-label="Editable input">
+  <textarea id="textarea" aria-label="Editable textarea">first line&#10;second line</textarea>
+  <div id="plain">Noneditable key target</div>
+  <div id="top-marker"></div><div id="bottom-marker"></div>`;
+
+  try {
+    const fontResponse = await fetch("./Ahem.ttf");
+    if (!fontResponse.ok) throw new Error(`Ahem fetch failed: ${fontResponse.status}`);
+    const fontBytes = new Uint8Array(await fontResponse.arrayBuffer());
+    const documentHtml = embedded.replace("FONT_DATA", btoa(String.fromCharCode(...fontBytes)));
+    const { default: init, start } = await import("./ortet.js");
+    await Promise.race([
+      init(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("wasm initialization timed out")), 10000)),
+    ]);
+    await Promise.race([
+      start(canvas, `data:text/html,${encodeURIComponent(documentHtml)}`),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Ortet start timed out")), 15000)),
+    ]);
+    let first = await capture();
+    const deadline = performance.now() + 12000;
+    while ((first.coloredStripPixels < 100 || first.controlInk.input < 100 || first.controlInk.textarea < 100) && performance.now() < deadline) first = await capture();
+    if (first.coloredStripPixels < 100 || first.controlInk.input < 100 || first.controlInk.textarea < 100) {
+      throw new Error(`initial product marker missing: ${JSON.stringify(first)}`);
+    }
+    receipt.dataset.status = "ready";
+    receipt.textContent = `ORTET_INPUT_DEFAULTS ready strip=${first.stripHash} colored=${first.coloredStripPixels}`;
+  } catch (error) {
+    receipt.dataset.status = "error";
+    receipt.textContent = `ORTET_INPUT_DEFAULTS error=${error}`;
+  }
+</script>

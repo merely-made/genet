@@ -157,7 +157,7 @@ fn table_html() -> String {
 }
 
 #[test]
-#[ignore = "K6: block continuation kernel not implemented"]
+#[ignore = "K6: block continuation is not connected to the live formatter"]
 fn continued_block_root_resumes_across_two_columns() {
     let fixture = Fixture::new(&block_html());
     let chain = fixture.two_column_chain("continued");

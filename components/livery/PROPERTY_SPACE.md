@@ -13,62 +13,19 @@ Regenerate after fork realignments or livery property additions.
 | of which livery-local (outside the servo lane) | 2 | 0 |
 | remaining (known, unimplemented) | 156 | 41 |
 
-## The consumed-set bar (cutover plan F0)
+## Historical consumed-set baseline (cutover plan F0)
 
-The property space above is the whole servo lane. F0 of the
-[cutover plan](../../docs/2026-07-24_livery_fullweb_cutover_and_servo_retirement_plan.md)
-bars on a much smaller set: the 128 longhands the current Genet product
-path actually reads, per `consumed_longhands.toml`. That is the live F0
-catalog ratchet, so it is reported separately here.
+`consumed_longhands.toml` preserves the F0 consumer audit and later bounded
+additions: 129 names in the checked-in baseline. Its `consumers` labels describe
+the readers assigned when those entries were recorded. They are not a census
+of current runtime readers. For example, the recorded `order` row lists `R`,
+while current layout also lowers `order` for flex layout.
 
-| consumed-set parity | longhands |
-| --- | --- |
-| consumed contract (the F0 bar) | 128 |
-| implemented | 97 |
-| **remaining** | **31** |
-
-`tests/consumed_set.rs` asserts this intersection as a ratchet and
-needs no fork checkout, so the receipt outlives the fork's archival
-at F5. This table is the readable half of the same check.
-
-Remaining consumed longhands, the F0 worklist:
-
-- `animation-direction`
-- `animation-fill-mode`
-- `animation-iteration-count`
-- `animation-play-state`
-- `background-attachment`
-- `background-clip`
-- `background-origin`
-- `background-position-x`
-- `background-position-y`
-- `background-size`
-- `border-image-outset`
-- `border-image-repeat`
-- `border-image-slice`
-- `border-image-source`
-- `border-image-width`
-- `clip-path`
-- `content`
-- `filter`
-- `grid-auto-columns`
-- `grid-auto-rows`
-- `grid-template-areas`
-- `image-rendering`
-- `list-style-position`
-- `mix-blend-mode`
-- `object-fit`
-- `perspective`
-- `text-overflow`
-- `transition-behavior`
-- `transition-timing-function`
-- `translate`
-- `will-change`
-
-Current receipt: `cargo test -p livery --test consumed_set --offline`
-reported 97/128 implemented on 2026-08-24. The contract grew from the
-original 126-name audit when two live font-feature consumers were added;
-both already resolve in the catalog.
+`tests/consumed_set.rs` checks that the historical names still resolve in
+Livery's current catalog and reports partial properties separately. That
+ratchet preserves the F0 receipt without the old Stylo fork checkout. Name
+resolution does not prove complete semantics or current reader coverage.
+The current catalog counts and reader coverage need a separate fresh audit.
 
 Livery-local names are livery catalog entries with no same-name servo-lane
 longhand or shorthand (bounded simplifications such as a single `overflow`

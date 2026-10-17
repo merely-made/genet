@@ -31,16 +31,7 @@ impl WebGlContext {
             self.record_error(WebGlError::InvalidOperation);
             return;
         };
-        // WebGL 1's draw-buffer form is commonly emitted by the Khronos
-        // helpers as `gl_FragData[0]`. The current Rust frontend owns one
-        // fragment output (`gl_FragColor`), so normalize the primary slot at
-        // this boundary before validation and lowering. Higher draw-buffer
-        // indices remain unsupported and must not be silently collapsed.
-        shader.source = if matches!(shader.stage, ShaderStage::Fragment) {
-            source.replace("gl_FragData[0]", "gl_FragColor")
-        } else {
-            source.to_string()
-        };
+        shader.source = source.to_string();
         shader.compile_status = false;
         shader.info_log.clear();
     }

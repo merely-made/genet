@@ -1,0 +1,120 @@
+{
+  "slice": 1,
+  "findings": [
+    "I13",
+    "L10",
+    "L11",
+    "L12"
+  ],
+  "base": "c1b4100dca7bf39b7d8727bd5a32df440db36408",
+  "source_sha256": {
+    "Cargo.toml": "53d8c5d96c9224201b49634152d404f086e35de8659d1ad486d3832a53d3c2d8",
+    "components/buckram/Cargo.toml": "391bf984bb5d09818e6fa01d8b4f24a08c6f6463b3541bd3f4a073851143c04c",
+    "components/buckram/src/flow.rs": "33b59c76b29413e93bc4440317a5e46a7cc57c7933b0ac1afc1c011d27591024",
+    "components/buckram/src/fragmentation.rs": "120af21896d1f66a6786e3ec52243a9d1bcf9d91e6121ea8183222744d522a0f",
+    "components/buckram/src/lib.rs": "b0d048c171063e776d4d25fa9af04e87f75e83fa6e72aec0acc28bf4e8f92ba1",
+    "components/genet-livery/tests/k6_fragmentation_contracts.rs": "93b58aedd37274120cd62cdc878a946ad458392bbb0990e6c5335a588dfb2820",
+    "components/livery/Cargo.toml": "4441c87cde13bdfc931f4da11595a392eeffecdb32b76b17255b51a493bb47f3",
+    "components/livery/PROPERTY_SPACE.md": "514699f5ced86c4c2e234cd16e24ea67c4f9637668dd7ca5885fba8a3530ca77",
+    "components/livery/consumed_longhands.toml": "d5b68d6681a536f80006aa7991de9106763dc12f6d361c54f4804cef38bbd227",
+    "components/livery/src/values/logical.rs": "3bc1fee736c692dcef8f70aa899f8c3dd37ac12598a92ff07c37a342edffcfd9",
+    "components/livery/tests/consumed_set.rs": "e1ca3efcab29a45232dc2c2d73fdc236791efdc2f22c7edffe8dcf45912ad86a",
+    "components/webgl-essl/ast.rs": "2ccf3849ab0d5334bad23f27fa0e2a898cd34fcde699554e4662b117f55c6889",
+    "components/webgl-essl/lib.rs": "9fe09045762057c75d7c09087fe61b5fca82e5c656fd48e222e0b04694981d6f",
+    "components/webgl-essl/parse.rs": "af25be431512f3feda1d4e34b2b3b532d0b55201c945d2782e7505f56616448f",
+    "components/webgl-essl/parse/expr.rs": "a1b0ba6c060b4c28ce06101cec3c30cd9f6fbb094ca8f7aa64253e637fd80fe3",
+    "components/webgl-essl/reflect.rs": "c46ed90d305cc8c4e1f401abd6ad7d29a29a21a7f782867f2dc4c693edfd9a2b",
+    "components/webgl-wgpu/shader.rs": "84a0f9f30e439a613823ad5ac1e7a4f3fb8bb776f5028baa93b83b38fb5d180a",
+    "components/webgl-wgpu/shader/lowering.rs": "aa26b81984738102a3e62e690d872b78fe8168e827a2e34b41352747a7d76008",
+    "components/webgl-wgpu/shader/tests.rs": "9897d1be1d7d41215e1f7111898d476a74dde07e7f3ad827d3a3d7b9482172df",
+    "components/webgl-wgpu/webgl/programs.rs": "4bc2cd70980f496618d95f963339e77917c28c19a0235f97ed2e244924a5e45f",
+    "components/webgl-wgpu/webgl/tests_core.rs": "d606031bd529fd89da9be8fa25fe3305a113057e3c671ed41700f124c74c93a8",
+    "components/shared/css-flow/Cargo.toml": "5e10a5c5f2ff8a71bdefa7a95a16148dcb76915c4bf56d46f7775fb507a2ace3",
+    "components/shared/css-flow/lib.rs": "7a079e3bcedf0b18c727db76606f87acf1a301759b5997c1db38271340f7f940",
+    "components/webgl-essl/tests/fragment_output_alias.rs": "22135365ae47af71206708b6e46ac6ac17898ff30327e8db60ac3bd426f8da2e"
+  },
+  "gates": [
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s1-buckram.log",
+      "sha256": "f77d6a7cf0b88e605551ceb933461f0c11266390685b31ea88c4fe727cc2aa00",
+      "passed": 273,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s1-census.log",
+      "sha256": "ffd993319415e951e11b4c58b78b5ba395c765ce8ff6135641a9ebc17be72331",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s1-draw.log",
+      "sha256": "1e16be27a0dbc424cecdc9e2d3a5015aaa1126d91cb7b795c3aa7da3d4d4aedf",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s1-fragmentation.log",
+      "sha256": "45a11ba6d5a7d6ff3cdeae34c221a04cc8ef1fba389441bac5e080dbaa41b11e",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 6
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s1-frontend.log",
+      "sha256": "74e1eb777160f190328c75d0bf4935b34a0d67339fa444576e62d9dd8ff91002",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s1-kernel.log",
+      "sha256": "7405484e5badb7a09581ba01873f640605b88b676d185eab38478aec7a3b629c",
+      "passed": 274,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s1-livery.log",
+      "sha256": "ce9b72b23b8a68f38f13088a920e32a7b72176b5e6c1e1790378fb78fe8afb86",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s1-matrix.log",
+      "sha256": "9d3339605a4d4d437a3d03978676909dec890fb26eb8bb693910b8c4b03b4da0",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s1-shader.log",
+      "sha256": "180a4ee0de5cc56c11b465f4f2067a28ae0dbe9985531015eda608181a54a71d",
+      "passed": 25,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "totals": {
+    "passed": 591,
+    "failed": 0,
+    "ignored": 6
+  },
+  "limits": {
+    "memory": "5G",
+    "swap": "0",
+    "cpu": "150%",
+    "cargo_jobs": 1,
+    "test_threads": 1,
+    "timeout_seconds": 240
+  },
+  "boundaries": [
+    "Six existing fragmentation continuation repros remain ignored; experimental kernel is not live multicol.",
+    "Property census remains historical, not a current consumer enumeration.",
+    "Fragment output alias supports literal zero, not arbitrary constant index expressions."
+  ],
+  "lock_sha256": "7ca519156c3283e05b4b1688e079a75ffaedbb63e4e0d1805561166152d85f2b"
+}

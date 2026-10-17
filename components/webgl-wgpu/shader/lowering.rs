@@ -11,7 +11,7 @@
 
 use super::*;
 use webgl_essl::CompileError;
-use webgl_essl::ast::TypeKind as EsslTypeKind;
+use webgl_essl::ast::{PrecisionQualifier, TypeKind as EsslTypeKind};
 use webgl_essl::validate::ShaderStage as EsslStage;
 
 pub(crate) fn translate_canonical_essl_pair(
@@ -20,7 +20,7 @@ pub(crate) fn translate_canonical_essl_pair(
 ) -> Result<TranslatedProgram, ShaderTranslationError> {
     let linked = webgl_essl::compile_linked(vertex_source, fragment_source)
         .map_err(map_linked_compile_error)?;
-    let reflection = build_program_reflection(&linked.reflection, fragment_source)?;
+    let reflection = build_program_reflection(&linked.reflection)?;
     Ok(TranslatedProgram {
         vertex_wgsl: linked.vertex_wgsl,
         fragment_wgsl: linked.fragment_wgsl,
@@ -76,7 +76,6 @@ fn map_linked_compile_error(error: webgl_essl::LinkedCompileError) -> ShaderTran
 /// including every vertex attribute, Block uniform, and sampler.
 fn build_program_reflection(
     linked: &webgl_essl::reflect::LinkedProgramReflection,
-    fragment_source: &str,
 ) -> Result<ProgramReflection, ShaderTranslationError> {
     let mut attributes = Vec::with_capacity(linked.attributes.len());
     for input in &linked.attributes {
@@ -118,8 +117,11 @@ fn build_program_reflection(
         });
     }
 
-    let fragment_float_precision =
-        extract_fragment_float_precision(fragment_source).unwrap_or(WebGlPrecision::Medium);
+    let fragment_float_precision = match linked.fragment_float_precision {
+        Some(PrecisionQualifier::Low) => WebGlPrecision::Low,
+        Some(PrecisionQualifier::Medium) | None => WebGlPrecision::Medium,
+        Some(PrecisionQualifier::High) => WebGlPrecision::High,
+    };
     Ok(ProgramReflection {
         attributes,
         uniforms,
@@ -153,35 +155,6 @@ fn uniform_kind_from_essl(kind: EsslTypeKind) -> Option<UniformKind> {
         EsslTypeKind::SamplerCube => Some(UniformKind::SamplerCube),
         _ => None,
     }
-}
-
-/// Scan the fragment source for a `precision <qualifier> float;`
-/// declaration so program reflection can carry it through.
-/// `webgl-essl`'s validator handles the actual precision rules;
-/// this is just a surface-level scrape for the public field.
-fn extract_fragment_float_precision(source: &str) -> Option<WebGlPrecision> {
-    let mut last = None;
-    let mut rest = source;
-    while let Some(start) = rest.find("precision") {
-        let after = &rest[start + "precision".len()..];
-        let Some(after) = after.strip_prefix(|c: char| c.is_whitespace()) else {
-            rest = after;
-            continue;
-        };
-        let mut parts = after.splitn(2, char::is_whitespace);
-        let qualifier = parts.next().unwrap_or("");
-        let tail = parts.next().unwrap_or("");
-        let tail = tail.trim_start();
-        if let Some(type_token) = tail.split(|c: char| c == ';' || c.is_whitespace()).next() {
-            if type_token == "float" {
-                if let Some(precision) = WebGlPrecision::parse(qualifier) {
-                    last = Some(precision);
-                }
-            }
-        }
-        rest = tail;
-    }
-    last
 }
 
 impl From<CompileError> for ShaderTranslationError {

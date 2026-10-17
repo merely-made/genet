@@ -9,40 +9,7 @@
 //! The side table follows CSS Writing Modes Level 4 section 6.4:
 //! <https://drafts.csswg.org/css-writing-modes-4/#logical-to-physical>.
 
-/// One of the two axes in a box's writing mode.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum LogicalAxis {
-    Inline,
-    Block,
-}
-
-/// The inherited inline base direction.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub enum Direction {
-    #[default]
-    Ltr,
-    Rtl,
-}
-
-/// The inherited block-flow and typographic mode.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub enum WritingMode {
-    #[default]
-    HorizontalTb,
-    VerticalRl,
-    VerticalLr,
-    SidewaysRl,
-    SidewaysLr,
-}
-
-/// A physical side used at CSS consumer and backend boundaries.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum PhysicalSide {
-    Top,
-    Right,
-    Bottom,
-    Left,
-}
+pub use css_flow::{Direction, LogicalAxis, PhysicalSide, WritingMode};
 
 /// The flow-relative axes for one CSS box.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
@@ -69,36 +36,19 @@ impl FlowAxes {
     }
 
     pub const fn block_start(self) -> PhysicalSide {
-        match self.writing_mode {
-            WritingMode::HorizontalTb => PhysicalSide::Top,
-            WritingMode::VerticalRl | WritingMode::SidewaysRl => PhysicalSide::Right,
-            WritingMode::VerticalLr | WritingMode::SidewaysLr => PhysicalSide::Left,
-        }
+        css_flow::LogicalSide::BlockStart.to_physical(self.writing_mode, self.direction)
     }
 
     pub const fn block_end(self) -> PhysicalSide {
-        opposite(self.block_start())
+        css_flow::LogicalSide::BlockEnd.to_physical(self.writing_mode, self.direction)
     }
 
     pub const fn inline_start(self) -> PhysicalSide {
-        match (self.writing_mode, self.direction) {
-            (WritingMode::HorizontalTb, Direction::Ltr) => PhysicalSide::Left,
-            (WritingMode::HorizontalTb, Direction::Rtl) => PhysicalSide::Right,
-            (
-                WritingMode::VerticalRl | WritingMode::VerticalLr | WritingMode::SidewaysRl,
-                Direction::Ltr,
-            ) => PhysicalSide::Top,
-            (
-                WritingMode::VerticalRl | WritingMode::VerticalLr | WritingMode::SidewaysRl,
-                Direction::Rtl,
-            ) => PhysicalSide::Bottom,
-            (WritingMode::SidewaysLr, Direction::Ltr) => PhysicalSide::Bottom,
-            (WritingMode::SidewaysLr, Direction::Rtl) => PhysicalSide::Top,
-        }
+        css_flow::LogicalSide::InlineStart.to_physical(self.writing_mode, self.direction)
     }
 
     pub const fn inline_end(self) -> PhysicalSide {
-        opposite(self.inline_start())
+        css_flow::LogicalSide::InlineEnd.to_physical(self.writing_mode, self.direction)
     }
 
     pub const fn logical_size(self, physical: PhysicalSize) -> LogicalSize {
@@ -265,15 +215,6 @@ impl FlowAxes {
             PhysicalSide::Left => physical.x,
         };
         LogicalOffset { inline, block }
-    }
-}
-
-const fn opposite(side: PhysicalSide) -> PhysicalSide {
-    match side {
-        PhysicalSide::Top => PhysicalSide::Bottom,
-        PhysicalSide::Right => PhysicalSide::Left,
-        PhysicalSide::Bottom => PhysicalSide::Top,
-        PhysicalSide::Left => PhysicalSide::Right,
     }
 }
 
@@ -457,6 +398,18 @@ mod tests {
                 (PhysicalSide::Left, PhysicalSide::Top),
             ),
             (
+                FlowAxes::new(WritingMode::VerticalLr, Direction::Rtl),
+                (PhysicalSide::Left, PhysicalSide::Bottom),
+            ),
+            (
+                FlowAxes::new(WritingMode::SidewaysRl, Direction::Ltr),
+                (PhysicalSide::Right, PhysicalSide::Top),
+            ),
+            (
+                FlowAxes::new(WritingMode::SidewaysRl, Direction::Rtl),
+                (PhysicalSide::Right, PhysicalSide::Bottom),
+            ),
+            (
                 FlowAxes::new(WritingMode::SidewaysLr, Direction::Ltr),
                 (PhysicalSide::Left, PhysicalSide::Bottom),
             ),
@@ -469,8 +422,8 @@ mod tests {
         for (axes, (block_start, inline_start)) in cases {
             assert_eq!(axes.block_start(), block_start);
             assert_eq!(axes.inline_start(), inline_start);
-            assert_eq!(axes.block_end(), opposite(block_start));
-            assert_eq!(axes.inline_end(), opposite(inline_start));
+            assert_eq!(axes.block_end(), block_start.opposite());
+            assert_eq!(axes.inline_end(), inline_start.opposite());
         }
     }
 

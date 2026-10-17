@@ -55,7 +55,8 @@ pub fn compile_linked(
     fragment_source: &str,
 ) -> Result<LinkedCompileResult, LinkedCompileError> {
     let vertex = parse_source(vertex_source).map_err(LinkedCompileError::Parse)?;
-    let fragment = parse_source(fragment_source).map_err(LinkedCompileError::Parse)?;
+    let fragment = parse_source_for_stage(fragment_source, validate::ShaderStage::Fragment)
+        .map_err(LinkedCompileError::Parse)?;
     for tu in [&vertex, &fragment] {
         let checked = check::check(tu);
         if !checked.diagnostics.is_empty() {
@@ -116,6 +117,7 @@ pub fn compile_linked(
             uniform_block_size: vertex_block_size,
             varyings: plan.varyings,
             samplers: fragment_reflection.samplers,
+            fragment_float_precision: fragment.fragment_float_precision(),
         },
     })
 }
@@ -141,7 +143,7 @@ pub enum LinkedCompileError {
 /// threaded through to the validator so info-log lines render with
 /// real line numbers.
 pub fn compile(source: &str, stage: validate::ShaderStage) -> Result<CompileResult, CompileError> {
-    let tu = parse_source(source).map_err(CompileError::Parse)?;
+    let tu = parse_source_for_stage(source, stage).map_err(CompileError::Parse)?;
     let check_result = check::check(&tu);
     if !check_result.diagnostics.is_empty() {
         return Err(CompileError::Check(check_result.diagnostics));
@@ -202,9 +204,27 @@ impl std::fmt::Display for CompileError {
 /// blanked out in the lexer input so byte offsets and line numbers in
 /// later diagnostics still match the original source.
 pub fn parse_source(source: &str) -> Result<TranslationUnit, Error> {
+    parse_source_with_fragment_output_alias(source, false)
+}
+
+fn parse_source_for_stage(
+    source: &str,
+    stage: validate::ShaderStage,
+) -> Result<TranslationUnit, Error> {
+    parse_source_with_fragment_output_alias(source, stage == validate::ShaderStage::Fragment)
+}
+
+fn parse_source_with_fragment_output_alias(
+    source: &str,
+    fragment_output_alias: bool,
+) -> Result<TranslationUnit, Error> {
     let (version, sans_version) = extract_version_directive(source);
     let tokens = lex::lex(&sans_version)?;
-    let mut tu = parse::parse(tokens, sans_version.len())?;
+    let mut tu = if fragment_output_alias {
+        parse::parse_fragment(tokens, sans_version.len())?
+    } else {
+        parse::parse(tokens, sans_version.len())?
+    };
     tu.version = version;
     Ok(tu)
 }

@@ -46,10 +46,12 @@ pub use fragment_tree::{
     Baselines, Fragment, FragmentId, FragmentTree, LayoutIdentityMap, LayoutResult, StaticPosition,
     StaticPositionSource,
 };
+#[cfg(feature = "experimental-fragmentation-kernel")]
+pub use fragmentation::{BlockBreakToken, ClearanceState, FloatExclusionState, InlineResumeState};
 pub use fragmentation::{
-    BlockBreakToken, BreakToken, ClearanceState, DeferredBreakKind, DeferredBreakToken,
-    FloatExclusionState, Fragmentainer, FragmentainerId, FragmentainerKind, FragmentationContext,
-    FragmentationContextId, InlineResumeState, MulticolFill, SequentialMulticolInput,
+    BreakToken, DeferredBreakKind, DeferredBreakToken, Fragmentainer, FragmentainerId,
+    FragmentainerKind, FragmentationContext, FragmentationContextId, MulticolFill,
+    SequentialMulticolInput,
 };
 pub use intrinsic::{
     IntrinsicQueryError, IntrinsicQueryState, IntrinsicSizeCache, IntrinsicSizeKind,

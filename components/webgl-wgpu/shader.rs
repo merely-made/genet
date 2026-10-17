@@ -141,17 +141,6 @@ pub(crate) enum WebGlPrecision {
     High,
 }
 
-impl WebGlPrecision {
-    fn parse(token: &str) -> Option<Self> {
-        match token {
-            "lowp" => Some(Self::Low),
-            "mediump" => Some(Self::Medium),
-            "highp" => Some(Self::High),
-            _ => None,
-        }
-    }
-}
-
 mod lowering;
 
 #[cfg(test)]

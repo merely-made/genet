@@ -148,6 +148,53 @@ fn webgl_context_explicit_compile_link_pipeline_renders() {
 }
 
 #[test]
+fn fragment_primary_draw_buffer_alias_keeps_source_and_draws() {
+    let mut context = make_context(32, 32);
+    let fragment_source = r#"
+precision mediump float;
+// gl_FragData[1] here is a comment, not an output.
+void main() {
+    gl_FragData /* spacing */ [ 0 ] = vec4(0.0, 0.0, 1.0, 1.0);
+}
+"#;
+    let vertex = context.create_shader(ShaderStage::Vertex);
+    context.shader_source(vertex, CANONICAL_TRIANGLE_VERTEX_SHADER);
+    context.compile_shader(vertex);
+    assert!(context.get_shader_compile_status(vertex));
+    let fragment = context.create_shader(ShaderStage::Fragment);
+    context.shader_source(fragment, fragment_source);
+    assert_eq!(
+        context.shaders.get(&fragment).unwrap().source,
+        fragment_source
+    );
+    context.compile_shader(fragment);
+    assert!(context.get_shader_compile_status(fragment));
+
+    let program = context.create_program();
+    context.attach_shader(program, vertex);
+    context.attach_shader(program, fragment);
+    context.link_program(program);
+    assert!(context.get_program_link_status(program));
+    context.use_program(Some(program));
+    let vertices = context.create_buffer();
+    context.bind_buffer(BufferTarget::ArrayBuffer, Some(vertices));
+    context.buffer_data_f32(
+        BufferTarget::ArrayBuffer,
+        &[-0.8, -0.8, 0.8, -0.8, 0.0, 0.8],
+        BufferUsage::StaticDraw,
+    );
+    context.enable_vertex_attrib_array(0);
+    context.vertex_attrib_pointer_f32(0, 2, false, 0, 0);
+    context.clear(wgpu::Color::BLACK);
+    context.draw_arrays(PrimitiveMode::Triangles, 0, 3);
+    assert_eq!(
+        &context.read_pixels(16, 16, 1, 1).expect("center read")[0..4],
+        &[0, 0, 255, 255]
+    );
+    assert_eq!(context.get_error(), WebGlError::NoError);
+}
+
+#[test]
 fn webgl_context_compile_failure_reports_shader_info_log() {
     let mut context = make_context(4, 4);
     let fragment = context.create_shader(ShaderStage::Fragment);

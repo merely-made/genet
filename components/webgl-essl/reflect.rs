@@ -18,7 +18,7 @@
 //! @location(N) decorations the lowering produces against
 //! [`reflect`]'s assignments.
 
-use crate::ast::{ExternalDecl, StorageQualifier, TranslationUnit, TypeKind};
+use crate::ast::{ExternalDecl, PrecisionQualifier, StorageQualifier, TranslationUnit, TypeKind};
 use crate::validate::ShaderStage;
 
 /// One immutable layout decision shared by both stages of a linked program.
@@ -59,6 +59,7 @@ pub struct LinkedProgramReflection {
     pub uniform_block_size: u32,
     pub varyings: Vec<LinkedVarying>,
     pub samplers: Vec<SamplerBinding>,
+    pub fragment_float_precision: Option<PrecisionQualifier>,
 }
 
 impl LinkedProgramPlan {

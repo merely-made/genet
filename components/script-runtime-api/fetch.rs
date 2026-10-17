@@ -2023,12 +2023,7 @@ const FETCH_BOOTSTRAP: &str = r#"
     return { essence: essence.toLowerCase(), charset: cm ? cm[2].toLowerCase() : '' };
   }
   function latin1Decode(b) { return FormOps.binary(b); }
-  function hasAnyListener(t) {
-    var L = t.__listeners;
-    if (!L) return false;
-    for (var k in L) { if (L[k] && L[k].length) return true; }
-    return false;
-  }
+  var hasAnyListener = globalThis.__agentTimers.eventHasListeners;
   function xhrFire(target, type) { target.dispatchEvent(new Event(type)); }
   function xhrProgress(target, type, loaded, total, computable) {
     target.dispatchEvent(new ProgressEvent(type, {

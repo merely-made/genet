@@ -7,6 +7,8 @@
 (function() {
   // Captured during trusted bootstrap, before authored scripts can run. The
   // realm hooks and raw record lookup never become an authored-script API.
+  var eventCore = globalThis.__eventCore;
+  delete globalThis.__eventCore;
   var domAgentDispatch = globalThis.__domAgentDispatch;
   var domRegisterHooks = globalThis.__domRegisterHooks;
   var domRealmHooks, formOperations, privateValidateForm;
@@ -991,70 +993,24 @@
     return oldChild;
   };
 
-  // Node-level EventTarget with real tree propagation (capture → target → bubble)
-  // over the parentNode chain. Listeners live on the (cached) wrapper, keyed by
-  // phase: 'c:'+type for capture, 'b:'+type for bubble/target.
-  // The 3rd arg of add/removeEventListener is either a boolean `capture` or an
-  // options object `{ capture, once, passive }` (DOM §dom-eventtarget-addeventlistener).
-  function eventOpts(arg) {
-    if (arg && typeof arg === 'object') {
-      return { capture: !!arg.capture, once: !!arg.once, passive: !!arg.passive };
-    }
-    return { capture: !!arg, once: false, passive: false };
-  }
-  // A listener is stored as `{ cb, once, passive }`: `once` so it can be removed
-  // after it first fires; `passive` so its `preventDefault()` is ignored (DOM:
-  // a passive listener cannot cancel the default action). Listeners are keyed by
-  // phase ('c:'/'b:' + type), so a capture and a bubble listener for the same
-  // callback are distinct entries (matching the DOM's (type, callback, capture)
-  // listener identity).
+  // Node-level EventTarget over the Rust listener registry (genet-events): the
+  // shared binding lives in EVENT_TARGET_BOOTSTRAP. A node dispatches through the
+  // registry's shadow-including path (slots, closed trees, and the window of a
+  // connected node's own document); no walk happens here.
   Node.prototype.addEventListener = function(type, cb, opts) {
-    if (typeof cb !== 'function') return;
-    var o = eventOpts(opts);
-    if (!this.__listeners) this.__listeners = {};
-    var key = (o.capture ? 'c:' : 'b:') + type;
-    var l = this.__listeners[key] || (this.__listeners[key] = []);
-    // Duplicate (type, callback, capture) listeners are ignored (DOM spec).
-    for (var i = 0; i < l.length; i++) { if (l[i].cb === cb) return; }
-    l.push({ cb: cb, once: o.once, passive: o.passive });
+    eventCore.add(this, this.__ref, type, cb, opts);
   };
   Node.prototype.removeEventListener = function(type, cb, opts) {
-    if (!this.__listeners) return;
-    var o = eventOpts(opts);
-    var l = this.__listeners[(o.capture ? 'c:' : 'b:') + type];
-    if (!l) return;
-    for (var i = 0; i < l.length; i++) {
-      if (l[i].cb === cb) { l.splice(i, 1); return; }
-    }
+    eventCore.remove(this, this.__ref, type, cb, opts);
   };
-  function fire(node, event, key) {
-    if (!node.__listeners) return;
-    var l = node.__listeners[key];
-    if (!l) return;
-    event.currentTarget = node;
-    // Snapshot: addEventListener during dispatch must not affect this node's
-    // current firing (DOM spec). stopImmediatePropagation halts the rest of
-    // THIS node's listeners (not just later nodes — that's __stop).
-    var copy = l.slice();
-    for (var i = 0; i < copy.length && !event.__stopImmediate; i++) {
-      var rec = copy[i];
-      // `once`: remove from the live list before calling, so a handler that
-      // re-dispatches the same event does not re-enter this listener.
-      if (rec.once) {
-        var j = l.indexOf(rec);
-        if (j !== -1) l.splice(j, 1);
-      }
-      // `passive`: preventDefault() must be a no-op for the duration of this
-      // listener (DOM). The flag is read by Event.preventDefault (lib.rs).
-      event.__inPassive = rec.passive;
-      // A listener's exception is *reported*, not propagated: dispatch continues
-      // to the remaining listeners and dispatchEvent returns normally (DOM
-      // §dispatch step "if this throws an exception, report the exception").
-      // Without this, one throwing onload/handler errors out the whole test.
-      try { rec.cb.call(node, event); }
-      catch (ex) { reportListenerException(ex); }
-      event.__inPassive = false;
-    }
+  // The window that terminates the path of a node connected to its document:
+  // each realm's document names its own window.
+  var documentWindows = globalThis.__agentTimers.eventDocumentWindows;
+  if (!documentWindows) documentWindows = globalThis.__agentTimers.eventDocumentWindows = new WeakMap();
+  function windowKeyOf(node) {
+    var doc = node.nodeType === 9 ? node : node.ownerDocument;
+    var key = doc ? applyDOMBrand(gcWeakMapGet, documentWindows, [doc]) : undefined;
+    return key === undefined ? '' : key;
   }
   function dispatchNodeEvent(event) {
     // DOM §dispatch: an uninitialized event (createEvent without initEvent) or
@@ -1062,101 +1018,14 @@
     if (event.__initialized === false || event.__dispatch) {
       throw new DOMException("The event is not initialized or is being dispatched.", "InvalidStateError");
     }
-    event.__dispatch = true;
-    // The propagation path is the **shadow-including** ancestor chain: at the
-    // top of a shadow tree it continues through the host, but only for an event
-    // whose `composed` flag is set. A non-composed event stops at the shadow
-    // root, which is what makes a shadow tree's events private.
-    //
-    // Each entry carries the target the listeners on that node must see —
-    // "retargeting". Inside the shadow tree the target is the real one; once the
-    // path crosses out through a host, every node above sees the *host* as
-    // `event.target`, because the outer tree may not learn about nodes it cannot
-    // reach. `composedPath()` returns the nodes themselves, trimmed to what the
-    // currently-firing node is allowed to see.
-    var path = [];
-    var targets = [];
-    var n = this;
-    var currentTarget = this;
-    while (n) {
-      path.push(n);
-      targets.push(currentTarget);
-      var parent = n.parentNode;
-      if (!parent && n.nodeType === 11) {
-        var host = wrapNode(__shadowHost(n.__ref));
-        if (host) {
-          if (!event.composed) break;
-          parent = host;
-          // Everything at or above the host sees the host as the target.
-          currentTarget = host;
-        }
-      }
-      n = parent;
-    }
-    // window sits above the document in the propagation path (DOM: the event
-    // path's root is the Window for a node in a document). window shares the
-    // EventTarget listener-record shape, so `fire` handles it like any node.
-    // Appended only when the chain reaches the document (a connected node), so
-    // detached subtrees don't spuriously route to window.
-    var terminalDocument = path.length && path[path.length - 1];
-    var terminalWindow = terminalDocument && terminalDocument.nodeType === 9 && terminalDocument.defaultView;
-    if (terminalWindow) {
-      path.push(terminalWindow);
-      targets.push(currentTarget);
-    }
-    var activationTarget = null;
-    if (event.type === 'click' && applyDOMBrand(gcWeakMapGet, mouseEvents, [event]) && formOperations) {
-      for (var ai = 0; ai < path.length && (ai === 0 || event.bubbles); ai++) {
-        if (formOperations.activationTarget(path[ai])) { activationTarget = path[ai]; break; }
-      }
-    }
-    event.target = this;
-    event.srcElement = this; // legacy alias for target
-    event.__path = path;
-    event.__pathTargets = targets;
-    // The stop-propagation flags are NOT cleared here. The DOM clears them
-    // *after* dispatch (§dispatch), so an event whose `cancelBubble` /
-    // `stopPropagation()` was set *before* dispatch arrives already stopped and
-    // fires nothing — every phase below is guarded on `__stop`. Clearing them
-    // here instead silently un-stopped such an event.
-    // Fire one path entry with the target that entry is allowed to see.
-    function fireAt(index, kind) {
-      event.__pathIndex = index;
-      event.target = targets[index] || targets[targets.length - 1] || null;
-      event.srcElement = event.target;
-      fire(path[index], event, kind + ':' + event.type);
-    }
-    // eventPhase constants: NONE 0, CAPTURING 1, AT_TARGET 2, BUBBLING 3.
-    // Capture: root → just above the target.
-    event.eventPhase = 1;
-    for (var i = path.length - 1; i >= 1 && !event.__stop; i--) {
-      fireAt(i, 'c');
-    }
-    // Target: capture- then bubble-registered listeners on the target itself.
-    event.eventPhase = 2;
-    if (!event.__stop) { fireAt(0, 'c'); }
-    if (!event.__stop) { fireAt(0, 'b'); }
-    // Bubble: just above the target → root, when the event bubbles.
-    event.eventPhase = 3;
-    if (event.bubbles) {
-      for (var j = 1; j < path.length && !event.__stop; j++) {
-        fireAt(j, 'b');
-      }
-    }
-    // Clear the dispatch flag + transient fields (DOM: after dispatch
-    // currentTarget is null, eventPhase is NONE, the stop flags are unset, and
-    // the event may be dispatched again).
-    event.__dispatch = false;
-    event.currentTarget = null;
-    event.eventPhase = 0;
-    event.__stop = false;
-    event.__stopImmediate = false;
-    event.__pathIndex = undefined;
-    event.target = this;
-    event.srcElement = this;
-    if (activationTarget && !event.__canceled) formOperations.activation(activationTarget, event);
-    return !event.__canceled;
+    var activation = event.type === 'click' && applyDOMBrand(gcWeakMapGet, mouseEvents, [event]) && formOperations;
+    return eventCore.dispatch(this, this.__ref, event, windowKeyOf(this), !!activation);
   }
+  eventCore.setNodeOps({
+    resolve: function(raw) { return nodeByRawId(userAgentString(raw)); },
+    activationTarget: function(node) { return !!(formOperations && node && formOperations.activationTarget(node)); },
+    activate: function(node, event) { if (formOperations && node) formOperations.activation(node, event); }
+  });
   Node.prototype.dispatchEvent = function(event) {
     if (event.__initialized === false || event.__dispatch) {
       throw new DOMException("The event is not initialized or is being dispatched.", "InvalidStateError");
@@ -1200,20 +1069,9 @@
       get: function() { return !!this.__stop; },
       set: function(v) { if (v) { this.__stop = true; } },
     });
-    // composedPath(): the propagation path recorded during dispatch, minus the
-    // nodes the node currently firing may not see. An **open** shadow tree is
-    // visible to everyone on the path; a **closed** one is visible only from
-    // inside itself, which is the whole point of closed mode. Returns a fresh
-    // array, or [] outside a dispatch (DOM spec).
-    globalThis.Event.prototype.composedPath = function() {
-      if (!this.__path) return [];
-      var index = this.__pathIndex;
-      var viewer = index === undefined ? null : this.__path[index];
-      var self = this;
-      return this.__path.filter(function(node) {
-        return globalThis.__composedPathVisible(node, viewer, self.__path);
-      });
-    };
+    // composedPath(): the dispatch's path as the registry computed it, trimmed
+    // to what the node currently firing may see. [] outside a dispatch.
+    globalThis.Event.prototype.composedPath = function() { return eventCore.composedPath(this); };
     // eventPhase constants (DOM). Instances carry a live `eventPhase` number set
     // during dispatch; these are the named values, on the constructor + proto.
     var E = globalThis.Event;
@@ -3436,7 +3294,7 @@
       cancelable: true, composed: false, defaultPrevented: false, __canceled: false,
       eventPhase: 0, target: null, currentTarget: null, srcElement: null,
       __initialized: true, __dispatch: false, __stop: false, __stopImmediate: false,
-      __inPassive: false, __path: null, __pathTargets: null, __pathIndex: undefined };
+      __inPassive: false, __eid: 0 };
     for (var key in fields) {
       gcDefineProperty(event, key, { configurable: true, enumerable: true, writable: true, value: fields[key] });
     }
@@ -5865,6 +5723,7 @@
   document.nodeType = 9;
   privateSet(documentModes, document, true);
   wrappers.set(docRef, document);
+  applyDOMBrand(gcWeakMapSet, documentWindows, [document, eventCore.windowKey()]);
   registerBaseReader(document);
   // On a Window, `document` is `[LegacyUnforgeable]`: a getter with no setter,
   // non-configurable and non-deletable. A worker global keeps it a plain property,
@@ -6079,10 +5938,11 @@
     }
   }
 
-  globalThis.__dispatchSynthetic = function(rawId, type, opts) {
+  // Host input dispatch: build the event; the registry does the walk.
+  globalThis.__dispatchHostEvent = function(rawId, type) {
     var node = wrapNode(__reflectNode(userAgentString(rawId)));
     if (!node) { return false; }
-    var ev = new userAgentEventConstructor(userAgentString(type), opts || { bubbles: true, cancelable: true });
+    var ev = new userAgentEventConstructor(userAgentString(type), { bubbles: true, cancelable: true });
     return applyDOMBrand(dispatchNodeEvent, node, [ev]);
   };
   // Parser-owned external script load failure. Keep the node wrapper and event
@@ -6147,27 +6007,7 @@
   // whatever `cancelable` its constructor was given, passive listeners or not
   // (`generic-events-stay-cancelable`).
   function hasNonPassiveListener(node, type) {
-    var path = [];
-    var n = node;
-    while (n) { path.push(n); n = n.parentNode; }
-    var terminalDocument = path.length && path[path.length - 1];
-    var terminalWindow = terminalDocument && terminalDocument.nodeType === 9 && terminalDocument.defaultView;
-    if (terminalWindow) {
-      path.push(terminalWindow);
-    }
-    var keys = ['c:' + type, 'b:' + type];
-    for (var i = 0; i < path.length; i++) {
-      var listeners = path[i].__listeners;
-      if (!listeners) continue;
-      for (var k = 0; k < keys.length; k++) {
-        var l = listeners[keys[k]];
-        if (!l) continue;
-        for (var j = 0; j < l.length; j++) {
-          if (!l[j].passive) return true;
-        }
-      }
-    }
-    return false;
+    return eventCore.hasNonPassive(node.__ref, type, windowKeyOf(node));
   }
 
   // Host bridge: dispatch a touch event carrying one touch point. Per Touch
@@ -6882,30 +6722,6 @@
   };
   ShadowRoot.prototype.setHTMLUnsafe = Element.prototype.setHTMLUnsafe;
 
-  // composedPath()'s visibility rule, called from Event.prototype.composedPath:
-  // an **open** shadow tree is visible to every node on the path; a **closed**
-  // one only from inside itself.
-  globalThis.__composedPathVisible = function(node, viewer, path) {
-    if (!viewer || node === viewer) return true;
-    var root = shadowRootContaining(node);
-    while (root) {
-      var init = shadowInitOf(root);
-      if (init && init.mode === 'closed') {
-        var viewerRoot = shadowRootContaining(viewer);
-        var inside = false;
-        while (viewerRoot) {
-          if (viewerRoot === root) { inside = true; break; }
-          var outer = wrapNode(__shadowHost(viewerRoot.__ref));
-          viewerRoot = outer ? shadowRootContaining(outer) : null;
-        }
-        if (!inside) return false;
-      }
-      var host = wrapNode(__shadowHost(root.__ref));
-      root = host ? shadowRootContaining(host) : null;
-    }
-    return true;
-  };
-
   // The clone walker's shadow hook (declared above it, defined here because it
   // needs `attachShadow`). Only a **clonable** root is carried, and it is
   // always deep — `cloneNode(false)` on a host still gets the whole tree.
@@ -7104,7 +6920,7 @@
     var event = formObjectCreate(prototype);
     var fields = { __proto__: null, type: type, bubbles: bubbles, cancelable: cancelable, composed: true,
       defaultPrevented: false, __canceled: false, eventPhase: 0, target: null, currentTarget: null,
-      srcElement: null, __initialized: true, __dispatch: false, __stop: false, __stopImmediate: false, __inPassive: false };
+      srcElement: null, __initialized: true, __dispatch: false, __stop: false, __stopImmediate: false, __inPassive: false, __eid: 0 };
     for (var key in fields) gcDefineProperty(event, key, { value: fields[key], writable: true, configurable: true, enumerable: true });
     if (extra) for (var key in extra) gcDefineProperty(event, key, { value: extra[key], writable: true, configurable: true, enumerable: true });
     privateTrust(event, trusted); return event;

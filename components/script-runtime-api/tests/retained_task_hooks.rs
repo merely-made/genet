@@ -44,7 +44,7 @@ fn author_replacement_cannot_steal_host_tasks<E: ScriptEngine>() {
     runtime.eval("globalThis.events=[]; var target=document.getElementById('target'); target.addEventListener('keydown',function(){events.push('key');});
       target.dispatchEvent=function(){throw new Error('stolen node dispatch');};
       globalThis.Event=function(){throw new Error('stolen event constructor');};
-      __dispatchSynthetic=function(){throw new Error('stolen dispatch');};
+      __dispatchHostEvent=function(){throw new Error('stolen dispatch');};
       __runTimers=function(){throw new Error('stolen timers');};
       __nextTimerDelay=function(){throw new Error('stolen delay');};
       __runOneAnimationFrameCallback=function(){throw new Error('stolen frame');};

@@ -24,6 +24,7 @@ script-engine-api = { path = "../script-engine-api" }
 # The DOM the host surface scripts against: a NodeId arena implementing
 # LayoutDom + LayoutDomMut, recording DomMutations for retained Livery hosts.
 genet-scripted-dom = { path = "../genet-scripted-dom" }
+genet-events = { path = "../genet-events" }
 # The HTML and XML parsers behind DOMParser.parseFromString; the parsed tree is
 # copied into the scripted arena as a new Document.
 genet-static-dom = { path = "../genet-static-dom" }

@@ -3831,3 +3831,117 @@ fn generic_font_ledger_survives_rebuild_and_invalid_batch_is_atomic() {
         .unwrap();
     glyph_fonts(&document.frame(300, 100).unwrap());
 }
+
+/// A keyed list of flex rows, each leading with text beside a span. Row 50 is at y=1000, so a
+/// retained text frame left at the local origin paints elsewhere than a fresh
+/// layout of the same final document.
+fn flex_row_list(rows: usize, changed: Option<usize>) -> String {
+    let mut html = String::from("<html><body><div id=list>");
+    for row in 0..rows {
+        let label = if changed == Some(row) {
+            "changed".to_owned()
+        } else {
+            format!("label {row}")
+        };
+        html.push_str(&format!(
+            "<div id=row{row} class=row>{label}<span>tail</span></div>"
+        ));
+    }
+    html.push_str("</div></body></html>");
+    html
+}
+
+fn assert_retained_text_edit_paints_like_fresh(rows: usize, row: usize) {
+    let styles = || {
+        StyleSet::cambium(&["html, body { margin: 0; padding: 0; } \
+             .row { display: flex; width: 300px; height: 20px; } \
+             .row span { width: 100px; height: 20px; margin-left: 100px; }"])
+    };
+    let mut dom = ScriptedDom::from_serialized_document(&flex_row_list(rows, None));
+    dom.drain_mutations(&mut Vec::new());
+    let mut retained = LiveryDocument::new(dom, styles(), Device::screen(300.0, 400.0));
+    retained.frame(300, 400).expect("initial retained frame");
+    let local_generation = retained.retained_root_relayout_generation;
+
+    retained.mutate_dom(|dom| {
+        let row = by_id(dom, &format!("row{row}"));
+        let text = dom.dom_children(row).next().expect("row text");
+        dom.set_text(text, "changed");
+    });
+    let retained_paint = retained.frame(300, 400).expect("retained frame");
+    assert_eq!(
+        retained.retained_root_relayout_generation,
+        local_generation + 1,
+        "the text edit takes the selected-root formatter",
+    );
+
+    let mut fresh_dom = ScriptedDom::from_serialized_document(&flex_row_list(rows, Some(row)));
+    fresh_dom.drain_mutations(&mut Vec::new());
+    let mut fresh = LiveryDocument::new(fresh_dom, styles(), Device::screen(300.0, 400.0));
+    let fresh_paint = fresh.frame(300, 400).expect("fresh final frame");
+    assert_eq!(
+        format!("{:?}", retained_paint.commands()),
+        format!("{:?}", fresh_paint.commands()),
+        "retained text must paint where a fresh layout paints it",
+    );
+}
+
+#[test]
+fn retained_text_edit_in_a_keyed_flex_row_list_paints_like_fresh_layout() {
+    assert_retained_text_edit_paints_like_fresh(100, 50);
+}
+
+#[test]
+fn retained_text_edit_in_a_thousand_flex_rows_paints_like_fresh_layout() {
+    assert_retained_text_edit_paints_like_fresh(1000, 500);
+}
+
+/// Text under a block container is not itself a formatting root, so the
+/// selected-root formatter promotes it to the nearest admitted ancestor.
+#[test]
+fn retained_text_edit_under_a_block_cell_promotes_and_paints_like_fresh_layout() {
+    let html = |changed: bool| {
+        let mut html = String::from("<html><body><div id=list>");
+        for row in 0..100 {
+            let label = if changed && row == 50 {
+                "changed".to_owned()
+            } else {
+                format!("label {row}")
+            };
+            html.push_str(&format!(
+                "<div class=row><div id=cell{row}>{label}</div><div>tail</div></div>"
+            ));
+        }
+        html.push_str("</div></body></html>");
+        html
+    };
+    let styles = || {
+        StyleSet::cambium(&["html, body { margin: 0; padding: 0; } \
+             .row { display: flex; width: 300px; height: 20px; } \
+             .row div { width: 100px; height: 20px; }"])
+    };
+    let mut dom = ScriptedDom::from_serialized_document(&html(false));
+    dom.drain_mutations(&mut Vec::new());
+    let mut retained = LiveryDocument::new(dom, styles(), Device::screen(300.0, 400.0));
+    retained.frame(300, 400).expect("initial retained frame");
+    let local_generation = retained.retained_root_relayout_generation;
+    retained.mutate_dom(|dom| {
+        let cell = by_id(dom, "cell50");
+        let text = dom.dom_children(cell).next().expect("cell text");
+        dom.set_text(text, "changed");
+    });
+    let retained_paint = retained.frame(300, 400).expect("retained frame");
+    assert_eq!(
+        retained.retained_root_relayout_generation,
+        local_generation + 1,
+        "the block-cell text edit promotes to an admitted ancestor",
+    );
+    let mut fresh_dom = ScriptedDom::from_serialized_document(&html(true));
+    fresh_dom.drain_mutations(&mut Vec::new());
+    let mut fresh = LiveryDocument::new(fresh_dom, styles(), Device::screen(300.0, 400.0));
+    let fresh_paint = fresh.frame(300, 400).expect("fresh final frame");
+    assert_eq!(
+        format!("{:?}", retained_paint.commands()),
+        format!("{:?}", fresh_paint.commands()),
+    );
+}

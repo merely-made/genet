@@ -3157,6 +3157,17 @@ fn phase_c_t5_native_textarea_enter_is_newline() {
 }
 #[cfg(feature = "livery")]
 #[test]
+fn i1_native_readonly_focus_becomes_editable() {
+    let mut s=t5_native("<input id='q' value='old' readonly><button id='next'>next</button>");
+    t5_native_click(&mut s,"q");
+    t5_native_attr(&mut s,"q","readonly",None);
+    assert_eq!(t5_key(&mut *s,SessionKey::Character("x".into()),SessionButtonState::Pressed,Default::default(),false),SessionEffect::Ignored);
+    assert_eq!(s.input(document_session_api::SessionInput::KeyboardText("x".into())).effect,SessionEffect::Handled);
+    let node=livery_node_with_id(livery(&mut s),"q");
+    assert_eq!(livery(&mut s).document().dom().form_control_editing_value(node).unwrap().value,"xold");
+}
+#[cfg(feature = "livery")]
+#[test]
 fn phase_c_t5_native_click_external_submitter_owner() {
     let mut s=t5_native("<form id='f' action='/correct'><input name='q' value='owned'></form><form action='/wrong'><button id='b' form='f' name='go' value='yes'>send</button></form>");
     assert_eq!(t5_submitted(t5_native_click(&mut s,"b")).fields,[("q".into(),"owned".into()),("go".into(),"yes".into())]);
@@ -3563,12 +3574,101 @@ fn t5_scripted_focus_blur_detach_revalidation<E:script_engine_api::ScriptEngine+
     t5_script_key(&mut *s,SessionButtonState::Pressed,Default::default(),false);t5_script_drain(&mut *s);assert!(fetch.requests.lock().unwrap().is_empty());
 }
 #[cfg(feature="scripted")]
-fn t5_scripted_textarea_editor_absence_explicit<E:script_engine_api::ScriptEngine+'static>() {
-    let (mut s,fetch)=t5_script_session::<E>("<form action='/send' method='post'><textarea id='q' name='q'>original</textarea><button id='b'>send</button></form><script>var keys=0;document.getElementById('q').addEventListener('keydown',function(){keys++})</script>");
-    t5_script_focus::<E>(&mut s);t5_script_key(&mut *s,SessionButtonState::Pressed,Default::default(),false);
-    t5_script_eval::<E>(&mut s,"if(keys!==1||document.getElementById('q').value!=='original')throw Error('textarea host key dispatch without invented text editor');");
-    assert_eq!(s.input(document_session_api::SessionInput::Text("new".into())).effect,SessionEffect::Ignored,"scripted text editing is an explicit unsupported route");
-    t5_script_drain(&mut *s);assert!(fetch.requests.lock().unwrap().is_empty(),"textarea Enter is not implicit submission");
+fn t5_scripted_textarea_live_edit<E:script_engine_api::ScriptEngine+'static>() {
+    let (mut s,fetch)=t5_script_session::<E>("<form action='/send' method='post'><textarea id='q' name='q'>original</textarea><button id='b'>send</button></form><script>var events=[];var q=document.getElementById('q');['keydown','keyup','beforeinput','input','change','compositionstart','compositionupdate','compositionend'].forEach(function(type){q.addEventListener(type,function(e){events.push(type+':'+e.isTrusted+(e.inputType?':'+e.inputType:''))})})</script>");
+    t5_script_focus::<E>(&mut s);
+    assert_eq!(t5_key(&mut *s,SessionKey::End,SessionButtonState::Pressed,Default::default(),false),SessionEffect::Handled);
+    assert_eq!(t5_key(&mut *s,SessionKey::Enter,SessionButtonState::Pressed,Default::default(),false),SessionEffect::Handled);
+    assert_eq!(s.input(document_session_api::SessionInput::Text("new".into())).effect,SessionEffect::Handled);
+    assert_eq!(s.input(document_session_api::SessionInput::Ime(document_session_api::SessionIme::Enabled)).effect,SessionEffect::Handled);
+    assert_eq!(s.input(document_session_api::SessionInput::Ime(document_session_api::SessionIme::Preedit{text:"仮".into(),selection:None})).effect,SessionEffect::Handled);
+    t5_script_eval::<E>(&mut s,"if(q.value!=='original\\nnew')throw Error('preedit must not commit DOM value');");
+    assert_eq!(s.input(document_session_api::SessionInput::Ime(document_session_api::SessionIme::Commit("界".into()))).effect,SessionEffect::Handled);
+    t5_script_eval::<E>(&mut s,"if(q.value!=='original\\nnew界')throw Error('host edit did not reach live textarea');if(events.join(',').indexOf('beforeinput:true:insertLineBreak,input:true:insertLineBreak')<0||events.join(',').indexOf('compositionstart:true')<0||events.join(',').indexOf('compositionend:true')<0)throw Error('trusted input/composition order');");
+    s.input(document_session_api::SessionInput::FocusMove(SessionFocusDirection::Forward));
+    t5_script_eval::<E>(&mut s,"if(events[events.length-1]!=='change:true')throw Error('change on edit commit');");
+    t5_script_drain(&mut *s);assert!(fetch.requests.lock().unwrap().is_empty(),"textarea Enter does not submit");
+}
+#[cfg(feature="scripted")]
+const T5_SHARED_INPUT_FIXTURE:&str="<label for='q'>Edit</label><input id='q' value='A😀B'><button id='next'>next</button><script>var q=document.getElementById('q');var edits=[];['beforeinput','input','change'].forEach(function(kind){q.addEventListener(kind,function(e){edits.push(kind+':'+e.isTrusted)})})</script>";
+#[cfg(feature="scripted")]
+fn t5_shared_input_actions(s:&mut dyn DocumentSession<Scene>) {
+    assert_eq!(t5_key(s,SessionKey::End,SessionButtonState::Pressed,Default::default(),false),SessionEffect::Handled);
+    assert_eq!(t5_key(s,SessionKey::ArrowLeft,SessionButtonState::Pressed,Default::default(),false),SessionEffect::Handled);
+    assert_eq!(t5_key(s,SessionKey::Character("界".into()),SessionButtonState::Pressed,Default::default(),false),SessionEffect::Ignored);
+    assert_eq!(s.input(document_session_api::SessionInput::KeyboardText("界".into())).effect,SessionEffect::Handled);
+    assert_eq!(s.input(document_session_api::SessionInput::Ime(document_session_api::SessionIme::Enabled)).effect,SessionEffect::Handled);
+    assert_eq!(s.input(document_session_api::SessionInput::Ime(document_session_api::SessionIme::Preedit{text:"仮".into(),selection:None})).effect,SessionEffect::Handled);
+    // Winit can deliver a character key and an IME commit for one gesture.
+    t5_key(s,SessionKey::Character("字".into()),SessionButtonState::Pressed,Default::default(),false);
+    assert_eq!(s.input(document_session_api::SessionInput::Ime(document_session_api::SessionIme::Commit("字".into()))).effect,SessionEffect::Handled);
+}
+#[cfg(feature="scripted")]
+fn t5_shared_native_scripted_input_fixture<E:script_engine_api::ScriptEngine+'static>() {
+    let mut native=t5_native(T5_SHARED_INPUT_FIXTURE);
+    t5_native_click(&mut native,"q");
+    t5_shared_input_actions(&mut *native);
+    let node=livery_node_with_id(livery(&mut native),"q");
+    let editing=livery(&mut native).document().dom().form_control_editing_value(node).unwrap();
+    assert_eq!(editing.value,"A😀界字B");
+    assert_eq!(editing.selection_start,Some(5),"native caret is in UTF-16 units");
+    native.frame(480,480);
+    assert!(native.accessibility_projection().unwrap().nodes().iter().any(|n|n.value.as_deref()==Some("A😀界字B") && n.bounds.is_some()),"native retained layout projects the edited value");
+
+    let (mut scripted,_fetch)=t5_script_session::<E>(T5_SHARED_INPUT_FIXTURE);
+    t5_script_focus::<E>(&mut scripted);
+    t5_shared_input_actions(&mut *scripted);
+    t5_script_eval::<E>(&mut scripted,"if(q.value!=='A😀界字B'||q.selectionStart!==5||q.selectionEnd!==5)throw Error('scripted shared DOM edit/UTF16 selection');if(edits.join(',')!=='beforeinput:true,input:true,beforeinput:true,input:true')throw Error('scripted trusted input ordering');");
+    scripted.frame(480,480);
+    assert!(scripted.accessibility_projection().unwrap().nodes().iter().any(|n|n.value.as_deref()==Some("A😀界字B") && n.bounds.is_some()),"scripted retained layout projects the edited value");
+    scripted.input(document_session_api::SessionInput::FocusMove(SessionFocusDirection::Forward));
+    t5_script_eval::<E>(&mut scripted,"if(edits[edits.length-1]!=='change:true')throw Error('scripted change on blur');");
+}
+#[cfg(feature="scripted")]
+fn t5_scripted_input_mutation_and_cancel<E:script_engine_api::ScriptEngine+'static>() {
+    let (mut s,_)=t5_script_session::<E>("<input id='q' value='old'><input id='other'><script>var q=document.getElementById('q');var seen=[];q.addEventListener('keydown',function(e){seen.push('key:'+e.type+':'+e.repeat);if(e.key==='Tab'||e.key==='z')e.preventDefault()});q.addEventListener('keyup',function(e){seen.push('key:'+e.type+':'+e.repeat)});q.addEventListener('beforeinput',function(e){seen.push('before:'+e.isTrusted);q.disabled=true});q.addEventListener('input',function(){seen.push('input')})</script>");
+    t5_script_focus::<E>(&mut s);
+    assert_eq!(t5_key(&mut *s,SessionKey::Tab,SessionButtonState::Pressed,Default::default(),false),SessionEffect::Cancelled);
+    t5_script_eval::<E>(&mut s,"if(document.activeElement!==q)throw Error('canceled Tab moved focus');");
+    assert_eq!(t5_key(&mut *s,SessionKey::Character("z".into()),SessionButtonState::Pressed,Default::default(),false),SessionEffect::Cancelled);
+    assert_eq!(s.input(document_session_api::SessionInput::KeyboardText("z".into())).effect,SessionEffect::Ignored);
+    t5_script_eval::<E>(&mut s,"if(q.value!=='old'||seen.indexOf('before:true')!==-1)throw Error('canceled key admitted paired text');");
+    t5_key(&mut *s,SessionKey::Character("x".into()),SessionButtonState::Released,Default::default(),true);
+    t5_key(&mut *s,SessionKey::Character("x".into()),SessionButtonState::Pressed,Default::default(),true);
+    s.input(document_session_api::SessionInput::KeyboardText("x".into()));
+    t5_script_eval::<E>(&mut s,"if(q.value!=='old'||seen.indexOf('input')!==-1||seen.indexOf('before:true')===-1||seen.indexOf('key:keyup:true')===-1||seen.indexOf('key:keydown:true')===-1)throw Error('key release/repeat or disabled-after-beforeinput revalidation');");
+    for mutation in ["q.type='checkbox'", "q.remove()"] {
+        let (mut s,_)=t5_script_session::<E>("<input id='q' value='old'><input id='other'><script>var q=document.getElementById('q');var inputs=0;q.addEventListener('input',function(){inputs++})</script>");
+        t5_script_focus::<E>(&mut s);
+        t5_script_eval::<E>(&mut s,&format!("q.addEventListener('beforeinput',function(){{{mutation}}})"));
+        assert_eq!(s.input(document_session_api::SessionInput::Text("X".into())).effect,SessionEffect::Ignored);
+        t5_script_eval::<E>(&mut s,"if(inputs!==0||q.value==='oldX')throw Error('stale target accepted after author mutation');");
+    }
+    let (mut s,_)=t5_script_session::<E>("<input id='q'><script>var q=document.getElementById('q');var order=[];q.addEventListener('keydown',function(e){if(e.key==='z')e.preventDefault();if(e.key==='a'){order.push('key');Promise.resolve().then(function(){order.push('micro')})}});q.addEventListener('beforeinput',function(){order.push('before')});q.addEventListener('input',function(){order.push('input')})</script>");
+    t5_script_focus::<E>(&mut s);
+    assert_eq!(t5_key(&mut *s,SessionKey::Character("z".into()),SessionButtonState::Pressed,Default::default(),false),SessionEffect::Cancelled);
+    assert_eq!(s.input(document_session_api::SessionInput::Text("paste".into())).effect,SessionEffect::Handled);
+    t5_script_eval::<E>(&mut s,"if(q.value!=='paste')throw Error('canceled key suppressed independent text');order=[]");
+    assert_eq!(t5_key(&mut *s,SessionKey::Character("a".into()),SessionButtonState::Pressed,Default::default(),false),SessionEffect::Ignored);
+    assert_eq!(s.input(document_session_api::SessionInput::KeyboardText("a".into())).effect,SessionEffect::Handled);
+    t5_script_eval::<E>(&mut s,"if(order.join(',')!=='key,micro,before,input')throw Error('keydown microtask must precede paired text events');");
+
+    let (mut s,_)=t5_script_session::<E>("<input id='q' value='old'><button id='other'>other</button><script>var q=document.getElementById('q');var changes=0;q.addEventListener('change',function(){changes++})</script>");
+    t5_script_focus::<E>(&mut s);
+    t5_script_eval::<E>(&mut s,"q.value='scripted'");
+    s.input(document_session_api::SessionInput::FocusMove(SessionFocusDirection::Forward));
+    t5_script_eval::<E>(&mut s,"if(changes!==0)throw Error('script setter forged trusted change');");
+
+    let (mut s,_)=t5_script_session::<E>("<input id='q' value='old' readonly><button id='other'>other</button><script>var q=document.getElementById('q');var changes=0;q.addEventListener('change',function(){changes++})</script>");
+    t5_script_focus::<E>(&mut s);
+    t5_script_eval::<E>(&mut s,"q.removeAttribute('readonly')");
+    assert_eq!(t5_key(&mut *s,SessionKey::Character("r".into()),SessionButtonState::Pressed,Default::default(),false),SessionEffect::Ignored);
+    assert_eq!(s.input(document_session_api::SessionInput::KeyboardText("r".into())).effect,SessionEffect::Handled);
+    assert_eq!(t5_key(&mut *s,SessionKey::Character("r".into()),SessionButtonState::Pressed,Default::default(),true),SessionEffect::Ignored);
+    assert_eq!(s.input(document_session_api::SessionInput::KeyboardText("r".into())).effect,SessionEffect::Handled);
+    t5_script_eval::<E>(&mut s,"if(q.value!=='rrold')throw Error('identical repeated key and Text pair inserted incorrectly');");
+    s.input(document_session_api::SessionInput::FocusMove(SessionFocusDirection::Forward));
+    t5_script_eval::<E>(&mut s,"if(changes!==1)throw Error('readonly-then-edit change missing on blur');");
 }
 #[cfg(feature="scripted")]
 fn t5_scripted_initial_redirect_current_address<E:script_engine_api::ScriptEngine+'static>() {
@@ -3717,7 +3817,13 @@ fn boa_phase_c_t5_scripted_focus_blur_detach_revalidation() {t5_scripted_focus_b
 
 #[cfg(feature="scripted")]
 #[test]
-fn boa_phase_c_t5_scripted_textarea_editor_absence_explicit() {t5_scripted_textarea_editor_absence_explicit::<script_engine_boa::BoaEngine>();}
+fn boa_phase_c_t5_scripted_textarea_live_edit() {t5_scripted_textarea_live_edit::<script_engine_boa::BoaEngine>();}
+#[cfg(feature="scripted")]
+#[test]
+fn boa_i1_shared_native_scripted_input_fixture() {t5_shared_native_scripted_input_fixture::<script_engine_boa::BoaEngine>();}
+#[cfg(feature="scripted")]
+#[test]
+fn boa_i1_input_mutation_and_cancel() {t5_scripted_input_mutation_and_cancel::<script_engine_boa::BoaEngine>();}
 
 #[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
 #[test]
@@ -3773,7 +3879,13 @@ fn nova_phase_c_t5_scripted_focus_blur_detach_revalidation() {t5_scripted_focus_
 
 #[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
 #[test]
-fn nova_phase_c_t5_scripted_textarea_editor_absence_explicit() {t5_scripted_textarea_editor_absence_explicit::<script_engine_nova::NovaEngine>();}
+fn nova_phase_c_t5_scripted_textarea_live_edit() {t5_scripted_textarea_live_edit::<script_engine_nova::NovaEngine>();}
+#[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
+#[test]
+fn nova_i1_shared_native_scripted_input_fixture() {t5_shared_native_scripted_input_fixture::<script_engine_nova::NovaEngine>();}
+#[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
+#[test]
+fn nova_i1_input_mutation_and_cancel() {t5_scripted_input_mutation_and_cancel::<script_engine_nova::NovaEngine>();}
 
 #[cfg(feature="scripted")]
 #[test]

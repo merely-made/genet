@@ -3549,6 +3549,221 @@ fn radio_group_membership_restyles_peer_without_form_or_fieldset() {
 }
 
 #[test]
+fn shared_mutation_dependencies_match_fresh_selectors_and_geometry() {
+    fn compare(
+        label: &str,
+        initial: &str,
+        css: &str,
+        target_id: &str,
+        before_width: &str,
+        after_width: &str,
+        mutate: fn(&mut ScriptedDom),
+    ) {
+        let mut retained_dom = ScriptedDom::from_serialized_document(initial);
+        retained_dom.drain_mutations(&mut Vec::new());
+        let mut retained = LiveryDocument::new(
+            retained_dom,
+            StyleSet::cambium(&[css]),
+            Device::screen(200.0, 160.0),
+        );
+        retained.frame(200, 160).expect("initial retained frame");
+        let target = by_id(retained.dom(), target_id);
+        assert_eq!(
+            retained
+                .style_session
+                .styles()
+                .computed_style(target, "width"),
+            Some(before_width.to_owned()),
+            "{label}: initial selector",
+        );
+
+        retained.mutate_dom(mutate);
+        assert_eq!(
+            retained
+                .style_session
+                .styles()
+                .computed_style(target, "width"),
+            Some(after_width.to_owned()),
+            "{label}: retained selector after mutation",
+        );
+        let retained_paint = retained.frame(200, 160).expect("retained final frame");
+
+        let mut fresh_dom = ScriptedDom::from_serialized_document(initial);
+        fresh_dom.drain_mutations(&mut Vec::new());
+        // The mutation may create an earlier duplicate ID (the form blocker
+        // case), so keep the identity of the same target from the initial DOM.
+        let fresh_target = by_id(&fresh_dom, target_id);
+        mutate(&mut fresh_dom);
+        let mut fresh = LiveryDocument::new(
+            fresh_dom,
+            StyleSet::cambium(&[css]),
+            Device::screen(200.0, 160.0),
+        );
+        let fresh_paint = fresh.frame(200, 160).expect("fresh final frame");
+        assert_eq!(
+            fresh
+                .style_session
+                .styles()
+                .computed_style(fresh_target, "width"),
+            Some(after_width.to_owned()),
+            "{label}: fresh selector",
+        );
+        let rect = |document: &LiveryDocument<ScriptedDom>, node: NodeId| {
+            document
+                .layout
+                .as_ref()
+                .and_then(|layout| layout.fragments.get(node))
+                .map(|fragment| (fragment.x, fragment.y, fragment.width, fragment.height))
+                .expect("target fragment")
+        };
+        assert_eq!(
+            rect(&retained, target),
+            rect(&fresh, fresh_target),
+            "{label}: geometry"
+        );
+        assert_eq!(
+            format!("{:?}", retained_paint.commands()),
+            format!("{:?}", fresh_paint.commands()),
+            "{label}: paint",
+        );
+        assert_eq!(
+            retained.content_height(0),
+            fresh.content_height(0),
+            "{label}: document extent",
+        );
+    }
+
+    let radio_css = "html, body { margin:0; } input { display:block; height:24px; } input:invalid { width:40px; background:#f00; } input:valid { width:80px; background:#0f0; }";
+    let form_css = "html, body { margin:0; } form { display:block; height:24px; } form:invalid { width:40px; background:#f00; } form:valid { width:80px; background:#0f0; }";
+    compare(
+        "former radio type",
+        "<html><body><section><input id=first type=radio name=g checked></section><section><input id=peer type=radio name=g required></section></body></html>",
+        radio_css,
+        "peer",
+        "80px",
+        "40px",
+        |dom| dom.set_attribute(by_id(dom, "first"), attr("type"), "text"),
+    );
+    compare(
+        "external form association",
+        "<html><body><form id=old></form><form id=new></form><input id=control form=old required></body></html>",
+        form_css,
+        "old",
+        "40px",
+        "80px",
+        |dom| dom.set_attribute(by_id(dom, "control"), attr("form"), "new"),
+    );
+    compare(
+        "earlier non-form ID blocker",
+        "<html><body><div id=blocker></div><form id=target></form><input id=control form=target required></body></html>",
+        form_css,
+        "target",
+        "40px",
+        "80px",
+        |dom| dom.set_attribute(by_id(dom, "blocker"), attr("id"), "target"),
+    );
+    compare(
+        "removed candidate",
+        "<html><body><form id=owner><input id=control required></form></body></html>",
+        form_css,
+        "owner",
+        "40px",
+        "80px",
+        |dom| dom.remove(by_id(dom, "control")),
+    );
+    compare(
+        "former and current fieldsets",
+        "<html><body><fieldset id=from><input id=control required></fieldset><fieldset id=to></fieldset></body></html>",
+        "html, body { margin:0; } fieldset { display:block; height:24px; } fieldset:invalid { width:40px; background:#f00; } fieldset:valid { width:80px; background:#0f0; }",
+        "from",
+        "40px",
+        "80px",
+        |dom| dom.append_child(by_id(dom, "to"), by_id(dom, "control")),
+    );
+    compare(
+        "selected placeholder reparent",
+        "<html><body><select id=select required><optgroup id=group><option id=empty value='' selected></option><option value=ok>ok</option></optgroup></select></body></html>",
+        "html, body { margin:0; } select { display:block; height:24px; } select:invalid { width:40px; background:#f00; } select:valid { width:80px; background:#0f0; }",
+        "select",
+        "80px",
+        "40px",
+        |dom| {
+            dom.insert_before(
+                by_id(dom, "select"),
+                by_id(dom, "empty"),
+                Some(by_id(dom, "group")),
+            )
+        },
+    );
+    compare(
+        "radio state",
+        "<html><body><section><input id=first type=radio name=g></section><section><input id=peer type=radio name=g required></section></body></html>",
+        radio_css,
+        "peer",
+        "40px",
+        "80px",
+        |dom| {
+            assert!(dom.set_form_control_checked(by_id(dom, "first"), true));
+        },
+    );
+    compare(
+        "interaction state",
+        "<html><body><form id=owner><input id=control required></form></body></html>",
+        "html, body { margin:0; } input { display:block; height:24px; width:80px; background:#0f0; } input:user-invalid { width:40px; background:#f00; }",
+        "control",
+        "80px",
+        "40px",
+        |dom| dom.mark_form_submission_user_validity(by_id(dom, "owner")),
+    );
+    compare(
+        "custom validity",
+        "<html><body><form id=owner><input id=control value=ok></form></body></html>",
+        form_css,
+        "owner",
+        "80px",
+        "40px",
+        |dom| {
+            assert!(dom.set_custom_validity(by_id(dom, "control"), "bad"));
+        },
+    );
+}
+
+#[test]
+fn radio_state_and_interaction_or_custom_validity_have_distinct_group_facts() {
+    use crate::invalidation::{MutationDependency, for_each_mutation_dependency};
+
+    let dom = ScriptedDom::from_serialized_document(
+        "<html><body><form id=owner><input id=radio type=radio name=group required></form></body></html>",
+    );
+    let radio = by_id(&dom, "radio");
+    let form = by_id(&dom, "owner");
+    for (mutation, widens_group) in [
+        (DomMutation::FormControlStateChanged { node: radio }, true),
+        (
+            DomMutation::FormControlInteractionStateChanged { node: radio },
+            false,
+        ),
+        (
+            DomMutation::FormControlCustomValidityChanged { node: radio },
+            false,
+        ),
+    ] {
+        let mut direct = false;
+        let mut form_owner = false;
+        let mut group_tree = false;
+        for_each_mutation_dependency(&dom, &mutation, |fact| match fact {
+            MutationDependency::Element(node) => direct |= node == radio,
+            MutationDependency::SemanticOwner(node) => form_owner |= node == form,
+            MutationDependency::Tree(_) => group_tree = true,
+            MutationDependency::Structure { .. } | MutationDependency::Removed(_) => {},
+        });
+        assert!(direct, "radio itself needs its changed selector or style");
+        assert!(form_owner, "the form aggregates its control's validity");
+        assert_eq!(group_tree, widens_group, "{mutation:?}");
+    }
+}
+
+#[test]
 fn text_inside_an_inline_block_has_caret_hit_and_selection_geometry() {
     let (document, atom, source) = inline_atom_document("inline-block");
     let layout = document.layout.as_ref().expect("completed frame");

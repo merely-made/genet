@@ -1293,6 +1293,15 @@ impl ApplicationHandler for Ortet {
                     repeat: event.repeat,
                 });
                 if event.state == ElementState::Pressed
+                    && !self.modifiers.meta && !(self.modifiers.control && !self.modifiers.alt)
+                    && let Some(text) = event.text.as_deref().or_else(||
+                        matches!(&event.logical_key, Key::Named(NamedKey::Space)).then_some(" "))
+                    && !text.is_empty() && text.chars().all(|c| !c.is_control())
+                    && matches!(session_key_from_winit(&event.logical_key), SessionKey::Character(_) | SessionKey::Space)
+                {
+                    let _ = self.apply_input(SessionInput::KeyboardText(text.to_owned()));
+                }
+                if event.state == ElementState::Pressed
                     && allows_default_scroll
                     && let Some(key) =
                         scroll_key_from_winit(&event.logical_key, self.modifiers.shift)

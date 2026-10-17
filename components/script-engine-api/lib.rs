@@ -88,6 +88,78 @@ pub enum PumpOutcome {
     UnsupportedBound,
 }
 
+/// The VM boundary at which execution stopped. Hosts can use this without
+/// interpreting an exception's display text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecutionPhase {
+    Parse,
+    Load,
+    Resolution,
+    Runtime,
+}
+
+/// The native brand of a thrown ECMAScript Error object. An arbitrary thrown
+/// object has no native error brand, even if it supplies `name` or `constructor`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NativeErrorKind {
+    Error,
+    AggregateError,
+    EvalError,
+    RangeError,
+    ReferenceError,
+    SyntaxError,
+    TypeError,
+    URIError,
+}
+
+impl NativeErrorKind {
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Error => "Error",
+            Self::AggregateError => "AggregateError",
+            Self::EvalError => "EvalError",
+            Self::RangeError => "RangeError",
+            Self::ReferenceError => "ReferenceError",
+            Self::SyntaxError => "SyntaxError",
+            Self::TypeError => "TypeError",
+            Self::URIError => "URIError",
+        }
+    }
+}
+
+/// A diagnostic execution result. `Pending` means evaluation has not settled;
+/// it must not be mistaken for a completed module or a thrown exception.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecutionObservation {
+    Completed,
+    Failed {
+        phase: ExecutionPhase,
+        native_error: Option<NativeErrorKind>,
+    },
+    Pending,
+    Unsupported,
+}
+
+/// Diagnostic outcome and the exact thrown value, retained together so a host
+/// can check an identity it owns without reading mutable error properties.
+pub struct ObservedExecution<V> {
+    pub observation: ExecutionObservation,
+    pub thrown: Option<V>,
+}
+
+impl<V> From<ExecutionObservation> for ObservedExecution<V> {
+    fn from(observation: ExecutionObservation) -> Self {
+        Self { observation, thrown: None }
+    }
+}
+
+/// A module evaluation can outlive its initial call. The retained handle is
+/// an engine value so the host can drive jobs and inspect its final result.
+pub enum ModuleObservation<V> {
+    Final(ObservedExecution<V>),
+    Pending(V),
+}
+
 /// Opaque, engine-assigned identity for a **realm** inside one engine instance.
 ///
 /// A realm is ECMAScript's unit of global object + intrinsics. HTML gives one
@@ -220,6 +292,12 @@ pub trait ScriptEngine: Sized {
     /// Evaluate `source` in the global scope, returning its completion value.
     fn eval(&mut self, source: &str) -> Result<Self::Value, Self::Error>;
 
+    /// Parse and evaluate a script with phase and native error-brand evidence.
+    /// Backends that cannot expose that evidence must refuse explicitly.
+    fn observe_script(&mut self, _realm: RealmId, _source: &str) -> ObservedExecution<Self::Value> {
+        ExecutionObservation::Unsupported.into()
+    }
+
     /// Invoke a retained callable directly from the host. The function enters its
     /// own creation realm; values must belong to this engine. Thrown exceptions
     /// are rendered as host errors, unlike the exception-preserving callback API.
@@ -260,6 +338,34 @@ pub trait ScriptEngine: Sized {
         _resolve: &mut dyn FnMut(&str, &str) -> Option<(String, String)>,
     ) -> Result<Option<Self::Value>, Self::Error> {
         Ok(None)
+    }
+
+    /// Load, link and evaluate a module with phase and native error-brand
+    /// evidence. A pending evaluation is reported separately from success.
+    fn observe_module(
+        &mut self,
+        _realm: RealmId,
+        _source: &str,
+        _base_url: &str,
+        _resolve: &mut dyn FnMut(&str, &str) -> Option<(String, String)>,
+    ) -> ModuleObservation<Self::Value> {
+        ModuleObservation::Final(ExecutionObservation::Unsupported.into())
+    }
+
+    /// Inspect a previously pending module evaluation after the host drives
+    /// the event loop. The handle came from `observe_module` on this engine.
+    fn poll_module(&mut self, _pending: &Self::Value) -> ObservedExecution<Self::Value> {
+        ExecutionObservation::Unsupported.into()
+    }
+
+    /// Install an owned module resolver for imports triggered by later jobs.
+    /// Unlike the borrowed callback passed to `observe_module`, this remains
+    /// available until replaced or the engine is dropped.
+    fn set_owned_module_resolver(
+        &mut self,
+        _resolve: Option<Box<dyn FnMut(&str, &str) -> Option<(String, String)>>>,
+    ) -> bool {
+        false
     }
 
     /// [`eval_module`](Self::eval_module), in `realm` rather than the agent's

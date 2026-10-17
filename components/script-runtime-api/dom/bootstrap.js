@@ -16,7 +16,8 @@
   var focusShadowHost = globalThis.__shadowHost;
   var nativeFormOwner = globalThis.__formControlOwner, nativeFormReflect = globalThis.__reflectNode;
   var formNamespace = globalThis.__namespaceURI, formNodeType = globalThis.__nodeType;
-  var formSplit = String.prototype.split, formTypeError = TypeError;
+  var formSplit = String.prototype.split, formParse = JSON.parse, formTypeError = TypeError;
+  var nativeHostFormEdit;
   var pointerEventPrototype = globalThis.PointerEvent.prototype;
   var keyboardEventPrototype = globalThis.KeyboardEvent.prototype;
   var formRefs = globalThis.__agentTimers.domFormRefs;
@@ -7112,9 +7113,21 @@
     applyDOMBrand(gcWeakMapSet, formInvalidEventTrust, [event, !!trusted]);
     gcDefineProperty(event, 'isTrusted', { enumerable: true, get: function() { return applyDOMBrand(gcWeakMapGet, formInvalidEventTrust, [event]); } });
   }
-  globalThis.__formsDOM = {
+  function hostFocusCurrent(node) {
+    var ref = applyDOMBrand(gcWeakMapGet, formRefs, [node]);
+    if (!ref || hostFocusedRef !== ref) return false;
+    while (ref) {
+      var parent = focusParent(ref);
+      if (parent) { ref = parent; continue; }
+      if (+focusType(ref) === 11) { ref = focusShadowHost(ref); continue; }
+      break;
+    }
+    return ref === docRef;
+  }
+  var formsDOM = globalThis.__formsDOM = {
     ref: formInterfaceRef, elementRef: privateElementRef,
     nodeRef: function(node) { if (!applyDOMBrand(formNodeHas, domNodes, [node])) throw new formTypeError('Illegal Node receiver'); return applyDOMBrand(gcWeakMapGet, formRefs, [node]); },
+    focused: hostFocusCurrent,
     isElement: function(node) { return applyDOMBrand(formNodeHas, domNodes, [node]) && +formNodeType(applyDOMBrand(gcWeakMapGet, formRefs, [node])) === 1; },
     wrap: wrapNode, eventPrototype: userAgentEventPrototype,
     formPrototype: elementSubclassProto.form, inputPrototype: elementSubclassProto.input,
@@ -7130,16 +7143,50 @@
       return applyDOMBrand(creator, undefined, [kind, value]);
     },
     pointer: function(trusted) { var event=privateEvent('click',pointerEventPrototype,true,true,trusted,{__proto__:null,button:0,buttons:0,clientX:0,clientY:0,screenX:0,screenY:0,detail:0,view:globalThis,ctrlKey:false,altKey:false,shiftKey:false,metaKey:false,pointerId:-1,pointerType:'',isPrimary:false,width:1,height:1,pressure:0,tangentialPressure:0,tiltX:0,tiltY:0,twist:0}); applyDOMBrand(gcWeakMapSet,mouseEvents,[event,true]); return event; },
-    key: function(target,details) { return applyDOMBrand(dispatchNodeEvent,target,[privateEvent('keydown',keyboardEventPrototype,true,true,true,{ __proto__:null,key:details.key,altKey:details.alt,ctrlKey:details.ctrl,metaKey:details.meta,shiftKey:details.shift })]); },
+    key: function(target,details) { return applyDOMBrand(dispatchNodeEvent,target,[privateEvent(details.down === false ? 'keyup' : 'keydown',keyboardEventPrototype,true,true,true,{ __proto__:null,key:details.key,repeat:!!details.repeat,altKey:!!details.alt,ctrlKey:!!details.ctrl,metaKey:!!details.meta,shiftKey:!!details.shift })]); },
+    hostEdit: function(target, details) {
+      var ref = applyDOMBrand(gcWeakMapGet, formRefs, [target]);
+      if (!hostFocusCurrent(target)) return 'rejected';
+      var operation = details.operation, valueWrite = operation === 'insert' || operation === 'backward' || operation === 'forward';
+      if (valueWrite) {
+        var before = privateEvent('beforeinput',userAgentEventPrototype,true,true,true,{__proto__:null,data:operation === 'insert' ? details.text : null,inputType:details.inputType,isComposing:details.inputType === 'insertCompositionText'});
+        if (!applyDOMBrand(dispatchNodeEvent,target,[before])) return 'rejected';
+        // Author listeners can remove, disable, retarget, or change the control.
+        if (!hostFocusCurrent(target)) return 'rejected';
+      }
+      var result = nativeHostFormEdit(ref,operation,details.text);
+      if (result === 'edited') {
+        applyDOMBrand(dispatchNodeEvent,target,[privateEvent('input',userAgentEventPrototype,true,false,true,{__proto__:null,data:operation === 'insert' ? details.text : null,inputType:details.inputType,isComposing:details.inputType === 'insertCompositionText'})]);
+      }
+      return result;
+    },
+    hostChange: function(target) { return applyDOMBrand(dispatchNodeEvent,target,[privateEvent('change',userAgentEventPrototype,true,false,true,null)]); },
+    hostComposition: function(target,details) { return applyDOMBrand(dispatchNodeEvent,target,[privateEvent(details.phase,userAgentEventPrototype,true,false,true,{__proto__:null,data:details.text})]); },
     task: setTimeout,
-    complete: function(operations) { if (formOperations) throw new TypeError('Form operations already installed'); formOperations=operations; }
+    complete: function(operations) { if (formOperations) throw new TypeError('Form operations already installed'); nativeHostFormEdit=globalThis.__hostFormEdit; formOperations=operations; }
   };
   domRealmHooks = function(op, a, b, c, d) {
       switch (op) {
         case 'formPrivate': return formOperations.private(a,b,c);
         case 'formActivateRaw': var p=applyDOMBrand(formSplit,b,[',']); return formOperations.hostClick(wrapNode(nativeFormReflect(a)),+p[0],+p[1]);
-        case 'formFocusRaw': hostFocusedRef = b === 'true' ? nativeFormReflect(a) : null; return true;
+        case 'formFocusRaw': {
+          var focusRef = nativeFormReflect(a), focusTarget = wrapNode(focusRef);
+          if (b === 'true') {
+            hostFocusedRef = focusRef;
+            applyDOMBrand(dispatchNodeEvent,focusTarget,[privateEvent('focus',userAgentEventPrototype,false,false,true,null)]);
+            applyDOMBrand(dispatchNodeEvent,focusTarget,[privateEvent('focusin',userAgentEventPrototype,true,false,true,null)]);
+            return hostFocusCurrent(focusTarget);
+          }
+          if (hostFocusedRef === focusRef) hostFocusedRef = null;
+          applyDOMBrand(dispatchNodeEvent,focusTarget,[privateEvent('blur',userAgentEventPrototype,false,false,true,null)]);
+          applyDOMBrand(dispatchNodeEvent,focusTarget,[privateEvent('focusout',userAgentEventPrototype,true,false,true,null)]);
+          return true;
+        }
         case 'formKeyRaw': return formOperations.key(wrapNode(nativeFormReflect(a)),b);
+        case 'hostKeyRaw': return formOperations.key(wrapNode(nativeFormReflect(a)),b);
+        case 'hostTextRaw': return formsDOM.hostEdit(wrapNode(nativeFormReflect(a)),applyDOMBrand(formParse,undefined,[b]));
+        case 'hostChangeRaw': return formsDOM.hostChange(wrapNode(nativeFormReflect(a)));
+        case 'hostCompositionRaw': return formsDOM.hostComposition(wrapNode(nativeFormReflect(a)),applyDOMBrand(formParse,undefined,[b]));
         case 'uaEvent': return dispatchUserAgentEvent(a, b, c);
         case 'wrap': return wrapNodeLocal(a);
         case 'owners': return setOwnerDocumentSnapshotLocal(a, b);

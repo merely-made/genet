@@ -11,11 +11,7 @@
 //! sticky-positioning pass that needs the laid-out scrollport.
 
 use super::*;
-use crate::invalidation::{
-    for_each_select_validity_dependent, for_each_validity_dependent,
-    form_association_attribute_changed, form_validity_tree_root, is_radio_control,
-    radio_group_attribute_changed, radio_tree_root,
-};
+use crate::invalidation::{MutationDependency, for_each_mutation_dependency};
 
 impl<D> LiveryDocument<D>
 where
@@ -58,82 +54,18 @@ where
         });
         let mut roots = Vec::new();
         for mutation in mutations {
-            match *mutation {
-                DomMutation::Inserted { parent, .. }
-                | DomMutation::Removed {
-                    former_parent: parent,
-                    ..
+            for_each_mutation_dependency(&self.dom, mutation, |dependency| {
+                let node = match dependency {
+                    MutationDependency::Element(node)
+                    | MutationDependency::SemanticOwner(node)
+                    | MutationDependency::Tree(node) => node,
+                    MutationDependency::Structure { boundary, .. } => boundary,
+                    MutationDependency::Removed(_) => return,
+                };
+                if self.dom.is_live(node) {
+                    self.insert_damage_root(&mut roots, self.formatting_damage_root(node));
                 }
-                | DomMutation::SubtreeReplaced { node: parent } => {
-                    if self.dom.is_live(parent) {
-                        self.insert_damage_root(&mut roots, self.formatting_damage_root(parent));
-                        self.insert_form_validity_tree_damage_roots(&mut roots, parent);
-                        self.insert_select_validity_damage_roots(&mut roots, parent);
-                    }
-                },
-                DomMutation::FormControlStateChanged { node } => {
-                    self.insert_validity_damage_roots(&mut roots, node);
-                    if is_radio_control(&self.dom, node) {
-                        self.insert_radio_tree_damage_root(&mut roots, node);
-                    }
-                },
-                DomMutation::FormControlInteractionStateChanged { node }
-                | DomMutation::FormControlCustomValidityChanged { node }
-                | DomMutation::OptionStateChanged { node } => {
-                    self.insert_validity_damage_roots(&mut roots, node);
-                },
-                DomMutation::AttributeChanged {
-                    node,
-                    ref name,
-                    ref old_value,
-                } => {
-                    if self.dom.is_live(node) {
-                        self.insert_damage_root(&mut roots, self.formatting_damage_root(node));
-                        self.insert_validity_dependents(&mut roots, node);
-                        if form_association_attribute_changed(&self.dom, node, name) {
-                            self.insert_form_validity_tree_damage_roots(&mut roots, node);
-                        }
-                        if radio_group_attribute_changed(
-                            &self.dom,
-                            node,
-                            name,
-                            old_value.as_deref(),
-                        ) {
-                            self.insert_radio_tree_damage_root(&mut roots, node);
-                        }
-                    }
-                },
-                DomMutation::CharacterDataChanged { node } => {
-                    if !self.dom.is_live(node) {
-                        continue;
-                    }
-                    let parent = self.dom.parent(node).unwrap_or(node);
-                    if self.dom.is_live(parent) {
-                        self.insert_damage_root(&mut roots, self.formatting_damage_root(parent));
-                        self.insert_form_validity_tree_damage_roots(&mut roots, parent);
-                        self.insert_select_validity_damage_roots(&mut roots, parent);
-                    }
-                },
-                DomMutation::Moved {
-                    from_parent,
-                    to_parent,
-                    ..
-                } => {
-                    if self.dom.is_live(from_parent) {
-                        self.insert_damage_root(
-                            &mut roots,
-                            self.formatting_damage_root(from_parent),
-                        );
-                        self.insert_form_validity_tree_damage_roots(&mut roots, from_parent);
-                        self.insert_select_validity_damage_roots(&mut roots, from_parent);
-                    }
-                    if self.dom.is_live(to_parent) {
-                        self.insert_damage_root(&mut roots, self.formatting_damage_root(to_parent));
-                        self.insert_form_validity_tree_damage_roots(&mut roots, to_parent);
-                        self.insert_select_validity_damage_roots(&mut roots, to_parent);
-                    }
-                },
-            }
+            });
         }
         self.last_layout_damage = Some(LayoutDamage {
             kind: LayoutDamageKind::Dom,
@@ -167,38 +99,6 @@ where
             candidate = self.dom.parent(current);
         }
         self.dom.document()
-    }
-
-    fn insert_validity_damage_roots(&self, roots: &mut Vec<D::NodeId>, node: D::NodeId) {
-        if !self.dom.is_live(node) {
-            return;
-        }
-        self.insert_damage_root(roots, self.formatting_damage_root(node));
-        self.insert_validity_dependents(roots, node);
-    }
-
-    fn insert_validity_dependents(&self, roots: &mut Vec<D::NodeId>, node: D::NodeId) {
-        for_each_validity_dependent(&self.dom, node, |id| {
-            self.insert_damage_root(roots, self.formatting_damage_root(id));
-        });
-    }
-
-    fn insert_select_validity_damage_roots(&self, roots: &mut Vec<D::NodeId>, node: D::NodeId) {
-        for_each_select_validity_dependent(&self.dom, node, |id| {
-            self.insert_damage_root(roots, self.formatting_damage_root(id));
-        });
-    }
-
-    fn insert_radio_tree_damage_root(&self, roots: &mut Vec<D::NodeId>, node: D::NodeId) {
-        if let Some(root) = radio_tree_root(&self.dom, node) {
-            self.insert_damage_root(roots, self.formatting_damage_root(root));
-        }
-    }
-
-    fn insert_form_validity_tree_damage_roots(&self, roots: &mut Vec<D::NodeId>, node: D::NodeId) {
-        if let Some(root) = form_validity_tree_root(&self.dom, node) {
-            self.insert_damage_root(roots, self.formatting_damage_root(root));
-        }
     }
 
     pub(in crate::document) fn insert_damage_root(

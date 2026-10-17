@@ -526,6 +526,17 @@ backends, full WebGL conformance, unrelated compiler cleanup and Forms acceptanc
 remain outside this result. Other audit findings retain their previous status.
 
 
+## Four partial ownership repairs, 2026-10-17
+
+I1, I11, H6 and L6 now have their named source cuts and retained-path evidence. This is not a claim of complete browser, platform or ECMAScript conformance. See the [execution record](2026-10-17_four_partial_ownership_cuts.md) and [test/source receipt](receipts/2026-10-17_four_partial_ownership_tests.json).
+
+- **I1:** native and scripted sessions use the shared DOM editor for live text, selection and IME commits. Scripted key release, cancellation, trusted beforeinput/input/change and composition routing are live. `KeyboardText` identifies text paired with a physical key; independent `Text` cannot inherit stale cancellation. Ortet and Mere adapters follow that contract, including Pelt surfaces. The document suite first passed 147/150; a wrong new fixture caret expectation and an Escape result regression were corrected, and all seven affected tests passed. Both VM input fixtures compare live DOM values, UTF-16 selection and retained layout with the native path. Mere embedding 8, Graphshell retained content 11, Pelt native text 1 and Pelt surface pairing 1 passed. Ortet native/Wasm and Graphshell Wasm checks passed.
+- **I11:** the shader owns its source/stage compilation artifact, including parsed syntax, checked types and validated unlinked output. Linking consumes that artifact and owns pair-dependent interface/layout work. Source changes and failed compilation invalidate it. **590 shader/backend tests passed**, including actual AMD RADV Vulkan draw/readback; this is not only a translation check.
+- **H6:** execution results retain phase, native error identity and the rooted thrown value. The runner separately owns harness identity and completion, retains module resolvers through delayed jobs, and gives entry/import paths one canonical identity. Infrastructure failures cannot satisfy negatives. The 16-test classifier matrix was qualified by 15 passing cases plus the corrected negative-identity rerun; the former ignored real-corpus parser test was explicitly run. Final engine adapter tests passed 27 Boa + 12 Nova. Nine selected actual corpus files passed on both engines with no exclusions/timeouts. These runs exposed and repaired Vano discarding top-level-await rejection values, duplicate circular entry identity, and unsupported harness error identity. The Bole native-brand supplier regression also passed. Full Test262 conformance was not run or claimed.
+- **L6:** one mutation dependency walk emits semantic owners and boundaries to separate style and formatting-root consumers. Former/current parents, removed subtrees, old radio types, external form owners and ID blockers remain represented. **85 document tests and five invalidation tests passed**, including retained-versus-fresh selector, geometry, paint and extent witnesses.
+
+Physical IME interaction, full InputEvent/CompositionEvent interfaces, the separately approved native event-dispatch convergence plan, Forms acceptance and supplemental X1 remain separate obligations. Raw failed and successful receipts are retained under `testing/audits/genet-architecture-20261017/four-partials` outside the repository. Builds used one Cargo job/test thread, the shared machine lock, 5 GiB memory and zero swap allowance, with 150% CPU quota. Turnstone passed all eight retained-pane tests on Rust 1.99.1 after a bounded cold-build timeout and warm continuation. Supplier revisions and publication graph verification are recorded in the receipt; downstream adoption follows this Genet commit.
+
 ## Post-cut re-audit, 2026-10-16
 
 **Current source: `6ab57c124e1`. The bounded cuts are implemented and focused tests passed. The broader architecture is not repaired or qualified.** This section supersedes the original snapshot's status claims below; the original evidence remains historical.
@@ -537,7 +548,7 @@ The fresh review covered the production changes, their consumers and regression 
 ### Current disposition of the findings
 
 Reconciled against `ec5d8b997aa`, the source-hashed slice 2 repair snapshot and
-the source-hashed slice 3, cross-repository slices 4 and 5, and remaining R7/I6/H5 repair snapshots on 2026-10-17. This table supersedes
+the source-hashed slice 3, cross-repository slices 4 and 5, and remaining R7/I6/H5 and four-partial repair snapshots on 2026-10-17. This table supersedes
 the older 9-addressed / 3-partial / 43-open snapshot and the open-status wording
 in historical evidence below. Addressed means the named source defect or cut,
 with each repair's stated qualification and publication limits retained.
@@ -545,20 +556,19 @@ with each repair's stated qualification and publication limits retained.
 | Disposition | IDs | Current evidence / remaining boundary |
 |---|---|---|
 | Addressed locally | R7, I6, H5, L9, H2, H9, H10, I10, R10, R11, L5, H1, H3, H4, H7, H8, H11, I2, I3, I4, I5, I7, I8, I9, I12, I13, I14, I15, L1, L2, L3, L4, L7, L8, L10, L11, L12, L13, R1, R2, R3, R4, R5, R6, R8, R9, R12, R13, R14, R15, W1, W2 | Original narrow removals plus retained acquisition, source-relative image identity, non-stealing capture, shared decoded pixels, generated transform/paint ownership, canonical origins, bounded decoded cache accumulation, default cookie storage restrictions, structured history state and bare-runtime ownership, shared CSS comment lexing, borrowed retained planes, authoritative linked shader layout, importer identity, scoped resolver/root cleanup, table-owned aggregation, capture admission, shared selector grammar, static query membership, whole-list declaration parsing and fallible context creation, retained task dispatch, parser failure reporting, production animation-frame scheduling and host elapsed clocks. Dated repair sections and receipts above contain the tests and limits. |
-| Partial | I1 | Native editing shares DOM defaults; scripted text/IME, key releases and default-action integration remain open. |
-| Partial | I11 | Cache-key lookup no longer recompiles shaders; a source/stage/options-owned compiled-artifact lifecycle remains open. |
-| Partial | H6 | Setup/execution/completion accounting repaired; trustworthy VM error phase/type and complete Test262 qualification remain open. |
-| Partial | L6 | Shared form/radio predicates; broader dependency classification and separate mutation switches remain. |
-| Open | None | Four partial findings retain their stated remaining work: I1, I11, H6 and L6. |
+| Addressed locally | I1 | Shared live native/scripted DOM editing, explicit paired keyboard text, cancellation, key release and trusted event routing; retained input/consumer gates above. Physical IME and complete event interfaces remain separate. |
+| Addressed locally | I11 | Source/stage-owned compiled artifacts survive linking; invalidation, reflection and actual GPU draw/readback qualified. |
+| Addressed locally | H6 | Typed VM outcomes, native/private harness identity, delayed module lifetime and canonical module identity; classifier regressions and selected real corpus qualified. Full VM conformance remains separate. |
+| Addressed locally | L6 | Shared mutation dependency classification feeds separate style/layout root policies; retained versus fresh witnesses passed. |
+| Partial / Open | None | No named source finding remains partial or open in this 56-finding register; qualification boundaries and supplemental X1 remain explicit. |
 
-**56 findings: 52 addressed locally, 4 partial, 0 open.** Supplemental X1 remains
+**56 findings: 56 addressed locally, 0 partial, 0 open.** Supplemental X1 remains
 partial and is excluded from that count. The pinned NetRender supplier revision is now published and adopted by Mere/Turnstone;
 the baseline supplier corpus mismatch, existing ignored continuation tests and
 platform/Forms acceptance are separate outstanding obligations, not extra closed
 findings. R4, R5, H3 and R15 now have local retained-path verification. The prior
 R6, R13, L8 and L13 continuation retains its separately recorded baseline
-font-test failure; larger runtime,
-input, policy and layout findings remain open.
+font-test failure. Broader standards, runtime, input and platform qualification remains separate from the named cuts.
 
 H4 is source-addressed, but the browser callback has not received a fresh wasm/browser interaction test. H8's earlier Windows fake-command result remains dated evidence; it was not rerun on Linux. I12 removes a genuine unused projection and rejection; it does not establish coherent shader linking. The original text gave conflicting ordering for I12 (safe narrow cut versus W1 prerequisite). The precise boundary is: unused-field cleanup may stand independently, while claims of correct linking or subsequent layout optimization require W1/W2 to be resolved.
 

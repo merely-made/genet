@@ -488,6 +488,7 @@ impl<Fetch> LiverySessionEngine<Fetch> {
             address: navigation.script_visible_url.clone(),
             focused_node: None,
             editor: None,
+            pending_key_text: None,
             editor_drag: None,
             active_form: None,
             pressed_submit: None,
@@ -612,6 +613,7 @@ pub struct LiveryDocumentSession {
     address: String,
     pub(crate) focused_node: Option<genet_scripted_dom::NodeId>,
     pub(crate) editor: Option<EditableControl>,
+    pending_key_text: Option<bool>,
     editor_drag: Option<EditableDrag>,
     pub(crate) active_form: Option<genet_scripted_dom::NodeId>,
     pressed_submit: Option<genet_scripted_dom::NodeId>,
@@ -1139,9 +1141,19 @@ impl LiveryDocumentSession {
     }
 
     fn commit_active_edit(&mut self) {
-        if let Some(node) = self.editor.as_ref().map(|editor| editor.node) {
+        if let Some(node) = self.editor.as_ref().map(|editor| editor.node).or(self.focused_node) {
             self.doc
                 .mutate_dom(|dom| dom.commit_form_control_user_edit(node));
+        }
+    }
+
+    fn restore_live_editor(&mut self) {
+        if self.editor.is_none()
+            && let Some(node) = self.focused_node
+            && let Some(kind) = self.editable_kind(node)
+            && self.editable_is_writable(node)
+        {
+            self.activate_editable(node, kind);
         }
     }
 
@@ -1444,6 +1456,7 @@ impl LiveryDocumentSession {
     }
 
     fn edit_control(&mut self, command: FormEditCommand<'_>) -> bool {
+        self.restore_live_editor();
         let Some(node) = self.editor.as_ref().map(|editor| editor.node) else {
             return false;
         };
@@ -1912,6 +1925,7 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
     }
 
     fn pointer_down(&mut self, x: f32, y: f32) -> SessionClick {
+        self.pending_key_text = None;
         let (x, y) = self.to_css_point(x, y);
         self.editor_drag = None;
         self.pressed_target = self.doc.hit_test(x, y);
@@ -1995,19 +2009,16 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
         _repeat: bool,
     ) -> SessionEffect {
         if state == SessionButtonState::Released {
+            self.pending_key_text = None;
             return SessionEffect::Ignored;
         }
+        let unmodified = !modifiers.control && !modifiers.meta && !modifiers.alt;
+        self.pending_key_text = match &key {
+            SessionKey::Character(_) | SessionKey::Space => Some(!self.editor.as_ref().is_some_and(|editor| editor.composition.is_some())),
+            _ => None,
+        };
         match key {
-            SessionKey::Character(text)
-                if !modifiers.control && !modifiers.meta && !modifiers.alt =>
-            {
-                if self.insert_text(&text) {
-                    SessionEffect::Handled
-                } else {
-                    SessionEffect::Ignored
-                }
-            },
-            SessionKey::Space if self.insert_text(" ") => SessionEffect::Handled,
+            SessionKey::Character(_) | SessionKey::Space => SessionEffect::Ignored,
             SessionKey::Backspace if self.delete_backward() => SessionEffect::Handled,
             SessionKey::Delete if self.delete_forward() => SessionEffect::Handled,
             SessionKey::ArrowLeft if self.move_caret(-1) => SessionEffect::Handled,
@@ -2068,11 +2079,18 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
         }
     }
 
+    fn keyboard_text_input(&mut self, text: &str) -> bool {
+        if self.pending_key_text.take() == Some(false) { return false; }
+        self.text_input(text)
+    }
+
     fn text_input(&mut self, text: &str) -> bool {
         self.insert_text(text)
     }
 
     fn ime_input(&mut self, ime: SessionIme) -> bool {
+        self.pending_key_text = None;
+        self.restore_live_editor();
         match ime {
             SessionIme::Enabled => self.editor.is_some(),
             SessionIme::Preedit { text, .. } => {
@@ -2095,6 +2113,7 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
 
     fn focus_input(&mut self, focused: bool) {
         if !focused {
+            self.pending_key_text = None;
             self.commit_active_edit();
             self.editor_drag = None;
             self.pressed_target = None;
@@ -2106,6 +2125,7 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
     }
 
     fn focus_move(&mut self, direction: SessionFocusDirection) -> bool {
+        self.pending_key_text = None;
         let mut focusable = Vec::new();
         self.collect_focusable(self.doc.dom().document(), &mut focusable);
         if focusable.is_empty() {
@@ -2147,6 +2167,7 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
     }
 
     fn cancel_input(&mut self) -> bool {
+        self.pending_key_text = None;
         self.pressed_target = None;
         self.pressed_submit = None;
         self.editor_drag = None;
@@ -2157,7 +2178,7 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
     }
 
     fn editable_focus(&self) -> bool {
-        self.editor.is_some()
+        self.focused_node.is_some_and(|node| self.editable_is_writable(node))
     }
 
     fn cursor_at(&self, x: f32, y: f32) -> SessionCursor {

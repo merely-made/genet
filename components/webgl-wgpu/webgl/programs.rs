@@ -15,6 +15,9 @@ impl WebGlContext {
             ShaderObject {
                 stage,
                 source: String::new(),
+                source_revision: 0,
+                compiled: None,
+                compiled_revision: None,
                 compile_status: false,
                 info_log: String::new(),
             },
@@ -32,6 +35,9 @@ impl WebGlContext {
             return;
         };
         shader.source = source.to_string();
+        shader.source_revision += 1;
+        shader.compiled = None;
+        shader.compiled_revision = None;
         shader.compile_status = false;
         shader.info_log.clear();
     }
@@ -45,12 +51,19 @@ impl WebGlContext {
             self.record_error(WebGlError::InvalidOperation);
             return;
         };
-        let validation = match shader.stage {
-            ShaderStage::Vertex => validate_canonical_vertex_source(&shader.source),
-            ShaderStage::Fragment => validate_canonical_fragment_source(&shader.source),
+        // Each invocation produces an artifact for this exact source revision.
+        // A failed recompile must not leave the previous artifact linkable.
+        shader.compiled = None;
+        shader.compiled_revision = None;
+        shader.compile_status = false;
+        let stage = match shader.stage {
+            ShaderStage::Vertex => webgl_essl::validate::ShaderStage::Vertex,
+            ShaderStage::Fragment => webgl_essl::validate::ShaderStage::Fragment,
         };
-        match validation {
-            Ok(()) => {
+        match compile_canonical_source(&shader.source, stage) {
+            Ok(compiled) => {
+                shader.compiled = Some(compiled);
+                shader.compiled_revision = Some(shader.source_revision);
                 shader.compile_status = true;
                 shader.info_log.clear();
             },
@@ -155,42 +168,44 @@ impl WebGlContext {
             self.set_program_link_failure(program, "program link failed: missing fragment shader");
             return;
         };
-        if !vertex_shader.compile_status || !fragment_shader.compile_status {
+        if !vertex_shader.compile_status
+            || !fragment_shader.compile_status
+            || vertex_shader.compiled.is_none()
+            || fragment_shader.compiled.is_none()
+            || vertex_shader.compiled_revision != Some(vertex_shader.source_revision)
+            || fragment_shader.compiled_revision != Some(fragment_shader.source_revision)
+        {
             self.set_program_link_failure(
                 program,
                 "program link failed: attached shader did not compile",
             );
             return;
         }
-        let vertex_source = vertex_shader.source.clone();
-        let fragment_source = fragment_shader.source.clone();
-        let cache_key = canonical_essl_cache_key(&vertex_source, &fragment_source);
-        let translated = match self.translated_programs.get(&cache_key) {
-            Some(translated) => translated.clone(),
-            None => {
-                let translated =
-                    match translate_canonical_essl_pair(&vertex_source, &fragment_source) {
-                        Ok(translated) => translated,
-                        Err(ShaderTranslationError::UnsupportedCanonicalPair) => {
-                            self.set_program_link_failure(
-                                program,
-                                "program link failed: interface validation",
-                            );
-                            return;
-                        },
-                        Err(error) => {
-                            self.set_program_link_failure(
-                                program,
-                                &format!("program link failed: {error}"),
-                            );
-                            return;
-                        },
-                    };
-                self.translated_programs
-                    .insert(cache_key, translated.clone());
-                translated
+        let vertex_compiled = vertex_shader.compiled.as_ref().expect("checked above");
+        let fragment_compiled = fragment_shader.compiled.as_ref().expect("checked above");
+        debug_assert_eq!(vertex_compiled.source(), vertex_shader.source);
+        debug_assert_eq!(fragment_compiled.source(), fragment_shader.source);
+        let cache_key =
+            canonical_essl_cache_key(vertex_compiled.source(), fragment_compiled.source());
+        let cached = self.translated_programs.get(&cache_key).cloned();
+        let translation = match cached {
+            Some(translated) => Ok(translated),
+            None => translate_compiled_essl_pair(vertex_compiled, fragment_compiled),
+        };
+        let translated = match translation {
+            Ok(translated) => translated,
+            Err(ShaderTranslationError::UnsupportedCanonicalPair) => {
+                self.set_program_link_failure(program, "program link failed: interface validation");
+                return;
+            },
+            Err(error) => {
+                self.set_program_link_failure(program, &format!("program link failed: {error}"));
+                return;
             },
         };
+        self.translated_programs
+            .entry(cache_key)
+            .or_insert_with(|| translated.clone());
         let reflection = translated.reflection.clone();
         let Some(program_object) = self.programs.get_mut(&program) else {
             self.record_error(WebGlError::InvalidOperation);

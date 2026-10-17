@@ -13,9 +13,10 @@ use std::path::Path;
 use std::rc::Rc;
 
 use boa_engine::{
-    Context, JsData, JsError, JsNativeError, JsObject, JsResult, JsString, JsValue, NativeFunction,
-    Source,
+    Context, JsData, JsError, JsNativeError, JsObject, JsResult, JsString,
+    JsValue, NativeFunction, Script, Source,
     builtins::promise::PromiseState,
+    builtins::error::ErrorKind as BoaErrorKind,
     class::{Class, ClassBuilder},
     module::{Module, ModuleLoader, ModuleRequest, Referrer},
     object::{
@@ -27,8 +28,11 @@ use boa_engine::{
 };
 use boa_gc::{Finalize, Gc, GcRefCell, Trace};
 use script_engine_api::{
-    Budget, CallCx, HostData, MAIN_REALM, NativeFn, PromiseToken, PumpOutcome, RealmError, RealmId,
-    ReflectorData, ScriptEngine, ScriptEngineLive, WINDOW_PROXY_ACCESS_SLOT,
+    Budget, CallCx, ExecutionObservation, ExecutionPhase, HostData, MAIN_REALM, ModuleObservation,
+    ObservedExecution,
+    NativeErrorKind,
+    NativeFn, PromiseToken, PumpOutcome, RealmError, RealmId, ReflectorData, ScriptEngine,
+    ScriptEngineLive, WINDOW_PROXY_ACCESS_SLOT,
     WINDOW_PROXY_HANDLER_SLOT, WINDOW_PROXY_TARGET_SLOT, WINDOW_PROXY_TRAPS,
 };
 
@@ -271,6 +275,8 @@ struct HostModuleLoader {
     /// otherwise). The pointee outlives the call (it is an `eval_module` argument),
     /// so the deref in `load_imported_module` is sound; single-threaded, no reentrancy.
     resolver: Cell<Option<*mut ModuleResolver<'static>>>,
+    /// Imports evaluated by later promise jobs outlive the borrowed resolver.
+    owned_resolver: RefCell<Option<Box<ModuleResolver<'static>>>>,
     /// A host callback panic is resumed after Boa has unwound its own module
     /// evaluation normally; unwinding through the VM could leave it unusable.
     resolver_panic: RefCell<Option<Box<dyn std::any::Any + Send>>>,
@@ -285,10 +291,12 @@ struct ResolverScope<'a> {
 
 impl Drop for ResolverScope<'_> {
     fn drop(&mut self) {
-        // Clear the erased borrow before releasing any cached modules. A later
-        // evaluation must never observe this call's resolver or graph.
+        // The borrowed callback is gone after this call. A retained resolver
+        // keeps this graph alive for imports evaluated by later jobs.
         self.loader.resolver.set(None);
-        self.loader.cache.borrow_mut().clear();
+        if self.loader.owned_resolver.borrow().is_none() {
+            self.loader.cache.borrow_mut().clear();
+        }
         self.loader.resolver_panic.borrow_mut().take();
     }
 }
@@ -341,16 +349,16 @@ impl ModuleLoader for HostModuleLoader {
                 .unwrap_or("")
                 .to_string();
 
-            let Some(ptr) = self.resolver.get() else {
-                return Err(JsNativeError::typ()
-                    .with_message("no module resolver active")
-                    .into());
-            };
-            // SAFETY: `ptr` was set by `with_resolver` to a resolver that outlives
-            // this call (cleared after); single-threaded, non-reentrant access.
-            let resolve = unsafe { &mut *ptr };
             let resolved = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                resolve(&specifier, &referrer_url)
+                if let Some(ptr) = self.resolver.get() {
+                    // SAFETY: the borrowed callback is installed only within
+                    // `with_resolver`, which clears this pointer on every exit.
+                    let resolve = unsafe { &mut *ptr };
+                    resolve(&specifier, &referrer_url)
+                } else {
+                    self.owned_resolver.borrow_mut().as_mut()
+                        .and_then(|resolve| resolve(&specifier, &referrer_url))
+                }
             })) {
                 Ok(resolved) => resolved,
                 Err(payload) => {
@@ -369,11 +377,25 @@ impl ModuleLoader for HostModuleLoader {
             if let Some(module) = self.cache.borrow().get(&url).cloned() {
                 return Ok(module);
             }
-            let module = Module::parse(
-                Source::from_bytes(source.as_bytes()).with_path(Path::new(&url)),
-                None,
-                &mut context.borrow_mut(),
-            )?;
+            let realm = match &referrer {
+                Referrer::Module(module) => module.realm().clone(),
+                Referrer::Script(script) => script.realm().clone(),
+                Referrer::Realm(realm) => realm.clone(),
+            };
+            let mut context = context.borrow_mut();
+            let previous = context.enter_realm(realm);
+            let parsed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                Module::parse(
+                    Source::from_bytes(source.as_bytes()).with_path(Path::new(&url)),
+                    None,
+                    &mut context,
+                )
+            }));
+            let _ = context.enter_realm(previous);
+            let module = match parsed {
+                Ok(result) => result?,
+                Err(payload) => std::panic::resume_unwind(payload),
+            };
             self.cache.borrow_mut().insert(url, module.clone());
             Ok(module)
         })();
@@ -455,6 +477,38 @@ fn describe_js_error(ctx: &mut Context, error: &JsError) -> String {
         }
     }
     format!("{error:?}")
+}
+
+fn native_error_kind(error: &JsError) -> Option<NativeErrorKind> {
+    Some(match error.native_error_kind()? {
+        BoaErrorKind::Error => NativeErrorKind::Error,
+        BoaErrorKind::Aggregate => NativeErrorKind::AggregateError,
+        BoaErrorKind::Eval => NativeErrorKind::EvalError,
+        BoaErrorKind::Range => NativeErrorKind::RangeError,
+        BoaErrorKind::Reference => NativeErrorKind::ReferenceError,
+        BoaErrorKind::Syntax => NativeErrorKind::SyntaxError,
+        BoaErrorKind::Type => NativeErrorKind::TypeError,
+        BoaErrorKind::Uri => NativeErrorKind::URIError,
+        _ => return None,
+    })
+}
+
+fn observed_error(phase: ExecutionPhase, error: &JsError) -> ExecutionObservation {
+    ExecutionObservation::Failed {
+        phase,
+        native_error: native_error_kind(error),
+    }
+}
+
+fn observed_error_with_value(
+    phase: ExecutionPhase,
+    error: &JsError,
+    ctx: &mut Context,
+) -> ObservedExecution<JsValue> {
+    ObservedExecution {
+        observation: observed_error(phase, error),
+        thrown: error.clone().into_opaque(ctx).ok(),
+    }
 }
 
 /// The call context handed to a native callback. Boa's callback gives
@@ -788,6 +842,19 @@ impl ScriptEngine for BoaEngine {
         self.ctx.eval(Source::from_bytes(source))
     }
 
+    fn observe_script(&mut self, realm: RealmId, source: &str) -> ObservedExecution<Self::Value> {
+        self.with_realm(realm, |ctx| {
+            let script = match Script::parse(Source::from_bytes(source), None, ctx) {
+                Ok(script) => script,
+                Err(error) => return observed_error_with_value(ExecutionPhase::Parse, &error, ctx),
+            };
+            match script.evaluate(ctx) {
+                Ok(_) => ExecutionObservation::Completed.into(),
+                Err(error) => observed_error_with_value(ExecutionPhase::Runtime, &error, ctx),
+            }
+        }).unwrap_or_else(|_| ExecutionObservation::Unsupported.into())
+    }
+
     fn call_function(
         &mut self,
         function: &Self::Value,
@@ -813,6 +880,91 @@ impl ScriptEngine for BoaEngine {
         resolve: &mut dyn FnMut(&str, &str) -> Option<(String, String)>,
     ) -> Result<Option<Self::Value>, Self::Error> {
         self.eval_module_entry(source, base_url, Some(base_url), resolve)
+    }
+
+    fn observe_module(
+        &mut self,
+        realm: RealmId,
+        source: &str,
+        base_url: &str,
+        resolve: &mut dyn FnMut(&str, &str) -> Option<(String, String)>,
+    ) -> ModuleObservation<Self::Value> {
+        let Some(target) = self.registry.realms.borrow().get(&realm).cloned() else {
+            return ModuleObservation::Final(ExecutionObservation::Unsupported.into());
+        };
+        let previous = self.ctx.enter_realm(target);
+        let loader = Rc::clone(&self.loader);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| loader.with_resolver(resolve, || {
+            let module = match Module::parse(
+                Source::from_bytes(source.as_bytes()).with_path(Path::new(base_url)),
+                None,
+                &mut self.ctx,
+            ) {
+                Ok(module) => module,
+                Err(error) => return ModuleObservation::Final(observed_error_with_value(ExecutionPhase::Parse, &error, &mut self.ctx)),
+            };
+            loader.cache.borrow_mut().insert(base_url.into(), module.clone());
+            let load = module.load(&mut self.ctx);
+            let _ = self.ctx.run_jobs();
+            match load.state() {
+                PromiseState::Fulfilled(_) => {},
+                PromiseState::Rejected(reason) => {
+                    return ModuleObservation::Final(observed_error_with_value(
+                        ExecutionPhase::Load,
+                        &JsError::from_opaque(reason),
+                        &mut self.ctx,
+                    ));
+                },
+                PromiseState::Pending => return ModuleObservation::Final(ExecutionObservation::Unsupported.into()),
+            }
+            if let Err(error) = module.link(&mut self.ctx) {
+                return ModuleObservation::Final(observed_error_with_value(ExecutionPhase::Resolution, &error, &mut self.ctx));
+            }
+            let evaluate = match module.evaluate(&mut self.ctx) {
+                Ok(promise) => promise,
+                Err(error) => return ModuleObservation::Final(observed_error_with_value(ExecutionPhase::Runtime, &error, &mut self.ctx)),
+            };
+            let _ = self.ctx.run_jobs();
+            match evaluate.state() {
+                PromiseState::Fulfilled(_) => ModuleObservation::Final(ExecutionObservation::Completed.into()),
+                PromiseState::Rejected(reason) => ModuleObservation::Final(observed_error_with_value(
+                    ExecutionPhase::Runtime,
+                    &JsError::from_opaque(reason),
+                    &mut self.ctx,
+                )),
+                PromiseState::Pending => ModuleObservation::Pending(evaluate.into()),
+            }
+        })));
+        let _ = self.ctx.enter_realm(previous);
+        match result {
+            Ok(result) => result,
+            Err(payload) => std::panic::resume_unwind(payload),
+        }
+    }
+
+    fn poll_module(&mut self, pending: &Self::Value) -> ObservedExecution<Self::Value> {
+        let Some(object) = pending.as_object() else { return ExecutionObservation::Unsupported.into(); };
+        let Ok(promise) = JsPromise::from_object(object.clone()) else { return ExecutionObservation::Unsupported.into(); };
+        match promise.state() {
+            PromiseState::Fulfilled(_) => ExecutionObservation::Completed.into(),
+            PromiseState::Rejected(reason) => observed_error_with_value(
+                ExecutionPhase::Runtime,
+                &JsError::from_opaque(reason),
+                &mut self.ctx,
+            ),
+            PromiseState::Pending => ExecutionObservation::Pending.into(),
+        }
+    }
+
+    fn set_owned_module_resolver(
+        &mut self,
+        resolve: Option<Box<dyn FnMut(&str, &str) -> Option<(String, String)>>>,
+    ) -> bool {
+        // Replacing the owned resolver starts a new graph; a later call must
+        // not observe cached source or module instances from another realm.
+        self.loader.cache.borrow_mut().clear();
+        *self.loader.owned_resolver.borrow_mut() = resolve;
+        true
     }
 
     /// A module in a named realm: enter it, then run exactly the entry above.

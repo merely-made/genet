@@ -1164,6 +1164,11 @@ fn install_dom_events(host: &Rc<RefCell<WebOrtet>>) -> Result<(), JsValue> {
                 state.modifiers = modifiers_from_key(event);
                 let modifiers = state.modifiers;
                 let key = session_key(event.key());
+                let text = match &key {
+                    SessionKey::Character(value) => Some(value.clone()),
+                    SessionKey::Space => Some(" ".to_owned()),
+                    _ => None,
+                };
                 let scroll = scroll_key(&key, modifiers.shift);
                 let result = state.dispatch_input(SessionInput::Key {
                     key,
@@ -1171,9 +1176,17 @@ fn install_dom_events(host: &Rc<RefCell<WebOrtet>>) -> Result<(), JsValue> {
                     modifiers,
                     repeat: event.repeat(),
                 });
+                let mut text_handled = false;
+                if !event.is_composing() && !modifiers.meta && !(modifiers.control && !modifiers.alt) {
+                    if let Some(text) = text {
+                        if text.chars().all(|c| !c.is_control()) {
+                            text_handled = state.dispatch_input(SessionInput::KeyboardText(text)).effect.is_handled();
+                        }
+                    }
+                }
                 let scrolled = result.effect.allows_default_scroll(result.editable)
                     && scroll.is_some_and(|scroll| state.session.scroll_for_key(scroll));
-                if result.effect.is_handled() || (result.editable && scroll.is_some()) || scrolled {
+                if result.effect.is_handled() || text_handled || (result.editable && scroll.is_some()) || scrolled {
                     event.prevent_default();
                 }
                 if scrolled {

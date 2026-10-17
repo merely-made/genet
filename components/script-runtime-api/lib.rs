@@ -178,6 +178,7 @@ impl<'cx, E: ScriptEngine + 'cx> Surface<'_, 'cx, E> {
         if name.starts_with("__webgl_") || matches!(
             name,
             "__formFileAllocate"
+                | "__hostFormEdit"
                 | "__formFilesReplace"
                 | "__formFilesSnapshot"
                 | "__formEntrySnapshot"

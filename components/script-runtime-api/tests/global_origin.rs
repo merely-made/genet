@@ -68,7 +68,7 @@ fn worker<E: ScriptEngine>() {
     loop {
         rt.run_event_loop(100).unwrap();
         rt.pump_workers();
-        rt.run_timers(64, 10000.0);
+        rt.run_timers(64, 10000.0).unwrap();
         let v = rt.eval("answer === 'https://a.test'").unwrap();
         if rt.value_to_string(&v).unwrap() == "true" { break; }
         let debug = rt.eval("String(answer)").unwrap();

@@ -77,16 +77,16 @@ fn drive_until<E: ScriptEngine>(rt: &mut Runtime<E>, done: &str) -> bool {
     let mut now_ms = 0.0f64;
     while Instant::now() < deadline {
         rt.run_microtasks();
-        let fired = rt.run_timers(64, now_ms);
+        let fired = rt.run_timers(64, now_ms).expect("timer task");
         let worked = rt.pump_workers();
         if read(rt, done) == "true" {
             return true;
         }
-        if let Some(d) = rt.next_timer_delay() {
+        if let Some(d) = rt.next_timer_delay().expect("timer delay") {
             now_ms += d.max(0.0);
         }
         if fired == 0 && worked == 0 {
-            if !rt.has_worker_work() && rt.next_timer_delay().is_none() {
+            if !rt.has_worker_work() && rt.next_timer_delay().expect("timer delay").is_none() {
                 // Quiescent: nothing can change without new input.
                 return read(rt, done) == "true";
             }
@@ -262,6 +262,29 @@ fn worker_timers_and_ordering_work<E: ScriptEngine>() {
     assert_eq!(read(&mut rt, "got"), "a,b,c");
 }
 
+fn worker_timer_uses_elapsed_host_clock<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.set_script_resource_loader(scripts(&[(
+        "elapsed.js",
+        "var before = performance.now(); \
+         setTimeout(function() { \
+           postMessage({ elapsed: performance.now() - before, \
+                         origin: performance.timeOrigin, wall: Date.now() }); \
+         }, 25);",
+    )]));
+    rt.eval(
+        "var got = null; var w = new Worker('elapsed.js'); \
+         w.onmessage = function(e) { got = e.data; };",
+    )
+    .expect("start");
+    assert!(drive_until(&mut rt, "String(got !== null)"), "no timer reply");
+    assert_eq!(read(&mut rt, "String(got.elapsed >= 20)"), "true");
+    assert_eq!(
+        read(&mut rt, "String(got.wall + 30 >= got.origin)"),
+        "true"
+    );
+}
+
 fn worker_error_reaches_the_page<E: ScriptEngine>() {
     let mut rt = Runtime::<E>::new().expect("runtime");
     rt.set_script_resource_loader(scripts(&[("boom.js", "throw new Error('worker boom');")]));
@@ -269,7 +292,8 @@ fn worker_error_reaches_the_page<E: ScriptEngine>() {
         "var err = null; var windowErr = null; \
          addEventListener('error', function(e) { windowErr = e.message; }); \
          var w = new Worker('boom.js'); \
-         w.onerror = function(e) { err = e.message; };",
+         w.onerror = function(e) { err = e.message; }; \
+         __reportListenerException = function() { throw new Error('stolen reporter'); };",
     )
     .expect("start");
     assert!(
@@ -461,6 +485,7 @@ both_engines! {
     worker_scope_has_no_document => (worker_scope_on_boa, worker_scope_on_nova),
     worker_import_scripts_works => (worker_import_scripts_on_boa, worker_import_scripts_on_nova),
     worker_timers_and_ordering_work => (worker_ordering_on_boa, worker_ordering_on_nova),
+    worker_timer_uses_elapsed_host_clock => (worker_elapsed_clock_on_boa, worker_elapsed_clock_on_nova),
     worker_error_reaches_the_page => (worker_error_on_boa, worker_error_on_nova),
     worker_terminate_and_close_work => (worker_terminate_on_boa, worker_terminate_on_nova),
     module_worker_is_a_named_residual => (module_worker_on_boa, module_worker_on_nova),

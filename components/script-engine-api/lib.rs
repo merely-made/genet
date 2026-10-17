@@ -206,6 +206,12 @@ pub trait ScriptEngine: Sized {
         Err(RealmError::Unsupported)
     }
 
+    /// Create a rooted string argument for a host call without evaluating source.
+    /// A backend without retained callable support may refuse this operation.
+    fn host_string(&mut self, _value: &str) -> Result<Self::Value, RealmError> {
+        Err(RealmError::Unsupported)
+    }
+
     /// Evaluate `source` as an ECMAScript **module** (module scope, strict mode,
     /// `import` / `export`), driving its load → link → evaluate to completion.
     ///

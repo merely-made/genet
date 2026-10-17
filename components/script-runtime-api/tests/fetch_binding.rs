@@ -97,7 +97,7 @@ fn case_deferred_fetch_settles_later<E: ScriptEngine>() {
             headers: vec![],
             body: b"hi".to_vec(),
         },
-    );
+    ).unwrap();
     assert_eq!(read(&mut rt, "String(D.s)"), "200");
     assert_eq!(read(&mut rt, "D.b"), "hi");
     assert_eq!(
@@ -110,7 +110,7 @@ fn case_deferred_fetch_settles_later<E: ScriptEngine>() {
     rt.eval(r#"var F={}; fetch("http://x/b").then(function(){F.r="ok";}, function(e){F.r=(e instanceof TypeError)?"TypeError":"other";});"#).unwrap();
     rt.run_microtasks();
     let id_b = seen.borrow()[1].0;
-    rt.fail_fetch(id_b, "boom");
+    rt.fail_fetch(id_b, "boom").unwrap();
     assert_eq!(read(&mut rt, "F.r"), "TypeError");
 
     // (3) Mid-flight abort cancels the in-flight request and rejects with AbortError.
@@ -166,7 +166,7 @@ fn case_streaming_response_body_delivers_incrementally<E: ScriptEngine>() {
     ).unwrap();
     rt.run_microtasks();
     let id = seen.borrow()[0].0;
-    rt.start_stream(id, ok_meta("http://x/stream"));
+    rt.start_stream(id, ok_meta("http://x/stream")).unwrap();
     assert_eq!(
         read(&mut rt, "String(S.status)"),
         "200",
@@ -177,16 +177,16 @@ fn case_streaming_response_body_delivers_incrementally<E: ScriptEngine>() {
         "0",
         "no chunks before any push"
     );
-    rt.push_chunk(id, b"foo");
+    rt.push_chunk(id, b"foo").unwrap();
     assert_eq!(read(&mut rt, "S.chunks.join(',')"), "foo");
-    rt.push_chunk(id, b"bar");
+    rt.push_chunk(id, b"bar").unwrap();
     assert_eq!(read(&mut rt, "S.chunks.join(',')"), "foo,bar");
     assert_eq!(
         read(&mut rt, "String(S.done)"),
         "undefined",
         "not done until close"
     );
-    rt.close_stream(id);
+    rt.close_stream(id).unwrap();
     assert_eq!(read(&mut rt, "String(S.done)"), "true");
     assert_eq!(
         rt.pending_fetches(),
@@ -199,10 +199,10 @@ fn case_streaming_response_body_delivers_incrementally<E: ScriptEngine>() {
     rt.eval(r#"var T={}; fetch("http://x/s2").then(function(r){ return r.text(); }).then(function(t){ T.text = t; });"#).unwrap();
     rt.run_microtasks();
     let id2 = seen.borrow()[1].0;
-    rt.start_stream(id2, ok_meta("http://x/s2"));
-    rt.push_chunk(id2, b"hel");
-    rt.push_chunk(id2, b"lo");
-    rt.close_stream(id2);
+    rt.start_stream(id2, ok_meta("http://x/s2")).unwrap();
+    rt.push_chunk(id2, b"hel").unwrap();
+    rt.push_chunk(id2, b"lo").unwrap();
+    rt.close_stream(id2).unwrap();
     assert_eq!(
         read(&mut rt, "T.text"),
         "hello",
@@ -223,7 +223,7 @@ fn case_clone_of_live_streaming_body_rejects<E: ScriptEngine>() {
         .unwrap();
     rt.run_microtasks();
     let id = seen.borrow()[0].0;
-    rt.start_stream(id, ok_meta("http://x/live"));
+    rt.start_stream(id, ok_meta("http://x/live")).unwrap();
     // C.resp is a live (still-arriving) streaming Response. The buffered tee cannot
     // clone it losslessly, so clone() must throw rather than silently truncate.
     assert_eq!(
@@ -233,7 +233,7 @@ fn case_clone_of_live_streaming_body_rejects<E: ScriptEngine>() {
         ),
         "TypeError"
     );
-    rt.close_stream(id);
+    rt.close_stream(id).unwrap();
 }
 
 fn case_fetch_resolves_to_response_through_the_handler<E: ScriptEngine>() {

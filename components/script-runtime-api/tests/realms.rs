@@ -101,7 +101,7 @@ fn shared_timer_order<E: ScriptEngine>() {
     rt.eval_in_realm(realm, "setTimeout(function(){order.push(document.getElementById('child').textContent);Promise.resolve().then(function(){order.push('microtask');});},0)").unwrap();
     rt.eval("setTimeout(function(){order.push('last');},0)")
         .unwrap();
-    assert_eq!(rt.run_timers(8, 0.0), 3);
+    assert_eq!(rt.run_timers(8, 0.0).unwrap(), 3);
     assert_eq!(
         read(&mut rt, top, "order.join(',')"),
         "parent,child,microtask,last"
@@ -150,7 +150,7 @@ fn child_fetch_completion<E: ScriptEngine>() {
     )
     .unwrap();
     assert_eq!(rt.pending_fetches(), 2);
-    rt.fail_fetch(child_id, "test complete");
+    rt.fail_fetch(child_id, "test complete").unwrap();
     assert_eq!(rt.pending_fetches(), 1);
     assert!(rt.host().borrow().console.is_empty());
     rt.fail_all_pending("parent complete");

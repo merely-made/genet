@@ -352,23 +352,31 @@ pub(crate) fn worker_main<E: ScriptEngine>(boot: WorkerBoot) {
         return;
     }
     let src = String::from_utf8_lossy(&out.body).into_owned();
+    // Timers installed by the startup script are measured from its entry,
+    // including time that synchronous script itself spends running.
+    let clock_start = Instant::now();
+    if let Err(error) = rt.run_timers(0, 0.0) {
+        let _ = tx.send(FromWorker::Error(rt.describe_error(&error)));
+        let _ = tx.send(FromWorker::Closed);
+        return;
+    }
     if let Err(e) = rt.eval(&src) {
         let msg = rt.describe_error(&e);
         let _ = tx.send(FromWorker::Error(msg));
     }
-    run_worker_loop(&mut rt, &link, &tx, wake.as_ref());
+    run_worker_loop(&mut rt, &link, &tx, wake.as_ref(), clock_start);
     let _ = tx.send(FromWorker::Closed);
 }
 
-/// The worker's event loop: deliver, run microtasks and timers on a virtual
-/// clock (the page's disk-mode drive does the same), then report idle and block.
+/// The worker's event loop: deliver messages, run microtasks and due timers on
+/// elapsed host time, then wait for the next message or timer deadline.
 fn run_worker_loop<E: ScriptEngine>(
     rt: &mut Runtime<E>,
     link: &Rc<RefCell<WorkerLink>>,
     tx: &Sender<FromWorker>,
     wake: Option<&Arc<dyn Fn() + Send + Sync>>,
+    clock_start: Instant,
 ) {
-    let mut now_ms = 0.0f64;
     let mut idle_sent = false;
     loop {
         {
@@ -377,6 +385,14 @@ fn run_worker_loop<E: ScriptEngine>(
                 break;
             }
         }
+        // A message callback may schedule a timer. Bring the shared timer
+        // queue up to the current host instant before running that callback,
+        // rather than giving its new timer the previous turn's stale base.
+        let turn_start_ms = clock_start.elapsed().as_secs_f64() * 1_000.0;
+        if let Err(error) = rt.run_timers(0, turn_start_ms) {
+            let _ = tx.send(FromWorker::Error(rt.describe_error(&error)));
+            break;
+        }
         let mut work = 0usize;
         if !link.borrow().inbox.is_empty() {
             idle_sent = false;
@@ -384,24 +400,45 @@ fn run_worker_loop<E: ScriptEngine>(
             work += 1;
         }
         rt.run_microtasks();
-        work += rt.run_timers(64, now_ms);
+        let elapsed_ms = clock_start.elapsed().as_secs_f64() * 1_000.0;
+        match rt.run_timers(64, elapsed_ms) {
+            Ok(fired) => work += fired,
+            Err(error) => {
+                let _ = tx.send(FromWorker::Error(rt.describe_error(&error)));
+                break;
+            },
+        }
         work += pump(rt);
-        if let Some(d) = rt.next_timer_delay() {
-            now_ms += d.max(0.0);
-            if d > 0.0 {
-                work += 1; // a pending timer is still work; loop and fire it
-            }
+        let next_delay = match rt.next_timer_delay() {
+            Ok(delay) => delay,
+            Err(error) => {
+                let _ = tx.send(FromWorker::Error(rt.describe_error(&error)));
+                break;
+            },
+        };
+        if work > 0 {
+            idle_sent = false;
         }
         if work == 0 {
-            if !idle_sent {
+            // A future timer still keeps the worker active. The page must not
+            // observe idle before that timer's callback has run.
+            if next_delay.is_none() && !idle_sent {
                 let _ = tx.send(FromWorker::Idle(link.borrow().consumed));
                 if let Some(wake) = wake {
                     wake();
                 }
                 idle_sent = true;
             }
+            // `next_timer_delay` is relative to the clock sample passed to
+            // `run_timers`; callback work since then has already used time.
+            let spent_ms = clock_start.elapsed().as_secs_f64() * 1_000.0 - elapsed_ms;
+            let wait_ms = next_delay
+                .filter(|delay| delay.is_finite())
+                .map(|delay| delay - spent_ms)
+                .unwrap_or(50.0)
+                .clamp(0.0, 50.0);
             let mut l = link.borrow_mut();
-            l.pump(Some(Duration::from_millis(50)));
+            l.pump(Some(Duration::from_secs_f64(wait_ms / 1_000.0)));
         }
     }
 }
@@ -864,6 +901,7 @@ pub(crate) fn shutdown(host: &SharedHost) {
 const WORKER_HOST_BOOTSTRAP: &str = r#"
 (function() {
   var workers = [];
+  var reportWorkerException = globalThis.__reportListenerException;
 
 
   // `ErrorEvent`: what a worker's unhandled exception is delivered as.
@@ -963,7 +1001,7 @@ const WORKER_HOST_BOOTSTRAP: &str = r#"
         });
         // Not handled on the Worker object: the error reaches the window, which
         // is where an unhandled worker exception is observable.
-        if (w.dispatchEvent(err)) globalThis.__reportListenerException({ message: e.d });
+        if (w.dispatchEvent(err)) reportWorkerException({ message: e.d });
       }
     }
     return n;

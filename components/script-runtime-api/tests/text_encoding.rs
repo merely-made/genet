@@ -362,16 +362,16 @@ fn drive_until<E: ScriptEngine>(runtime: &mut Runtime<E>, done: &str) -> bool {
     let mut now_ms = 0.0f64;
     while Instant::now() < deadline {
         runtime.run_microtasks();
-        let fired = runtime.run_timers(64, now_ms);
+        let fired = runtime.run_timers(64, now_ms).expect("timer task");
         let worked = runtime.pump_workers();
         if read(runtime, done) == "true" {
             return true;
         }
-        if let Some(delay) = runtime.next_timer_delay() {
+        if let Some(delay) = runtime.next_timer_delay().expect("timer delay") {
             now_ms += delay.max(0.0);
         }
         if fired == 0 && worked == 0 {
-            if !runtime.has_worker_work() && runtime.next_timer_delay().is_none() {
+            if !runtime.has_worker_work() && runtime.next_timer_delay().expect("timer delay").is_none() {
                 return read(runtime, done) == "true";
             }
             std::thread::sleep(Duration::from_millis(1));

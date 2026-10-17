@@ -1285,6 +1285,19 @@ mod native {
             out
         }
 
+        fn host_string(&mut self, value: &str) -> Result<Self::Value, RealmError> {
+            let release = self.release.clone();
+            let mut out = Err(RealmError::Refused("host string did not run"));
+            self.agent.run_in_realm(&self.realm, |agent, gc| {
+                let string = JsString::from_str(agent, value, gc.nogc());
+                out = Ok(NovaValue::new(
+                    Global::new(agent, Value::from(string).unbind()),
+                    &release,
+                ));
+            });
+            out
+        }
+
         fn eval_module(
             &mut self,
             source: &str,

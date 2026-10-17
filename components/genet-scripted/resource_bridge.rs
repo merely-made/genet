@@ -294,7 +294,7 @@ impl ScriptResourceBridge {
         completions.queue.clear();
     }
 
-    pub fn pump<E: ScriptEngine>(&self, runtime: &mut Runtime<E>) -> usize {
+    pub fn pump<E: ScriptEngine>(&self, runtime: &mut Runtime<E>) -> Result<usize, String> {
         let completions = {
             let mut queue = self
                 .state
@@ -304,13 +304,20 @@ impl ScriptResourceBridge {
             queue.queue.drain(..).collect::<Vec<_>>()
         };
         if self.state.closed.load(Ordering::Acquire) {
-            return 0;
+            return Ok(0);
         }
         let count = completions.len();
+        let mut failures = Vec::new();
         for completion in completions {
-            runtime.settle_fetch(completion.id, completion.outcome);
+            if let Err(error) = runtime.settle_fetch(completion.id, completion.outcome) {
+                failures.push(format!("fetch {}: {error}", completion.id));
+            }
         }
-        count
+        if failures.is_empty() {
+            Ok(count)
+        } else {
+            Err(failures.join("; "))
+        }
     }
 
     fn outcome(&self, request: &FetchRequest) -> FetchOutcome {

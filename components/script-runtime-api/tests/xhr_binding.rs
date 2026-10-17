@@ -402,7 +402,7 @@ fn a_timeout_fires_the_timeout_event() {
         "",
         "not yet: the timer has not run"
     );
-    rt.run_timers(16, 50.0);
+    rt.run_timers(16, 50.0).unwrap();
     rt.run_microtasks();
     assert_eq!(read(&mut rt, "log.join(',')"), "timeout,loadend");
     assert_eq!(read(&mut rt, "x.readyState"), "4");

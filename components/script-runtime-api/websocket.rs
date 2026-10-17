@@ -33,7 +33,7 @@ use std::cell::RefCell;
 
 use script_engine_api::{CallCx, NativeFn, ScriptEngine};
 
-use crate::{HostState, Runtime, js_str};
+use crate::{HostState, Runtime};
 
 /// A connection the host should open on script's behalf.
 #[derive(Clone, Debug)]
@@ -190,6 +190,13 @@ pub(crate) fn install_websocket_surface<E: ScriptEngine>(
 }
 
 impl<E: ScriptEngine> Runtime<E> {
+    fn deliver_websocket_task(&mut self, name: &'static str, args: &[&str]) {
+        if let Err(error) = self.call_task(self.top_realm(), name, args) {
+            self.report_script_exception(&format!("WebSocket delivery: {error}"), None);
+        }
+        self.run_microtasks();
+    }
+
     /// Install the host's WebSocket seam. Until set, every `new WebSocket(...)`
     /// fails the connection (`error` then `close`), which is the right answer for
     /// a runtime with no network — and is what disk-mode WPT sees.
@@ -200,51 +207,25 @@ impl<E: ScriptEngine> Runtime<E> {
     /// The handshake succeeded: `protocol` is the selected subprotocol (or `""`)
     /// and `extensions` the negotiated extension list (or `""`). Fires `open`.
     pub fn ws_open(&mut self, id: u64, protocol: &str, extensions: &str) {
-        let js = format!(
-            "globalThis.__websocketOpen({},{},{});",
-            id,
-            js_str(protocol),
-            js_str(extensions)
-        );
-        let _ = self.eval(&js);
-        self.run_microtasks();
+        self.deliver_websocket_task("__websocketOpen", &[&id.to_string(), protocol, extensions]);
     }
 
     /// A text frame arrived. Fires `message` with a string `data`.
     pub fn ws_message_text(&mut self, id: u64, text: &str) {
-        let js = format!(
-            "globalThis.__websocketMessageText({},{});",
-            id,
-            js_str(text)
-        );
-        let _ = self.eval(&js);
-        self.run_microtasks();
+        self.deliver_websocket_task("__websocketMessageText", &[&id.to_string(), text]);
     }
 
     /// A binary frame arrived. Fires `message` with a `Blob` or an `ArrayBuffer`
-    /// depending on the socket's `binaryType`. Bytes cross as a JS array literal
-    /// (no string-escape hazard), the same way a streamed fetch chunk does.
+    /// depending on the socket's `binaryType`. Bytes cross as a Latin-1 string
+    /// argument to the retained delivery callable.
     pub fn ws_message_binary(&mut self, id: u64, bytes: &[u8]) {
-        let mut lit = String::with_capacity(bytes.len() * 4 + 2);
-        lit.push('[');
-        for (i, b) in bytes.iter().enumerate() {
-            if i > 0 {
-                lit.push(',');
-            }
-            lit.push_str(&b.to_string());
-        }
-        lit.push(']');
-        let _ = self.eval(&format!(
-            "globalThis.__websocketMessageBinary({},{});",
-            id, lit
-        ));
-        self.run_microtasks();
+        let binary = bytes.iter().map(|&byte| char::from(byte)).collect::<String>();
+        self.deliver_websocket_task("__websocketMessageBinary", &[&id.to_string(), &binary]);
     }
 
     /// `n` bytes left the send queue, so `bufferedAmount` drops by that much.
     pub fn ws_flushed(&mut self, id: u64, n: u64) {
-        let _ = self.eval(&format!("globalThis.__websocketFlushed({},{});", id, n));
-        self.run_microtasks();
+        self.deliver_websocket_task("__websocketFlushed", &[&id.to_string(), &n.to_string()]);
     }
 
     /// The connection failed — a handshake failure, a policy refusal, or a drop
@@ -252,41 +233,41 @@ impl<E: ScriptEngine> Runtime<E> {
     /// (1006, not clean), which is the ordering the specification requires and
     /// the only failure detail it lets script see.
     pub fn ws_error(&mut self, id: u64) {
-        let _ = self.eval(&format!("globalThis.__websocketError({});", id));
-        self.run_microtasks();
+        self.deliver_websocket_task("__websocketError", &[&id.to_string()]);
     }
 
     /// The closing handshake completed. Fires `close` with the peer's code and
     /// reason; `was_clean` is false when the connection dropped instead.
     pub fn ws_close(&mut self, id: u64, code: u16, reason: &str, was_clean: bool) {
-        let js = format!(
-            "globalThis.__websocketClose({},{},{},{});",
-            id,
-            code,
-            js_str(reason),
-            was_clean
+        self.deliver_websocket_task(
+            "__websocketClose",
+            &[&id.to_string(), &code.to_string(), reason, if was_clean { "true" } else { "false" }],
         );
-        let _ = self.eval(&js);
-        self.run_microtasks();
     }
 
     /// How many `WebSocket`s are not yet `CLOSED`. The host drive loop reads this
     /// the way it reads `pending_fetches`: a live socket can still speak, so the
     /// agent is not quiescent while one is open.
     pub fn pending_websockets(&mut self) -> usize {
-        self.eval("String(globalThis.__websocketPending ? __websocketPending() : 0)")
-            .ok()
-            .and_then(|v| self.value_to_string(&v).ok())
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0)
+        let pending = self.call_task(self.top_realm(), "__websocketPending", &[])
+            .and_then(|value| self.engine.value_to_string(&value)
+                .map_err(|error| script_engine_api::RealmError::Engine(self.engine.describe_error(&error))))
+            .and_then(|text| text.parse()
+                .map_err(|_| script_engine_api::RealmError::Refused("private websocket pending hook returned an invalid count")));
+        match pending {
+            Ok(count) => count,
+            Err(error) => {
+                self.report_script_exception(&format!("WebSocket pending count: {error}"), None);
+                1 // Unknown state is still work, not quiescence.
+            }
+        }
     }
 
     /// Fail every live `WebSocket`, the way [`Runtime::fail_all_pending`] rejects
     /// outstanding fetches: the host calls it at its deadline so a test awaiting a
     /// socket that will never answer records a failure rather than hanging.
     pub fn fail_all_websockets(&mut self) {
-        let _ = self.eval("globalThis.__websocketFailAll && __websocketFailAll();");
-        self.run_microtasks();
+        self.deliver_websocket_task("__websocketFailAll", &[]);
     }
 }
 
@@ -565,7 +546,9 @@ const WEBSOCKET_BOOTSTRAP: &str = r#"
   globalThis.__websocketMessageBinary = function(id, arr) {
     var ws = live(id);
     if (!ws || ws._readyState !== OPEN) return;
-    var bytes = FormOps.bytes(arr);
+    var wire = [];
+    for (var i = 0; i < arr.length; i++) wire[i] = arr.charCodeAt(i) & 255;
+    var bytes = FormOps.bytes(wire);
     var data = ws._binaryType === 'arraybuffer' ? bytes.buffer : FormOps.makeBlob(bytes, '');
     ws.dispatchEvent(new MessageEvent('message', { data: data, origin: ws._origin }));
   };
@@ -582,7 +565,7 @@ const WEBSOCKET_BOOTSTRAP: &str = r#"
   globalThis.__websocketClose = function(id, code, reason, clean) {
     var ws = live(id);
     if (!ws) return;
-    if (!clean) { fail(ws); return; }
+    if (clean !== 'true') { fail(ws); return; }
     finish(ws, code, reason || '', true);
   };
   globalThis.__websocketPending = function() {

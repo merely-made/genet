@@ -6191,5 +6191,351 @@
     "webgl_adapter": [
       "test a_created_context_can_report_context_loss ... WebGL binding test adapter: AdapterInfo { name: \"AMD Radeon Graphics (RADV RENOIR)\", vendor: 4098, device: 5686, device_type: IntegratedGpu, device_pci_bus_id: \"0000:06:00.0\", driver: \"radv\", driver_info: \"Mesa 26.2.4\", backend: Vulkan, subgroup_min_size: 64, subgroup_max_size: 64, transient_saves_memory: Some(false), limit_bucket: None }"
     ]
+  },
+  "runtime_turn_repairs": {
+    "base_commit": "42026a78a4b38688d62937fe3925de1c24b57969",
+    "date": "2026-10-17",
+    "findings": [
+      "R4",
+      "R5",
+      "H3",
+      "R15"
+    ],
+    "source_sha256": {
+      "components/genet-documents/src/engines/scripted.rs": "60c884165cf00abe66df604d037d7ce3c1c4f51bfe58b6d4c2e70650d2d7001a",
+      "components/genet-scripted/document.rs": "6f6ceee55ccd31bf02afbb3e6541badc631c7a5d01956a16b218abcd45d89c98",
+      "components/genet-scripted/resource_bridge.rs": "4d6c0045afc80aab1999f8909512a1ce2b68689146d9e9193d52694fd61f800a",
+      "components/script-engine-api/lib.rs": "123249743a8f0dd1aa8b15705854ee3500925f89554b11575b3c5077f03f70e5",
+      "components/script-engine-boa/lib.rs": "d135eb7d5e5fcc55911fb1badee4cd64bc5a547c68db791719e3bc25ea12b750",
+      "components/script-engine-nova/lib.rs": "2a0505555c6d582841125f339709182dfcbf8287cc24b8592c167e7f0b9bf6be",
+      "components/script-runtime-api/dom/bootstrap.js": "dc7f56ceef08efba8f885f7c9182741ab67af8e168726d60918090b761884864",
+      "components/script-runtime-api/fetch.rs": "893e5ce931c3f9bfa6b8fcc1c80137d0628b8e603c21855caf48162571ec1f2f",
+      "components/script-runtime-api/frames.rs": "6454c7c3a54d1dcd1c4ebbe59cc7e05b8cdf1fd8ecfc69cea5f129a8fc6e0207",
+      "components/script-runtime-api/lib.rs": "3238acb003255a06b7e74ad30bac487d2ab3e47bbb99907f1cc6d37e17cf8dbd",
+      "components/script-runtime-api/parse.rs": "9f8895bfa06f79180f5a35e0191309a391a51c4b4555b9d4e81096ea4677fe6d",
+      "components/script-runtime-api/tests/cheap_globals.rs": "79a78d1a267bbc0014e14f807bf5bc8d5a899573bfb18f0d14d3102572268ac5",
+      "components/script-runtime-api/tests/fetch_binding.rs": "4e3449ea4b68cda2767d6681bd2dabd0b92dd9995d7f8beddaa2ad931221e6b6",
+      "components/script-runtime-api/tests/global_origin.rs": "5b933e887bf588ff9bd24e766be6f028a7bdc02a3613e80138a2c1fb5eeb819b",
+      "components/script-runtime-api/tests/parser_script_interleaving.rs": "60047ddaf1327bc1871d7fb99d5b223e68bd4485726cd587ba3171483a958c35",
+      "components/script-runtime-api/tests/realm_animation_frames.rs": "067ac60d254aef25ea36523d92223bc81aa1d5349e291e60800da02370b91b69",
+      "components/script-runtime-api/tests/realms.rs": "3a33242730d4af7a7779c4bab1fbdf252dc02c2045616691660f86111bcb9d26",
+      "components/script-runtime-api/tests/streams_bridge.rs": "17f7ab82004bad650dbf609099b96a72e3cbb3d869d6a8e3906babdf1edad154",
+      "components/script-runtime-api/tests/text_encoding.rs": "4593aa8325ef7160586b8ec5f5d0db2f9bd18f2258bfef8815cb39a553b94ac8",
+      "components/script-runtime-api/tests/websocket_binding.rs": "72e96993757ca9ea4d399e22665a5b8c6ccc7e5e68499fb47cc35156fa58d1ae",
+      "components/script-runtime-api/tests/worker.rs": "c50fac789e4ce31b761182391706e70fd698c6da8324a34f9df5f09dc47c21bd",
+      "components/script-runtime-api/tests/xhr_binding.rs": "7f734853c1cf0a011ae9f67195aa3653b2ee7bde58db322be8ffd6f8885623b7",
+      "components/script-runtime-api/timing.rs": "70424855949d8de7811f17f7220df4b4764033879746b9a2edf2e0d0e64a79a0",
+      "components/script-runtime-api/websocket.rs": "6d099e9ccbda4572e6a1c1d705953e8b11783abdc81ca7bfc0fa643bef40fb8a",
+      "components/script-runtime-api/worker.rs": "9822ccd53e64db73d07a3be4f1ce5dc08ffc5e05fa4126bb40eb7d30b182e415",
+      "ports/genet-wpt/src/harness.rs": "bef6e9634a01e0708d92c42f5dfee9d22facfd8a4305424742c82dbfe199a1f9",
+      "components/script-runtime-api/tests/retained_task_hooks.rs": "7fddebb432bf98374d5b6fe0b80efae88375748e7271c3c2e6623974ca8f0f1a"
+    },
+    "gates": [
+      {
+        "label": "hooks",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/hooks.log",
+        "sha256": "3e9d3edcb4c43771d5df173a22dd3ab81b738849189721b5506c615e866f80e9",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p script-runtime-api --test retained_task_hooks -- --test-threads=1",
+        "max_process_rss_kib": 730608,
+        "swaps": 0
+      },
+      {
+        "label": "clocks",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/clocks.log",
+        "sha256": "1e477590978653094da86a3fb2dbe713399fcf34a75ca2a23e7a86bb276cb8de",
+        "passed": 24,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p script-runtime-api --test cheap_globals -- --test-threads=1",
+        "max_process_rss_kib": 732748,
+        "swaps": 0
+      },
+      {
+        "label": "parser-boa",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/parser-boa.log",
+        "sha256": "3632adf233060094360c9125ab5d32f9fb861dd36dc14f2084b4e1a829e947d1",
+        "passed": 27,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p script-runtime-api --test parser_script_interleaving on_boa -- --test-threads=1",
+        "max_process_rss_kib": 731964,
+        "swaps": 0
+      },
+      {
+        "label": "parser-nova",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/parser-nova.log",
+        "sha256": "011bf386b687c7e751d19ccbba0f6484263a0fa6407818f4b6244abb98d68cbf",
+        "passed": 27,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p script-runtime-api --test parser_script_interleaving on_nova -- --test-threads=1",
+        "max_process_rss_kib": 129812,
+        "swaps": 0
+      },
+      {
+        "label": "realms",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/realms.log",
+        "sha256": "482bfe79f5f1c0f9fbe153a1ef8c6220adb6fbc80560bf0df484b6ab7061cfa2",
+        "passed": 10,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p script-runtime-api --test realms --test realm_animation_frames -- --test-threads=1",
+        "max_process_rss_kib": 731828,
+        "swaps": 0
+      },
+      {
+        "label": "worker",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/worker.log",
+        "sha256": "c0fbc6619681ad37137400d3f74e6fd36eaefb72493bd99236871fac984840f0",
+        "passed": 26,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p script-runtime-api --test worker -- --test-threads=1",
+        "max_process_rss_kib": 726100,
+        "swaps": 0
+      },
+      {
+        "label": "mutations",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/mutations.log",
+        "sha256": "12cc1b4ab5c433b5c401f9aec4985e478ec08ecbbb66bd89f800be8e93e1df31",
+        "passed": 16,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p script-runtime-api --test mutation_observer -- --test-threads=1",
+        "max_process_rss_kib": 729596,
+        "swaps": 0
+      },
+      {
+        "label": "adoption",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/adoption.log",
+        "sha256": "f05db707c634b3124535cc2fdb4cf184624856417a3334678a40f54a86867c38",
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p script-runtime-api --test pending_script_adoption -- --test-threads=1",
+        "max_process_rss_kib": 733100,
+        "swaps": 0
+      },
+      {
+        "label": "streams",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/streams.log",
+        "sha256": "09c14923eb9713e3bff5a8dfa44dcfed8bced1999e1f284903dd4c3e6c67f2c1",
+        "passed": 19,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p script-runtime-api --test streams_bridge -- --test-threads=1",
+        "max_process_rss_kib": 731112,
+        "swaps": 0
+      },
+      {
+        "label": "websocket",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/websocket.log",
+        "sha256": "39f50d3b07d466f2cb51a4784128b7182837bffb9e651f5db0dc8de8642fb958",
+        "passed": 32,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p script-runtime-api --test websocket_binding -- --test-threads=1",
+        "max_process_rss_kib": 729104,
+        "swaps": 0
+      },
+      {
+        "label": "coercion",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/coercion.log",
+        "sha256": "2e776aa01907fde511bbb224013fbe798a0db3e2880dfa2776b93c9cd0f2ce86",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p script-runtime-api --lib malformed_task_boolean -- --test-threads=1",
+        "max_process_rss_kib": 740276,
+        "swaps": 0
+      },
+      {
+        "label": "snapshot",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/snapshot.log",
+        "sha256": "8df339ccae9306472e2c2480054fdc529e6baaed9bd49b72906ee095729268bb",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p script-runtime-api --lib runtime_snapshot_clone -- --test-threads=1",
+        "max_process_rss_kib": 119000,
+        "swaps": 0
+      },
+      {
+        "label": "scheduler",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/scheduler.log",
+        "sha256": "8fdd0e2a10993e8a42aff2e18b43bf011185c7814bc1057abcee979fb47c139f",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p script-runtime-api --lib scheduler_trace -- --test-threads=1",
+        "max_process_rss_kib": 119024,
+        "swaps": 0
+      },
+      {
+        "label": "scripted-animation",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/scripted-animation.log",
+        "sha256": "19d21d49619e7a137f4036a63253eadc1b26c5a45bb110d635464d508cedb36b",
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-scripted --features scripted-nova --lib animation_frame -- --test-threads=1",
+        "max_process_rss_kib": 1157260,
+        "swaps": 0
+      },
+      {
+        "label": "scripted-lifecycle",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/scripted-lifecycle.log",
+        "sha256": "01c474f58cd8ba15057fbfb87c183808c0a081f24df2cd07ee29dfc5c37b904a",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-scripted --features scripted-nova --lib hidden_clamps -- --test-threads=1",
+        "max_process_rss_kib": 120452,
+        "swaps": 0
+      },
+      {
+        "label": "session-wake",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/session-wake.log",
+        "sha256": "2334ba7b4e462447bfd3cb925932b6ea251ca5a93dfd159d64054c5b21fbd443",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-documents --features scripted-nova --lib raf_only -- --test-threads=1",
+        "max_process_rss_kib": 1172360,
+        "swaps": 0
+      },
+      {
+        "label": "wpt-animation",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/wpt-animation.log",
+        "sha256": "c893405b0764a269a3626d2b0005b4837619aa281ba8162e990d6bc3f443987a",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-wpt --bin genet-wpt retained_animation_turn -- --test-threads=1",
+        "max_process_rss_kib": 1425596,
+        "swaps": 0
+      },
+      {
+        "label": "cpu-repaint",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/cpu-repaint.log",
+        "sha256": "ce26c2ec77f98fe25967185d5aa07ab51986f14e391d2dfd5bf074a8f6eadc81",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-livery --test retained_cpu_raster -- --test-threads=1",
+        "max_process_rss_kib": 107980,
+        "swaps": 0
+      },
+      {
+        "label": "runtime-consumers",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/runtime-consumers.log",
+        "sha256": "0581e83221ea9af68dc92ad0fe960517ce1c011128640ce4d4ac3ed2f3363125",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo check --offline --locked -j1 -p script-runtime-api --tests",
+        "max_process_rss_kib": 1005048,
+        "swaps": 0
+      }
+    ],
+    "totals": {
+      "passed": 205,
+      "failed": 0,
+      "ignored": 0
+    },
+    "reviews": [
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/parser-review.md",
+        "sha256": "084db95a9610b3b7118869fddef6813f0e3b3d010b168eb63999635a7e176e37"
+      },
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/dispatch-review.md",
+        "sha256": "eb13fbe4c4dc93cdb7558a79edf993c964157a57f308f2731f0283c4c6bcc67e"
+      },
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/clock-harness-review.md",
+        "sha256": "19637de9861ec244a26062adfbb7257398aabe0a476a0e1fdc8146ab750aae34"
+      },
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/animation-review.md",
+        "sha256": "c2b233af1d98ba91d2ac956b71178010ad34aeff6b3992ac40a07d05cc8b9fa6"
+      },
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/final-review.md",
+        "sha256": "345da2da51d300c8dc08bb76a549736a82c451644fe062550d99b8402af96b95"
+      }
+    ],
+    "earlier_attempts": [
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/clocks-before-review-fix.log",
+        "sha256": "419b2888718abc8a5fb5994583055938465d4cfe6cadd5665ee3d420c80a77b1",
+        "exit_status": 0,
+        "qualification": "Preliminary attempt; excluded from final counts"
+      },
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/hooks-before-review-fix.log",
+        "sha256": "de9cc4cf4315c19759f3e0ae2d5a80cc5fff9e4244fa40d1a1aa3e04bf79d496",
+        "exit_status": 0,
+        "qualification": "Preliminary attempt; excluded from final counts"
+      },
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/parser-throw-diagnostic.log",
+        "sha256": "09cd0a4281151c1ddca117c064e73ba6fa29a29834e9e0c776b0b9d938bbf373",
+        "exit_status": 101,
+        "qualification": "Preliminary attempt; excluded from final counts"
+      },
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/runtime-core-fix1.log",
+        "sha256": "7eb2126f0c2620122af05ecb0a1375f37e4655374b2e835c1c0cf9aff544f7f8",
+        "exit_status": 124,
+        "qualification": "Preliminary attempt; excluded from final counts"
+      },
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261017/runtime-turns/runtime-core.log",
+        "sha256": "d4b5a81266a796a3d4c643e0668af65f2c86c17b3ea730a6e3956a1531686ed0",
+        "exit_status": 101,
+        "qualification": "Preliminary attempt; excluded from final counts"
+      }
+    ],
+    "resources": {
+      "lock": "/home/markik/Code/testing/machine-heavy.lock",
+      "memory_max": "5G",
+      "memory_swap_max": 0,
+      "cpu_quota": "150%",
+      "nice": 10,
+      "cargo_jobs": 1,
+      "test_threads": 1,
+      "timeout_seconds": 240
+    },
+    "lock_sha256": "64d36e366ed880d70ef3344b70252f66a0ede6c70f0ce028f31c2c960bb73746",
+    "limits": [
+      "Inherited I2 hidden timer wake/clamp mismatch remains open.",
+      "WebSocket top-realm routing preserves prior supported scope; child socket routing is not qualified.",
+      "Explicit Virtual profile may return zero before its first advance. Date implementation is unchanged.",
+      "Snapshot tests cover bootstrap templates and retained task restoration, not arbitrary hostile post-author cloning.",
+      "No Forms, full WPT, or platform acceptance claimed. R7/R8 execution budgets, prior baseline font failure, supplier publication remain separate."
+    ]
   }
 }

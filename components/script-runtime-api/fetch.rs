@@ -1765,6 +1765,29 @@ const FETCH_BOOTSTRAP: &str = r#"
   // Single authority, delete-once: every terminal removes the entry exactly once.
   var __pending = Object.create(null);
   globalThis.__pending = __pending;          // Object.keys count drives the host's quiescence probe
+  var fetchTypeError = TypeError;
+  globalThis.__fetchPendingCount = function() {
+    var count = 0;
+    for (var id in __pending) {
+      var entry = __pending[id];
+      if (entry && (!entry.settled || entry.awaiting)) count++;
+    }
+    return count;
+  };
+  globalThis.__fetchFailAll = function(message) {
+    for (var id in __pending) {
+      var entry = __pending[id];
+      delete __pending[id];
+      if (!entry) continue;
+      if (entry.controller) {
+        try { entry.controller.error(new fetchTypeError(message)); } catch (ignored) {}
+      }
+      if (!entry.settled) {
+        entry.settled = true;
+        entry.reject(new fetchTypeError(message));
+      }
+    }
+  };
   var fetchIds = globalThis.__agentTimers;
   if (!fetchIds.nextFetchId) fetchIds.nextFetchId = 1;
 
@@ -1915,7 +1938,7 @@ const FETCH_BOOTSTRAP: &str = r#"
   globalThis.__fetchPushChunk = function(id, arr) {
     var e = __pending[id]; if (!e || e.stream === null) return;
     var u8 = new Uint8Array(arr.length);
-    for (var i = 0; i < arr.length; i++) u8[i] = arr[i] & 0xFF;
+    for (var i = 0; i < arr.length; i++) u8[i] = arr.charCodeAt(i) & 0xFF;
     try { if (arr.length !== 0) ReadableOps.enqueue(e.stream, u8); }
     finally { finishPull(e); }
   };

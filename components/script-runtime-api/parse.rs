@@ -72,9 +72,9 @@ use crate::{NodeId, Runtime};
 /// script is fetched through the same route, which makes it available
 /// immediately — see [`ScriptTiming`].
 pub trait ParserScriptLoader {
-    /// The text of an external classic or module script, or `None` to skip it
-    /// (a missing resource, a blocked one, or a route that does not serve this
-    /// URL).
+    /// The text of an external classic or module script, or `None` when the
+    /// resource is missing, blocked, or unavailable through this route. The
+    /// parser reports `None` as a nonfatal load failure.
     fn load(&self, src: &str, charset: Option<&str>, integrity: Option<&str>) -> Option<String>;
 
     /// Fallback identity for loaders without a parseable document URL.
@@ -104,7 +104,8 @@ pub trait ParserScriptLoader {
 }
 
 /// A loader that serves nothing — the `parse()` entry point with no document
-/// URL, where an external script has no route to travel.
+/// URL, where an external script has no route to travel. Such scripts report
+/// load failures while the parser continues.
 pub struct NoScriptLoader;
 
 impl ParserScriptLoader for NoScriptLoader {
@@ -222,15 +223,48 @@ impl DomAccess for ParkedDom {
     }
 }
 
-/// What a completed parse reports back.
+/// The result of preparing and executing one parser-discovered script.
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum ScriptOutcome {
+    Skipped,
+    FetchFailed,
+    UnsupportedModule,
+    Threw,
+    Executed,
+}
+
+/// What a completed parse reports back. Execution counters count successful
+/// evaluations, rather than scripts merely scheduled by the parser.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct ParseReport {
-    /// Classic scripts that ran, parser-blocking and async.
+    /// Classic scripts evaluated successfully, parser-blocking and async.
     pub scripts_run: usize,
-    /// Deferred classic and module scripts that ran after parsing.
+    /// Deferred classic and module scripts evaluated successfully.
     pub deferred_run: usize,
+    /// Script elements skipped because they were inert, already started,
+    /// removed before execution, or had an unsupported `type`.
+    pub scripts_skipped: usize,
+    /// External scripts whose loader returned no source.
+    pub script_fetch_failures: usize,
+    /// Modules the selected engine cannot evaluate.
+    pub unsupported_modules: usize,
+    /// Classic or module evaluations that raised an exception.
+    pub script_exceptions: usize,
     /// `document.write` calls whose source re-entered the token stream.
     pub writes_applied: usize,
+}
+
+impl ParseReport {
+    fn record(&mut self, outcome: ScriptOutcome, deferred: bool) {
+        match outcome {
+            ScriptOutcome::Skipped => self.scripts_skipped += 1,
+            ScriptOutcome::FetchFailed => self.script_fetch_failures += 1,
+            ScriptOutcome::UnsupportedModule => self.unsupported_modules += 1,
+            ScriptOutcome::Threw => self.script_exceptions += 1,
+            ScriptOutcome::Executed if deferred => self.deferred_run += 1,
+            ScriptOutcome::Executed => self.scripts_run += 1,
+        }
+    }
 }
 
 impl<E: ScriptEngine> Runtime<E> {
@@ -304,8 +338,13 @@ impl<E: ScriptEngine> Runtime<E> {
             // Foreign-namespace scripts do not pause the tokenizer, so run any
             // the parser has completed since the last pause — they precede this
             // one in the document, and this one may name what they defined.
-            report.scripts_run +=
-                self.run_foreign_scripts(&policy, loader, &mut deferred, &mut async_pending);
+            self.run_foreign_scripts(
+                &policy,
+                loader,
+                &mut deferred,
+                &mut async_pending,
+                &mut report,
+            );
             let already_started = markup_insertion::script_started(&self.host.borrow(), node);
             // HTML never executes a `<script>` found in a template's contents.
             let inert = already_started || self.host.borrow().dom.is_in_template_contents(node);
@@ -318,12 +357,12 @@ impl<E: ScriptEngine> Runtime<E> {
                 markup_insertion::mark_script_started(&mut self.host.borrow_mut(), node);
             }
             match facts.timing {
-                ScriptTiming::Skipped => {},
+                ScriptTiming::Skipped => report.record(ScriptOutcome::Skipped, false),
                 ScriptTiming::Deferred => deferred.push((node, facts)),
                 ScriptTiming::Async => async_pending.push((node, facts)),
                 ScriptTiming::Blocking => {
-                    self.run_parser_script(node, &facts, loader);
-                    report.scripts_run += 1;
+                    let outcome = self.run_parser_script(node, &facts, loader);
+                    report.record(outcome, false);
                 },
             }
             // Refresh *after* the script: it may have defined a custom
@@ -338,8 +377,13 @@ impl<E: ScriptEngine> Runtime<E> {
         }
         self.refresh_parser_policy(&policy);
         self.upgrade_parser_created(&policy);
-        report.scripts_run +=
-            self.run_foreign_scripts(&policy, loader, &mut deferred, &mut async_pending);
+        self.run_foreign_scripts(
+            &policy,
+            loader,
+            &mut deferred,
+            &mut async_pending,
+            &mut report,
+        );
 
         // The final tokenizer stretch may contain frames without a following
         // blocking script. Discover their contexts and queue document loads
@@ -352,20 +396,22 @@ impl<E: ScriptEngine> Runtime<E> {
         self.set_ready_state(ReadyState::Interactive);
         for (node, facts) in &async_pending {
             if !self.host.borrow().dom.is_live(*node) {
+                report.record(ScriptOutcome::Skipped, false);
                 continue;
             }
-            self.run_parser_script(*node, facts, loader);
-            report.scripts_run += 1;
+            let outcome = self.run_parser_script(*node, facts, loader);
+            report.record(outcome, false);
         }
         for (node, facts) in &deferred {
             // A preceding queued script may have adopted this prepared node
             // into another arena. Execution cannot follow it there or run in
             // the old preparation realm after its document has changed.
             if !self.host.borrow().dom.is_live(*node) {
+                report.record(ScriptOutcome::Skipped, true);
                 continue;
             }
-            self.run_parser_script_deferred(facts, loader);
-            report.deferred_run += 1;
+            let outcome = self.run_parser_script_deferred(*node, facts, loader);
+            report.record(outcome, true);
         }
         let _ = self.dispatch_user_agent_event("document", "DOMContentLoaded", true);
         self.run_microtasks();
@@ -452,15 +498,16 @@ impl<E: ScriptEngine> Runtime<E> {
         loader: &dyn ParserScriptLoader,
         deferred: &mut Vec<(NodeId, ScriptFacts)>,
         async_pending: &mut Vec<(NodeId, ScriptFacts)>,
-    ) -> usize {
+        report: &mut ParseReport,
+    ) {
         let nodes = policy.take_foreign_scripts();
-        let mut ran = 0;
         for node in nodes {
             let skip = {
                 let host = self.host.borrow();
                 !host.dom.is_live(node) || host.dom.is_in_template_contents(node)
             };
             if skip {
+                report.record(ScriptOutcome::Skipped, false);
                 continue;
             }
             let started = markup_insertion::script_started(&self.host.borrow(), node);
@@ -468,18 +515,17 @@ impl<E: ScriptEngine> Runtime<E> {
             markup_insertion::clear_parser_inserted(&self.host.borrow(), node);
             markup_insertion::mark_script_started(&mut self.host.borrow_mut(), node);
             match facts.timing {
-                ScriptTiming::Skipped => continue,
+                ScriptTiming::Skipped => report.record(ScriptOutcome::Skipped, false),
                 // A module in foreign content is deferred like any other, and
                 // must still run before the load event.
                 ScriptTiming::Deferred => deferred.push((node, facts)),
                 ScriptTiming::Async => async_pending.push((node, facts)),
                 ScriptTiming::Blocking => {
-                    self.run_parser_script(node, &facts, loader);
-                    ran += 1;
+                    let outcome = self.run_parser_script(node, &facts, loader);
+                    report.record(outcome, false);
                 },
             }
         }
-        ran
     }
 
     fn set_ready_state(&mut self, state: ReadyState) {
@@ -555,32 +601,48 @@ impl<E: ScriptEngine> Runtime<E> {
         node: NodeId,
         facts: &ScriptFacts,
         loader: &dyn ParserScriptLoader,
-    ) {
+    ) -> ScriptOutcome {
         let source = match &facts.src {
             None => Some(facts.text.clone()),
             Some(src) => loader.load(src, facts.charset.as_deref(), facts.integrity.as_deref()),
         };
         let Some(source) = source else {
-            return;
+            self.report_script_load_failure(node, facts.src.as_deref().unwrap_or_default());
+            self.run_microtasks();
+            return ScriptOutcome::FetchFailed;
         };
         // Window named properties are live over the tree, and the tree just
         // grew: a script that names an element parsed since the last pause
         // (`ordinarytemplate.innerHTML = ...`) must find it.
         let _ = self.eval_top("globalThis.__refreshNamedProperties && __refreshNamedProperties()");
-        self.host.borrow_mut().markup.current_script = Some(node);
-        let _ = self.eval_top(&source);
+        let previous = self.host.borrow_mut().markup.current_script.replace(node);
+        let result = self.eval_top(&source);
         self.flush_host_trace_events();
-        self.host.borrow_mut().markup.current_script = None;
+        self.host.borrow_mut().markup.current_script = previous;
+        let outcome = match result {
+            Ok(_) => ScriptOutcome::Executed,
+            Err(error) => {
+                let message = self.describe_error(&error);
+                self.report_script_exception(&message, facts.src.as_deref());
+                ScriptOutcome::Threw
+            },
+        };
         // The microtask checkpoint after a script is where a MutationObserver
         // callback registered by an earlier script actually runs — and the
         // reason the parser can see a shadow root that callback attached.
         self.run_microtasks();
         let _ = self.eval_top("globalThis.__refreshNamedProperties && __refreshNamedProperties()");
+        outcome
     }
 
     /// Execute one deferred classic or module script after parsing.
-    fn run_parser_script_deferred(&mut self, facts: &ScriptFacts, loader: &dyn ParserScriptLoader) {
-        match facts.kind {
+    fn run_parser_script_deferred(
+        &mut self,
+        node: NodeId,
+        facts: &ScriptFacts,
+        loader: &dyn ParserScriptLoader,
+    ) -> ScriptOutcome {
+        let outcome = match facts.kind {
             ScriptKind::Classic => {
                 let source = match &facts.src {
                     None => Some(facts.text.clone()),
@@ -588,9 +650,28 @@ impl<E: ScriptEngine> Runtime<E> {
                         loader.load(src, facts.charset.as_deref(), facts.integrity.as_deref())
                     },
                 };
-                if let Some(source) = source {
-                    let _ = self.eval_top(&source);
-                    self.flush_host_trace_events();
+                match source {
+                    None => {
+                        self.report_script_load_failure(
+                            node,
+                            facts.src.as_deref().unwrap_or_default(),
+                        );
+                        ScriptOutcome::FetchFailed
+                    },
+                    Some(source) => {
+                        let previous = self.host.borrow_mut().markup.current_script.replace(node);
+                        let result = self.eval_top(&source);
+                        self.flush_host_trace_events();
+                        self.host.borrow_mut().markup.current_script = previous;
+                        match result {
+                            Ok(_) => ScriptOutcome::Executed,
+                            Err(error) => {
+                                let message = self.describe_error(&error);
+                                self.report_script_exception(&message, facts.src.as_deref());
+                                ScriptOutcome::Threw
+                            },
+                        }
+                    },
                 }
             },
             ScriptKind::Module => {
@@ -605,26 +686,59 @@ impl<E: ScriptEngine> Runtime<E> {
                         facts.integrity.as_deref(),
                     ),
                 };
-                if let Some((base, source)) = entry {
-                    let mut resolve = |specifier: &str, referrer: &str| {
-                        loader.load_module(specifier, referrer, None, None)
-                    };
-                    // The module belongs to the document that declared it, so
-                    // it is evaluated in the top document's realm - not the
-                    // agent's bootstrap realm, which is nobody's document.
-                    let top = self.top_realm();
-                    let _ = self.engine.eval_module_in_realm(
-                        top,
-                        &source,
-                        &base,
-                        facts.src.as_ref().map(|_| base.as_str()),
-                        &mut resolve,
-                    );
-                    self.flush_host_trace_events();
+                match entry {
+                    None => {
+                        self.report_script_load_failure(
+                            node,
+                            facts.src.as_deref().unwrap_or_default(),
+                        );
+                        ScriptOutcome::FetchFailed
+                    },
+                    Some((base, source)) => {
+                        let mut missing_import = None;
+                        let mut resolve = |specifier: &str, referrer: &str| {
+                            let loaded = loader.load_module(specifier, referrer, None, None);
+                            if loaded.is_none() && missing_import.is_none() {
+                                missing_import = Some(format!("{specifier} (from {referrer})"));
+                            }
+                            loaded
+                        };
+                        // The module belongs to the document that declared it,
+                        // rather than the agent's bootstrap realm.
+                        let top = self.top_realm();
+                        let result = self.engine.eval_module_in_realm(
+                            top,
+                            &source,
+                            &base,
+                            facts.src.as_ref().map(|_| base.as_str()),
+                            &mut resolve,
+                        );
+                        self.flush_host_trace_events();
+                        match result {
+                            Ok(Some(_)) => ScriptOutcome::Executed,
+                            Ok(None) | Err(script_engine_api::RealmError::Unsupported) => {
+                                self.report_script_exception(
+                                    "Module scripts are unsupported by this engine",
+                                    Some(&base),
+                                );
+                                ScriptOutcome::UnsupportedModule
+                            },
+                            Err(error) => {
+                                if let Some(missing) = missing_import {
+                                    self.report_script_load_failure(node, &missing);
+                                    ScriptOutcome::FetchFailed
+                                } else {
+                                    self.report_script_exception(&error.to_string(), Some(&base));
+                                    ScriptOutcome::Threw
+                                }
+                            },
+                        }
+                    },
                 }
             },
-        }
+        };
         self.run_microtasks();
+        outcome
     }
 }
 

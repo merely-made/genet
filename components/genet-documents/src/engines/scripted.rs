@@ -428,14 +428,16 @@ impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
         self.collection_stats
     }
     fn pending_work(&mut self) -> SessionPendingWork {
-        let timer = self
+        // The session's deadline field is also the wake for a queued rAF;
+        // `next_wake_delay` returns zero for the next visible rendering turn.
+        let wake = self
             .doc
-            .next_timer_delay()
+            .next_wake_delay()
             .and_then(|delay| delay.is_finite().then_some(delay.max(0.0)))
             .map(|delay| Duration::from_secs_f64(delay / 1000.0));
         let external = self.doc.has_external_work();
         SessionPendingWork {
-            timer,
+            timer: wake,
             microtasks: false,
             external,
         }
@@ -505,5 +507,44 @@ impl<E: script_engine_api::ScriptEngine> ScriptedDocumentSession<E> {
     /// observation contract lands).
     pub fn document_mut(&mut self) -> &mut genet_scripted::LiveryScriptedDocument<E> {
         &mut self.doc
+    }
+}
+
+#[cfg(all(test, feature = "scripted"))]
+mod animation_frame_pending_tests {
+    use super::*;
+
+    fn raf_only_session_wakes<E: script_engine_api::ScriptEngine + 'static>() {
+        let doc = genet_scripted::LiveryScriptedDocument::<E>::parse(
+            "<body><script>requestAnimationFrame(function() {\
+               document.body.setAttribute('data-frame', 'done');\
+             });</script></body>",
+        )
+        .expect("scripted document");
+        let mut session = ScriptedDocumentSession::new(doc);
+        let pending = session.pending_work();
+        assert_eq!(pending.timer, Some(Duration::ZERO));
+        assert!(!pending.external);
+        assert!(!pending.is_idle(), "rAF wakes the session host");
+        assert!(session.settled(), "a future rendering turn does not hold a completion receipt open");
+        session.pump(16.0);
+        assert!(
+            session
+                .document_mut()
+                .dom_snapshot()
+                .contains("data-frame=\"done\"")
+        );
+        assert!(session.pending_work().is_settled());
+    }
+
+    #[test]
+    fn raf_only_session_wakes_on_boa() {
+        raf_only_session_wakes::<script_engine_boa::BoaEngine>();
+    }
+
+    #[cfg(all(target_pointer_width = "64", feature = "scripted-nova"))]
+    #[test]
+    fn raf_only_session_wakes_on_nova() {
+        raf_only_session_wakes::<script_engine_nova::NovaEngine>();
     }
 }

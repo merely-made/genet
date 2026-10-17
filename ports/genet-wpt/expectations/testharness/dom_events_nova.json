@@ -4,7 +4,7 @@
   "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
   "policy": "exact",
   "renderer": "livery",
-  "runner_sha256": "f9804e1739e5774a192bc839d445e911cda79c139b590cc6c34d46d9f937fc88",
+  "runner_sha256": "363d6abe361f0567bbd9439f954c62bf17ff926080122f296acfc9a57c68c4a2",
   "subset": "dom/events",
   "tests": {
     "dom/events/AddEventListenerOptions-once.any.html": {
@@ -1559,8 +1559,7 @@
       "subtests_total": 1
     },
     "dom/events/Event-dispatch-throwing-multiple-globals.html": {
-      "reason": "harness-timeout",
-      "status": "error",
+      "status": "fail",
       "subtests": [
         {
           "name": "exception thrown in event listener function should result in error event on listener's global",
@@ -1568,7 +1567,7 @@
         },
         {
           "name": "exception thrown in event listener interface object should result in error event on listener's global",
-          "status": "timeout"
+          "status": "fail"
         }
       ],
       "subtests_passed": 0,
@@ -2111,7 +2110,7 @@
       "subtests_total": 5
     },
     "dom/events/EventListener-handleEvent.html": {
-      "status": "fail",
+      "status": "pass",
       "subtests": [
         {
           "name": "calls `handleEvent` method of `EventListener`",
@@ -2119,7 +2118,7 @@
         },
         {
           "name": "performs `Get` every time event is dispatched",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "doesn't call `handleEvent` method on callable `EventListener`",
@@ -2127,18 +2126,18 @@
         },
         {
           "name": "rethrows errors when getting `handleEvent`",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "throws if `handleEvent` is falsy and not callable",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "throws if `handleEvent` is thruthy and not callable",
-          "status": "fail"
+          "status": "pass"
         }
       ],
-      "subtests_passed": 2,
+      "subtests_passed": 6,
       "subtests_total": 6
     },
     "dom/events/EventListener-incumbent-global-1.sub.html": {
@@ -2262,8 +2261,7 @@
       "status": "error"
     },
     "dom/events/EventTarget-constructible.any.html": {
-      "reason": "harness-error",
-      "status": "error",
+      "status": "fail",
       "subtests": [
         {
           "name": "A constructed EventTarget can be used as expected",
@@ -3706,18 +3704,18 @@
       "subtests_total": 6
     },
     "dom/events/remove-all-listeners.html": {
-      "status": "fail",
+      "status": "pass",
       "subtests": [
         {
           "name": "Removing all listeners and then adding a new one should work.",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "Nested usage of once listeners should work.",
-          "status": "fail"
+          "status": "pass"
         }
       ],
-      "subtests_passed": 0,
+      "subtests_passed": 2,
       "subtests_total": 2
     },
     "dom/events/replace-event-listener-null-browsing-context-crash.html": {
@@ -4156,8 +4154,7 @@
       "status": "error"
     },
     "dom/events/window-composed-path.html": {
-      "reason": "harness-error",
-      "status": "error",
+      "status": "pass",
       "subtests": [
         {
           "name": "window target has an empty path after dispatch",

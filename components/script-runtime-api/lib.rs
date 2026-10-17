@@ -4596,7 +4596,7 @@ mod tests {
     /// Both halves were broken: `globalThis.addEventListener` delegated to a
     /// private `EventTarget` instance, so the window's listeners lived somewhere
     /// path walk never looked (it fired the top of the propagation path by
-    /// reading `globalThis.__listeners`) — meaning
+    /// reading the window's own listener list) — meaning
     /// `window.addEventListener('click', …)` never saw a click on the page. And
     /// the wrapper dropped its third argument, so `{passive}` / `{capture}` /
     /// `{once}` silently never applied to a window listener.

@@ -1,6 +1,6 @@
 # Native event dispatch, focus and activation (plan, 2026-10-17)
 
-Status: **proposal for owner ruling. No code changes.** Supersedes the
+Status: **approved 2026-10-17 as proposed (rulings in §6); Phases 0 and 1 in progress.** Supersedes the
 two-dispatcher "shared scenario table" approach of the
 [2026-06-01 convergence plan](./2026-06-01_event_model_convergence_plan.md): that
 plan kept two algorithms and tested them for agreement. This one removes the
@@ -221,34 +221,50 @@ If a gate fails, the phase reverts rather than carrying a fallback dispatcher.
 1. **Crate placement.** Recommended: new `genet-events`. Alternative: inside
    `genet-scripted-dom`, which avoids a registry-cleanup hook but grows a
    published crate and ties events to its release cadence. Which?
+   **Ruling (ruled 2026-10-17: as proposed):** a new `genet-events` crate.
 2. **Re-entrancy.** A script listener can call `dispatchEvent` that reaches a
    Cambium listener while the runner is borrowed (native dispatch → JS listener →
    nested dispatch). Proposed rule: the runner's state sits behind a try-borrow
    and a nested native invoke is queued and run when the outer dispatch unwinds,
    with a flagged ordering deviation. Acceptable, or must nested dispatch be
    synchronous?
+   **Ruling (ruled 2026-10-17: as proposed):** a nested native invoke is queued and
+   runs when the outer dispatch unwinds; the ordering deviation stays flagged.
 3. **Focusable marking.** Cambium nodes become focusable through a native flag in
    the layer (no DOM change, proposed) or by emitting `tabindex="0"` attributes
    (visible to selectors and accessibility, but mutates the DOM and the AccessKit
    projection).
+   **Ruling (ruled 2026-10-17: as proposed):** a native focusable flag, no
+   `tabindex` mutation.
 4. **Focus scope with several windows in one document.** Cambium's forest-DOM
    projection mounts N windows as sibling subtrees of one document, but a spec
    document has one focused area. Proposal: a focus scope per mount root. Needs a
    ruling because it departs from the spec's single focused area.
+   **Ruling (ruled 2026-10-17: as proposed):** one focus scope per mount root.
 5. **Behaviour changes users will see.** Tab order moves from pre-order to spec
    order (positive tabindex first, shadow-flat). Hover moves from "nearest
    handler" to enter/leave semantics; mitigated by stop_propagation in the
    handler, covered by Mesquite hover scenarios. Accept both?
+   **Ruling (ruled 2026-10-17: as proposed):** accept the Tab-order and hover
+   behaviour changes.
 6. **JS callback lifetime.** Registry-held script tokens must keep callbacks
    rooted and release them when the node dies or the realm tears down. The shape
    of that handle differs between Boa and Nova; Phase 1 needs a short spike on
    both before the design is final.
+   **Ruling (ruled 2026-10-17: as proposed):** use the callback-lifetime shape the
+   plan proposes.
 7. **Performance.** Per-dispatch `EventState` and cross-owner invocation on
    pointermove and wheel. Fast path in §2 plus the Phase 5 benchmark gate; if it
    fails the gate, the fallback is a per-type native listener index, not a second
    dispatcher.
+   **Ruling (ruled 2026-10-17: as proposed):** the plan's fast path and its Phase 5
+   gate.
 8. **ARIA-role activation.** Spec is silent on Enter/Space for `role=button`. Keep
    as Cambium policy (proposed) or drop it and require authors to use native
    elements.
+   **Ruling (ruled 2026-10-17: as proposed):** `role=button` Enter/Space stays
+   Cambium policy.
 9. **Superseded plan.** Mark the 2026-06-01 convergence plan as superseded once
    Phase 2 lands, keeping its scenario table as a permanent test.
+   **Ruling (ruled 2026-10-17: as proposed):** mark the 2026-06-01 convergence plan
+   superseded after Phase 2.

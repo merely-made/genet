@@ -827,7 +827,7 @@ where
 /// inline size. Other positioned subtrees retain the formatter fallback
 /// until their own K5d sizing route is implemented.
 pub(in crate::layout) fn apply_admitted_positioned_inline_sizes<Context, Source>(
-    tree: &mut AlgorithmTree<Style, Context, Source>,
+    tree: &mut AlgorithmTree<Context, Source>,
     candidates: &[(BoxId, AlgorithmNodeId)],
     placements: &[PositionedPlacement],
     intrinsic_sizes: &HashMap<BoxId, IntrinsicSizes>,
@@ -947,7 +947,7 @@ pub(in crate::layout) fn apply_absolute_and_fixed_positioning<D>(
 }
 
 pub(in crate::layout) fn fragment_baselines<Id, Context, Source>(
-    tree: &AlgorithmTree<Style, Context, Source>,
+    tree: &AlgorithmTree<Context, Source>,
     boxes: &GeneratedBoxTree<Id>,
     node: AlgorithmNodeId,
     box_id: BoxId,

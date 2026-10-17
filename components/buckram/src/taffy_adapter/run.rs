@@ -24,7 +24,7 @@ use super::*;
 ///
 /// The caller's measure context is looked up by the erasing closure, so the
 /// run is also independent of the `(Context, Source)` pair (2026-10-14): one
-/// copy per style type.
+/// copy of the active Taffy implementation.
 pub(in crate::taffy_adapter) type MeasureFn<'m> = dyn FnMut(
         AlgorithmSize<Option<f32>>,
         AlgorithmSize<AlgorithmAvailableSpace>,
@@ -33,8 +33,8 @@ pub(in crate::taffy_adapter) type MeasureFn<'m> = dyn FnMut(
     ) -> AlgorithmSize<f32>
     + 'm;
 
-pub(in crate::taffy_adapter) struct AlgorithmRun<'a, S> {
-    pub(in crate::taffy_adapter) tree: &'a mut AlgorithmCore<S>,
+pub(in crate::taffy_adapter) struct AlgorithmRun<'a> {
+    pub(in crate::taffy_adapter) tree: &'a mut AlgorithmCore,
     pub(in crate::taffy_adapter) measure: &'a mut MeasureFn<'a>,
     pub(in crate::taffy_adapter) line_constraints: Option<FloatLineConstraints>,
     pub(in crate::taffy_adapter) nested_float_state: Option<FloatContextState>,
@@ -67,14 +67,9 @@ pub(in crate::taffy_adapter) struct PendingBlockChildLayout {
     static_position: bool,
 }
 
-impl<S> AlgorithmRun<'_, S>
-where
-    S: AlgorithmStyle,
-{
+impl AlgorithmRun<'_> {
     fn style(&self, id: NodeId) -> &Style {
-        sealed::AlgorithmStyle::as_taffy_style(
-            &self.tree.nodes[AlgorithmNodeId::from_taffy(id).index()].style,
-        )
+        &self.tree.nodes[AlgorithmNodeId::from_taffy(id).index()].style
     }
 
     fn block_subtree_deferral(&self, node: AlgorithmNodeId) -> Option<BlockDeferral> {
@@ -409,16 +404,13 @@ where
             if !self.tree.nodes[child.index()].block_style.is_out_of_flow() {
                 continue;
             }
-            let style = sealed::AlgorithmStyle::as_taffy_style_mut(
-                &mut self.tree.nodes[child.index()].style,
-            );
+            let style = &mut self.tree.nodes[child.index()].style;
             flipped.push((child, style.position));
             style.position = taffy::Position::Absolute;
         }
         let output = layout(self);
         for (child, previous) in flipped {
-            sealed::AlgorithmStyle::as_taffy_style_mut(&mut self.tree.nodes[child.index()].style)
-                .position = previous;
+            self.tree.nodes[child.index()].style.position = previous;
         }
         output
     }
@@ -1794,7 +1786,7 @@ where
                 },
                 AlgorithmKind::Leaf => {
                     let node = &mut tree.tree.nodes[node_index];
-                    let style = sealed::AlgorithmStyle::as_taffy_style(&node.style);
+                    let style = &node.style;
                     let measure = &mut tree.measure;
                     let line_constraints = tree.line_constraints.as_ref();
                     compute_leaf_layout(
@@ -1986,10 +1978,7 @@ pub(in crate::taffy_adapter) fn intrinsic_definite_inline_content_size(
     Ok(Some(content_size))
 }
 
-impl<S> TraversePartialTree for AlgorithmRun<'_, S>
-where
-    S: AlgorithmStyle,
-{
+impl TraversePartialTree for AlgorithmRun<'_> {
     type ChildIter<'a>
         = ChildIter<'a>
     where
@@ -2015,12 +2004,9 @@ where
     }
 }
 
-impl<S> TraverseTree for AlgorithmRun<'_, S> where S: AlgorithmStyle {}
+impl TraverseTree for AlgorithmRun<'_> {}
 
-impl<S> LayoutPartialTree for AlgorithmRun<'_, S>
-where
-    S: AlgorithmStyle,
-{
+impl LayoutPartialTree for AlgorithmRun<'_> {
     type CoreContainerStyle<'a>
         = &'a Style
     where
@@ -2046,10 +2032,7 @@ where
     }
 }
 
-impl<S> CacheTree for AlgorithmRun<'_, S>
-where
-    S: AlgorithmStyle,
-{
+impl CacheTree for AlgorithmRun<'_> {
     fn cache_get(&self, node_id: NodeId, input: &LayoutInput) -> Option<LayoutOutput> {
         self.tree.nodes[AlgorithmNodeId::from_taffy(node_id).index()]
             .cache
@@ -2069,10 +2052,7 @@ where
     }
 }
 
-impl<S> LayoutBlockContainer for AlgorithmRun<'_, S>
-where
-    S: AlgorithmStyle,
-{
+impl LayoutBlockContainer for AlgorithmRun<'_> {
     type BlockContainerStyle<'a>
         = &'a Style
     where
@@ -2100,10 +2080,7 @@ where
     }
 }
 
-impl<S> LayoutFlexboxContainer for AlgorithmRun<'_, S>
-where
-    S: AlgorithmStyle,
-{
+impl LayoutFlexboxContainer for AlgorithmRun<'_> {
     type FlexboxContainerStyle<'a>
         = &'a Style
     where
@@ -2122,10 +2099,7 @@ where
     }
 }
 
-impl<S> LayoutGridContainer for AlgorithmRun<'_, S>
-where
-    S: AlgorithmStyle,
-{
+impl LayoutGridContainer for AlgorithmRun<'_> {
     type GridContainerStyle<'a>
         = &'a Style
     where
@@ -2232,10 +2206,7 @@ where
     }
 }
 
-impl<S> RoundTree for AlgorithmRun<'_, S>
-where
-    S: AlgorithmStyle,
-{
+impl RoundTree for AlgorithmRun<'_> {
     fn get_unrounded_layout(&self, node_id: NodeId) -> Layout {
         self.tree.nodes[AlgorithmNodeId::from_taffy(node_id).index()].unrounded_layout
     }

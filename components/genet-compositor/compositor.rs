@@ -46,6 +46,34 @@ use wgpu::Texture;
 
 use crate::interop::{HostWgpuContext, InteropBackend, SyncMechanism};
 
+/// What a compositor is capable of handing to its caller.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PresentationRoute {
+    Display,
+    Capture,
+}
+
+/// The operation that prevented a complete OS handoff for one frame.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PresentationStage {
+    Master,
+    Declare(SurfaceKey),
+    Surface(SurfaceKey),
+}
+
+/// Host-visible result of the most recent `present_frame` call. A display
+/// handoff means the native commit/present call accepted the frame, not that
+/// the OS has scanned it out.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PresentationOutcome {
+    DisplayHandoff,
+    CaptureReady,
+    Failed {
+        stage: PresentationStage,
+        message: String,
+    },
+}
+
 /// A `Compositor` impl that captures the master texture from each
 /// `present_frame` call so embedder code can read it back via
 /// [`WgpuMasterCaptureBackend::last_master`].
@@ -67,6 +95,7 @@ pub struct WgpuMasterCaptureBackend {
     /// Cloned handle to the most recently presented master texture.
     /// `wgpu::Texture` is `Arc`-shared internally so cloning is cheap.
     last_master: Option<Texture>,
+    last_outcome: Option<PresentationOutcome>,
 }
 
 impl WgpuMasterCaptureBackend {
@@ -74,6 +103,7 @@ impl WgpuMasterCaptureBackend {
         Self {
             surfaces: FxHashMap::default(),
             last_master: None,
+            last_outcome: None,
         }
     }
 
@@ -104,6 +134,7 @@ impl Compositor for WgpuMasterCaptureBackend {
         // Capture the master so `Paint::composite_texture` can hand
         // it back to the wgpu-shared-device embedder.
         self.last_master = Some(frame.master.clone());
+        self.last_outcome = Some(PresentationOutcome::CaptureReady);
     }
 }
 
@@ -116,6 +147,16 @@ impl Compositor for WgpuMasterCaptureBackend {
 /// wouldn't make sense for them (their pixels go to the OS
 /// compositor, not back to the embedder's wgpu device).
 pub trait PaintCompositor: Compositor + Send {
+    /// The route chosen at construction, independent of any frame result.
+    fn presentation_route(&self) -> PresentationRoute;
+
+    /// Result of the most recent frame, or `None` before the first frame.
+    fn presentation_outcome(&self) -> Option<&PresentationOutcome>;
+
+    /// Consume the latest result. A host can clear this before rendering and
+    /// require a fresh result afterward, even if its renderer skips the callback.
+    fn take_presentation_outcome(&mut self) -> Option<PresentationOutcome>;
+
     /// Most recently captured master texture, if this backend
     /// captures masters. `None` for OS-handoff backends.
     fn last_master(&self) -> Option<&Texture> {
@@ -124,12 +165,36 @@ pub trait PaintCompositor: Compositor + Send {
 }
 
 impl PaintCompositor for WgpuMasterCaptureBackend {
+    fn presentation_route(&self) -> PresentationRoute {
+        PresentationRoute::Capture
+    }
+
+    fn presentation_outcome(&self) -> Option<&PresentationOutcome> {
+        self.last_outcome.as_ref()
+    }
+
+    fn take_presentation_outcome(&mut self) -> Option<PresentationOutcome> {
+        self.last_outcome.take()
+    }
+
     fn last_master(&self) -> Option<&Texture> {
         WgpuMasterCaptureBackend::last_master(self)
     }
 }
 
-impl<B: OsCompositorBackend> PaintCompositor for ServoCompositor<B> {}
+impl<B: OsCompositorBackend> PaintCompositor for ServoCompositor<B> {
+    fn presentation_route(&self) -> PresentationRoute {
+        PresentationRoute::Display
+    }
+
+    fn presentation_outcome(&self) -> Option<&PresentationOutcome> {
+        self.last_outcome.as_ref()
+    }
+
+    fn take_presentation_outcome(&mut self) -> Option<PresentationOutcome> {
+        self.last_outcome.take()
+    }
+}
 
 /// Per-platform OS-compositor backend. Implementations bridge
 /// netrender's wgpu master texture into a native texture that the OS
@@ -152,10 +217,8 @@ pub trait OsCompositorBackend: Send {
     /// Called from [`ServoCompositor::present_frame`] once per
     /// frame, before any per-`SurfaceKey` `present()` calls.
     ///
-    /// Default impl is a no-op for backends that don't yet wire the
-    /// master path (e.g. the trait shape compiles without forcing
-    /// every platform to implement).
-    fn present_master(&mut self, _master: &Texture) {}
+    /// A successful return means the native handoff accepted the master.
+    fn present_master(&mut self, master: &Texture) -> Result<(), BoxedBackendError>;
 
     /// Which wgpu/native graphics backend this implementation targets.
     /// `ServoCompositor` cross-checks against the
@@ -227,26 +290,22 @@ pub trait OsCompositorBackend: Send {
     /// the given world transform / clip / opacity. This corresponds
     /// to one entry in netrender's `present_frame` `layers` slice.
     ///
-    /// Default is a no-op for backends that have not yet wired
-    /// per-`SurfaceKey` presentation. Such backends still see the
-    /// master path through `present_master`; declared surfaces
-    /// simply don't receive a per-surface handoff.
+    /// A successful return means the native handoff accepted this surface.
     fn present(
         &mut self,
-        _key: SurfaceKey,
-        _transform: [f32; 6],
-        _clip: Option<[f32; 4]>,
-        _opacity: f32,
-    ) {
-    }
+        key: SurfaceKey,
+        transform: [f32; 6],
+        clip: Option<[f32; 4]>,
+        opacity: f32,
+    ) -> Result<(), BoxedBackendError>;
 }
 
 /// Boxed error returned by [`OsCompositorBackend::declare`].
 /// Backends that fail allocation (out-of-memory, OS handle
 /// exhaustion, IOSurface/CALayer creation failure) box their
 /// concrete error into this shape so the trait surface stays free
-/// of platform-specific error types. `ServoCompositor` logs and
-/// skips the layer on `Err`.
+/// of platform-specific error types. `ServoCompositor` records the
+/// first failure for the host and skips a layer whose declaration fails.
 pub type BoxedBackendError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 /// Production compositor wrapper. Holds an [`OsCompositorBackend`], a
@@ -258,6 +317,7 @@ pub struct ServoCompositor<B: OsCompositorBackend> {
     host: HostWgpuContext,
     destinations: HashMap<SurfaceKey, Texture>,
     backend: B,
+    last_outcome: Option<PresentationOutcome>,
 }
 
 impl<B: OsCompositorBackend> ServoCompositor<B> {
@@ -278,6 +338,7 @@ impl<B: OsCompositorBackend> ServoCompositor<B> {
             host,
             destinations: HashMap::new(),
             backend,
+            last_outcome: None,
         }
     }
 
@@ -285,6 +346,19 @@ impl<B: OsCompositorBackend> ServoCompositor<B> {
     /// inspection).
     pub fn backend(&self) -> &B {
         &self.backend
+    }
+
+    fn record_failure(&mut self, stage: PresentationStage, error: BoxedBackendError) {
+        log::warn!("[ServoCompositor] {stage:?} failed: {error}");
+        if !matches!(
+            self.last_outcome.as_ref(),
+            Some(PresentationOutcome::Failed { .. })
+        ) {
+            self.last_outcome = Some(PresentationOutcome::Failed {
+                stage,
+                message: error.to_string(),
+            });
+        }
     }
 }
 
@@ -303,9 +377,11 @@ impl<B: OsCompositorBackend> Compositor for ServoCompositor<B> {
 
     fn present_frame(&mut self, frame: PresentedFrame<'_>) {
         // Step 1 — present the master through the OS compositor.
-        // Backends that don't override `present_master` get a no-op
-        // (the WgpuMasterCaptureBackend default-impl behavior).
-        self.backend.present_master(frame.master);
+        self.last_outcome = Some(PresentationOutcome::DisplayHandoff);
+        if let Err(error) = self.backend.present_master(frame.master) {
+            self.record_failure(PresentationStage::Master, error);
+            return;
+        }
 
         // Step 2 — per-`SurfaceKey` blit + present. For each
         // `LayerPresent`:
@@ -373,10 +449,7 @@ impl<B: OsCompositorBackend> Compositor for ServoCompositor<B> {
                         self.destinations.insert(layer.key, dest);
                     },
                     Err(err) => {
-                        log::warn!(
-                            "[ServoCompositor] backend.declare({:?}, {w}x{h}) failed: {err}",
-                            layer.key,
-                        );
+                        self.record_failure(PresentationStage::Declare(layer.key), err);
                         continue;
                     },
                 }
@@ -430,9 +503,239 @@ impl<B: OsCompositorBackend> Compositor for ServoCompositor<B> {
         // wgpu just discards the empty command buffer.
 
         for (key, world_transform, clip, opacity) in presents {
-            self.backend.present(key, world_transform, clip, opacity);
+            if let Err(error) = self.backend.present(key, world_transform, clip, opacity) {
+                self.record_failure(PresentationStage::Surface(key), error);
+            }
         }
 
         let _ = &self.host;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use netrender_device::WgpuHandles;
+    use netrender_device::compositor::LayerPresent;
+
+    struct RejectingBackend {
+        backend: InteropBackend,
+        reject_master: bool,
+        reject_declare: bool,
+        reject_surface: bool,
+        declare_calls: usize,
+        surface_calls: usize,
+    }
+
+    impl OsCompositorBackend for RejectingBackend {
+        fn interop_backend(&self) -> InteropBackend {
+            self.backend
+        }
+
+        fn present_master(&mut self, _: &Texture) -> Result<(), BoxedBackendError> {
+            if self.reject_master {
+                Err("master rejected".into())
+            } else {
+                Ok(())
+            }
+        }
+
+        fn declare(
+            &mut self,
+            _: SurfaceKey,
+            host: &HostWgpuContext,
+            width: u32,
+            height: u32,
+            format: wgpu::TextureFormat,
+        ) -> Result<Texture, BoxedBackendError> {
+            self.declare_calls += 1;
+            if self.reject_declare {
+                return Err("allocation rejected".into());
+            }
+            Ok(host.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("H10 mock destination"),
+                size: wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format,
+                usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            }))
+        }
+
+        fn present(
+            &mut self,
+            _: SurfaceKey,
+            _: [f32; 6],
+            _: Option<[f32; 4]>,
+            _: f32,
+        ) -> Result<(), BoxedBackendError> {
+            self.surface_calls += 1;
+            if self.reject_surface {
+                Err("surface rejected".into())
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    #[test]
+    fn native_errors_and_recovery_are_visible_per_frame() {
+        let handles = pollster::block_on(async {
+            let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+                backends: wgpu::Backends::all(),
+                flags: wgpu::InstanceFlags::default(),
+                memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
+                backend_options: wgpu::BackendOptions::default(),
+                display: None,
+            });
+            let adapter = instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::LowPower,
+                    force_fallback_adapter: true,
+                    compatible_surface: None,
+                    apply_limit_buckets: false,
+                })
+                .await
+                .expect("fallback adapter");
+            let (device, queue) = adapter
+                .request_device(&wgpu::DeviceDescriptor {
+                    label: Some("H10 outcome test"),
+                    required_features: wgpu::Features::empty(),
+                    required_limits: wgpu::Limits::downlevel_defaults(),
+                    ..Default::default()
+                })
+                .await
+                .expect("device");
+            WgpuHandles {
+                instance,
+                adapter,
+                device,
+                queue,
+            }
+        });
+        let host = HostWgpuContext::new(handles.device.clone(), handles.queue.clone());
+        let mut compositor = ServoCompositor::new(
+            host.clone(),
+            RejectingBackend {
+                backend: host.backend,
+                reject_master: true,
+                reject_declare: false,
+                reject_surface: false,
+                declare_calls: 0,
+                surface_calls: 0,
+            },
+        );
+        let master = handles.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("H10 mock master"),
+            size: wgpu::Extent3d {
+                width: 4,
+                height: 4,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let empty = PresentedFrame {
+            master: &master,
+            handles: &handles,
+            layers: &[],
+        };
+        compositor.present_frame(empty);
+        assert_eq!(
+            compositor.take_presentation_outcome(),
+            Some(PresentationOutcome::Failed {
+                stage: PresentationStage::Master,
+                message: "master rejected".into(),
+            })
+        );
+        assert_eq!(compositor.take_presentation_outcome(), None);
+
+        let key = SurfaceKey(7);
+        let layer = LayerPresent {
+            key,
+            source_rect_in_master: [0, 0, 4, 4],
+            world_transform: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+            clip: None,
+            opacity: 1.0,
+            dirty: true,
+        };
+        compositor.present_frame(PresentedFrame {
+            master: &master,
+            handles: &handles,
+            layers: std::slice::from_ref(&layer),
+        });
+        assert_eq!(
+            compositor.take_presentation_outcome(),
+            Some(PresentationOutcome::Failed {
+                stage: PresentationStage::Master,
+                message: "master rejected".into(),
+            })
+        );
+        assert_eq!(compositor.backend.declare_calls, 0);
+        assert_eq!(compositor.backend.surface_calls, 0);
+        assert!(compositor.destinations.is_empty());
+
+        compositor.backend.reject_master = false;
+        compositor.backend.reject_declare = true;
+        compositor.present_frame(PresentedFrame {
+            master: &master,
+            handles: &handles,
+            layers: std::slice::from_ref(&layer),
+        });
+        assert_eq!(
+            compositor.take_presentation_outcome(),
+            Some(PresentationOutcome::Failed {
+                stage: PresentationStage::Declare(key),
+                message: "allocation rejected".into(),
+            })
+        );
+
+        compositor.backend.reject_declare = false;
+        compositor.backend.reject_surface = true;
+        compositor.present_frame(PresentedFrame {
+            master: &master,
+            handles: &handles,
+            layers: std::slice::from_ref(&layer),
+        });
+        assert_eq!(
+            compositor.take_presentation_outcome(),
+            Some(PresentationOutcome::Failed {
+                stage: PresentationStage::Surface(key),
+                message: "surface rejected".into(),
+            })
+        );
+
+        compositor.backend.reject_surface = false;
+        compositor.present_frame(PresentedFrame {
+            master: &master,
+            handles: &handles,
+            layers: std::slice::from_ref(&layer),
+        });
+        assert_eq!(
+            compositor.take_presentation_outcome(),
+            Some(PresentationOutcome::DisplayHandoff)
+        );
+
+        let mut capture = WgpuMasterCaptureBackend::new();
+        capture.present_frame(PresentedFrame {
+            master: &master,
+            handles: &handles,
+            layers: &[],
+        });
+        assert_eq!(capture.presentation_route(), PresentationRoute::Capture);
+        assert_eq!(
+            capture.take_presentation_outcome(),
+            Some(PresentationOutcome::CaptureReady)
+        );
     }
 }

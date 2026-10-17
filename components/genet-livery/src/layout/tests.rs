@@ -3776,7 +3776,7 @@ fn k4d1_cell_formatter_formats_contents_at_exact_inline_sizes() {
     };
 
     struct TreeFormatter<'a> {
-        tree: &'a mut AlgorithmTree<Style, TextMeasure, Option<BoxId>>,
+        tree: &'a mut AlgorithmTree<TextMeasure, Option<BoxId>>,
         nodes: HashMap<BoxId, AlgorithmNodeId>,
         formatted: Vec<(BoxId, f32)>,
     }
@@ -3855,7 +3855,7 @@ fn k4d1_cell_formatter_formats_contents_at_exact_inline_sizes() {
     let grid = build_table_grid(&boxes, &dom, table);
     assert_eq!(grid.cells.len(), 2);
 
-    let mut tree: AlgorithmTree<Style, TextMeasure, Option<BoxId>> = AlgorithmTree::new();
+    let mut tree: AlgorithmTree<TextMeasure, Option<BoxId>> = AlgorithmTree::new();
     let mut nodes = HashMap::new();
     for cell in &grid.cells {
         let kind = if nodes.is_empty() {
@@ -3952,7 +3952,7 @@ fn k4d2_row_minima_follow_from_formatted_cell_contents() {
     };
 
     struct TreeFormatter<'a> {
-        tree: &'a mut AlgorithmTree<Style, TextMeasure, Option<BoxId>>,
+        tree: &'a mut AlgorithmTree<TextMeasure, Option<BoxId>>,
         nodes: HashMap<BoxId, AlgorithmNodeId>,
         requests: Vec<TableCellLayoutInput>,
     }
@@ -4024,7 +4024,7 @@ fn k4d2_row_minima_follow_from_formatted_cell_contents() {
     assert_eq!(grid.rows.len(), 2);
     assert_eq!(grid.cells.len(), 2);
 
-    let mut tree: AlgorithmTree<Style, TextMeasure, Option<BoxId>> = AlgorithmTree::new();
+    let mut tree: AlgorithmTree<TextMeasure, Option<BoxId>> = AlgorithmTree::new();
     let mut nodes = HashMap::new();
     for (index, cell) in grid.cells.iter().enumerate() {
         let blocks = (0..if index == 0 { 3 } else { 1 })
@@ -4136,7 +4136,7 @@ fn k4d5_cell_contents_return_baselines_directly() {
     };
 
     struct BaselineFormatter<'a> {
-        tree: &'a mut AlgorithmTree<Style, TextMeasure, Option<BoxId>>,
+        tree: &'a mut AlgorithmTree<TextMeasure, Option<BoxId>>,
         nodes: HashMap<BoxId, AlgorithmNodeId>,
     }
 
@@ -4203,7 +4203,7 @@ fn k4d5_cell_contents_return_baselines_directly() {
         .expect("table grid box");
     let grid = build_table_grid(&boxes, &dom, table);
 
-    let mut tree: AlgorithmTree<Style, TextMeasure, Option<BoxId>> = AlgorithmTree::new();
+    let mut tree: AlgorithmTree<TextMeasure, Option<BoxId>> = AlgorithmTree::new();
     let mut nodes = HashMap::new();
     for (index, cell) in grid.cells.iter().enumerate() {
         // A block container's first baseline is its first child's, so the

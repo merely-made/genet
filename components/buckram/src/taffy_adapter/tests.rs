@@ -40,7 +40,7 @@ fn automatic_minimum_mode_stays_on_buckrams_content_sizing_route() {
 
 #[test]
 fn sequential_multicol_input_is_preserved_but_dispatch_stays_explicitly_unsupported() {
-    let mut tree = AlgorithmTree::<Style, (), &str>::new();
+    let mut tree = AlgorithmTree::<(), &str>::new();
     let child = tree.new_with_children(AlgorithmKind::Leaf, Style::default(), &[], "child");
     let root = tree.new_with_children(
         AlgorithmKind::Block,
@@ -71,7 +71,7 @@ fn sequential_multicol_input_is_preserved_but_dispatch_stays_explicitly_unsuppor
 
 #[test]
 fn fragmentation_output_is_run_scoped_and_continuous_runs_are_distinguishable() {
-    let mut tree = AlgorithmTree::<Style, (), &str>::new();
+    let mut tree = AlgorithmTree::<(), &str>::new();
     let root = tree.new_with_children(
         AlgorithmKind::Block,
         Style {
@@ -116,7 +116,7 @@ fn sequential_multicol_input_rejects_balancing_and_nondefinite_values() {
 
 #[test]
 fn flex_dispatch_preserves_exact_placements_and_sources() {
-    let mut tree = AlgorithmTree::<Style, (), &str>::new();
+    let mut tree = AlgorithmTree::<(), &str>::new();
     let child_style = Style {
         size: taffy::Size {
             width: Dimension::length(50.0),
@@ -164,7 +164,7 @@ fn flex_dispatch_preserves_exact_placements_and_sources() {
 
 #[test]
 fn buckram_block_parent_keeps_absolute_child_at_its_static_position() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let positioned = tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         BlockStyle {
@@ -212,7 +212,7 @@ fn buckram_block_parent_keeps_absolute_child_at_its_static_position() {
 
 #[test]
 fn positioned_empty_leaf_has_zero_intrinsic_inline_contributions() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let positioned = tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         BlockStyle {
@@ -238,7 +238,7 @@ fn positioned_empty_leaf_has_zero_intrinsic_inline_contributions() {
 /// static one does.
 #[test]
 fn positioned_intrinsic_sizes_skip_out_of_flow_children_and_count_relative_ones() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let mut child = |width: f32, position, source| {
         tree.new_with_children_and_block_style(
             AlgorithmKind::Block,
@@ -283,7 +283,7 @@ fn vertical_positioned_block_intrinsic_and_inline_size_follow_height() {
     use crate::{Direction, WritingMode};
 
     let vertical = FlowAxes::new(WritingMode::VerticalRl, Direction::Ltr);
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let child = tree.new_with_children_and_block_style(
         AlgorithmKind::Block,
         BlockStyle {
@@ -326,7 +326,7 @@ fn vertical_positioned_block_intrinsic_and_inline_size_follow_height() {
 
 #[test]
 fn grid_static_layout_uses_content_box_before_insets() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let positioned = tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         BlockStyle {
@@ -393,7 +393,7 @@ fn grid_static_layout_uses_content_box_before_insets() {
 
 #[test]
 fn grid_static_layout_uses_the_grid_area_when_the_grid_is_the_containing_block() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let positioned = tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         BlockStyle {
@@ -467,7 +467,7 @@ fn grid_static_layout_uses_the_grid_area_when_the_grid_is_the_containing_block()
 
 #[test]
 fn grid_static_layout_auto_lines_align_in_the_padding_box_when_selected() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let positioned = tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         BlockStyle {
@@ -524,7 +524,7 @@ fn grid_static_layout_auto_lines_align_in_the_padding_box_when_selected() {
 
 #[test]
 fn grid_positioned_area_keeps_the_final_explicit_track_rectangle() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let positioned = tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         BlockStyle {
@@ -618,7 +618,7 @@ fn grid_positioned_area_projects_track_axes_through_container_flow() {
             },
         ),
     ] {
-        let mut tree = AlgorithmTree::<Style, (), u8>::new();
+        let mut tree = AlgorithmTree::<(), u8>::new();
         let positioned = tree.new_with_children_and_block_style(
             AlgorithmKind::Leaf,
             BlockStyle {
@@ -674,7 +674,7 @@ fn grid_positioned_area_projects_track_axes_through_container_flow() {
 
 #[test]
 fn flex_static_layout_keeps_alignment_when_insets_place_the_item() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let positioned = tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         BlockStyle {
@@ -730,7 +730,7 @@ fn flex_static_layout_keeps_alignment_when_insets_place_the_item() {
 
 #[test]
 fn grid_dispatch_preserves_exact_track_geometry() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let children = (0..4)
         .map(|source| tree.new_with_children(AlgorithmKind::Leaf, Style::default(), &[], source))
         .collect::<Vec<_>>();
@@ -772,7 +772,7 @@ fn grid_dispatch_preserves_exact_track_geometry() {
 
 #[test]
 fn buckram_kind_selects_the_algorithm_independently_of_backend_display() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let child_style = Style {
         size: taffy::Size {
             width: Dimension::length(50.0),
@@ -808,7 +808,7 @@ fn buckram_kind_selects_the_algorithm_independently_of_backend_display() {
 
 #[test]
 fn buckram_block_flow_uses_css_inputs_instead_of_backend_sizes() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let backend_child_style = Style {
         size: taffy::Size {
             // Deliberately contradictory: Buckram's CSS input says 80px.
@@ -881,7 +881,7 @@ fn buckram_block_flow_propagates_parent_child_and_empty_margin_chains() {
         }
     }
 
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let child = tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         block_style(20.0, 30.0, 40.0),
@@ -982,7 +982,7 @@ fn buckram_places_direct_floats_and_clearance_inside_an_independent_bfc() {
         }
     }
 
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let left = tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         float_style(FloatSide::Left, 80.0, 40.0),
@@ -1040,7 +1040,7 @@ fn buckram_places_direct_floats_and_clearance_inside_an_independent_bfc() {
 
 #[test]
 fn buckram_carries_clearance_through_an_empty_collapsing_block() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let float = tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         BlockStyle {
@@ -1135,7 +1135,7 @@ fn buckram_carries_clearance_through_an_empty_collapsing_block() {
 
 #[test]
 fn buckram_sizes_an_auto_float_from_inline_intrinsic_queries() {
-    let mut tree = AlgorithmTree::<Style, Vec<AlgorithmAvailableSpace>, u8>::new();
+    let mut tree = AlgorithmTree::<Vec<AlgorithmAvailableSpace>, u8>::new();
     let lines = tree.new_leaf_with_context_and_block_style(
         BlockStyle::anonymous(FlowAxes::HORIZONTAL_LTR, FlowAxes::HORIZONTAL_LTR),
         Style::default(),
@@ -1216,7 +1216,7 @@ fn buckram_sizes_an_auto_float_from_inline_intrinsic_queries() {
 #[test]
 fn buckram_queries_multi_child_and_block_content_intrinsics_for_shrink_to_fit() {
     fn layout_float(containing_width: f32, wrap_children: bool) -> (f32, usize) {
-        let mut tree = AlgorithmTree::<Style, Vec<AlgorithmAvailableSpace>, u8>::new();
+        let mut tree = AlgorithmTree::<Vec<AlgorithmAvailableSpace>, u8>::new();
         let first = tree.new_leaf_with_context_and_block_style(
             BlockStyle::anonymous(FlowAxes::HORIZONTAL_LTR, FlowAxes::HORIZONTAL_LTR),
             Style::default(),
@@ -1314,7 +1314,7 @@ fn buckram_queries_multi_child_and_block_content_intrinsics_for_shrink_to_fit() 
 #[test]
 fn buckram_queries_atomic_inline_intrinsics_without_float_placement() {
     fn layout_atomic_inline(containing_width: f32) -> f32 {
-        let mut tree = AlgorithmTree::<Style, Vec<AlgorithmAvailableSpace>, u8>::new();
+        let mut tree = AlgorithmTree::<Vec<AlgorithmAvailableSpace>, u8>::new();
         let lines = tree.new_leaf_with_context_and_block_style(
             BlockStyle::anonymous(FlowAxes::HORIZONTAL_LTR, FlowAxes::HORIZONTAL_LTR),
             Style::default(),
@@ -1382,7 +1382,7 @@ fn an_out_of_flow_child_adds_nothing_to_its_parents_intrinsic_width() {
     /// The used width of a row flex item whose text measures 120 at
     /// max-content, with an optional 300px-wide positioned child.
     fn flex_item_width(position: Option<crate::BlockPosition>) -> f32 {
-        let mut tree = AlgorithmTree::<Style, Vec<AlgorithmAvailableSpace>, u8>::new();
+        let mut tree = AlgorithmTree::<Vec<AlgorithmAvailableSpace>, u8>::new();
         let lines = tree.new_leaf_with_context_and_block_style(
             BlockStyle::anonymous(FlowAxes::HORIZONTAL_LTR, FlowAxes::HORIZONTAL_LTR),
             Style::default(),
@@ -1449,7 +1449,7 @@ fn an_out_of_flow_child_adds_nothing_to_its_parents_intrinsic_width() {
 
 #[test]
 fn buckram_remeasures_opted_in_bfcs_inside_the_float_band() {
-    let mut tree = AlgorithmTree::<Style, Vec<f32>, u8>::new();
+    let mut tree = AlgorithmTree::<Vec<f32>, u8>::new();
     let float = tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         BlockStyle {
@@ -1555,7 +1555,7 @@ fn buckram_remeasures_opted_in_bfcs_inside_the_float_band() {
 
 #[test]
 fn buckram_applies_bfc_inline_margins_before_avoiding_a_float() {
-    let mut tree = AlgorithmTree::<Style, Vec<f32>, u8>::new();
+    let mut tree = AlgorithmTree::<Vec<f32>, u8>::new();
     let float = tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         BlockStyle {
@@ -1635,7 +1635,7 @@ fn buckram_applies_bfc_inline_margins_before_avoiding_a_float() {
 
 #[test]
 fn buckram_places_flex_and_grid_algorithms_around_a_float() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let float = tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         BlockStyle {
@@ -1788,7 +1788,7 @@ fn buckram_places_flex_and_grid_algorithms_around_a_float() {
 
 #[test]
 fn flex_without_an_active_float_does_not_widen_the_buckram_block_lane() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let flex = tree.new_with_children_and_block_style(
         AlgorithmKind::Flex,
         BlockStyle {
@@ -1832,7 +1832,7 @@ fn flex_without_an_active_float_does_not_widen_the_buckram_block_lane() {
 
 #[test]
 fn buckram_delivers_float_constraints_to_a_direct_inline_leaf() {
-    let mut tree = AlgorithmTree::<Style, Vec<crate::FloatAvailableSpace>, u8>::new();
+    let mut tree = AlgorithmTree::<Vec<crate::FloatAvailableSpace>, u8>::new();
     let float = tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         BlockStyle {
@@ -1922,7 +1922,7 @@ fn buckram_delivers_float_constraints_to_a_direct_inline_leaf() {
 
 #[test]
 fn buckram_exports_nested_negative_margin_floats_through_a_relative_wrapper() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let nested_float = tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         BlockStyle {
@@ -2030,7 +2030,7 @@ fn buckram_exports_nested_negative_margin_floats_through_a_relative_wrapper() {
 
 #[test]
 fn buckram_delivers_outer_float_constraints_through_an_ordinary_wrapper() {
-    let mut tree = AlgorithmTree::<Style, Vec<crate::FloatAvailableSpace>, u8>::new();
+    let mut tree = AlgorithmTree::<Vec<crate::FloatAvailableSpace>, u8>::new();
     let float = tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         BlockStyle {
@@ -2132,7 +2132,7 @@ fn buckram_delivers_outer_float_constraints_through_an_ordinary_wrapper() {
 
 #[test]
 fn buckram_stops_nested_float_state_at_an_explicit_bfc() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let nested_float = tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         BlockStyle {
@@ -2227,7 +2227,7 @@ fn buckram_stops_nested_float_state_at_an_explicit_bfc() {
 
 #[test]
 fn buckram_delivers_outer_clearance_through_an_ordinary_wrapper() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let float = tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         BlockStyle {
@@ -2309,7 +2309,7 @@ fn buckram_delivers_outer_clearance_through_an_ordinary_wrapper() {
 
 #[test]
 fn nested_clear_without_a_shared_float_role_remains_deferred() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let clear = tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         BlockStyle {
@@ -2365,7 +2365,7 @@ fn nested_clear_without_a_shared_float_role_remains_deferred() {
 
 #[test]
 fn nested_float_state_nonconvergence_remains_deferred() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let float = tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         BlockStyle {
@@ -2457,7 +2457,7 @@ fn nested_float_state_nonconvergence_remains_deferred() {
 
 #[test]
 fn buckram_keeps_inline_context_float_state_deferred() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let nested_float = tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         BlockStyle {
@@ -2516,7 +2516,7 @@ fn buckram_keeps_inline_context_float_state_deferred() {
 
 #[test]
 fn adapter_propagates_declared_bfc_baselines_without_backend_child_walks() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let absolute = tree.new_with_children_and_block_style(
         AlgorithmKind::Block,
         BlockStyle {
@@ -2647,7 +2647,7 @@ fn adapter_propagates_declared_bfc_baselines_without_backend_child_walks() {
 /// in-flow children's, and nothing outside it moves.
 #[test]
 fn declared_baselines_propagate_within_one_subtree() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let mut leaf = |height: f32, source: u8| {
         tree.new_with_children_and_block_style(
             AlgorithmKind::Flex,
@@ -2714,7 +2714,7 @@ fn declared_baselines_propagate_within_one_subtree() {
 /// reach its parent.
 #[test]
 fn an_owned_table_context_keeps_the_geometry_it_was_given() {
-    let mut tree: AlgorithmTree<Style, (), u8> = AlgorithmTree::new();
+    let mut tree: AlgorithmTree<(), u8> = AlgorithmTree::new();
     let cells = (0..2)
         .map(|index| {
             tree.new_with_children_and_block_style(
@@ -2823,7 +2823,7 @@ fn horizontal_buckram_block_admits_vertical_flex_auto_block_size() {
             [(2.0, 47.0), (2.0, 2.0), (17.0, 47.0), (17.0, 2.0)],
         ),
     ] {
-        let mut tree = AlgorithmTree::<Style, (), u8>::new();
+        let mut tree = AlgorithmTree::<(), u8>::new();
         let children = (1..=4)
             .map(|source| {
                 tree.new_with_children_and_block_style(
@@ -2976,7 +2976,7 @@ fn orthogonal_auto_inline_uses_intrinsic_child_block_contribution() {
 
     let horizontal = FlowAxes::HORIZONTAL_LTR;
     let vertical = FlowAxes::new(WritingMode::VerticalRl, Direction::Ltr);
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let text = tree.new_leaf_with_context_and_block_style(
         BlockStyle::anonymous(horizontal, horizontal),
         Style::default(),
@@ -3049,7 +3049,7 @@ fn orthogonal_auto_inline_rejects_a_nested_flow_boundary() {
 
     let horizontal = FlowAxes::HORIZONTAL_LTR;
     let vertical = FlowAxes::new(WritingMode::VerticalRl, Direction::Ltr);
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let text = tree.new_leaf_with_context_and_block_style(
         BlockStyle::anonymous(horizontal, horizontal),
         Style::default(),
@@ -3121,7 +3121,7 @@ fn orthogonal_auto_block_sizes_finalize_before_physical_child_placement() {
         (WritingMode::SidewaysLr, 0.0, 20.0),
     ] {
         let flow = FlowAxes::new(writing_mode, Direction::Ltr);
-        let mut tree = AlgorithmTree::<Style, (), u8>::new();
+        let mut tree = AlgorithmTree::<(), u8>::new();
         let first = tree.new_with_children_and_block_style(
             AlgorithmKind::Leaf,
             BlockStyle::anonymous(flow, flow),
@@ -3199,7 +3199,7 @@ fn adapter_nests_horizontal_and_vertical_normal_flow_in_both_directions() {
     use crate::{Direction, WritingMode};
 
     fn layout_nested(parent_flow: FlowAxes, child_flow: FlowAxes) -> AlgorithmLayout {
-        let mut tree = AlgorithmTree::<Style, (), u8>::new();
+        let mut tree = AlgorithmTree::<(), u8>::new();
         let leaf = tree.new_with_children_and_block_style(
             AlgorithmKind::Leaf,
             BlockStyle::anonymous(child_flow, child_flow),
@@ -3300,7 +3300,7 @@ fn rtl_block_auto_inline_size_accounts_for_physical_margins() {
     use crate::{Direction, WritingMode};
 
     let rtl = FlowAxes::new(WritingMode::HorizontalTb, Direction::Rtl);
-    let mut tree = AlgorithmTree::<Style, (), &str>::new();
+    let mut tree = AlgorithmTree::<(), &str>::new();
     let body = tree.new_with_children_and_block_style(
         AlgorithmKind::Block,
         BlockStyle {
@@ -3356,7 +3356,7 @@ fn orthogonal_percentage_width_uses_available_physical_fallback() {
 
     let vertical = FlowAxes::new(WritingMode::VerticalLr, Direction::Ltr);
     let horizontal = FlowAxes::HORIZONTAL_LTR;
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let text = tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         BlockStyle::anonymous(horizontal, horizontal),
@@ -3427,7 +3427,7 @@ fn orthogonal_float_continuation_stays_deferred_without_a_logical_transform() {
 
     let horizontal = FlowAxes::HORIZONTAL_LTR;
     let vertical = FlowAxes::new(WritingMode::VerticalRl, Direction::Ltr);
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let orthogonal_float = tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         BlockStyle {
@@ -3480,7 +3480,7 @@ fn orthogonal_float_continuation_stays_deferred_without_a_logical_transform() {
 
 #[test]
 fn taffy_block_fallback_retains_the_css_facing_deferral() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let child = tree.new_with_children_and_block_style(
         AlgorithmKind::Block,
         BlockStyle::default(),
@@ -3525,7 +3525,7 @@ fn taffy_block_fallback_retains_the_css_facing_deferral() {
 }
 
 fn leaf_with_height(
-    tree: &mut AlgorithmTree<Style, (), u8>,
+    tree: &mut AlgorithmTree<(), u8>,
     height: f32,
     source: u8,
 ) -> AlgorithmNodeId {
@@ -3551,7 +3551,7 @@ fn leaf_with_height(
 }
 
 fn bfc_root_with_children(
-    tree: &mut AlgorithmTree<Style, (), u8>,
+    tree: &mut AlgorithmTree<(), u8>,
     width: f32,
     children: &[AlgorithmNodeId],
 ) -> AlgorithmNodeId {
@@ -3581,7 +3581,7 @@ fn bfc_root_with_children(
 /// Taffy because the grid establishes its own formatting context.
 #[test]
 fn buckram_admits_a_table_wrapper_as_an_opaque_block_sized_by_its_grid() {
-    let mut tree: AlgorithmTree<Style, (), u8> = AlgorithmTree::new();
+    let mut tree: AlgorithmTree<(), u8> = AlgorithmTree::new();
     let cells = (0..2)
         .map(|index| {
             tree.new_with_children_and_block_style(
@@ -3694,7 +3694,7 @@ fn buckram_admits_a_table_wrapper_as_an_opaque_block_sized_by_its_grid() {
 /// its style: 30px below the previous sibling's margin, not deferred.
 #[test]
 fn a_deferred_flow_root_child_does_not_defer_its_buckram_parent() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let replaced = tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         BlockStyle {
@@ -3801,7 +3801,7 @@ fn a_deferred_flow_root_child_does_not_defer_its_buckram_parent() {
 /// formatting-context deferral, and the parent falls back as before.
 #[test]
 fn a_table_beside_an_active_float_still_defers_to_float_avoidance() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let float = tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         BlockStyle {
@@ -3858,7 +3858,7 @@ fn a_table_beside_an_active_float_still_defers_to_float_avoidance() {
 /// ordinary opaque block child.
 #[test]
 fn a_relatively_positioned_scroll_container_is_an_opaque_block_child() {
-    let mut tree = AlgorithmTree::<Style, (), u8>::new();
+    let mut tree = AlgorithmTree::<(), u8>::new();
     let inner = leaf_with_height(&mut tree, 10.0, 1);
     let scroll = tree.new_with_children_and_block_style(
         AlgorithmKind::Block,

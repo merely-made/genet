@@ -37,18 +37,46 @@
 //! factory propagates those errors as `BoxedFactoryError`. Embedders
 //! that want "platform if available, else fall back to capture"
 //! should call [`default_compositor_for_window_or_capture`] instead
-//! — that variant logs the error and returns
-//! `WgpuMasterCaptureBackend` as the fallback.
+//! — that variant returns a typed selection retaining the native
+//! construction error when capture is chosen.
 
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 
-use crate::compositor::{PaintCompositor, WgpuMasterCaptureBackend};
+use crate::compositor::{PaintCompositor, PresentationRoute, WgpuMasterCaptureBackend};
 use crate::interop::HostWgpuContext;
 
 /// Type-erased factory error. Per-platform backends return their own
 /// `BackendError` types; this wraps them so the cfg-dispatched
 /// factory has one return shape.
 pub type BoxedFactoryError = Box<dyn std::error::Error + Send + Sync + 'static>;
+
+/// The route selected by the factory. A capture fallback has pixels for an
+/// embedder, but must never be counted as an OS display handoff.
+pub enum CompositorSelection {
+    Display(Box<dyn PaintCompositor>),
+    CaptureFallback {
+        compositor: Box<dyn PaintCompositor>,
+        /// `None` means this target has no OS handoff backend. `Some` is the
+        /// construction error that caused a platform backend to fall back.
+        cause: Option<BoxedFactoryError>,
+    },
+}
+
+impl CompositorSelection {
+    pub fn compositor_mut(&mut self) -> &mut dyn PaintCompositor {
+        match self {
+            Self::Display(compositor) | Self::CaptureFallback { compositor, .. } => {
+                compositor.as_mut()
+            },
+        }
+    }
+
+    pub fn into_compositor(self) -> Box<dyn PaintCompositor> {
+        match self {
+            Self::Display(compositor) | Self::CaptureFallback { compositor, .. } => compositor,
+        }
+    }
+}
 
 /// Construct the platform-default OS-handoff compositor.
 ///
@@ -207,29 +235,145 @@ pub fn default_compositor_for_window(
     }
 }
 
-/// Same as [`default_compositor_for_window`] but logs construction
-/// errors and falls back to [`WgpuMasterCaptureBackend`] instead of
-/// surfacing them. Useful for embedders that just want pixels —
-/// "platform handoff if it works, capture path otherwise."
+/// Select an OS handoff when available, otherwise expose a typed capture
+/// fallback with its construction error. The caller can still use the
+/// captured texture, but cannot mistake it for visible presentation.
 pub fn default_compositor_for_window_or_capture(
     host: HostWgpuContext,
     display: RawDisplayHandle,
     window: RawWindowHandle,
-) -> Box<dyn PaintCompositor> {
-    // We need to keep `host` available for the fallback construction.
-    // Clone it before handing it to the strict factory; HostWgpuContext
-    // is `Clone` (wgpu Device/Queue/Adapter/Instance are all Arc-shared
-    // so the clone is cheap).
-    let host_for_fallback = host.clone();
-    match default_compositor_for_window(host, display, window) {
-        Ok(boxed) => boxed,
+) -> CompositorSelection {
+    select_compositor(default_compositor_for_window(host, display, window))
+}
+
+fn select_compositor(
+    result: Result<Box<dyn PaintCompositor>, BoxedFactoryError>,
+) -> CompositorSelection {
+    match result {
+        Ok(compositor) => match compositor.presentation_route() {
+            PresentationRoute::Display => CompositorSelection::Display(compositor),
+            PresentationRoute::Capture => CompositorSelection::CaptureFallback {
+                compositor,
+                cause: None,
+            },
+        },
         Err(err) => {
             log::warn!(
                 "[paint] default_compositor_for_window failed; falling back to \
                  WgpuMasterCaptureBackend: {err}"
             );
-            let _ = host_for_fallback; // keep available for symmetry / future
-            Box::new(WgpuMasterCaptureBackend::new())
+            CompositorSelection::CaptureFallback {
+                compositor: Box::new(WgpuMasterCaptureBackend::new()),
+                cause: Some(err),
+            }
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use netrender_device::compositor::{Compositor, PresentedFrame, SurfaceKey};
+
+    struct DisplayProbe;
+
+    impl Compositor for DisplayProbe {
+        fn declare_surface(&mut self, _: SurfaceKey, _: [f32; 4]) {}
+        fn destroy_surface(&mut self, _: SurfaceKey) {}
+        fn present_frame(&mut self, _: PresentedFrame<'_>) {}
+    }
+
+    impl PaintCompositor for DisplayProbe {
+        fn presentation_route(&self) -> PresentationRoute {
+            PresentationRoute::Display
+        }
+
+        fn presentation_outcome(&self) -> Option<&crate::PresentationOutcome> {
+            None
+        }
+
+        fn take_presentation_outcome(&mut self) -> Option<crate::PresentationOutcome> {
+            None
+        }
+    }
+
+    #[test]
+    fn successful_os_factory_stays_on_display_route() {
+        let selected = select_compositor(Ok(Box::new(DisplayProbe)));
+        let CompositorSelection::Display(compositor) = selected else {
+            panic!("OS compositor was reported as capture fallback");
+        };
+        assert_eq!(compositor.presentation_route(), PresentationRoute::Display);
+    }
+
+    #[test]
+    fn capture_only_factory_success_is_not_a_display_route() {
+        let selected = select_compositor(Ok(Box::new(WgpuMasterCaptureBackend::new())));
+        let CompositorSelection::CaptureFallback { compositor, cause } = selected else {
+            panic!("capture backend was reported as display handoff");
+        };
+        assert!(cause.is_none());
+        assert_eq!(compositor.presentation_route(), PresentationRoute::Capture);
+        assert!(compositor.presentation_outcome().is_none());
+    }
+
+    #[test]
+    fn failed_os_construction_keeps_its_reason_with_capture_fallback() {
+        let selected = select_compositor(Err("native window rejected".into()));
+        let CompositorSelection::CaptureFallback { compositor, cause } = selected else {
+            panic!("failed construction was reported as display handoff");
+        };
+        assert_eq!(cause.unwrap().to_string(), "native window rejected");
+        assert_eq!(compositor.presentation_route(), PresentationRoute::Capture);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn unsupported_window_handle_reaches_factory_capture_fallback() {
+        use raw_window_handle::{WebDisplayHandle, WebWindowHandle};
+
+        let host = pollster::block_on(async {
+            let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+                backends: wgpu::Backends::all(),
+                flags: wgpu::InstanceFlags::default(),
+                memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
+                backend_options: wgpu::BackendOptions::default(),
+                display: None,
+            });
+            let adapter = instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::LowPower,
+                    force_fallback_adapter: true,
+                    compatible_surface: None,
+                    apply_limit_buckets: false,
+                })
+                .await
+                .expect("fallback adapter");
+            let (device, queue) = adapter
+                .request_device(&wgpu::DeviceDescriptor {
+                    label: Some("H10 factory fallback test"),
+                    required_features: wgpu::Features::empty(),
+                    required_limits: wgpu::Limits::downlevel_defaults(),
+                    ..Default::default()
+                })
+                .await
+                .expect("device");
+            HostWgpuContext::new(device, queue)
+        });
+        let selected = default_compositor_for_window_or_capture(
+            host,
+            RawDisplayHandle::Web(WebDisplayHandle::new()),
+            RawWindowHandle::Web(WebWindowHandle::new(1)),
+        );
+        let CompositorSelection::CaptureFallback { compositor, cause } = selected else {
+            panic!("unsupported window was reported as display handoff");
+        };
+        assert_eq!(compositor.presentation_route(), PresentationRoute::Capture);
+        assert!(
+            cause
+                .expect("factory rejection reason")
+                .to_string()
+                .contains("expected Wayland RawWindowHandle")
+        );
     }
 }

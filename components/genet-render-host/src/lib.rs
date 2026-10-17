@@ -89,6 +89,8 @@ struct ScopedRasterResult {
 pub enum SurfaceAcquire {
     Frame(wgpu::SurfaceTexture),
     SurfaceLost,
+    /// The outdated surface was reconfigured on the same device; retry acquisition later.
+    Reconfigured,
     Unavailable { reason: String },
     DeviceLost(DeviceLossNotice),
 }
@@ -744,15 +746,6 @@ impl RenderCore {
         &self.renderer
     }
 
-    /// Browser compatibility getter; checked callers use try_renderer.
-    /// The access guard holds ownership and refuses another frame's Renderer.
-    #[cfg(target_arch = "wasm32")]
-    pub fn renderer(&self) -> RendererAccess<'_> {
-        #[cfg(feature = "without-classic-vello")]
-        self.unavailable();
-        self.try_renderer().expect("checked renderer access refused")
-    }
-
     /// Retire one keyed surface's retained tile state after its content source
     /// is replaced in place. The next [`rasterize_for`](Self::rasterize_for)
     /// call rebuilds the surface from the complete current scene.
@@ -1394,9 +1387,7 @@ impl WindowSurface {
                     return SurfaceAcquire::DeviceLost(loss);
                 }
                 self.surface.configure(core.device(), &self.surface_config);
-                SurfaceAcquire::Unavailable {
-                    reason: "surface outdated; reconfigured same device".into(),
-                }
+                SurfaceAcquire::Reconfigured
             },
             wgpu::CurrentSurfaceTexture::Lost => {
                 if let Some(loss) = core.device_failure() {

@@ -1,0 +1,157 @@
+<!-- Copyright 2026 Mark Alan Boykin
+     SPDX-License-Identifier: MPL-2.0 -->
+<!doctype html>
+<meta charset="utf-8">
+<title>Ortet checked browser frame</title>
+<style>
+  body { margin: 0; background: #e7edf3; }
+  #ortet { display: block; width: 320px; height: 200px; }
+  .probe { width: 64px; height: 64px; }
+</style>
+<canvas id="ortet" aria-label="Retained Ortet frame"></canvas>
+<canvas class="probe" id="probe-a" width="64" height="64" aria-label="Shared Core surface A"></canvas>
+<canvas class="probe" id="probe-b" width="64" height="64" aria-label="Shared Core surface B"></canvas>
+<pre id="receipt">ORTET_CHECKED_FRAME pending</pre>
+<script type="module">
+  const output = document.querySelector("#receipt");
+  const canvas = document.querySelector("#ortet");
+  const deadline = (promise, ms, name) => Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${name} exceeded ${ms} ms`)), ms)),
+  ]);
+  try {
+    const { default: init, start, probe_browser_frame_contract } = await import("./ortet.js");
+    if (typeof probe_browser_frame_contract !== "function") {
+      throw new Error("build Ortet with --features browser-frame-fixture");
+    }
+    await deadline(init(), 10000, "wasm initialization");
+    const article = `<!doctype html><style>
+      body { margin: 0; background: #d8e6dc; color: #17324d; }
+      article { margin: 24px; width: 240px; height: 120px; background: #8a2f24; }
+    </style><article>Retained browser frame</article>`;
+    await deadline(start(canvas, `data:text/html,${encodeURIComponent(article)}`), 10000, "Ortet start");
+
+    // Capture actual canvas pixels after the asynchronous checked frame has
+    // completed. The source HTML and scene alone are not a drawing witness.
+    async function countRetainedTone() {
+      const image = new Image();
+      image.src = canvas.toDataURL("image/png");
+      await image.decode();
+      const copy = new OffscreenCanvas(canvas.width, canvas.height);
+      const context = copy.getContext("2d", { willReadFrequently: true });
+      context.drawImage(image, 0, 0);
+      const pixels = context.getImageData(0, 0, copy.width, copy.height).data;
+      let count = 0;
+      for (let index = 0; index < pixels.length; index += 4) {
+        if (pixels[index] > 100 && pixels[index] < 180 &&
+            pixels[index + 1] < 90 && pixels[index + 2] < 80 && pixels[index + 3] === 255) {
+          count++;
+        }
+      }
+      return count;
+    }
+    let colored = 0;
+    const drawDeadline = performance.now() + 12000;
+    while (performance.now() < drawDeadline && colored < 100) {
+      await new Promise(requestAnimationFrame);
+      colored = await countRetainedTone();
+    }
+    if (colored < 100) throw new Error(`retained frame pixels absent: colored=${colored}`);
+
+    // Two real resize events queue new retained draws. The canvas backing
+    // store is cleared at each resize, so final pixels require a fresh present.
+    canvas.style.width = "360px";
+    canvas.style.height = "210px";
+    window.dispatchEvent(new Event("resize"));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    canvas.style.width = "400px";
+    canvas.style.height = "230px";
+    window.dispatchEvent(new Event("resize"));
+    const scale = Math.max(1, devicePixelRatio);
+    const expectedWidth = Math.round(400 * scale);
+    const expectedHeight = Math.round(230 * scale);
+    const resizeDeadline = performance.now() + 12000;
+    let resizedPixels = 0;
+    while (performance.now() < resizeDeadline && resizedPixels < 100) {
+      await new Promise(requestAnimationFrame);
+      if (canvas.width === expectedWidth && canvas.height === expectedHeight) {
+        resizedPixels = await countRetainedTone();
+      }
+    }
+    if (resizedPixels < 100) {
+      throw new Error(`resized retained frame absent: ${canvas.width}x${canvas.height}, pixels=${resizedPixels}`);
+    }
+
+    // The first submitted event fires after Ortet releases its host borrow
+    // and before it awaits GPU completion. Queue a same-size resize there:
+    // only the content revision changes, so the accepted old frame must skip.
+    let fixtureArmed = true;
+    let submitted = 0;
+    let staleSkipped = 0;
+    let freshPresented = 0;
+    const sizeBefore = [canvas.width, canvas.height];
+    const staleProbe = new Promise(resolve => {
+      canvas.addEventListener("ortet-fixture-submitted", () => {
+        if (!fixtureArmed) return;
+        fixtureArmed = false;
+        submitted++;
+        window.dispatchEvent(new Event("resize"));
+      });
+      canvas.addEventListener("ortet-fixture-stale-skipped", () => {
+        if (submitted) staleSkipped++;
+      });
+      canvas.addEventListener("ortet-fixture-presented", () => {
+        if (staleSkipped) {
+          freshPresented++;
+          resolve();
+        }
+      });
+    });
+    window.dispatchEvent(new Event("resize"));
+    await deadline(staleProbe, 12000, "same-size pending-frame redraw");
+    if (submitted !== 1 || staleSkipped !== 1 || freshPresented < 1 ||
+        canvas.width !== sizeBefore[0] || canvas.height !== sizeBefore[1]) {
+      throw new Error(`stale frame guard failed: submitted=${submitted} skipped=${staleSkipped} fresh=${freshPresented} size=${canvas.width}x${canvas.height}`);
+    }
+    const staleRedrawPixels = await countRetainedTone();
+    if (staleRedrawPixels < 100) {
+      throw new Error(`same-size retained redraw absent: pixels=${staleRedrawPixels}`);
+    }
+
+    async function countTone(surface, channel) {
+      const image = new Image();
+      image.src = surface.toDataURL("image/png");
+      await image.decode();
+      const copy = new OffscreenCanvas(64, 64);
+      const context = copy.getContext("2d", { willReadFrequently: true });
+      context.drawImage(image, 0, 0);
+      const pixels = context.getImageData(0, 0, 64, 64).data;
+      let count = 0;
+      for (let index = 0; index < pixels.length; index += 4) {
+        const [r, g, b, a] = pixels.slice(index, index + 4);
+        if (a === 255 && (channel === "red" ? r > 140 && g < 100 && b < 100 :
+          b > 140 && r < 100 && g < 140)) count++;
+      }
+      return count;
+    }
+    let probeRed = 0;
+    let probeBlue = 0;
+    const witness = async () => {
+      const until = performance.now() + 5000;
+      while (performance.now() < until && (probeRed < 100 || probeBlue < 100)) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+        probeRed = await countTone(document.querySelector("#probe-a"), "red");
+        probeBlue = await countTone(document.querySelector("#probe-b"), "blue");
+      }
+      if (probeRed < 100 || probeBlue < 100) {
+        throw new Error(`shared-Core pixels absent: A=${probeRed} B=${probeBlue}`);
+      }
+    };
+    const lifecycle = await deadline(probe_browser_frame_contract(
+      document.querySelector("#probe-a"), document.querySelector("#probe-b"), witness,
+    ), 30000, "real WebGPU lease probe");
+    output.textContent = `ORTET_CHECKED_FRAME retained_pixels=${colored} resized_pixels=${resizedPixels} stale_skipped=${staleSkipped} fresh_presented=${freshPresented} stale_redraw_pixels=${staleRedrawPixels} probe_red=${probeRed} probe_blue=${probeBlue} ${lifecycle}`;
+  } catch (error) {
+    output.textContent = `ORTET_CHECKED_FRAME error=${error}`;
+  }
+</script>

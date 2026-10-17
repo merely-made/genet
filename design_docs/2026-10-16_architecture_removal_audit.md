@@ -565,8 +565,8 @@ with each repair's stated qualification and publication limits retained.
 | Partial / Open | None | No named source finding remains partial or open in this 56-finding register; qualification boundaries remain explicit; supplemental X1 is removed. |
 
 **56 findings: 56 addressed locally, 0 partial, 0 open.** Supplemental X1 is also addressed: the retired environment script and unused vendored debugger helper are removed. It remains outside that count. The pinned NetRender supplier revision is now published and adopted by Mere/Turnstone;
-the baseline supplier corpus mismatch, existing ignored continuation tests and
-platform/Forms acceptance are separate outstanding obligations, not extra closed
+the baseline supplier corpus mismatches are now resolved by [captured-border pixel verification](https://github.com/merely-made/netrender/blob/771cacf3487c7ba088f272ce391d6772fbc4c979/netrender-notes/receipts/2026-10-17_corpus_borders/README.md). Existing ignored continuation tests and
+platform/Forms acceptance remain separate outstanding obligations, not extra closed
 findings. R4, R5, H3 and R15 now have local retained-path verification. The prior
 R6, R13, L8 and L13 continuation recorded a baseline font-test failure;
 that Parley failure and the nested-table distribution failure are now repaired.

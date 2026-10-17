@@ -77,9 +77,29 @@ pub trait ParserScriptLoader {
     /// URL).
     fn load(&self, src: &str, charset: Option<&str>, integrity: Option<&str>) -> Option<String>;
 
-    /// The base URL an external script's own imports resolve against.
+    /// Fallback identity for loaders without a parseable document URL.
+    /// Production module loaders should return the fetch's final URL from
+    /// [`Self::load_module`].
     fn resolve(&self, src: &str) -> String {
         src.to_owned()
+    }
+
+    /// Fetch a module against its importer and return its final URL with its
+    /// source. The final URL is the identity used for later relative imports
+    /// and for the engine's per-graph module cache.
+    fn load_module(
+        &self,
+        specifier: &str,
+        referrer: &str,
+        charset: Option<&str>,
+        integrity: Option<&str>,
+    ) -> Option<(String, String)> {
+        let url = url::Url::parse(referrer)
+            .and_then(|base| base.join(specifier))
+            .map(|url| url.to_string())
+            .unwrap_or_else(|_| self.resolve(specifier));
+        self.load(&url, charset, integrity)
+            .map(|source| (url, source))
     }
 }
 
@@ -136,6 +156,8 @@ struct ScriptFacts {
     charset: Option<String>,
     integrity: Option<String>,
     text: String,
+    /// Effective document base when this element was prepared.
+    module_base: String,
 }
 
 /// `type`/`language` classification, per HTML's "prepare the script element".
@@ -518,6 +540,11 @@ impl<E: ScriptEngine> Runtime<E> {
             charset: attr("charset"),
             integrity: attr("integrity"),
             text,
+            module_base: if kind == Some(ScriptKind::Module) {
+                host.document_base_url().unwrap_or_default()
+            } else {
+                String::new()
+            },
         }
     }
 
@@ -567,36 +594,32 @@ impl<E: ScriptEngine> Runtime<E> {
                 }
             },
             ScriptKind::Module => {
-                let (source, base) = match &facts.src {
-                    None => (Some(facts.text.clone()), String::new()),
-                    Some(src) => (
-                        loader.load(src, facts.charset.as_deref(), facts.integrity.as_deref()),
-                        loader.resolve(src),
+                // An inline module uses the preparation-time document base;
+                // an external module uses its redirect-final URL.
+                let entry = match &facts.src {
+                    None => Some((facts.module_base.clone(), facts.text.clone())),
+                    Some(src) => loader.load_module(
+                        src,
+                        &facts.module_base,
+                        facts.charset.as_deref(),
+                        facts.integrity.as_deref(),
                     ),
                 };
-                if let Some(source) = source {
-                    // An import's own URL is resolved by the loader, which is
-                    // the document's resource route; the referrer is already
-                    // folded into that route's base.
-                    //
-                    // `ScriptEngine::eval_module`'s resolver returns
-                    // `(resolved_url, source)` — in that order. This closure had
-                    // them swapped, so every backend parsed the *URL string* as
-                    // the dependency's source and the import rejected with the
-                    // failure swallowed. Nothing caught it because the only
-                    // tests that reach a second module were themselves ignored
-                    // over `resolve_href`.
-                    let mut resolve = |specifier: &str, _referrer: &str| {
-                        let url = loader.resolve(specifier);
-                        loader.load(specifier, None, None).map(|text| (url, text))
+                if let Some((base, source)) = entry {
+                    let mut resolve = |specifier: &str, referrer: &str| {
+                        loader.load_module(specifier, referrer, None, None)
                     };
                     // The module belongs to the document that declared it, so
                     // it is evaluated in the top document's realm - not the
                     // agent's bootstrap realm, which is nobody's document.
                     let top = self.top_realm();
-                    let _ = self
-                        .engine
-                        .eval_module_in_realm(top, &source, &base, &mut resolve);
+                    let _ = self.engine.eval_module_in_realm(
+                        top,
+                        &source,
+                        &base,
+                        facts.src.as_ref().map(|_| base.as_str()),
+                        &mut resolve,
+                    );
                     self.flush_host_trace_events();
                 }
             },
@@ -608,6 +631,40 @@ impl<E: ScriptEngine> Runtime<E> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn default_module_loader_resolves_against_importer() {
+        struct Loader(RefCell<Vec<String>>);
+        impl ParserScriptLoader for Loader {
+            fn load(
+                &self,
+                src: &str,
+                _charset: Option<&str>,
+                _integrity: Option<&str>,
+            ) -> Option<String> {
+                self.0.borrow_mut().push(src.into());
+                Some("export const value = 1;".into())
+            }
+        }
+        let loader = Loader(RefCell::new(Vec::new()));
+        let module = loader.load_module(
+            "../shared/dep.js",
+            "https://modules.test/a/branch/entry.js",
+            None,
+            None,
+        );
+        assert_eq!(
+            module,
+            Some((
+                "https://modules.test/a/shared/dep.js".into(),
+                "export const value = 1;".into(),
+            ))
+        );
+        assert_eq!(
+            &*loader.0.borrow(),
+            &["https://modules.test/a/shared/dep.js"]
+        );
+    }
 
     #[test]
     fn classifies_script_types() {

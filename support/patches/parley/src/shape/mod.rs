@@ -618,23 +618,29 @@ impl<'a, 'b, B: Brush> FontSelector<'a, 'b, B> {
         }
         let mut selected_font = None;
         #[cfg(feature = "font-diagnostic")]
-        let mut diagnostic = FontDiagnosticEvent {
-            cluster: cluster.chars.iter().map(|ch| ch.ch).collect(),
-            fallback_script: self.fallback_key.script().to_bytes(),
-            candidates: Vec::new(),
-            selected_candidate: None,
-        };
+        let mut diagnostic = crate::font_diagnostic::construct_if_capturing(|| {
+            #[cfg(test)]
+            crate::font_diagnostic::note_event_construction();
+            FontDiagnosticEvent {
+                cluster: cluster.chars.iter().map(|ch| ch.ch).collect(),
+                fallback_script: self.fallback_key.script().to_bytes(),
+                candidates: Vec::new(),
+                selected_candidate: None,
+            }
+        });
         macro_rules! try_fonts {
             ($matches:ident) => {{
                 let mut complete = false;
                 self.query.$matches(|font: &QueryFont| {
                     let Some(charmap) = font.charmap() else {
                         #[cfg(feature = "font-diagnostic")]
-                        diagnostic.candidates.push(FontDiagnosticCandidate {
-                            family: format!("{:?}", font.family),
-                            index: font.index,
-                            status: FontDiagnosticCandidateStatus::NoCharmap,
-                        });
+                        if let Some(diagnostic) = diagnostic.as_mut() {
+                            diagnostic.candidates.push(FontDiagnosticCandidate {
+                                family: format!("{:?}", font.family),
+                                index: font.index,
+                                status: FontDiagnosticCandidateStatus::NoCharmap,
+                            });
+                        }
                         return fontique::QueryStatus::Continue;
                     };
 
@@ -655,17 +661,19 @@ impl<'a, 'b, B: Brush> FontSelector<'a, 'b, B> {
                         analysis_data_sources,
                     );
                     #[cfg(feature = "font-diagnostic")]
-                    let candidate_index = diagnostic.candidates.len();
+                    let candidate_index = diagnostic.as_ref().map(|event| event.candidates.len());
                     #[cfg(feature = "font-diagnostic")]
-                    diagnostic.candidates.push(FontDiagnosticCandidate {
-                        family: format!("{:?}", font.family),
-                        index: font.index,
-                        status: match map_status {
-                            Status::Complete => FontDiagnosticCandidateStatus::Complete,
-                            Status::Keep => FontDiagnosticCandidateStatus::Keep,
-                            Status::Discard => FontDiagnosticCandidateStatus::Discard,
-                        },
-                    });
+                    if let Some(diagnostic) = diagnostic.as_mut() {
+                        diagnostic.candidates.push(FontDiagnosticCandidate {
+                            family: format!("{:?}", font.family),
+                            index: font.index,
+                            status: match map_status {
+                                Status::Complete => FontDiagnosticCandidateStatus::Complete,
+                                Status::Keep => FontDiagnosticCandidateStatus::Keep,
+                                Status::Discard => FontDiagnosticCandidateStatus::Discard,
+                            },
+                        });
+                    }
 
                     match map_status {
                         Status::Complete => {
@@ -676,7 +684,9 @@ impl<'a, 'b, B: Brush> FontSelector<'a, 'b, B> {
                             });
                             #[cfg(feature = "font-diagnostic")]
                             {
-                                diagnostic.selected_candidate = Some(candidate_index);
+                                if let Some(diagnostic) = diagnostic.as_mut() {
+                                    diagnostic.selected_candidate = candidate_index;
+                                }
                             }
                             fontique::QueryStatus::Stop
                         },
@@ -687,7 +697,9 @@ impl<'a, 'b, B: Brush> FontSelector<'a, 'b, B> {
                             });
                             #[cfg(feature = "font-diagnostic")]
                             {
-                                diagnostic.selected_candidate = Some(candidate_index);
+                                if let Some(diagnostic) = diagnostic.as_mut() {
+                                    diagnostic.selected_candidate = candidate_index;
+                                }
                             }
                             fontique::QueryStatus::Continue
                         },
@@ -699,7 +711,9 @@ impl<'a, 'b, B: Brush> FontSelector<'a, 'b, B> {
                                 });
                                 #[cfg(feature = "font-diagnostic")]
                                 {
-                                    diagnostic.selected_candidate = Some(candidate_index);
+                                    if let Some(diagnostic) = diagnostic.as_mut() {
+                                        diagnostic.selected_candidate = candidate_index;
+                                    }
                                 }
                             }
                             fontique::QueryStatus::Continue
@@ -717,7 +731,9 @@ impl<'a, 'b, B: Brush> FontSelector<'a, 'b, B> {
             let _ = try_fonts!(matches_fallbacks_with);
         }
         #[cfg(feature = "font-diagnostic")]
-        crate::font_diagnostic::record(diagnostic);
+        if let Some(diagnostic) = diagnostic {
+            crate::font_diagnostic::record(diagnostic);
+        }
         selected_font
     }
 }

@@ -209,13 +209,13 @@ pub trait ScriptEngine: Sized {
     /// Evaluate `source` as an ECMAScript **module** (module scope, strict mode,
     /// `import` / `export`), driving its load → link → evaluate to completion.
     ///
-    /// `base_url` is the entry module's own URL (its `import` specifiers resolve
-    /// against it). `resolve` is the host module resolver: given an import
+    /// `base_url` resolves the entry's imports. For fetched entries this is
+    /// their redirect-final URL; inline entries use the document base.
+    /// `resolve` is the host module resolver: given an import
     /// `(specifier, referrer_url)` it returns the imported module's
     /// `(resolved_url, source)`, or `None` if it cannot be resolved/fetched — the
     /// seam through which the host (which owns the fetcher) supplies dependency
-    /// source on demand. The engine keys its module cache on `resolved_url`, so a
-    /// diamond or cycle resolves each module once.
+    /// source on demand. The engine keys its module cache on `resolved_url`.
     ///
     /// Returns `Ok(Some(value))` on success, `Err` if the module (or a dependency)
     /// throws or fails to load, and `Ok(None)` when this backend does not support
@@ -236,22 +236,19 @@ pub trait ScriptEngine: Sized {
     /// A module script belongs to the document that declared it, and the
     /// top-level browsing context's document has a realm of its own, so "the
     /// bootstrap realm" is no longer the answer for any `<script type=module>`.
-    /// The default forwards to [`eval_module`](Self::eval_module) when `realm`
-    /// *is* the bootstrap realm and otherwise refuses, so a backend with realms
-    /// but no per-realm module entry fails loudly rather than quietly
-    /// evaluating a module against the wrong global.
+    /// `entry_identity` is `Some(final_url)` for a fetched entry and `None`
+    /// for an inline entry. The latter still uses `base_url` for resolving its
+    /// imports, but must not alias a fetched module at that URL in the cache.
+    /// Backends without per-realm module support refuse explicitly.
     fn eval_module_in_realm(
         &mut self,
         realm: RealmId,
         source: &str,
         base_url: &str,
+        entry_identity: Option<&str>,
         resolve: &mut dyn FnMut(&str, &str) -> Option<(String, String)>,
     ) -> Result<Option<Self::Value>, RealmError> {
-        if realm == MAIN_REALM {
-            return self
-                .eval_module(source, base_url, resolve)
-                .map_err(|error| RealmError::Engine(self.describe_error(&error)));
-        }
+        let _ = (realm, source, base_url, entry_identity, resolve);
         Err(RealmError::Unsupported)
     }
 

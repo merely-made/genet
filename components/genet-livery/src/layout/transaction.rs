@@ -512,14 +512,14 @@ where
         // build_box, and both skip paths would otherwise drop its ledger.
         plane
             .table_shadow
-            .merge(std::mem::take(&mut state.table_shadow));
+            .merge_deferred(std::mem::take(&mut state.table_shadow));
         let Some(atomic_root) = built else {
             // No layout will run for a root that built nothing, but noted
             // tables still record their deferrals.
             state.apply_buckram_table_layout();
             plane
                 .table_shadow
-                .merge(std::mem::take(&mut state.table_shadow));
+                .merge_deferred(std::mem::take(&mut state.table_shadow));
             continue;
         };
         // An inline replaced root contributes its natural box to the line.
@@ -660,7 +660,7 @@ where
             });
             plane
                 .table_shadow
-                .merge(std::mem::take(&mut state.table_shadow));
+                .merge_deferred(std::mem::take(&mut state.table_shadow));
             continue;
         };
         // An inline-block or button aligns on its last line box, unless it
@@ -734,7 +734,7 @@ where
         });
         plane
             .table_shadow
-            .merge(std::mem::take(&mut state.table_shadow));
+            .merge_deferred(std::mem::take(&mut state.table_shadow));
         plane.table_paint.merge(table_paint);
         for candidate in &mut fragments {
             candidate.fragment.x -= root_rect.x;
@@ -1185,7 +1185,7 @@ where
     // Tables on the inline route record into the state's own ledger; tables
     // inside atomic subtrees accumulated into the plane's. Both survive.
     let mut table_shadow = std::mem::take(&mut state.table_shadow);
-    table_shadow.merge(atomic.table_shadow.clone());
+    table_shadow.merge_deferred(atomic.table_shadow.clone());
     drop(state);
     merge_atomic_subtrees(atomic, &boxes, &mut fragments);
     table_paint.merge(atomic.table_paint.clone());

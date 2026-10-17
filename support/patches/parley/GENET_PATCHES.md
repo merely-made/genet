@@ -81,3 +81,17 @@ Every commit that has touched this directory, newest first
 | `caa562d1e3a` | Add correlated Windows font fallback diagnostic and revise repair gates |
 | `29f93579d92` | Reconcile Livery css-text behavior |
 | `c36c34be0ad` | Implement Livery font feature resolution |
+
+## Font diagnostics admit payload work only during capture
+
+With `font-diagnostic` enabled, shaping now checks the thread-local capture
+owner before constructing cluster strings, candidate lists and family strings.
+Capture-off preserves font selection without building discarded events; active
+capture retains the same records and RAII lifetime. A real shaping regression
+uses bundled Lato with system fonts disabled and counts event construction.
+
+The vendored builder-parity tests referenced the absent upstream `parley_dev`
+font collection. They now register bundled Lato Medium/Bold; their English-text
+builder-equivalence assertions remain. The existing empty-layout tab-size
+mismatch reproduces with the pre-cut production source and is recorded in the
+2026-10-16 architecture audit receipt, rather than skipped or normalized away.

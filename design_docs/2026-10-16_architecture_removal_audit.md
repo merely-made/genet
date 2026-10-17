@@ -1,6 +1,62 @@
 # Genet architecture and removal audit
 
 
+## R6/R13/L8/L13 module and diagnostics repairs, 2026-10-16
+
+The next four cuts are implemented and independently source-reviewed:
+
+- **R6:** parser module requests retain the actual importer and response-final
+  URL. Preparation captures the document base for inline modules. The engine
+  call distinguishes that resolution base from optional fetched-entry identity;
+  external entries join their own graph cache, while inline scripts cannot alias
+  fetched resources at their document URL. Shared URL parsing owns resolution.
+- **R13:** scoped resolver installation rejects nesting and clears borrowed
+  callback state on exit. Host-resolver panics return through the VM as failed
+  resolution before the original panic resumes outside it. Boa restores the
+  prior realm; Nova explicitly releases each cached module's Global root with
+  `take(agent)`. Clearing its map alone did not release those roots. Borrowed
+  callback lifetime erasure remains encapsulated because the upstream hook is
+  long-lived. Arbitrary VM panic reuse is not qualified by this repair.
+- **L8:** table-owned contributions are authoritative; construction stages them
+  without repeatedly folding all detail vectors. Publication materializes the
+  aggregate in stable BoxId order. Public merge still returns current totals;
+  standalone contributions and empty-after-removal state remain distinct.
+  Retained replacement and remapping preserve the published receipt. This is an
+  operation-count improvement, not a wall-clock performance measurement.
+- **L13:** inactive font capture admits no diagnostic payload construction.
+  Active capture keeps its event order and thread-local RAII behavior. The
+  real-shaping witness uses bundled Lato with system fonts disabled. This
+  concerns the opt-in diagnostic feature, not default release overhead.
+
+Review caught and corrected three table publication errors, missing module-entry
+cache identity, and Nova's leaked root slots. Regressions cover detailed table
+records, replacement/removal, importer redirects, diamonds and cycles, inline
+identity, original resolver-panic payload and subsequent evaluation, and GC
+liveness after a completed module graph.
+
+The Parley library gate also required replacing its absent upstream `parley_dev`
+font helper with bundled Lato fixtures. Its empty-layout builder test still
+reports tab size 64 versus 0. A fresh control using pre-cut production sources
+and the same fixture helper reproduces that mismatch. The test remains enabled
+and unchanged; the failure is a separate open residual. Early font fixture
+compile/coverage errors and the deliberately stopped broad runtime run are
+preserved in the receipt, not counted as completed gates.
+
+Final retained gates: **603 passed, 1 baseline-reproduced failure, 2 existing ignores**.
+Both engines pass parser and document module integration, host-resolver recovery
+and module cache tests; Nova additionally passes root-release GC coverage. The
+retained layout/paint gate includes an actual CPU repaint. Feature-disabled
+Parley also checks successfully. Gates ran serially with a 5 GiB memory cap,
+no swap allowance, one Cargo job and one test thread.
+
+Qualification commands, source/review hashes and limits are recorded in
+`module_and_diagnostics_repairs` in the
+[audit receipt](receipts/2026-10-16_architecture_post_cut_audit.json).
+No supplier pins or lock graph changed. The unpublished supplier and separate
+platform/Forms qualification boundaries remain.
+
+
+
 ## I7/I8/L1/L7 boundary ownership repairs, 2026-10-16
 
 Four further cuts are implemented and independently source-reviewed:
@@ -336,7 +392,7 @@ The fresh review covered the production changes, their consumers and regression 
 
 ### Current disposition of the findings
 
-Reconciled against `8a89a8bcdb8` plus the source-hashed I7/I8/L1/L7 repair
+Reconciled against `103aaafa42e` plus the source-hashed R6/R13/L8/L13 repair
 snapshot on 2026-10-16. This table supersedes
 the older 9-addressed / 3-partial / 43-open snapshot and the open-status wording
 in historical evidence below. Addressed means the named source defect or cut,
@@ -344,18 +400,19 @@ with each repair's stated qualification and publication limits retained.
 
 | Disposition | IDs | Current evidence / remaining boundary |
 |---|---|---|
-| Addressed locally | H1, H4, H7, H8, H11, I3, I4, I5, I7, I8, I12, I14, I15, L1, L2, L3, L4, L7, W1, W2 | Original narrow removals plus retained acquisition, source-relative image identity, non-stealing capture, shared decoded pixels, generated transform/paint ownership, canonical origins, bounded decoded cache accumulation, shared CSS comment lexing, borrowed retained planes and authoritative linked shader layout. Dated repair sections and receipts above contain the tests and limits. |
+| Addressed locally | H1, H4, H7, H8, H11, I3, I4, I5, I7, I8, I12, I14, I15, L1, L2, L3, L4, L7, L8, L13, R6, R13, W1, W2 | Original narrow removals plus retained acquisition, source-relative image identity, non-stealing capture, shared decoded pixels, generated transform/paint ownership, canonical origins, bounded decoded cache accumulation, shared CSS comment lexing, borrowed retained planes, authoritative linked shader layout, importer identity, scoped resolver/root cleanup, table-owned aggregation and capture admission. Dated repair sections and receipts above contain the tests and limits. |
 | Partial | I1 | Native editing shares DOM defaults; scripted text/IME, key releases and default-action integration remain open. |
 | Partial | I11 | Cache-key lookup no longer recompiles shaders; a source/stage/options-owned compiled-artifact lifecycle remains open. |
 | Partial | H6 | Setup/execution/completion accounting repaired; trustworthy VM error phase/type and complete Test262 qualification remain open. |
 | Partial | L6 | Shared form/radio predicates; broader dependency classification and separate mutation switches remain. |
-| Open | I2, I6, I9-I10, I13; R1-R15; L5, L8-L13; H2-H3, H5, H9-H10 | No later cut or verification closes these findings. |
+| Open | I2, I6, I9-I10, I13; R1-R5, R7-R12, R14-R15; L5, L9-L12; H2-H3, H5, H9-H10 | No later cut or verification closes these findings. |
 
-**56 findings: 20 addressed locally, 4 partial, 32 open.** Supplemental X1 remains
+**56 findings: 24 addressed locally, 4 partial, 28 open.** Supplemental X1 remains
 partial and is excluded from that count. Supplier publication/Mere adoption,
 the baseline supplier corpus mismatch, existing ignored continuation tests and
 platform/Forms acceptance are separate outstanding obligations, not extra closed
-findings. The I8, I7, L1 and L7 continuation is now locally verified; larger runtime,
+findings. The R6, R13, L8 and L13 continuation is now locally verified with the
+separate baseline font-test failure recorded above; larger runtime,
 input, policy and layout findings remain open.
 
 H4 is source-addressed, but the browser callback has not received a fresh wasm/browser interaction test. H8's earlier Windows fake-command result remains dated evidence; it was not rerun on Linux. I12 removes a genuine unused projection and rejection; it does not establish coherent shader linking. The original text gave conflicting ordering for I12 (safe narrow cut versus W1 prerequisite). The precise boundary is: unused-field cleanup may stand independently, while claims of correct linking or subsequent layout optimization require W1/W2 to be resolved.
@@ -484,7 +541,7 @@ Relevant existing evidence: [review receipt](receipts/2026-10-16_forms_submissio
 
 ## Consolidated finding register
 
-Status is reconciled to `20d78e88bff`; descriptions and cut directions retain the original evidence. IDs match the detailed evidence sections. These are issues and removal decisions, not a count of independently reproduced bugs. Related rows share a repair boundary rather than requiring separate frameworks. W1 is the independent review's shader-link finding; the remaining independent observations corroborate I findings and are not counted twice.
+Status is reconciled to `103aaafa42e` plus the source-hashed R6/R13/L8/L13 repair; descriptions and cut directions retain the original evidence. IDs match the detailed evidence sections. These are issues and removal decisions, not a count of independently reproduced bugs. Related rows share a repair boundary rather than requiring separate frameworks. W1 is the independent review's shader-link finding; the remaining independent observations corroborate I findings and are not counted twice.
 
 | ID | Current status | Finding | Disposition / dependency |
 |---|---|---|---|
@@ -508,14 +565,14 @@ Status is reconciled to `20d78e88bff`; descriptions and cut directions retain th
 | R3 | Open | JS splits CSS declarations and mirrors a private Rust record codec | Whole-list parse in CSS owner; adequate structured boundary or one specified codec. |
 | R4 | Open | Internal task source-eval and result coercion can erase errors/work | Retained private callable entrypoints with realm/GC ownership and explicit outcomes. |
 | R5 | Open | Parsed script loading/evaluation errors disappear behind scheduling counters | Typed nonfatal execution results and proper exception reporting. |
-| R6 | Open | Parser module resolver drops referrer identity | Resolve/cache using actual importer/final URL and inline document base. |
+| R6 | Addressed locally | Parser module resolver drops referrer identity | Resolve/cache using actual importer/final URL and inline document base. |
 | R7 | Open | Worker shutdown detaches uninterruptible VM execution | Enforceable interruption/isolation; truthful lifetime and configurable shutdown policy. |
 | R8 | Open | Budget-shaped API defaults ignore limits | Separate execution interruption from job count; refuse unsupported required bounds. |
 | R9 | Open | Missing WebGL factory manufactures a context-shaped capability | Return unsupported/null when actual graphics capability is absent. |
 | R10 | Open | WebGL objects use public mutable identity and permissive text coercion | Private context-owned brands and genuine value extraction. |
 | R11 | Open | XPath adapter loses attributes, namespaces, mode and detached context | Replace lossy live adapter; preserve language core and real result identity. |
 | R12 | Open | History uses JSON state despite existing structured clone; fallback duplicates history | Share serialization semantics, then migrate fallback owner deliberately. |
-| R13 | Open | Module resolver lifetimes are erased and manually restored without unwind guard | Owned/scoped resolver context and unwind-safe restoration; preserve GC roots. |
+| R13 | Addressed locally | Module resolver lifetimes are erased and manually restored without unwind guard | Owned/scoped resolver context and unwind-safe restoration; preserve GC roots. |
 | R14 | Open | Ordinary engine/realm registration leaks process-lifetime allocations | Proper owned registrations or fixed static names; keep required rooted release queues. |
 | R15 | Open | Product elapsed-time API uses timer-driven test-like clock | Explicit host elapsed clock and separate deterministic test profile. |
 | L1 | Addressed locally | Two comment strippers remove comment-like text inside quoted CSS strings | Token-aware CSS lexical authority; isolated probe confirms helper corruption. |
@@ -525,12 +582,12 @@ Status is reconciled to `20d78e88bff`; descriptions and cut directions retain th
 | L5 | Open | Public estimated geometry diverges from retained text/resource geometry | Use live retained owner for observable geometry; identify estimates explicitly. |
 | L6 | Partial | Style invalidation and layout damage separately classify DOM dependencies | Share affected semantic owners; retain different style/formatting root outputs. |
 | L7 | Addressed locally | Local retained rendering clones whole style/fragment planes | Borrow/overlay immutable generations while preserving rollback/isolation. |
-| L8 | Open | Per-table ledger publication rebuilds aggregate diagnostics eagerly | Aggregate lazily or by deltas; keep actual divergence/ownership evidence. |
+| L8 | Addressed locally | Per-table ledger publication rebuilds aggregate diagnostics eagerly | Aggregate lazily or by deltas; keep actual divergence/ownership evidence. |
 | L9 | Open | Buckram/backend styles and genuine block fallback debt overlap | Narrow conversion/ownership after accepted contracts replace fallback; retain real flex/grid/backend functions. |
 | L10 | Open | Prospective fragmentation kernel coexists with live unsupported markers | Feature-gate prospective code; retain explicit unsupported results and six continuation repros. |
 | L11 | Open | Logical-axis facts repeat across value/geometry layers | Share small vocabulary if dependency direction permits; otherwise parity witnesses. |
 | L12 | Open | Historical property census is mistaken for current runtime consumption | Label historical or generate/check against current readers; retain honest unsupported classification. |
-| L13 | Open | Feature-enabled font diagnostics construct events before capture check | Avoid discarded collection; keep deterministic font evidence and RAII scope. |
+| L13 | Addressed locally | Feature-enabled font diagnostics construct events before capture check | Avoid discarded collection; keep deterministic font evidence and RAII scope. |
 | H1 | Addressed locally | Unused GL capability/handle stubs claim success without work | Delete stub surface after API consumer check; preserve real wgpu Core capability. |
 | H2 | Open | Browser compatibility renderer access bypasses checked ownership | Migrate to browser frame transaction; preserve leases/loss/scope outcomes. |
 | H3 | Open | WPT runs animation callbacks that live session pumps omit | Share production turn contract and pending-work wake facts; preserve virtual clock. |

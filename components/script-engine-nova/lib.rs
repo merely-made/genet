@@ -46,6 +46,9 @@ mod native {
         /// (`None` otherwise). The pointee outlives the call (an `eval_module` arg),
         /// so the deref in `load_imported_module` is sound; single-threaded.
         module_resolver: Cell<Option<*mut ModuleResolver<'static>>>,
+        /// Held until the VM finishes its normal module failure path, then
+        /// resumed outside `run_in_realm` with its original payload.
+        resolver_panic: RefCell<Option<Box<dyn Any + Send>>>,
         /// Parsed modules by resolved URL — the per-call cache (cleared each call), so
         /// a diamond / cycle resolves each module once. `Global` keeps each rooted
         /// across the load (the heap-global root set, like the reflector cache).
@@ -63,6 +66,23 @@ mod native {
         module_realm: Cell<Option<Realm<'static>>>,
     }
 
+    /// Owns one temporary resolver installation. Nova's host hooks are
+    /// registered for the agent lifetime, so a borrowed host callback cannot
+    /// be stored without erasure; this guard closes that interval on unwind.
+    struct ResolverScope<'a> {
+        hooks: &'a GenetHostHooks,
+    }
+
+    impl Drop for ResolverScope<'_> {
+        fn drop(&mut self) {
+            self.hooks.module_resolver.set(None);
+            self.hooks.module_realm.set(None);
+            // Module Globals are taken using Agent inside run_in_realm before
+            // this scope ends; dropping a Global alone leaks its root slot.
+            self.hooks.resolver_panic.borrow_mut().take();
+        }
+    }
+
     // `HostHooks: Debug`, but `Job` is not `Debug`, so report the queue length only.
     impl std::fmt::Debug for GenetHostHooks {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -73,10 +93,15 @@ mod native {
     }
 
     impl GenetHostHooks {
-        /// Install `resolver` for the duration of `f`, then clear it and the module
-        /// cache (dropping the `Global` roots so they do not leak across calls). The
-        /// lifetime is erased to `'static` for storage in the leaked (`'static`)
-        /// hooks; it is never observed past `f`, where the real resolver lives.
+        fn release_module_cache(&self, agent: &Agent) {
+            for (_, root) in self.module_cache.borrow_mut().drain() {
+                let _ = root.take(agent);
+            }
+        }
+
+        /// Install `resolver` for the duration of `f`. The host hook contract
+        /// has no scoped resolver registration, so lifetime erasure remains
+        /// localized here and the scope guard closes it on every exit.
         fn with_resolver<R>(&self, resolver: &mut ModuleResolver<'_>, f: impl FnOnce() -> R) -> R {
             self.with_resolver_in_realm(None, resolver, f)
         }
@@ -89,16 +114,25 @@ mod native {
             resolver: &mut ModuleResolver<'_>,
             f: impl FnOnce() -> R,
         ) -> R {
+            assert!(
+                self.module_resolver.get().is_none(),
+                "nested module resolver installation"
+            );
+            assert!(self.resolver_panic.borrow().is_none());
             let raw: *mut ModuleResolver<'_> = resolver;
-            // SAFETY: erases only the captured-data lifetime; same layout. Cleared below.
+            // SAFETY: erases only the callback's captured-data lifetime. The
+            // scope guard clears it before `resolver` can be dropped on all exits.
             let erased: *mut ModuleResolver<'static> = unsafe { std::mem::transmute(raw) };
             self.module_resolver.set(Some(erased));
             self.module_realm.set(realm);
-            let out = f();
-            self.module_resolver.set(None);
-            self.module_realm.set(None);
-            self.module_cache.borrow_mut().clear();
-            out
+            let scope = ResolverScope { hooks: self };
+            let result = f();
+            let panic = self.resolver_panic.borrow_mut().take();
+            drop(scope);
+            if let Some(payload) = panic {
+                std::panic::resume_unwind(payload);
+            }
+            result
         }
     }
 
@@ -143,11 +177,24 @@ mod native {
                 .unwrap_or_default();
 
             // Resolve + fetch through the host resolver active for this call.
-            let resolved = self.module_resolver.get().and_then(|ptr| {
-                // SAFETY: set by `with_resolver` for the call's duration; single-threaded.
-                let resolve = unsafe { &mut *ptr };
-                resolve(&specifier, &referrer_url)
-            });
+            let resolved = if self.resolver_panic.borrow().is_some() {
+                None
+            } else {
+                self.module_resolver.get().and_then(|ptr| {
+                    // SAFETY: set by `with_resolver` for the call's duration;
+                    // the guard clears it before the borrowed callback drops.
+                    let resolve = unsafe { &mut *ptr };
+                    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        resolve(&specifier, &referrer_url)
+                    })) {
+                        Ok(resolved) => resolved,
+                        Err(payload) => {
+                            *self.resolver_panic.borrow_mut() = Some(payload);
+                            None
+                        },
+                    }
+                })
+            };
 
             let result = match resolved {
                 Some((url, source)) => {
@@ -202,6 +249,7 @@ mod native {
         Box::leak(Box::new(GenetHostHooks {
             jobs,
             module_resolver: Cell::new(None),
+            resolver_panic: RefCell::new(None),
             module_cache: RefCell::new(HashMap::new()),
             module_realm: Cell::new(None),
         }))
@@ -1255,36 +1303,46 @@ mod native {
             // (synchronously, since the resolver fetches synchronously).
             hooks.with_resolver(resolve, || {
                 self.agent.run_in_realm(&self.realm, |agent, mut gc| {
-                    let realm = agent.current_realm(gc.nogc());
-                    let source_text = JsString::from_string(agent, src, gc.nogc());
-                    let module = match parse_module(
-                        agent,
-                        source_text,
-                        realm,
-                        Some(Rc::new(base) as HostDefined),
-                        gc.nogc(),
-                    ) {
-                        Ok(m) => m,
-                        Err(_) => {
-                            out = Err("module parse error".to_string());
-                            return;
-                        },
-                    };
-                    match agent.run_module(module.unbind(), None, gc.reborrow()) {
-                        Ok(value) => {
-                            out = Ok(Some(NovaValue::new(
-                                Global::new(agent, value.unbind()),
-                                &release,
-                            )))
-                        },
-                        Err(err) => {
-                            let v = err.value().unbind();
-                            let msg = v
-                                .to_string(agent, gc.reborrow())
-                                .map(|s| s.to_string_lossy(agent).into_owned())
-                                .unwrap_or_else(|_| "<unprintable>".to_string());
-                            out = Err(format!("module threw: {msg}"));
-                        },
+                    let evaluation = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        let realm = agent.current_realm(gc.nogc());
+                        let source_text = JsString::from_string(agent, src, gc.nogc());
+                        let module = match parse_module(
+                            agent,
+                            source_text,
+                            realm,
+                            Some(Rc::new(base.clone()) as HostDefined),
+                            gc.nogc(),
+                        ) {
+                            Ok(m) => m,
+                            Err(_) => {
+                                out = Err("module parse error".to_string());
+                                return;
+                            },
+                        };
+                        hooks
+                            .module_cache
+                            .borrow_mut()
+                            .insert(base.clone(), Global::new(agent, module.unbind()));
+                        match agent.run_module(module.unbind(), None, gc.reborrow()) {
+                            Ok(value) => {
+                                out = Ok(Some(NovaValue::new(
+                                    Global::new(agent, value.unbind()),
+                                    &release,
+                                )))
+                            },
+                            Err(err) => {
+                                let v = err.value().unbind();
+                                let msg = v
+                                    .to_string(agent, gc.reborrow())
+                                    .map(|s| s.to_string_lossy(agent).into_owned())
+                                    .unwrap_or_else(|_| "<unprintable>".to_string());
+                                out = Err(format!("module threw: {msg}"));
+                            },
+                        }
+                    }));
+                    hooks.release_module_cache(agent);
+                    if let Err(payload) = evaluation {
+                        std::panic::resume_unwind(payload);
                     }
                 });
             });
@@ -1299,6 +1357,7 @@ mod native {
             realm: RealmId,
             source: &str,
             base_url: &str,
+            entry_identity: Option<&str>,
             resolve: &mut dyn FnMut(&str, &str) -> Option<(String, String)>,
         ) -> Result<Option<Self::Value>, RealmError> {
             if !self.registry.realms.borrow().contains_key(&realm) {
@@ -1309,6 +1368,7 @@ mod native {
             let registry = self.registry.clone();
             let src = source.to_string();
             let base = base_url.to_string();
+            let identity = entry_identity.map(str::to_owned);
             let mut out: Result<Option<NovaValue>, RealmError> = Err(RealmError::Engine(
                 "eval_module_in_realm did not run".to_string(),
             ));
@@ -1327,43 +1387,55 @@ mod native {
             };
             hooks.with_resolver_in_realm(pinned, resolve, || {
                 self.agent.run_in_realm(&self.realm, |agent, mut gc| {
-                    let target = registry
-                        .realms
-                        .borrow()
-                        .get(&realm)
-                        .expect("checked realm")
-                        .get(agent, gc.nogc())
-                        .unbind();
-                    let current = target.bind(gc.nogc());
-                    let source_text = JsString::from_string(agent, src, gc.nogc());
-                    let module = match parse_module(
-                        agent,
-                        source_text,
-                        current,
-                        Some(Rc::new(base) as HostDefined),
-                        gc.nogc(),
-                    ) {
-                        Ok(m) => m,
-                        Err(_) => {
-                            out = Err(RealmError::Engine("module parse error".to_string()));
-                            return;
-                        },
-                    };
-                    match agent.run_module(module.unbind(), None, gc.reborrow()) {
-                        Ok(value) => {
-                            out = Ok(Some(NovaValue::new(
-                                Global::new(agent, value.unbind()),
-                                &release,
-                            )))
-                        },
-                        Err(err) => {
-                            let v = err.value().unbind();
-                            let msg = v
-                                .to_string(agent, gc.reborrow())
-                                .map(|s| s.to_string_lossy(agent).into_owned())
-                                .unwrap_or_else(|_| "<unprintable>".to_string());
-                            out = Err(RealmError::Engine(format!("module threw: {msg}")));
-                        },
+                    let evaluation = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        let target = registry
+                            .realms
+                            .borrow()
+                            .get(&realm)
+                            .expect("checked realm")
+                            .get(agent, gc.nogc())
+                            .unbind();
+                        let current = target.bind(gc.nogc());
+                        let source_text = JsString::from_string(agent, src, gc.nogc());
+                        let module = match parse_module(
+                            agent,
+                            source_text,
+                            current,
+                            Some(Rc::new(base) as HostDefined),
+                            gc.nogc(),
+                        ) {
+                            Ok(m) => m,
+                            Err(_) => {
+                                out = Err(RealmError::Engine("module parse error".to_string()));
+                                return;
+                            },
+                        };
+                        if let Some(identity) = identity {
+                            hooks
+                                .module_cache
+                                .borrow_mut()
+                                .insert(identity, Global::new(agent, module.unbind()));
+                        }
+                        match agent.run_module(module.unbind(), None, gc.reborrow()) {
+                            Ok(value) => {
+                                out = Ok(Some(NovaValue::new(
+                                    Global::new(agent, value.unbind()),
+                                    &release,
+                                )))
+                            },
+                            Err(err) => {
+                                let v = err.value().unbind();
+                                let msg = v
+                                    .to_string(agent, gc.reborrow())
+                                    .map(|s| s.to_string_lossy(agent).into_owned())
+                                    .unwrap_or_else(|_| "<unprintable>".to_string());
+                                out = Err(RealmError::Engine(format!("module threw: {msg}")));
+                            },
+                        }
+                    }));
+                    hooks.release_module_cache(agent);
+                    if let Err(payload) = evaluation {
+                        std::panic::resume_unwind(payload);
                     }
                 });
             });
@@ -2492,6 +2564,79 @@ mod native {
     #[cfg(test)]
     mod tests {
         use super::*;
+
+        #[test]
+        fn completed_module_graph_releases_its_global_roots() {
+            let mut engine = NovaEngine::new().unwrap();
+            let mut resolve = |specifier: &str, _: &str| {
+                assert_eq!(specifier, "./dep.js");
+                Some((
+                    "https://roots.test/dep.js".into(),
+                    "export const marker = {};".into(),
+                ))
+            };
+            engine
+                .eval_module(
+                    "import { marker } from './dep.js'; globalThis.moduleWeak = new WeakRef(marker);",
+                    "https://roots.test/entry.js",
+                    &mut resolve,
+                )
+                .unwrap();
+            assert!(engine.hooks.module_cache.borrow().is_empty());
+            engine.force_gc();
+            let collected = engine.eval("moduleWeak.deref() === undefined").unwrap();
+            assert_eq!(engine.value_to_string(&collected).unwrap(), "true");
+        }
+
+        #[test]
+        fn resolver_panic_restores_scope_and_allows_a_second_module() {
+            #[derive(Debug, PartialEq)]
+            struct ResolverPanic;
+
+            let mut engine = NovaEngine::new().unwrap();
+            let realm = engine.create_realm().unwrap();
+            let mut calls = 0;
+            let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let mut failing = |_: &str, _: &str| -> Option<(String, String)> {
+                    calls += 1;
+                    std::panic::panic_any(ResolverPanic);
+                };
+                let _ = engine.eval_module_in_realm(
+                    realm,
+                    "import './first.js'; import './second.js';",
+                    "https://modules.test/entry.js",
+                    Some("https://modules.test/entry.js"),
+                    &mut failing,
+                );
+            }))
+            .expect_err("original host panic must resume outside Nova");
+            assert_eq!(caught.downcast_ref::<ResolverPanic>(), Some(&ResolverPanic));
+            assert_eq!(calls, 1, "do not invoke the resolver again after its panic");
+            assert!(engine.hooks.module_resolver.get().is_none());
+            assert!(engine.hooks.module_realm.get().is_none());
+            assert!(engine.hooks.module_cache.borrow().is_empty());
+            assert!(engine.hooks.resolver_panic.borrow().is_none());
+
+            let mut clean = |specifier: &str, referrer: &str| {
+                assert_eq!(specifier, "./dep.js");
+                assert_eq!(referrer, "https://modules.test/next.js");
+                Some((
+                    "https://modules.test/dep.js".into(),
+                    "export const answer = 42;".into(),
+                ))
+            };
+            engine
+                .eval_module_in_realm(
+                    realm,
+                    "import { answer } from './dep.js'; globalThis.answer = answer;",
+                    "https://modules.test/next.js",
+                    Some("https://modules.test/next.js"),
+                    &mut clean,
+                )
+                .unwrap();
+            let value = engine.eval_in_realm(realm, "answer").unwrap();
+            assert_eq!(engine.value_to_string(&value).unwrap(), "42");
+        }
 
         // Regression guard for the Nova reflector leak (fixed by the `NovaValue`
         // deferred-release wrapper). Before the fix, `NovaCallCx::arg` returned a bare

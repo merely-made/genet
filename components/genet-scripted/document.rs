@@ -1300,7 +1300,9 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             let mut stack = vec![dom.document()]; let mut nodes = Vec::new();
             while let Some(node) = stack.pop() {
                 if let Some(name) = dom.element_name(node) {
-                    let attr = |key: &str| dom.attribute(node, &Namespace::default(), &LocalName::from(key));
+                    let attr = |key: &str| {
+                        dom.attribute(node, &Namespace::default(), &LocalName::from(key))
+                    };
                     let tabindex = attr("tabindex").and_then(|v| v.parse::<i32>().ok());
                     if !dom.form_control_is_disabled(node).unwrap_or(false)
                         && tabindex.is_none_or(|i| i >= 0)
@@ -1314,20 +1316,62 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             }
             nodes
         });
-        let nodes = nodes.into_iter().filter(|node| self.cssom.fragment_rect(*node)
-            .is_some_and(|[_, _, w, h]| w > 0.0 && h > 0.0)).collect::<Vec<_>>();
-        if nodes.is_empty() { self.clear_host_focus(); return false; }
-        let current = self.host_focused_node.and_then(|node| nodes.iter().position(|n| *n == node));
-        let next = if backward { current.map_or(nodes.len()-1, |i| (i+nodes.len()-1)%nodes.len()) }
-            else { current.map_or(0, |i| (i+1)%nodes.len()) };
+        let nodes = nodes
+            .into_iter()
+            .filter(|node| {
+                self.cssom
+                    .fragment_rect(*node)
+                    .is_some_and(|[_, _, w, h]| w > 0.0 && h > 0.0)
+            })
+            .collect::<Vec<_>>();
+        if nodes.is_empty() {
+            self.clear_host_focus();
+            return false;
+        }
+        let current = self
+            .host_focused_node
+            .and_then(|node| nodes.iter().position(|n| *n == node));
+        let next = if backward {
+            current.map_or(nodes.len() - 1, |i| (i + nodes.len() - 1) % nodes.len())
+        } else {
+            current.map_or(0, |i| (i + 1) % nodes.len())
+        };
         self.focus_host_node(nodes[next])
     }
-    pub fn dispatch_host_keydown(&mut self, key: &str, alt: bool, ctrl: bool, meta: bool, shift: bool) -> bool {
-        let Some(node) = self.host_focused_node else { return false; };
-        if !self.host_focus_is_current(node) { self.clear_host_focus(); return false; }
-        let handled = self.rt.dispatch_form_keydown(node.raw(), key, script_runtime_api::FormKeyModifiers { alt, ctrl, meta, shift }).unwrap_or(false);
-        if !self.host_focus_is_current(node) { self.clear_host_focus(); }
-        self.drain_validation_reports(); self.flush_dom_capture(); handled
+    pub fn dispatch_host_keydown(
+        &mut self,
+        key: &str,
+        alt: bool,
+        ctrl: bool,
+        meta: bool,
+        shift: bool,
+    ) -> bool {
+        let Some(node) = self.host_focused_node else {
+            return false;
+        };
+        if !self.host_focus_is_current(node) {
+            self.clear_host_focus();
+            return false;
+        }
+        let handled = self
+            .rt
+            .dispatch_form_keydown(
+                node.raw(),
+                key,
+                script_runtime_api::FormKeyModifiers {
+                    alt,
+                    ctrl,
+                    meta,
+                    shift,
+                },
+            )
+            .unwrap_or(false);
+        if !self.host_focus_is_current(node) {
+            self.clear_host_focus();
+        }
+        self.drain_validation_reports();
+        self.flush_dom_capture();
+        handled
     }
 
     pub fn click_at(&mut self, x: f32, y: f32) -> bool {
@@ -1356,8 +1400,15 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         let mut links = Vec::new();
         collect_livery_links(&host.dom, host.dom.document(), &self.cssom, &mut links);
         let base = host.document_base_url();
-        links.into_iter().map(|(href, rect)|
-            (crate::resolve_href(base.as_deref().unwrap_or("about:blank"), &href), rect)).collect()
+        links
+            .into_iter()
+            .map(|(href, rect)| {
+                (
+                    crate::resolve_href(base.as_deref().unwrap_or("about:blank"), &href),
+                    rect,
+                )
+            })
+            .collect()
     }
 
     pub fn begin_text_selection(&mut self, x: f32, y: f32) -> bool {
@@ -1771,6 +1822,35 @@ impl script_runtime_api::ParserScriptLoader for DocumentScriptLoader<'_> {
             Some((_, base)) => crate::resolve_href(base, src),
             None => src.to_owned(),
         }
+    }
+
+    fn load_module(
+        &self,
+        specifier: &str,
+        referrer: &str,
+        charset: Option<&str>,
+        integrity: Option<&str>,
+    ) -> Option<(String, String)> {
+        let (fetcher, document_url) = self.loader?;
+        let requested = crate::resolve_href(
+            if referrer.is_empty() {
+                document_url
+            } else {
+                referrer
+            },
+            specifier,
+        );
+        let response = fetcher.fetch_response(&requested)?;
+        if let Some(metadata) = integrity {
+            if !integrity_matches(metadata, &response.bytes) {
+                eprintln!("[pelt-scripted] integrity mismatch for {requested}; script blocked");
+                return None;
+            }
+        }
+        Some((
+            response.final_url,
+            decode_script_bytes(&response.bytes, charset),
+        ))
     }
 }
 
@@ -2555,6 +2635,127 @@ mod tests {
         );
     }
 
+    /// Redirected entries and dependencies use their final URL as the next
+    /// import base and as the cache key. Inline modules use the live <base>.
+    fn module_graph_uses_importer_final_urls_and_inline_base<E: ScriptEngine>() {
+        use genet_host_api::ResourceResponse;
+        use std::collections::HashMap;
+        use std::sync::Mutex;
+
+        struct Modules {
+            files: HashMap<String, (String, String)>,
+            requested: Mutex<Vec<String>>,
+        }
+        impl ResourceFetcher for Modules {
+            fn fetch(&self, url: &str) -> Option<Vec<u8>> {
+                self.fetch_response(url).map(|response| response.bytes)
+            }
+            fn fetch_response(&self, url: &str) -> Option<ResourceResponse> {
+                self.requested.lock().unwrap().push(url.into());
+                let (final_url, source) = self.files.get(url)?;
+                Some(ResourceResponse::new(
+                    final_url.clone(),
+                    source.as_bytes().to_vec(),
+                ))
+            }
+        }
+        const ENTRY: &str = "import { left } from './branch/left.js';\
+             import { right } from './branch/right.js';\
+             console.log('entry-once'); console.log('joined:' + left + right);";
+        let files = [
+            (
+                "https://site.test/page/index.html",
+                "https://site.test/page/index.html",
+                "<head><script type=module>import { value } from './early.js'; console.log('early:' + value);</script>\
+                 <base href='https://site.test/assets/'></head><body>\
+                 <script type=module src='../redirect/entry.js'></script>\
+                 <script type=module>import { value } from './inline.js'; console.log('inline:' + value);</script></body>",
+            ),
+            (
+                "https://site.test/page/early.js",
+                "https://site.test/page/early.js",
+                "export const value = 'E';",
+            ),
+            (
+                "https://site.test/redirect/entry.js",
+                "https://site.test/modules/a/entry.js",
+                ENTRY,
+            ),
+            (
+                "https://site.test/modules/a/entry.js",
+                "https://site.test/modules/a/entry.js",
+                ENTRY,
+            ),
+            (
+                "https://site.test/modules/a/branch/left.js",
+                "https://site.test/modules/a/branch/left.js",
+                "import '../entry.js'; import { token } from '../../shared/alias-a.js'; export const left = token;",
+            ),
+            (
+                "https://site.test/modules/a/branch/right.js",
+                "https://site.test/modules/a/branch/right.js",
+                "import { token } from '../../shared/alias-b.js'; export const right = token;",
+            ),
+            (
+                "https://site.test/modules/shared/alias-a.js",
+                "https://site.test/canonical/shared.js",
+                "console.log('shared-once'); export const token = 'S';",
+            ),
+            (
+                "https://site.test/modules/shared/alias-b.js",
+                "https://site.test/canonical/shared.js",
+                "console.log('shared-once'); export const token = 'S';",
+            ),
+            (
+                "https://site.test/assets/inline.js",
+                "https://site.test/assets/inline.js",
+                "export const value = 'I';",
+            ),
+        ];
+        let fetcher = Modules {
+            files: files
+                .into_iter()
+                .map(|(requested, final_url, source)| {
+                    (requested.into(), (final_url.into(), source.into()))
+                })
+                .collect(),
+            requested: Mutex::new(Vec::new()),
+        };
+        let document = ScriptedDocument::<E>::load(&fetcher, "https://site.test/page/index.html")
+            .expect("module document loads");
+        let console = document.console();
+        assert!(console.iter().any(|line| line == "early:E"), "{console:?}");
+        assert!(
+            console.iter().any(|line| line == "joined:SS"),
+            "{console:?}"
+        );
+        assert!(console.iter().any(|line| line == "inline:I"), "{console:?}");
+        assert_eq!(
+            console.iter().filter(|line| *line == "entry-once").count(),
+            1
+        );
+        assert_eq!(
+            console.iter().filter(|line| *line == "shared-once").count(),
+            1
+        );
+        let requested = fetcher.requested.lock().unwrap();
+        for url in [
+            "https://site.test/page/early.js",
+            "https://site.test/redirect/entry.js",
+            "https://site.test/modules/a/entry.js",
+            "https://site.test/modules/a/branch/left.js",
+            "https://site.test/modules/a/branch/right.js",
+            "https://site.test/modules/shared/alias-a.js",
+            "https://site.test/modules/shared/alias-b.js",
+            "https://site.test/assets/inline.js",
+        ] {
+            assert!(
+                requested.iter().any(|seen| seen == url),
+                "missing {url}: {requested:?}"
+            );
+        }
+    }
+
     /// `<script charset>` decodes the fetched bytes with the named encoding, not
     /// UTF-8: an ISO-8859-1 script with a `0xE9` byte ('é') decodes to `café`. As
     /// UTF-8 the lone `0xE9` is invalid and would become a replacement char.
@@ -2782,6 +2983,10 @@ mod tests {
         module_import_diamond_loads_shared_once::<BoaEngine>();
     }
     #[test]
+    fn module_graph_uses_importer_final_urls_and_inline_base_on_boa() {
+        module_graph_uses_importer_final_urls_and_inline_base::<BoaEngine>();
+    }
+    #[test]
     fn external_script_charset_decodes_on_boa() {
         external_script_charset_decodes::<BoaEngine>();
     }
@@ -2878,6 +3083,10 @@ mod tests {
         #[test]
         fn module_import_diamond_loads_shared_once_on_nova() {
             module_import_diamond_loads_shared_once::<NovaEngine>();
+        }
+        #[test]
+        fn module_graph_uses_importer_final_urls_and_inline_base_on_nova() {
+            module_graph_uses_importer_final_urls_and_inline_base::<NovaEngine>();
         }
         #[test]
         fn external_script_charset_decodes_on_nova() {

@@ -5738,5 +5738,207 @@
       }
     ],
     "lock_changes": "Canonical origin URL dependency; CPU raster dev-dependencies activate four previously absent packages from existing pinned supplier graph. No root supplier pin changes."
+  },
+  "module_and_diagnostics_repairs": {
+    "base_commit": "103aaafa42e9c469594806361145a2ea13b959a6",
+    "findings": [
+      "R6",
+      "R13",
+      "L8",
+      "L13"
+    ],
+    "source_sha256": {
+      "components/genet-livery/src/layout/query.rs": "5e7914b8d276e83950570d3b1b5c494812cf3c91c5ddbb26c57284c6a0e44fd6",
+      "components/genet-livery/src/layout/transaction.rs": "5faede4d050bf17946d83f280c7385e6ebd1dc12e40caff4ef473f2b6e6bf970",
+      "components/genet-livery/src/table_shadow.rs": "d13cef5412e4f30cd3017335d999d3ec9351098e5ba69d3f26489d1f4b5f3f2d",
+      "components/genet-scripted/document.rs": "b148a06e6e3560db8b90e59122ef5ead82bd736d28edbd7d6c4f0998c8a6e58f",
+      "components/script-engine-api/lib.rs": "3de90fb0466844a0968edb31a63512dca779f2424b1af1e0c949ec30915f5bb6",
+      "components/script-engine-boa/lib.rs": "2d649f512aa14accf3a04880293254854bb23346921f67dba27db05b48057a40",
+      "components/script-engine-nova/lib.rs": "1fe38fb4607a8d88db1cba0389c9bcc152568a308976b6478fde5927017e04ac",
+      "components/script-runtime-api/parse.rs": "c54cf24afc28408e15c9bb2b8451e613ba4268fb30bd2cf8c909e31e6b25bba2",
+      "components/script-runtime-api/tests/parser_script_interleaving.rs": "5c553673182b053fbc31d4448efa511a101c1461719223115d53347a9d4cb0a0",
+      "support/patches/parley/GENET_PATCHES.md": "0cf05485674e3ced562bb1c8d0c5c450fd26550f2e83e179f5e10fdd7352b2c9",
+      "support/patches/parley/src/font_diagnostic.rs": "8250ce87ea5b6f654896f2af38a9f2d14d368fc230bf64be066ef1d4da19cbe6",
+      "support/patches/parley/src/shape/mod.rs": "164f157bfa55fe0744e8da974f0638dba7e6a239f7f1df47d9d5f85fc59f2e31",
+      "support/patches/parley/src/tests/test_builders.rs": "d975384c36a7562f0d97412880999a657b50b212a601e40e5bce8673811774e4"
+    },
+    "gates": [
+      {
+        "label": "retained-final",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261016/module-diagnostics-cuts/retained-final.log",
+        "sha256": "98187c26c00cae84120f27f7f366e56b147272f947a208a9f2ba2208f151988a",
+        "passed": 435,
+        "failed": 0,
+        "ignored": 2,
+        "exit_status": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-livery --lib --test anonymous_tables --test k5d_font_feature_resolution --test retained_cpu_raster --test paint -- --test-threads=1",
+        "max_process_rss_kib": 808192,
+        "swaps": 0
+      },
+      {
+        "label": "engines-committed-source",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261016/module-diagnostics-cuts/engines-committed-source.log",
+        "sha256": "ea78c9ebf169d84ac3352371fec02a66d2a1c16891359ce27e320110ebc01002",
+        "passed": 38,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p script-engine-boa -p script-engine-nova --lib -- --test-threads=1",
+        "max_process_rss_kib": 414776,
+        "swaps": 0
+      },
+      {
+        "label": "parser-unit",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261016/module-diagnostics-cuts/parser-unit.log",
+        "sha256": "d4c61138ad80cc5f81b0b36bc87b2aa8f581cd0d3242e35a3fc8a7779cb18ee2",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p script-runtime-api --lib parse::tests -- --test-threads=1",
+        "max_process_rss_kib": 118512,
+        "swaps": 0
+      },
+      {
+        "label": "parser-integration",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261016/module-diagnostics-cuts/parser-integration.log",
+        "sha256": "c8686015c5e4c5e55d7c58e10ad82710c5cb0b9e7390d49bf32531f2607cdb25",
+        "passed": 54,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p script-runtime-api --test parser_script_interleaving --test pending_script_adoption -- --test-threads=1",
+        "max_process_rss_kib": 135556,
+        "swaps": 0
+      },
+      {
+        "label": "scripted-modules-final",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261016/module-diagnostics-cuts/scripted-modules-final.log",
+        "sha256": "bb36d9a059f755a24d9f4c4435da74a4266c1fe5a32e86e089d1aaad81a816b8",
+        "passed": 16,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-scripted --features scripted-nova --lib module_ -- --test-threads=1",
+        "max_process_rss_kib": 1144576,
+        "swaps": 0
+      },
+      {
+        "label": "font-verified",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261016/module-diagnostics-cuts/font-verified.log",
+        "sha256": "81445d8a4f381eeae751440b6189c01131579db7c4cf247db1e96658ea031d40",
+        "passed": 58,
+        "failed": 1,
+        "ignored": 0,
+        "exit_status": 101,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 -p genet-parley --features font-diagnostic --lib -- --test-threads=1",
+        "max_process_rss_kib": 305812,
+        "swaps": 0
+      },
+      {
+        "label": "font-feature-off",
+        "log": "/home/markik/Code/testing/audits/genet-architecture-20261016/module-diagnostics-cuts/font-feature-off.log",
+        "sha256": "f2c649ba0507228e9baf63df07aeb5ca0ad987ac54a9ca5fdba1659e586cb4e5",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "exit_status": 0,
+        "command": "timeout --signal=TERM --kill-after=10s 240s cargo check --offline --locked -j1 -p genet-parley --no-default-features --features libm",
+        "max_process_rss_kib": 432176,
+        "swaps": 0
+      }
+    ],
+    "totals": {
+      "passed": 603,
+      "failed": 1,
+      "ignored": 2
+    },
+    "reviews": [
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/module-diagnostics-cuts/review-font.md",
+        "sha256": "f76218f92416c2a063ec6b64819404210e64baf1fd91f85ce9fe662976a24181"
+      },
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/module-diagnostics-cuts/review-table.md",
+        "sha256": "cf8312b6b71af53688d6f1246c12d7106d674de16753e0762aab87a7e82dbfb9"
+      },
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/module-diagnostics-cuts/review-module.md",
+        "sha256": "00db92ba29e9cd109d41587459c3281cacafb8c53c4a76e071215c97d23fe952"
+      },
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/module-diagnostics-cuts/final-review.md",
+        "sha256": "5f25dc6f3ea043d0c8645cdeb59f3c6e6b1c9aaca905186ceb052a96480f01e7"
+      }
+    ],
+    "baseline_failure": {
+      "test": "tests::test_builders::builders_empty",
+      "difference": "tab_size 64 versus 0",
+      "control_log": "/home/markik/Code/testing/audits/genet-architecture-20261016/module-diagnostics-cuts/font-baseline-empty.log",
+      "control_sha256": "c283a1f0aa091e90bc14fff0a9c072645670e28401dbfb537ad4378aad2c4221",
+      "control_sources": {
+        "base": "103aaafa42e",
+        "exception": "test fixture helper only: bundled Lato replaces unavailable parley_dev",
+        "sha256": {
+          "support/patches/parley/src/font_diagnostic.rs": "5048f3180a03cf2416895880441c0766a88e367f4f62e19245fbbe705ee169fa",
+          "support/patches/parley/src/shape/mod.rs": "5e294d5193522617fef9ebc8ee5535ba470d51f5e82a6a7eaeeeeda84bae5de6",
+          "support/patches/parley/src/tests/test_builders.rs": "d975384c36a7562f0d97412880999a657b50b212a601e40e5bce8673811774e4"
+        }
+      },
+      "note": "Pre-cut production font sources with the same repaired bundled-font test helper reproduce the failure; test remains enabled. Control wrapper exited zero, underlying Cargo gate failed 101."
+    },
+    "resource_limits": {
+      "build_lock": "/home/markik/Code/testing/machine-heavy.lock",
+      "memory_max": "5G",
+      "memory_swap_max": 0,
+      "cpu_quota": "150%",
+      "nice": 10,
+      "cargo_jobs": 1,
+      "test_threads": 1,
+      "timeout_seconds": 240
+    },
+    "lock_sha256": "0600a9b8467bf8db5ea8b7df64f88b1de0a44a1803259331d024d4901f7b9b75",
+    "lock_unchanged": true,
+    "limits": [
+      "Host resolver panic recovery qualified; arbitrary VM panic reuse not qualified; encapsulated borrowed resolver lifetime erasure remains.",
+      "Font suite has one baseline-reproduced failure; Windows font contracts not rerun.",
+      "Table optimization proved by fold counts, not wall-clock benchmark.",
+      "Supplier pin remains local and unpublished; no platform or Forms acceptance claimed."
+    ],
+    "prior_attempts": "font.log compile failures repaired; font-final/font-isolated shaping fixture corrected; parser.log overly broad gate deliberately stopped with exit 143, not counted; intermediate gates excluded from final totals. scripted-modules.log failed compilation because the new fixture omitted std::sync::Mutex; the one-line import correction was independently reviewed and scripted-modules-final passed.",
+    "earlier_attempt_logs": [
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/module-diagnostics-cuts/font.log",
+        "sha256": "71038229e7c05daf1fc3a18d878729e2a72f86a588b06a2a2c4bec5ab93470e4"
+      },
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/module-diagnostics-cuts/font-final.log",
+        "sha256": "939fc84c33b7a4eab100cb4f225b49f31b454c3b8967e91ec2751b2d4e7511de"
+      },
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/module-diagnostics-cuts/font-isolated.log",
+        "sha256": "9a09a019dcaeb116e3471edc91a7b6fcf6c6386c9ef08421e2a355768d94e48b"
+      },
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/module-diagnostics-cuts/parser.log",
+        "sha256": "8f3f1b155a5b6b6888721ad41474a3c452abcc582591637af5358c6a4f89c285"
+      },
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/module-diagnostics-cuts/scripted-modules.log",
+        "sha256": "5faa3d33b20270d2b7ccc3f5b3649106b2c78ec90007d09ca18f63b5163ecbe7"
+      },
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/module-diagnostics-cuts/engines.log",
+        "sha256": "751a74172663bcf32374e11237db5a62a286e429ec694218806ced34784a068c"
+      },
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/module-diagnostics-cuts/engines-final.log",
+        "sha256": "f15b0bf394062f56f218499a6050c1435d762b10c7b07b45d002944102df9814"
+      },
+      {
+        "path": "/home/markik/Code/testing/audits/genet-architecture-20261016/module-diagnostics-cuts/table.log",
+        "sha256": "36f24791721c855cbcc8b8c316346c9cd8c42868db2b2eb21216fde9148ba6e2"
+      }
+    ]
   }
 }

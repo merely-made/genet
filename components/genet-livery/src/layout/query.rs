@@ -21,8 +21,9 @@ where
         text_frame: Option<TextFrame<Id>>,
         block_algorithms: BlockAlgorithmCounts,
         table_paint: TablePaintPlane,
-        table_shadow: TableShadowLedger,
+        mut table_shadow: TableShadowLedger,
     ) -> Self {
+        table_shadow.materialize_summary();
         Self {
             viewport,
             buckram,

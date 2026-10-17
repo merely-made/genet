@@ -3,7 +3,7 @@
 
 //! Test that the various builders produce the same results.
 
-use std::{borrow::Cow, path::PathBuf, sync::Arc};
+use std::{borrow::Cow, sync::Arc};
 
 use fontique::{Collection, CollectionOptions, FontStyle, FontWeight, FontWidth, SourceCache};
 use parlance::FontFamilyName;
@@ -16,47 +16,22 @@ use crate::{
     TreeBuilder, WordBreak,
 };
 
-// TODO: `FONT_FAMILY_LIST`, `load_fonts`, and `create_font_context` are
-// duplicated between this crate and `parley_test`. We can't move the builder
-// tests into `parley_test` because they use private APIs, but should eventually
-// figure out some way to reduce the duplication.
-const FONT_FAMILY_LIST: &[FontFamilyName<'_>] = &[
-    FontFamilyName::Named(Cow::Borrowed("Roboto")),
-    FontFamilyName::Named(Cow::Borrowed("Noto Kufi Arabic")),
-];
-
-pub(crate) fn load_fonts(
-    collection: &mut Collection,
-    font_dirs: impl Iterator<Item = PathBuf>,
-) -> std::io::Result<()> {
-    for dir in font_dirs {
-        let paths = std::fs::read_dir(dir)?;
-        for entry in paths {
-            let entry = entry?;
-            if !entry.metadata()?.is_file() {
-                continue;
-            }
-            let path = entry.path();
-            if path
-                .extension()
-                .and_then(|ext| ext.to_str())
-                .is_none_or(|ext| !["ttf", "otf", "ttc", "otc"].contains(&ext))
-            {
-                continue;
-            }
-            let font_data = std::fs::read(&path)?;
-            collection.register_fonts(Blob::new(Arc::new(font_data)), None);
-        }
-    }
-    Ok(())
-}
+// These tests compare builder output, not a particular font's metrics. Use
+// the repository's deterministic Latin fixtures instead of parley_dev's
+// unavailable upstream font collection.
+const FONT_FAMILY_LIST: &[FontFamilyName<'_>] = &[FontFamilyName::Named(Cow::Borrowed("Lato"))];
 
 fn create_font_context() -> FontContext {
     let mut collection = Collection::new(CollectionOptions {
         shared: false,
         system_fonts: false,
     });
-    load_fonts(&mut collection, parley_dev::font_dirs()).unwrap();
+    for bytes in [
+        include_bytes!("../../../../../tests/wpt/tests/fonts/Lato-Medium.ttf").as_slice(),
+        include_bytes!("../../../../../tests/wpt/tests/fonts/Lato-Bold.ttf").as_slice(),
+    ] {
+        collection.register_fonts(Blob::new(Arc::new(bytes.to_vec())), None);
+    }
     for font in FONT_FAMILY_LIST {
         if let FontFamilyName::Named(font_name) = font {
             collection

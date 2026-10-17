@@ -41,6 +41,25 @@ impl ParserScriptLoader for TableLoader {
     }
 }
 
+/// An inline module uses the document URL to resolve imports, but is a
+/// distinct module from a fetched dependency at that same URL.
+fn inline_entry_does_not_alias_fetched_document_url<E: ScriptEngine>() {
+    let loader = TableLoader(vec![(
+        "https://identity.test/page/entry.js",
+        "export const value = 'fetched';",
+    )]);
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.set_base_url("https://identity.test/page/entry.js")
+        .expect("document URL");
+    rt.parse_document_interleaved(
+        "<body><script type=module>\
+         import { value } from './entry.js'; globalThis.inlineValue = value;\
+         </script></body>",
+        &loader,
+    );
+    assert_eq!(read(&mut rt, "inlineValue"), "fetched");
+}
+
 /// The defining difference from parse-then-run: a script sees the tree only as
 /// far as its own position in the source.
 fn a_script_sees_the_tree_only_as_far_as_itself<E: ScriptEngine>() {
@@ -613,6 +632,8 @@ macro_rules! both_engines {
 }
 
 both_engines! {
+    inline_entry_does_not_alias_fetched_document_url
+        => (inline_identity_on_boa, inline_identity_on_nova),
     a_script_sees_the_tree_only_as_far_as_itself => (partial_tree_on_boa, partial_tree_on_nova),
     script_order_is_document_order => (script_order_on_boa, script_order_on_nova),
     document_write_lands_at_the_insertion_point => (write_point_on_boa, write_point_on_nova),

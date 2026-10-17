@@ -271,23 +271,51 @@ struct HostModuleLoader {
     /// otherwise). The pointee outlives the call (it is an `eval_module` argument),
     /// so the deref in `load_imported_module` is sound; single-threaded, no reentrancy.
     resolver: Cell<Option<*mut ModuleResolver<'static>>>,
+    /// A host callback panic is resumed after Boa has unwound its own module
+    /// evaluation normally; unwinding through the VM could leave it unusable.
+    resolver_panic: RefCell<Option<Box<dyn std::any::Any + Send>>>,
+}
+
+/// Restores the long-lived loader even when parsing, a host resolver, or
+/// evaluation unwinds. The borrowed callback remains installed only while
+/// this guard and its caller's resolver argument are alive.
+struct ResolverScope<'a> {
+    loader: &'a HostModuleLoader,
+}
+
+impl Drop for ResolverScope<'_> {
+    fn drop(&mut self) {
+        // Clear the erased borrow before releasing any cached modules. A later
+        // evaluation must never observe this call's resolver or graph.
+        self.loader.resolver.set(None);
+        self.loader.cache.borrow_mut().clear();
+        self.loader.resolver_panic.borrow_mut().take();
+    }
 }
 
 impl HostModuleLoader {
-    /// Install `resolver` for the duration of `f`, then clear it and the module
-    /// cache. The lifetime is erased to `'static` for storage in the long-lived
-    /// loader; it is never observed past `f`, where the real resolver lives.
+    /// Install `resolver` for the duration of `f`. Boa's long-lived loader has
+    /// no scoped resolver registration API, so the borrowed pointer's lifetime
+    /// is still erased here; the guard bounds that unsafe interval on all exits.
     fn with_resolver<R>(&self, resolver: &mut ModuleResolver<'_>, f: impl FnOnce() -> R) -> R {
+        assert!(
+            self.resolver.get().is_none(),
+            "nested module resolver installation"
+        );
+        assert!(self.resolver_panic.borrow().is_none());
         let raw: *mut ModuleResolver<'_> = resolver;
-        // SAFETY: erases only the trait object's captured-data lifetime, not the
-        // (HRTB) argument lifetimes; same fat-pointer layout. Cleared below before
-        // the real lifetime ends.
+        // SAFETY: erases only the callback's captured-data lifetime. The guard
+        // clears the pointer before `resolver` can be dropped, including unwind.
         let erased: *mut ModuleResolver<'static> = unsafe { std::mem::transmute(raw) };
         self.resolver.set(Some(erased));
-        let out = f();
-        self.resolver.set(None);
-        self.cache.borrow_mut().clear();
-        out
+        let scope = ResolverScope { loader: self };
+        let result = f();
+        let panic = self.resolver_panic.borrow_mut().take();
+        drop(scope);
+        if let Some(payload) = panic {
+            std::panic::resume_unwind(payload);
+        }
+        result
     }
 }
 
@@ -300,6 +328,11 @@ impl ModuleLoader for HostModuleLoader {
     ) -> impl Future<Output = JsResult<Module>> {
         let result = (|| {
             let specifier = request.specifier().to_std_string_escaped();
+            if self.resolver_panic.borrow().is_some() {
+                return Err(JsNativeError::typ()
+                    .with_message("module resolver panicked")
+                    .into());
+            }
             // The importing module's URL (its `path`, set when we parsed it) is the
             // base its relative imports resolve against; empty for the entry's realm.
             let referrer_url = referrer
@@ -316,7 +349,18 @@ impl ModuleLoader for HostModuleLoader {
             // SAFETY: `ptr` was set by `with_resolver` to a resolver that outlives
             // this call (cleared after); single-threaded, non-reentrant access.
             let resolve = unsafe { &mut *ptr };
-            let Some((url, source)) = resolve(&specifier, &referrer_url) else {
+            let resolved = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                resolve(&specifier, &referrer_url)
+            })) {
+                Ok(resolved) => resolved,
+                Err(payload) => {
+                    *self.resolver_panic.borrow_mut() = Some(payload);
+                    return Err(JsNativeError::typ()
+                        .with_message("module resolver panicked")
+                        .into());
+                },
+            };
+            let Some((url, source)) = resolved else {
                 return Err(JsNativeError::typ()
                     .with_message(format!("could not resolve module '{specifier}'"))
                     .into());
@@ -350,6 +394,39 @@ pub struct BoaEngine {
 }
 
 impl BoaEngine {
+    fn eval_module_entry(
+        &mut self,
+        source: &str,
+        base_url: &str,
+        entry_identity: Option<&str>,
+        resolve: &mut ModuleResolver<'_>,
+    ) -> Result<Option<JsValue>, JsError> {
+        let loader = Rc::clone(&self.loader);
+        let state = loader.with_resolver(resolve, || {
+            let module = Module::parse(
+                Source::from_bytes(source.as_bytes()).with_path(Path::new(base_url)),
+                None,
+                &mut self.ctx,
+            )?;
+            if let Some(identity) = entry_identity {
+                loader
+                    .cache
+                    .borrow_mut()
+                    .insert(identity.into(), module.clone());
+            }
+            let promise = module.load_link_evaluate(&mut self.ctx);
+            let _ = self.ctx.run_jobs();
+            Ok::<_, JsError>(promise.state())
+        })?;
+        match state {
+            PromiseState::Fulfilled(_) => Ok(Some(JsValue::undefined())),
+            PromiseState::Rejected(reason) => Err(JsError::from_opaque(reason)),
+            PromiseState::Pending => Err(JsNativeError::typ()
+                .with_message("module evaluation did not settle synchronously")
+                .into()),
+        }
+    }
+
     /// Enter `realm`, run `f`, and restore the previous realm — including on the
     /// error path, which is why this is a helper rather than three lines at each
     /// call site. Boa's `enter_realm` swaps the *current call frame's* realm, so
@@ -697,28 +774,7 @@ impl ScriptEngine for BoaEngine {
         base_url: &str,
         resolve: &mut dyn FnMut(&str, &str) -> Option<(String, String)>,
     ) -> Result<Option<Self::Value>, Self::Error> {
-        // Install the host resolver for this call so the loader can fetch imports,
-        // then parse the entry (its `path` = `base_url`, the base its imports resolve
-        // against) and drive load → link → evaluate. `run_jobs` settles the promise
-        // (synchronously, since the resolver fetches synchronously).
-        let loader = Rc::clone(&self.loader);
-        let state = loader.with_resolver(resolve, || {
-            let module = Module::parse(
-                Source::from_bytes(source.as_bytes()).with_path(Path::new(base_url)),
-                None,
-                &mut self.ctx,
-            )?;
-            let promise = module.load_link_evaluate(&mut self.ctx);
-            let _ = self.ctx.run_jobs();
-            Ok::<_, JsError>(promise.state())
-        })?;
-        match state {
-            PromiseState::Fulfilled(_) => Ok(Some(JsValue::undefined())),
-            PromiseState::Rejected(reason) => Err(JsError::from_opaque(reason)),
-            PromiseState::Pending => Err(JsNativeError::typ()
-                .with_message("module evaluation did not settle synchronously")
-                .into()),
-        }
+        self.eval_module_entry(source, base_url, Some(base_url), resolve)
     }
 
     /// A module in a named realm: enter it, then run exactly the entry above.
@@ -731,15 +787,21 @@ impl ScriptEngine for BoaEngine {
         realm: RealmId,
         source: &str,
         base_url: &str,
+        entry_identity: Option<&str>,
         resolve: &mut dyn FnMut(&str, &str) -> Option<(String, String)>,
     ) -> Result<Option<Self::Value>, RealmError> {
         let Some(target) = self.registry.realms.borrow().get(&realm).cloned() else {
             return Err(RealmError::NoSuchRealm(realm));
         };
         let previous = self.ctx.enter_realm(target);
-        let result = self.eval_module(source, base_url, resolve);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.eval_module_entry(source, base_url, entry_identity, resolve)
+        }));
         let _ = self.ctx.enter_realm(previous);
-        result.map_err(|error| RealmError::Engine(format!("{error:?}")))
+        match result {
+            Ok(result) => result.map_err(|error| RealmError::Engine(format!("{error:?}"))),
+            Err(payload) => std::panic::resume_unwind(payload),
+        }
     }
 
     fn value_to_string(&mut self, value: &Self::Value) -> Result<String, Self::Error> {
@@ -1420,6 +1482,55 @@ impl ScriptEngineLive for BoaEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resolver_panic_restores_scope_and_allows_a_second_module() {
+        #[derive(Debug, PartialEq)]
+        struct ResolverPanic;
+
+        let mut engine = BoaEngine::new().unwrap();
+        let realm = engine.create_realm().unwrap();
+        let mut calls = 0;
+        let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut failing = |_: &str, _: &str| -> Option<(String, String)> {
+                calls += 1;
+                std::panic::panic_any(ResolverPanic);
+            };
+            let _ = engine.eval_module_in_realm(
+                realm,
+                "import './first.js'; import './second.js';",
+                "https://modules.test/entry.js",
+                Some("https://modules.test/entry.js"),
+                &mut failing,
+            );
+        }))
+        .expect_err("original host panic must resume outside Boa");
+        assert_eq!(caught.downcast_ref::<ResolverPanic>(), Some(&ResolverPanic));
+        assert_eq!(calls, 1, "do not invoke the resolver again after its panic");
+        assert!(engine.loader.resolver.get().is_none());
+        assert!(engine.loader.cache.borrow().is_empty());
+        assert!(engine.loader.resolver_panic.borrow().is_none());
+
+        let mut clean = |specifier: &str, referrer: &str| {
+            assert_eq!(specifier, "./dep.js");
+            assert_eq!(referrer, "https://modules.test/next.js");
+            Some((
+                "https://modules.test/dep.js".into(),
+                "export const answer = 42;".into(),
+            ))
+        };
+        engine
+            .eval_module_in_realm(
+                realm,
+                "import { answer } from './dep.js'; globalThis.answer = answer;",
+                "https://modules.test/next.js",
+                Some("https://modules.test/next.js"),
+                &mut clean,
+            )
+            .unwrap();
+        let value = engine.eval_in_realm(realm, "answer").unwrap();
+        assert_eq!(engine.value_to_string(&value).unwrap(), "42");
+    }
 
     /// The teardown half of the realm contract. The host discards a browsing
     /// context from inside a native callback, so the release has to happen

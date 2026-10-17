@@ -3,6 +3,8 @@
 
 //! Opt-in, thread-local receipts for Parley's Fontique queries.
 
+#[cfg(test)]
+use std::cell::Cell;
 use std::{cell::RefCell, marker::PhantomData, rc::Rc, string::String, thread_local, vec::Vec};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -37,6 +39,11 @@ struct State {
 
 thread_local! {
     static STATE: RefCell<State> = const { RefCell::new(State { enabled: false, events: Vec::new() }) };
+}
+
+#[cfg(test)]
+thread_local! {
+    static EVENT_CONSTRUCTIONS: Cell<usize> = const { Cell::new(0) };
 }
 
 /// Enables recording on this thread until [`take`](Self::take) or drop.
@@ -88,6 +95,15 @@ impl Drop for FontDiagnosticCapture {
     }
 }
 
+pub(crate) fn construct_if_capturing<T>(construct: impl FnOnce() -> T) -> Option<T> {
+    STATE.with(|state| state.borrow().enabled).then(construct)
+}
+
+#[cfg(test)]
+pub(crate) fn note_event_construction() {
+    EVENT_CONSTRUCTIONS.with(|count| count.set(count.get() + 1));
+}
+
 pub(crate) fn record(event: FontDiagnosticEvent) {
     STATE.with(|state| {
         let mut state = state.borrow_mut();
@@ -95,4 +111,92 @@ pub(crate) fn record(event: FontDiagnosticEvent) {
             state.events.push(event);
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{borrow::Cow, sync::Arc};
+
+    use crate::{FontContext, FontFamily, LayoutContext, StyleProperty};
+    use fontique::{Blob, FontInfoOverride};
+
+    fn shape_control() -> f32 {
+        let mut font_context = FontContext {
+            collection: fontique::Collection::new(fontique::CollectionOptions {
+                shared: false,
+                system_fonts: false,
+            }),
+            source_cache: fontique::SourceCache::default(),
+        };
+        font_context.collection.register_fonts(
+            Blob::new(Arc::new(
+                include_bytes!("../../../../tests/wpt/tests/fonts/Lato-Medium.ttf").to_vec(),
+            )),
+            Some(FontInfoOverride {
+                family_name: Some("face"),
+                ..Default::default()
+            }),
+        );
+        let mut layout_context: LayoutContext<[u8; 4]> = LayoutContext::new();
+        let mut builder = layout_context.ranged_builder(&mut font_context, "a", 1.0, false);
+        builder.push_default(StyleProperty::FontSize(32.0));
+        builder.push_default(StyleProperty::FontFamily(FontFamily::Source(
+            Cow::Borrowed("face"),
+        )));
+        let mut layout = builder.build("a");
+        layout.break_all_lines(None);
+        let advance = layout
+            .lines()
+            .next()
+            .expect("one text line")
+            .metrics()
+            .advance;
+        advance
+    }
+
+    #[test]
+    fn shaping_skips_payload_without_capture_and_records_it_with_capture() {
+        EVENT_CONSTRUCTIONS.with(|count| count.set(0));
+        let inactive_advance = shape_control();
+        assert_eq!(EVENT_CONSTRUCTIONS.with(Cell::get), 0);
+
+        let capture = begin_font_diagnostic_capture();
+        let active_advance = shape_control();
+        let events = capture.take();
+        assert!(EVENT_CONSTRUCTIONS.with(Cell::get) > 0);
+        assert_eq!(inactive_advance, active_advance);
+        let event = events
+            .iter()
+            .find(|event| event.cluster == "a")
+            .expect("authored control reaches the font query");
+        assert_eq!(event.fallback_script, *b"Latn");
+        assert_eq!(event.selected_candidate, Some(0));
+        assert_eq!(
+            event.candidates[0].status,
+            FontDiagnosticCandidateStatus::Complete
+        );
+    }
+
+    #[test]
+    fn active_capture_records_event_and_rejects_nested_capture() {
+        let capture = begin_font_diagnostic_capture();
+        assert!(std::panic::catch_unwind(begin_font_diagnostic_capture).is_err());
+
+        let event = construct_if_capturing(|| FontDiagnosticEvent {
+            cluster: String::from("a"),
+            fallback_script: *b"Latn",
+            candidates: std::vec![FontDiagnosticCandidate {
+                family: String::from("Test"),
+                index: 3,
+                status: FontDiagnosticCandidateStatus::Complete,
+            }],
+            selected_candidate: Some(0),
+        })
+        .expect("capture remains active after rejected nesting");
+        record(event.clone());
+
+        assert_eq!(capture.take(), std::vec![event]);
+        assert!(construct_if_capturing(|| ()).is_none());
+    }
 }

@@ -105,6 +105,22 @@ fn canonical_fragment_accepts_float_precision_variants() {
 }
 
 #[test]
+fn fragment_precision_ignores_comment_text_and_other_types() {
+    let fragment = r#"
+precision lowp float;
+/* precision highp float; */
+precision mediump int;
+void main() { gl_FragColor = vec4(1.0); }
+"#;
+    let translated = translate_canonical_essl_pair(CANONICAL_TRIANGLE_VERTEX_SHADER, fragment)
+        .expect("fragment translates");
+    assert_eq!(
+        translated.reflection.fragment_float_precision,
+        WebGlPrecision::Low
+    );
+}
+
+#[test]
 fn canonical_pair_lowers_varying_color_to_wgsl() {
     let vertex = r#"
 attribute vec2 a_position;

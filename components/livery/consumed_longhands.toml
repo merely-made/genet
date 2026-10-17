@@ -1,15 +1,16 @@
-# The Genet consumed-longhand contract: the 129 longhands the current
-# product path actually reads.
+# Historical Genet consumed-longhand baseline: 129 names from the F0 audit
+# and later bounded additions. This is not a current runtime-reader census.
 #
 # Source: docs/2026-07-13_genet_consumed_css_property_audit.md (landed
 # against Genet 6b955ff96ed, Stylo eec60c2464). This file is the
 # machine-readable form of that audit's overlap table, checked in so the
-# F0 receipt ("census reads every consumed longhand as implemented") can be
-# asserted by `tests/consumed_set.rs` with no stylo fork checkout. That
+# historical F0 catalog-resolution ratchet can be asserted by
+# `tests/consumed_set.rs` with no stylo fork checkout. That
 # matters: the fork archives at F5 of the cutover plan, and a receipt
 # that needs it would die with it.
 #
-# `consumers` records which surface reads each name:
+# `consumers` records the surfaces assigned at the time of the audit and its
+# bounded additions; it does not enumerate current readers:
 #   L = taffy layout adapter
 #   R = direct render/text/box read
 #   C = getComputedStyle
@@ -20,6 +21,7 @@
 # `font-variant-ligatures`.
 
 [meta]
+status = "historical-baseline"
 audit = "2026-07-13_genet_consumed_css_property_audit.md"
 genet_rev = "6b955ff96ed"
 stylo_rev = "eec60c2464"

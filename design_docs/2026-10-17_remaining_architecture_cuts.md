@@ -1,0 +1,19 @@
+# Remaining architecture cuts: five slices
+
+User-authorized continuation of the 2026-10-16 source audit. Start: c1b4100dca7. Each slice is reviewed, tested on its retained path, committed and pushed to main before the next slice. Fetch and integrate concurrent main changes before publishing. Preserve unrelated worktree edits and historical receipts.
+
+| Slice | Findings | Owner boundary and done condition |
+|---|---|---|
+| 1 | I13, L10, L11, L12 | Compiler-owned shader normalization/precision; prospective fragmentation gated; shared axis facts; honestly historical census. Retain linked shader layouts, unsupported fragmentation markers, continuation repros and property classification. |
+| 2 | R7, R8, R14, I2 | Truthful execution bounds and worker lifetime, owned registrations, shared live/headless lifecycle. Unsupported required bounds must refuse rather than run unbounded. |
+| 3 | I6, H5, I9, R12 | Shared host request/response contract, enforceable native fetch policy, one cookie-policy owner, structured history serialization. |
+| 4 | R10, R11, L5, I10 | Private WebGL identity; faithful XPath adapter; retained geometry and semantic projections consumed by automation. Preserve caller contracts or migrate actual callers. |
+| 5 | L9, H2, H9, H10 | Honest backend boundary, checked browser rendering, same-queue synchronization, observable presentation outcomes. Hardware/browser proof remains required where the audit requires it. |
+
+## Verification and resources
+
+Cheaper implementation agents; controller alone runs builds and commits. Test after each slice's cuts, using relevant existing tests and regressions for changed behavior. Mechanical moves do not need a new testing campaign. Serialize Cargo using /home/markik/Code/testing/machine-heavy.lock; one build job, one test thread, nice 10, MemoryMax=5G, MemorySwapMax=0, CPUQuota=150%, bounded gates. Preserve test receipts and active targets. Delete only identified disposable artifacts if storage pressure warrants it.
+
+## Scope and evidence
+
+The four previously partial findings are outside this twenty-finding sequence. A finding is addressed only when its stated ownership cut and required evidence are established. Record any remaining platform/dependency/caller limits explicitly; do not relabel incomplete work to meet the batch count. Publication of a slice does not establish unrelated Forms or full browser conformance.

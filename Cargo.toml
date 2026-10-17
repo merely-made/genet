@@ -6,6 +6,7 @@ members = [
     "components/shared/engine-observables-api",
     "components/shared/document-session-api",
     "components/shared/paint-types",
+    "components/shared/css-flow",
     "components/xpath",
     "components/genet-compositor",
     "components/webgl-wgpu",

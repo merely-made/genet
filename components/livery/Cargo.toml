@@ -9,6 +9,7 @@ description = "Generated CSS property and cascade engine for Genet."
 readme = "README.md"
 
 [dependencies]
+css-flow = { package = "genet-css-flow", version = "0.1.0", path = "../shared/css-flow" }
 cssparser.workspace = true
 cadency = { version = "0.0.1", path = "../cadency" }
 
@@ -17,7 +18,7 @@ serde = { version = "1", features = ["derive"] }
 toml = "1"
 
 [dev-dependencies]
-# Reads the checked-in consumed-longhand contract in tests/consumed_set.rs.
+# Reads the checked-in historical consumed-longhand baseline in tests/consumed_set.rs.
 # Same crate the build script uses, so the data file cannot drift into a shape
 # the generator would reject.
 toml = "1"

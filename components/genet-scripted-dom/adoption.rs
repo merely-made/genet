@@ -300,6 +300,9 @@ impl ScriptedDom {
         let mut owner = None;
         for id in members {
             let key = id.raw();
+            if self.checked_radios.remove(id) {
+                destination.checked_radios.insert(*id);
+            }
             if let Some(data) = self.shadow_roots.remove(&key) {
                 destination.shadow_roots.insert(key, data);
             }

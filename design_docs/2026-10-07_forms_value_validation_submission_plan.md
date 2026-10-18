@@ -326,6 +326,49 @@ matched capture, the native live submission and the F13 live Chrome check. The T
 not as Windows qualification. The control must be reconstructed to account for the F12
 repair on the same 56 paths, as the 2026-10-16 entry says.
 
+### F16: Checkpoint C qualifies the prepared epoch, 2026-10-18
+
+Question as put: which source epoch does Checkpoint C qualify? The Windows lane prepared
+everything at `e3911fb6b2d` plus `8fa73497` (both in main): candidate WPT runner built and
+frozen, candidate controls assessed, native live run and Chrome 155 browser submission
+passed, the 59-path control projection staged in `genet-forms-c-control`, 18 capture chunks
+and 15 gate rows frozen. Current main is 55 commits and 311 files past that.
+
+Mark's answer, verbatim: **"Prepared epoch (Recommended)"**.
+
+Consequence: candidate is `e3911fb6b2d`+`8fa73497`; only the control is built new. The 55
+later commits are a named limitation of the Checkpoint C report, with a follow-up delta gate
+on them, not part of this qualification.
+
+### F17: the guard's RAM floor is 6 GiB for this run, 2026-10-18
+
+Question as put: the lane's guarded wrapper refuses to start unless 12 GiB of RAM is
+available (4 GiB compiler cap plus the 8 GiB floor) and 30 GiB of disk; RAM was 9.9 GB free
+of 31 with no single hog, and the control build was refused on that check on the 16th.
+Options: free RAM and launch at 12 GiB; lower the floor to 6 GiB; hold until quiet.
+
+Mark's answer, verbatim: **"Lower the floor to 6 GiB"**.
+
+Consequence: a new wrapper revision with `FLOOR = 6 GiB` (cap unchanged at 4 GiB, so the
+guard needs 10 GiB available at launch), content-hashed like its predecessor and named in
+`build-wrapper-name.txt`; every receipt it writes records the new wrapper hash and floor. The
+6 GiB floor is this run's ruling, not a family-wide policy. The STOP sentinel from the
+2026-10-16 pause is removed at launch and remains the kill switch: recreating it stops the
+sequence before its next job.
+
+### F18: unattended, sequential, one report at the end, 2026-10-18
+
+Question as put: remaining work in order is the cold control runner build, 76 capture rows
+across both engines and both roles (2,468 submission and encoding records plus prior maps,
+CSS slices and controls), 12 of the 15 covering gates (3 reused), then whole-change review
+and the Checkpoint C report. Options: unattended sequential; stage by stage with check-ins;
+gates first.
+
+Mark's answer, verbatim: **"Unattended, sequential, report at the end (Recommended)"**.
+
+Consequence: the stages chain under one owned job at a time, stopping on the first incomplete
+receipt; the report carries every count, every refusal and the limitation list.
+
 ## Phases and done-conditions
 
 ### A: one live control value

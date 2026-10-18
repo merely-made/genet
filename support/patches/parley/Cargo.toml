@@ -98,7 +98,7 @@ package = "genet-fontique"
 default-features = false
 
 [dependencies.harfrust]
-version = "0.8.0"
+version = "0.12.0"
 default-features = false
 
 [dependencies.hashbrown]
@@ -151,7 +151,7 @@ features = ["baked"]
 default-features = false
 
 [dependencies.skrifa]
-version = "0.42.0"
+version = "0.44.0"
 default-features = false
 
 [dev-dependencies.peniko]

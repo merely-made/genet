@@ -96,7 +96,7 @@ version = "0.1.0"
 default-features = false
 
 [dependencies.read-fonts]
-version = "0.39.0"
+version = "0.41.0"
 default-features = false
 
 [dependencies.smallvec]

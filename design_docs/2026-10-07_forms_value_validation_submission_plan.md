@@ -309,6 +309,23 @@ with R19's toolchain amended by this ruling. The repository's
 `rust-toolchain.toml` (channel 1.99.0) is not changed here; a family-wide
 toolchain bump is decided separately.
 
+### F15: Checkpoint C runs on O-PC, 2026-10-18
+
+Question as put (after the 2026-10-18 state report): Checkpoint C is unstarted and F11's
+Windows choice was recorded as pending a platform clarification; the ThinkPad's live
+browser leg was blocked for want of a WebGPU-capable browser. Where does final
+qualification run?
+
+Mark's answer, verbatim: "Let's do it on o-pc. If the thinkpad doesn't have a webgpu-capable
+browser, might as well".
+
+Consequence: F11 stands and is no longer pending. All of Checkpoint C runs on O-PC (this
+Windows box, Chrome 155.0.8059.80 installed): the fresh control, the 15 covering gates, the
+matched capture, the native live submission and the F13 live Chrome check. The ThinkPad's
+2026-10-13/14 and 2026-10-16 receipts stay as evidence of the candidate's behaviour on Linux,
+not as Windows qualification. The control must be reconstructed to account for the F12
+repair on the same 56 paths, as the 2026-10-16 entry says.
+
 ## Phases and done-conditions
 
 ### A: one live control value

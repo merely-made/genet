@@ -3550,7 +3550,7 @@ mod tests {
 
         fn child_realm_mutations_render<E: ScriptEngine>() {
             let mut doc = LiveryScriptedDocument::<E>::parse(
-                r#"<body><iframe id="f" style="width:180px;height:90px" srcdoc='<body><p id="target" style="margin:0;width:20px;height:10px;background:red">child</p><script>globalThis.initialWidth=getComputedStyle(document.getElementById("target")).width;</script></body>'></iframe></body>"#,
+                r#"<body><iframe id="f" style="width:180px;height:90px;border:2px solid" srcdoc='<body><p id="target" style="margin:0;width:20px;height:10px;background:red">child</p><script>globalThis.initialWidth=getComputedStyle(document.getElementById("target")).width;</script></body>'></iframe></body>"#,
             ).expect("hosted document");
             // The child's load is an agent task. Pump it before inspecting the
             // first child script, while retaining the before-first-paint gate.
@@ -3565,6 +3565,7 @@ mod tests {
                 "child CSSOM is bound before its first inline script and before paint"
             );
             let first = doc.frame(400, 300);
+            assert_eq!(doc.last_error(), None);
             assert!(
                 first
                     .ops
@@ -3583,6 +3584,7 @@ mod tests {
                 .expect("initial child layout");
             doc.evaluate("var p=document.getElementById('f').contentWindow.document.getElementById('target'); p.textContent=''; p.style.width='75px'; p.style.height='30px'; p.style.backgroundColor='blue';").expect("mutate child from parent");
             let second = doc.frame(400, 300);
+            assert_eq!(doc.last_error(), None);
             assert!(
                 !second
                     .ops
@@ -3621,11 +3623,12 @@ mod tests {
                 DomCaptureRecord, DomCaptureRecorder, RecordedMutation, read_capture_records,
             };
             let mut doc = LiveryScriptedDocument::<E>::parse(
-                r#"<body><iframe id="f" srcdoc='<body><p id="target">child</p></body>'></iframe></body>"#,
+                r#"<body><iframe id="f" style="border:2px solid" srcdoc='<body><p id="target">child</p></body>'></iframe></body>"#,
             )
             .expect("hosted document");
             doc.pump(0.0);
             let _ = doc.frame(400, 300);
+            assert_eq!(doc.last_error(), None);
             let child_realm = doc.rt.frame_realms(doc.rt.top_realm())[0].1;
             let child_arena = doc
                 .rt
@@ -3639,6 +3642,7 @@ mod tests {
             )
             .expect("cross-arena adoption");
             let _ = doc.frame(400, 300);
+            assert_eq!(doc.last_error(), None);
             let host = doc
                 .rt
                 .host_in_realm(doc.rt.top_realm())
@@ -4102,9 +4106,10 @@ mod tests {
 
         fn validation_feedback_follows_adoption_and_clears_after_teardown<E: ScriptEngine>() {
             let mut doc = LiveryScriptedDocument::<E>::parse(
-                r#"<body><iframe id="frame" srcdoc="&lt;body&gt;&lt;input id='field' required&gt;&lt;/body&gt;"></iframe></body>"#,
+                r#"<body><iframe id="frame" style="border:2px solid" srcdoc="&lt;body&gt;&lt;input id='field' required&gt;&lt;/body&gt;"></iframe></body>"#,
             ).expect("framed validation document");
             doc.frame(320, 220);
+            assert_eq!(doc.last_error(), None);
             doc.pump(0.0);
             doc.evaluate("var frame = document.getElementById('frame'); var field = frame.contentDocument.getElementById('field'); field.setCustomValidity('  exact\\nmessage  '); field.reportValidity();")
                 .expect("child report");
@@ -4138,16 +4143,18 @@ mod tests {
 
         fn child_frame_timer_report_keeps_its_realm<E: ScriptEngine>() {
             let mut doc = LiveryScriptedDocument::<E>::parse(
-                r#"<body><iframe style="width:200px;height:100px" srcdoc="&lt;body&gt;&lt;input id='child' required&gt;&lt;script&gt;setTimeout(function(){document.getElementById('child').reportValidity()},0)&lt;/script&gt;&lt;/body&gt;"></iframe></body>"#,
+                r#"<body><iframe style="width:200px;height:100px;border:2px solid" srcdoc="&lt;body&gt;&lt;input id='child' required&gt;&lt;script&gt;setTimeout(function(){document.getElementById('child').reportValidity()},0)&lt;/script&gt;&lt;/body&gt;"></iframe></body>"#,
             )
             .expect("framed document");
             let authored_dom = doc.dom_snapshot();
             doc.pump(0.0);
             let _ = doc.frame(320, 220);
+            assert_eq!(doc.last_error(), None);
             doc.pump(16.0);
             let notice = doc.validation_notice().expect("child timer report");
             assert_ne!(notice.realm, doc.rt.top_realm());
             let frame = doc.frame(320, 220);
+            assert_eq!(doc.last_error(), None);
             assert!(
                 frame
                     .ops
@@ -4172,7 +4179,7 @@ mod tests {
                 .replace('<', "&lt;")
                 .replace('>', "&gt;");
             let html = format!(
-                "<body><input id='top' required><iframe style='width:200px;height:100px' srcdoc=\"{escaped_child}\"></iframe><script>\
+                "<body><input id='top' required><iframe style='width:200px;height:100px;border:2px solid' srcdoc=\"{escaped_child}\"></iframe><script>\
                     var field = document.getElementById('top');\
                     if (field.validationMessage !== 'A value is required (embedder).') throw new Error('top catalog missing');\
                     document.body.setAttribute('top-validation-message', field.validationMessage);\
@@ -4198,6 +4205,7 @@ mod tests {
 
             doc.pump(0.0);
             let _ = doc.frame(320, 220);
+            assert_eq!(doc.last_error(), None);
             doc.pump(16.0);
             let child_notice = doc
                 .validation_notice()

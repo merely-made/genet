@@ -1,0 +1,499 @@
+{
+  "date": "2026-10-18",
+  "base_commit": "4733c557e4c7e54f9e928116b8008671f69fe4bf",
+  "scope": "Completion of the 117-test genet-scripted suite interrupted by the prior combined 600-second gate. Production source unchanged; five rendering fixtures now author supported solid iframe borders and assert no paint error.",
+  "coverage": {
+    "total": 117,
+    "passed": 117,
+    "failed": 0,
+    "ignored": 0,
+    "method": "31 earlier passes plus 86 remaining tests; two failures corrected and five changed fixtures plus refusal/recovery regression rerun. Coverage is across recorded runs, not one monolithic invocation."
+  },
+  "resources": {
+    "memory_max": "5G",
+    "swap_max": 0,
+    "cpu_quota": "150%",
+    "jobs": 1,
+    "test_threads": 1,
+    "timeout_seconds": 600,
+    "lock": "/home/markik/Code/testing/machine-heavy.lock"
+  },
+  "source_sha256": {
+    "components/genet-scripted/document.rs": "aafc693d9cc038c2e163114a95c5da9610747109d2f5bfbe2dd6ad41324c982a",
+    "Cargo.lock": "a5fb40cc2eb08484d8994b73ce8713d813d713fe569c443bffa7f9c0e87dc2d8"
+  },
+  "gates": [
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/render-admission/genet-retained-final.log",
+      "sha256": "4299165bfb21993dc1253191d20b34b1898b9cfb234877f6dd3a7fa08e649ab1",
+      "commands": [
+        "timeout --signal=TERM --kill-after=10s 600s cargo test --offline --locked -j1 -p genet-render -p genet-documents -p genet-scripted -p genet-livery --features genet-documents/scripted-nova --lib --test retained_cpu_raster --no-fail-fast -- --test-threads=1"
+      ],
+      "summaries": [
+        "test result: FAILED. 150 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 400.49s",
+        "test result: ok. 357 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 30.20s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+        "test result: ok. 67 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.10s"
+      ],
+      "exit_status": [
+        "124"
+      ],
+      "peak_rss_kib": [
+        "1211208"
+      ],
+      "swaps": [
+        "0"
+      ],
+      "tests": {
+        "capture::tests::control_capture_roundtrip_preserves_live_value_and_selection": "ok",
+        "capture::tests::historical_control_payload_still_decodes_byte_for_byte": "ok",
+        "capture::tests::recorder_captures_insert_position_and_removed_liveness": "ok",
+        "capture::tests::recorder_records_an_adopted_node_and_replay_resolves_the_same_live_node": "ok",
+        "capture::tests::recorder_refuses_exported_readback_without_consuming_source_journal": "ok",
+        "capture::tests::recorder_writes_snapshot_then_replayable_batches": "ok",
+        "capture::tests::replay_refuses_a_serial_from_an_unregistered_arena": "ok",
+        "capture::tests::validation_capture_records_native_interaction_options_and_custom_messages": "ok",
+        "document::extraction_tests::spa_article_is_available_only_over_the_post_js_dom": "ok",
+        "document::extraction_tests::static_article_is_identical_under_static_and_scripted_profiles": "ok",
+        "document::extraction_tests::the_document_parses_and_runs_interleaved": "ok",
+        "document::journal_tests::capture_preserves_livery_incremental_frame_and_resource_decisions": "ok",
+        "document::journal_tests::headless_script_turns_compact_the_journal_with_or_without_capture": "ok",
+        "document::journal_tests::recorder_rejects_missing_history_and_a_different_arena": "ok",
+        "document::livery_text_fragment_tests::initial_text_fragment_fetches_the_source_once_on_boa": "ok",
+        "document::livery_text_fragment_tests::initial_text_fragment_selects_scrolls_and_hides_the_directive_on_boa": "ok",
+        "document::livery_text_fragment_tests::livery_stylesheets_attach_where_they_are_parsed_on_boa": "ok",
+        "document::livery_text_fragment_tests::scripted_text_fragment_falls_back_to_its_element_fragment_on_boa": "ok",
+        "document::phase_c_document_encoding_fixtures::phase_c_document_encoding_headless_configured_fallback_boa": "ok",
+        "document::phase_c_document_encoding_fixtures::phase_c_document_encoding_headless_euckr_boa": "ok",
+        "document::phase_c_document_encoding_fixtures::phase_c_document_encoding_headless_initial_boa": "ok",
+        "document::phase_c_document_encoding_fixtures::phase_c_document_encoding_livery_initial_boa": "ok",
+        "document::tests::animation_frames_follow_visible_document_turn_on_boa": "ok",
+        "document::tests::async_runs_after_parser_blocking_on_boa": "ok",
+        "document::tests::defer_runs_after_parser_blocking_on_boa": "ok",
+        "document::tests::defer_scripts_run_in_document_order_on_boa": "ok",
+        "document::tests::external_module_runs_on_boa": "ok",
+        "document::tests::external_script_charset_decodes_on_boa": "ok",
+        "document::tests::extract_sees_post_js_dom_on_boa": "ok",
+        "document::tests::from_body_wires_document_cookie_on_boa": "ok"
+      }
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/render-admission/genet-scripted-admission-warm.log",
+      "sha256": "d82df8577fe7474fc623782e16a40149a6a1bdcdf6e9c594c1b0835f8b99614e",
+      "commands": [
+        "timeout --signal=TERM --kill-after=10s 600s cargo test --offline --locked -j1 -p genet-render -p genet-documents -p genet-scripted -p genet-livery --features genet-documents/scripted-nova --lib --test retained_cpu_raster scripted_frame_reports_rejected_border_and_recovers -- --test-threads=1"
+      ],
+      "summaries": [
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 153 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 359 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 67 filtered out; finished in 0.00s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 116 filtered out; finished in 4.74s"
+      ],
+      "exit_status": [
+        "0"
+      ],
+      "peak_rss_kib": [
+        "1211344"
+      ],
+      "swaps": [
+        "0"
+      ],
+      "tests": {
+        "document::tests::livery_render_tests::scripted_frame_reports_rejected_border_and_recovers": "ok"
+      }
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261018/remaining-slices/genet-build.log",
+      "sha256": "e15b9341012c2417973318226391513eb7bf1c045f616df637ecc6179ce8e427",
+      "commands": [
+        "timeout --signal=TERM --kill-after=10s 600s cargo test --offline --locked -j1 -p genet-render -p genet-documents -p genet-scripted -p genet-livery --features genet-documents/scripted-nova --lib --test retained_cpu_raster --no-run"
+      ],
+      "summaries": [],
+      "exit_status": [
+        "0"
+      ],
+      "peak_rss_kib": [
+        "121728"
+      ],
+      "swaps": [
+        "0"
+      ],
+      "tests": {}
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261018/remaining-slices/genet-gc-soak.log",
+      "sha256": "d82d7a7fbe35feb637a83475e01c7636ed2ff4fafd545545074ff41a3b450979",
+      "commands": [
+        "timeout --signal=TERM --kill-after=10s 600s /home/markik/Code/target/debug/deps/genet_scripted-1cce7bb28d4d2593 --exact document::tests::gc_soak_bounds_memory_on_boa --test-threads=1 --nocapture"
+      ],
+      "summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 116 filtered out; finished in 93.10s"
+      ],
+      "exit_status": [
+        "0"
+      ],
+      "peak_rss_kib": [
+        "73648"
+      ],
+      "swaps": [
+        "0"
+      ],
+      "tests": {
+        "document::tests::gc_soak_bounds_memory_on_boa": "ok"
+      }
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261018/remaining-slices/genet-scripted-01.log",
+      "sha256": "bf4813f9648655955fce0bce8a6d1279036cc3ef04d576c288b97e65788fe091",
+      "commands": [
+        "timeout --signal=TERM --kill-after=10s 600s /home/markik/Code/target/debug/deps/genet_scripted-1cce7bb28d4d2593 --exact document::tests::hidden_clamps_timers_frozen_stops_them_on_boa document::tests::integrity_match_runs_on_boa document::tests::integrity_mismatch_blocks_on_boa document::tests::lifecycle_wake_matches_task_delivery_on_boa document::tests::livery_render_tests::adopted_node_capture_replays_to_the_same_live_node_on_boa document::tests::livery_render_tests::animation_frame_mutation_renders_on_boa document::tests::livery_render_tests::canceled_and_ineligible_reports_do_not_remain_on_boa document::tests::livery_render_tests::child_frame_timer_report_keeps_its_realm_on_boa --test-threads=1 --nocapture"
+      ],
+      "summaries": [
+        "test result: FAILED. 7 passed; 1 failed; 0 ignored; 0 measured; 109 filtered out; finished in 58.50s"
+      ],
+      "exit_status": [
+        "101"
+      ],
+      "peak_rss_kib": [
+        "125652"
+      ],
+      "swaps": [
+        "0"
+      ],
+      "tests": {
+        "document::tests::hidden_clamps_timers_frozen_stops_them_on_boa": "ok",
+        "document::tests::integrity_match_runs_on_boa": "ok",
+        "document::tests::integrity_mismatch_blocks_on_boa": "ok",
+        "document::tests::lifecycle_wake_matches_task_delivery_on_boa": "ok",
+        "document::tests::livery_render_tests::adopted_node_capture_replays_to_the_same_live_node_on_boa": "ok",
+        "document::tests::livery_render_tests::animation_frame_mutation_renders_on_boa": "ok",
+        "document::tests::livery_render_tests::canceled_and_ineligible_reports_do_not_remain_on_boa": "ok",
+        "document::tests::livery_render_tests::child_frame_timer_report_keeps_its_realm_on_boa": "FAILED"
+      }
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261018/remaining-slices/genet-scripted-02.log",
+      "sha256": "925219a3fe7ba4c35d988b9d2ef51b5d4165f6681e7f66b9161573b1cf38e262",
+      "commands": [
+        "timeout --signal=TERM --kill-after=10s 600s /home/markik/Code/target/debug/deps/genet_scripted-1cce7bb28d4d2593 --exact document::tests::livery_render_tests::child_realm_mutations_render_on_boa document::tests::livery_render_tests::click_dispatches_to_script_on_boa document::tests::livery_render_tests::empty_body_has_no_text_on_boa document::tests::livery_render_tests::external_script_runs_on_boa document::tests::livery_render_tests::from_body_runs_external_script_on_boa document::tests::livery_render_tests::get_computed_style_reads_cascade_on_boa document::tests::livery_render_tests::live_lifecycle_wake_matches_delivery_on_boa document::tests::livery_render_tests::livery_scripted_button_hit_dispatches_to_its_listener_on_boa --test-threads=1 --nocapture"
+      ],
+      "summaries": [
+        "test result: FAILED. 7 passed; 1 failed; 0 ignored; 0 measured; 109 filtered out; finished in 40.98s"
+      ],
+      "exit_status": [
+        "101"
+      ],
+      "peak_rss_kib": [
+        "99112"
+      ],
+      "swaps": [
+        "0"
+      ],
+      "tests": {
+        "document::tests::livery_render_tests::child_realm_mutations_render_on_boa": "FAILED",
+        "document::tests::livery_render_tests::click_dispatches_to_script_on_boa": "ok",
+        "document::tests::livery_render_tests::empty_body_has_no_text_on_boa": "ok",
+        "document::tests::livery_render_tests::external_script_runs_on_boa": "ok",
+        "document::tests::livery_render_tests::from_body_runs_external_script_on_boa": "ok",
+        "document::tests::livery_render_tests::get_computed_style_reads_cascade_on_boa": "ok",
+        "document::tests::livery_render_tests::live_lifecycle_wake_matches_delivery_on_boa": "ok",
+        "document::tests::livery_render_tests::livery_scripted_button_hit_dispatches_to_its_listener_on_boa": "ok"
+      }
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261018/remaining-slices/genet-scripted-03.log",
+      "sha256": "1ff01a9a1738ae1995ed2b325548a562b5666130030f0afeb13fb6f4af562631",
+      "commands": [
+        "timeout --signal=TERM --kill-after=10s 600s /home/markik/Code/target/debug/deps/genet_scripted-1cce7bb28d4d2593 --exact document::tests::livery_render_tests::livery_scripted_document_owns_live_cssom_resources_and_frame_on_boa document::tests::livery_render_tests::match_media_evaluates_against_the_frame_on_boa document::tests::livery_render_tests::mutation_renders_on_boa document::tests::livery_render_tests::native_validation_notice_is_painted_and_dismissible_on_boa document::tests::livery_render_tests::prevent_default_blocks_anchor_nav_on_boa document::tests::livery_render_tests::scripted_content_scrolls_on_boa document::tests::livery_render_tests::scripted_links_report_after_a_frame_on_boa document::tests::livery_render_tests::validation_catalog_is_installed_before_scripts_and_shared_with_children_on_boa --test-threads=1 --nocapture"
+      ],
+      "summaries": [
+        "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 109 filtered out; finished in 45.80s"
+      ],
+      "exit_status": [
+        "0"
+      ],
+      "peak_rss_kib": [
+        "116900"
+      ],
+      "swaps": [
+        "0"
+      ],
+      "tests": {
+        "document::tests::livery_render_tests::livery_scripted_document_owns_live_cssom_resources_and_frame_on_boa": "ok",
+        "document::tests::livery_render_tests::match_media_evaluates_against_the_frame_on_boa": "ok",
+        "document::tests::livery_render_tests::mutation_renders_on_boa": "ok",
+        "document::tests::livery_render_tests::native_validation_notice_is_painted_and_dismissible_on_boa": "ok",
+        "document::tests::livery_render_tests::prevent_default_blocks_anchor_nav_on_boa": "ok",
+        "document::tests::livery_render_tests::scripted_content_scrolls_on_boa": "ok",
+        "document::tests::livery_render_tests::scripted_links_report_after_a_frame_on_boa": "ok",
+        "document::tests::livery_render_tests::validation_catalog_is_installed_before_scripts_and_shared_with_children_on_boa": "ok"
+      }
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261018/remaining-slices/genet-scripted-04.log",
+      "sha256": "7fbb8607cac23af59624a974961c28de1ed6d2f70ca2ec528b970b8e0a7dd3b8",
+      "commands": [
+        "timeout --signal=TERM --kill-after=10s 600s /home/markik/Code/target/debug/deps/genet_scripted-1cce7bb28d4d2593 --exact document::tests::livery_render_tests::validation_feedback_follows_adoption_and_clears_after_teardown_on_boa document::tests::livery_webgl_factory_is_installed_before_inline_script_on_boa document::tests::missing_external_script_is_skipped_on_boa document::tests::module_executes_with_module_scope_on_boa document::tests::module_graph_uses_importer_final_urls_and_inline_base_on_boa document::tests::module_import_diamond_loads_shared_once_on_boa document::tests::module_import_fails_gracefully_on_boa document::tests::module_imports_dependency_on_boa --test-threads=1 --nocapture"
+      ],
+      "summaries": [
+        "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 109 filtered out; finished in 40.02s"
+      ],
+      "exit_status": [
+        "0"
+      ],
+      "peak_rss_kib": [
+        "96960"
+      ],
+      "swaps": [
+        "0"
+      ],
+      "tests": {
+        "document::tests::livery_render_tests::validation_feedback_follows_adoption_and_clears_after_teardown_on_boa": "ok",
+        "document::tests::livery_webgl_factory_is_installed_before_inline_script_on_boa": "ok",
+        "document::tests::missing_external_script_is_skipped_on_boa": "ok",
+        "document::tests::module_executes_with_module_scope_on_boa": "ok",
+        "document::tests::module_graph_uses_importer_final_urls_and_inline_base_on_boa": "ok",
+        "document::tests::module_import_diamond_loads_shared_once_on_boa": "ok",
+        "document::tests::module_import_fails_gracefully_on_boa": "ok",
+        "document::tests::module_imports_dependency_on_boa": "ok"
+      }
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261018/remaining-slices/genet-scripted-05.log",
+      "sha256": "7b5bb8719d5c3eaa2adf8b9fcfef66fdedd809151e7f26f3294cd21b80e57fb7",
+      "commands": [
+        "timeout --signal=TERM --kill-after=10s 600s /home/markik/Code/target/debug/deps/genet_scripted-1cce7bb28d4d2593 --exact document::tests::module_keeps_classic_siblings_running_on_boa document::tests::module_runs_after_parser_blocking_on_boa document::tests::node_identity_is_stable_on_boa document::tests::pump_collects_orphans_on_boa document::tests::relative_src_resolves_against_page_url_on_boa document::tests::script_type_data_block_is_not_executed_on_boa document::tests::scripts_run_in_document_order_on_boa document::tests::url_attributes_resolve_against_page_url_on_boa --test-threads=1 --nocapture"
+      ],
+      "summaries": [
+        "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 109 filtered out; finished in 38.26s"
+      ],
+      "exit_status": [
+        "0"
+      ],
+      "peak_rss_kib": [
+        "75192"
+      ],
+      "swaps": [
+        "0"
+      ],
+      "tests": {
+        "document::tests::module_keeps_classic_siblings_running_on_boa": "ok",
+        "document::tests::module_runs_after_parser_blocking_on_boa": "ok",
+        "document::tests::node_identity_is_stable_on_boa": "ok",
+        "document::tests::pump_collects_orphans_on_boa": "ok",
+        "document::tests::relative_src_resolves_against_page_url_on_boa": "ok",
+        "document::tests::script_type_data_block_is_not_executed_on_boa": "ok",
+        "document::tests::scripts_run_in_document_order_on_boa": "ok",
+        "document::tests::url_attributes_resolve_against_page_url_on_boa": "ok"
+      }
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261018/remaining-slices/genet-scripted-06.log",
+      "sha256": "680ebd701450a5d122a413f4d5f08cd3f578d31f57625fe70afbd3d067dfb34e",
+      "commands": [
+        "timeout --signal=TERM --kill-after=10s 600s /home/markik/Code/target/debug/deps/genet_scripted-1cce7bb28d4d2593 --exact document::tests::webgl_factory_is_installed_before_inline_script_on_boa href_tests::a_windows_drive_is_not_a_scheme href_tests::absolute_and_opaque_references_are_unchanged_relative_forms href_tests::double_dot_walks_up href_tests::empty_specifier_is_the_base_without_its_fragment href_tests::fragment_only_keeps_the_path_and_query href_tests::ordinary_relative_joins_are_unchanged href_tests::query_only_replaces_the_query_and_drops_the_fragment --test-threads=1 --nocapture"
+      ],
+      "summaries": [
+        "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 109 filtered out; finished in 4.70s"
+      ],
+      "exit_status": [
+        "0"
+      ],
+      "peak_rss_kib": [
+        "73484"
+      ],
+      "swaps": [
+        "0"
+      ],
+      "tests": {
+        "document::tests::webgl_factory_is_installed_before_inline_script_on_boa": "ok",
+        "href_tests::a_windows_drive_is_not_a_scheme": "ok",
+        "href_tests::absolute_and_opaque_references_are_unchanged_relative_forms": "ok",
+        "href_tests::double_dot_walks_up": "ok",
+        "href_tests::empty_specifier_is_the_base_without_its_fragment": "ok",
+        "href_tests::fragment_only_keeps_the_path_and_query": "ok",
+        "href_tests::ordinary_relative_joins_are_unchanged": "ok",
+        "href_tests::query_only_replaces_the_query_and_drops_the_fragment": "ok"
+      }
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261018/remaining-slices/genet-scripted-07.log",
+      "sha256": "c45be72e05175c8f3bb387311152d10b5f5cd3d2b3e97584955dea5ba1e3a67f",
+      "commands": [
+        "timeout --signal=TERM --kill-after=10s 600s /home/markik/Code/target/debug/deps/genet_scripted-1cce7bb28d4d2593 --exact href_tests::single_dot_is_collapsed livery::tests::boa_canonicalizes_nested_calc_through_livery_inline_cssom livery::tests::boa_cssom_flex_basis_accepts_intrinsic_keywords_in_scripted_reads livery::tests::boa_cssom_flex_shorthand_receipts_cover_specified_and_computed_reads livery::tests::boa_cssom_projects_every_livery_rule_object livery::tests::boa_live_cssom_exposes_imported_sheet_owner_graph livery::tests::boa_live_cssom_reconciles_inserted_removed_and_media_gated_sheets livery::tests::boa_livery_frame_consumes_the_same_collapsed_border_batch_as_cssom --test-threads=1 --nocapture"
+      ],
+      "summaries": [
+        "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 109 filtered out; finished in 33.07s"
+      ],
+      "exit_status": [
+        "0"
+      ],
+      "peak_rss_kib": [
+        "84168"
+      ],
+      "swaps": [
+        "0"
+      ],
+      "tests": {
+        "href_tests::single_dot_is_collapsed": "ok",
+        "livery::tests::boa_canonicalizes_nested_calc_through_livery_inline_cssom": "ok",
+        "livery::tests::boa_cssom_flex_basis_accepts_intrinsic_keywords_in_scripted_reads": "ok",
+        "livery::tests::boa_cssom_flex_shorthand_receipts_cover_specified_and_computed_reads": "ok",
+        "livery::tests::boa_cssom_projects_every_livery_rule_object": "ok",
+        "livery::tests::boa_live_cssom_exposes_imported_sheet_owner_graph": "ok",
+        "livery::tests::boa_live_cssom_reconciles_inserted_removed_and_media_gated_sheets": "ok",
+        "livery::tests::boa_livery_frame_consumes_the_same_collapsed_border_batch_as_cssom": "ok"
+      }
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261018/remaining-slices/genet-scripted-08.log",
+      "sha256": "2954d9c9ebabe278493fbdea07c80be43f173461cc8f474fecf5adef8b3d0d5c",
+      "commands": [
+        "timeout --signal=TERM --kill-after=10s 600s /home/markik/Code/target/debug/deps/genet_scripted-1cce7bb28d4d2593 --exact livery::tests::boa_mutates_named_container_queries_through_cssom livery::tests::boa_reaches_livery_stylesheets_mutation_and_computed_values livery::tests::boa_reads_advanced_math_through_livery_used_values livery::tests::boa_resolves_nested_calc_widths_through_livery_layout livery::tests::boa_resolves_tiered_viewports_comparison_math_and_container_axes livery::tests::boa_restyles_viewport_units_when_the_livery_device_changes livery::tests::boa_scopes_iframe_documents_to_the_laid_out_frame_viewport livery::tests::boa_used_values_follow_the_retained_font_and_image_geometry --test-threads=1 --nocapture"
+      ],
+      "summaries": [
+        "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 109 filtered out; finished in 39.53s"
+      ],
+      "exit_status": [
+        "0"
+      ],
+      "peak_rss_kib": [
+        "95644"
+      ],
+      "swaps": [
+        "0"
+      ],
+      "tests": {
+        "livery::tests::boa_mutates_named_container_queries_through_cssom": "ok",
+        "livery::tests::boa_reaches_livery_stylesheets_mutation_and_computed_values": "ok",
+        "livery::tests::boa_reads_advanced_math_through_livery_used_values": "ok",
+        "livery::tests::boa_resolves_nested_calc_widths_through_livery_layout": "ok",
+        "livery::tests::boa_resolves_tiered_viewports_comparison_math_and_container_axes": "ok",
+        "livery::tests::boa_restyles_viewport_units_when_the_livery_device_changes": "ok",
+        "livery::tests::boa_scopes_iframe_documents_to_the_laid_out_frame_viewport": "ok",
+        "livery::tests::boa_used_values_follow_the_retained_font_and_image_geometry": "ok"
+      }
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261018/remaining-slices/genet-scripted-09.log",
+      "sha256": "d9ba7789a3ef9315fda37b8f0466720fcecab19dc38e6241360fe11a09cbd665",
+      "commands": [
+        "timeout --signal=TERM --kill-after=10s 600s /home/markik/Code/target/debug/deps/genet_scripted-1cce7bb28d4d2593 --exact livery::tests::iframe_image_uses_its_document_base_for_used_geometry livery::tests::inline_declaration_priority_survives_later_normal_values livery::tests::live_cssom_replaces_image_and_font_resources_after_a_dom_reconciliation livery::tests::live_cssom_retires_a_replaced_arena_with_the_same_mutation_count livery::tests::scripted_attribute_change_restyles_only_its_livery_subtree livery::tests::scripted_style_read_recovers_when_layout_drained_an_unseen_batch pin_tests::collect_dom_uses_pins_as_roots resource_bridge::tests::async_mapping_preserves_final_url_and_content_type --test-threads=1 --nocapture"
+      ],
+      "summaries": [
+        "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 109 filtered out; finished in 35.43s"
+      ],
+      "exit_status": [
+        "0"
+      ],
+      "peak_rss_kib": [
+        "113272"
+      ],
+      "swaps": [
+        "0"
+      ],
+      "tests": {
+        "livery::tests::iframe_image_uses_its_document_base_for_used_geometry": "ok",
+        "livery::tests::inline_declaration_priority_survives_later_normal_values": "ok",
+        "livery::tests::live_cssom_replaces_image_and_font_resources_after_a_dom_reconciliation": "ok",
+        "livery::tests::live_cssom_retires_a_replaced_arena_with_the_same_mutation_count": "ok",
+        "livery::tests::scripted_attribute_change_restyles_only_its_livery_subtree": "ok",
+        "livery::tests::scripted_style_read_recovers_when_layout_drained_an_unseen_batch": "ok",
+        "pin_tests::collect_dom_uses_pins_as_roots": "ok",
+        "resource_bridge::tests::async_mapping_preserves_final_url_and_content_type": "ok"
+      }
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261018/remaining-slices/genet-scripted-10.log",
+      "sha256": "6a79ec1687b7e4de0d5781554c11ab6ab33eb49e29cefff4a9d2a79a1f1ba74a",
+      "commands": [
+        "timeout --signal=TERM --kill-after=10s 600s /home/markik/Code/target/debug/deps/genet_scripted-1cce7bb28d4d2593 --exact resource_bridge::tests::boa_product_bridge_metadata_retains_document resource_bridge::tests::boa_product_bridge_redirect_identity resource_bridge::tests::classic_script_loading_checks_integrity_and_stops_after_close resource_bridge::tests::classic_script_loading_decodes_the_declared_charset resource_bridge::tests::close_discards_queued_completions resource_bridge::tests::failed_replacement_restores_the_previous_generation resource_bridge::tests::overlapping_failed_spawns_leave_the_latest_live_generation_active resource_bridge::tests::page_admission_bounds_workers_and_queued_completions_until_pump --test-threads=1 --nocapture"
+      ],
+      "summaries": [
+        "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 109 filtered out; finished in 34.52s"
+      ],
+      "exit_status": [
+        "0"
+      ],
+      "peak_rss_kib": [
+        "109708"
+      ],
+      "swaps": [
+        "0"
+      ],
+      "tests": {
+        "resource_bridge::tests::boa_product_bridge_metadata_retains_document": "ok",
+        "resource_bridge::tests::boa_product_bridge_redirect_identity": "ok",
+        "resource_bridge::tests::classic_script_loading_checks_integrity_and_stops_after_close": "ok",
+        "resource_bridge::tests::classic_script_loading_decodes_the_declared_charset": "ok",
+        "resource_bridge::tests::close_discards_queued_completions": "ok",
+        "resource_bridge::tests::failed_replacement_restores_the_previous_generation": "ok",
+        "resource_bridge::tests::overlapping_failed_spawns_leave_the_latest_live_generation_active": "ok",
+        "resource_bridge::tests::page_admission_bounds_workers_and_queued_completions_until_pump": "ok"
+      }
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261018/remaining-slices/genet-scripted-11.log",
+      "sha256": "287129362ee9c229edca2cc043b7aebbdf393fbb355f9635026632d50298e055",
+      "commands": [
+        "timeout --signal=TERM --kill-after=10s 600s /home/markik/Code/target/debug/deps/genet_scripted-1cce7bb28d4d2593 --exact resource_bridge::tests::page_spawn_failure_releases_reservation_without_panicking resource_bridge::tests::rich_request_preserves_bytes_policies_and_response_metadata resource_bridge::tests::url_only_host_refuses_rich_requests_without_claiming_http_success resource_bridge::tests::wake_callback_is_called_for_deferred_completion resource_bridge::tests::worker_admission_refuses_inline_without_falling_back_to_sync_fetch --test-threads=1 --nocapture"
+      ],
+      "summaries": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 112 filtered out; finished in 0.00s"
+      ],
+      "exit_status": [
+        "0"
+      ],
+      "peak_rss_kib": [
+        "24036"
+      ],
+      "swaps": [
+        "0"
+      ],
+      "tests": {
+        "resource_bridge::tests::page_spawn_failure_releases_reservation_without_panicking": "ok",
+        "resource_bridge::tests::rich_request_preserves_bytes_policies_and_response_metadata": "ok",
+        "resource_bridge::tests::url_only_host_refuses_rich_requests_without_claiming_http_success": "ok",
+        "resource_bridge::tests::wake_callback_is_called_for_deferred_completion": "ok",
+        "resource_bridge::tests::worker_admission_refuses_inline_without_falling_back_to_sync_fetch": "ok"
+      }
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261018/remaining-slices/genet-fixtures-fixed.log",
+      "sha256": "f45ae8e684f2c95e79d989e5d8e9c936e3b4b733d8f1578f7e0e7693cb514418",
+      "commands": [
+        "timeout --signal=TERM --kill-after=10s 600s cargo test --offline --locked -j1 -p genet-render -p genet-documents -p genet-scripted -p genet-livery --features genet-documents/scripted-nova --lib --test retained_cpu_raster -- --test-threads=1 child_realm_mutations_render_on_boa adopted_node_capture_replays_to_the_same_live_node_on_boa validation_feedback_follows_adoption_and_clears_after_teardown_on_boa child_frame_timer_report_keeps_its_realm_on_boa validation_catalog_is_installed_before_scripts_and_shared_with_children_on_boa scripted_frame_reports_rejected_border_and_recovers"
+      ],
+      "summaries": [
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 153 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 359 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 67 filtered out; finished in 0.00s",
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 111 filtered out; finished in 40.68s"
+      ],
+      "exit_status": [
+        "0"
+      ],
+      "peak_rss_kib": [
+        "1212948"
+      ],
+      "swaps": [
+        "0"
+      ],
+      "tests": {
+        "document::tests::livery_render_tests::adopted_node_capture_replays_to_the_same_live_node_on_boa": "ok",
+        "document::tests::livery_render_tests::child_frame_timer_report_keeps_its_realm_on_boa": "ok",
+        "document::tests::livery_render_tests::child_realm_mutations_render_on_boa": "ok",
+        "document::tests::livery_render_tests::scripted_frame_reports_rejected_border_and_recovers": "ok",
+        "document::tests::livery_render_tests::validation_catalog_is_installed_before_scripts_and_shared_with_children_on_boa": "ok",
+        "document::tests::livery_render_tests::validation_feedback_follows_adoption_and_clears_after_teardown_on_boa": "ok"
+      }
+    }
+  ],
+  "boundaries": [
+    "Boa feature configuration from the original gate; no new Nova, browser, or headed-platform qualification.",
+    "Original failed and timed-out logs are retained; the GC soak independently passes in 93.10 seconds.",
+    "Unrelated working-tree edits to the architecture reduction plan are excluded."
+  ]
+}

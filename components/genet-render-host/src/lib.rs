@@ -66,12 +66,15 @@ pub use recovery::{
 pub enum RasterizeFailure {
     DeviceLost(DeviceLossNotice),
     ProviderError(Arc<netrender::VelloError>),
+    /// The frame source refused to produce a scene before GPU submission.
+    SourceError(String),
 }
 impl std::fmt::Display for RasterizeFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::DeviceLost(loss) => write!(f, "rasterization refused: DeviceLost({loss:?})"),
             Self::ProviderError(error) => write!(f, "rasterization refused: {error}"),
+            Self::SourceError(error) => write!(f, "frame source refused: {error}"),
         }
     }
 }

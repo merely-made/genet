@@ -764,6 +764,7 @@ pub struct LiveryScriptedDocument<E: ScriptEngine> {
     lifecycle: DocumentLifecycle,
     validation_notice: Option<ScriptedValidationNotice>,
     next_validation_notice_sequence: u64,
+    last_error: Option<String>,
 }
 
 /// A native, inert presentation of an uncanceled constraint-validation
@@ -1153,6 +1154,7 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             lifecycle: DocumentLifecycle::default(),
             validation_notice: None,
             next_validation_notice_sequence: 0,
+            last_error: None,
         };
         document.drain_validation_reports();
         Ok(document)
@@ -1210,6 +1212,11 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         self.validation_notice.as_ref()
     }
 
+    /// The last frame's layout or paint translation failure, if any.
+    pub fn last_error(&self) -> Option<&str> {
+        self.last_error.as_deref()
+    }
+
     /// Dismiss the current native notice. A later uncanceled report creates a
     /// new notice with a new sequence number.
     pub fn dismiss_validation_notice(&mut self) -> bool {
@@ -1245,6 +1252,7 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         let mut list = match self.cssom.frame(&mut self.rt, width, height) {
             Ok(list) => list,
             Err(error) => {
+                self.last_error = Some(format!("layout: {error}"));
                 eprintln!("[pelt-livery-scripted] layout error: {error}");
                 return genet_render::RenderedFrame {
                     scene: netrender::Scene::new(width, height),
@@ -1265,6 +1273,7 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             list = match self.cssom.frame(&mut self.rt, width, height) {
                 Ok(list) => list,
                 Err(error) => {
+                    self.last_error = Some(format!("layout: {error}"));
                     eprintln!("[pelt-livery-scripted] layout error: {error}");
                     return genet_render::RenderedFrame {
                         scene: netrender::Scene::new(width, height),
@@ -1302,7 +1311,20 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             let message = notice.message.clone();
             notice.bounds = self.cssom.push_validation_notice(&mut list, &message);
         }
-        genet_render::translate_frame(&list)
+        match genet_render::translate_frame(&list) {
+            Ok(frame) => {
+                self.last_error = None;
+                frame
+            },
+            Err(error) => {
+                self.last_error = Some(format!("paint translation: {error}"));
+                eprintln!("[pelt-livery-scripted] paint translation error: {error}");
+                genet_render::RenderedFrame {
+                    scene: netrender::Scene::new(width, height),
+                    external_textures: Vec::new(),
+                }
+            },
+        }
     }
 
     /// Child paint is inserted at the parent's replaced-content slot, inheriting
@@ -3505,6 +3527,26 @@ mod tests {
     mod livery_render_tests {
         use super::*;
         use script_engine_boa::BoaEngine;
+
+        #[test]
+        fn scripted_frame_reports_rejected_border_and_recovers() {
+            let mut doc = LiveryScriptedDocument::<BoaEngine>::parse(
+                "<body><div id='target' style='width: 32px; height: 32px; border: 4px solid red'></div></body>",
+            ).expect("scripted document");
+            assert!(!doc.frame(64, 64).ops.is_empty());
+
+            doc.evaluate("document.getElementById('target').setAttribute('style', 'width: 32px; height: 32px; border: 4px groove red')")
+                .expect("change border style");
+            assert!(doc.frame(64, 64).ops.is_empty());
+            assert!(doc.last_error().is_some_and(|error|
+                error.contains("paint translation: paint command")
+                    && error.contains("border style or geometry is not lowered")));
+
+            doc.evaluate("document.getElementById('target').setAttribute('style', 'width: 32px; height: 32px; border: 4px solid red')")
+                .expect("restore supported border");
+            assert!(!doc.frame(64, 64).ops.is_empty());
+            assert_eq!(doc.last_error(), None);
+        }
 
         fn child_realm_mutations_render<E: ScriptEngine>() {
             let mut doc = LiveryScriptedDocument::<E>::parse(

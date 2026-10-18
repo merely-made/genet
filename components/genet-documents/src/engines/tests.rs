@@ -455,6 +455,94 @@ fn livery_session_routes_retained_structural_and_text_paint() {
 
 #[cfg(feature = "livery")]
 #[test]
+fn livery_session_reports_rejected_border_and_recovers_after_style_correction() {
+    let engine = LiverySessionEngine::new(NoFetch);
+    let request = SessionSpawnRequest::new("https://example.test/")
+        .with_body("<html><body><div id='target' style='width: 32px; height: 32px; border: 4px solid red'></div></body></html>")
+        .with_viewport(64, 64);
+    let mut session = engine.spawn(&request).expect("retained Livery session");
+    assert!(!session.try_frame(64, 64).expect("valid frame").ops.is_empty());
+
+    let concrete = session.as_any().downcast_mut::<LiveryDocumentSession>().unwrap();
+    let target = livery_node_with_id(concrete, "target");
+    concrete.doc.mutate_dom(|dom| {
+        dom.set_attribute(
+            target,
+            QualName::new(None, Namespace::default(), LocalName::from("style")),
+            "width: 32px; height: 32px; border: 4px groove red",
+        );
+    });
+    let error = session.try_frame(64, 64).expect_err("groove border must refuse");
+    assert!(error.contains("paint translation: paint command"));
+    let concrete = session.as_any().downcast_mut::<LiveryDocumentSession>().unwrap();
+    assert!(
+        concrete.last_error().is_some_and(|error|
+            error.contains("paint translation: paint command")
+                && error.contains("border style or geometry is not lowered")),
+        "translation failure must remain visible through the session"
+    );
+
+    concrete.doc.mutate_dom(|dom| {
+        dom.set_attribute(
+            target,
+            QualName::new(None, Namespace::default(), LocalName::from("style")),
+            "width: 32px; height: 32px; border: 4px solid red",
+        );
+    });
+    assert!(!session.try_frame(64, 64).expect("corrected frame").ops.is_empty());
+    let concrete = session.as_any().downcast_mut::<LiveryDocumentSession>().unwrap();
+    assert_eq!(concrete.last_error(), None);
+}
+
+#[cfg(feature = "livery")]
+#[test]
+fn default_iframe_border_refuses_checked_frame() {
+    let engine = LiverySessionEngine::new(NoFetch);
+    let request = SessionSpawnRequest::new("https://example.test/")
+        .with_body("<iframe></iframe>")
+        .with_viewport(400, 300);
+    let mut session = engine.spawn(&request).expect("iframe session");
+    let error = session.try_frame(400, 300).expect_err("UA inset border is not lowered");
+    assert!(error.contains("border style or geometry is not lowered"));
+}
+
+#[cfg(feature = "scripted")]
+#[test]
+fn scripted_session_checked_frame_reports_rejected_border_and_recovers() {
+    let engine =
+        ScriptedSessionEngine::<script_engine_boa::BoaEngine, _>::new("genet.scripted", NoFetch);
+    let request = SessionSpawnRequest::new("https://example.test/")
+        .with_body("<body><div id='target' style='width: 32px; height: 32px; border: 4px solid red'></div></body>")
+        .with_viewport(64, 64);
+    let mut session = engine.spawn(&request).expect("scripted session");
+    assert!(!session.try_frame(64, 64).expect("valid frame").ops.is_empty());
+
+    let concrete = session
+        .as_any()
+        .downcast_mut::<ScriptedDocumentSession<script_engine_boa::BoaEngine>>()
+        .unwrap();
+    concrete.document_mut().evaluate("document.getElementById('target').setAttribute('style', 'width: 32px; height: 32px; border: 4px groove red')")
+        .expect("change border style");
+    let error = session.try_frame(64, 64).expect_err("groove border must refuse");
+    assert!(error.contains("paint translation: paint command"));
+
+    let concrete = session
+        .as_any()
+        .downcast_mut::<ScriptedDocumentSession<script_engine_boa::BoaEngine>>()
+        .unwrap();
+    assert_eq!(concrete.last_error(), Some(error.as_str()));
+    concrete.document_mut().evaluate("document.getElementById('target').setAttribute('style', 'width: 32px; height: 32px; border: 4px solid red')")
+        .expect("restore supported border");
+    assert!(!session.try_frame(64, 64).expect("corrected frame").ops.is_empty());
+    let concrete = session
+        .as_any()
+        .downcast_mut::<ScriptedDocumentSession<script_engine_boa::BoaEngine>>()
+        .unwrap();
+    assert_eq!(concrete.last_error(), None);
+}
+
+#[cfg(feature = "livery")]
+#[test]
 fn livery_session_activates_the_first_matching_text_directive() {
     let engine = LiverySessionEngine::new(NoFetch);
     let request = SessionSpawnRequest::new(
@@ -2152,7 +2240,7 @@ fn a_srcdoc_frame_loads_without_a_fetch_and_keeps_the_parents_base_url() {
     let mut session = spawn_site(
         "https://example.test/index.html",
         Some(
-            r#"<iframe srcdoc="<link rel=stylesheet href=child.css><div style='width:20px;height:20px'></div>"></iframe>"#,
+            r#"<iframe style="border:2px solid" srcdoc="<link rel=stylesheet href=child.css><div style='width:20px;height:20px'></div>"></iframe>"#,
         ),
     );
     let session = livery(&mut session);
@@ -2182,7 +2270,7 @@ fn a_srcdoc_frame_loads_without_a_fetch_and_keeps_the_parents_base_url() {
 fn an_unfetchable_frame_reports_error_and_leaves_an_empty_box() {
     let mut session = spawn_site(
         "https://example.test/index.html",
-        Some(r#"<iframe src="missing.html"></iframe>"#),
+        Some(r#"<iframe style="border:2px solid" src="missing.html"></iframe>"#),
     );
     let session = livery(&mut session);
     let reports = session.frame_load_reports();

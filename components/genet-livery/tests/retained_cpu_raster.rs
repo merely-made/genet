@@ -43,7 +43,7 @@ fn retained_background_color_repaints_cpu_pixel_without_relayout() {
 
     let first = document.frame(64, 64).expect("initial frame");
     let layout_generation = document.layout_generation();
-    let first_scene = translate_paint_list(&first);
+    let first_scene = translate_paint_list(&first).expect("initial paint translation");
     let first_pixels = cpu.render(&first_scene).expect("initial CPU raster");
     assert_eq!(
         pixel_at(first_pixels.data_as_u8_slice(), 64, 16, 16),
@@ -60,7 +60,7 @@ fn retained_background_color_repaints_cpu_pixel_without_relayout() {
     });
     let repainted = document.frame(64, 64).expect("retained repaint");
     assert_eq!(document.layout_generation(), layout_generation);
-    let repainted_scene = translate_paint_list(&repainted);
+    let repainted_scene = translate_paint_list(&repainted).expect("repainted paint translation");
     let repainted_pixels = cpu.render(&repainted_scene).expect("repainted CPU raster");
     assert_eq!(
         pixel_at(repainted_pixels.data_as_u8_slice(), 64, 16, 16),

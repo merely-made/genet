@@ -1742,10 +1742,7 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
     fn frame(&mut self, width: u32, height: u32) -> Scene {
         let (css_width, css_height) = self.css_viewport(width, height);
         let mut list = match self.doc.frame(css_width, css_height) {
-            Ok(list) => {
-                self.last_error = None;
-                list
-            },
+            Ok(list) => list,
             Err(error) => {
                 self.last_error = Some(error.to_string());
                 return Scene::new(width, height);
@@ -1770,7 +1767,13 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
         }
         composite_child_frames(&mut list, &mut self.frames);
         let list = list.scaled_to(self.zoom(), width, height);
-        let mut scene = paint_list_render::translate_paint_list(&list);
+        let mut scene = match paint_list_render::translate_paint_list(&list) {
+            Ok(scene) => scene,
+            Err(error) => {
+                self.last_error = Some(format!("paint translation: {error}"));
+                return Scene::new(width, height);
+            },
+        };
         if let Some(selection) = self.doc.text_selection() {
             for rect in selection.rects {
                 // The overlay is host-side paint, so it is placed in the
@@ -1877,11 +1880,25 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
             notice.bounds = self.doc.push_validation_notice(&mut overlay, &notice.message)
                 .map(|[x, y, w, h]| [x * zoom, y * zoom, w * zoom, h * zoom]);
             let overlay = overlay.scaled_to(zoom, width, height);
-            scene.append_fragment(netrender::SceneFragment::from_scene(
-                paint_list_render::translate_paint_list(&overlay),
-            ));
+            let overlay = match paint_list_render::translate_paint_list(&overlay) {
+                Ok(scene) => scene,
+                Err(error) => {
+                    self.last_error = Some(format!("paint translation: {error}"));
+                    return Scene::new(width, height);
+                },
+            };
+            scene.append_fragment(netrender::SceneFragment::from_scene(overlay));
         }
+        self.last_error = None;
         scene
+    }
+
+    fn try_frame(&mut self, width: u32, height: u32) -> Result<Scene, String> {
+        let scene = self.frame(width, height);
+        match &self.last_error {
+            Some(error) => Err(error.clone()),
+            None => Ok(scene),
+        }
     }
 
     fn scroll_by(&mut self, dx: f32, dy: f32) -> bool {

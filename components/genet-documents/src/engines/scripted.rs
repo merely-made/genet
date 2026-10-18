@@ -181,6 +181,11 @@ impl<E: script_engine_api::ScriptEngine + 'static> ScriptedDocumentSession<E> {
         Self::new_at(doc, "about:blank")
     }
 
+    /// The latest frame's layout or paint translation failure, if any.
+    pub fn last_error(&self) -> Option<&str> {
+        self.doc.last_error()
+    }
+
     pub fn new_at(
         doc: genet_scripted::LiveryScriptedDocument<E>,
         address: impl Into<String>,
@@ -323,6 +328,13 @@ impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
             })
             .collect();
         frame.scene
+    }
+    fn try_frame(&mut self, width: u32, height: u32) -> Result<Scene, String> {
+        let scene = self.frame(width, height);
+        match self.last_error() {
+            Some(error) => Err(error.to_owned()),
+            None => Ok(scene),
+        }
     }
     fn external_texture_draws(&self) -> &[document_session_api::SessionExternalTextureDraw] {
         &self.external_textures

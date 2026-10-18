@@ -1,0 +1,128 @@
+{
+  "date": "2026-10-17",
+  "base_commit": "69b6f7a0e4c00655dfb5f1f281dd2e918ae1750c",
+  "netrender": "c5efc94f876e93caba20807709189c5f9589492b",
+  "source_sha256": {
+    "Cargo.toml": "d8a9ce34bdff52f6c69a60b4fd374ea4e96f5a4119cb783965ec3a03d338cf63",
+    "components/genet-documents/src/engines/livery.rs": "f569528d6aaf28191867750b2def0ac2baa93b83b4ee8811899e4e6efbf7d236",
+    "components/genet-documents/src/engines/scripted.rs": "302369a6e4e33ac875d0e3d3dc5996676a16a628975398eb3c7721dd63c5b64d",
+    "components/genet-documents/src/engines/tests.rs": "000471e6518111bfd80377043b42ceaecf088faf0f18e854389f6533ddf71bb8",
+    "components/genet-livery/tests/retained_cpu_raster.rs": "a146664e2e38b13435d7e1e69bf86e66573cde14b5bcfd2cbfe788a83f1404e2",
+    "components/genet-render-host/src/lib.rs": "2548f66879f996bb75f3ddbda48f6e6395e83913d9ba87d3b472eb11d0fb2165",
+    "components/genet-render/src/lib.rs": "a76821e3f7387d89a0ee4a2b5f77e259dfbf9d68fa15ba25eca48c9be7a3434b",
+    "components/genet-render/src/livery_render.rs": "c161a91125c783f3ab1564bf838ceccfb94ea3269bd4326d398c8ad47dc63bd6",
+    "components/genet-scripted/document.rs": "933c5988f71032a6cb2b65c232020afdbfae9ed16d6eab55b302e3b9091204ae",
+    "components/shared/document-session-api/src/session_engine.rs": "a970ec0c9d4f696539baca825c1ee096c115a4dde376baab203675151d21d8f3",
+    "ports/genet-wpt/src/main.rs": "ddd281cd136e7edcf77fc80571ce7cebe297c6c09a534fb37b226a7801494acf",
+    "ports/genet-wpt/src/reftest.rs": "f4a60135a42d8feebda0ec5782c1bf6bcab058d79b8dd2cb265647386db38877",
+    "ports/genet-wpt/src/render.rs": "d9a79f7d69ed5e72cf54a70ca34441d8bdda0f6f5dc13237be2289998d354ce5",
+    "Cargo.lock": "a5fb40cc2eb08484d8994b73ce8713d813d713fe569c443bffa7f9c0e87dc2d8"
+  },
+  "resources": {
+    "memory_max": "5G",
+    "swap_max": 0,
+    "cpu_quota": "150%",
+    "jobs": 1,
+    "test_threads": 1,
+    "timeout_seconds": 600,
+    "lock": "/home/markik/Code/testing/machine-heavy.lock"
+  },
+  "gates": [
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/render-admission/genet-retained.log",
+      "sha256": "43d221d3f80d52dd56942dcaa0d673a155accdd29a1cc398d7571c7a88919864",
+      "summaries": [],
+      "exit_status": [
+        "1"
+      ],
+      "peak_rss_kib": [
+        "30756"
+      ]
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/render-admission/genet-retained-2.log",
+      "sha256": "d22b9b1d088f538364690d00c5496faa02ef416ee7c535d89ad800e826c9f818",
+      "summaries": [],
+      "exit_status": [
+        "101"
+      ],
+      "peak_rss_kib": [
+        "1420452"
+      ]
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/render-admission/genet-retained-final.log",
+      "sha256": "4299165bfb21993dc1253191d20b34b1898b9cfb234877f6dd3a7fa08e649ab1",
+      "summaries": [
+        "test result: FAILED. 150 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 400.49s",
+        "test result: ok. 357 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 30.20s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+        "test result: ok. 67 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.10s"
+      ],
+      "exit_status": [
+        "124"
+      ],
+      "peak_rss_kib": [
+        "1211208"
+      ]
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/render-admission/genet-admission-focused.log",
+      "sha256": "7fcb74327193979e95932576cb3b7b37848a563dd6afc45866ff4aab9aa952ba",
+      "summaries": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 148 filtered out; finished in 4.88s"
+      ],
+      "exit_status": [
+        "0"
+      ],
+      "peak_rss_kib": [
+        "1192484"
+      ]
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/render-admission/genet-scripted-admission.log",
+      "sha256": "1d9e59485c997d2b6f80b5621d4dd84b6097118c83665fdc948f2c7e6af7c757",
+      "summaries": [],
+      "exit_status": [],
+      "peak_rss_kib": []
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/render-admission/genet-scripted-admission-warm.log",
+      "sha256": "d82df8577fe7474fc623782e16a40149a6a1bdcdf6e9c594c1b0835f8b99614e",
+      "summaries": [
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 153 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 359 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 67 filtered out; finished in 0.00s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 116 filtered out; finished in 4.74s"
+      ],
+      "exit_status": [
+        "0"
+      ],
+      "peak_rss_kib": [
+        "1211344"
+      ]
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/render-admission/genet-wpt-admission.log",
+      "sha256": "5368b820351a63cd668cf2e709a7da1cc3e95355d6c4e2b3e94f1ab9f4a41787",
+      "summaries": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 82 filtered out; finished in 0.00s"
+      ],
+      "exit_status": [
+        "0"
+      ],
+      "peak_rss_kib": [
+        "1428248"
+      ]
+    }
+  ],
+  "qualification": [
+    "Full document invocation: 150 passed, two iframe fixture failures; both corrected to supported solid borders without changing UA defaults and rerun successfully. Added explicit default inset iframe refusal test. Total 153 document tests covered across these runs.",
+    "Livery lib: 357 passed, two preexisting ignores; retained CPU raster: one passed; render lib: 67 passed.",
+    "Scripted admission regression: one passed. The broader scripted suite was interrupted by the combined 600-second limit in gc_soak_bounds_memory_on_boa and is not qualified as complete.",
+    "WPT render unit tests: five passed, including namespaced nine-patch translation. This is not WPT conformance qualification.",
+    "Initial repeated --lib CLI invocation failed before build. Next compile overlapped shared trait editing and failed; final frozen-source runs supersede it. Standalone scripted feature-graph rebuild was stopped and replaced with the already compiled graph.",
+    "Legacy frame APIs remain compatible; checked presentation consumers use DocumentSession::try_frame and RasterizeFailure::SourceError. Mere adoption follows in a separate commit."
+  ]
+}

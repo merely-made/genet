@@ -1138,12 +1138,23 @@ fn dump(tests: &[TestCase], args: &Args) {
         let test_dir = test.path.parent().unwrap_or(tests_root);
         let ref_dir = ref_path.parent().unwrap_or(tests_root);
         let render = |html: &str, dir: &Path, xml: bool| {
-            renderer
-                .render_html(html, dir, tests_root, viewport, xml)
-                .image
+            renderer.render_html(html, dir, tests_root, viewport, xml)
+                .map(|rendered| rendered.image)
         };
-        let t = render(&test_html, test_dir, is_xml_path(&test.path));
-        let r = render(&ref_html, ref_dir, is_xml_path(&ref_path));
+        let t = match render(&test_html, test_dir, is_xml_path(&test.path)) {
+            Ok(image) => image,
+            Err(error) => {
+                eprintln!("cannot dump {}: {error}", test.name());
+                continue;
+            },
+        };
+        let r = match render(&ref_html, ref_dir, is_xml_path(&ref_path)) {
+            Ok(image) => image,
+            Err(error) => {
+                eprintln!("cannot dump {} reference: {error}", test.name());
+                continue;
+            },
+        };
         let stem = test
             .path
             .file_stem()

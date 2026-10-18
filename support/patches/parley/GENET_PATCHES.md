@@ -117,3 +117,12 @@ complex-scripts --example export_segmenter_dictionaries -- <dir>` writes
 `dictionaries` tests check that loaded blobs break all six scripts exactly as
 the baked dictionaries do. `icu_provider`'s `sync` feature keeps
 `LayoutContext` `Send`.
+
+## One font stack with netrender and vello
+
+Parley's shaping moved from harfrust 0.8 to harfrust 0.12 and skrifa 0.42 to
+0.44, and fontique from read-fonts 0.39 to 0.41, matching the skrifa 0.44 /
+read-fonts 0.41 that netrender and vello use. A page linking both used to
+carry two read-fonts and two skrifa; it now carries one of each. No source
+change was needed, and genet-livery's 704 layout and paint tests pass
+unchanged.

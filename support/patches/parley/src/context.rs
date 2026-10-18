@@ -55,6 +55,32 @@ impl<B: Brush> LayoutContext<B> {
         }
     }
 
+    /// Load a segmenter dictionary blob (see [`crate::segmenter_dictionaries`]).
+    /// Loading one this context already holds does nothing. Layouts built
+    /// before the load keep their old breaks; rebuild them to use it.
+    #[cfg(feature = "complex-scripts")]
+    pub fn load_segmenter_dictionaries(
+        &mut self,
+        blob: &crate::segmenter_dictionaries::DictionaryBlob,
+    ) {
+        self.analysis_data_sources.load_dictionaries(blob);
+    }
+
+    /// The dictionary groups text laid out so far has asked for and this
+    /// context does not hold: what a host should fetch and load.
+    #[cfg(feature = "complex-scripts")]
+    pub fn wanted_segmenter_dictionaries(
+        &self,
+    ) -> crate::segmenter_dictionaries::SegmenterDictionaries {
+        self.analysis_data_sources.wanted_dictionaries()
+    }
+
+    /// The dictionary groups this context holds.
+    #[cfg(feature = "complex-scripts")]
+    pub fn segmenter_dictionaries(&self) -> crate::segmenter_dictionaries::SegmenterDictionaries {
+        self.analysis_data_sources.held_dictionaries()
+    }
+
     fn resolve_style_set(
         &mut self,
         font_ctx: &mut FontContext,

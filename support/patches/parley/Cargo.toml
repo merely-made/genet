@@ -42,6 +42,10 @@ categories = [
 license = "Apache-2.0 OR MIT"
 repository = "https://github.com/merely-made/genet"
 
+[[example]]
+name = "export_segmenter_dictionaries"
+required-features = ["complex-scripts"]
+
 [[test]]
 name = "join_controls"
 path = "tests/join_controls.rs"
@@ -51,7 +55,9 @@ all-features = true
 
 [features]
 accesskit = ["dep:accesskit"]
-complex-scripts = []
+# Runtime-loaded ICU dictionaries for Thai, Lao, Khmer, Burmese, Chinese and
+# Japanese breaking (`LayoutContext::load_segmenter_dictionaries`).
+complex-scripts = ["dep:icu_provider", "dep:zerovec"]
 font-diagnostic = ["std"]
 default = ["system"]
 libm = [
@@ -118,9 +124,22 @@ version = "2.1.2"
 features = ["compiled_data"]
 default-features = false
 
+[dependencies.icu_provider]
+version = "2.2"
+default-features = false
+# `sync` shares loaded dictionaries through `Arc`, keeping `LayoutContext` `Send`.
+features = ["alloc", "sync"]
+optional = true
+
 [dependencies.linebender_resource_handle]
 version = "0.1.1"
 default-features = false
+
+[dependencies.zerovec]
+version = "0.11"
+default-features = false
+features = ["alloc"]
+optional = true
 
 [dependencies.parlance]
 version = "0.1.0"

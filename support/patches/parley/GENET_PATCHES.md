@@ -95,3 +95,25 @@ font collection. They now register bundled Lato Medium/Bold; their English-text
 builder-equivalence assertions remain. The existing empty-layout tab-size
 mismatch reproduces with the pre-cut production source and is recorded in the
 2026-10-16 architecture audit receipt, rather than skipped or normalized away.
+
+## Complex-script dictionaries load at runtime
+
+Upstream's `complex-scripts` feature calls ICU's `new_dictionary` constructors,
+which compile the Thai, Lao, Khmer, Burmese, Chinese and Japanese segmenter
+dictionaries into the binary: about 3.7 MB, 2.4 MB gzipped, in a wasm page. Here
+the feature keeps the compiled non-complex rules and owns its segmenters, and a
+host loads the dictionaries when text asks for them:
+`segmenter_dictionaries::DictionaryBlob::new(bytes)` checks a blob once (clones
+share it), `LayoutContext::load_segmenter_dictionaries` loads it, and
+`LayoutContext::wanted_segmenter_dictionaries` names the groups text has met
+without them. Until a group loads, its scripts break by the plain rules.
+
+Blobs are `GSEGDIC1` followed by `[group][name length][name][u16 count LE][u16 LE…]`
+entries, read by a crate-local ICU data provider that projects each trie out of
+the shared bytes (no `icu_provider_blob`). `cargo run -p genet-parley --features
+complex-scripts --example export_segmenter_dictionaries -- <dir>` writes
+`segmenter-southeast-asian.dict` (1,773,143 B) and
+`segmenter-chinese-japanese.dict` (2,007,130 B) from ICU's baked data; the
+`dictionaries` tests check that loaded blobs break all six scripts exactly as
+the baked dictionaries do. `icu_provider`'s `sync` feature keeps
+`LayoutContext` `Send`.

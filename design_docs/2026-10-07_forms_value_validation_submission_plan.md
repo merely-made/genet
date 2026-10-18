@@ -2091,3 +2091,24 @@ Left for Checkpoint C, in order:
 5. Run the native live submission on Livery, Boa and Nova.
 6. Run the live Chrome submission check under wasm-bindgen 0.2.129 (F13).
 7. Whole-change review, Checkpoint C report, ledger and DOC_README rows.
+
+### 2026-10-18, state recorded during a branch sweep
+
+Mark asked (2026-10-18) whether Phase C was still in limbo; it is. Facts checked against
+the tree during the mere and genet branch sweep:
+
+- The Phase C product commit `e3911fb6b2d` (Fix form submission validity, listener
+  transitions and feedback) is in main; branches `forms-phase-c` and
+  `forms-phase-c-control` are both merged and 53 behind main.
+- Checkpoint C has not run: no covering gate, matched capture, live native run or browser
+  check on Windows since the 2026-10-15 pause. The F12 repro tests still carry `#[ignore]`.
+- `Code/worktrees/genet-forms-c-control` holds the aborted manual reversal: 59 staged
+  changes (40 modified, 19 deleted, 636 insertions, 15,395 deletions) from 2026-10-16 04:59,
+  uncommitted. `Code/worktrees/genet-forms-c` holds one uncommitted change,
+  `ports/ortet/src/web.rs` (+21/-4), a guard that refuses a held source once a newer
+  navigation has won.
+
+Mark's ruling (2026-10-18): **"Keep both for resumption (Recommended)"**. The lane is paused,
+not abandoned; both worktrees stay as they are. Main was fast-forwarded 61 commits the same
+day, so a resumption starts by merging main into `forms-phase-c` and rebuilding the control
+from the recipe above.

@@ -859,6 +859,12 @@ pub trait DocumentSession<F>: Any {
     /// implicit: a size change re-lays-out, same as the lanes today.
     fn frame(&mut self, width: u32, height: u32) -> F;
 
+    /// Paint a frame while preserving an engine's refusal reason. Existing
+    /// infallible sessions inherit the ordinary frame path.
+    fn try_frame(&mut self, width: u32, height: u32) -> Result<F, String> {
+        Ok(self.frame(width, height))
+    }
+
     /// Producer draws associated with the most recent [`Self::frame`].
     fn external_texture_draws(&self) -> &[SessionExternalTextureDraw] {
         &[]

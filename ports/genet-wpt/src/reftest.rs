@@ -767,15 +767,21 @@ pub(crate) fn reftest(tests: &[TestCase], args: &Args) {
         let ref_xml = is_xml_path(&ref_path);
         let rendered = panic::catch_unwind(AssertUnwindSafe(|| {
             let render = |html: &str, dir: &Path, xml: bool| {
-                let rendered = renderer.render_html(html, dir, tests_root, viewport, xml);
-                (rendered.image, Some(rendered.table_ledger))
+                renderer.render_html(html, dir, tests_root, viewport, xml)
+                    .map(|rendered| (rendered.image, Some(rendered.table_ledger)))
             };
-            let t = render(&test_html, test_dir, test_xml);
-            let r = render(&ref_html, ref_dir, ref_xml);
-            (t, r)
+            let t = render(&test_html, test_dir, test_xml)?;
+            let r = render(&ref_html, ref_dir, ref_xml)?;
+            Ok::<_, String>((t, r))
         }));
         let ((test_img, test_ledger), (ref_img, ref_ledger)) = match rendered {
-            Ok(pair) => pair,
+            Ok(Ok(pair)) => pair,
+            Ok(Err(error)) => {
+                failed += 1;
+                actuals.push(ActualRecord::with_reason(test, "fail", error.clone()));
+                println!("FAIL  render   {}: {error}", test.name());
+                continue;
+            },
             Err(_) => {
                 failed += 1;
                 actuals.push(ActualRecord::with_reason(test, "fail", "crash"));

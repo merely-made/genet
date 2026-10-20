@@ -1,0 +1,397 @@
+{
+  "recorded_utc": "2026-10-20T02:23:46.073796+00:00",
+  "platform": "Windows O-PC",
+  "toolchain": "1.99.1",
+  "candidate_head": "e3911fb6b2de59ff7526a2c3b437cfa6f662ccae",
+  "candidate_includes": "8fa73497 (in main) and the dirty ports/ortet/src/web.rs of the v4/v5 review manifest",
+  "control": "59-path inverse C projection over the same head (final-projection.json), cold-built in C:/t/cargo-targets/genet/forms-control as qual-wpt-build-control-v2 (1,790 s, eight projection packages compiled fresh)",
+  "candidate_binary_sha256": "402d4b71acbebc03b5f978834ded44e7b8697b7aca3d600cf14d7bbee72781da",
+  "control_binary_sha256": "e969c828f0d52400ba50f8535a98e18bd1bb2c1c526622f56478fd2b4b11dba0",
+  "matched_capture": {
+    "pairs": 188,
+    "totals": {
+      "same": 10847,
+      "lost": 0,
+      "gained": 974876,
+      "changed": 126838
+    },
+    "per_stage": {
+      "c": {
+        "same": 430,
+        "lost": 0,
+        "gained": 974758,
+        "changed": 126832,
+        "pairs": 158
+      },
+      "controls": {
+        "same": 84,
+        "lost": 0,
+        "gained": 42,
+        "changed": 0,
+        "pairs": 6
+      },
+      "b": {
+        "same": 7602,
+        "lost": 0,
+        "gained": 76,
+        "changed": 6,
+        "pairs": 8
+      },
+      "css": {
+        "same": 2731,
+        "lost": 0,
+        "gained": 0,
+        "changed": 0,
+        "pairs": 16
+      }
+    },
+    "lost_passes": 0,
+    "unpaired": [],
+    "css_vs_checked_in_deviations_total": 0
+  },
+  "file_status_counts": {
+    "c": {
+      "candidate encoding boa": {
+        "pass": 439,
+        "error": 145
+      },
+      "candidate encoding nova": {
+        "pass": 571,
+        "error": 13
+      },
+      "candidate forms boa": {
+        "pass": 8,
+        "fail": 18,
+        "error": 7
+      },
+      "candidate forms nova": {
+        "pass": 8,
+        "fail": 18,
+        "error": 7
+      },
+      "control encoding boa": {
+        "error": 583,
+        "fail": 1
+      },
+      "control encoding nova": {
+        "error": 583,
+        "fail": 1
+      },
+      "control forms boa": {
+        "fail": 27,
+        "error": 6
+      },
+      "control forms nova": {
+        "fail": 27,
+        "error": 6
+      }
+    },
+    "b": {
+      "candidate b boa": {
+        "fail": 94,
+        "error": 10,
+        "pass": 60,
+        "skip": 55
+      },
+      "candidate b nova": {
+        "fail": 94,
+        "error": 10,
+        "pass": 60,
+        "skip": 55
+      },
+      "control b boa": {
+        "fail": 95,
+        "error": 10,
+        "pass": 59,
+        "skip": 55
+      },
+      "control b nova": {
+        "fail": 95,
+        "error": 10,
+        "pass": 59,
+        "skip": 55
+      }
+    },
+    "css": {
+      "candidate css livery": {
+        "fail": 865,
+        "pass": 1052,
+        "skip": 814
+      },
+      "control css livery": {
+        "fail": 865,
+        "pass": 1052,
+        "skip": 814
+      }
+    }
+  },
+  "subtest_status_counts": {
+    "c": {
+      "candidate encoding boa": {
+        "pass": 432419,
+        "timeout": 1
+      },
+      "candidate encoding nova": {
+        "pass": 541243,
+        "timeout": 1
+      },
+      "candidate forms boa": {
+        "pass": 35,
+        "fail": 105,
+        "timeout": 6,
+        "not-run": 193
+      },
+      "candidate forms nova": {
+        "pass": 35,
+        "fail": 105,
+        "timeout": 6,
+        "not-run": 193
+      },
+      "control encoding boa": {
+        "not-run": 550053,
+        "fail": 1
+      },
+      "control encoding nova": {
+        "not-run": 550053,
+        "fail": 1
+      },
+      "control forms boa": {
+        "fail": 319,
+        "timeout": 4,
+        "not-run": 16
+      },
+      "control forms nova": {
+        "fail": 319,
+        "timeout": 4,
+        "not-run": 16
+      }
+    },
+    "b": {
+      "candidate b boa": {
+        "pass": 2587,
+        "fail": 1004,
+        "not-run": 27,
+        "timeout": 5
+      },
+      "candidate b nova": {
+        "pass": 2587,
+        "fail": 1004,
+        "not-run": 27,
+        "timeout": 5
+      },
+      "control b boa": {
+        "pass": 2550,
+        "fail": 1041,
+        "not-run": 28,
+        "timeout": 4
+      },
+      "control b nova": {
+        "pass": 2550,
+        "fail": 1041,
+        "not-run": 28,
+        "timeout": 4
+      }
+    }
+  },
+  "covering_gates": {
+    "run": [
+      {
+        "run": "qual-cover-00-v2-run",
+        "gate": "20261016-hosts-native-only-v1",
+        "counts": {
+          "passed": 25,
+          "failed": 0,
+          "ignored": 0
+        },
+        "historical_pass_losses": {},
+        "issues": [],
+        "assessment_sha256": "0787c699c0fe17f1c1b402117c11211f753593caa81a6ab9ea5e8146da3095a2"
+      },
+      {
+        "run": "qual-cover-02-v2-run",
+        "gate": "20261016-hosts-livery-full-v1",
+        "counts": {
+          "passed": 342,
+          "failed": 0,
+          "ignored": 2
+        },
+        "historical_pass_losses": {},
+        "issues": [],
+        "assessment_sha256": "47f35ebb61b1e8a04ab3c1da9616402d1f46b1bc230057f87ccf1a481aed6672"
+      },
+      {
+        "run": "qual-cover-03-v2-run",
+        "gate": "20261016-hosts-render-full-v1",
+        "counts": {
+          "passed": 67,
+          "failed": 0,
+          "ignored": 0
+        },
+        "historical_pass_losses": {},
+        "issues": [],
+        "assessment_sha256": "f8d3451cf6abff4cee747261b5be165592889c3af30f93635ba02123ff3fb363"
+      },
+      {
+        "run": "qual-cover-04-v2-run",
+        "gate": "20261016-hosts-wpt-full-v1",
+        "counts": {
+          "passed": 81,
+          "failed": 0,
+          "ignored": 3
+        },
+        "historical_pass_losses": {},
+        "issues": [],
+        "assessment_sha256": "18b42fe783d9932e23b6072e02ed140eccefa3862cc29b25d515d7058b5d2e8d"
+      },
+      {
+        "run": "qual-cover-05-v2-run",
+        "gate": "20261016-hosts-boa-adapter-full-v1",
+        "counts": {
+          "passed": 26,
+          "failed": 0,
+          "ignored": 0
+        },
+        "historical_pass_losses": {},
+        "issues": [],
+        "assessment_sha256": "a6109c40b9214335245b81c6ede827a60c47e10ddb5ea64c76d9872824ca1615"
+      },
+      {
+        "run": "qual-cover-06-v2-run",
+        "gate": "20261016-hosts-nova-adapter-full-v1",
+        "counts": {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        "historical_pass_losses": {},
+        "issues": [],
+        "assessment_sha256": "cd990ba403aa4a102e2614999fe8b7d0de23125073f2577c4605972ad88291d8"
+      },
+      {
+        "run": "qual-cover-07-v2-run",
+        "gate": "20261016-hosts-ortet-full-v1",
+        "counts": {
+          "passed": 55,
+          "failed": 0,
+          "ignored": 0
+        },
+        "historical_pass_losses": {},
+        "issues": [],
+        "assessment_sha256": "35721157bb243e0ebd372902ead25c15a8b47a19b6271be3c13624e710ac1632"
+      },
+      {
+        "run": "qual-cover-08-v2-run",
+        "gate": "20261016-hosts-resources-full-v1",
+        "counts": {
+          "passed": 18,
+          "failed": 0,
+          "ignored": 0
+        },
+        "historical_pass_losses": {},
+        "issues": [],
+        "assessment_sha256": "66067ab57e5908dde6fe5c55f5e73c2aee345eb4e4fb2ae52ff9441472d8f1bb"
+      },
+      {
+        "run": "qual-cover-10-v3-run",
+        "gate": "20261016-hosts-runtime-full-v1",
+        "counts": {
+          "passed": 1078,
+          "failed": 0,
+          "ignored": 0
+        },
+        "historical_pass_losses": {},
+        "issues": [],
+        "assessment_sha256": "941f5f6b8091cd2baaea8929230a700807ade4ab17e949c505592045ae3dbe2f"
+      },
+      {
+        "run": "qual-cover-11-v2-run",
+        "gate": "20261016-hosts-api-full-v1",
+        "counts": {
+          "passed": 22,
+          "failed": 0,
+          "ignored": 0
+        },
+        "historical_pass_losses": {},
+        "issues": [],
+        "assessment_sha256": "5d88d9f31d1abf650ce67b8cafbcb9f1bfab3d4766df2fc665d9692f8fee076b"
+      },
+      {
+        "run": "qual-cover-13-v2-run",
+        "gate": "20261016-hosts-native-redirect-full-v1",
+        "counts": {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        "historical_pass_losses": {},
+        "issues": [],
+        "assessment_sha256": "7ee02fcad6537d945e12c3a88131574139c946059a9a0cce29d2109ce13d5111"
+      },
+      {
+        "run": "qual-cover-14-v2-run",
+        "gate": "20261016-hosts-render-host-full-v1",
+        "counts": {
+          "passed": 17,
+          "failed": 0,
+          "ignored": 4
+        },
+        "historical_pass_losses": {},
+        "issues": [],
+        "assessment_sha256": "9ecee58856eb4ec6e9f771fb74e855814a586a1679e4bfe059c16f5dfcc6d6b9"
+      }
+    ],
+    "reused": [
+      {
+        "gate": "20261016-hosts-scripted-full-v1",
+        "receipt": "review-green-native-v2"
+      },
+      {
+        "gate": "20261016-hosts-documents-full-v1",
+        "receipt": "review-green-native-v2"
+      },
+      {
+        "gate": "20261016-hosts-native-dom-full-v1",
+        "receipt": "review-green-dom-v2"
+      }
+    ],
+    "total_passed_run": 1743,
+    "total_failed_run": 0,
+    "historical_pass_losses": 0
+  },
+  "earlier_windows_receipts": [
+    "design_docs/receipts/2026-10-16_forms_redirect_base.json",
+    "design_docs/receipts/2026-10-16_forms_submission_review_windows.json",
+    "design_docs/receipts/2026-10-16_forms_native_browser_windows.json"
+  ],
+  "files": {
+    "matched-accounting-20261020.json": "aa25b618fc0493fda965306e369f47a7b19280219e3239037e72a5864914fea6",
+    "account_matched_captures_20261020.py": "0de9d39248a735088f3dfa698d6d1546aa140c3196e86b71842f7d9af00c8b42",
+    "chain-20261018-summary.json": "6ffae113802814271c24da852a2dc2984ec13531d77222137d93a9cb51da6676",
+    "chain-20261018-r2-summary.json": "ae3ff7608555f06ba054ade5bed6e295a4984e500a05666d1082b96c10886ff0",
+    "chain-20261018-r3-summary.json": "843aa4c2998d198c92522716d4bc74da0e68d9e8492ccdaa19b64301c75883a1",
+    "chain-20261018-build1-summary.json": "f5c76c1787ce932f0b03cfe06590f0b990542927712025515352ca46c82b39f3",
+    "chain-20261018-r4-summary.json": "740295a375c79447badff9c2016cbf4ce85fce541c552ea9b069f7765f1701f5",
+    "wpt-candidate-build-binding.json": "3dcfa4b22eb1c3baf5178cc46d7461ab3fd9d7164a1d74edd5a2added5279f50",
+    "wpt-control-build-binding.json": "e6d47820c990f3eb4af8e50dad7f47718cc93234844dbbb4785b91b9d93f792a",
+    "continuation-20261018-amendments.json": "779e9095bfa92ea40e73513921d56db770e33bba2574a01fba72a06cda9202eb",
+    "continuation-20261019-amendments.json": "7760a298f31455597da17dfc87d7fd5813e95968ca1b9a7143947ae80f801b33",
+    "run_checkpoint_c_chain_20261018.py": "cae53f3eeb210de9739b277dd7ba4ce23c105cb4b0d67dafcd9fc8337fe5af32",
+    "windows_wpt_capture_v2.py": "b036d01b71bb3c1f143c4df484f9ab5a5ed72d2e4b292c4605efb7744fe063ec",
+    "run_windows_capture_jobs_v7.py": "62e345cf77894c60fa891fbf21dd55f4d420436e2637e28c9d288676af170d6d",
+    "final-covering-gate-plan.json": "7c494fae18f14b5f98f1087acb14a8ae0bf5b3c676f099af67cf2fd22033393c",
+    "windows-matched-capture-plan.json": "e47d9c324d4cd4adc1d830bd0d326a5731d271cf76507c87578de1fa4f7b24f5",
+    "windows-capture-jobs-v2.json": "7f6e87705987e0a6d02b8351d8db33506fd728d5409a625ef67e05e390815c0e"
+  },
+  "checkpoint_c_complete": true,
+  "acceptance": {
+    "by": "Mark",
+    "utc": "2026-10-20T02:27:02.846316+00:00",
+    "question": "Is Checkpoint C reached?",
+    "answer_verbatim": "Accept, with the formdata-event timeout as a follow-up (Recommended)",
+    "follow_ups": [
+      "formdata-event submission case hits the harness timeout under the WPT harness on Windows (five files, both engines)",
+      "main is 55 commits past the candidate epoch (F16): delta gate on the forms crates"
+    ]
+  },
+  "evidence_root": "C:\\Users\\mark_\\Code\\testing\\genet\\forms\\phase-c-windows-20261016"
+}

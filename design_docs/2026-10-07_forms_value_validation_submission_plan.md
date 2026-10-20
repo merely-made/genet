@@ -57,7 +57,10 @@ remain historical evidence.
 
 **Checkpoint C note, 2026-10-20:** the Windows qualification run is complete on O-PC (candidate
 and control captures matched with zero lost passes, twelve covering gates green, three reused);
-see "Checkpoint C qualification run on O-PC" at the end of Progress. Acceptance is Mark's.
+see "Checkpoint C qualification run on O-PC" at the end of Progress. **Accepted by Mark on
+2026-10-20:** "Accept, with the formdata-event timeout as a follow-up (Recommended)". Phase C is
+qualified at the prepared epoch; the follow-ups are named in that section and in
+`receipts/2026-10-20_forms_checkpoint_c_windows.json`.
 
 The eleven-crate 1,943-pass receipt belongs to Genet
 `b8a3ec1d6abe88e07438ca4d53b9ca4d2b92111d`, with zero failures and nine ignores.
@@ -2135,7 +2138,8 @@ current-address/links fixtures passing. The candidate fix is to resolve
 against the host's current `document_base_url()` and to re-resolve and
 invalidate when the arena changes. It is not written yet.
 
-Left for Checkpoint C, in order:
+Left for Checkpoint C, in order *(all done on O-PC by 2026-10-20; see the qualification run
+section at the end of Progress)*:
 
 1. Run the F12 tests RED (Boa and Nova), write the fix, then GREEN plus the
    Documents and scripted suites it touches.
@@ -2253,3 +2257,9 @@ The ThinkPad's C-before maps are not on this machine, so the only cross-epoch re
 the checked-in CSS expectations. The run spanned two session restarts and memory contention from
 other builds; every job's receipt records its own memory floor and minimum. `checkpoint_c_complete`
 stays false in every receipt until Mark accepts.
+
+**Accepted, 2026-10-20.** Mark, asked whether Checkpoint C is reached: **"Accept, with the
+formdata-event timeout as a follow-up (Recommended)"**. `checkpoint_c_complete` is true in
+`checkpoint_c_report_20261020.json` and its repo copy. Follow-ups, unnumbered until Mark numbers
+them: the formdata-event harness timeout on Windows; the delta gate for the 55 main commits past
+the candidate epoch.

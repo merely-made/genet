@@ -128,6 +128,7 @@ fn role_matches(role: DocumentA11yRole, requested: &str) -> bool {
         Dialog => "dialog",
         Alert => "alert",
         Menu => "menu",
+        MenuBar => "menubar",
         MenuItem => "menuitem",
         MenuItemCheckBox => "menuitemcheckbox",
         MenuItemRadio => "menuitemradio",

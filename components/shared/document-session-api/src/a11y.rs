@@ -116,6 +116,7 @@ pub enum DocumentA11yRole {
     Dialog,
     Alert,
     Menu,
+    MenuBar,
     MenuItem,
     MenuItemCheckBox,
     MenuItemRadio,

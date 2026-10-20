@@ -220,6 +220,8 @@ pub(crate) struct WorkerBoot {
     pub(crate) tx: WorkerSender<FromWorker>,
     pub(crate) wake: Option<Arc<dyn Fn() + Send + Sync>>,
     pub(crate) policy: WorkerPolicy,
+    /// The owner's secure context, which a worker inherits.
+    pub(crate) secure_context: bool,
 }
 
 /// The page's handle on one live worker.
@@ -416,6 +418,7 @@ pub(crate) fn worker_main<E: ScriptEngine>(boot: WorkerBoot) {
         tx,
         wake,
         policy,
+        secure_context,
     } = boot;
     let link = Rc::new(RefCell::new(WorkerLink {
         tx: tx.clone(),
@@ -447,6 +450,8 @@ pub(crate) fn worker_main<E: ScriptEngine>(boot: WorkerBoot) {
     rt.host().borrow_mut().worker_link = Some(link.clone());
     rt.set_fetch_handler(Box::new(WorkerFetch(link.clone())));
     let _ = rt.set_base_url(&url);
+    // The owner decides, not the worker script's URL.
+    let _ = rt.set_secure_context(secure_context);
     if install_worker_scope(rt.engine_mut()).is_err() {
         let _ = tx.send(FromWorker::Error(
             "worker scope failed to install".to_owned(),
@@ -647,6 +652,7 @@ impl<E: ScriptEngine> NativeFn<E> for WorkerCreate {
         }
         let spawn = with_host::<E, _>(cx, |h| h.worker_spawn).flatten();
         let wake = with_host::<E, _>(cx, |h| h.worker_wake.clone()).flatten();
+        let secure_context = with_host::<E, _>(cx, |h| h.secure_context.0).unwrap_or(true);
         let Some(spawn) = spawn else {
             return cx.make_string("-1");
         };
@@ -710,6 +716,7 @@ impl<E: ScriptEngine> NativeFn<E> for WorkerCreate {
             tx: tx_from,
             wake,
             policy,
+            secure_context,
         };
         #[cfg(not(target_arch = "wasm32"))]
         let pump_limit = launcher

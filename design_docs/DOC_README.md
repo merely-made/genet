@@ -152,6 +152,18 @@ completed corpus census or bounded slice does not close its enclosing feature.
   fontsan/WOFF2 change is preserved. Forms phases have separate checkpoints
   in their own plan.
 
+- [Web Cryptography `crypto.subtle`](2026-10-20_webcrypto_subtle_plan.md)
+  (**P1 on branch `webcrypto-subtle`, not merged, 2026-10-20**).
+  - **Rulings.** Mark's answers set:
+    - the crates: "RustCrypto 0.11 line (Recommended)";
+    - the order: "Weight order (Recommended)";
+    - the scope: "Standard + drafts with crates";
+    - the bytes: "Binary strings in P1 (Recommended)";
+    - Web Crypto's `[SecureContext]` gate: "Gate Web Crypto now (Recommended)".
+  - **P1** is the framework, digest, HMAC and the secure-context gate. Matched
+    WebCryptoAPI maps lose zero passes: Boa 81 → 5,472 and Vano 80 → 7,980.
+  - The suite enumerates to 72,172 reference subtests; the census saw 9,652.
+
 - [HTML forms](2026-10-07_forms_value_validation_submission_plan.md) — Phases A, B and C qualified; Checkpoint C accepted 2026-10-20 on O-PC, two follow-ups named
   (**A/B qualified and published; C acceptance open, 2026-10-16**): Windows
   qualification has resumed on O-PC under F11. F12's published redirect-base

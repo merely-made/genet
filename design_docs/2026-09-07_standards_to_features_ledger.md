@@ -9,7 +9,7 @@ rows are added as lanes open and as consumers name a dependency.
 **Baseline:** the [web platform WPT census](2026-09-06_web_platform_wpt_census.md).
 Every census-measured row carries that run's subtests-passed-over-total, so a
 later census diffs against it. These are historical baseline counts, not current
-implementation status. See the dated reconciliation below before assigning work.
+implementation status. The dated reconciliation below supplies later evidence.
 
 **Backend ownership and naming:** Vano is our fork of Nova, maintained and
 available to improve or change as needed for the stack. It is Genet's primary
@@ -23,11 +23,13 @@ revision; new status prose calls the current backend Vano.
 ## Purpose
 
 *Develop and adhere to these standards, and we unlock these features.* The
-left three columns are genet facts: the standard, where genet stands, and
+columns connect genet facts: the standard, where genet stands, and
 what adhering means in this engine. The right column is what mere and the
-products get for it. The ledger orders the grind by payoff rather than by
-WPT directory order, and it gives a mere plan one place to say "we depend on
-row N" instead of re-deriving the engine's state.
+products could get for it. The ledger connects standards to named consumers
+and gives a mere plan one place to say "we depend on row N" instead of
+re-deriving the engine's state. It is a map of relevance and dependencies, not
+an implementation order. Open qualifications describe the limits of recorded
+evidence, without assigning a future proof or task.
 
 Rules for a row:
 
@@ -39,7 +41,7 @@ Rules for a row:
   `merelyllc.com/content/specs.toml`. Since Mark's ruling D2 of 2026-10-18
   admission is spec-first and belongs to the registry, which records every
   spec genet answers to whether or not a consumer has asked. This ledger keeps
-  the consumer-ordered subset: a row here is a spec with a named consumer.
+  the consumer-linked subset: a row here is a spec with a named consumer.
 - When a lane closes a row's gap, the row keeps its founding count and gains
   a dated receipt; a lane receipt does not imply full conformance or a new
   whole-platform census. Counts always retain their date, engine and scope.
@@ -73,7 +75,7 @@ Their denominators grew as more tests could execute; they are not percentages
 of implementation completeness. Focused coverage on both backends is separate
 evidence from these WPT counts.
 
-| Row | Recorded implementation and receipt | Remaining qualification / next proof |
+| Row | Recorded implementation and receipt | Evidence limits / unmeasured behavior |
 |---|---|---|
 | 2, Selection API | [Selection/Range](2026-09-07_selection_range_plan.md) landed 2026-09-07: selection **28,582/33,621**, 12 all-pass files; live ranges, Livery geometry and selection paint projection. Subsequent DOM node work removed additional range blockers. | Exercise the consumer's gesture-to-clip path; retain the plan's selection movement, scheduling and geometry qualifications. The founding 0/280 does not describe the landed surface. |
 | 4, Intersection Observer | Founding census **0/104**; this reconciliation establishes no later implementation receipt. | Scope viewport geometry and delivery against a named consumer. Intersection evidence alone does not establish dwell or attention. |
@@ -130,9 +132,10 @@ file; it is excluded from the fixed-budget totals. A fully paired run with
 identical profiles/budgets, the optional in-process snapshot route, server-mode
 families and full-browser rendering acceptance remain separate open gates.
 
-Candidates a lane should add when it opens: `editing` (contenteditable for
-a writing product), `streams` (extraction starts before the page finishes),
-`service-workers` (offline products).
+Other connections identified here: `editing` relates to contenteditable in
+a writing product; `streams` to extraction during loading; `service-workers`
+to offline web products. These are relevance cues, not additions assigned to
+a future lane.
 
 ## Conformance targets, 2026-10-02
 

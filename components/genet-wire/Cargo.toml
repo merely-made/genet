@@ -10,7 +10,7 @@ description = "Host-selected one-hop HTTP and raw WebSocket wire engines"
 default = ["http", "h3", "websocket"]
 http = ["dep:tokio", "dep:hyper", "dep:hyper-util", "dep:hyper-rustls", "dep:rustls", "dep:http-body-util"]
 h3 = ["http", "dep:quinn", "dep:h3", "dep:h3-quinn", "dep:webpki-roots"]
-websocket = ["dep:tokio", "dep:tokio-tungstenite"]
+websocket = ["dep:tokio", "dep:tokio-tungstenite", "dep:rustls", "dep:webpki-roots"]
 [dependencies]
 bytes = "1"
 url = "2.5"
@@ -26,7 +26,7 @@ quinn = { version = "0.11", optional = true }
 h3 = { version = "0.0.8", optional = true }
 h3-quinn = { version = "0.0.10", optional = true }
 webpki-roots = { version = "1", optional = true }
-tokio-tungstenite = { version = "0.29", features = ["rustls-tls-webpki-roots"], optional = true }
+tokio-tungstenite = { version = "0.29", features = ["rustls-tls-native-roots"], optional = true }
 [dev-dependencies]
 hyper = { version = "1", features = ["server", "http2"] }
 tokio-rustls = "0.26"

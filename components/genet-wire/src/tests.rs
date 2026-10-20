@@ -182,3 +182,68 @@ async fn raw_websocket_carries_caller_handshake_and_echoes_without_browser_polic
     let _ = socket.close(None).await;
     server.await.unwrap();
 }
+#[tokio::test]
+async fn default_wss_connector_runs_webpki_tls_and_rejects_an_unknown_issuer() {
+    use rustls::pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
+    use websocket::tungstenite::{Error as WsError, client::IntoClientRequest};
+    let certified = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let certificate = certified.cert.der().clone();
+    let provider = Arc::new(rustls::crypto::ring::default_provider());
+    let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(
+        certified.signing_key.serialize_der(),
+    ));
+    let server_config = rustls::ServerConfig::builder_with_provider(provider.clone())
+        .with_safe_default_protocol_versions()
+        .unwrap()
+        .with_no_client_auth()
+        .with_single_cert(vec![certificate.clone()], key)
+        .unwrap();
+    let acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(server_config));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server = tokio::spawn(async move {
+        // Serve two connections: the default one fails its handshake, the trusting one echoes.
+        for _ in 0..2 {
+            let (tcp, _) = listener.accept().await.unwrap();
+            let Ok(tls) = acceptor.accept(tcp).await else {
+                continue;
+            };
+            if let Ok(mut socket) = tokio_tungstenite::accept_async(tls).await {
+                let _ = socket.close(None).await;
+            }
+        }
+    });
+    let url = format!("wss://localhost:{port}/");
+    // The default connector trusts webpki roots only, so a self-signed leaf is refused.
+    let refused = websocket::connect(url.as_str().into_client_request().unwrap())
+        .await
+        .unwrap_err();
+    let WsError::Io(io) = refused else {
+        panic!("expected a TLS handshake refusal, got {refused:?}");
+    };
+    let tls = io.get_ref().and_then(|e| e.downcast_ref::<rustls::Error>());
+    assert!(
+        matches!(
+            tls,
+            Some(rustls::Error::InvalidCertificate(
+                rustls::CertificateError::UnknownIssuer
+            ))
+        ),
+        "unexpected refusal: {io:?}"
+    );
+    // Positive control: the same server accepts a host-selected connector that trusts its cert.
+    let mut roots = rustls::RootCertStore::empty();
+    roots.add(certificate).unwrap();
+    let tls = rustls::ClientConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()
+        .unwrap()
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+    let trusted = websocket::connect_with(
+        url.as_str().into_client_request().unwrap(),
+        Some(websocket::Connector::Rustls(Arc::new(tls))),
+    )
+    .await;
+    assert!(trusted.is_ok(), "trusting connector failed: {:?}", trusted.err());
+    server.await.unwrap();
+}

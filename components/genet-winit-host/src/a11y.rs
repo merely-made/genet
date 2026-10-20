@@ -967,11 +967,11 @@ mod tests {
 
     #[test]
     fn batch_completion_requires_every_boundary_and_no_activation_reset() {
-        use accesskit::{Node, Role, Tree, TreeUpdate};
+        use accesskit::{Node, Role, TreeInfo, TreeUpdate};
         use std::sync::atomic::Ordering;
         let root = TreeUpdate {
             nodes: vec![(NodeId(0), Node::new(Role::Window))],
-            tree: Some(Tree::new(NodeId(0))),
+            tree: Some(TreeInfo::new(NodeId(0))),
             tree_id: TreeId::ROOT,
             focus: NodeId(0),
         };
@@ -1005,7 +1005,7 @@ mod tests {
 
     #[test]
     fn single_host_publication_cannot_activate_a_missing_guest() {
-        use accesskit::{Node, Role, Tree, TreeUpdate};
+        use accesskit::{Node, Role, TreeInfo, TreeUpdate};
         let guest_id = TreeId(accesskit::Uuid::from_u128(77));
         let mut root = Node::new(Role::Window);
         root.set_children(vec![NodeId(1)]);
@@ -1013,7 +1013,7 @@ mod tests {
         graft.set_tree_id(guest_id);
         let host = TreeUpdate {
             nodes: vec![(NodeId(0), root), (NodeId(1), graft)],
-            tree: Some(Tree::new(NodeId(0))),
+            tree: Some(TreeInfo::new(NodeId(0))),
             tree_id: TreeId::ROOT,
             focus: NodeId(1),
         };
@@ -1029,7 +1029,7 @@ mod tests {
         let _ = accesskit_consumer::Tree::new(initial, true);
         assert!(!publication.replace_host(TreeUpdate {
             nodes: vec![(NodeId(0), Node::new(Role::Document))],
-            tree: Some(Tree::new(NodeId(0))),
+            tree: Some(TreeInfo::new(NodeId(0))),
             tree_id: guest_id,
             focus: NodeId(0),
         }));
@@ -1038,8 +1038,8 @@ mod tests {
 
     #[test]
     fn publication_replays_safe_root_before_guest_focus_after_activation() {
-        use accesskit::{Node, Role, Tree, TreeUpdate};
-        use accesskit_consumer::{Node as ConsumerNode, TreeChangeHandler};
+        use accesskit::{Node, Role, TreeInfo, TreeUpdate};
+        use accesskit_consumer::{NodeRef as ConsumerNode, TreeChangeHandler};
         struct Changes;
         impl TreeChangeHandler for Changes {
             fn node_added(&mut self, _: &ConsumerNode<'_>) {}
@@ -1054,13 +1054,13 @@ mod tests {
         graft.set_tree_id(guest_id);
         let host = TreeUpdate {
             nodes: vec![(NodeId(0), root), (NodeId(1), graft)],
-            tree: Some(Tree::new(NodeId(0))),
+            tree: Some(TreeInfo::new(NodeId(0))),
             tree_id: TreeId::ROOT,
             focus: NodeId(0),
         };
         let guest = TreeUpdate {
             nodes: vec![(NodeId(0), Node::new(Role::Document))],
-            tree: Some(Tree::new(NodeId(0))),
+            tree: Some(TreeInfo::new(NodeId(0))),
             tree_id: guest_id,
             focus: NodeId(0),
         };
@@ -1077,7 +1077,7 @@ mod tests {
         );
         let safe_root = TreeUpdate {
             nodes: vec![(NodeId(0), Node::new(Role::Window))],
-            tree: Some(Tree::new(NodeId(0))),
+            tree: Some(TreeInfo::new(NodeId(0))),
             tree_id: TreeId::ROOT,
             focus: NodeId(0),
         };
@@ -1109,7 +1109,7 @@ mod tests {
         replacement_host.nodes[1].1.set_tree_id(replacement_id);
         let replacement_guest = TreeUpdate {
             nodes: vec![(NodeId(0), Node::new(Role::Document))],
-            tree: Some(Tree::new(NodeId(0))),
+            tree: Some(TreeInfo::new(NodeId(0))),
             tree_id: replacement_id,
             focus: NodeId(0),
         };
@@ -1135,7 +1135,7 @@ mod tests {
         // Removing the graft must also retire it from future activation replay.
         let root_only = TreeUpdate {
             nodes: vec![(NodeId(0), Node::new(Role::Window))],
-            tree: Some(Tree::new(NodeId(0))),
+            tree: Some(TreeInfo::new(NodeId(0))),
             tree_id: TreeId::ROOT,
             focus: NodeId(0),
         };
@@ -1153,10 +1153,10 @@ mod tests {
     }
     #[test]
     fn activation_rejects_an_uninstalled_child_graft_even_with_host_root_focus() {
-        use accesskit::{Node, Role, Tree, TreeUpdate};
+        use accesskit::{Node, Role, TreeInfo, TreeUpdate};
         let safe = TreeUpdate {
             nodes: vec![(NodeId(0), Node::new(Role::Window))],
-            tree: Some(Tree::new(NodeId(0))),
+            tree: Some(TreeInfo::new(NodeId(0))),
             tree_id: TreeId::ROOT,
             focus: NodeId(0),
         };
@@ -1190,7 +1190,7 @@ mod tests {
     fn safe_epoch_root() -> accesskit::TreeUpdate {
         accesskit::TreeUpdate {
             nodes: vec![(NodeId(0), accesskit::Node::new(accesskit::Role::Window))],
-            tree: Some(accesskit::Tree::new(NodeId(0))),
+            tree: Some(accesskit::TreeInfo::new(NodeId(0))),
             tree_id: TreeId::ROOT,
             focus: NodeId(0),
         }

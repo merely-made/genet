@@ -55,6 +55,10 @@ C5, with builds and matched gates on ThinkPad. The Phase C execution section
 below owns current tasks and done-conditions; earlier Phase B progress entries
 remain historical evidence.
 
+**Checkpoint C note, 2026-10-20:** the Windows qualification run is complete on O-PC (candidate
+and control captures matched with zero lost passes, twelve covering gates green, three reused);
+see "Checkpoint C qualification run on O-PC" at the end of Progress. Acceptance is Mark's.
+
 The eleven-crate 1,943-pass receipt belongs to Genet
 `b8a3ec1d6abe88e07438ca4d53b9ca4d2b92111d`, with zero failures and nine ignores.
 Matched supplementary 60-second WPT maps have zero starting pass losses;
@@ -2172,3 +2176,80 @@ Mark's ruling (2026-10-18): **"Keep both for resumption (Recommended)"**. The la
 not abandoned; both worktrees stay as they are. Main was fast-forwarded 61 commits the same
 day, so a resumption starts by merging main into `forms-phase-c` and rebuilding the control
 from the recipe above.
+
+
+### Checkpoint C qualification run on O-PC, 2026-10-18 to 2026-10-20
+
+**Status:** the run is complete; acceptance of Checkpoint C is Mark's call and is not claimed
+here. Everything below ran on O-PC under toolchain 1.99.1 at the prepared epoch (F16):
+candidate `e3911fb6b2d` with `8fa73497` and the v4/v5 review manifest's `ports/ortet/src/web.rs`;
+control the 59-path inverse C projection over the same head. Evidence lives in `Code/testing/genet/forms/phase-c-windows-20261016/`,
+bound by `checkpoint_c_report_20261020.json`.
+
+**Runs.** Four chain runs and one standalone build under the guarded wrapper (floor 6 GiB, F17):
+r1 and r2 stopped on memory refusals at the wrapper's 10 GiB launch check (the box sat on that
+line); r3 completed the candidate side except CSS and was killed by a session restart; the
+control build then ran alone (`qual-wpt-build-control-v2`, 1,790 s, all eight projection packages
+compiled fresh, binary `e969c828f0d5…`); r4 ran 11:40 to 19:48 UTC on 2026-10-19 and completed
+the rest. Three rows were relabelled: two memory refusals and the CSS slice below.
+
+**Tooling amendments**, each hashed in `continuation-20261018-amendments.json` and
+`continuation-20261019-amendments.json`, the frozen 2026-10-16 tools untouched beside them: the
+wrapper revision for F17; v2 manifests carrying the `~/.cargo/config.toml` that appeared on the
+17th (`[profile.dev] debug = 0`, no effect on release builds); a per-row memory wait and relabel
+retries in the capture runner; and, on Mark's answer **"Complete means ran to summary
+(Recommended)"** (2026-10-19), a reftest row is complete when it ran to its summary and wrote
+its map at exit 0 or 1, because `genet-wpt` exits 1 whenever any reftest fails in
+write-expectations mode (`reftest.rs` 887-891); the ThinkPad's own B baseline carries such an
+exit 1. The exit code stays in every `process.json`.
+
+**Matched capture, candidate against control, 188 paired rows, zero lost passes.**
+
+| Stage | Pairs | Same | Lost | Gained | Changed |
+|---|---|---|---|---|---|
+| Submission and encoding (c) | 158 | 430 | 0 | 974,758 | 126,832 |
+| Controls (original, corrected, new, both engines) | 6 | 84 | 0 | 42 | 0 |
+| Phase B maps (b) | 8 | 7,602 | 0 | 76 | 6 |
+| CSS slices | 16 | 2,731 | 0 | 0 | 0 |
+
+File statuses, each engine: encoding 584 files, candidate Boa 439 pass / 145 error, candidate
+Nova 571 pass / 13 error, control 583 error / 1 fail on both engines; forms 33 files, candidate
+8 pass / 18 fail / 7 error, control 27 fail / 6 error, identical on Boa and Nova. The 974 thousand
+gains are encoding subtests the control enumerates as not-run under erroring files and the
+candidate passes; the 126 thousand "changed" rows are placeholder subtests the control lists
+under files that error on both sides and the candidate does not enumerate (sample:
+`eucjp-encode-form-errors-han.html?12001-13000`, 1,000 placeholders against 400). CSS is
+byte-for-byte the same on both sides and deviates from the checked-in Linux expectations on zero
+of 16 slices. Controls: `original-b20` and `corrected-b20` 20/20 on both sides and engines;
+`new-c20` 0/20 on the control and 20/20 on the candidate, both engines.
+
+Forms movements, the same on both engines: gained `FormDataEvent.window`, `SubmitEvent.window`,
+`form-data-set-empty-file.window`, `newline-normalization`,
+`reparent-form-during-planned-navigation-task` (fail to pass) and `form-double-submit`,
+`form-double-submit-3`, `url-encoded` (error to pass); `form-double-submit-2` moved from a harness
+error to a run that fails its one assertion. Five files moved fail to error:
+`text-plain.window`, `multipart-formdata.window`, `urlencoded2.window`, `submit-file.sub` and
+`form-double-submit-multiple-targets`. In each the control fails every case outright, the
+candidate passes the first case and then the formdata-event case hits the harness timeout,
+leaving the remaining cases not run. That is attributed, not a lost pass, and is the named
+follow-up of this run: the formdata-event submission path under the WPT harness on Windows.
+The Boa/Nova gap on encoding errors (145 against 13 files) is recorded as observed. Phase B maps:
+`the-input-element` gained 38 subtests per engine (button, checkbox and files cases) with three
+changed; the other six maps are identical.
+
+**Covering gates.** Twelve run in release under the wrapper, 1,743 passed, 0 failed, 0 historical
+pass losses, 0 issues: native-only 25, Livery 342 with 2 ignored, render 67, WPT unit 81 with
+3 ignored, Boa adapter 26, Nova adapter 9, Ortet 55, resources 18, runtime 1,078, session API 22,
+netfetcher redirect 3, render-host 17 with the four R23 ignores. Three reused on the same product
+bytes per the plan's policy: scripted 145, Documents and native DOM from `review-green-native-v2`.
+Livery on Windows: zero failures, so F11's no-allowance rule is met.
+
+**Already on record from 2026-10-16 on this box:** the F12 repair review (678 passed), the native
+live submission on Livery, Boa and Nova, and the Chrome 155 browser submission check under
+wasm-bindgen 0.2.129 (F13).
+
+**Limitations.** Main is 55 commits past the candidate (F16); that delta is not qualified here.
+The ThinkPad's C-before maps are not on this machine, so the only cross-epoch reference used is
+the checked-in CSS expectations. The run spanned two session restarts and memory contention from
+other builds; every job's receipt records its own memory floor and minimum. `checkpoint_c_complete`
+stays false in every receipt until Mark accepts.

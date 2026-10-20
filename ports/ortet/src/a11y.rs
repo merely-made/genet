@@ -374,6 +374,7 @@ fn role(role: DocumentA11yRole, state: DocumentA11yState) -> Role {
         DocumentA11yRole::Dialog => Role::Dialog,
         DocumentA11yRole::Alert => Role::Alert,
         DocumentA11yRole::Menu => Role::Menu,
+        DocumentA11yRole::MenuBar => Role::MenuBar,
         DocumentA11yRole::MenuItem => Role::MenuItem,
         DocumentA11yRole::MenuItemCheckBox => Role::MenuItemCheckBox,
         DocumentA11yRole::MenuItemRadio => Role::MenuItemRadio,

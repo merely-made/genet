@@ -1,0 +1,102 @@
+# Observers and timing: High Resolution Time, Performance Timeline, the MutationObserver residue and IntersectionObserver
+
+**Status:** in progress, 2026-10-20. Assessment and both rulings rounds done; phase H (clock) next. Branch `observers-timing` at worktree `Code/worktrees/genet-observers-timing`, from main `16b971188f3`. Not merged.
+
+Ledger rows 4, 5 and 6 of the [standards-to-features ledger](2026-09-07_standards_to_features_ledger.md): Intersection Observer unlocks dwell and attention receipts for the trail pane; High Resolution Time and the Performance Timeline unlock an honest `dwell_ms` and page-load receipts; Mutation Observer unlocks re-extraction on SPA navigation. Mark, 2026-10-20, asked whether the four are briefed as one small lane: "Yes, one bundled lane (Recommended)".
+
+Evidence lives under `Code/testing/genet/observers-timing/`. Baseline counts are from the 2026-09-29 Vano census (`Code/testing/genet/wpt-ledger/2026-09-29_vano_platform_census/disk-fixed/`): disk mode, dev build, four workers. They are a starting picture, not this lane's before map. The before map is a frozen runner built from `16b971188f3` on this box.
+
+## Rulings (Mark's words, unnumbered)
+
+Round 1, 2026-10-20:
+
+| Question | Answer |
+|---|---|
+| How far the lane goes for IntersectionObserver's geometry | "Build the seam here (Recommended)": one host geometry seam backed by Livery (`getBoundingClientRect`/`getClientRects`, `client*`, `scrollTop`/`scrollLeft` get and set, element `scrollTo`/`scrollBy`, `scrollingElement`). IO computes from the same seam. `css/cssom-view` is measured before and after. |
+| Order | "Clock first, IO last (Recommended)": hr-time, then performance-timeline, then the MO residue, then IO. |
+| Coarsening | "Spec values, host-configurable (Recommended)": 100 µs, or 5 µs when `crossOriginIsolated`, with no jitter; a host profile may set a coarser resolution. |
+| IO timing | "Spec timing (Recommended)": compute after rAF and relayout in each rendering turn, deliver as a queued task, and skip hidden documents. |
+
+Round 2, 2026-10-20:
+
+| Question | Answer |
+|---|---|
+| Clock owner | "One host clock per process (Recommended)": one shared clock with one epoch anchor, held by the host and handed to every runtime, worker and frame. Each realm's `timeOrigin` is a coarsened reading at navigation start or worker start. |
+| Harness `Date` | "Date follows the clock, both engines (Recommended)": the virtual clock is epoch-anchored and drives `Date`. Boa uses its `Clock`. Vano gets an additive `HostHooks` clock hook on its own branch, shown to Mark before anything is pinned. |
+| Sleep | "Excludes sleep (Recommended)": the host clock pauses during system suspend on every platform. |
+
+## Assessment (2026-10-20)
+
+### Where each piece's prerequisites live
+
+- **Timers and the timeline.** `components/script-runtime-api/timing.rs` installs `performance` as a JS bootstrap over two natives: `__performanceClockMode` and `__performanceHostElapsed`. `ElapsedClock` is a per-`Runtime` `Instant`. `timeOrigin` is `Date.now()` sampled when the surface is installed. Nothing is coarsened. Observer delivery is a zero-delay `setTimeout`. The WPT harness selects `PerformanceClockProfile::Virtual` (`ports/genet-wpt/src/harness.rs`, three sites), so `performance.now()` follows the timer queue while `Date.now()` reads wall time.
+- **`Date`.** Boa (bole `aef1134`) owns `Rc<dyn Clock>` on its `Context` (`core/engine/src/context/time.rs`), which a host can supply. Vano (`fd9db00`) calls `SystemTime::now()` in `builtins/date/data.rs`; its `HostHooks` trait (`execution/agent.rs`) has no clock.
+- **The rendering turn.** Both scripted hosts already run rAF and then relayout in one turn. In the harness this is `RenderSession::turn` (`ports/genet-wpt/src/harness.rs`). In product it is `LiveryScriptedDocument::pump` and `ScriptedDocument::pump` (`components/genet-scripted/document.rs`), and hidden documents skip rAF there. IntersectionObserver's "run the update intersection observations steps" belongs right after the relayout, in both.
+- **Geometry.** Livery has what IO needs: `LiveryLayout::fragment_rect` and `content_rect` (`genet-livery/src/document.rs`), `rect_of` / `fragments_for_node` (`layout/query.rs`), and per-element scroll offsets (`document/scrolling.rs`, `element_scroll`). `engine-observables-api`'s `BoxModel` names the border box as `getBoundingClientRect`'s. **Script reaches none of it.** No `Element.getBoundingClientRect`, `getClientRects`, `clientWidth`/`clientHeight`, `scrollTop`/`scrollLeft` or element `scrollTo` exists. Only `window.scrollX`/`scrollY` and the `Range` rects reach script, through `SelectionHandler`, which `genet-scripted/livery.rs` implements over `frame.fragments` minus document scroll. That seam is the model for the geometry seam. `css/cssom-view` is not in the 2026-09-29 census scope.
+- **MutationObserver.** Landed 2026-09-07 ([plan](2026-09-07_mutation_observer_plan.md)). The global exists on both engines, so ledger row 6's "9 files fail on the missing global" is stale.
+
+### Failing files by cause (census 2026-09-29, Vano)
+
+**hr-time, 17 files, 13/26.**
+
+| Cause | Files | In lane? |
+|---|---|---|
+| Virtual `performance` against wall `Date` | `basic.any` ×2 (one subtest each) | yes, H |
+| No coarsening | `clamped-time-origin`, `timing-attack` | yes, H |
+| Coarsening plus cross-origin isolation (https, headers) | `clamped-time-origin-isolated.https`, `cross-origin-isolated-timing-attack.https`, `raf-coarsened-time.https` (no results) | clock yes; needs server mode to measure |
+| Shared clock between window and worker | `timeOrigin.html` (3), `window-worker-timeOrigin` (1) | clock yes; the tests also build workers from `URL.createObjectURL(new Blob(...))`, which does not exist (File API) |
+| Child-frame and navigation origin | `test_cross_frame_start`, `navigation-start-post-before-unload` | partly; the origin must come from the navigating host |
+| IDL shape | `idlharness.any` ×2 | yes, H/T |
+
+**performance-timeline, 72 files, 70/115.**
+
+| Cause | Files | In lane? |
+|---|---|---|
+| Resource Timing entries absent (another spec) | `case-sensitivity.any` ×2 (2 of 3 each), `droppedentriescount.any` ×2 (0/5 each), `po-resource`, probably `po-observe.html` | no; residual |
+| Coarsening | `webtiming-resolution.any` ×2 (0/2 each) | yes, H |
+| `supportedEntryTypes` is not `[SameObject]` | `supportedEntryTypes.any` ×2 (1/2 each) | yes, T |
+| Entries are cloneable; they must throw `DataCloneError` | `not-clonable` | yes, T |
+| IDL shape | `idlharness.any` ×2 | yes, T |
+| `navigationId`, bfcache, not-restored reasons, element/long-task timing (tentative, other specs) | 21 files | no; residual |
+
+**intersection-observer, 119 files, 0/118.** 104 files fail with no `IntersectionObserver` global. 14 report no results: 12 SVG targets, `zoom-scaled-target`, `grow-height-and-scrolled`, and `root-is-table-with-overflow-scroll`. One is skipped (a reftest). 19 files use iframes. Across the tests and their helper, `scrollTop` appears 134 times, `clientWidth`/`clientHeight` 86, `getBoundingClientRect` 23 and `scrollTo` 13.
+
+**The MutationObserver residue.** All the core `MutationObserver-*` files pass. These still fail: `MutationObserver-document` 1/4 (parser-inserted records; residual 7 of the 2026-09-07 plan), `-cross-realm-callback-report-exception` 0/1, `-textContent` 3/4, `ParentNode-replaceChildren` 17/29, `Element-classlist` (errors), and `insertion-removing-steps-iframe` 1/4. Phase M attributes each from a verbose run before changing anything.
+
+## Phases
+
+### Phase H: one host clock (High Resolution Time)
+
+Done when:
+- one process-wide `SharedClock` (one epoch anchor taken at startup; a monotonic source that excludes suspend on Windows, Linux and macOS) is owned by the host and handed to every `Runtime`, worker and child realm;
+- `timeOrigin` is the coarsened clock reading at navigation start (supplied by the navigating host) or at worker start, and `performance.now()` is the coarsened difference;
+- coarsening defaults to 100 µs, or 5 µs when `crossOriginIsolated`, with no jitter, and a host profile can choose a coarser resolution;
+- the harness's virtual clock is epoch-anchored, and `Date` reads the same clock on Boa (its `Clock`) and on Vano (a new additive `HostHooks` clock hook, on a Vano branch shown to Mark before any pin moves);
+- regressions at the clock layer: monotonicity, coarsening at both resolutions, window and worker origins on one timeline, and `Date` agreeing with the virtual clock, on both engines;
+- hr-time and performance-timeline are mapped before and after on both engines, with zero lost passes and every movement attributed.
+
+### Phase T: the Performance Timeline residue
+
+Done when `supportedEntryTypes` returns one frozen array per realm, entries refuse structured cloning with `DataCloneError`, `PerformanceEntry` and friends have IDL shape (`idlharness` gets past setup), and performance-timeline's map moves only by attributed gains.
+
+### Phase M: the MutationObserver residue
+
+Done when each of the six files is attributed from a verbose run on both engines, the causes that sit in the observer are fixed, the rest are named here with their owning spec, and `dom`'s map has zero lost passes.
+
+### Phase G: the element geometry seam (CSSOM View subset)
+
+Done when a `GeometryHandler` host seam (modelled on `SelectionHandler`) is installed by the harness `RenderSession` and by `LiveryScriptedDocument`, backed by Livery's fragment and scroll state. Through it, script gets `Element.getBoundingClientRect`/`getClientRects`, `clientTop`/`Left`/`Width`/`Height`, `scrollTop`/`scrollLeft` (get and set), element `scrollTo`/`scrollBy`/`scrollWidth`/`scrollHeight`, `document.scrollingElement`, and `window.scrollTo`/`scrollBy` reaching Livery. Done also requires regressions at the seam on both engines, and `css/cssom-view` mapped before and after with zero lost passes.
+
+### Phase I: IntersectionObserver
+
+Done when `IntersectionObserver` and `IntersectionObserverEntry` exist per the IDL. The init must be validated: `rootMargin`/`scrollMargin` parsing and `threshold` range checks with their `TypeError`/`RangeError`. Intersections must be computed per spec over the containing-block chain with clips, the implicit root (the top-level viewport) and an explicit root, using thresholds, `isIntersecting` and the edge-inclusive rule. The update step must run after rAF and relayout in both rendering hosts and skip hidden documents, with delivery as a queued task and `entry.time` from the shared clock. Done also requires regressions at the computation layer (pure geometry, no script) and at the script layer on both engines, and intersection-observer mapped before and after with every movement attributed.
+
+## Findings
+
+- **F1 (2026-10-20).** Main's ignored `Cargo.lock`, copied into this worktree, passes `cargo metadata --locked --offline` at `16b971188f3`. The out-of-step state reported earlier on 2026-10-20 is no longer present.
+- **F2 (2026-10-20).** The hr-time text, read at w3c.github.io/hr-time, says three things: the time origin of a Window is when navigation started, a worker's is when it runs, and time origins that can exchange messages share one monotonic clock. Coarsening is "100 microseconds, or a higher implementation-defined value" (5 µs when cross-origin isolated), so a coarser host profile conforms. The spec says nothing about system sleep. Only the WebIDL is vendored (`tests/wpt/tests/interfaces/{hr-time,performance-timeline,intersection-observer}.idl`).
+- **F3 (2026-10-20).** The scripted tier has no element geometry API (see Assessment). This is the largest prerequisite for IntersectionObserver, and it is ruled into this lane as phase G.
+
+## Progress
+
+- **2026-10-20.** Worktree and branch created from main `16b971188f3`. Assessment done from the census maps, the WPT sources and the code. Two rounds of rulings recorded above. No code changed yet.

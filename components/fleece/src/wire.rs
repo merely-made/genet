@@ -12,7 +12,6 @@
 //! caller-owned.
 
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 use crate::{
     AnchoredBlock, Block, CANONICAL_TEXT_MEDIA_TYPE, DirectionEvidence,
@@ -144,7 +143,7 @@ impl JsonLdBlockRecordV1 {
         Self {
             schema_id: JSON_LD_BLOCK_RECORD_SCHEMA_V1.to_string(),
             parser_profile: JSON_LD_PARSER_PROFILE_V1.to_string(),
-            dom_text_sha256: format!("{:x}", Sha256::digest(block.dom_text.as_bytes())),
+            dom_text_sha256: crate::sha256_hex(block.dom_text.as_bytes()),
             document_order: block.document_order,
             element_id: block.element_id.clone(),
             declared_type: block.declared_type.clone(),
@@ -179,7 +178,7 @@ impl JsonLdBlockRecordV1 {
         if !crate::structured::is_json_ld_media_type(&self.declared_type) {
             return Err(WireError::JsonLdMediaType);
         }
-        let expected = format!("{:x}", Sha256::digest(self.dom_text.as_bytes()));
+        let expected = crate::sha256_hex(self.dom_text.as_bytes());
         if self.dom_text_sha256 != expected {
             return Err(WireError::JsonLdTextIdentity);
         }

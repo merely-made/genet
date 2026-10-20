@@ -1,0 +1,40 @@
+{
+  "recorded_utc": "2026-10-20T22:54:26+00:00",
+  "platform": "Windows O-PC, NVIDIA GeForce RTX 4060 Laptop GPU (Vulkan, DiscreteGpu, driver 610.88)",
+  "genet_base": "16b971188f352ef8a16716eb9de584bf9165635e",
+  "branch": "img-gpu (not merged)",
+  "toolchain": "1.99.1",
+  "command": "GENET_IMG_GPU_EVIDENCE=<dir> cargo test --release -p genet-render-host --test image_gpu -j 2 -- --ignored --nocapture --test-threads=1",
+  "gate": "components/genet-render-host/tests/image_gpu.rs",
+  "gate_sha256": "a3e10c06e57a19b1f8e70e2caca28a88e396b6efc1c9d6cdb9f05762a253662a",
+  "rulings": "Mark, 2026-10-20 card round: host in genet-render-host; #[ignore] with coordinator wording and hard fail on no adapter; opaque/backdrop exact, translucent +-1; read workspace Cargo.lock and assert one supplier revision; evidence PNGs kept in repo receipts.",
+  "supplier_pin": {
+    "netrender_rev": "d92050146768357ead4e4e42967866be7061262e",
+    "crates": ["netrender", "netrender_device", "paint_list_api", "paint_list_render"],
+    "how": "gate reads Cargo.lock and asserts all four resolve to one git rev",
+    "lock_note": "Cargo.lock is untracked; this worktree used a copy of the main checkout's local lock (dated 2026-10-20 00:06), not a fresh cargo update --workspace."
+  },
+  "result": {"checks_passed": 16, "checks_failed": 1, "test": "FAILED (one finding)", "seconds": 2.56},
+  "matrix": {
+    "opaque": "PASS exact [0,0,255,255]; backdrop control exact",
+    "translucent": "PASS [127,128,0,255] (src-over of [0,255,0,128] on red, +-1); control exact",
+    "replacement": "FAIL at (12,12): got [0,0,255,255] (old blue), want [255,0,255,255] (new magenta). Replaced size 8x8 was applied; old pixels drawn. Old-area (20,20) white PASS; unchanged translucent image PASS.",
+    "removal": "PASS: no resources; opaque area white, translucent area back to red backdrop",
+    "frame_composition": "PASS: parent yellow image, child blue image (colliding key 1 absorbed to key 2), child green backdrop, parent white around"
+  },
+  "finding": {
+    "id": "IMG-GPU-REPLACE-STALE",
+    "summary": "A replaced image reuses its per-frame ordinal ImageKey with new pixels and a fresh Blob; NetRender keeps the old pixels.",
+    "evidence": [
+      "Paint list carries the replacement pixels (asserted); scene gets a fresh blob id (3) for the same ImageKey 0x8000000000000001 with 8x8 size.",
+      "Same scene on a fresh surface key still draws blue (probe image 2b): staleness is renderer-wide, not per-surface tile state.",
+      "netrender d92050146 vello_rasterizer/mod.rs CpuImageCache::refresh: entries.entry(key).or_insert_with(..); documented as 'Keys identify immutable pixels until absent from a refreshed scene'. Its debug_assert compares only width/height/length and is compiled out in release (here dimensions changed 16x16 -> 8x8, so a debug build would assert).",
+      "Genet side: paint.rs image_key_for allocates ordinal images.len()+1 per list, so the same slot gets the same key across frames whatever its pixels."
+    ],
+    "owner_fork": "Open: either genet issues keys that change when pixels change, or NetRender's refresh compares blob identity. Not decided here."
+  },
+  "evidence_images": ["2026-10-20_img_gpu/1-opaque-translucent.png", "2026-10-20_img_gpu/2-replacement.png", "2026-10-20_img_gpu/2b-replacement-fresh-surface-probe.png", "2026-10-20_img_gpu/3-removal.png", "2026-10-20_img_gpu/4-frame-composition.png"],
+  "run_excerpt": "2026-10-20_img_gpu/run_excerpt.txt",
+  "log_sha256": "1899c658b4ec7c3d962ecba95e8f86e2a7b4e0399240021ab72501582eef4864",
+  "scope": "Shared-device draw/readback for decoded document images only, 64x64 target, 1:1 integer placement, interior samples. Not browser, not other adapters, not image Blob atlas identity."
+}

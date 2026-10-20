@@ -336,6 +336,21 @@ the form-control value model. Where the current value lives is shared by
 script, the native editor, paint and accessibility, so that brief's first
 checkpoint brings the representation back to Mark.
 
+**Conformance targets, 2026-10-20 (Mark's answers; unnumbered until Mark numbers them).**
+Asked, against the 2026-09-29 Vano census (33,824 of 144,238 subtests; pre-encoding,
+pre-streams, pre-forms-C), which conformance targets get briefed next, any number
+selectable among: the fetch and request-security cluster (fetch 27%, referrer-policy 0%,
+mixed-content 0%, CSP 5%, upgrade-insecure 0%, about 20,700 subtests, on the qualified
+netfetcher wire adoption); WebCrypto (107 of 9,652, 86 files lacking `crypto`); the component
+model (dom, html/dom, custom-elements, shadow-dom, about 7,100); a paired census refresh
+first. Mark: **"Fetch and request security cluster (Recommended),WebCrypto,Component model"**.
+Each is briefed to a separate implementing agent, as C1 did; the census refresh was not
+selected. Asked whether intersection-observer (0 of 118), hr-time (13 of 26),
+performance-timeline (70 of 115) and Mutation Observer's missing global are briefed as one
+small lane for the trail and frecency unlocks. Mark: **"Yes, one bundled lane
+(Recommended)"**. WebCrypto carries the standing security rule: maintained libraries and
+standards only, no own crypto math.
+
 ## Consumers on record
 
 | Row | Consumer | Where it is named |

@@ -152,7 +152,7 @@ completed corpus census or bounded slice does not close its enclosing feature.
   fontsan/WOFF2 change is preserved. Forms phases have separate checkpoints
   in their own plan.
 
-- [HTML forms](2026-10-07_forms_value_validation_submission_plan.md)
+- [HTML forms](2026-10-07_forms_value_validation_submission_plan.md) — Phases A, B and C qualified; Checkpoint C accepted 2026-10-20 on O-PC, two follow-ups named
   (**A/B qualified and published; C acceptance open, 2026-10-16**): Windows
   qualification has resumed on O-PC under F11. F12's published redirect-base
   repair passes the original 285 affected tests there. The closing review's

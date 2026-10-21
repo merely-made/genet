@@ -153,15 +153,23 @@ completed corpus census or bounded slice does not close its enclosing feature.
   in their own plan.
 
 - [Web Cryptography `crypto.subtle`](2026-10-20_webcrypto_subtle_plan.md)
-  (**P1 on branch `webcrypto-subtle`, not merged, 2026-10-20**).
+  (**P1 and P2 on branch `webcrypto-subtle`, not merged, 2026-10-20**).
   - **Rulings.** Mark's answers set:
     - the crates: "RustCrypto 0.11 line (Recommended)";
     - the order: "Weight order (Recommended)";
     - the scope: "Standard + drafts with crates";
     - the bytes: "Binary strings in P1 (Recommended)";
-    - Web Crypto's `[SecureContext]` gate: "Gate Web Crypto now (Recommended)".
+    - Web Crypto's `[SecureContext]` gate: "Gate Web Crypto now (Recommended)";
+    - AES in P2: "Raw import/export only (Recommended)";
+    - Boa's two lost passes: "Keep AES import, waive the 2 (Recommended)".
   - **P1** is the framework, digest, HMAC and the secure-context gate. Matched
     WebCryptoAPI maps lose zero passes: Boa 81 → 5,472 and Vano 80 → 7,980.
+  - **P2** is HKDF and PBKDF2 (`deriveBits`, `deriveKey` into HMAC and AES keys)
+    over `hkdf` and `pbkdf2` 0.13.0. Vano 7,980 → 17,698 with zero lost; the two
+    KDF files fail only the 2,652 window subtests that need an EC key (P4). Boa
+    5,472 → 6,909 with two `setup` passes lost to Boa's value-stack leak (F11,
+    waived). Only the window scope is measurable: every worker scope errors in
+    the runner.
   - The suite enumerates to 72,172 reference subtests; the census saw 9,652.
 
 - [HTML forms](2026-10-07_forms_value_validation_submission_plan.md) — Phases A, B and C qualified; Checkpoint C accepted 2026-10-20 on O-PC, two follow-ups named

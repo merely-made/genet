@@ -253,3 +253,22 @@ fn the_host_pump_updates_after_layout_and_skips_hidden_documents<E: ScriptEngine
 }
 
 both_engines!(the_host_pump_updates_after_layout_and_skips_hidden_documents);
+
+fn an_explicit_root_is_computed_against<E: ScriptEngine>() {
+    let mut page = Page::<E>::new();
+    page.eval(
+        "var log = []; \
+         var o = new IntersectionObserver(function(entries) { \
+           for (var e of entries) log.push(e.isIntersecting + ':' + e.rootBounds.height + ':' + e.intersectionRect.height); \
+         }, { root: document.getElementById('above') }); \
+         o.observe(document.getElementById('target')); \
+         var inside = new IntersectionObserver(function() {}, { root: document.body }); \
+         inside.observe(document.getElementById('target'));",
+    );
+    assert_eq!(page.turn(), 2);
+    let out = page.eval("console.log(log.join('|'));");
+    // `#target` is not inside `#above`, so it never intersects it.
+    assert_eq!(out[0], "false:100:0");
+}
+
+both_engines!(an_explicit_root_is_computed_against);

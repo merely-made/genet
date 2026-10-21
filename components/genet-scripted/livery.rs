@@ -22,7 +22,7 @@ use genet_livery::{
     LayoutError, LiveryLayout, LiveryPaintList, RestyleStats, RuleMutationError, StylePlane,
     StyleSet, TextDirective, TextRange, TextSelection, TextSystem, ViewportSizes,
     canonicalize_specified_value, classify_specified_shorthand, content_box_size,
-    IntersectionFrame, MarginValue, Margins, is_scroll_container, scroll_metrics,
+    IntersectionFrame, MarginValue, Margins, inline_boxes, is_scroll_container, scroll_metrics,
     emit_paint_list_with_text_system_scrolled_with_images_and_external_textures_with_document_base,
     DocumentImageSources, hit_test_with_scroll,
     is_implemented_shorthand, layout_with_text_system, reconstruct_specified_shorthand,
@@ -2199,8 +2199,21 @@ fn element_metrics(host: &HostState, state: &LiveryState, node: NodeId) -> Optio
             ..ElementMetrics::default()
         }
     };
+    let (mut left, mut top) = (fragment.x, fragment.y);
     metrics.offset_width = fragment.width;
     metrics.offset_height = fragment.height;
+    if let Some(boxes) = inline_boxes(dom, &frame.styles, &frame.fragments, node) {
+        // An inline element is its line boxes' union.
+        let union = boxes.iter().fold(boxes[0], |all, b| {
+            let right = (all[0] + all[2]).max(b[0] + b[2]);
+            let bottom = (all[1] + all[3]).max(b[1] + b[3]);
+            let (x, y) = (all[0].min(b[0]), all[1].min(b[1]));
+            [x, y, right - x, bottom - y]
+        });
+        (left, top) = (union[0], union[1]);
+        metrics.offset_width = union[2];
+        metrics.offset_height = union[3];
+    }
     let (root, body) = root_and_body(dom);
     let parent = if root == Some(node) || body == Some(node) || style.position == CssPosition::Fixed
     {
@@ -2222,8 +2235,8 @@ fn element_metrics(host: &HostState, state: &LiveryState, node: NodeId) -> Optio
             ))
         })
         .unwrap_or((0.0, 0.0));
-    metrics.offset_left = fragment.x - origin.0;
-    metrics.offset_top = fragment.y - origin.1;
+    metrics.offset_left = left - origin.0;
+    metrics.offset_top = top - origin.1;
     metrics.offset_parent = parent.map(|parent| parent.raw());
     Some(metrics)
 }
@@ -2309,9 +2322,15 @@ impl GeometryHandler for LiveryGeometry {
                 return Vec::new();
             };
             let (sx, sy) = state.scroll;
+            let (hx, hy) = frame.shifts.get(&node).copied().unwrap_or_default();
+            if let Some(boxes) = inline_boxes(dom, &frame.styles, &frame.fragments, node) {
+                return boxes
+                    .iter()
+                    .map(|b| [b[0] - sx - hx, b[1] - sy - hy, b[2], b[3]])
+                    .collect();
+            }
             let parts: Vec<_> = frame.fragments.fragments_for_node(node).collect();
             if parts.len() > 1 {
-                let (hx, hy) = frame.shifts.get(&node).copied().unwrap_or_default();
                 return parts
                     .iter()
                     .map(|part| [part.x - sx - hx, part.y - sy - hy, part.width, part.height])
@@ -2329,7 +2348,6 @@ impl GeometryHandler for LiveryGeometry {
                 return vec![[bounds[0] - sx, bounds[1] - sy, bounds[2], bounds[3]]];
             }
             // Not painted (visibility: hidden) but still a box.
-            let (hx, hy) = frame.shifts.get(&node).copied().unwrap_or_default();
             parts
                 .iter()
                 .map(|part| [part.x - sx - hx, part.y - sy - hy, part.width, part.height])

@@ -116,7 +116,9 @@ pub use paint::{
     emit_paint_list_with_text_system_scrolled_with_images_and_external_textures_with_document_base,
 };
 pub use placement::{ElementGeometry, element_geometry};
-pub use scroll_geometry::{ScrollMetrics, ancestor_scroll, is_scroll_container, scroll_metrics};
+pub use scroll_geometry::{
+    ScrollMetrics, ancestor_scroll, inline_boxes, is_scroll_container, scroll_metrics,
+};
 pub use presentational_hints::{
     LegacyDescendantAlignment, PresentationalDeclarations, PresentationalHintDiagnostic,
     PresentationalHintProvider, PresentationalHints,

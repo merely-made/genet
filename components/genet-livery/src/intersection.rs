@@ -17,8 +17,8 @@ use layout_dom_api::{LayoutDom, NodeKind};
 use livery::values::{Display, Overflow, Position};
 
 use crate::{
-    LiveryLayout, StylePlane, ancestor_scroll, element_geometry, is_scroll_container,
-    layout::fragment_edges,
+    LiveryLayout, StylePlane, ancestor_scroll, element_geometry, inline_boxes,
+    is_scroll_container, layout::fragment_edges,
 };
 
 /// One side of `rootMargin`/`scrollMargin`.
@@ -127,6 +127,25 @@ where
     }
 
     fn target_rect(&self, target: D::NodeId) -> Option<Edges> {
+        if let Some(boxes) = inline_boxes(self.dom, self.styles, self.fragments, target) {
+            let above = ancestor_scroll(self.dom, self.element_scroll, target);
+            let (dx, dy) = (
+                self.viewport_scroll.0 + above.0,
+                self.viewport_scroll.1 + above.1,
+            );
+            let first = boxes[0];
+            return Some(boxes.iter().fold(
+                [first[0] - dx, first[1] - dy, first[0] + first[2] - dx, first[1] + first[3] - dy],
+                |all, part| {
+                    [
+                        all[0].min(part[0] - dx),
+                        all[1].min(part[1] - dy),
+                        all[2].max(part[0] + part[2] - dx),
+                        all[3].max(part[1] + part[3] - dy),
+                    ]
+                },
+            ));
+        }
         if let Some(bounds) = element_geometry(
             self.dom,
             self.styles,
@@ -301,7 +320,11 @@ where
             .then(|| self.target_rect(target))
             .flatten();
         let Some(target_edges) = target_edges else {
-            return miss([0.0; 4]);
+            // Not rendered or detached: nothing to place against the root.
+            return Intersection {
+                root_bounds: root_edges.map(|_| [0.0; 4]),
+                ..miss([0.0; 4])
+            };
         };
         let target_rect = to_rect(target_edges);
         let Some(root_bounds) = root_edges else {

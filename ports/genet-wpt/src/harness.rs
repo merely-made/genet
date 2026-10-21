@@ -919,6 +919,12 @@ impl RenderSession {
                 .map_err(|error| format!("retained frame: {error:?}"))?;
             work += pending;
         }
+        // The observers' update step runs after the callbacks and the relayout
+        // they caused, whether or not this turn changed the DOM: a scroll alone
+        // moves what intersects.
+        work += rt
+            .update_intersection_observations()
+            .map_err(|error| format!("intersection observations: {error:?}"))?;
         Ok(work)
     }
 }

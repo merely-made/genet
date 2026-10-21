@@ -105,7 +105,7 @@ pub use crypto::RandomSource;
 pub use dom::markup_insertion::{MarkupState, ReadyState};
 pub use dom::{
     ComputedStyleHandler, CookieProvider, InlineStyleHandler, InlineStyleValueResult,
-    ElementMetrics, GeometryHandler, MediaQueryHandler, SelectionHandler, StyleSheetHandler, StyleSheetImportOwner,
+    ElementMetrics, GeometryHandler, IntersectionReport, IntersectionRequest, MediaQueryHandler, SelectionHandler, StyleSheetHandler, StyleSheetImportOwner,
     StyleSheetImportRule, StyleSheetMutationError, StyleSheetRule, StyleSheetRuleKind,
 };
 pub use fetch::{FetchHandler, FetchOutcome, FetchRequest};
@@ -603,7 +603,7 @@ const REALM_TASK_HOOKS: &[&str] = &[
     "__reportListenerException", "__reportScriptException", "__fetchSettle", "__fetchFail",
     "__fetchStartStream", "__fetchPushChunk", "__fetchClose", "__fetchError",
     "__fetchPendingCount", "__fetchFailAll",
-    "__moPump", "__websocketOpen", "__websocketMessageText",
+    "__moPump", "__ioUpdate", "__websocketOpen", "__websocketMessageText",
     "__websocketMessageBinary", "__websocketFlushed", "__websocketError",
     "__websocketClose", "__websocketPending", "__websocketFailAll",
 ];
@@ -2129,6 +2129,30 @@ impl<E: ScriptEngine> Runtime<E> {
         Ok(ran)
     }
 
+    /// Run the "update intersection observations" steps in every realm that has
+    /// observers: the host calls this once per rendering turn, after the
+    /// animation frame callbacks and the relayout they caused. Entries are
+    /// queued, and delivered later as a task. Returns how many were queued.
+    pub fn update_intersection_observations(&mut self) -> Result<usize, E::Error> {
+        let mut queued = 0usize;
+        let mut realms = vec![self.top_realm()];
+        let mut next = 0;
+        while next < realms.len() {
+            let parent = realms[next];
+            next += 1;
+            for (_, realm) in self.frame_realms(parent) {
+                realms.push(realm);
+            }
+        }
+        for realm in realms {
+            let v = self
+                .call_task(realm, "__ioUpdate", &[])
+                .map_err(|error| self.engine_error(&error.to_string()))?;
+            queued += self.task_count(&v)?;
+        }
+        Ok(queued)
+    }
+
     /// Whether any animation frame callbacks are registered. The host uses this
     /// (alongside its own animation state) to keep requesting frames only while
     /// script is animating, so idle surfaces stop ticking.
@@ -2909,6 +2933,11 @@ pub(crate) fn install_host_surface<E: ScriptEngine>(
     streams::finish_streams_install(engine)?;
     // `performance` (hr-time, user timing) + `PerformanceObserver`.
     timing::install_timing_surface(engine)?;
+    // `IntersectionObserver`: after `dom` (Element, Document, the geometry
+    // natives) and after timing (the clock its entries are stamped from).
+    if scope == GlobalScopeKind::Window {
+        engine.eval(include_str!("intersection_observer.js"))?;
+    }
     // `MessageChannel` / `MessagePort` / `BroadcastChannel` / `MessageEvent`.
     // After `structured_clone` so `postMessage` can clone its argument.
     messaging::install_messaging_surface(engine)?;
@@ -3827,16 +3856,72 @@ const SHELL_GLOBALS_BOOTSTRAP: &str = r#"
   // and its titlebar area is the empty DOMRect. Keep this object stable: the
   // WebIDL attribute is [SameObject], and consumers retain it for
   // `geometrychange` listeners even while it is hidden.
-  function DOMRect(x, y, width, height) {
-    this.x = Number(x || 0);
-    this.y = Number(y || 0);
-    this.width = Number(width || 0);
-    this.height = Number(height || 0);
-    this.left = Math.min(this.x, this.x + this.width);
-    this.right = Math.max(this.x, this.x + this.width);
-    this.top = Math.min(this.y, this.y + this.height);
-    this.bottom = Math.max(this.y, this.y + this.height);
+  // DOMRectReadOnly / DOMRect (Geometry Interfaces): four doubles in a private
+  // slot, the edges derived from them.
+  var rectSlots = new WeakMap();
+  function rectSlot(object) {
+    var slot = rectSlots.get(object);
+    if (!slot) throw new TypeError('Illegal invocation');
+    return slot;
   }
+  function rectNumber(value) { return value === undefined ? 0 : Number(value); }
+  function DOMRectReadOnly(x, y, width, height) {
+    if (!(this instanceof DOMRectReadOnly)) {
+      throw new TypeError("Failed to construct 'DOMRectReadOnly': Please use the 'new' operator");
+    }
+    rectSlots.set(this, [rectNumber(x), rectNumber(y), rectNumber(width), rectNumber(height)]);
+  }
+  function DOMRect(x, y, width, height) {
+    if (!(this instanceof DOMRect)) {
+      throw new TypeError("Failed to construct 'DOMRect': Please use the 'new' operator");
+    }
+    rectSlots.set(this, [rectNumber(x), rectNumber(y), rectNumber(width), rectNumber(height)]);
+  }
+  DOMRect.prototype = Object.create(DOMRectReadOnly.prototype);
+  Object.defineProperty(DOMRect.prototype, 'constructor', { configurable: true, writable: true, value: DOMRect });
+  Object.setPrototypeOf(DOMRect, DOMRectReadOnly);
+  ['x', 'y', 'width', 'height'].forEach(function(name, index) {
+    Object.defineProperty(DOMRectReadOnly.prototype, name, {
+      configurable: true, enumerable: true,
+      get: function() { return rectSlot(this)[index]; }
+    });
+    Object.defineProperty(DOMRect.prototype, name, {
+      configurable: true, enumerable: true,
+      get: function() { return rectSlot(this)[index]; },
+      set: function(value) { rectSlot(this)[index] = Number(value); }
+    });
+  });
+  var rectEdges = {
+    top: function(s) { return Math.min(s[1], s[1] + s[3]); },
+    right: function(s) { return Math.max(s[0], s[0] + s[2]); },
+    bottom: function(s) { return Math.max(s[1], s[1] + s[3]); },
+    left: function(s) { return Math.min(s[0], s[0] + s[2]); }
+  };
+  Object.keys(rectEdges).forEach(function(name) {
+    Object.defineProperty(DOMRectReadOnly.prototype, name, {
+      configurable: true, enumerable: true,
+      get: function() { return rectEdges[name](rectSlot(this)); }
+    });
+  });
+  Object.defineProperty(DOMRectReadOnly.prototype, 'toJSON', {
+    configurable: true, writable: true, enumerable: true,
+    value: function toJSON() {
+      var s = rectSlot(this);
+      return { x: s[0], y: s[1], width: s[2], height: s[3], top: rectEdges.top(s),
+               right: rectEdges.right(s), bottom: rectEdges.bottom(s), left: rectEdges.left(s) };
+    }
+  });
+  function rectFrom(Ctor) {
+    return function fromRect(other) {
+      other = other === undefined || other === null ? {} : other;
+      return new Ctor(other.x, other.y, other.width, other.height);
+    };
+  }
+  Object.defineProperty(DOMRectReadOnly, 'fromRect', { configurable: true, writable: true, enumerable: true, value: rectFrom(DOMRectReadOnly) });
+  Object.defineProperty(DOMRect, 'fromRect', { configurable: true, writable: true, enumerable: true, value: rectFrom(DOMRect) });
+  Object.defineProperty(DOMRectReadOnly.prototype, Symbol.toStringTag, { configurable: true, value: 'DOMRectReadOnly' });
+  Object.defineProperty(DOMRect.prototype, Symbol.toStringTag, { configurable: true, value: 'DOMRect' });
+  globalThis.DOMRectReadOnly = DOMRectReadOnly;
   globalThis.DOMRect = DOMRect;
 
   function WindowControlsOverlay() {

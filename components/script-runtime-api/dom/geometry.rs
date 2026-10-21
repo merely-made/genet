@@ -36,8 +36,34 @@ pub struct ElementMetrics {
     pub offset_parent: Option<u64>,
 }
 
+/// One `IntersectionObserver` observation to compute. A margin side is its
+/// number and whether it is a percentage.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct IntersectionRequest {
+    pub target: u64,
+    /// `None` is the implicit root: the viewport.
+    pub root: Option<u64>,
+    /// Top, right, bottom, left.
+    pub root_margin: [(f32, bool); 4],
+    pub scroll_margin: [(f32, bool); 4],
+}
+
+/// The geometry of one observation, rectangles as `[x, y, width, height]` in
+/// viewport coordinates.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct IntersectionReport {
+    pub target: [f32; 4],
+    pub intersection: [f32; 4],
+    pub root_bounds: Option<[f32; 4]>,
+    pub is_intersecting: bool,
+}
+
 /// The host's layout seam for CSSOM View element geometry and scrolling.
 pub trait GeometryHandler {
+    /// How much of a target shows through the clips up to a root. `None` when
+    /// the host has no layout to answer from.
+    fn intersection(&self, request: &IntersectionRequest) -> Option<IntersectionReport>;
+
     /// Border-box rectangles `[x, y, width, height]` of the element's boxes in
     /// viewport coordinates, transforms applied. Empty when it has no box.
     fn client_rects(&self, node: u64) -> Vec<[f32; 4]>;
@@ -160,5 +186,64 @@ impl<E: ScriptEngine> NativeFn<E> for OffsetParent {
             Some(raw) => reflect_pinned::<E>(cx, raw),
             None => Ok(cx.undefined()),
         }
+    }
+}
+
+fn margin_arg<E: ScriptEngine>(
+    cx: &mut E::CallCx<'_>,
+    index: usize,
+) -> Result<[(f32, bool); 4], E::Error> {
+    let value = cx.arg(index);
+    let text = cx.value_to_string(&value)?;
+    let numbers: Vec<f32> = text
+        .split(',')
+        .map(|part| part.trim().parse::<f32>().unwrap_or(0.0))
+        .collect();
+    let mut sides = [(0.0, false); 4];
+    for (side, pair) in sides.iter_mut().zip(numbers.chunks(2)) {
+        *side = (pair[0], pair.get(1).is_some_and(|flag| *flag != 0.0));
+    }
+    Ok(sides)
+}
+
+/// `__geomIntersection(targetRef, rootRef, rootMargin, scrollMargin)` ->
+/// `target;intersection;rootBounds;isIntersecting`, each rectangle
+/// `x,y,width,height` (the last two possibly empty), or empty without layout.
+/// An empty `rootRef` is the implicit root.
+pub(crate) struct Intersection;
+impl<E: ScriptEngine> NativeFn<E> for Intersection {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let target_value = cx.arg(0);
+        let root_value = cx.arg(1);
+        let Some(target) = cx.owned_node(&target_value)? else {
+            return cx.make_string("");
+        };
+        let root_text = cx.value_to_string(&root_value)?;
+        let root = if root_text.is_empty() {
+            None
+        } else {
+            match cx.owned_node(&root_value)? {
+                Some(root) => Some(root.raw()),
+                None => return cx.make_string(""),
+            }
+        };
+        let request = IntersectionRequest {
+            target: target.raw(),
+            root,
+            root_margin: margin_arg::<E>(cx, 2)?,
+            scroll_margin: margin_arg::<E>(cx, 3)?,
+        };
+        let Some(report) = handler::<E>(cx).and_then(|h| h.intersection(&request)) else {
+            return cx.make_string("");
+        };
+        let rect = |r: [f32; 4]| format!("{},{},{},{}", r[0], r[1], r[2], r[3]);
+        let encoded = format!(
+            "{};{};{};{}",
+            rect(report.target),
+            rect(report.intersection),
+            report.root_bounds.map(rect).unwrap_or_default(),
+            u8::from(report.is_intersecting)
+        );
+        cx.make_string(&encoded)
     }
 }

@@ -65,11 +65,11 @@ genet-scripted = { path = "../../components/genet-scripted", optional = true }
 webgl_wgpu = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = "=0.2.127"
-wasm-bindgen-futures = "=0.4.77"
-js-sys = "=0.3.104"
+wasm-bindgen = "=0.2.129"
+wasm-bindgen-futures = "=0.4.79"
+js-sys = "=0.3.106"
 wgpu = { workspace = true, features = ["webgpu"] }
-web-sys = { version = "=0.3.104", features = [
+web-sys = { version = "=0.3.106", features = [
     "Document", "DomRect", "Element", "Event", "EventTarget", "Headers", "Response", "Request", "RequestInit", "Location", "Url",
     "ReadableStream", "ReadableStreamDefaultReader",
     "FocusEvent", "HtmlCanvasElement", "HtmlElement", "KeyboardEvent", "MouseEvent",

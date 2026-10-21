@@ -31,6 +31,11 @@ use std::sync::{Arc, Mutex, Weak};
 #[cfg(test)]
 use std::time::Duration;
 
+#[cfg(target_arch = "wasm32")]
+mod browser_frame;
+#[cfg(target_arch = "wasm32")]
+pub use browser_frame::{AcceptedBrowserFrame, BrowserFrameCommands, BrowserFrameStartError, BrowserFrameSubmission, PendingBrowserFrame, RendererAccess};
+
 mod readback;
 mod recovery;
 pub use recovery::{
@@ -420,6 +425,8 @@ pub struct RenderCore {
     loss: Arc<DeviceLossMonitor>,
     recovery_owner: Mutex<Weak<SharedRenderCore>>,
     recipe: CoreBootRecipe,
+    #[cfg(target_arch = "wasm32")]
+    browser_frame_gate: Arc<browser_frame::FrameGate>,
 }
 
 impl RenderCore {
@@ -504,6 +511,8 @@ impl RenderCore {
             loss,
             recovery_owner: Mutex::new(Weak::new()),
             recipe,
+            #[cfg(target_arch = "wasm32")]
+            browser_frame_gate: Arc::new(browser_frame::FrameGate::default()),
         })
     }
 
@@ -639,14 +648,24 @@ impl RenderCore {
 
     /// The netrender renderer — call `compose_external_texture` (and friends) on
     /// it to composite rasterized layers onto a surface's backbuffer.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn renderer(&self) -> &Renderer {
         &self.renderer
+    }
+
+    /// Browser compatibility getter; checked callers use try_renderer.
+    /// The access guard holds ownership and refuses another frame's Renderer.
+    #[cfg(target_arch = "wasm32")]
+    pub fn renderer(&self) -> RendererAccess<'_> {
+        self.try_renderer().expect("checked renderer access refused")
     }
 
     /// Retire one keyed surface's retained tile state after its content source
     /// is replaced in place. The next [`rasterize_for`](Self::rasterize_for)
     /// call rebuilds the surface from the complete current scene.
     pub fn invalidate_surface(&self, surface: u64) -> bool {
+        #[cfg(target_arch = "wasm32")]
+        let _renderer_access = self.try_renderer().expect("checked renderer access refused");
         self.renderer.invalidate_surface_tiles(surface)
     }
 
@@ -797,6 +816,8 @@ impl RenderCore {
         clear: ColorLoad,
         scale: f32,
     ) -> (wgpu::Texture, wgpu::TextureView) {
+        #[cfg(target_arch = "wasm32")]
+        let _renderer_access = self.try_renderer().expect("checked renderer access refused");
         let (tex, view) = self.scene_target(w, h);
         self.renderer
             .render_vello_scaled_for(surface, scene, &view, clear, scale);
@@ -852,6 +873,7 @@ impl RenderCore {
             // asynchronous. This existing synchronous API does not qualify
             // either; an async host seam remains open. Do not block JS or
             // drop a promise and claim native completion guarantees here.
+            let _renderer_access = self.try_renderer()?;
             let _operation = self
                 .loss
                 .begin_operation()
@@ -1056,6 +1078,8 @@ impl RenderCore {
         clear: ColorLoad,
         scale: f32,
     ) -> (wgpu::Texture, wgpu::TextureView) {
+        #[cfg(target_arch = "wasm32")]
+        let _renderer_access = self.try_renderer().expect("checked renderer access refused");
         let (tex, view) = self.scene_target(w, h);
         self.renderer
             .render_vello_scaled(scene, &view, clear, scale);
@@ -1079,6 +1103,8 @@ impl RenderCore {
         _scale: f32,
         external_textures: &[netrender::ExternalTextureComposite<'_>],
     ) -> (wgpu::Texture, wgpu::TextureView) {
+        #[cfg(target_arch = "wasm32")]
+        let _renderer_access = self.try_renderer().expect("checked renderer access refused");
         let mut compositor = CaptureMasterCompositor::default();
         let base_color = match clear {
             ColorLoad::Clear(color) => netrender::peniko::Color::new([

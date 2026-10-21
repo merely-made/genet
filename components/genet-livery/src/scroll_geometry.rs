@@ -14,7 +14,7 @@ use std::{collections::HashMap, hash::Hash};
 use layout_dom_api::LayoutDom;
 use livery::values::{Display, Overflow};
 
-use crate::{LiveryLayout, StylePlane, layout::fragment_edges, paint};
+use crate::{LiveryLayout, StylePlane, layout::fragment_edges};
 
 /// A scroll container's client box and scrollable overflow, in CSS pixels.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -87,7 +87,7 @@ where
     if style.display == Display::None {
         return None;
     }
-    if paint::paints_as_inline_box(fragments, node, style) {
+    if style.display == Display::Inline && !crate::box_tree::is_replaced_element(dom, node) {
         return Some(ScrollMetrics::default());
     }
     let edges = fragment_edges(style, fragment);

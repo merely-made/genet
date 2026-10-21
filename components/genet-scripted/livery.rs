@@ -22,7 +22,7 @@ use genet_livery::{
     LayoutError, LiveryLayout, LiveryPaintList, RestyleStats, RuleMutationError, StylePlane,
     StyleSet, TextDirective, TextRange, TextSelection, TextSystem, ViewportSizes,
     canonicalize_specified_value, classify_specified_shorthand, content_box_size,
-    is_scroll_container, scroll_metrics,
+    IntersectionFrame, MarginValue, Margins, is_scroll_container, scroll_metrics,
     emit_paint_list_with_text_system_scrolled_with_images_and_external_textures_with_document_base,
     DocumentImageSources, hit_test_with_scroll,
     is_implemented_shorthand, layout_with_text_system, reconstruct_specified_shorthand,
@@ -38,7 +38,7 @@ use livery::values::Position as CssPosition;
 use paint_list_api::{ColorF, DeviceIntSize, LayoutPoint, LayoutRect, LayoutSize};
 use script_engine_api::ScriptEngine;
 use script_runtime_api::{
-    ComputedStyleHandler, ElementMetrics, GeometryHandler, HostState, InlineStyleHandler, InlineStyleValueResult, MediaQueryHandler,
+    ComputedStyleHandler, ElementMetrics, GeometryHandler, HostState, IntersectionReport, IntersectionRequest, InlineStyleHandler, InlineStyleValueResult, MediaQueryHandler,
     Runtime, SelectionHandler, SharedHost, StyleSheetHandler, StyleSheetImportOwner,
     StyleSheetImportRule, StyleSheetMutationError, StyleSheetRule, StyleSheetRuleKind,
 };
@@ -2263,6 +2263,41 @@ fn offset_parent(
 }
 
 impl GeometryHandler for LiveryGeometry {
+    fn intersection(&self, request: &IntersectionRequest) -> Option<IntersectionReport> {
+        let target = NodeId::from_raw(request.target);
+        let root = request.root.map(NodeId::from_raw);
+        let margins = |sides: [(f32, bool); 4]| -> Margins {
+            sides.map(|(value, percent)| {
+                if percent {
+                    MarginValue::Percent(value)
+                } else {
+                    MarginValue::Px(value)
+                }
+            })
+        };
+        let (root_margin, scroll_margin) =
+            (margins(request.root_margin), margins(request.scroll_margin));
+        self.with_layout(|host, state| {
+            let frame = state.frame.as_ref()?;
+            let result = IntersectionFrame {
+                dom: &host.dom,
+                styles: &frame.styles,
+                fragments: &frame.fragments,
+                element_scroll: &state.element_scroll,
+                viewport: (frame.viewport.0 as f32, frame.viewport.1 as f32),
+                viewport_scroll: state.scroll,
+            }
+            .intersection(target, root, &root_margin, &scroll_margin);
+            Some(IntersectionReport {
+                target: result.target_rect,
+                intersection: result.intersection_rect,
+                root_bounds: result.root_bounds,
+                is_intersecting: result.is_intersecting,
+            })
+        })
+        .flatten()
+    }
+
     fn client_rects(&self, node: u64) -> Vec<[f32; 4]> {
         let node = NodeId::from_raw(node);
         self.with_layout(|host, state| {

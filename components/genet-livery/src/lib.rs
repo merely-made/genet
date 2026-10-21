@@ -17,6 +17,7 @@ mod document;
 mod dom;
 mod image_decode;
 mod image_resources;
+mod intersection;
 mod invalidation;
 mod layout;
 mod legacy_color;
@@ -91,6 +92,7 @@ pub use document::{
 };
 pub use dom::{ElementRef, InteractionStates, SelectorTree};
 pub use image_resources::{DocumentImageSources, ImagePixels, ImageSourceLookup};
+pub use intersection::{Intersection, IntersectionFrame, MarginValue, Margins, ZERO_MARGINS};
 pub use invalidation::{AttributeSnapshot, ElementSnapshot, IncrementalStyle, RestyleStats};
 pub use layout::{
     BlockAlgorithmCounts, FragmentEdges, LayoutError, LiveryLayout, content_box_size, hit_test,

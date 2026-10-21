@@ -90,6 +90,7 @@ mod harness;
 mod messaging;
 pub mod parse;
 mod platform;
+mod policy;
 mod selector;
 mod streams;
 mod structured_clone;
@@ -318,6 +319,10 @@ pub struct HostState {
     /// Creation-time inherited fallback for about:blank / iframe srcdoc.
     /// `base_url` remains the visible document URL.
     pub about_base_url: Option<String>,
+    /// The initial document's response headers, as the host that loaded it saw
+    /// them (`Runtime::set_document_response_headers`). They seed the document
+    /// policy container; see `policy`.
+    pub(crate) document_response_headers: Vec<(String, String)>,
     document_base_cache: RefCell<DocumentBaseCache>,
     /// `window.localStorage` backing: an ordered key→value store (insertion
     /// order, for `key(n)` / `Object.keys`). The in-memory default (tests / WPT /
@@ -2512,6 +2517,14 @@ impl<E: ScriptEngine> Runtime<E> {
         // surface's getters re-read it), so updating the host base URL is enough;
         // no need to rebuild a location snapshot here.
         Ok(())
+    }
+
+    /// Hand the runtime the initial document's response headers. Only the host
+    /// that fetched the document saw them; the runtime reads `Referrer-Policy`
+    /// from them for the document policy container. Call it before the document's
+    /// scripts run; a later call replaces the earlier headers.
+    pub fn set_document_response_headers(&mut self, headers: Vec<(String, String)>) {
+        self.host.borrow_mut().document_response_headers = headers;
     }
 
     /// Install byte-input metadata before parsing authored source.

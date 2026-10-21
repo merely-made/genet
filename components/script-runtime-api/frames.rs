@@ -2149,6 +2149,8 @@ fn navigation_get(url: &str) -> crate::FetchRequest {
         referrer_policy: String::new(),
         credentials: "include".into(),
         integrity: String::new(),
+        upgrade_insecure_requests: false,
+        block_all_mixed_content: false,
     }
 }
 

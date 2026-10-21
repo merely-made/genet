@@ -140,6 +140,16 @@ pub struct ResourceRequest {
     pub referrer_policy: String,
     pub credentials: String,
     pub integrity: String,
+    /// The requesting document's `upgrade-insecure-requests` policy: an `http` URL
+    /// (the request's or any redirect hop's) is fetched as `https`. A host that does
+    /// not honour it keeps the request as sent.
+    #[serde(default)]
+    pub upgrade_insecure_requests: bool,
+    /// The requesting document's `block-all-mixed-content` policy: from a secure
+    /// context, every `http` URL (the request's or any hop's) is a network error,
+    /// with none of the usual upgrade of images and media.
+    #[serde(default)]
+    pub block_all_mixed_content: bool,
 }
 
 impl ResourceRequest {
@@ -157,6 +167,8 @@ impl ResourceRequest {
             referrer_policy: String::new(),
             credentials: "same-origin".into(),
             integrity: String::new(),
+            upgrade_insecure_requests: false,
+            block_all_mixed_content: false,
         }
     }
 
@@ -172,6 +184,8 @@ impl ResourceRequest {
             && self.referrer_policy.is_empty()
             && self.credentials == "same-origin"
             && self.integrity.is_empty()
+            && !self.upgrade_insecure_requests
+            && !self.block_all_mixed_content
     }
 }
 
@@ -318,7 +332,7 @@ mod request_compatibility {
     fn url_only_default_does_not_fabricate_success_metadata() {
         let fetcher = UrlOnly(Cell::new(0));
         assert!(fetcher.fetch_request(&plain()).is_none());
-        for change in 0..10 {
+        for change in 0..12 {
             let mut request = plain();
             match change {
                 0 => request.method = "POST".into(),
@@ -332,6 +346,8 @@ mod request_compatibility {
                 6 => request.referrer = "https://host.test/page".into(),
                 7 => request.referrer_policy = "origin".into(),
                 8 => request.credentials = "include".into(),
+                9 => request.upgrade_insecure_requests = true,
+                10 => request.block_all_mixed_content = true,
                 _ => request.integrity = "sha256-example".into(),
             }
             assert!(

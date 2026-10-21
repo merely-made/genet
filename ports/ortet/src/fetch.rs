@@ -406,7 +406,8 @@ mod tests {
             headers:vec![("Content-Type".into(),"text/plain".into())],body:Some(b"q=\0\x80\xff\r\n".to_vec()),
             cache:"default".into(),redirect:"follow".into(),mode:"navigate".into(),
             referrer:format!("{origin}/source#initiator"),referrer_policy:"no-referrer".into(),
-            credentials:"include".into(),integrity:String::new()}
+            credentials:"include".into(),integrity:String::new(),
+            upgrade_insecure_requests:false,block_all_mixed_content:false}
     }
     fn t5_wire_header<'a>(r:&'a T5WireRequest,name:&str)->Option<&'a str> {
         r.headers.iter().find(|(k,_)|k.eq_ignore_ascii_case(name)).map(|(_,v)|v.as_str())

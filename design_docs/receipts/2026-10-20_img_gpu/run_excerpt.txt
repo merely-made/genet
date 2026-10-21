@@ -1,0 +1,26 @@
+     Running tests\image_gpu.rs (target/build\release\deps\image_gpu-f71d9fcd0646068b.exe)
+test img_gpu_decoded_images_draw_and_read_back_on_the_shared_device ... IMG-GPU netrender d92050146768357ead4e4e42967866be7061262e; adapter NVIDIA GeForce RTX 4060 Laptop GPU (Vulkan, DiscreteGpu, driver 610.88)
+IMG-GPU 1-opaque-translucent: digest ff642d9a1377b7a5
+IMG-GPU PASS opaque at (16, 16): got [0, 0, 255, 255], want [0, 0, 255, 255] +-0
+IMG-GPU PASS opaque control at (16, 40): got [255, 255, 255, 255], want [255, 255, 255, 255] +-0
+IMG-GPU PASS translucent at (44, 20): got [127, 128, 0, 255], want [127, 128, 0, 255] +-1
+IMG-GPU PASS translucent control at (34, 10): got [255, 0, 0, 255], want [255, 0, 0, 255] +-0
+IMG-GPU 2-replacement: digest b80eaace9b1ba325
+IMG-GPU 2b-replacement-fresh-surface-probe: digest b80eaace9b1ba325
+IMG-GPU probe: same scene, fresh surface key, pixel (12,12) = [0, 0, 255, 255]; subject surface = [0, 0, 255, 255]
+IMG-GPU FAIL replacement at (12, 12): got [0, 0, 255, 255], want [255, 0, 255, 255] +-0
+IMG-GPU PASS replacement old area at (20, 20): got [255, 255, 255, 255], want [255, 255, 255, 255] +-0
+IMG-GPU PASS replacement keeps translucent at (44, 20): got [127, 128, 0, 255], want [127, 128, 0, 255] +-1
+IMG-GPU 3-removal: digest 830dc45f1fb821a5
+IMG-GPU PASS removed opaque at (12, 12): got [255, 255, 255, 255], want [255, 255, 255, 255] +-0
+IMG-GPU PASS removed translucent at (44, 20): got [255, 0, 0, 255], want [255, 0, 0, 255] +-0
+IMG-GPU 4-frame-composition: digest 1f15ecbc4f2ceba5
+IMG-GPU PASS parent image at (8, 8): got [255, 255, 0, 255], want [255, 255, 0, 255] +-0
+IMG-GPU PASS child image at (36, 36): got [0, 0, 255, 255], want [0, 0, 255, 255] +-0
+IMG-GPU PASS child backdrop at (50, 50): got [0, 128, 0, 255], want [0, 128, 0, 255] +-0
+IMG-GPU PASS parent around frame at (60, 60): got [255, 255, 255, 255], want [255, 255, 255, 255] +-0
+IMG-GPU PASS parent before frame at (24, 24): got [255, 255, 255, 255], want [255, 255, 255, 255] +-0
+IMG-GPU mismatches: [
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.56s
+error: test failed, to rerun pass `-p genet-render-host --test image_gpu`
+EXIT 101

@@ -59,6 +59,8 @@ impl<E: ScriptEngine> NativeFn<E> for Post {
             referrer_policy: "origin".into(),
             credentials: "include".into(),
             integrity: String::new(),
+            upgrade_insecure_requests: false,
+            block_all_mixed_content: false,
         };
         navigate_request::<E>(cx, from, target, request, false)
     }

@@ -323,6 +323,7 @@ impl<Fetch: ResourceFetcher> LiverySessionEngine<Fetch> {
             mode: request.mode.clone(), referrer: request.referrer.clone(),
             referrer_policy: request.referrer_policy.clone(), credentials: request.credentials.clone(),
             integrity: request.integrity.clone(),
+            upgrade_insecure_requests: false, block_all_mixed_content: false,
         };
         let response = self.fetcher.fetch_request(&transport)
             .ok_or_else(|| SessionError::SpawnFailed(format!("could not load {}", request.url)))?;

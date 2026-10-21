@@ -171,7 +171,11 @@ fn run_one(test: &TestCase, args: &Args, ctx: &mut RunCtx<'_>) -> OneOutcome {
         // the test, not the run.
         net::set_page_origin(s.origin_for(test.name()));
         match net::http_get_document(&s.doc_url(test.name()), Default::default()) {
-            Some(t) => (t.document.source, t.document.encoding, Some(t.final_url)),
+            Some(t) => (
+                t.document.source,
+                t.document.encoding,
+                Some((t.final_url, t.headers)),
+            ),
             None => {
                 return OneOutcome {
                     record: ActualRecord::with_reason(test, "error", "fetch-load-failed"),
@@ -225,8 +229,10 @@ fn run_one(test: &TestCase, args: &Args, ctx: &mut RunCtx<'_>) -> OneOutcome {
         #[cfg(feature = "netfetch")]
         if let Some(s) = ctx.server {
             let (ev_tx, ev_rx) = std::sync::mpsc::channel::<net::FetchEvent>();
-            let doc_url = final_url.clone().unwrap_or_else(|| s.doc_url(test.name()));
-            let loader = s.loader(&doc_url);
+            let (doc_url, doc_headers) = final_url
+                .clone()
+                .unwrap_or_else(|| (s.doc_url(test.name()), Vec::new()));
+            let loader = s.loader(&doc_url, doc_headers);
             let handler = net::NetFetchHandler::new(ev_tx.clone());
             // The `WebSocket` seam rides the same per-test channel: `wpt serve`
             // hosts ws/wss endpoints, so server mode is where a socket can

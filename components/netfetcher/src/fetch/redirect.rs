@@ -166,7 +166,13 @@ pub(super) fn process_redirect(
                 });
             }
             *current_url = next;
-            if resolve_mixed_content(current_url, request.destination, secure_context, cx) {
+            if resolve_mixed_content(
+                current_url,
+                request.destination,
+                secure_context,
+                request.upgrade_insecure_requests,
+                cx,
+            ) {
                 return RedirectStep::Done(Response::network_error());
             }
             url_list.push(current_url.clone());

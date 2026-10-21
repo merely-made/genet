@@ -203,6 +203,8 @@ pub fn http_get(url: &str) -> Option<String> {
 pub struct LoadedHtmlDocument {
     pub document: genet_scripted_dom::html_encoding::DecodedHtmlDocument,
     pub final_url: String,
+    /// The final response's headers, as received.
+    pub headers: Vec<(String, String)>,
 }
 pub fn http_get_document(
     url: &str,
@@ -238,8 +240,10 @@ async fn do_get_document(
         .iter()
         .find(|(n, _)| n.eq_ignore_ascii_case("content-type"))
         .map(|(_, v)| v.clone());
+    let headers = response.headers.clone();
     let bytes = response.bytes().await.ok()?;
     Some(LoadedHtmlDocument {
+        headers,
         document: genet_scripted_dom::html_encoding::decode_html_document(
             &bytes,
             content_type.as_deref(),
@@ -404,6 +408,8 @@ async fn run_fetch_streaming(
         _ => netfetcher::Credentials::SameOrigin,
     };
     request.integrity = req.integrity.clone();
+    request.upgrade_insecure_requests = req.upgrade_insecure_requests;
+    request.block_all_mixed_content = req.block_all_mixed_content;
 
     let cx = fetch_context();
     let mut resp = netfetcher::fetch(request, &cx).await;
@@ -826,9 +832,15 @@ fn to_completion(ev: FetchEvent) -> crate::harness::FetchCompletion {
 /// substituted). One per test (cheap: it owns only the doc URL string).
 pub struct ServerLoader {
     pub doc_url: String,
+    /// The document's own response headers.
+    pub headers: Vec<(String, String)>,
 }
 
 impl ScriptSrcLoader for ServerLoader {
+    fn document_response_headers(&self) -> Vec<(String, String)> {
+        self.headers.clone()
+    }
+
     fn load_script(&self, src: &str) -> Option<String> {
         let base = url::Url::parse(&self.doc_url).ok()?;
         let abs = base.join(src).ok()?;
@@ -945,9 +957,10 @@ impl ServerCtx {
         )
     }
 
-    pub fn loader(&self, doc_url: &str) -> ServerLoader {
+    pub fn loader(&self, doc_url: &str, headers: Vec<(String, String)>) -> ServerLoader {
         ServerLoader {
             doc_url: doc_url.to_owned(),
+            headers,
         }
     }
 }
@@ -1195,6 +1208,45 @@ mod phase_c_document_encoding_fixtures {
             actual_url, final_url,
             "redirect identity retained by initial loader"
         );
+        first.assert();
+        last.assert();
+    }
+    #[test]
+    fn the_initial_document_keeps_the_final_responses_headers() {
+        let mut server = mockito::Server::new();
+        let first = server
+            .mock("GET", "/requested")
+            .with_status(302)
+            .with_header("Location", "/final")
+            .with_header("Referrer-Policy", "no-referrer")
+            .expect(1)
+            .create();
+        let last = server
+            .mock("GET", "/final")
+            .with_status(200)
+            .with_header("Content-Type", "text/html")
+            .with_header("Referrer-Policy", "origin")
+            .with_body("<p>x</p>")
+            .expect(1)
+            .create();
+        let loaded = http_get_document(&format!("{}/requested", server.url()), Default::default())
+            .expect("actual initial HTTP GET");
+        let policies: Vec<&str> = loaded
+            .headers
+            .iter()
+            .filter(|(name, _)| name.eq_ignore_ascii_case("referrer-policy"))
+            .map(|(_, value)| value.as_str())
+            .collect();
+        assert_eq!(
+            policies,
+            ["origin"],
+            "the final response's header, not the redirect's"
+        );
+        let loader = ServerLoader {
+            doc_url: "http://x/".into(),
+            headers: loaded.headers.clone(),
+        };
+        assert_eq!(loader.document_response_headers(), loaded.headers);
         first.assert();
         last.assert();
     }

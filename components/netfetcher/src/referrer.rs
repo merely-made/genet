@@ -34,8 +34,17 @@ pub(crate) fn referrer_header(
     // A downgrade: a secure (potentially-trustworthy) referrer to a non-secure
     // target. (Scheme-based; the localhost special case is not modeled.)
     let downgrade = is_secure(referrer) && !is_secure(target);
-    let full = || strip_referrer(referrer);
     let origin = || origin_referrer(referrer);
+    // Fetch's "determine request's referrer": a stripped referrer URL whose
+    // serialization is longer than 4096 bytes is cut down to its origin.
+    let full = || {
+        let stripped = strip_referrer(referrer);
+        if stripped.len() > MAX_REFERRER_LEN {
+            origin()
+        } else {
+            stripped
+        }
+    };
     match policy {
         UnsafeUrl => Some(full()),
         NoReferrerWhenDowngrade => (!downgrade).then(full),
@@ -56,6 +65,9 @@ pub(crate) fn referrer_header(
         Empty | NoReferrer => None,
     }
 }
+
+/// The longest referrer URL a request carries (bytes of its serialization).
+const MAX_REFERRER_LEN: usize = 4096;
 
 fn is_secure(u: &Url) -> bool {
     matches!(u.scheme(), "https" | "wss")
@@ -111,6 +123,44 @@ mod tests {
 
     fn url(s: &str) -> Url {
         Url::parse(s).unwrap()
+    }
+
+    #[test]
+    fn a_referrer_over_4096_bytes_is_cut_to_its_origin() {
+        let target = url("http://b.test/");
+        for path_len in [
+            4096 - "http://a.test/".len() - 1,
+            4096 - "http://a.test/".len(),
+        ] {
+            let at_limit = url(&format!("http://a.test/{}", "A".repeat(path_len)));
+            assert!(at_limit.as_str().len() <= 4096);
+            assert_eq!(
+                referrer_header(&at_limit, &target, ReferrerPolicy::UnsafeUrl),
+                Some(at_limit.as_str().to_owned()),
+                "up to 4096 bytes is kept whole"
+            );
+        }
+        let over = url(&format!("http://a.test/{}", "A".repeat(4096)));
+        assert!(over.as_str().len() > 4096);
+        for policy in [
+            ReferrerPolicy::UnsafeUrl,
+            ReferrerPolicy::NoReferrerWhenDowngrade,
+        ] {
+            assert_eq!(
+                referrer_header(&over, &target, policy),
+                Some("http://a.test/".to_owned()),
+                "{policy:?}"
+            );
+        }
+        // Same-origin policies cut too; no-referrer still sends nothing.
+        assert_eq!(
+            referrer_header(&over, &url("http://a.test/x"), ReferrerPolicy::SameOrigin),
+            Some("http://a.test/".to_owned())
+        );
+        assert_eq!(
+            referrer_header(&over, &target, ReferrerPolicy::NoReferrer),
+            None
+        );
     }
 
     #[test]

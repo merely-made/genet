@@ -45,6 +45,14 @@ pub struct Request {
     /// Subresource Integrity metadata (`alg-base64 ...`), or empty for none. The
     /// response body is verified against it; a mismatch is a network error.
     pub integrity: String,
+    /// The requesting document's `upgrade-insecure-requests` policy: this request's
+    /// `http` URL, and any redirect hop's, is fetched as `https`.
+    pub upgrade_insecure_requests: bool,
+    /// The requesting document's `block-all-mixed-content` policy. Carried for the
+    /// Content Security Policy lane: Mixed Content Level 2 already upgrades or
+    /// blocks every `http` subresource of a secure context, so the directive
+    /// changes no outcome today.
+    pub block_all_mixed_content: bool,
 }
 
 impl Request {
@@ -116,6 +124,8 @@ impl Request {
             _ => return None,
         };
         request.integrity = host.integrity.clone();
+        request.upgrade_insecure_requests = host.upgrade_insecure_requests;
+        request.block_all_mixed_content = host.block_all_mixed_content;
         if host.mode == "navigate" {
             request.destination = Destination::Document;
         }
@@ -138,6 +148,8 @@ impl Request {
             referrer: None,
             referrer_policy: ReferrerPolicy::default(),
             integrity: String::new(),
+            upgrade_insecure_requests: false,
+            block_all_mixed_content: false,
         }
     }
 
@@ -319,6 +331,8 @@ mod host_request_mapping {
         host.referrer_policy = "strict-origin".into();
         host.credentials = "include".into();
         host.integrity = "sha256-example".into();
+        host.upgrade_insecure_requests = true;
+        host.block_all_mixed_content = true;
         let request = Request::from_host(&host).expect("supported host request");
         assert_eq!(request.url.as_str(), host.url);
         assert_eq!(request.method, Method::Other("REPORT".into()));
@@ -336,6 +350,12 @@ mod host_request_mapping {
         assert_eq!(request.credentials, Credentials::Include);
         assert_eq!(request.destination, Destination::Document);
         assert_eq!(request.integrity, host.integrity);
+        assert!(request.upgrade_insecure_requests && request.block_all_mixed_content);
+        let plain = Request::from_host(&genet_host_api::ResourceRequest::plain_get(
+            "https://site.test/",
+        ))
+        .unwrap();
+        assert!(!plain.upgrade_insecure_requests && !plain.block_all_mixed_content);
     }
 
     #[test]

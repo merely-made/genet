@@ -21,7 +21,7 @@ livery = []
 image-decode = ["genet-livery/image-decode"]
 # The native bridge lowers the engine projection to AccessKit. Browser hosts
 # retain that projection without linking a platform accessibility tree.
-accesskit = ["dep:accesskit"]
+accesskit = ["dep:accesskit", "document-session-api/accesskit"]
 
 [dependencies]
 # The genet DOM + the engine pipeline this drives.

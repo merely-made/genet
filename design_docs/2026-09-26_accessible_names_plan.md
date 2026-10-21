@@ -29,11 +29,14 @@ owner-supplied route, not a fabricated DOM node or guessed pointer gesture.
 This view does not allocate identities, retain a second catalogue, establish a
 presentation revision or confer a target-lifetime lease.
 
-Genet's accessibility code now owns the existing supported role spellings used
+The optional `document-session-api/accesskit` spelling bridge owns the supported
+role spellings used
 by both the contributed selector adapter and Mere's browser mirror. Semantic
 window/text/label tokens remain distinct from browser ARIA emission. This is a
 spelling bridge for existing vocabularies, not a neutral contributor redesign.
-The 46-test Taproot native suite passes, including flat-tree assignment/fallback,
+Taproot does not depend on the renderer to use the bridge; `genet-render`
+reexports the same functions for hosts. The default document contract remains
+renderer-neutral. The 46-test Taproot native suite passes, including flat-tree assignment/fallback,
 DOM/composed role parity, generated exact-name preference, attribute refusal and
 hidden-subtree controls. Final source-sealed supplier and Mere receiving receipts
 live under `mere/support/family-promotion/diagnostics-selectors-*`; native/browser

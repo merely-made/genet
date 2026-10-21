@@ -32,6 +32,12 @@
 //!    the host treats accessibility uniformly regardless of which engine backs a
 //!    tile (a nematic document, a Genet page, a scrying WebView).
 
+/// Optional platform spelling bridge; the default contract remains renderer-neutral.
+#[cfg(feature = "accesskit")]
+mod accesskit_roles;
+#[cfg(feature = "accesskit")]
+pub use accesskit_roles::{accesskit_aria_role, accesskit_role_token};
+
 use serde::{Deserialize, Serialize};
 
 /// Stable, document-local semantic identity.

@@ -1,9 +1,9 @@
 # Fetch and request-security conformance
 
-**Status (2026-10-20): in progress. P0 landed on branch `fetch-security` (not
+**Status (2026-10-21): in progress. P0 and P1 landed on branch `fetch-security` (not
 merged) with matched Vano and Boa accounting, zero lost passes; the Murm fix sits on
-Murm branch `fetch-close-notify` (not merged); P1 not started.** Rulings are recorded
-unnumbered below until Mark numbers them.
+Murm branch `fetch-close-notify` (not merged). P2 (element loads) is next and needs no
+further ruling.** Rulings are recorded unnumbered below until Mark numbers them.
 
 Mark's brief, 2026-10-20 (ledger, "Conformance targets, 2026-10-20"): asked
 which conformance targets get briefed next against the 2026-09-29 Vano census
@@ -293,6 +293,45 @@ P0 result against its done-conditions (server mode, matched maps, both engines):
   non-pass changes, every row attributed; 75 raw lost rows on Vano settled by
   isolated reruns (see Progress).
 
+### F10. P1 implementation facts (2026-10-21)
+
+- The container is `script-runtime-api/policy.rs`. `read_request` (the one native entry
+  of `fetch()` and synchronous XHR) asks it for the running document's policy, so no
+  JavaScript changed. The referrer policy comes from the `Referrer-Policy` header, then
+  every `<meta name=referrer>` in tree order, the last valid one winning; the two
+  mixed-content directives come from `Content-Security-Policy` headers and `<meta
+  http-equiv>` (a report-only header enforces nothing). The tree is read when a request
+  starts, so a `<meta>` removed after it applied no longer applies (residual, in the
+  module comment).
+- Hand-over of the initial headers is `Runtime::set_document_response_headers`; the
+  runner keeps the final response's headers in `LoadedHtmlDocument` and passes them
+  through `ScriptSrcLoader::document_response_headers`. Header-delivered UIR works
+  (`upgrade-insecure-requests/gen/top.http-rp` fetch and XHR pass).
+- `block-all-mixed-content` is carried to netfetcher but changes no outcome: Mixed
+  Content Level 2 already blocks or upgrades every `http` subresource of a secure
+  context, and WPT expects optionally-blockable loads to be upgraded even under the
+  directive. It is there for the CSP lane. UIR leaves a loopback host alone; the spec
+  text that settles that case is not vendored (F8), so this is a stated assumption.
+- netfetcher had no 4096-byte referrer cap (Fetch cuts a longer referrer URL to its
+  origin). With a real policy in place 80 `referrer-policy/4K+1` cases lost passes that
+  the old default policy had given by accident; the cap is now in `referrer.rs` with a
+  test at the limit, and those cases pass.
+- `ResourceRequest` gained two `bool` fields, `#[serde(default)]`. Every literal in this
+  workspace is updated (genet-host-api, genet-documents, genet-scripted,
+  script-runtime-api, ortet). **Mere and any other out-of-tree host that builds a
+  `ResourceRequest` literal must add the two fields when it takes this change.**
+- Gates (own target directory, local Murm override): netfetcher 98 pass; genet-host-api
+  5; genet-wpt `--features netfetch` 95 + 1 + 1 (2 existing ignores); genet-scripted
+  all pass; `script-runtime-api` 1,143 pass and the same 10 predating failures
+  (`cross_arena_replacement`, `forms_submission::phase_c_forms_submission_implicit_*`,
+  `frame_arena_boundary`); `check --tests` clean for genet-documents (all features)
+  and ortet; default-features `check -p genet-wpt` clean. New tests:
+  `tests/document_referrer_policy.rs` (meta spellings, header, precedence, request
+  override, CSP directives, sync XHR, on both engines), `policy::tests`, netfetcher
+  `upgrade_insecure_requests_upgrades_every_http_url_but_loopback` and
+  `a_referrer_over_4096_bytes_is_cut_to_its_origin`, genet-wpt
+  `the_initial_document_keeps_the_final_responses_headers`.
+
 ## Rulings (Mark's answers, 2026-10-20; unnumbered until Mark numbers them)
 
 Asked the phase order, with the census-versus-server-mode evidence, Mark:
@@ -327,6 +366,11 @@ dependency of `murm-wire`, a regression that fails on the unpatched source), Mar
 pushed or merged; Mark merges as usual. Genet follows Murm by `branch = "main"` with
 its lock ignored, so the repin is the supplier resolving the merged commit; no Genet
 manifest changes.
+
+Round 3, 2026-10-21. Asked how `upgrade-insecure-requests` and `block-all-mixed-content`
+reach the host that sends a request, Mark: **"Two bool fields on ResourceRequest
+(Recommended)"**. Implemented as `upgrade_insecure_requests` and `block_all_mixed_content`
+on `genet_host_api::ResourceRequest` and `netfetcher::Request`.
 
 Asked to confirm that `.h2.` tests stay on the plain origin (serving them from the h2
 origin lost `request-upload.h2.any.html` 8 passes to 1, found by the matched
@@ -403,3 +447,43 @@ become the default.
   which the local override is dropped and `fetch-security` is rebuilt against `main`;
   `isSecureContext` ancestor condition; Murm request-body streaming for full-duplex h2
   upload; worker variants (Workers lane) remain the largest `fetch` error source.
+- **2026-10-21** Quiet-machine `fetch` figure on Vano, one runner at a time, nothing else
+  running: frozen runner 2,357 of 5,459 subtests, candidate `p0b` 2,360 of 5,499 (files
+  all-pass 111 to 111), one row lost that sits in `fetch/metadata/generated/element-iframe.sub.html`,
+  which ends `harness-timeout` on both runners alone (twice each). So the loaded-machine
+  2,292 to 2,259 was noise, and P0's `fetch` movement is **+3, no confirmed loss**.
+  (Maps `quietpre_fetch_nova.json`, `quietpost_fetch_nova.json`.)
+- **2026-10-21** P1 landed on branch `fetch-security`. Frozen candidate `genet-wpt-p1b`
+  SHA-256 `cb79fe1b7d39bb2926d37628810d444f3edaee87418ec53a4d3e0678ec2cd908`
+  (the first P1 build `p1`, `37a1f39a...`, lacks the 4096-byte cap and was used only for
+  directories it cannot affect: `4K+1` exists only in `referrer-policy`). Before-maps are
+  the P0 after-maps (the quiet pair for `fetch` on Vano). Subtest passes, before to after:
+
+| Directory | Vano | Boa | Files all-pass (Vano / Boa) |
+|---|---:|---:|---:|
+| `referrer-policy` | 720 to 908 | 739 to 908 | 73 to 119 / 76 to 119 |
+| `upgrade-insecure-requests` | 154 to 178 | 154 to 178 | 31 to 35 / 31 to 35 |
+| `mixed-content` | 558 to 558 | 558 to 558 | 6 to 6 |
+| `fetch` | 2,360 to 2,352 (raw) | 2,434 to 2,437 | not tabulated |
+| `content-security-policy` | 1,359 to 1,359 | 1,369 to 1,369 | 52 to 52 / 60 to 60 |
+
+  Over 48,201 unchanged rows, 507 gained and 51 non-pass changes, **zero lost passes on
+  either engine and nothing unattributed**. Gains are the `fetch` and `xhr` rows under
+  `referrer-policy/gen` and `generic` (document policy), the `fetch.https.html` and
+  `xhr.https.html` rows of `upgrade-insecure-requests/gen/top.meta/upgrade` and
+  `top.http-rp/upgrade` (24 subtests, four files per engine), and
+  `fetch/api/policies/referrer-origin.html`. Boa and Vano now report the same 908 of
+  8,466 for `referrer-policy`. Eleven raw Vano `fetch` rows were lost in capture and
+  settled by isolated reruns: nine in `request-forbidden-headers.any.html` and two in
+  `redirect-referrer-override.any.html`, both of which end in the 15 s drive deadline on
+  both runners alone (`redirect-referrer-override` flipped between 128/128 and the
+  deadline on each runner, `redirect_referrer_override_repeat.txt`); one Boa `request-keepalive-quota` row is the same kind of
+  variance as in P0. The `fetch` rows after P1 were captured with two runner chains and a
+  build active, so they are not a quiet-machine figure; a quiet rerun of
+  `fetch` for both runners is the clean comparison.
+- **2026-10-21** Open items carried: P2 element loads (`img`, `script`, `link`,
+  `iframe`, `a` load and error events with the policy container, the next-largest block:
+  the `img-tag`, `script-tag`, `iframe-tag`, `a-tag` files still end `harness-timeout`);
+  workers and nested contexts inherit nothing yet (`srcdoc`/`about:blank` children and
+  `Worker`/`SharedWorker` start with the default policy); WebSocket has the mixed-content
+  check but not UIR; Mere's `ResourceRequest` literals.

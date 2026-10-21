@@ -128,7 +128,7 @@ fn hmac_vectors_and_rules<E: ScriptEngine>() {
         ("crypto.subtle.importKey('raw', bytes('Jefe'), {name: 'HMAC'}, false, ['sign'])", "TypeError"),
         ("crypto.subtle.importKey('spki', bytes('Jefe'), {name: 'HMAC', hash: 'SHA-1'}, false, ['sign'])", "NotSupportedError"),
         ("crypto.subtle.importKey('jwk', bytes('Jefe'), {name: 'HMAC', hash: 'SHA-1'}, false, ['sign'])", "TypeError"),
-        ("crypto.subtle.importKey('raw', bytes('Jefe'), {name: 'AES-GCM'}, false, ['encrypt'])", "NotSupportedError"),
+        ("crypto.subtle.importKey('raw', bytes('Jefe'), {name: 'RSA-OAEP'}, false, ['encrypt'])", "NotSupportedError"),
         ("crypto.subtle.generateKey({name: 'HMAC', hash: 'SHA-256'}, false, [])", "SyntaxError"),
         ("crypto.subtle.generateKey({name: 'HMAC', hash: 'SHA-256', length: 0}, false, ['sign'])", "OperationError"),
         ("crypto.subtle.generateKey({name: 'HMAC', hash: 'SHA-256'}, false, ['sign', 'bogus'])", "TypeError"),

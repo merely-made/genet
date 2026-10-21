@@ -2,7 +2,7 @@
 //
 // This file holds Web Crypto's WebIDL conversions, algorithm normalisation,
 // usage and format rules, JWK handling, error names and promises. Key material
-// and every digest and MAC stay native; a key here is an opaque id. The native
+// and every digest, MAC and key derivation stay native; a key here is an opaque id. The native
 // registry rechecks extractability and usages, so this side's brand data is
 // bookkeeping, not the authority.
 //
@@ -43,13 +43,18 @@
     sign: globalThis.__subtle_sign,
     verify: globalThis.__subtle_verify,
     release: globalThis.__subtle_release,
-    secure: globalThis.__subtle_secure
+    secure: globalThis.__subtle_secure,
+    secretStore: globalThis.__subtle_secret_store,
+    derive: globalThis.__subtle_derive,
+    deriveKey: globalThis.__subtle_derive_key
   };
   try {
     delete globalThis.__subtle_digest; delete globalThis.__subtle_hmac_store;
     delete globalThis.__subtle_hmac_generate; delete globalThis.__subtle_export;
     delete globalThis.__subtle_sign; delete globalThis.__subtle_verify;
     delete globalThis.__subtle_release; delete globalThis.__subtle_secure;
+    delete globalThis.__subtle_secret_store; delete globalThis.__subtle_derive;
+    delete globalThis.__subtle_derive_key;
   } catch (deleteError) {}
   // `call(fn, receiver, ...args)` for captured intrinsics; `invoke(fn, ...args)`
   // for the receiver-less native sinks.
@@ -80,7 +85,7 @@
   }
   var FinReg = globalThis.FinalizationRegistry;
   var finalizer = typeof FinReg === 'function'
-    ? new FinReg(function(id) { invoke(native.release, id); }) : null;
+    ? new FinReg(function(held) { invoke(held.release, held.id); }) : null;
   var finRegister = finalizer ? FinReg.prototype.register : null;
 
   function typeError(message) { return new TypeErrorCtor(message); }
@@ -101,6 +106,12 @@
     if (x !== x || !isFiniteFn(x)) throw typeError(what + ' is not a finite number');
     x = x < 0 ? -mathFloor(mathAbs(x)) : mathFloor(x);
     if (x < 0 || x > 4294967295) throw typeError(what + ' is out of range');
+    return x;
+  }
+  // [EnforceRange] unsigned short.
+  function toEnforcedUShort(value, what) {
+    var x = toEnforcedULong(value, what);
+    if (x > 65535) throw typeError(what + ' is out of range');
     return x;
   }
   function toSequence(value, what, convert) {
@@ -155,6 +166,7 @@
     try { call(sharedLength, buffer); return true; } catch (notShared) { return false; }
   }
   function copyBytes(source) {
+    if (source.kind === 'binary') return source.value;
     var buffer, offset, length;
     try {
       if (source.kind === 'buffer') {
@@ -214,6 +226,26 @@
     }
   };
   DICTIONARIES.HmacKeyGenParams = DICTIONARIES.HmacImportParams;
+  // Members are converted in lexicographic order (hash, info/iterations, salt),
+  // so a bad hash name reports before a missing salt does.
+  DICTIONARIES.HkdfParams = function(alg, out) {
+    HASHED(alg, out);
+    if (alg.info === undefined) throw typeError("Algorithm: 'info' is required");
+    out.info = toBufferSource(alg.info, "Algorithm: 'info'");
+    if (alg.salt === undefined) throw typeError("Algorithm: 'salt' is required");
+    out.salt = toBufferSource(alg.salt, "Algorithm: 'salt'");
+  };
+  DICTIONARIES.Pbkdf2Params = function(alg, out) {
+    HASHED(alg, out);
+    if (alg.iterations === undefined) throw typeError("Algorithm: 'iterations' is required");
+    out.iterations = toEnforcedULong(alg.iterations, "Algorithm: 'iterations'");
+    if (alg.salt === undefined) throw typeError("Algorithm: 'salt' is required");
+    out.salt = toBufferSource(alg.salt, "Algorithm: 'salt'");
+  };
+  DICTIONARIES.AesDerivedKeyParams = function(alg, out) {
+    if (alg.length === undefined) throw typeError("Algorithm: 'length' is required");
+    out.length = toEnforcedUShort(alg.length, "Algorithm: 'length'");
+  };
 
   // The registered algorithms, per operation, with each one's parameter type.
   // A name missing here normalises to NotSupportedError; that is how every
@@ -223,9 +255,17 @@
     sign: { 'HMAC': 'Algorithm' },
     verify: { 'HMAC': 'Algorithm' },
     generateKey: { 'HMAC': 'HmacKeyGenParams' },
-    importKey: { 'HMAC': 'HmacImportParams' },
-    'get key length': { 'HMAC': 'HmacImportParams' },
-    encrypt: {}, decrypt: {}, deriveBits: {}, wrapKey: {}, unwrapKey: {}
+    importKey: {
+      'HMAC': 'HmacImportParams', 'HKDF': 'Algorithm', 'PBKDF2': 'Algorithm',
+      'AES-CBC': 'Algorithm', 'AES-CTR': 'Algorithm', 'AES-GCM': 'Algorithm', 'AES-KW': 'Algorithm'
+    },
+    deriveBits: { 'HKDF': 'HkdfParams', 'PBKDF2': 'Pbkdf2Params' },
+    'get key length': {
+      'HMAC': 'HmacImportParams', 'HKDF': 'Algorithm', 'PBKDF2': 'Algorithm',
+      'AES-CBC': 'AesDerivedKeyParams', 'AES-CTR': 'AesDerivedKeyParams',
+      'AES-GCM': 'AesDerivedKeyParams', 'AES-KW': 'AesDerivedKeyParams'
+    },
+    encrypt: {}, decrypt: {}, wrapKey: {}, unwrapKey: {}
   };
 
   function normalize(alg, op) {
@@ -288,15 +328,18 @@
     }
     return true;
   }
-  function makeKey(id, type, extractable, algorithm, usages) {
+  // `owner` is the sink set of the realm whose registry holds the bytes; it is
+  // this realm's own except for a key derived from another realm's base key.
+  function makeKey(id, type, extractable, algorithm, usages, owner) {
+    owner = owner || native;
     var key = create(CryptoKey.prototype);
     var usagesObject = [];
     for (var i = 0; i < usages.length; i++) usagesObject[i] = usages[i];
     call(weakSet, brands.keys, key, {
       id: id, type: type, extractable: extractable, algorithm: algorithm,
-      usages: usages, usagesObject: usagesObject, native: native
+      usages: usages, usagesObject: usagesObject, native: owner
     });
-    if (finalizer) call(finRegister, finalizer, key, id);
+    if (finalizer) call(finRegister, finalizer, key, { id: id, release: owner.release });
     return key;
   }
   function hasUsage(brand, usage) {
@@ -374,6 +417,85 @@
       };
     }
     throw dom('NotSupportedError', 'HMAC keys export to raw or jwk');
+  }
+
+  // ---- KDF base keys and AES keys ---------------------------------------------
+  // HKDF and PBKDF2 keys are raw secrets that only derive. AES keys are created
+  // here from raw bytes, as deriveKey needs; the ciphers, jwk and generateKey
+  // belong to the AES phase.
+
+  var KDF_USAGES = ['deriveKey', 'deriveBits'];
+  var AES_USAGES = {
+    'AES-CBC': ['encrypt', 'decrypt', 'wrapKey', 'unwrapKey'],
+    'AES-CTR': ['encrypt', 'decrypt', 'wrapKey', 'unwrapKey'],
+    'AES-GCM': ['encrypt', 'decrypt', 'wrapKey', 'unwrapKey'],
+    'AES-KW': ['wrapKey', 'unwrapKey']
+  };
+  var HASH_BYTES = { 'SHA-1': 20, 'SHA-256': 32, 'SHA-384': 48, 'SHA-512': 64 };
+
+  function kdfImport(format, keyData, alg, extractable, usages) {
+    if (format !== 'raw' && format !== 'raw-secret')
+      throw dom('NotSupportedError', alg.name + ' keys import from raw');
+    if (!onlyAllowed(usages, KDF_USAGES)) throw dom('SyntaxError', alg.name + ' keys only derive');
+    if (extractable) throw dom('SyntaxError', alg.name + ' keys are not extractable');
+    usages = intersect(usages, KDF_USAGES);
+    var id = storedKey(invoke(native.secretStore, alg.name, '0', usageList(usages), copyBytes(keyData)));
+    return makeKey(id, 'secret', false, { name: alg.name }, usages);
+  }
+
+  function aesImport(format, keyData, alg, extractable, usages) {
+    var allowed = AES_USAGES[alg.name];
+    if (!onlyAllowed(usages, allowed)) throw dom('SyntaxError', alg.name + ' keys do not allow these usages');
+    if (format !== 'raw' && format !== 'raw-secret')
+      throw dom('NotSupportedError', alg.name + ' keys import from raw');
+    var data = copyBytes(keyData), length = data.length * 8;
+    if (length !== 128 && length !== 192 && length !== 256)
+      throw dom('DataError', 'AES key data must be 128, 192 or 256 bits');
+    usages = intersect(usages, allowed);
+    var id = storedKey(invoke(native.secretStore, 'AES', extractable ? '1' : '0', usageList(usages), data));
+    return makeKey(id, 'secret', extractable, { name: alg.name, length: length }, usages);
+  }
+
+  function aesExport(format, brand) {
+    if (format !== 'raw' && format !== 'raw-secret') throw dom('NotSupportedError', 'AES keys export to raw');
+    var data = invoke(brand.native.exportKey, brand.id);
+    if (data === null) throw dom('OperationError', 'The key material is unavailable');
+    return toArrayBuffer(data);
+  }
+
+  // Import by the normalised algorithm's name.
+  function importSecret(format, keyData, alg, extractable, usages) {
+    if (alg.name === 'HMAC') return hmacImport(format, keyData, alg, extractable, usages);
+    if (alg.name === 'HKDF' || alg.name === 'PBKDF2') return kdfImport(format, keyData, alg, extractable, usages);
+    return aesImport(format, keyData, alg, extractable, usages);
+  }
+
+  // "Get key length" for a derived key's algorithm; null for the KDFs.
+  function derivedKeyBits(alg) {
+    if (alg.name === 'HMAC') {
+      if (alg.length === undefined) return hashBlockBits(alg.hash.name);
+      if (alg.length === 0) throw typeError("Algorithm: 'length' must not be zero");
+      return alg.length;
+    }
+    if (alg.name === 'HKDF' || alg.name === 'PBKDF2') return null;
+    if (alg.length !== 128 && alg.length !== 192 && alg.length !== 256)
+      throw dom('OperationError', 'AES key length must be 128, 192 or 256');
+    return alg.length;
+  }
+
+  // The derive-bits preconditions that fail with OperationError.
+  function deriveCheck(alg, bits) {
+    if (bits === null || bits % 8 !== 0) throw dom('OperationError', 'The length must be a multiple of 8');
+    if (alg.name === 'HKDF') {
+      if (bits > 255 * HASH_BYTES[alg.hash.name] * 8) throw dom('OperationError', 'HKDF length is too large');
+    } else if (alg.iterations === 0) {
+      throw dom('OperationError', 'PBKDF2 iterations must not be zero');
+    }
+  }
+  // The native parameters: HKDF's info, or PBKDF2's iterations, in one slot.
+  function deriveParams(alg) {
+    return [alg.name, alg.hash.name, copyBytes(alg.salt),
+      alg.name === 'HKDF' ? copyBytes(alg.info) : StringCtor(alg.iterations)];
   }
 
   // ---- JSON Web Key --------------------------------------------------------
@@ -515,18 +637,41 @@
   });
   method('deriveKey', 5, function(a) {
     requireArgs(a, 5, 'deriveKey');
-    var alg = toAlgorithmIdentifier(a[0]); requireKey(a[1], 'baseKey');
-    var derived = toAlgorithmIdentifier(a[2]); toUsages(a[4]);
-    normalize(alg, 'deriveBits');
-    normalize(derived, 'importKey');
-    throw notSupported('deriveKey');
+    var alg = toAlgorithmIdentifier(a[0]), brand = requireKey(a[1], 'baseKey');
+    var derived = toAlgorithmIdentifier(a[2]), extractable = !!a[3], usages = toUsages(a[4]);
+    var normalized = normalize(alg, 'deriveBits');
+    var importAlg = normalize(derived, 'importKey'), lengthAlg = normalize(derived, 'get key length');
+    if (normalized.name !== brand.algorithm.name) throw dom('InvalidAccessError', 'The key is for a different algorithm');
+    if (!hasUsage(brand, 'deriveKey')) throw dom('InvalidAccessError', "The key does not allow 'deriveKey'");
+    var bits = derivedKeyBits(lengthAlg);
+    deriveCheck(normalized, bits);
+    // The import step's preconditions, ahead of the native work. A KDF target
+    // has no length, so it never gets here.
+    var allowed = importAlg.name === 'HMAC' ? HMAC_USAGES : AES_USAGES[importAlg.name];
+    if (!onlyAllowed(usages, allowed)) throw dom('SyntaxError', 'The derived key does not allow these usages');
+    usages = intersect(usages, allowed);
+    if (usages.length === 0) throw dom('SyntaxError', 'A secret key needs at least one usage');
+    var params = deriveParams(normalized), hmac = importAlg.name === 'HMAC';
+    var id = invoke(brand.native.deriveKey, brand.id, 'deriveKey', params[0], params[1], params[2], params[3],
+      StringCtor(bits), hmac ? 'HMAC' : 'AES', hmac ? importAlg.hash.name : '', extractable ? '1' : '0',
+      usageList(usages));
+    if (id === null || id === '!O') throw dom('OperationError', 'The key could not be derived');
+    return makeKey(id, 'secret', extractable,
+      hmac ? hmacAlgorithm(importAlg.hash.name, bits) : { name: importAlg.name, length: bits }, usages, brand.native);
   });
   method('deriveBits', 2, function(a) {
     requireArgs(a, 2, 'deriveBits');
-    var alg = toAlgorithmIdentifier(a[0]); requireKey(a[1], 'baseKey');
-    if (a[2] !== undefined && a[2] !== null) toEnforcedULong(a[2], 'length');
-    normalize(alg, 'deriveBits');
-    throw notSupported('deriveBits');
+    var alg = toAlgorithmIdentifier(a[0]), brand = requireKey(a[1], 'baseKey');
+    var length = a[2] === undefined || a[2] === null ? null : toEnforcedULong(a[2], 'length');
+    var normalized = normalize(alg, 'deriveBits');
+    if (normalized.name !== brand.algorithm.name) throw dom('InvalidAccessError', 'The key is for a different algorithm');
+    if (!hasUsage(brand, 'deriveBits')) throw dom('InvalidAccessError', "The key does not allow 'deriveBits'");
+    deriveCheck(normalized, length);
+    var params = deriveParams(normalized);
+    var bytes = invoke(brand.native.derive, brand.id, 'deriveBits', params[0], params[1], params[2], params[3],
+      StringCtor(length));
+    if (bytes === null || bytes === '!O') throw dom('OperationError', 'The bits could not be derived');
+    return toArrayBuffer(bytes);
   });
   method('importKey', 5, function(a) {
     requireArgs(a, 5, 'importKey');
@@ -541,7 +686,7 @@
     } else if (!isBytes) {
       throw typeError('A ' + format + ' import needs a BufferSource');
     }
-    var key = hmacImport(format, isBytes ? source : jwk, normalized, extractable, usages);
+    var key = importSecret(format, isBytes ? source : jwk, normalized, extractable, usages);
     var brand = keyBrand(key);
     if ((brand.type === 'secret' || brand.type === 'private') && brand.usages.length === 0)
       throw dom('SyntaxError', 'A secret key needs at least one usage');
@@ -550,9 +695,10 @@
   method('exportKey', 2, function(a) {
     requireArgs(a, 2, 'exportKey');
     var format = toFormat(a[0]), brand = requireKey(a[1], 'key');
-    if (brand.algorithm.name !== 'HMAC') throw dom('NotSupportedError', 'This key cannot be exported');
+    var name = brand.algorithm.name;
+    if (name !== 'HMAC' && !AES_USAGES[name]) throw dom('NotSupportedError', 'This key cannot be exported');
     if (!brand.extractable) throw dom('InvalidAccessError', 'The key is not extractable');
-    return hmacExport(format, brand);
+    return name === 'HMAC' ? hmacExport(format, brand) : aesExport(format, brand);
   });
   method('wrapKey', 4, function(a) {
     requireArgs(a, 4, 'wrapKey');

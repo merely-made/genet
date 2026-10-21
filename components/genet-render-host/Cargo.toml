@@ -27,3 +27,10 @@ tracing = "0.1"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)', 'cfg(llvm_pgo)'] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3"
+wasm-bindgen = "=0.2.129"
+wasm-bindgen-futures = "0.4"
+web-time = "1"
+gloo-timers = { version = "0.3", features = ["futures"] }

@@ -5,9 +5,7 @@
 use std::hash::Hash;
 
 #[cfg(feature = "accesskit")]
-mod roles;
-#[cfg(feature = "accesskit")]
-pub use roles::{accesskit_aria_role, accesskit_role_token};
+pub use document_session_api::a11y::{accesskit_aria_role, accesskit_role_token};
 
 #[cfg(feature = "accesskit")]
 use accesskit::{

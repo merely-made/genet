@@ -21,15 +21,14 @@ image-decode = ["genet-livery/image-decode"]
 # selectors must use the host's retained projection and painted geometry.
 estimated-probe-fixtures = []
 # Read-only access to an already composed host tree, without a platform adapter.
-accesskit = ["dep:accesskit", "dep:genet-render", "genet-render/accesskit"]
+accesskit = ["dep:accesskit", "document-session-api/accesskit"]
 
 [dependencies]
 accesskit = { workspace = true, optional = true }
-genet-render = { path = "../genet-render", default-features = false, optional = true }
 document-session-api = { version = "0.1.0", path = "../shared/document-session-api" }
 genet-livery = { version = ">=0.0.1, <0.1", path = "../genet-livery", default-features = false }
 genet-scripted-dom = { version = "0.1.1", path = "../genet-scripted-dom" }
 layout-dom-api = { version = "0.1.1", path = "../shared/layout-dom" }
 
 [dev-dependencies]
-genet-render = { path = "../genet-render", default-features = false }
+genet-render = { path = "../genet-render", default-features = false, features = ["accesskit"] }

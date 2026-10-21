@@ -16,5 +16,10 @@ publish = true
 name = "document_session_api"
 path = "src/lib.rs"
 
+[features]
+# Pure spelling bridge for existing platform roles; no renderer or OS adapter.
+accesskit = ["dep:accesskit"]
+
 [dependencies]
+accesskit = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"] }

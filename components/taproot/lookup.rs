@@ -165,7 +165,7 @@ impl<F: Fn(u64) -> Option<NodeId>> SemanticLookup for AccessKitLookup<'_, F> {
             result.push(SemanticNode {
                 target: (self.dom_target)(id.0)
                     .map_or(SemanticTarget::Contributed(id.0), SemanticTarget::Dom),
-                role: genet_render::a11y::accesskit_role_token(node.role()),
+                role: document_session_api::a11y::accesskit_role_token(node.role()),
                 name: node.label(),
                 hidden: false,
             });

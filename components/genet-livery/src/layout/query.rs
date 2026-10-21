@@ -642,6 +642,12 @@ where
         self.text_frame.as_ref()?.line_bounds(node)
     }
 
+    /// The per-line boxes of an inline element, in physical layout
+    /// coordinates: what an inline box paints as and what its client rects are.
+    pub fn inline_box_fragments(&self, node: Id) -> Option<&[Fragment]> {
+        self.text_frame.as_ref()?.inline_fragments(node)
+    }
+
     /// Compatibility name for callers that only need a node's outermost
     /// retained fragment.
     pub fn rect_of(&self, node: Id) -> Option<&TreeFragment> {

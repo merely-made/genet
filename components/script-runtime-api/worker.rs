@@ -222,6 +222,8 @@ pub(crate) struct WorkerBoot {
     pub(crate) policy: WorkerPolicy,
     /// The owner's secure context, which a worker inherits.
     pub(crate) secure_context: bool,
+    /// The page's shared clock: the worker's time origin is a reading of it.
+    pub(crate) clock: crate::SharedClock,
 }
 
 /// The page's handle on one live worker.
@@ -421,6 +423,7 @@ pub(crate) fn worker_main<E: ScriptEngine>(boot: WorkerBoot) {
         wake,
         policy,
         secure_context,
+        clock,
     } = boot;
     let link = Rc::new(RefCell::new(WorkerLink {
         tx: tx.clone(),
@@ -438,7 +441,7 @@ pub(crate) fn worker_main<E: ScriptEngine>(boot: WorkerBoot) {
             WorkerPolicy::RequireCancellation => Duration::from_secs(30),
         },
     }));
-    let mut rt = match Runtime::<E>::new_worker() {
+    let mut rt = match Runtime::<E>::new_worker(clock) {
         Ok(rt) => rt,
         Err(_) => {
             let _ = tx.send(FromWorker::Error(
@@ -655,6 +658,9 @@ impl<E: ScriptEngine> NativeFn<E> for WorkerCreate {
         let spawn = with_host::<E, _>(cx, |h| h.worker_spawn).flatten();
         let wake = with_host::<E, _>(cx, |h| h.worker_wake.clone()).flatten();
         let secure_context = with_host::<E, _>(cx, |h| h.secure_context.0).unwrap_or(true);
+        let clock = with_host::<E, _>(cx, |h| h.agent.upgrade().map(|a| a.borrow().clock.clone()))
+            .flatten()
+            .unwrap_or_default();
         let Some(spawn) = spawn else {
             return cx.make_string("-1");
         };
@@ -719,6 +725,7 @@ impl<E: ScriptEngine> NativeFn<E> for WorkerCreate {
             wake,
             policy,
             secure_context,
+            clock,
         };
         #[cfg(not(target_arch = "wasm32"))]
         let pump_limit = launcher

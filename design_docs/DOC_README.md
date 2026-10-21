@@ -209,6 +209,15 @@ completed corpus census or bounded slice does not close its enclosing feature.
   154 to 178, zero lost passes on either engine. Next: P2 element loads, P3 Fetch
   Metadata, P4 fetch API residuals; CSP is its own lane. Rulings recorded in Mark's
   words.
+- [Observers and timing](2026-10-20_observers_and_timing_plan.md)
+  (**in progress, 2026-10-20**, branch `observers-timing`, not merged; all phases implemented; IntersectionObserver 0 -> 213/309 and cssom-view 331 -> 569 subtests on both engines; one fork open, 15 vacuous cssom-view passes): ledger
+  rows 4–6 as one lane, in Mark's ruled order. First, one host clock per process,
+  coarsened to spec, excluding sleep, with `Date` following the harness clock
+  on both engines. Then the Performance Timeline residue, then the
+  MutationObserver residue (the "missing global" is stale; six files remain).
+  Last, a CSSOM View element geometry seam over Livery and IntersectionObserver
+  on it. Baseline from the 2026-09-29 Vano census: intersection-observer 0/118,
+  hr-time 13/26, performance-timeline 70/115.
 
 ## WPT census — the web platform beyond CSS
 

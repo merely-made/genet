@@ -614,8 +614,8 @@ pub struct NovaHarnessTemplate {
 #[expect(dead_code, reason = "Nova convenience wrappers, reached another way")]
 impl NovaHarnessTemplate {
     pub fn new(testharness_js: &str) -> Result<Self, String> {
-        let mut rt = Runtime::<script_engine_nova::NovaEngine>::with_performance_clock(
-            script_runtime_api::PerformanceClockProfile::Virtual,
+        let mut rt = Runtime::<script_engine_nova::NovaEngine>::with_clock(
+            script_runtime_api::SharedClock::skipping(),
         )
         .map_err(|e| format!("runtime init: {e:?}"))?;
         rt.load_testharness(testharness_js)
@@ -790,8 +790,8 @@ fn run_with<E: ScriptEngine>(
     route: Option<Box<dyn ScriptResourceLoader>>,
     encoding: script_runtime_api::DocumentEncoding,
 ) -> HarnessOutcome {
-    let mut rt = match Runtime::<E>::with_performance_clock(
-        script_runtime_api::PerformanceClockProfile::Virtual,
+    let mut rt = match Runtime::<E>::with_clock(
+        script_runtime_api::SharedClock::skipping(),
     ) {
         Ok(rt) => rt,
         Err(e) => return HarnessOutcome::Threw(format!("runtime init: {e:?}")),
@@ -937,6 +937,12 @@ impl RenderSession {
                 .map_err(|error| format!("retained frame: {error:?}"))?;
             work += pending;
         }
+        // The observers' update step runs after the callbacks and the relayout
+        // they caused, whether or not this turn changed the DOM: a scroll alone
+        // moves what intersects.
+        work += rt
+            .update_intersection_observations()
+            .map_err(|error| format!("intersection observations: {error:?}"))?;
         Ok(work)
     }
 }
@@ -1255,11 +1261,17 @@ fn run_parsed_with<E: ScriptEngine>(
 /// an rAF loop that never exits).
 fn drive_virtual<E: ScriptEngine>(rt: &mut Runtime<E>, render: &RenderSession) -> HarnessOutcome {
     let start = Instant::now();
+    // The runtime's skipping clock: real time plus every wait this loop jumps
+    // over instead of sleeping, so synchronous work still takes time and `Date`
+    // agrees with `performance` (Mark, 2026-10-20: "Real time plus skipped
+    // waits"). A worker's reply arrives in real time on the same clock.
+    let clock = rt.clock();
+    // Timers run on a virtual queue clock that moves only by the jumps below, so
+    // a test's own timeout does not depend on machine load. `performance` and
+    // `Date` read the shared clock, which takes the same jumps on top of real
+    // time. While another agent runs, the queue follows wall time plus the jumps:
+    // a worker's reply arrives in real time.
     let mut now_ms = 0.0f64;
-    // The virtual jumps taken so far. While another agent is running, the clock
-    // is wall time plus those jumps instead: a worker's reply arrives in real
-    // time, and a virtual jump to testharness's own 10s timeout would time the
-    // test out before the worker had started.
     let mut skipped_ms = 0.0f64;
     let mut turns = 0u64;
     let mut stop_reason = "harness-incomplete";
@@ -1283,10 +1295,12 @@ fn drive_virtual<E: ScriptEngine>(rt: &mut Runtime<E>, render: &RenderSession) -
             Err(error) => return HarnessOutcome::Threw(format!("runtime turn: {error:?}")),
         };
         let labelled = process_testdriver_labels(rt, render);
+        let before_actions = now_ms;
         let acted = match process_testdriver_actions(rt, render, &mut now_ms, true) {
             Ok(work) => work + labelled,
             Err(error) => return HarnessOutcome::Threw(error),
         };
+        clock.skip(now_ms - before_actions);
         // Dedicated workers: answer their resource requests and deliver their
         // messages. A worker that has not reported idle can still speak, so it
         // holds the loop open the way a pending timer does.
@@ -1340,6 +1354,7 @@ fn drive_virtual<E: ScriptEngine>(rt: &mut Runtime<E>, render: &RenderSession) -
         } else {
             0.0
         };
+        clock.skip(step);
         now_ms += step;
         skipped_ms += step;
     }
@@ -1364,8 +1379,8 @@ fn drive_wall<E: ScriptEngine>(
 ) -> HarnessOutcome {
     let start = Instant::now();
     let deadline = drive_deadline();
-    // Virtual offset added to elapsed wall time by the quiescent jumps below.
-    let mut skipped_ms = 0.0f64;
+    // The quiescent jumps below skip the runtime's clock rather than sleep.
+    let skipping = rt.clock();
     let elapsed_ms =
         |start: Instant| (Instant::now().saturating_duration_since(start)).as_millis() as f64;
     let mut turns = 0u64;
@@ -1421,7 +1436,7 @@ fn drive_wall<E: ScriptEngine>(
         if let Some(error) = delivery_error.take() {
             return HarnessOutcome::Threw(error);
         }
-        let clock = elapsed_ms(start) + skipped_ms;
+        let clock = rt.clock_elapsed_ms();
         let fired = match rt.run_timers(TIMER_BUDGET, clock) {
             Ok(value) => value,
             Err(error) => return HarnessOutcome::Threw(format!("runtime turn: {error:?}")),
@@ -1480,7 +1495,7 @@ fn drive_wall<E: ScriptEngine>(
                 // sleeping to it. The wall deadline above still bounds a
                 // runaway self-rearming timer.
                 if let Some(d) = next_timer {
-                    skipped_ms += d.max(0.0);
+                    skipping.skip(d.max(0.0));
                     continue;
                 }
             }
@@ -2108,8 +2123,8 @@ test(function() {
     }
 
     fn retained_animation_turn<E: ScriptEngine>() {
-        let mut rt = Runtime::<E>::with_performance_clock(
-            script_runtime_api::PerformanceClockProfile::Virtual,
+        let mut rt = Runtime::<E>::with_clock(
+            script_runtime_api::SharedClock::skipping(),
         )
         .expect("runtime");
         let render = RenderSession::new(&mut rt, StyleRoute::Livery).expect("render session");

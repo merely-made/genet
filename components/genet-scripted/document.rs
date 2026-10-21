@@ -550,6 +550,11 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
             if let Err(error) = self.rt.run_animation_frame_callbacks(now_ms) {
                 report_runtime_task_error(&mut self.rt, "animation frame", error);
             }
+            // After the frame callbacks, against geometry that has caught up
+            // with them: the observers' update step, delivered later as a task.
+            if let Err(error) = self.rt.update_intersection_observations() {
+                report_runtime_task_error(&mut self.rt, "intersection observations", error);
+            }
         }
         self.flush_dom_capture();
         self.rt.collect_garbage()
@@ -1761,6 +1766,11 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         if !self.lifecycle.hidden {
             if let Err(error) = self.rt.run_animation_frame_callbacks(now_ms) {
                 report_runtime_task_error(&mut self.rt, "animation frame", error);
+            }
+            // After the frame callbacks, against geometry that has caught up
+            // with them: the observers' update step, delivered later as a task.
+            if let Err(error) = self.rt.update_intersection_observations() {
+                report_runtime_task_error(&mut self.rt, "intersection observations", error);
             }
         }
         self.flush_dom_capture();

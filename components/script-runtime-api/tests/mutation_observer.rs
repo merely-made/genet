@@ -351,3 +351,29 @@ both_engines! {
     transient_registered_observers => (transient_observers_on_boa, transient_observers_on_nova),
     delivery_is_one_microtask => (delivery_microtask_on_boa, delivery_microtask_on_nova),
 }
+
+/// Parser-inserted nodes are observed by an observer a script registered while
+/// the parser was still running (MutationObserver-document.html).
+fn parser_insertions_reach_a_document_observer<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.parse_document_interleaved(
+        "<body><script>var seen = []; \
+         new MutationObserver(function(rs){ for (var i = 0; i < rs.length; i++) \
+           seen.push(rs[i].type + ':' + rs[i].addedNodes.length); }) \
+           .observe(document, {childList: true, subtree: true});</script>\
+         <p id='n00'>x</p></body>",
+        &script_runtime_api::NoScriptLoader,
+    );
+    rt.run_microtasks();
+    assert_eq!(read(&mut rt, "String(seen.length > 0)"), "true", "{}", read(&mut rt, "seen.join('|')"));
+}
+
+#[test]
+fn parser_insertions_on_boa() {
+    parser_insertions_reach_a_document_observer::<script_engine_boa::BoaEngine>();
+}
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn parser_insertions_on_nova() {
+    parser_insertions_reach_a_document_observer::<script_engine_nova::NovaEngine>();
+}

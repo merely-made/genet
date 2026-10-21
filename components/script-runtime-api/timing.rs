@@ -342,6 +342,10 @@ const TIMING_BOOTSTRAP: &str = r#"
   };
   defineTag(PerformanceEntry, 'PerformanceEntry');
   globalThis.PerformanceEntry = PerformanceEntry;
+  // Not [Serializable]: postMessage / structuredClone of an entry is a DataCloneError.
+  if (typeof globalThis.__sc_registerUncloneable === 'function') {
+    globalThis.__sc_registerUncloneable(PerformanceEntry, 'PerformanceEntry');
+  }
 
   function PerformanceMark(name, options) {
     var startTime = now();
@@ -515,9 +519,11 @@ const TIMING_BOOTSTRAP: &str = r#"
     this._buffer = [];
     return out;
   };
+  // [SameObject]: one frozen array per realm.
+  var SUPPORTED_FROZEN = Object.freeze(SUPPORTED.slice());
   Object.defineProperty(PerformanceObserver, 'supportedEntryTypes', {
     configurable: true,
-    get: function() { return Object.freeze(SUPPORTED.slice()); }
+    get: function() { return SUPPORTED_FROZEN; }
   });
   defineTag(PerformanceObserver, 'PerformanceObserver');
   globalThis.PerformanceObserver = PerformanceObserver;

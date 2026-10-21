@@ -662,3 +662,24 @@ both_engines! {
 fn named_constructors_works_alias<E: ScriptEngine>() {
     named_constructors_work::<E>();
 }
+
+fn performance_entries_are_not_cloneable<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.eval("var m = performance.mark('x'); var name = ''; try { structuredClone(m); } catch (e) { name = e.name; }")
+        .expect("clone");
+    assert_eq!(read(&mut rt, "name"), "DataCloneError");
+    assert_eq!(read(&mut rt, "String(structuredClone({ a: 1 }).a)"), "1");
+}
+
+fn supported_entry_types_is_same_object<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    assert_eq!(
+        read(&mut rt, "String(PerformanceObserver.supportedEntryTypes === PerformanceObserver.supportedEntryTypes && Object.isFrozen(PerformanceObserver.supportedEntryTypes))"),
+        "true"
+    );
+}
+
+both_engines! {
+    performance_entries_are_not_cloneable => (entries_not_cloneable_on_boa, entries_not_cloneable_on_nova),
+    supported_entry_types_is_same_object => (supported_types_same_object_on_boa, supported_types_same_object_on_nova),
+}

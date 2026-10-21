@@ -72,6 +72,10 @@ const STRUCTURED_CLONE_BOOTSTRAP: &str = r#"
   // Each entry: { ctor, transfer(obj) -> record, adopt(record) -> object }.
   var transferables = [];
   globalThis.__sc_registerTransferable = function(entry) { transferables.push(entry); };
+  // Platform objects whose interface is not [Serializable] (for example
+  // PerformanceEntry): cloning one by value throws DataCloneError.
+  var uncloneables = [];
+  globalThis.__sc_registerUncloneable = function(ctor, name) { uncloneables.push({ ctor: ctor, name: name }); };
   function transferableFor(v) {
     for (var i = 0; i < transferables.length; i++) {
       if (v instanceof transferables[i].ctor) return transferables[i];
@@ -176,6 +180,9 @@ const STRUCTURED_CLONE_BOOTSTRAP: &str = r#"
     // A transferable reached by value (not in the transfer list) is not cloneable.
     var tr = transferableFor(v);
     if (tr) throw dataClone("A " + (tr.name || 'transferable'));
+    for (var ui = 0; ui < uncloneables.length; ui++) {
+      if (v instanceof uncloneables[ui].ctor) throw dataClone("A " + uncloneables[ui].name);
+    }
 
     if (kind === '[object Map]') {
       out = new Map();

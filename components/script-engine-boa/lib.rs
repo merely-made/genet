@@ -404,8 +404,30 @@ impl ModuleLoader for HostModuleLoader {
 }
 
 /// A Boa-backed scripting engine.
+/// `Date`'s clock: the host's shared clock once `set_date_source` names one,
+/// Boa's standard clock until then. The monotonic half stays Boa's own.
+#[derive(Default)]
+struct HostDateClock {
+    source: RefCell<Option<Rc<dyn Fn() -> f64>>>,
+    fallback: boa_engine::context::time::StdClock,
+}
+
+impl boa_engine::context::Clock for HostDateClock {
+    fn now(&self) -> boa_engine::context::time::JsInstant {
+        self.fallback.now()
+    }
+
+    fn system_time_millis(&self) -> i64 {
+        match self.source.borrow().as_ref() {
+            Some(source) => source().floor() as i64,
+            None => self.fallback.system_time_millis(),
+        }
+    }
+}
+
 pub struct BoaEngine {
     ctx: Context,
+    date_clock: Rc<HostDateClock>,
     /// The module loader installed on `ctx`; `eval_module` sets its resolver per call.
     loader: Rc<HostModuleLoader>,
     /// Live realms of this engine (this is one **agent**), including
@@ -816,7 +838,11 @@ impl ScriptEngine for BoaEngine {
 
     fn new() -> Result<Self, Self::Error> {
         let loader = Rc::new(HostModuleLoader::default());
-        let mut ctx = Context::builder().module_loader(loader.clone()).build()?;
+        let date_clock = Rc::new(HostDateClock::default());
+        let mut ctx = Context::builder()
+            .module_loader(loader.clone())
+            .clock(date_clock.clone())
+            .build()?;
         ctx.register_global_class::<Reflector>()?;
         let registry = Gc::new(RealmRegistry {
             realms: GcRefCell::new(HashMap::new()),
@@ -833,9 +859,14 @@ impl ScriptEngine for BoaEngine {
         registry.realms.borrow_mut().insert(MAIN_REALM, main);
         Ok(Self {
             ctx,
+            date_clock,
             loader,
             registry,
         })
+    }
+
+    fn set_date_source(&mut self, source: Rc<dyn Fn() -> f64>) {
+        *self.date_clock.source.borrow_mut() = Some(source);
     }
 
     fn eval(&mut self, source: &str) -> Result<Self::Value, Self::Error> {

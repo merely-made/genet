@@ -426,6 +426,11 @@ pub trait ScriptEngine: Sized {
     /// once before running script.
     fn set_host_data(&mut self, data: HostData);
 
+    /// Supply the Unix-epoch milliseconds ECMAScript `Date` reads, so it
+    /// follows the host's shared clock. A backend without the hook keeps its
+    /// own wall clock.
+    fn set_date_source(&mut self, _source: std::rc::Rc<dyn Fn() -> f64>) {}
+
     /// Install `name` on the global as a native function backed by `F`, with arity
     /// `length`. `F` is a zero-sized type, not a closure: both backends register a
     /// bare `fn` pointer (Nova `RegularFn`, Boa `NativeFunctionPointer`), so the

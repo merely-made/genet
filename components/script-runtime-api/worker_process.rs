@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::worker::{FromWorker, ToWorker, WorkerBoot, WorkerPolicy, worker_main};
 
-const PROTOCOL_VERSION: u32 = 1;
+const PROTOCOL_VERSION: u32 = 2;
 
 /// Concrete engine built into the selected helper executable.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -84,6 +84,10 @@ struct Hello {
     resource_timeout_ms: u64,
     max_frame_bytes: usize,
     max_queued_messages: usize,
+    /// The parent's shared-clock anchor: the system monotonic source is
+    /// system-wide, so the child's readings line up with the parent's.
+    clock_epoch_offset_ms: f64,
+    clock_skipped_ms: f64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -196,6 +200,8 @@ impl WorkerProcessHandle {
             resource_timeout_ms: launcher.resource_timeout.as_millis().min(u64::MAX as u128) as u64,
             max_frame_bytes: launcher.max_frame_bytes,
             max_queued_messages: launcher.max_queued_messages,
+            clock_epoch_offset_ms: boot.clock.anchor().0,
+            clock_skipped_ms: boot.clock.anchor().1,
         };
         let (ack_tx, ack_rx) = sync_channel(1);
         let max = launcher.max_frame_bytes;
@@ -462,6 +468,7 @@ pub fn run_worker_process<E: ScriptEngine>(backend: WorkerBackend) -> io::Result
             resource_timeout: Duration::from_millis(hello.resource_timeout_ms),
             shutdown_grace: Duration::ZERO,
         },
+        clock: crate::SharedClock::from_anchor(hello.clock_epoch_offset_ms, hello.clock_skipped_ms),
     });
     let _ = writer.join();
     // stdin may still be open while the worker voluntarily closes. The process

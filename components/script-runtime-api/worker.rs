@@ -220,6 +220,8 @@ pub(crate) struct WorkerBoot {
     pub(crate) tx: WorkerSender<FromWorker>,
     pub(crate) wake: Option<Arc<dyn Fn() + Send + Sync>>,
     pub(crate) policy: WorkerPolicy,
+    /// The page's shared clock: the worker's time origin is a reading of it.
+    pub(crate) clock: crate::SharedClock,
 }
 
 /// The page's handle on one live worker.
@@ -416,6 +418,7 @@ pub(crate) fn worker_main<E: ScriptEngine>(boot: WorkerBoot) {
         tx,
         wake,
         policy,
+        clock,
     } = boot;
     let link = Rc::new(RefCell::new(WorkerLink {
         tx: tx.clone(),
@@ -433,7 +436,7 @@ pub(crate) fn worker_main<E: ScriptEngine>(boot: WorkerBoot) {
             WorkerPolicy::RequireCancellation => Duration::from_secs(30),
         },
     }));
-    let mut rt = match Runtime::<E>::new_worker() {
+    let mut rt = match Runtime::<E>::new_worker(clock) {
         Ok(rt) => rt,
         Err(_) => {
             let _ = tx.send(FromWorker::Error(
@@ -647,6 +650,9 @@ impl<E: ScriptEngine> NativeFn<E> for WorkerCreate {
         }
         let spawn = with_host::<E, _>(cx, |h| h.worker_spawn).flatten();
         let wake = with_host::<E, _>(cx, |h| h.worker_wake.clone()).flatten();
+        let clock = with_host::<E, _>(cx, |h| h.agent.upgrade().map(|a| a.borrow().clock.clone()))
+            .flatten()
+            .unwrap_or_default();
         let Some(spawn) = spawn else {
             return cx.make_string("-1");
         };
@@ -710,6 +716,7 @@ impl<E: ScriptEngine> NativeFn<E> for WorkerCreate {
             tx: tx_from,
             wake,
             policy,
+            clock,
         };
         #[cfg(not(target_arch = "wasm32"))]
         let pump_limit = launcher

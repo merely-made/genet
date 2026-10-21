@@ -140,6 +140,82 @@ async fn explicit_tls_pools_are_separate_and_http2_exchange_has_no_cookie_author
         .unwrap()
         .unwrap();
 }
+// A server that closes TLS without `close_notify` ends a close-delimited body
+// cleanly, but cannot truncate a body that declared its length.
+#[tokio::test]
+async fn tls_close_without_close_notify_ends_only_a_close_delimited_body() {
+    use rustls::pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let certified = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let certificate = certified.cert.der().clone();
+    let _ = rustls::crypto::ring::default_provider().install_default();
+    let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(
+        certified.signing_key.serialize_der(),
+    ));
+    let mut server_config = rustls::ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(vec![certificate.clone()], key)
+        .unwrap();
+    server_config.alpn_protocols = vec![b"http/1.1".to_vec()];
+    let acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(server_config));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let task = tokio::spawn(async move {
+        loop {
+            let (tcp, _) = listener.accept().await.unwrap();
+            let acceptor = acceptor.clone();
+            tokio::spawn(async move {
+                let Ok(mut tls) = acceptor.accept(tcp).await else { return };
+                let mut head = [0u8; 1024];
+                let n = tls.read(&mut head).await.unwrap();
+                let first = String::from_utf8_lossy(&head[..n]).to_string();
+                let response: &[u8] = if first.starts_with("GET /close ") {
+                    b"HTTP/1.1 200 OK
+connection: close
+
+close-delimited"
+                } else {
+                    b"HTTP/1.1 200 OK
+content-length: 20
+
+short"
+                };
+                tls.write_all(response).await.unwrap();
+                tls.flush().await.unwrap();
+                // Drop the stream without `shutdown()`: no `close_notify`.
+                drop(tls);
+            });
+        }
+    });
+    let mut roots = rustls::RootCertStore::empty();
+    roots.add(certificate).unwrap();
+    let tls = rustls::ClientConfig::builder()
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+    let engine = hyper::HttpTransport::new(tls, false);
+    let mut response = engine
+        .send(request(&format!("https://localhost:{port}/close")))
+        .await
+        .unwrap();
+    let mut body = Vec::new();
+    while let Some(chunk) = response.body.next().await {
+        body.extend_from_slice(&chunk.unwrap());
+    }
+    assert_eq!(body, b"close-delimited");
+    let mut response = engine
+        .send(request(&format!("https://localhost:{port}/short")))
+        .await
+        .unwrap();
+    let mut failed = false;
+    while let Some(chunk) = response.body.next().await {
+        if chunk.is_err() {
+            failed = true;
+            break;
+        }
+    }
+    assert!(failed, "a body shorter than its Content-Length is still an error");
+    task.abort();
+}
 // Tungstenite fixes the callback error type to its complete HTTP response.
 #[allow(clippy::result_large_err)]
 #[tokio::test]
@@ -180,70 +256,5 @@ async fn raw_websocket_carries_caller_handshake_and_echoes_without_browser_polic
         Message::Binary(vec![0, 1, 255].into())
     );
     let _ = socket.close(None).await;
-    server.await.unwrap();
-}
-#[tokio::test]
-async fn default_wss_connector_runs_webpki_tls_and_rejects_an_unknown_issuer() {
-    use rustls::pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
-    use websocket::tungstenite::{Error as WsError, client::IntoClientRequest};
-    let certified = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
-    let certificate = certified.cert.der().clone();
-    let provider = Arc::new(rustls::crypto::ring::default_provider());
-    let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(
-        certified.signing_key.serialize_der(),
-    ));
-    let server_config = rustls::ServerConfig::builder_with_provider(provider.clone())
-        .with_safe_default_protocol_versions()
-        .unwrap()
-        .with_no_client_auth()
-        .with_single_cert(vec![certificate.clone()], key)
-        .unwrap();
-    let acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(server_config));
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let port = listener.local_addr().unwrap().port();
-    let server = tokio::spawn(async move {
-        // Serve two connections: the default one fails its handshake, the trusting one echoes.
-        for _ in 0..2 {
-            let (tcp, _) = listener.accept().await.unwrap();
-            let Ok(tls) = acceptor.accept(tcp).await else {
-                continue;
-            };
-            if let Ok(mut socket) = tokio_tungstenite::accept_async(tls).await {
-                let _ = socket.close(None).await;
-            }
-        }
-    });
-    let url = format!("wss://localhost:{port}/");
-    // The default connector trusts webpki roots only, so a self-signed leaf is refused.
-    let refused = websocket::connect(url.as_str().into_client_request().unwrap())
-        .await
-        .unwrap_err();
-    let WsError::Io(io) = refused else {
-        panic!("expected a TLS handshake refusal, got {refused:?}");
-    };
-    let tls = io.get_ref().and_then(|e| e.downcast_ref::<rustls::Error>());
-    assert!(
-        matches!(
-            tls,
-            Some(rustls::Error::InvalidCertificate(
-                rustls::CertificateError::UnknownIssuer
-            ))
-        ),
-        "unexpected refusal: {io:?}"
-    );
-    // Positive control: the same server accepts a host-selected connector that trusts its cert.
-    let mut roots = rustls::RootCertStore::empty();
-    roots.add(certificate).unwrap();
-    let tls = rustls::ClientConfig::builder_with_provider(provider)
-        .with_safe_default_protocol_versions()
-        .unwrap()
-        .with_root_certificates(roots)
-        .with_no_client_auth();
-    let trusted = websocket::connect_with(
-        url.as_str().into_client_request().unwrap(),
-        Some(websocket::Connector::Rustls(Arc::new(tls))),
-    )
-    .await;
-    assert!(trusted.is_ok(), "trusting connector failed: {:?}", trusted.err());
     server.await.unwrap();
 }

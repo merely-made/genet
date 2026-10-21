@@ -10,8 +10,11 @@
 //! refinement; a host that needs per-session trust or partitioned pools supplies
 //! its own [`Transport`].
 
+use std::future::Future;
 use std::io;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::task::{Context, Poll};
 use std::sync::{Arc, OnceLock};
 
 use bytes::Bytes;
@@ -19,7 +22,7 @@ use futures_util::TryStreamExt;
 use http_body_util::{BodyExt, Full};
 use hyper_rustls::HttpsConnector;
 use hyper_util::client::legacy::Client;
-use hyper_util::client::legacy::connect::HttpConnector;
+use hyper_util::client::legacy::connect::{Connected, Connection, HttpConnector};
 use hyper_util::rt::TokioExecutor;
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 
@@ -30,7 +33,82 @@ use super::{RawResponse, Transport, TransportFuture, WireRequest};
 type ReqBody = Full<Bytes>;
 
 /// The connection-pooled, TLS-capable client type.
-type HttpClient = Client<HttpsConnector<HttpConnector>, ReqBody>;
+type HttpClient = Client<LenientConnector<HttpsConnector<HttpConnector>>, ReqBody>;
+
+/// Reads that end in `UnexpectedEof` (a TLS peer that closed without a
+/// `close_notify`) are reported as a clean end of stream. hyper still fails a
+/// body whose declared `Content-Length` or chunked framing is not complete, so
+/// only a close-delimited HTTP/1 body is affected, which is what browsers and
+/// curl accept from servers that close this way.
+struct LenientEof<T>(T);
+
+impl<T: hyper::rt::Read + Unpin> hyper::rt::Read for LenientEof<T> {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: hyper::rt::ReadBufCursor<'_>,
+    ) -> Poll<io::Result<()>> {
+        match Pin::new(&mut self.0).poll_read(cx, buf) {
+            Poll::Ready(Err(e)) if e.kind() == io::ErrorKind::UnexpectedEof => Poll::Ready(Ok(())),
+            other => other,
+        }
+    }
+}
+
+impl<T: hyper::rt::Write + Unpin> hyper::rt::Write for LenientEof<T> {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        Pin::new(&mut self.0).poll_write(cx, buf)
+    }
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.0).poll_flush(cx)
+    }
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.0).poll_shutdown(cx)
+    }
+    fn is_write_vectored(&self) -> bool {
+        self.0.is_write_vectored()
+    }
+    fn poll_write_vectored(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        bufs: &[io::IoSlice<'_>],
+    ) -> Poll<io::Result<usize>> {
+        Pin::new(&mut self.0).poll_write_vectored(cx, bufs)
+    }
+}
+
+impl<T: Connection> Connection for LenientEof<T> {
+    fn connected(&self) -> Connected {
+        self.0.connected()
+    }
+}
+
+/// Wraps a connector so every connection it makes reads leniently.
+#[derive(Clone)]
+struct LenientConnector<C>(C);
+
+impl<C> tower_service::Service<http::Uri> for LenientConnector<C>
+where
+    C: tower_service::Service<http::Uri>,
+    C::Response: hyper::rt::Read + hyper::rt::Write + Connection + Unpin + Send + 'static,
+    C::Future: Send + 'static,
+{
+    type Response = LenientEof<C::Response>;
+    type Error = C::Error;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, C::Error>> + Send>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.0.poll_ready(cx)
+    }
+    fn call(&mut self, dst: http::Uri) -> Self::Future {
+        let connecting = self.0.call(dst);
+        Box::pin(async move { connecting.await.map(LenientEof) })
+    }
+}
 
 static CLIENT: OnceLock<HttpClient> = OnceLock::new();
 static SHARED: OnceLock<Arc<DefaultTransport>> = OnceLock::new();
@@ -103,7 +181,7 @@ impl HttpTransport {
         Self {
             client: Client::builder(TokioExecutor::new())
                 .retry_canceled_requests(retry)
-                .build(connector),
+                .build(LenientConnector(connector)),
             response_timeout: None,
             #[cfg(all(feature = "h3", not(target_arch = "wasm32")))]
             h3: None,
@@ -233,7 +311,7 @@ fn build_client() -> HttpClient {
         .enable_http2()
         .build();
 
-    Client::builder(TokioExecutor::new()).build(https)
+    Client::builder(TokioExecutor::new()).build(LenientConnector(https))
 }
 
 fn collect_headers(map: &http::HeaderMap) -> Vec<(String, String)> {

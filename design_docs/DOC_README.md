@@ -170,7 +170,7 @@ completed corpus census or bounded slice does not close its enclosing feature.
   is historical.
 
 - [Observers and timing](2026-10-20_observers_and_timing_plan.md)
-  (**in progress, 2026-10-20**, branch `observers-timing`, not merged; clock and timeline phases measured with 0 lost passes on both engines, geometry/IntersectionObserver stopped at a fork): ledger
+  (**in progress, 2026-10-20**, branch `observers-timing`, not merged; all phases implemented; IntersectionObserver 0 -> 213/309 and cssom-view 331 -> 569 subtests on both engines; one fork open, 15 vacuous cssom-view passes): ledger
   rows 4–6 as one lane, in Mark's ruled order. First, one host clock per process,
   coarsened to spec, excluding sleep, with `Date` following the harness clock
   on both engines. Then the Performance Timeline residue, then the

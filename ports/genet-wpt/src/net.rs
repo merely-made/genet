@@ -164,17 +164,19 @@ fn fetch_context() -> netfetcher::FetchContext {
 /// origin. Drives cross-origin detection (CORS / response tainting): a request
 /// whose target origin differs is cross-origin. Set once when server mode is
 /// established; `None` in disk mode (every fetch treated as same-origin).
-static PAGE_ORIGIN: std::sync::OnceLock<url::Origin> = std::sync::OnceLock::new();
+static PAGE_ORIGIN: std::sync::RwLock<Option<url::Origin>> = std::sync::RwLock::new(None);
 
-/// Record the page origin from the server base (idempotent; first wins).
+/// Record the page origin (the last call wins). A test runs on the origin that
+/// serves it, which is the https origin for a `.https.` file, so each test sets
+/// it before its document loads.
 pub fn set_page_origin(origin_str: &str) {
     if let Ok(u) = url::Url::parse(origin_str) {
-        let _ = PAGE_ORIGIN.set(u.origin());
+        *PAGE_ORIGIN.write().expect("page origin") = Some(u.origin());
     }
 }
 
 fn page_origin() -> Option<url::Origin> {
-    PAGE_ORIGIN.get().cloned()
+    PAGE_ORIGIN.read().expect("page origin").clone()
 }
 
 /// A globally-unique abort key (the JS `id` is per-test, so it cannot key the
@@ -838,7 +840,48 @@ impl ScriptSrcLoader for ServerLoader {
 /// runner drives. A spawned server is torn down on drop.
 pub struct ServerCtx {
     pub origin: String,
+    /// Origin serving `.https.` tests; `h2_origin` serves `.h2.` tests when set.
+    /// Murm's request body is buffered, so a full-duplex h2 upload cannot be
+    /// driven yet: `.h2.` files stay on the plain origin unless asked
+    /// (`request-upload.h2.any.html` falls from 8 passes to 1 on port 9000).
+    https_origin: String,
+    h2_origin: Option<String>,
     _spawned: Option<ServerHandle>,
+}
+
+/// `wpt serve`'s default https port.
+const WPT_HTTPS_PORT: u16 = 8443;
+
+/// The same host as `origin` on `port`, over https.
+fn https_origin_on(origin: &str, port: u16) -> String {
+    let host = url::Url::parse(origin)
+        .ok()
+        .and_then(|u| u.host_str().map(str::to_owned))
+        .unwrap_or_else(|| "web-platform.test".to_owned());
+    format!("https://{host}:{port}")
+}
+
+/// Which `wpt serve` scheme a test is served on: WPT picks it from the dotted
+/// flags in the file name (`x.https.any.html`, `y.h2.html`), not the directory.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ServeFlag {
+    Plain,
+    Https,
+    H2,
+}
+
+fn serve_flag(test_rel: &str) -> ServeFlag {
+    let path = test_rel.split(['?', '#']).next().unwrap_or(test_rel);
+    let file = path.rsplit('/').next().unwrap_or(path);
+    let mut flag = ServeFlag::Plain;
+    for part in file.split('.').skip(1) {
+        match part {
+            "h2" => return ServeFlag::H2,
+            "https" => flag = ServeFlag::Https,
+            _ => {},
+        }
+    }
+    flag
 }
 
 impl ServerCtx {
@@ -852,9 +895,23 @@ impl ServerCtx {
             ));
         }
         Ok(Self {
+            https_origin: https_origin_on(&origin, WPT_HTTPS_PORT),
+            h2_origin: None,
             origin,
             _spawned: None,
         })
+    }
+
+    /// Override the derived https and h2 origins (`--server-https-base`,
+    /// `--server-h2-base`).
+    pub fn with_secure_origins(mut self, https: Option<String>, h2: Option<String>) -> Self {
+        if let Some(https) = https {
+            self.https_origin = https.trim_end_matches('/').to_owned();
+        }
+        if let Some(h2) = h2 {
+            self.h2_origin = Some(h2.trim_end_matches('/').to_owned());
+        }
+        self
     }
 
     /// Spawn `python wpt serve` under `tests_root`, discover its plain-http
@@ -863,14 +920,29 @@ impl ServerCtx {
         let handle = ServerHandle::spawn(tests_root)?;
         let origin = handle.origin.clone();
         Ok(Self {
+            https_origin: https_origin_on(&origin, WPT_HTTPS_PORT),
+            h2_origin: None,
             origin,
             _spawned: Some(handle),
         })
     }
 
+    /// The origin that serves a test, given its path relative to the tests root.
+    pub fn origin_for(&self, test_rel: &str) -> &str {
+        match serve_flag(test_rel) {
+            ServeFlag::Plain => &self.origin,
+            ServeFlag::Https => &self.https_origin,
+            ServeFlag::H2 => self.h2_origin.as_deref().unwrap_or(&self.origin),
+        }
+    }
+
     /// The document URL for a test, given its path relative to the tests root.
     pub fn doc_url(&self, test_rel: &str) -> String {
-        format!("{}/{}", self.origin, test_rel.trim_start_matches('/'))
+        format!(
+            "{}/{}",
+            self.origin_for(test_rel),
+            test_rel.trim_start_matches('/')
+        )
     }
 
     pub fn loader(&self, doc_url: &str) -> ServerLoader {
@@ -1001,6 +1073,8 @@ mod tests {
     fn doc_url_joins_origin_and_test_path() {
         let ctx = ServerCtx {
             origin: "http://web-platform.test:8000".into(),
+            https_origin: "https://web-platform.test:8443".into(),
+            h2_origin: None,
             _spawned: None,
         };
         assert_eq!(
@@ -1012,6 +1086,57 @@ mod tests {
             ctx.doc_url("/fetch/api/basic/x.any.js"),
             "http://web-platform.test:8000/fetch/api/basic/x.any.js"
         );
+    }
+
+    fn ctx() -> ServerCtx {
+        ServerCtx {
+            origin: "http://web-platform.test:8000".into(),
+            https_origin: https_origin_on("http://web-platform.test:8000", WPT_HTTPS_PORT),
+            h2_origin: None,
+            _spawned: None,
+        }
+    }
+
+    #[test]
+    fn the_serving_scheme_follows_the_dotted_flags_in_the_file_name() {
+        assert_eq!(serve_flag("fetch/api/basic/x.any.html"), ServeFlag::Plain);
+        assert_eq!(
+            serve_flag("fetch/api/basic/x.https.any.html"),
+            ServeFlag::Https
+        );
+        assert_eq!(
+            serve_flag("mixed-content/gen/top.meta/opt-in/fetch.https.html"),
+            ServeFlag::Https
+        );
+        assert_eq!(
+            serve_flag("fetch/api/basic/status.h2.any.html?x"),
+            ServeFlag::H2
+        );
+        // A directory named like a flag, or a query that carries one, is not a flag.
+        assert_eq!(serve_flag("https/a/x.html"), ServeFlag::Plain);
+        assert_eq!(serve_flag("a/x.html?y=.https."), ServeFlag::Plain);
+        assert_eq!(serve_flag("a/https.html"), ServeFlag::Plain);
+    }
+
+    #[test]
+    fn a_secure_test_is_served_from_the_https_origin_on_the_same_host() {
+        let ctx = ctx();
+        assert_eq!(ctx.origin_for("a/b.html"), "http://web-platform.test:8000");
+        assert_eq!(
+            ctx.doc_url("upgrade-insecure-requests/x.https.sub.html"),
+            "https://web-platform.test:8443/upgrade-insecure-requests/x.https.sub.html"
+        );
+        // `.h2.` tests stay on the plain origin unless an h2 origin is given.
+        assert_eq!(
+            ctx.doc_url("fetch/api/basic/status.h2.any.html"),
+            "http://web-platform.test:8000/fetch/api/basic/status.h2.any.html"
+        );
+        let ctx = ctx.with_secure_origins(
+            Some("https://example.test:1/".into()),
+            Some("https://example.test:2".into()),
+        );
+        assert_eq!(ctx.origin_for("a/b.https.html"), "https://example.test:1");
+        assert_eq!(ctx.origin_for("a/b.h2.html"), "https://example.test:2");
     }
 }
 

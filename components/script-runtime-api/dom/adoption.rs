@@ -18,6 +18,9 @@ pub(crate) struct AgentDomState {
     hooks: BTreeMap<RealmId, Rc<dyn Any>>,
     observing: HashSet<RealmId>,
     observer_groups: BTreeMap<RealmId, usize>,
+    /// Realms with at least one custom element definition. While any has
+    /// one, every arena of the agent records reaction candidates.
+    reacting: HashSet<RealmId>,
 }
 
 impl AgentDomState {
@@ -31,6 +34,7 @@ impl AgentDomState {
         self.hooks.remove(&realm);
         self.observing.remove(&realm);
         self.observer_groups.remove(&realm);
+        self.reacting.remove(&realm);
     }
 
     pub(crate) fn retire_reflector(&mut self, raw: u64) {
@@ -328,8 +332,10 @@ impl<E: ScriptEngine> NativeFn<E> for RegisterHooks {
                     .entry(realm)
                     .or_insert_with(|| Rc::new(hook));
                 let observing = !state.dom_adoption.observing.is_empty();
+                let reacting = !state.dom_adoption.reacting.is_empty();
                 drop(state);
                 host.borrow_mut().dom.set_observing(observing);
+                host.borrow_mut().dom.set_reaction_recording(reacting);
             }
         }
         Ok(cx.undefined())
@@ -528,6 +534,55 @@ impl<E: ScriptEngine> NativeFn<E> for AgentDispatch {
                     };
                     for host in hosts.values() {
                         host.borrow_mut().dom.set_observing(any);
+                    }
+                }
+                Ok(cx.undefined())
+            },
+            "ceActive" => {
+                let value = cx.arg(1);
+                let on = cx.value_to_string(&value)? == "true";
+                let realm = cx.current_realm();
+                if let Some(agent) = current_host(cx).and_then(|h| h.borrow().agent.upgrade()) {
+                    let (hosts, any) = {
+                        let mut a = agent.borrow_mut();
+                        if on {
+                            a.dom_adoption.reacting.insert(realm);
+                        } else {
+                            a.dom_adoption.reacting.remove(&realm);
+                        }
+                        (a.hosts.clone(), !a.dom_adoption.reacting.is_empty())
+                    };
+                    for host in hosts.values() {
+                        host.borrow_mut().dom.set_reaction_recording(any);
+                    }
+                }
+                Ok(cx.undefined())
+            },
+            // Drain every arena's reaction candidates and hand each batch to
+            // the same-origin realms; each enqueues the reactions for the
+            // elements its own registry defined.
+            "ceFlush" => {
+                let Some(agent) = current_host(cx).and_then(|h| h.borrow().agent.upgrade()) else {
+                    return Ok(cx.undefined());
+                };
+                let hosts = agent.borrow().hosts.clone();
+                for (source, host) in &hosts {
+                    let encoded = {
+                        let mut host = host.borrow_mut();
+                        if !host.dom.has_reaction_candidates() {
+                            continue;
+                        }
+                        let candidates = host.dom.take_reaction_candidates();
+                        super::custom_elements::encode(&candidates, &host.dom)
+                    };
+                    if encoded.is_empty() {
+                        continue;
+                    }
+                    for &realm in hosts.keys() {
+                        if agent.borrow().frames.same_origin(*source, realm) {
+                            let blob = cx.make_string(&encoded)?;
+                            call_hook::<E>(cx, realm, "ceRecords", vec![blob])?;
+                        }
                     }
                 }
                 Ok(cx.undefined())

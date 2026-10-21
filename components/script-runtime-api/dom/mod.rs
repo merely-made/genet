@@ -168,6 +168,7 @@ pub(crate) fn install_dom_surface<E: ScriptEngine>(
     engine: &mut crate::Surface<'_, '_, E>,
 ) -> Result<(), crate::SurfaceError<E::Error>> {
     shadow::install(engine)?;
+    custom_elements::install(engine)?;
     markup_insertion::install(engine)?;
     engine.set_function::<DocumentRoot>("__documentRoot", 0)?;
     engine.set_function::<form_controls::FormControlOwner>("__formControlOwner", 1)?;
@@ -1287,6 +1288,7 @@ fn find_by_id(dom: &ScriptedDom, root: NodeId, target: &str) -> Option<NodeId> {
 }
 
 pub(crate) mod adoption;
+mod custom_elements;
 mod html_interfaces;
 mod html_interfaces_generated;
 pub(crate) mod markup_insertion;

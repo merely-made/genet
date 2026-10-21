@@ -42,3 +42,11 @@ wasm-bindgen = "=0.2.129"
 wasm-bindgen-futures = "0.4"
 web-time = "1"
 gloo-timers = { version = "0.3", features = ["futures"] }
+
+[dev-dependencies]
+# IMG-GPU gate (tests/image_gpu.rs): decoded document images through the shared device.
+genet-livery = { path = "../genet-livery" }
+genet-scripted-dom = { path = "../genet-scripted-dom" }
+paint_list_api = { workspace = true }
+paint_list_render = { workspace = true }
+image = { workspace = true }

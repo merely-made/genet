@@ -108,13 +108,13 @@ pub use crypto::RandomSource;
 pub use dom::markup_insertion::{MarkupState, ReadyState};
 pub use dom::{
     ComputedStyleHandler, CookieProvider, InlineStyleHandler, InlineStyleValueResult,
-    MediaQueryHandler, SelectionHandler, StyleSheetHandler, StyleSheetImportOwner,
+    ElementMetrics, GeometryHandler, IntersectionReport, IntersectionRequest, MediaQueryHandler, SelectionHandler, StyleSheetHandler, StyleSheetImportOwner,
     StyleSheetImportRule, StyleSheetMutationError, StyleSheetRule, StyleSheetRuleKind,
 };
 pub use fetch::{FetchHandler, FetchOutcome, FetchRequest};
 pub use harness::{HarnessCompletion, TestResult};
 pub use parse::{NoScriptLoader, ParseReport, ParserScriptLoader};
-pub use timing::{ElapsedClock, PerformanceClockProfile};
+pub use timing::{SharedClock, TimeResolution};
 pub use platform::StorageProvider;
 pub use webgl::{WebGlFactory, WebGlHandler};
 pub use websocket::{WebSocketHandler, WebSocketRequest};
@@ -295,6 +295,12 @@ pub struct HostState {
     /// range geometry is empty and the projection goes nowhere. Script remains
     /// the only owner of the selection either way.
     pub selection: Option<std::rc::Rc<dyn SelectionHandler>>,
+    /// The host's layout seam for element geometry (`getBoundingClientRect`,
+    /// `client*` / `offset*` / `scroll*`) and for scrolling the viewport and
+    /// elements. `None` = no layout bound: boxes are empty, metrics are zero and
+    /// the viewport scroll falls back to the deferred
+    /// [`viewport_scroll`](Self::viewport_scroll) field.
+    pub geometry: Option<std::rc::Rc<dyn GeometryHandler>>,
     /// The selected CSS engine's specified-value normalizer for
     /// `element.style`. `None` preserves authored values verbatim.
     pub inline_style: Option<std::rc::Rc<dyn InlineStyleHandler>>,
@@ -610,7 +616,7 @@ const REALM_TASK_HOOKS: &[&str] = &[
     "__reportListenerException", "__reportScriptException", "__fetchSettle", "__fetchFail",
     "__fetchStartStream", "__fetchPushChunk", "__fetchClose", "__fetchError",
     "__fetchPendingCount", "__fetchFailAll",
-    "__moPump", "__websocketOpen", "__websocketMessageText",
+    "__moPump", "__ioUpdate", "__websocketOpen", "__websocketMessageText",
     "__websocketMessageBinary", "__websocketFlushed", "__websocketError",
     "__websocketClose", "__websocketPending", "__websocketFailAll",
     "__subtleExposure",
@@ -695,7 +701,10 @@ pub(crate) fn capture_task_hooks_from_call<E: ScriptEngine>(
 /// Realm-owned state shared with native frame creation. Hosts point back weakly.
 #[derive(Default)]
 pub(crate) struct AgentState {
-    pub(crate) performance_clock: timing::PerformanceClockProfile,
+    /// The process's shared clock, and its reading when this agent's timer
+    /// queue started (the zero of `run_timers`' `now_ms`).
+    pub(crate) clock: timing::SharedClock,
+    pub(crate) clock_base: f64,
     /// Type-erased rooted callables, keyed by their creation realm. Frame
     /// teardown can release them without needing the concrete backend type.
     pub(crate) task_hooks: std::collections::BTreeMap<(RealmId, &'static str), Rc<dyn std::any::Any>>,
@@ -855,35 +864,61 @@ fn install_window_proxy_in_realm<E: ScriptEngine>(
     Ok(Some(engine.eval_in_realm(realm, WINDOW_PROXY_BOOTSTRAP)?))
 }
 
+/// Point the engine's `Date` at the shared clock, so `Date.now()` and
+/// `performance` never drift apart (a harness skip moves both).
+fn install_date_source<E: ScriptEngine>(engine: &mut E, clock: &SharedClock) {
+    let clock = clock.clone();
+    engine.set_date_source(Rc::new(move || clock.epoch_now_ms()));
+}
+
 impl<E: ScriptEngine> Runtime<E> {
     /// Construct an engine and install the `Window` host surface on it.
     pub fn new() -> Result<Self, E::Error> {
-        Self::with_performance_clock(PerformanceClockProfile::default())
+        Self::with_clock(SharedClock::process())
     }
 
-    /// Construct a window runtime with an explicit performance clock profile.
-    pub fn with_performance_clock(profile: PerformanceClockProfile) -> Result<Self, E::Error> {
-        Self::with_scope(GlobalScopeKind::Window, profile)
+    /// Construct a window runtime over an explicit shared clock: a harness's
+    /// skipping clock, or an embedder's controlled one.
+    pub fn with_clock(clock: SharedClock) -> Result<Self, E::Error> {
+        Self::with_scope(GlobalScopeKind::Window, clock)
     }
 
     /// The same surface with a worker global: no `window`, and a read-only
     /// `self`. Used by [`worker::worker_main`] on the worker thread.
-    pub(crate) fn new_worker() -> Result<Self, E::Error> {
-        Self::with_scope(GlobalScopeKind::Worker, PerformanceClockProfile::default())
+    /// The shared clock this runtime reads.
+    pub fn clock(&self) -> SharedClock {
+        self.agent.borrow().clock.clone()
+    }
+
+    /// Milliseconds on the shared clock since this runtime's timer queue
+    /// started: the `now_ms` a host passes to [`run_timers`](Self::run_timers)
+    /// when its timers should follow the shared clock.
+    pub fn clock_elapsed_ms(&self) -> f64 {
+        let agent = self.agent.borrow();
+        agent.clock.now_ms() - agent.clock_base
+    }
+
+    pub(crate) fn new_worker(clock: SharedClock) -> Result<Self, E::Error> {
+        Self::with_scope(GlobalScopeKind::Worker, clock)
     }
 
     fn with_scope(
         scope: GlobalScopeKind,
-        profile: PerformanceClockProfile,
+        clock: SharedClock,
     ) -> Result<Self, E::Error> {
         let mut engine = E::new()?;
+        install_date_source(&mut engine, &clock);
         let host: SharedHost = Rc::new(RefCell::new(HostState::default()));
         // The default viewport: the same 800x600 the media-query evaluator
         // already assumes, so a host that never calls `set_viewport_size` still
         // has `innerWidth`/`innerHeight` agree with `matchMedia`.
         host.borrow_mut().viewport_size = (800.0, 600.0);
         let agent = Rc::new(RefCell::new(AgentState::default()));
-        agent.borrow_mut().performance_clock = profile;
+        {
+            let mut agent = agent.borrow_mut();
+            agent.clock_base = clock.now_ms();
+            agent.clock = clock;
+        }
         host.borrow_mut().agent = Rc::downgrade(&agent);
         agent.borrow_mut().register(MAIN_REALM, host.clone());
         engine.set_host_data(host.clone());
@@ -2120,6 +2155,30 @@ impl<E: ScriptEngine> Runtime<E> {
         Ok(ran)
     }
 
+    /// Run the "update intersection observations" steps in every realm that has
+    /// observers: the host calls this once per rendering turn, after the
+    /// animation frame callbacks and the relayout they caused. Entries are
+    /// queued, and delivered later as a task. Returns how many were queued.
+    pub fn update_intersection_observations(&mut self) -> Result<usize, E::Error> {
+        let mut queued = 0usize;
+        let mut realms = vec![self.top_realm()];
+        let mut next = 0;
+        while next < realms.len() {
+            let parent = realms[next];
+            next += 1;
+            for (_, realm) in self.frame_realms(parent) {
+                realms.push(realm);
+            }
+        }
+        for realm in realms {
+            let v = self
+                .call_task(realm, "__ioUpdate", &[])
+                .map_err(|error| self.engine_error(&error.to_string()))?;
+            queued += self.task_count(&v)?;
+        }
+        Ok(queued)
+    }
+
     /// Whether any animation frame callbacks are registered. The host uses this
     /// (alongside its own animation state) to keep requesting frames only while
     /// script is animating, so idle surfaces stop ticking.
@@ -2209,6 +2268,11 @@ impl<E: ScriptEngine> Runtime<E> {
     /// and the projection is dropped.
     pub fn set_selection_handler(&mut self, handler: Box<dyn SelectionHandler>) {
         self.host.borrow_mut().selection = Some(std::rc::Rc::from(handler));
+    }
+
+    /// Install the host's geometry seam; see [`GeometryHandler`].
+    pub fn set_geometry_handler(&mut self, handler: Box<dyn GeometryHandler>) {
+        self.host.borrow_mut().geometry = Some(std::rc::Rc::from(handler));
     }
 
     /// Install specified-value parsing and canonical serialization for the
@@ -2696,7 +2760,13 @@ impl<E: ScriptEngineSnapshot> Runtime<E> {
         let worker_process_launcher = self.host.borrow().worker_process_launcher.clone();
         let boot_host: SharedHost = Rc::new(RefCell::new(HostState::default()));
         let agent = Rc::new(RefCell::new(AgentState::default()));
-        agent.borrow_mut().performance_clock = self.agent.borrow().performance_clock.clone();
+        {
+            let donor = self.agent.borrow();
+            let mut fresh = agent.borrow_mut();
+            fresh.clock = donor.clock.clone();
+            fresh.clock_base = donor.clock_base;
+            install_date_source(&mut engine, &donor.clock);
+        }
         {
             // The heap keeps its windows' and plain targets' listeners and
             // callbacks, and the ids they were keyed by.
@@ -2913,6 +2983,11 @@ pub(crate) fn install_host_surface<E: ScriptEngine>(
     streams::finish_streams_install(engine)?;
     // `performance` (hr-time, user timing) + `PerformanceObserver`.
     timing::install_timing_surface(engine)?;
+    // `IntersectionObserver`: after `dom` (Element, Document, the geometry
+    // natives) and after timing (the clock its entries are stamped from).
+    if scope == GlobalScopeKind::Window {
+        engine.eval(include_str!("intersection_observer.js"))?;
+    }
     // `MessageChannel` / `MessagePort` / `BroadcastChannel` / `MessageEvent`.
     // After `structured_clone` so `postMessage` can clone its argument.
     messaging::install_messaging_surface(engine)?;
@@ -3649,8 +3724,13 @@ fn scroll_arg<E: ScriptEngine>(cx: &mut E::CallCx<'_>, i: usize) -> Result<f64, 
 fn read_scroll<E: ScriptEngine>(cx: &mut E::CallCx<'_>) -> (f32, f32) {
     cx.host_data()
         .and_then(|d| {
-            d.downcast_ref::<RefCell<HostState>>()
-                .map(|h| h.borrow().viewport_scroll)
+            d.downcast_ref::<RefCell<HostState>>().map(|h| {
+                let (geometry, deferred) = {
+                    let h = h.borrow();
+                    (h.geometry.clone(), h.viewport_scroll)
+                };
+                geometry.map_or(deferred, |g| g.viewport_scroll())
+            })
         })
         .unwrap_or((0.0, 0.0))
 }
@@ -3660,6 +3740,9 @@ fn read_scroll<E: ScriptEngine>(cx: &mut E::CallCx<'_>) -> (f32, f32) {
 fn write_scroll<E: ScriptEngine>(cx: &mut E::CallCx<'_>, scroll: (f32, f32)) {
     if let Some(data) = cx.host_data() {
         if let Some(host) = data.downcast_ref::<RefCell<HostState>>() {
+            // A host with geometry scrolls now and answers with the clamped offset.
+            let geometry = host.borrow().geometry.clone();
+            let scroll = geometry.map_or(scroll, |g| g.set_viewport_scroll(scroll.0, scroll.1));
             let mut host = host.borrow_mut();
             host.viewport_scroll = scroll;
             host.scroll_into_view = None;
@@ -3823,16 +3906,72 @@ const SHELL_GLOBALS_BOOTSTRAP: &str = r#"
   // and its titlebar area is the empty DOMRect. Keep this object stable: the
   // WebIDL attribute is [SameObject], and consumers retain it for
   // `geometrychange` listeners even while it is hidden.
-  function DOMRect(x, y, width, height) {
-    this.x = Number(x || 0);
-    this.y = Number(y || 0);
-    this.width = Number(width || 0);
-    this.height = Number(height || 0);
-    this.left = Math.min(this.x, this.x + this.width);
-    this.right = Math.max(this.x, this.x + this.width);
-    this.top = Math.min(this.y, this.y + this.height);
-    this.bottom = Math.max(this.y, this.y + this.height);
+  // DOMRectReadOnly / DOMRect (Geometry Interfaces): four doubles in a private
+  // slot, the edges derived from them.
+  var rectSlots = new WeakMap();
+  function rectSlot(object) {
+    var slot = rectSlots.get(object);
+    if (!slot) throw new TypeError('Illegal invocation');
+    return slot;
   }
+  function rectNumber(value) { return value === undefined ? 0 : Number(value); }
+  function DOMRectReadOnly(x, y, width, height) {
+    if (!(this instanceof DOMRectReadOnly)) {
+      throw new TypeError("Failed to construct 'DOMRectReadOnly': Please use the 'new' operator");
+    }
+    rectSlots.set(this, [rectNumber(x), rectNumber(y), rectNumber(width), rectNumber(height)]);
+  }
+  function DOMRect(x, y, width, height) {
+    if (!(this instanceof DOMRect)) {
+      throw new TypeError("Failed to construct 'DOMRect': Please use the 'new' operator");
+    }
+    rectSlots.set(this, [rectNumber(x), rectNumber(y), rectNumber(width), rectNumber(height)]);
+  }
+  DOMRect.prototype = Object.create(DOMRectReadOnly.prototype);
+  Object.defineProperty(DOMRect.prototype, 'constructor', { configurable: true, writable: true, value: DOMRect });
+  Object.setPrototypeOf(DOMRect, DOMRectReadOnly);
+  ['x', 'y', 'width', 'height'].forEach(function(name, index) {
+    Object.defineProperty(DOMRectReadOnly.prototype, name, {
+      configurable: true, enumerable: true,
+      get: function() { return rectSlot(this)[index]; }
+    });
+    Object.defineProperty(DOMRect.prototype, name, {
+      configurable: true, enumerable: true,
+      get: function() { return rectSlot(this)[index]; },
+      set: function(value) { rectSlot(this)[index] = Number(value); }
+    });
+  });
+  var rectEdges = {
+    top: function(s) { return Math.min(s[1], s[1] + s[3]); },
+    right: function(s) { return Math.max(s[0], s[0] + s[2]); },
+    bottom: function(s) { return Math.max(s[1], s[1] + s[3]); },
+    left: function(s) { return Math.min(s[0], s[0] + s[2]); }
+  };
+  Object.keys(rectEdges).forEach(function(name) {
+    Object.defineProperty(DOMRectReadOnly.prototype, name, {
+      configurable: true, enumerable: true,
+      get: function() { return rectEdges[name](rectSlot(this)); }
+    });
+  });
+  Object.defineProperty(DOMRectReadOnly.prototype, 'toJSON', {
+    configurable: true, writable: true, enumerable: true,
+    value: function toJSON() {
+      var s = rectSlot(this);
+      return { x: s[0], y: s[1], width: s[2], height: s[3], top: rectEdges.top(s),
+               right: rectEdges.right(s), bottom: rectEdges.bottom(s), left: rectEdges.left(s) };
+    }
+  });
+  function rectFrom(Ctor) {
+    return function fromRect(other) {
+      other = other === undefined || other === null ? {} : other;
+      return new Ctor(other.x, other.y, other.width, other.height);
+    };
+  }
+  Object.defineProperty(DOMRectReadOnly, 'fromRect', { configurable: true, writable: true, enumerable: true, value: rectFrom(DOMRectReadOnly) });
+  Object.defineProperty(DOMRect, 'fromRect', { configurable: true, writable: true, enumerable: true, value: rectFrom(DOMRect) });
+  Object.defineProperty(DOMRectReadOnly.prototype, Symbol.toStringTag, { configurable: true, value: 'DOMRectReadOnly' });
+  Object.defineProperty(DOMRect.prototype, Symbol.toStringTag, { configurable: true, value: 'DOMRect' });
+  globalThis.DOMRectReadOnly = DOMRectReadOnly;
   globalThis.DOMRect = DOMRect;
 
   function WindowControlsOverlay() {

@@ -44,6 +44,8 @@ mod native {
     /// them across GC is safe.
     struct GenetHostHooks {
         jobs: Rc<RefCell<VecDeque<Job>>>,
+        /// The host's shared clock for `Date`, once `set_date_source` names one.
+        date_source: RefCell<Option<Rc<dyn Fn() -> f64>>>,
         /// Raw pointer to the active module resolver, set for one `eval_module` call
         /// (`None` otherwise). The pointee outlives the call (an `eval_module` arg),
         /// so the deref in `load_imported_module` is sound; single-threaded.
@@ -159,6 +161,13 @@ mod native {
             &()
         }
 
+        fn system_time_millis(&self) -> Option<i64> {
+            self.date_source
+                .borrow()
+                .as_ref()
+                .map(|source| source().floor() as i64)
+        }
+
         fn load_imported_module<'gc>(
             &self,
             agent: &mut Agent,
@@ -257,6 +266,7 @@ mod native {
     fn new_host_hooks(jobs: Rc<RefCell<VecDeque<Job>>>) -> Box<GenetHostHooks> {
         Box::new(GenetHostHooks {
             jobs,
+            date_source: RefCell::new(None),
             module_resolver: Cell::new(None),
             owned_module_resolver: RefCell::new(None),
             resolver_panic: RefCell::new(None),
@@ -1188,6 +1198,7 @@ mod native {
 
             let jobs: Rc<RefCell<VecDeque<Job>>> = Rc::new(RefCell::new(VecDeque::new()));
             let hook_owner = new_host_hooks(jobs.clone());
+            *hook_owner.date_source.borrow_mut() = self.hook_owner.date_source.borrow().clone();
             let hooks = agent_hooks(&hook_owner);
             let release: ReleaseQueue = Rc::new(RefCell::new(Vec::new()));
             let mut agent = self.agent.snapshot_clone(hooks);
@@ -1770,6 +1781,10 @@ mod native {
                 }
             });
             out
+        }
+
+        fn set_date_source(&mut self, source: Rc<dyn Fn() -> f64>) {
+            *self.hook_owner.date_source.borrow_mut() = Some(source);
         }
 
         fn set_host_data(&mut self, data: HostData) {

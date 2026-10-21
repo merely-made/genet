@@ -166,8 +166,16 @@ fn run_one(test: &TestCase, args: &Args, ctx: &mut RunCtx<'_>) -> OneOutcome {
     // synthesized wrapper for a `.any.js` / `.window.js` test.
     #[cfg(feature = "netfetch")]
     let (html, encoding, final_url) = if let Some(s) = ctx.server {
+        // A `.https.` test is a secure-context page on the https origin, so the
+        // page origin that fetches, XHR and sockets are initiated from follows
+        // the test, not the run.
+        net::set_page_origin(s.origin_for(test.name()));
         match net::http_get_document(&s.doc_url(test.name()), Default::default()) {
-            Some(t) => (t.document.source, t.document.encoding, Some(t.final_url)),
+            Some(t) => (
+                t.document.source,
+                t.document.encoding,
+                Some((t.final_url, t.headers)),
+            ),
             None => {
                 return OneOutcome {
                     record: ActualRecord::with_reason(test, "error", "fetch-load-failed"),
@@ -221,8 +229,10 @@ fn run_one(test: &TestCase, args: &Args, ctx: &mut RunCtx<'_>) -> OneOutcome {
         #[cfg(feature = "netfetch")]
         if let Some(s) = ctx.server {
             let (ev_tx, ev_rx) = std::sync::mpsc::channel::<net::FetchEvent>();
-            let doc_url = final_url.clone().unwrap_or_else(|| s.doc_url(test.name()));
-            let loader = s.loader(&doc_url);
+            let (doc_url, doc_headers) = final_url
+                .clone()
+                .unwrap_or_else(|| (s.doc_url(test.name()), Vec::new()));
+            let loader = s.loader(&doc_url, doc_headers);
             let handler = net::NetFetchHandler::new(ev_tx.clone());
             // The `WebSocket` seam rides the same per-test channel: `wpt serve`
             // hosts ws/wss endpoints, so server mode is where a socket can
@@ -674,6 +684,12 @@ fn run_worker(
     if let Some(base) = server_base {
         command.arg("--server-base").arg(base);
     }
+    if let Some(base) = &args.server_https_base {
+        command.arg("--server-https-base").arg(base);
+    }
+    if let Some(base) = &args.server_h2_base {
+        command.arg("--server-h2-base").arg(base);
+    }
     let Ok(mut child) = command.spawn() else {
         return OneOutcome {
             record: ActualRecord::with_reason(test, "error", "worker-spawn-failed"),
@@ -757,6 +773,8 @@ addEventListener('load',function(){for(var i=0;i<complete.length;i++)complete[i]
             renderer: ReftestRenderer::Livery,
             device_scale: 1.0,
             server_base: None,
+            server_https_base: None,
+            server_h2_base: None,
             spawn_server: false,
             timeout_secs: 30,
             drive_deadline_secs: 15,

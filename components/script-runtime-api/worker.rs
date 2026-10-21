@@ -399,6 +399,8 @@ fn get_request(url: &str) -> FetchRequest {
         referrer_policy: String::new(),
         credentials: "same-origin".to_owned(),
         integrity: String::new(),
+        upgrade_insecure_requests: false,
+        block_all_mixed_content: false,
     }
 }
 

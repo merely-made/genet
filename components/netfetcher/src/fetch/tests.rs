@@ -327,6 +327,7 @@ fn mixed_content_active_passive_split() {
         &mut img,
         Destination::Image,
         true,
+        false,
         &cx
     ));
     assert_eq!(img.scheme(), "https", "passive mixed content is upgraded");
@@ -338,6 +339,7 @@ fn mixed_content_active_passive_split() {
         &mut script,
         Destination::Other,
         true,
+        false,
         &cx
     ));
     let mut xhr: Url = "http://example.org/api".parse().unwrap();
@@ -345,6 +347,7 @@ fn mixed_content_active_passive_split() {
         &mut xhr,
         Destination::None,
         true,
+        false,
         &cx
     ));
 
@@ -354,9 +357,60 @@ fn mixed_content_active_passive_split() {
         &mut insecure,
         Destination::Other,
         false,
+        false,
         &cx
     ));
     assert_eq!(insecure.scheme(), "http");
+}
+
+#[test]
+fn upgrade_insecure_requests_upgrades_every_http_url_but_loopback() {
+    use crate::Destination;
+    let cx = FetchContext::permissive();
+
+    // Any destination, secure context or not: upgraded, never blocked, port kept.
+    for (dest, secure) in [
+        (Destination::None, false),
+        (Destination::None, true),
+        (Destination::Other, true),
+        (Destination::Image, false),
+    ] {
+        let mut url: Url = "http://example.org:8443/x".parse().unwrap();
+        assert!(!resolve_mixed_content(&mut url, dest, secure, true, &cx));
+        assert_eq!(url.as_str(), "https://example.org:8443/x");
+    }
+    // Without the policy the same URL is left alone outside a secure context.
+    let mut off: Url = "http://example.org/x".parse().unwrap();
+    assert!(!resolve_mixed_content(
+        &mut off,
+        Destination::None,
+        false,
+        false,
+        &cx
+    ));
+    assert_eq!(off.scheme(), "http");
+    // Loopback hosts are already potentially trustworthy.
+    for host in ["localhost", "a.localhost", "127.0.0.1", "[::1]"] {
+        let mut local: Url = format!("http://{host}/x").parse().unwrap();
+        assert!(!resolve_mixed_content(
+            &mut local,
+            Destination::None,
+            false,
+            true,
+            &cx
+        ));
+        assert_eq!(local.scheme(), "http", "{host}");
+    }
+    // https is untouched.
+    let mut secure: Url = "https://example.org/x".parse().unwrap();
+    assert!(!resolve_mixed_content(
+        &mut secure,
+        Destination::None,
+        true,
+        true,
+        &cx
+    ));
+    assert_eq!(secure.as_str(), "https://example.org/x");
 }
 
 #[test]

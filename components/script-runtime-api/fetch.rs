@@ -102,6 +102,19 @@ pub trait FetchHandler {
     fn request_chunk(&self, _id: u64) {}
 }
 
+/// The policy container of the document whose script is running, from its response
+/// headers and `<meta>` elements.
+fn document_policy<E: ScriptEngine>(cx: &mut E::CallCx<'_>) -> crate::policy::DocumentPolicy {
+    let Some(data) = cx.host_data() else {
+        return Default::default();
+    };
+    let policy = match data.downcast_ref::<RefCell<HostState>>() {
+        Some(cell) => crate::policy::document_policy(&cell.borrow()),
+        None => Default::default(),
+    };
+    policy
+}
+
 /// Clone the installed handler out from under the `HostState` borrow, so the
 /// handler call holds no borrow (it must not be live if the handler re-enters a
 /// native sink). `None` = no handler installed.
@@ -144,6 +157,14 @@ fn read_request<E: ScriptEngine>(
     let credentials = s(9, cx)?;
     let integrity = s(10, cx)?;
     let body_present = s(11, cx)? == "1";
+    // The document's policy container: a request that names no referrer policy takes
+    // the document's, and the two mixed-content directives ride along.
+    let policy = document_policy::<E>(cx);
+    let referrer_policy = if referrer_policy.is_empty() {
+        policy.referrer_policy
+    } else {
+        referrer_policy
+    };
     // The body crosses as a lossless "binary string": each JS char code (0-255)
     // is one byte. `char as u8` recovers the byte (every char is <= 0xFF).
     let body = body_present.then(|| body_str.chars().map(|c| c as u8).collect::<Vec<u8>>());
@@ -159,6 +180,8 @@ fn read_request<E: ScriptEngine>(
         referrer_policy,
         credentials,
         integrity,
+        upgrade_insecure_requests: policy.upgrade_insecure_requests,
+        block_all_mixed_content: policy.block_all_mixed_content,
     })
 }
 

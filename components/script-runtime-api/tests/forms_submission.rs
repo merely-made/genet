@@ -77,6 +77,8 @@ fn request<E: ScriptEngineLive>(rt: &mut Runtime<E>, rec: &Requests) -> FetchReq
         referrer_policy: request.referrer_policy.clone(),
         credentials: request.credentials.clone(),
         integrity: request.integrity.clone(),
+        upgrade_insecure_requests: request.upgrade_insecure_requests,
+        block_all_mixed_content: request.block_all_mixed_content,
     }
 }
 fn header<'a>(request: &'a FetchRequest, name: &str) -> Option<&'a str> {

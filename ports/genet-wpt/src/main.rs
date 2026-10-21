@@ -927,7 +927,9 @@ fn setup_server(args: &Args) -> Option<net::ServerCtx> {
         eprintln!("spawning `wpt serve` under {} ...", args.tests_root);
         net::ServerCtx::spawn(Path::new(&args.tests_root))
     } else {
-        net::ServerCtx::connect(args.server_base.clone().unwrap())
+        net::ServerCtx::connect(args.server_base.clone().unwrap()).map(|s| {
+            s.with_secure_origins(args.server_https_base.clone(), args.server_h2_base.clone())
+        })
     };
     match result {
         Ok(s) => {

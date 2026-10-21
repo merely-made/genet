@@ -93,7 +93,13 @@ async fn fetch_inner(request: Request, cx: &FetchContext) -> Response {
         .origin
         .as_ref()
         .is_some_and(|o| o.ascii_serialization().starts_with("https://"));
-    if resolve_mixed_content(&mut current_url, request.destination, secure_context, cx) {
+    if resolve_mixed_content(
+        &mut current_url,
+        request.destination,
+        secure_context,
+        request.upgrade_insecure_requests,
+        cx,
+    ) {
         return Response::network_error();
     }
     let mut method = request.method.clone();

@@ -20,6 +20,12 @@ pub(crate) struct Args {
     pub(crate) device_scale: f32,
     /// Connect to an already-running `wpt serve` at this origin (server mode).
     pub(crate) server_base: Option<String>,
+    /// Origin serving `.https.` tests in server mode (default: the `--server-base`
+    /// host on port 8443).
+    pub(crate) server_https_base: Option<String>,
+    /// Origin serving `.h2.` tests in server mode (default: none, so `.h2.` tests
+    /// stay on the plain origin, as before).
+    pub(crate) server_h2_base: Option<String>,
     /// Spawn (and tear down) a `wpt serve` for the run (server mode).
     pub(crate) spawn_server: bool,
     /// Per-test wall-clock timeout (seconds) for `test262` worker subprocesses: a test
@@ -89,6 +95,8 @@ pub(crate) fn parse_args() -> Result<Args, String> {
     let mut renderer = ReftestRenderer::Livery;
     let mut device_scale = 1.0f32;
     let mut server_base = None;
+    let mut server_https_base = None;
+    let mut server_h2_base = None;
     let mut spawn_server = false;
     let mut timeout_secs = 30u64;
     let mut drive_deadline_secs = 15u64;
@@ -140,6 +148,12 @@ pub(crate) fn parse_args() -> Result<Args, String> {
             },
             "--server-base" => {
                 server_base = Some(it.next().ok_or("--server-base needs a URL")?);
+            },
+            "--server-https-base" => {
+                server_https_base = Some(it.next().ok_or("--server-https-base needs a URL")?);
+            },
+            "--server-h2-base" => {
+                server_h2_base = Some(it.next().ok_or("--server-h2-base needs a URL")?);
             },
             "--spawn-server" => spawn_server = true,
             "--timeout" => {
@@ -237,6 +251,8 @@ pub(crate) fn parse_args() -> Result<Args, String> {
         renderer,
         device_scale,
         server_base,
+        server_https_base,
+        server_h2_base,
         spawn_server,
         timeout_secs,
         drive_deadline_secs,
@@ -312,6 +328,12 @@ Options:
     --device-scale <n>   device pixels per CSS pixel for reftest/dump (default: 1)
     --server-base <url>  run testharness against a live `wpt serve` at <url>
                          (server mode; needs --features netfetch)
+    --server-https-base <url>
+                         origin serving `.https.` tests in server mode
+                         (default: the --server-base host on port 8443)
+    --server-h2-base <url>
+                         origin serving `.h2.` tests in server mode
+                         (default: unset, `.h2.` tests stay on --server-base)
     --spawn-server       spawn + tear down a `wpt serve` for the run
                          (server mode; needs --features netfetch)
     -v, --verbose        print every test, not just failures

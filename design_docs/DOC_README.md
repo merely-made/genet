@@ -191,6 +191,24 @@ completed corpus census or bounded slice does not close its enclosing feature.
   evidence retain their recorded scope. The old Linux Livery failure allowance
   is historical.
 
+- [Fetch and request-security conformance](2026-10-20_fetch_request_security_plan.md)
+  (**in progress, 2026-10-20**; Mark briefed the cluster: `fetch`, `referrer-policy`,
+  `mixed-content`, `content-security-policy`, `upgrade-insecure-requests`). The census
+  measured these in disk mode, where the generated files cannot pass; the lane measures
+  in server mode. P0 instrument landed on branch `fetch-security` (not merged): the
+  runner serves `.https.` tests from the https origin with a per-test page origin,
+  `window.isSecureContext`, and a Murm `close_notify` tolerance (Murm branch
+  `fetch-close-notify`, not merged) that lets https bodies be read; server-mode
+  `referrer-policy` 389 to 720 (Vano) and 391 to 739 (Boa) subtest passes. P1 landed
+  too (2026-10-21): a runtime-owned document policy container (referrer policy,
+  `upgrade-insecure-requests`, `block-all-mixed-content`) fed by `<meta>` and the
+  host-handed response headers reaches `fetch()` and XHR through two new
+  `ResourceRequest` fields, and netfetcher gained the 4096-byte referrer cap:
+  `referrer-policy` 720 to 908 (Vano) and 739 to 908 (Boa), `upgrade-insecure-requests`
+  154 to 178, zero lost passes on either engine. Next: P2 element loads, P3 Fetch
+  Metadata, P4 fetch API residuals; CSP is its own lane. Rulings recorded in Mark's
+  words.
+
 ## WPT census — the web platform beyond CSS
 
 - [census_panics_plan](2026-10-03_census_panics_plan.md)

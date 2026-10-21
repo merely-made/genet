@@ -111,7 +111,7 @@ pub use dom::{
 pub use fetch::{FetchHandler, FetchOutcome, FetchRequest};
 pub use harness::{HarnessCompletion, TestResult};
 pub use parse::{NoScriptLoader, ParseReport, ParserScriptLoader};
-pub use timing::{ElapsedClock, PerformanceClockProfile};
+pub use timing::{SharedClock, TimeResolution};
 pub use platform::StorageProvider;
 pub use webgl::{WebGlFactory, WebGlHandler};
 pub use websocket::{WebSocketHandler, WebSocketRequest};
@@ -681,7 +681,10 @@ pub(crate) fn capture_task_hooks_from_call<E: ScriptEngine>(
 /// Realm-owned state shared with native frame creation. Hosts point back weakly.
 #[derive(Default)]
 pub(crate) struct AgentState {
-    pub(crate) performance_clock: timing::PerformanceClockProfile,
+    /// The process's shared clock, and its reading when this agent's timer
+    /// queue started (the zero of `run_timers`' `now_ms`).
+    pub(crate) clock: timing::SharedClock,
+    pub(crate) clock_base: f64,
     /// Type-erased rooted callables, keyed by their creation realm. Frame
     /// teardown can release them without needing the concrete backend type.
     pub(crate) task_hooks: std::collections::BTreeMap<(RealmId, &'static str), Rc<dyn std::any::Any>>,
@@ -841,35 +844,61 @@ fn install_window_proxy_in_realm<E: ScriptEngine>(
     Ok(Some(engine.eval_in_realm(realm, WINDOW_PROXY_BOOTSTRAP)?))
 }
 
+/// Point the engine's `Date` at the shared clock, so `Date.now()` and
+/// `performance` never drift apart (a harness skip moves both).
+fn install_date_source<E: ScriptEngine>(engine: &mut E, clock: &SharedClock) {
+    let clock = clock.clone();
+    engine.set_date_source(Rc::new(move || clock.epoch_now_ms()));
+}
+
 impl<E: ScriptEngine> Runtime<E> {
     /// Construct an engine and install the `Window` host surface on it.
     pub fn new() -> Result<Self, E::Error> {
-        Self::with_performance_clock(PerformanceClockProfile::default())
+        Self::with_clock(SharedClock::process())
     }
 
-    /// Construct a window runtime with an explicit performance clock profile.
-    pub fn with_performance_clock(profile: PerformanceClockProfile) -> Result<Self, E::Error> {
-        Self::with_scope(GlobalScopeKind::Window, profile)
+    /// Construct a window runtime over an explicit shared clock: a harness's
+    /// skipping clock, or an embedder's controlled one.
+    pub fn with_clock(clock: SharedClock) -> Result<Self, E::Error> {
+        Self::with_scope(GlobalScopeKind::Window, clock)
     }
 
     /// The same surface with a worker global: no `window`, and a read-only
     /// `self`. Used by [`worker::worker_main`] on the worker thread.
-    pub(crate) fn new_worker() -> Result<Self, E::Error> {
-        Self::with_scope(GlobalScopeKind::Worker, PerformanceClockProfile::default())
+    /// The shared clock this runtime reads.
+    pub fn clock(&self) -> SharedClock {
+        self.agent.borrow().clock.clone()
+    }
+
+    /// Milliseconds on the shared clock since this runtime's timer queue
+    /// started: the `now_ms` a host passes to [`run_timers`](Self::run_timers)
+    /// when its timers should follow the shared clock.
+    pub fn clock_elapsed_ms(&self) -> f64 {
+        let agent = self.agent.borrow();
+        agent.clock.now_ms() - agent.clock_base
+    }
+
+    pub(crate) fn new_worker(clock: SharedClock) -> Result<Self, E::Error> {
+        Self::with_scope(GlobalScopeKind::Worker, clock)
     }
 
     fn with_scope(
         scope: GlobalScopeKind,
-        profile: PerformanceClockProfile,
+        clock: SharedClock,
     ) -> Result<Self, E::Error> {
         let mut engine = E::new()?;
+        install_date_source(&mut engine, &clock);
         let host: SharedHost = Rc::new(RefCell::new(HostState::default()));
         // The default viewport: the same 800x600 the media-query evaluator
         // already assumes, so a host that never calls `set_viewport_size` still
         // has `innerWidth`/`innerHeight` agree with `matchMedia`.
         host.borrow_mut().viewport_size = (800.0, 600.0);
         let agent = Rc::new(RefCell::new(AgentState::default()));
-        agent.borrow_mut().performance_clock = profile;
+        {
+            let mut agent = agent.borrow_mut();
+            agent.clock_base = clock.now_ms();
+            agent.clock = clock;
+        }
         host.borrow_mut().agent = Rc::downgrade(&agent);
         agent.borrow_mut().register(MAIN_REALM, host.clone());
         engine.set_host_data(host.clone());
@@ -2646,7 +2675,13 @@ impl<E: ScriptEngineSnapshot> Runtime<E> {
         let worker_process_launcher = self.host.borrow().worker_process_launcher.clone();
         let boot_host: SharedHost = Rc::new(RefCell::new(HostState::default()));
         let agent = Rc::new(RefCell::new(AgentState::default()));
-        agent.borrow_mut().performance_clock = self.agent.borrow().performance_clock.clone();
+        {
+            let donor = self.agent.borrow();
+            let mut fresh = agent.borrow_mut();
+            fresh.clock = donor.clock.clone();
+            fresh.clock_base = donor.clock_base;
+            install_date_source(&mut engine, &donor.clock);
+        }
         {
             // The heap keeps its windows' and plain targets' listeners and
             // callbacks, and the ids they were keyed by.

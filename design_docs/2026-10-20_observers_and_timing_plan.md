@@ -25,6 +25,13 @@ Round 2, 2026-10-20:
 | Harness `Date` | "Date follows the clock, both engines (Recommended)": the virtual clock is epoch-anchored and drives `Date`. Boa uses its `Clock`. Vano gets an additive `HostHooks` clock hook on its own branch, shown to Mark before anything is pinned. |
 | Sleep | "Excludes sleep (Recommended)": the host clock pauses during system suspend on every platform. |
 
+Round 3, 2026-10-20. This was raised because the virtual clock moves only when a timer fires, so a spin on `performance.now()` or `Date.now()` never ends:
+
+| Question | Answer |
+|---|---|
+| The harness clock | "Real time plus skipped waits (Recommended)": harness time is the shared host clock plus the total of the waits it skipped. Timers still fire in delay order without sleeping, and each fire adds the skip needed to reach its due time. |
+| Vano base for the `Date` hook | "Branch from Genet's pin fd9db00 (Recommended)": the repin moves Genet by exactly the hook commit; the branch reaches Vano main separately. |
+
 ## Assessment (2026-10-20)
 
 ### Where each piece's prerequisites live
@@ -85,7 +92,7 @@ Done when each of the six files is attributed from a verbose run on both engines
 
 ### Phase G: the element geometry seam (CSSOM View subset)
 
-Done when a `GeometryHandler` host seam (modelled on `SelectionHandler`) is installed by the harness `RenderSession` and by `LiveryScriptedDocument`, backed by Livery's fragment and scroll state. Through it, script gets `Element.getBoundingClientRect`/`getClientRects`, `clientTop`/`Left`/`Width`/`Height`, `scrollTop`/`scrollLeft` (get and set), element `scrollTo`/`scrollBy`/`scrollWidth`/`scrollHeight`, `document.scrollingElement`, and `window.scrollTo`/`scrollBy` reaching Livery. Done also requires regressions at the seam on both engines, and `css/cssom-view` mapped before and after with zero lost passes.
+Done when a `GeometryHandler` host seam (modelled on `SelectionHandler`) is installed by the harness `RenderSession` and by `LiveryScriptedDocument`, backed by Livery's fragment and scroll state. Through it, script gets `Element.getBoundingClientRect`/`getClientRects`, `clientTop`/`Left`/`Width`/`Height`, `HTMLElement.offsetParent`/`offsetTop`/`Left`/`Width`/`Height` (IO's test helper computes root bounds from them), `scrollTop`/`scrollLeft` (get and set), element `scrollTo`/`scrollBy`/`scrollWidth`/`scrollHeight`, `document.scrollingElement`, and `window.scrollTo`/`scrollBy` reaching Livery. Done also requires regressions at the seam on both engines, and `css/cssom-view` mapped before and after with zero lost passes.
 
 ### Phase I: IntersectionObserver
 
@@ -100,3 +107,6 @@ Done when `IntersectionObserver` and `IntersectionObserverEntry` exist per the I
 ## Progress
 
 - **2026-10-20.** Worktree and branch created from main `16b971188f3`. Assessment done from the census maps, the WPT sources and the code. Two rounds of rulings recorded above. No code changed yet.
+- **2026-10-20, phase H code.** `SharedClock` (`script-runtime-api/timing.rs`) replaces the per-runtime `Instant` and the `PerformanceClockProfile`: one process clock from `QueryUnbiasedInterruptTimePrecise` (Windows) or `CLOCK_MONOTONIC`/`CLOCK_UPTIME_RAW` (Unix), anchored once to the epoch; coarsening at 100 µs (5 µs isolated) with a host-raisable floor; thread workers take the page's clock in `WorkerBoot`, process workers rebuild it from an anchor in `Hello` (protocol version 2). `ScriptEngine::set_date_source` points `Date` at it: Boa through its `Clock`, Vano through a new `HostHooks::system_time_millis` (Vano branch `genet-date-clock`, commit `b1f3d25d`, from the pin `fd9db00`, not pushed or pinned; the lane builds against it with a local `--config patch`). The harness's two drive loops use `SharedClock::skipping()` instead of a private `skipped_ms`. `crossOriginIsolated` is defined as `false`. Two new dependency edges in `Cargo.lock` (`libc`, `windows-sys 0.61.2`), no version moves.
+- **2026-10-20, phase H accounting** (frozen before-runner `16b971188f3`, candidate `runners/after-h.freeze.txt`, `--release` without netfetch, disk mode, `--jobs 1`): hr-time subtests 5/19 -> 10/19 and performance-timeline 35/70 -> 38/73 on **both** engines, with **0 lost** and every gain attributed (`Code/testing/genet/observers-timing/accounting-after-h.json`; accountant `account_observers_timing.py`). Gains: coarsening 2+3, now() positive 2, Date and performance on one clock 1, shared-clock time origin 1, real time in the harness clock 2, spins ending on the harness clock 2. Still failing in hr-time: worker origins need `Blob`/`URL.createObjectURL` workers, `crossOriginIsolated` tests need server-mode headers, frame and unload origins need the navigating host's start (those are navigation work), and the idlharness setup fetches WebIDL.
+- Passed: 28 `cheap_globals` tests and 4 `SharedClock` tests on both engines under the local Vano patch.

@@ -63,5 +63,13 @@ pollster = "0.4"
 getrandom = "0.4"
 serde_json = { workspace = true }
 
+# hr-time's shared monotonic clock, read from a system-wide source that pauses
+# during system sleep (timing.rs).
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_System_WindowsProgramming"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
 [target.'cfg(target_pointer_width = "64")'.dev-dependencies]
 script-engine-nova = { path = "../script-engine-nova" }

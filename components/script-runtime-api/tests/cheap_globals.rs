@@ -8,9 +8,9 @@
 //! (`Image` / `Option` / `Audio`). Each body runs against both backends.
 
 use script_engine_api::ScriptEngine;
-use script_runtime_api::{ElapsedClock, PerformanceClockProfile, Runtime};
-use std::cell::Cell;
-use std::rc::Rc;
+use script_runtime_api::{Runtime, SharedClock, TimeResolution};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 /// Evaluate `expr` and read its value back as a string.
 fn read<E: ScriptEngine>(rt: &mut Runtime<E>, expr: &str) -> String {
@@ -58,30 +58,58 @@ fn performance_clock_works<E: ScriptEngine>() {
     );
 }
 
-fn virtual_performance_clock_follows_timer_driver<E: ScriptEngine>() {
-    let mut rt = Runtime::<E>::with_performance_clock(PerformanceClockProfile::Virtual)
-        .expect("virtual runtime");
-    assert_eq!(
-        read(&mut rt, "String(performance.now() === performance.now())"),
-        "true",
-        "reads at one virtual instant do not advance time"
-    );
+/// A controlled shared clock: milliseconds read from an atomic the test moves.
+fn controlled_clock(epoch_ms_at_zero: f64, start_ms: f64) -> (SharedClock, Arc<AtomicU64>) {
+    let ms = Arc::new(AtomicU64::new(start_ms.to_bits()));
+    let reader = ms.clone();
+    let clock = SharedClock::from_reader(epoch_ms_at_zero, move || {
+        f64::from_bits(reader.load(Ordering::SeqCst))
+    });
+    (clock, ms)
+}
+
+fn set_ms(cell: &AtomicU64, ms: f64) {
+    cell.store(ms.to_bits(), Ordering::SeqCst);
+}
+
+fn shared_clock_skip_moves_performance<E: ScriptEngine>() {
+    let (clock, _) = controlled_clock(1_700_000_000_000.0, 1_000.0);
+    let mut rt = Runtime::<E>::with_clock(clock.clone()).expect("runtime");
     assert_eq!(read(&mut rt, "String(performance.now())"), "0");
-    rt.eval("var before = performance.now(); var after = 0; setTimeout(function(){ after = performance.now(); }, 50);")
-        .expect("schedule");
-    rt.run_event_loop(10).expect("drain");
-    assert_eq!(read(&mut rt, "String(Math.abs(after - before - 50) < 0.00001)"), "true");
+    // The origin is the clock's reading as an epoch timestamp, on the grid.
+    assert_eq!(read(&mut rt, "String(performance.timeOrigin)"), "1700000001000");
+    // A harness skip is elapsed time for everything that reads the clock.
+    clock.skip(50.0);
+    assert_eq!(read(&mut rt, "String(performance.now())"), "50");
+    assert_eq!(rt.clock_elapsed_ms(), 50.0);
+    rt.eval("performance.mark('after-skip')").expect("mark");
+    assert_eq!(
+        read(&mut rt, "String(performance.getEntriesByName('after-skip')[0].startTime)"),
+        "50"
+    );
+}
+
+/// `Date` reads the shared clock: Boa through its `Clock`, Vano through its
+/// `HostHooks::system_time_millis`.
+fn date_follows_shared_clock<E: ScriptEngine>() {
+    let (clock, ms) = controlled_clock(1_700_000_000_000.0, 1_000.0);
+    let mut rt = Runtime::<E>::with_clock(clock.clone()).expect("runtime");
+    assert_eq!(read(&mut rt, "String(Date.now())"), "1700000001000");
+    clock.skip(2_000.0);
+    set_ms(&ms, 1_000.25);
+    assert_eq!(read(&mut rt, "String(Date.now())"), "1700000003000");
+    assert_eq!(
+        read(&mut rt, "String(Date.now() - performance.timeOrigin === Math.floor(performance.now()))"),
+        "true"
+    );
 }
 
 fn host_performance_clock_follows_configured_reader<E: ScriptEngine>() {
-    let elapsed = Rc::new(Cell::new(1_000.0));
-    let reader = elapsed.clone();
-    let clock = ElapsedClock::from_reader(move || reader.get());
-    let mut rt = Runtime::<E>::with_performance_clock(PerformanceClockProfile::Host(clock))
-        .expect("configured host runtime");
+    let (clock, elapsed) = controlled_clock(0.0, 1_000.0);
+    let mut rt = Runtime::<E>::with_clock(clock).expect("configured host runtime");
 
     assert_eq!(read(&mut rt, "String(performance.now())"), "0");
-    elapsed.set(1_012.5);
+    set_ms(&elapsed, 1_012.5);
     assert_eq!(read(&mut rt, "String(performance.now())"), "12.5");
     assert_eq!(read(&mut rt, "String(performance.now())"), "12.5");
     rt.eval("performance.mark('controlled')").expect("mark");
@@ -89,15 +117,30 @@ fn host_performance_clock_follows_configured_reader<E: ScriptEngine>() {
         read(&mut rt, "String(performance.getEntriesByName('controlled')[0].startTime)"),
         "12.5"
     );
-    elapsed.set(1_005.0);
+    // Coarsened to 100 µs: a reading inside the step reports the step.
+    set_ms(&elapsed, 1_012.5999);
     assert_eq!(read(&mut rt, "String(performance.now())"), "12.5");
-    elapsed.set(1_020.0);
+    // A regressing reader never makes time go back.
+    set_ms(&elapsed, 1_005.0);
+    assert_eq!(read(&mut rt, "String(performance.now())"), "12.5");
+    set_ms(&elapsed, 1_020.0);
     assert_eq!(read(&mut rt, "String(performance.now())"), "20");
 
-    // Advancing timer state does not manufacture host elapsed time.
+    // Draining timers cooperatively does not manufacture elapsed time.
     rt.eval("setTimeout(function() {}, 50)").expect("schedule");
     rt.run_event_loop(10).expect("drain");
     assert_eq!(read(&mut rt, "String(performance.now())"), "20");
+}
+
+fn host_resolution_coarsens_further<E: ScriptEngine>() {
+    let (clock, elapsed) = controlled_clock(0.0, 1_000.0);
+    let clock = clock.with_resolution(TimeResolution {
+        default_ms: 1.0,
+        isolated_ms: 1.0,
+    });
+    let mut rt = Runtime::<E>::with_clock(clock).expect("runtime");
+    set_ms(&elapsed, 1_012.9);
+    assert_eq!(read(&mut rt, "String(performance.now())"), "12");
 }
 
 fn user_timing_works<E: ScriptEngine>() {
@@ -600,8 +643,10 @@ macro_rules! both_engines {
 
 both_engines! {
     performance_clock_works => (performance_clock_on_boa, performance_clock_on_nova),
-    virtual_performance_clock_follows_timer_driver => (virtual_performance_clock_on_boa, virtual_performance_clock_on_nova),
+    shared_clock_skip_moves_performance => (shared_clock_skip_on_boa, shared_clock_skip_on_nova),
     host_performance_clock_follows_configured_reader => (host_performance_clock_on_boa, host_performance_clock_on_nova),
+    host_resolution_coarsens_further => (host_resolution_on_boa, host_resolution_on_nova),
+    date_follows_shared_clock => (date_follows_shared_clock_on_boa, date_follows_shared_clock_on_nova),
     user_timing_works => (user_timing_on_boa, user_timing_on_nova),
     performance_observer_works => (performance_observer_on_boa, performance_observer_on_nova),
     queue_microtask_works => (queue_microtask_on_boa, queue_microtask_on_nova),
@@ -612,6 +657,7 @@ both_engines! {
     crypto_works => (crypto_on_boa, crypto_on_nova),
     named_constructors_works_alias => (named_constructors_on_boa, named_constructors_on_nova),
 }
+
 
 fn named_constructors_works_alias<E: ScriptEngine>() {
     named_constructors_work::<E>();

@@ -4945,6 +4945,117 @@
     return new DOMRect(left, top, right - left, bottom - top);
   };
 
+  // ---- element geometry (CSSOM View) -----------------------------------------
+  //
+  // The host's geometry seam answers; this is only marshalling and the
+  // attribute shapes the spec asks for. No layout bound means no box: empty
+  // rect lists and zero metrics, which is also what a `display: none` element
+  // reads in a real engine.
+  var GEOM = { clientTop: 0, clientLeft: 1, clientWidth: 2, clientHeight: 3,
+               scrollLeft: 4, scrollTop: 5, scrollWidth: 6, scrollHeight: 7,
+               offsetTop: 8, offsetLeft: 9, offsetWidth: 10, offsetHeight: 11 };
+  function geomMetrics(el) {
+    if (typeof __geomMetrics !== 'function') return null;
+    var blob = __geomMetrics(el.__ref);
+    if (!blob) return null;
+    var f = String(blob).split(',');
+    for (var i = 0; i < f.length; i++) f[i] = +f[i];
+    return f;
+  }
+  function geomRects(el) {
+    var out = [];
+    if (typeof __geomRects !== 'function') return out;
+    var blob = __geomRects(el.__ref);
+    if (!blob) return out;
+    var lines = String(blob).split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      if (!lines[i]) continue;
+      var f = lines[i].split(',');
+      out.push(new DOMRect(+f[0], +f[1], +f[2], +f[3]));
+    }
+    return out;
+  }
+  Element.prototype.getClientRects = function() {
+    var rects = geomRects(this);
+    rects.item = function(i) { return this[i] === undefined ? null : this[i]; };
+    return rects;
+  };
+  Element.prototype.getBoundingClientRect = function() {
+    var rects = geomRects(this);
+    if (!rects.length) return new DOMRect(0, 0, 0, 0);
+    var left = rects[0].x, top = rects[0].y;
+    var right = left + rects[0].width, bottom = top + rects[0].height;
+    for (var i = 1; i < rects.length; i++) {
+      var r = rects[i];
+      if (r.x < left) left = r.x;
+      if (r.y < top) top = r.y;
+      if (r.x + r.width > right) right = r.x + r.width;
+      if (r.y + r.height > bottom) bottom = r.y + r.height;
+    }
+    return new DOMRect(left, top, right - left, bottom - top);
+  };
+  function geomInteger(proto, name) {
+    Object.defineProperty(proto, name, {
+      configurable: true, enumerable: true,
+      get: function() { var m = geomMetrics(this); return m ? Math.round(m[GEOM[name]]) : 0; }
+    });
+  }
+  ['clientTop', 'clientLeft', 'clientWidth', 'clientHeight', 'scrollWidth', 'scrollHeight']
+    .forEach(function(name) { geomInteger(Element.prototype, name); });
+  function geomFinite(v) { v = Number(v); return isFinite(v) ? v : 0; }
+  ['scrollLeft', 'scrollTop'].forEach(function(name) {
+    Object.defineProperty(Element.prototype, name, {
+      configurable: true, enumerable: true,
+      get: function() { var m = geomMetrics(this); return m ? m[GEOM[name]] : 0; },
+      set: function(v) {
+        if (typeof __geomScroll !== 'function') return;
+        v = geomFinite(v);
+        if (name === 'scrollLeft') __geomScroll(this.__ref, v, 'keep');
+        else __geomScroll(this.__ref, 'keep', v);
+      }
+    });
+  });
+  function scrollArgs(el, a, b, relative) {
+    var x, y;
+    if (a !== null && typeof a === 'object') { x = a.left; y = a.top; }
+    else { x = a; y = b; }
+    var left = x === undefined ? undefined : geomFinite(x);
+    var top = y === undefined ? undefined : geomFinite(y);
+    if (relative) {
+      left = (left || 0) + el.scrollLeft;
+      top = (top || 0) + el.scrollTop;
+    }
+    if (typeof __geomScroll === 'function') {
+      __geomScroll(el.__ref, left === undefined ? 'keep' : left, top === undefined ? 'keep' : top);
+    }
+  }
+  Element.prototype.scrollTo = function(a, b) { scrollArgs(this, a, b, false); };
+  Element.prototype.scroll = Element.prototype.scrollTo;
+  Element.prototype.scrollBy = function(a, b) { scrollArgs(this, a, b, true); };
+  function installOffsetGeometry() {
+    var htmlElementProto = htmlInterfaceConstructors.HTMLElement && htmlInterfaceConstructors.HTMLElement.prototype;
+  if (htmlElementProto) {
+    ['offsetTop', 'offsetLeft', 'offsetWidth', 'offsetHeight'].forEach(function(name) {
+      geomInteger(htmlElementProto, name);
+    });
+    Object.defineProperty(htmlElementProto, 'offsetParent', {
+      configurable: true, enumerable: true,
+      get: function() {
+        if (typeof __geomOffsetParent !== 'function') return null;
+        var ref = __geomOffsetParent(this.__ref);
+        return ref === undefined ? null : wrapNode(ref);
+      }
+    });
+  }
+  }
+  Object.defineProperty(Document.prototype, 'scrollingElement', {
+    configurable: true, enumerable: true,
+    get: function() {
+      if (this.compatMode === 'BackCompat') return this.body || null;
+      return this.documentElement;
+    }
+  });
+
   setClassString(Range.prototype, 'Range');
   globalThis.Range = Range;
 
@@ -5204,6 +5315,7 @@
   };
 
   installHtmlInterfaceTable();
+  installOffsetGeometry();
   installShapeInterfaces();
   installTraversal();
 

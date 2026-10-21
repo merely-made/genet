@@ -278,6 +278,10 @@ pub(crate) fn install_dom_surface<E: ScriptEngine>(
     engine.set_function::<mutation_observer::SetObserving>("__moObserving", 1)?;
     engine.set_function::<mutation_observer::TakeRecords>("__moTake", 0)?;
     engine.set_function::<mutation_observer::SetGroup>("__moGroup", 1)?;
+    engine.set_function::<geometry::Rects>("__geomRects", 1)?;
+    engine.set_function::<geometry::Metrics>("__geomMetrics", 1)?;
+    engine.set_function::<geometry::SetScroll>("__geomScroll", 3)?;
+    engine.set_function::<geometry::OffsetParent>("__geomOffsetParent", 1)?;
     engine.set_function::<selection::RangeRects>("__rangeRects", 4)?;
     engine.set_function::<selection::VisualSelection>("__selectionVisual", 4)?;
     let html_interfaces = html_interfaces::bootstrap_script();
@@ -1287,6 +1291,8 @@ fn find_by_id(dom: &ScriptedDom, root: NodeId, target: &str) -> Option<NodeId> {
 }
 
 pub(crate) mod adoption;
+mod geometry;
+pub use geometry::{ElementMetrics, GeometryHandler};
 mod html_interfaces;
 mod html_interfaces_generated;
 pub(crate) mod markup_insertion;

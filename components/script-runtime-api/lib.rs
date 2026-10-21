@@ -105,7 +105,7 @@ pub use crypto::RandomSource;
 pub use dom::markup_insertion::{MarkupState, ReadyState};
 pub use dom::{
     ComputedStyleHandler, CookieProvider, InlineStyleHandler, InlineStyleValueResult,
-    MediaQueryHandler, SelectionHandler, StyleSheetHandler, StyleSheetImportOwner,
+    ElementMetrics, GeometryHandler, MediaQueryHandler, SelectionHandler, StyleSheetHandler, StyleSheetImportOwner,
     StyleSheetImportRule, StyleSheetMutationError, StyleSheetRule, StyleSheetRuleKind,
 };
 pub use fetch::{FetchHandler, FetchOutcome, FetchRequest};
@@ -292,6 +292,12 @@ pub struct HostState {
     /// range geometry is empty and the projection goes nowhere. Script remains
     /// the only owner of the selection either way.
     pub selection: Option<std::rc::Rc<dyn SelectionHandler>>,
+    /// The host's layout seam for element geometry (`getBoundingClientRect`,
+    /// `client*` / `offset*` / `scroll*`) and for scrolling the viewport and
+    /// elements. `None` = no layout bound: boxes are empty, metrics are zero and
+    /// the viewport scroll falls back to the deferred
+    /// [`viewport_scroll`](Self::viewport_scroll) field.
+    pub geometry: Option<std::rc::Rc<dyn GeometryHandler>>,
     /// The selected CSS engine's specified-value normalizer for
     /// `element.style`. `None` preserves authored values verbatim.
     pub inline_style: Option<std::rc::Rc<dyn InlineStyleHandler>>,
@@ -2214,6 +2220,11 @@ impl<E: ScriptEngine> Runtime<E> {
         self.host.borrow_mut().selection = Some(std::rc::Rc::from(handler));
     }
 
+    /// Install the host's geometry seam; see [`GeometryHandler`].
+    pub fn set_geometry_handler(&mut self, handler: Box<dyn GeometryHandler>) {
+        self.host.borrow_mut().geometry = Some(std::rc::Rc::from(handler));
+    }
+
     /// Install specified-value parsing and canonical serialization for the
     /// inline `CSSStyleDeclaration` surface.
     pub fn set_inline_style_handler(&mut self, handler: Box<dyn InlineStyleHandler>) {
@@ -3634,8 +3645,13 @@ fn scroll_arg<E: ScriptEngine>(cx: &mut E::CallCx<'_>, i: usize) -> Result<f64, 
 fn read_scroll<E: ScriptEngine>(cx: &mut E::CallCx<'_>) -> (f32, f32) {
     cx.host_data()
         .and_then(|d| {
-            d.downcast_ref::<RefCell<HostState>>()
-                .map(|h| h.borrow().viewport_scroll)
+            d.downcast_ref::<RefCell<HostState>>().map(|h| {
+                let (geometry, deferred) = {
+                    let h = h.borrow();
+                    (h.geometry.clone(), h.viewport_scroll)
+                };
+                geometry.map_or(deferred, |g| g.viewport_scroll())
+            })
         })
         .unwrap_or((0.0, 0.0))
 }
@@ -3645,6 +3661,9 @@ fn read_scroll<E: ScriptEngine>(cx: &mut E::CallCx<'_>) -> (f32, f32) {
 fn write_scroll<E: ScriptEngine>(cx: &mut E::CallCx<'_>, scroll: (f32, f32)) {
     if let Some(data) = cx.host_data() {
         if let Some(host) = data.downcast_ref::<RefCell<HostState>>() {
+            // A host with geometry scrolls now and answers with the clamped offset.
+            let geometry = host.borrow().geometry.clone();
+            let scroll = geometry.map_or(scroll, |g| g.set_viewport_scroll(scroll.0, scroll.1));
             let mut host = host.borrow_mut();
             host.viewport_scroll = scroll;
             host.scroll_into_view = None;

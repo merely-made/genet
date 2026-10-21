@@ -1264,6 +1264,40 @@ pub fn content_box_rect(style: &ComputedValues, fragment: &TreeFragment) -> (f32
     )
 }
 
+/// A fragment's resolved border and padding widths, `[top, right, bottom, left]`.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct FragmentEdges {
+    pub border: [f32; 4],
+    pub padding: [f32; 4],
+}
+
+/// Resolve a fragment's border and padding widths with the same em and
+/// percentage-basis approximations as [`content_box_size`].
+pub fn fragment_edges(style: &ComputedValues, fragment: &TreeFragment) -> FragmentEdges {
+    let em = match style.font_size {
+        FontSize::Value(CssLengthPercentage::Length(Length {
+            value,
+            unit: livery::values::LengthUnit::Px,
+        })) => value,
+        _ => 16.0,
+    };
+    let pad = |value| length_percentage_px(value, em, fragment.width);
+    FragmentEdges {
+        border: [
+            border_width_px(style.border_top_style, style.border_top_width, em),
+            border_width_px(style.border_right_style, style.border_right_width, em),
+            border_width_px(style.border_bottom_style, style.border_bottom_width, em),
+            border_width_px(style.border_left_style, style.border_left_width, em),
+        ],
+        padding: [
+            pad(style.padding_top.0),
+            pad(style.padding_right.0),
+            pad(style.padding_bottom.0),
+            pad(style.padding_left.0),
+        ],
+    }
+}
+
 struct FragmentOutput<'a> {
     fragments: &'a mut FragmentTree,
 }

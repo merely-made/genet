@@ -201,14 +201,24 @@ pub(crate) fn stream_script_already_started(host: &HostState, node: NodeId) -> b
 /// during the call. Queuing them until the calling script returns is visibly
 /// wrong: `document.write("PASS"); assert(document.body.textContent == "PASS")`
 /// is the shape a whole WPT battery is written in.
-fn write_pump(host: &mut HostState) {
+///
+/// Returns true when the parser created an element a definition may claim:
+/// the bootstrap then upgrades it, runs that insertion's custom element
+/// reactions, and continues the write (`__docWriteContinue`), so a
+/// connectedCallback runs before the element's children are parsed.
+fn write_pump(host: &mut HostState) -> bool {
     let Some(stream) = host.markup.open_stream.take() else {
-        return;
+        return false;
     };
     let pause = with_parked(host, &stream, || stream.parser.pump_written());
     host.markup.open_stream = Some(stream);
-    if pause != ParsePause::Done {
-        host.markup.stalled = Some(pause);
+    match pause {
+        ParsePause::Done => false,
+        ParsePause::Created => true,
+        pause => {
+            host.markup.stalled = Some(pause);
+            false
+        },
     }
 }
 
@@ -561,7 +571,7 @@ impl<E: ScriptEngine> NativeFn<E> for DocWrite {
         let text = cx.value_to_string(&text_v)?;
         let a1 = cx.arg(1);
         let target = stream_target::<E>(cx, &a1)?;
-        with_host::<E, _>(cx, |host| {
+        let created = with_host::<E, _>(cx, |host| {
             // A write into a document that is not the active one must not touch
             // the active one — which is what this did until 2026-09-08, so
             // `doc.write(...)` on a `createHTMLDocument` result wiped the page.
@@ -571,7 +581,7 @@ impl<E: ScriptEngine> NativeFn<E> for DocWrite {
                     host.dom.set_document_encoding(document, encoding);
                 }
                 detached_write(host, document, &text);
-                return;
+                return false;
             }
             if host.markup.open_stream.is_none() {
                 // The implied `document.open`: the document is replaced, so
@@ -584,14 +594,17 @@ impl<E: ScriptEngine> NativeFn<E> for DocWrite {
                 open_stream_begin(host);
             }
             if let Some(stream) = &host.markup.open_stream {
+                // A definition made by the writing script has not reached the
+                // parser's policy yet; recording means one exists.
+                if host.markup.parser_active && host.dom.is_recording_reactions() {
+                    stream.parser.policy().set_upgrade_at_creation(true);
+                }
                 stream.parser.write_at_insertion_point(&text);
             }
             host.markup.writes_applied += 1;
-            if host.markup.parser_active {
-                write_pump(host);
-            }
+            host.markup.parser_active && write_pump(host)
         });
-        cx.make_string("")
+        cx.make_string(if created == Some(true) { "c" } else { "" })
     }
 }
 
@@ -601,6 +614,40 @@ impl<E: ScriptEngine> NativeFn<E> for DocWrite {
 ///
 /// This is the one seam that makes a written `<script>` run: the tokenizer
 /// cannot call the engine, so the loop lives in `document.write` itself.
+/// `__docWriteCreated()` → ids of the elements the written source created
+/// since the last pause, for the bootstrap's upgrade at creation.
+pub(crate) struct DocWriteCreated;
+impl<E: ScriptEngine> NativeFn<E> for DocWriteCreated {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let ids = with_host::<E, _>(cx, |host| {
+            let Some(stream) = &host.markup.open_stream else {
+                return String::new();
+            };
+            stream
+                .parser
+                .policy()
+                .take_custom_candidates()
+                .into_iter()
+                .filter(|&id| host.dom.is_live(id))
+                .map(|id| id.raw().to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        })
+        .unwrap_or_default();
+        cx.make_string(&ids)
+    }
+}
+
+/// `__docWriteContinue()` → tokenize the rest of the written source; `"c"`
+/// again at the next element creation.
+pub(crate) struct DocWriteContinue;
+impl<E: ScriptEngine> NativeFn<E> for DocWriteContinue {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let created = with_host::<E, _>(cx, |host| host.markup.parser_active && write_pump(host));
+        cx.make_string(if created == Some(true) { "c" } else { "" })
+    }
+}
+
 pub(crate) struct DocPumpStream;
 impl<E: ScriptEngine> NativeFn<E> for DocPumpStream {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
@@ -772,6 +819,8 @@ pub(crate) fn install<E: ScriptEngine>(
     engine.set_function::<CurrentScript>("__currentScript", 0)?;
     engine.set_function::<DocOpen>("__docOpen", 1)?;
     engine.set_function::<DocWrite>("__docWrite", 2)?;
+    engine.set_function::<DocWriteCreated>("__docWriteCreated", 0)?;
+    engine.set_function::<DocWriteContinue>("__docWriteContinue", 0)?;
     engine.set_function::<DocPumpStream>("__docPumpStream", 1)?;
     engine.set_function::<DocClose>("__docClose", 1)?;
     engine.set_function::<StageScripts>("__stageScripts", 2)?;

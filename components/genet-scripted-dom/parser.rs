@@ -565,6 +565,21 @@ pub enum ParsePause {
     Done,
 }
 
+/// Cut `source` just past each `>`, so the tokenizer sees one tag at a time.
+fn split_after_tags(source: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut rest = source;
+    while let Some(cut) = rest.find('>') {
+        let (head, tail) = rest.split_at(cut + 1);
+        out.push(head.to_owned());
+        rest = tail;
+    }
+    if !rest.is_empty() {
+        out.push(rest.to_owned());
+    }
+    out
+}
+
 /// html5ever driven a pause at a time, over the live arena.
 pub struct DocumentParser<A: DomAccess> {
     parser: driver::Parser<ScriptedTreeSink<A>>,
@@ -574,6 +589,11 @@ pub struct DocumentParser<A: DomAccess> {
     /// [`ParserPolicy::upgrade_at_creation`] is set it is fed a tag at a time
     /// so the driver regains control at element creation.
     pending: RefCell<std::collections::VecDeque<StrTendril>>,
+    /// How many chunks at the front of `pending` are `document.write` source
+    /// still to tokenize. While a custom element is defined, written source is
+    /// queued a tag at a time like the document's own, so [`pump_written`]
+    /// can hand control back at element creation inside the write.
+    written_chunks: std::cell::Cell<usize>,
 }
 
 impl<A: DomAccess> DocumentParser<A> {
@@ -585,6 +605,7 @@ impl<A: DomAccess> DocumentParser<A> {
             parser,
             policy,
             pending: RefCell::new(std::collections::VecDeque::new()),
+            written_chunks: std::cell::Cell::new(0),
         }
     }
 
@@ -617,7 +638,16 @@ impl<A: DomAccess> DocumentParser<A> {
             return;
         }
         self.reclaim_input();
-        self.parser.input_buffer.push_back(StrTendril::from(source));
+        if !self.policy.upgrade_at_creation() {
+            self.parser.input_buffer.push_back(StrTendril::from(source));
+            return;
+        }
+        let chunks = split_after_tags(source);
+        let mut pending = self.pending.borrow_mut();
+        for chunk in chunks.iter().rev() {
+            pending.push_front(StrTendril::from(chunk.as_str()));
+        }
+        self.written_chunks.set(self.written_chunks.get() + chunks.len());
     }
 
     /// Tokenize the characters written at the insertion point and stop there.
@@ -634,11 +664,27 @@ impl<A: DomAccess> DocumentParser<A> {
                     if self.policy.upgrade_at_creation() && self.policy.has_custom_candidates() {
                         return ParsePause::Created;
                     }
-                    return ParsePause::Done;
+                    if !self.feed_written_chunk() {
+                        return ParsePause::Done;
+                    }
                 },
                 _ => continue,
             }
         }
+    }
+
+    /// Move the next queued chunk of written source into the tokenizer.
+    fn feed_written_chunk(&self) -> bool {
+        if self.written_chunks.get() == 0 {
+            return false;
+        }
+        let Some(chunk) = self.pending.borrow_mut().pop_front() else {
+            self.written_chunks.set(0);
+            return false;
+        };
+        self.written_chunks.set(self.written_chunks.get() - 1);
+        self.parser.input_buffer.push_back(chunk);
+        true
     }
 
     /// Whether the tokenizer has consumed everything pushed so far.
@@ -659,6 +705,12 @@ impl<A: DomAccess> DocumentParser<A> {
         let Some(chunk) = pending.pop_front() else {
             return false;
         };
+        // Written chunks sit at the front and are already a tag each.
+        if self.written_chunks.get() > 0 {
+            self.written_chunks.set(self.written_chunks.get() - 1);
+            self.parser.input_buffer.push_back(chunk);
+            return true;
+        }
         if !self.policy.upgrade_at_creation() {
             self.parser.input_buffer.push_back(chunk);
             return true;
@@ -686,6 +738,10 @@ impl<A: DomAccess> DocumentParser<A> {
         }
         if taken.is_empty() {
             return;
+        }
+        // Unread text taken back mid-write is written source still owed.
+        if self.written_chunks.get() > 0 {
+            self.written_chunks.set(self.written_chunks.get() + taken.len());
         }
         let mut pending = self.pending.borrow_mut();
         for chunk in taken.into_iter().rev() {

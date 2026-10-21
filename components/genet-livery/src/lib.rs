@@ -24,6 +24,7 @@ mod paint;
 /// Engine phase spans behind a host flag (T2's instrument).
 pub mod phase;
 mod placement;
+mod scroll_geometry;
 mod presentational_hints;
 mod style;
 // K4d6b: Buckram lays out live tables' block axis through the phase order it
@@ -92,8 +93,8 @@ pub use dom::{ElementRef, InteractionStates, SelectorTree};
 pub use image_resources::{DocumentImageSources, ImagePixels, ImageSourceLookup};
 pub use invalidation::{AttributeSnapshot, ElementSnapshot, IncrementalStyle, RestyleStats};
 pub use layout::{
-    BlockAlgorithmCounts, LayoutError, LiveryLayout, content_box_size, hit_test,
-    hit_test_with_scroll, layout, layout_with_text_system, resolve_container_query_styles,
+    BlockAlgorithmCounts, FragmentEdges, LayoutError, LiveryLayout, content_box_size, hit_test,
+    fragment_edges, hit_test_with_scroll, layout, layout_with_text_system, resolve_container_query_styles,
     resolve_container_query_styles_with_images, resolve_container_relative_styles,
     estimated_used_value_context, used_value_context_with_text_system,
 };
@@ -113,6 +114,7 @@ pub use paint::{
     emit_paint_list_with_text_system_scrolled_with_images_and_external_textures_with_document_base,
 };
 pub use placement::{ElementGeometry, element_geometry};
+pub use scroll_geometry::{ScrollMetrics, ancestor_scroll, is_scroll_container, scroll_metrics};
 pub use presentational_hints::{
     LegacyDescendantAlignment, PresentationalDeclarations, PresentationalHintDiagnostic,
     PresentationalHintProvider, PresentationalHints,

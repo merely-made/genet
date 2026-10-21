@@ -41,7 +41,7 @@
       "netrender d92050146 vello_rasterizer/mod.rs CpuImageCache::refresh: entries.entry(key).or_insert_with(..); documented as 'Keys identify immutable pixels until absent from a refreshed scene'. Its debug_assert compares only width/height/length and is compiled out in release (here dimensions changed 16x16 -> 8x8, so a debug build would assert).",
       "Genet side: paint.rs image_key_for allocates ordinal images.len()+1 per list, so the same slot gets the same key across frames whatever its pixels."
     ],
-    "owner_fork": "Answered by Mark, 2026-10-20: \"netrender side sounds cool, with blob identity as the comparator\". Fix is in NetRender CpuImageCache::refresh; not yet made."
+    "owner_fork": "Answered by Mark, 2026-10-20: \"netrender side sounds cool, with blob identity as the comparator\", then \"or the thing compared, rather\" (blob identity is the thing compared). Fix is in NetRender CpuImageCache::refresh; not yet made."
   },
   "evidence_images": [
     "2026-10-20_img_gpu/1-opaque-translucent.png",

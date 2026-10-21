@@ -331,6 +331,7 @@ impl ScriptedDom {
             .partition(|id| moving.contains(&id.raw()));
         self.slot_changes = kept;
         destination.slot_changes.extend(moved);
+        self.move_reaction_candidates_to(destination, &moving);
         // Assignment is not recomputed: no member changed parent in the move,
         // so the tables that came across are already the destination's answer.
     }

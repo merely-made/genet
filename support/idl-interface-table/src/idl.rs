@@ -103,6 +103,8 @@ pub struct Interface {
     pub attributes: Vec<Attribute>,
     pub has_constructor: bool,
     pub html_constructor: bool,
+    /// Attribute and operation names carrying `[CEReactions]`, in source order.
+    pub ce_reactions: Vec<String>,
     /// Declaration index in the source file, for stable emission order.
     pub order: usize,
 }
@@ -341,13 +343,23 @@ impl Parser {
             }
             if self.is_ident("attribute") {
                 self.i += 1;
+                let ce = ext.has("CEReactions");
                 if let Some(attr) = self.attribute(readonly, ext) {
+                    if ce {
+                        iface.ce_reactions.push(attr.name.clone());
+                    }
                     iface.attributes.push(attr);
                 }
                 continue;
             }
+            let start = self.i;
             if self.i < self.t.len() {
                 self.skip_to_semi();
+            }
+            if ext.has("CEReactions") {
+                if let Some(name) = operation_name(&self.t[start..self.i]) {
+                    iface.ce_reactions.push(name);
+                }
             }
         }
         // Trailing `;` after the closing brace.
@@ -402,6 +414,24 @@ impl Parser {
     }
 }
 
+/// The identifier an operation declares, or `None` for an unnamed special
+/// operation (`setter undefined (DOMString name, ...)`), which has no property
+/// to wrap.
+fn operation_name(toks: &[Tok]) -> Option<String> {
+    let paren = toks.iter().position(|t| *t == Tok::Punct('('))?;
+    match toks[..paren].last()? {
+        Tok::Ident(name) if !TYPE_WORDS.contains(&name.as_str()) && name != "undefined" => {
+            // A lone type after a special keyword is an unnamed operation.
+            let idents = toks[..paren]
+                .iter()
+                .filter(|t| matches!(t, Tok::Ident(n) if !matches!(n.as_str(), "getter" | "setter" | "deleter" | "static" | "stringifier")))
+                .count();
+            (idents >= 2).then(|| name.clone())
+        },
+        _ => None,
+    }
+}
+
 /// Parse one IDL file into `idl`, merging partials onto the base interface.
 pub fn parse_into(src: &str, idl: &mut Idl) {
     let mut p = Parser {
@@ -451,6 +481,7 @@ pub fn parse_into(src: &str, idl: &mut Idl) {
             match table.get_mut(&name) {
                 Some(existing) => {
                     existing.attributes.extend(fresh.attributes);
+                    existing.ce_reactions.extend(fresh.ce_reactions);
                     existing.has_constructor |= fresh.has_constructor;
                     existing.html_constructor |= fresh.html_constructor;
                     if existing.parent.is_none() {
@@ -490,6 +521,7 @@ pub fn expand_includes(idl: &mut Idl) {
         };
         if let Some(t) = idl.interfaces.get_mut(&target) {
             t.attributes.extend(m.attributes);
+            t.ce_reactions.extend(m.ce_reactions);
         }
     }
 }

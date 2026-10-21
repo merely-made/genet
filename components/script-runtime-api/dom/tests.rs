@@ -760,8 +760,9 @@ fn custom_elements_html_constructor_on_nova() {
 
 /// First custom-elements I3 slice: use the HTML interface table for customized
 /// built-ins, upgrade existing matching nodes on define, support `{ is }`
-/// creation, explicit upgrade of detached subtrees, and Promise-microtask-timed
-/// connected / disconnected / attribute reactions.
+/// creation, explicit upgrade of detached subtrees, and connected /
+/// disconnected / attribute reactions invoked before the [CEReactions] member
+/// that caused them returns.
 fn custom_elements_customized_builtins_work<E: ScriptEngine>() {
     use genet_static_dom::StaticDocument;
     let mut rt = Runtime::<E>::new().expect("runtime");
@@ -824,16 +825,16 @@ fn custom_elements_customized_builtins_work<E: ScriptEngine>() {
     assert_eq!(
         rt.host().borrow().console,
         vec![
-            "true,true,yes,null",
+            "true,true,yes,yes",
             "x-fancy,true,yes,false",
-            "false,null",
+            "false,yes",
             "false",
             "true,true,card",
             "false",
             "true,yes",
             "true,true,ok",
             "true,x-fancy",
-            "events-sync:0",
+            "events-sync:7",
             "events:attr:old:data-state:null>seed|connected:old|attr:old:data-state:seed>hot|attr:old:disabled:null>|connected:|disconnected:|connected-card:card",
             "post:yes,7",
         ],

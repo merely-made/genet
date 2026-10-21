@@ -324,6 +324,8 @@ impl<E: ScriptEngine> NativeFn<E> for FormSubmissionPlan {
             referrer_policy: o.policy,
             credentials: "include".into(),
             integrity: String::new(),
+            upgrade_insecure_requests: false,
+            block_all_mixed_content: false,
         };
         crate::frames::navigate_form_request::<E>(cx, from, target, request, false, form.id())
     }

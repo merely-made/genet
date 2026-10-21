@@ -225,6 +225,12 @@ pub trait ScriptSrcLoader {
     fn resource_route(&self) -> Option<Box<dyn ScriptResourceLoader>> {
         None
     }
+
+    /// The response headers the test document arrived with (server mode); disk
+    /// mode has none. They seed the document policy container.
+    fn document_response_headers(&self) -> Vec<(String, String)> {
+        Vec::new()
+    }
 }
 
 /// Disk loader: resolve `<script src>` against the test dir / tests root, read the
@@ -1227,6 +1233,7 @@ fn run_parsed_with<E: ScriptEngine>(
         Ok(render) => render,
         Err(error) => return HarnessOutcome::Threw(error),
     };
+    rt.set_document_response_headers(loader.document_response_headers());
     let parser_loader = HarnessParserLoader { inner: loader };
     if let Err(e) = rt.begin_parsed_testharness(html, &parser_loader) {
         return HarnessOutcome::Threw(truncate(&format!("{e:?}"), 200));

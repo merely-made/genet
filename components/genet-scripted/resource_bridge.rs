@@ -507,6 +507,8 @@ impl ScriptResourceLoader for ScriptResourceBridge {
             referrer_policy: String::new(),
             credentials: "same-origin".into(),
             integrity: String::new(),
+            upgrade_insecure_requests: false,
+            block_all_mixed_content: false,
         };
         Some(if self.state.closed.load(Ordering::Acquire) {
             FetchOutcome::network_error()
@@ -993,6 +995,8 @@ mod tests {
             referrer_policy: String::new(),
             credentials: "same-origin".into(),
             integrity: String::new(),
+            upgrade_insecure_requests: false,
+            block_all_mixed_content: false,
         }
     }
 
@@ -1098,6 +1102,8 @@ mod tests {
                 referrer_policy: "origin".into(),
                 credentials: "include".into(),
                 integrity: String::new(),
+                upgrade_insecure_requests: false,
+                block_all_mixed_content: false,
             },
         );
         assert!(

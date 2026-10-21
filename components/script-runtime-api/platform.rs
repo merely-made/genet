@@ -599,6 +599,27 @@ const PLATFORM_BOOTSTRAP: &str = r#"
       Object.defineProperty(this, 'origin', {configurable:true, enumerable:true, writable:true, value:value});
     }
   });
+  // Secure Contexts: whether the global's origin is potentially trustworthy
+  // (https/wss, or a loopback host over http/ws). An opaque origin is not. The
+  // ancestor condition for nested contexts is not applied here.
+  function trustworthyOrigin(origin) {
+    var m = /^([a-z][a-z0-9+.-]*):\/\/([^\/:]*|\[[^\]]*\])(?::\d+)?$/.exec(origin);
+    if (!m) return false;
+    if (m[1] === 'https' || m[1] === 'wss') return true;
+    if (m[1] !== 'http' && m[1] !== 'ws') return false;
+    var host = m[2];
+    return host === 'localhost' || /\.localhost$/.test(host) || host === '[::1]' || /^127\.\d+\.\d+\.\d+$/.test(host);
+  }
+  Object.defineProperty(globalThis, 'isSecureContext', {
+    configurable: true, enumerable: true,
+    get: function() {
+      var realm = globalOrigins.get(this);
+      if (realm === undefined) throw new TypeError('Illegal invocation');
+      var origin = __environmentOrigin(realm);
+      if (origin === '__security_error__') throw new DOMException('Cross-origin Window access', 'SecurityError');
+      return trustworthyOrigin(origin);
+    }
+  });
   var stringLists = platformState.domStringLists || (platformState.domStringLists = new WeakMap());
   var locations = platformState.locations || (platformState.locations = new WeakMap());
   function DOMStringList() { throw new TypeError('Illegal constructor'); }

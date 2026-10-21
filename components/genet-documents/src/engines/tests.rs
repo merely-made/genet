@@ -3135,7 +3135,8 @@ fn t5_native_take_absent(_s: &mut dyn DocumentSession<Scene>) -> Option<T5Native
     _s.take_encoded_form_submission().map(|e| T5NativeEncoded { target:e.target,
         request:genet_host_api::ResourceRequest {url:e.request.url,method:e.request.method,headers:e.request.headers,
             body:e.request.body,cache:e.request.cache,redirect:e.request.redirect,mode:e.request.mode,
-            referrer:e.request.referrer,referrer_policy:e.request.referrer_policy,credentials:e.request.credentials,integrity:e.request.integrity} })
+            referrer:e.request.referrer,referrer_policy:e.request.referrer_policy,credentials:e.request.credentials,integrity:e.request.integrity,
+            upgrade_insecure_requests:false,block_all_mixed_content:false} })
 }
 #[cfg(any(feature = "livery", feature = "scripted"))]
 fn t5_address_absent(_s: &dyn DocumentSession<Scene>) -> Option<String> { _s.current_address() }
@@ -3412,7 +3413,8 @@ fn t5_reply(url:&str,status:u16,kind:&str,bytes:Vec<u8>,content_type:&str)->gene
 fn t5_rich_request()->genet_host_api::ResourceRequest {
     genet_host_api::ResourceRequest{url:"https://forms.test/send#done".into(),method:"POST".into(),
         headers:vec![("Content-Type".into(),"text/plain".into())],body:Some(vec![0,128,255]),cache:"no-store".into(),redirect:"follow".into(),
-        mode:"navigate".into(),referrer:"https://foreign.test/source#initiator".into(),referrer_policy:"no-referrer".into(),credentials:"include".into(),integrity:"".into()}
+        mode:"navigate".into(),referrer:"https://foreign.test/source#initiator".into(),referrer_policy:"no-referrer".into(),credentials:"include".into(),integrity:"".into(),
+        upgrade_insecure_requests:false,block_all_mixed_content:false}
 }
 #[cfg(feature = "livery")]
 fn t5_rich_outcome(reply:Option<genet_host_api::ResourceFetchResponse>)->(Result<Box<dyn DocumentSession<Scene>>,SessionError>,Vec<genet_host_api::ResourceRequest>) {

@@ -28,6 +28,8 @@ use layout_dom_api::{
 
 mod adoption;
 pub use adoption::SubtreeTransferError;
+mod custom_elements;
+pub use custom_elements::{CustomElementState, ReactionCandidate};
 
 mod forms;
 pub use forms::FormControlValueError;
@@ -217,6 +219,8 @@ struct Node {
     selected_files: Vec<FormFile>,
     option_state: Option<SelectOptionState>,
     custom_validity_message: Option<String>,
+    /// HTML's custom element state; see `custom_elements.rs`.
+    custom_state: CustomElementState,
 }
 
 impl Node {
@@ -235,6 +239,7 @@ impl Node {
             selected_files: Vec::new(),
             option_state: None,
             custom_validity_message: None,
+            custom_state: CustomElementState::Uncustomized,
         }
     }
 }
@@ -337,6 +342,11 @@ pub struct ScriptedDom {
     /// document is in no-quirks mode, as one no parser decided is
     /// (`createHTMLDocument`, an XML document).
     document_modes: std::collections::HashMap<u64, QuirksMode>,
+    /// Whether tree and attribute mutators record [`ReactionCandidate`]s. On
+    /// once any custom element definition exists; off costs nothing.
+    reaction_recording: bool,
+    /// Pending custom element reaction candidates, in mutation order.
+    reaction_candidates: Vec<ReactionCandidate>,
     /// Unique allocation namespace. Storage may later accept identities born elsewhere.
     arena_id: u32,
 }
@@ -476,6 +486,8 @@ impl ScriptedDom {
             assigned_slots: std::collections::HashMap::new(),
             slot_assignments: std::collections::HashMap::new(),
             slot_changes: Vec::new(),
+            reaction_recording: false,
+            reaction_candidates: Vec::new(),
             template_contents: std::collections::HashMap::new(),
             template_content_owners: std::collections::HashMap::new(),
             template_document: None,
@@ -872,7 +884,9 @@ impl ScriptedDom {
     /// the subtree is only orphaned; [`collect`](Self::collect) reclaims it once
     /// nothing reaches it.
     fn release_subtree(&mut self, node: NodeId) {
-        if !self.observing && !self.parsing {
+        // A pending reaction candidate can name a removed custom element, so
+        // while reactions are recorded the subtree waits for collection too.
+        if !self.observing && !self.parsing && !self.reaction_recording {
             self.drop_subtree(node);
         }
     }
@@ -888,7 +902,11 @@ impl ScriptedDom {
         let radio_before = self.snapshot_radio_associations(&seeds);
         let previous = self.sibling(child, -1);
         let next = self.sibling(child, 1);
+        let was_connected = self.reaction_recording && self.is_connected(child);
         self.detach(child);
+        if was_connected {
+            self.record_disconnected(child);
+        }
         if let Some(former_parent) = former_parent {
             self.mutations.push(DomMutation::Removed {
                 node: child,
@@ -929,6 +947,7 @@ impl ScriptedDom {
         }
 
         let radio_before = self.snapshot_radio_associations(&[node]);
+        let was_connected = self.reaction_recording && self.is_connected(node);
         let existing = std::mem::take(&mut self.node_mut(node).children);
         let removed = existing.clone();
         for child in existing {
@@ -936,6 +955,9 @@ impl ScriptedDom {
             self.structure_epoch += 1;
             // Replacement detaches like removeChild: a reflector or queued
             // record can still retain this subtree. Only collect sees all pins.
+            if was_connected {
+                self.record_disconnected(child);
+            }
         }
         self.node_mut(node).text = None;
         let mut added = Vec::new();
@@ -1221,6 +1243,11 @@ impl ScriptedDom {
         let mut stack: Vec<u64> = Vec::new();
         self.seed_mark(self.root, &mut marked, &mut stack);
         for r in extra_roots {
+            self.seed_mark(r, &mut marked, &mut stack);
+        }
+        // A queued reaction will hand its node to script (G5 lifetime).
+        let pending: Vec<NodeId> = self.reaction_candidates.iter().map(|c| c.node()).collect();
+        for r in pending {
             self.seed_mark(r, &mut marked, &mut stack);
         }
         while let Some(v) = stack.pop() {
@@ -1815,7 +1842,11 @@ impl LayoutDomMut for ScriptedDom {
             });
             self.record_implicit_removal(former_parent, child, previous, next);
         }
+        let was_connected = self.reaction_recording && self.is_connected(child);
         self.detach(child);
+        if was_connected {
+            self.record_disconnected(child);
+        }
         if let Some(former_parent) = former_parent
             && (former_select.is_none() || former_select != destination_select)
         {
@@ -1824,6 +1855,9 @@ impl LayoutDomMut for ScriptedDom {
         self.node_mut(child).parent = Some(parent);
         self.structure_epoch += 1;
         self.node_mut(parent).children.push(child);
+        if self.reaction_recording && self.is_connected(child) {
+            self.record_connected(child);
+        }
         self.mutations.push(DomMutation::Inserted {
             node: child,
             parent,
@@ -1858,7 +1892,15 @@ impl LayoutDomMut for ScriptedDom {
             });
             self.record_implicit_removal(former_parent, child, previous, next);
         }
+        let was_connected = self.reaction_recording && self.is_connected(child);
+        self.detach(child);
+        if was_connected {
+            self.record_disconnected(child);
+        }
         self.attach_at(parent, child, reference);
+        if self.reaction_recording && self.is_connected(child) {
+            self.record_connected(child);
+        }
         self.mutations.push(DomMutation::Inserted {
             node: child,
             parent,
@@ -1901,7 +1943,16 @@ impl LayoutDomMut for ScriptedDom {
         let radio_before = self.snapshot_radio_associations(&seeds);
         let was_previous = self.sibling(child, -1);
         let was_next = self.sibling(child, 1);
+        // No definition captures connectedMoveCallback yet, so a move owes the
+        // disconnected and connected fallback pair HTML specifies.
+        let was_connected = self.reaction_recording && self.is_connected(child);
         self.attach_at(parent, child, reference);
+        if was_connected {
+            self.record_disconnected(child);
+        }
+        if self.reaction_recording && self.is_connected(child) {
+            self.record_connected(child);
+        }
         if let Some(from_parent) = from_parent {
             self.record_child_list(from_parent, Vec::new(), vec![child], was_previous, was_next);
         }
@@ -1942,7 +1993,11 @@ impl LayoutDomMut for ScriptedDom {
         let radio_before = self.snapshot_radio_associations(&seeds);
         let previous = self.sibling(node, -1);
         let next = self.sibling(node, 1);
+        let was_connected = self.reaction_recording && self.is_connected(node);
         self.detach(node);
+        if was_connected {
+            self.record_disconnected(node);
+        }
         if let Some(former_parent) = former_parent {
             self.mutations.push(DomMutation::Removed {
                 node,
@@ -1984,6 +2039,7 @@ impl LayoutDomMut for ScriptedDom {
             name: name.clone(),
             old_value: old_value.clone(),
         });
+        self.record_attribute_reaction(node, &name, old_value.clone(), Some(value.to_owned()));
         self.record_attribute(node, name.clone(), old_value);
         self.form_control_attribute_changed(node, &name, old_type.as_deref());
         self.reassign_for_attribute(node, &name);
@@ -2017,6 +2073,7 @@ impl LayoutDomMut for ScriptedDom {
                 name: name.clone(),
                 old_value: Some(old.clone()),
             });
+            self.record_attribute_reaction(node, &name, Some(old.clone()), None);
             self.record_attribute(node, name.clone(), Some(old));
             self.form_control_attribute_changed(node, &name, old_type.as_deref());
             self.reassign_for_attribute(node, &name);
@@ -2038,12 +2095,16 @@ impl LayoutDomMut for ScriptedDom {
     fn set_inner_html(&mut self, node: NodeId, html: &str) {
         // Orphan the current children; the single SubtreeReplaced covers it.
         let radio_before = self.snapshot_radio_associations(&[node]);
+        let was_connected = self.reaction_recording && self.is_connected(node);
         let existing = std::mem::take(&mut self.node_mut(node).children);
         let removed = existing.clone();
         for child in existing {
             self.node_mut(child).parent = None;
             self.structure_epoch += 1;
             // Keep retained descendants available until pin-aware collection.
+            if was_connected {
+                self.record_disconnected(child);
+            }
         }
         // Parse via the static parser (a LayoutDom) and copy the explicitly
         // wrapped <body> children in. The wrapper keeps metadata elements such

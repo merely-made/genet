@@ -325,13 +325,10 @@
     'missing-glyph': true
   };
   var upgradedCustomElements = new WeakMap();
-  var connectedCustomElements = new WeakMap();
   var ownerDocuments = globalThis.__agentTimers.domOwners;
 
 
   var htmlElementConstructionStack = [];
-  var customElementReactionQueue = [];
-  var customElementReactionScheduled = false;
 
   // Node: the base every node shares (tree + events + textContent). Methods live
   // on the prototype (shared, instanceof-able), not per-object. `this.__ref` is
@@ -569,21 +566,12 @@
       if (nodes[i] && nodes[i].nodeType !== 9) ownerDocuments.set(nodes[i], doc);
     }
   }
-  function enqueueAdoptedTree(root, oldDoc, newDoc) {
-    if (domAgentDispatch) return domAgentDispatch('adopted', root, oldDoc, newDoc);
-    return enqueueAdoptedTreeLocal(root, oldDoc, newDoc);
-  }
-  function enqueueAdoptedTreeLocal(root, oldDoc, newDoc) {
-    if (!root || oldDoc === newDoc) return;
-    if (root.nodeType === 1 && upgradedCustomElements.get(root)) {
-      enqueueCustomElementReaction(root, 'adoptedCallback', [oldDoc, newDoc]);
+  function recordAdoptedRoots(move) {
+    if (!ceShared.active || !move || move.oldDoc === move.newDoc) return;
+    if (!move.oldDoc || !move.newDoc) return;
+    for (var i = 0; i < move.roots.length; i++) {
+      __ceAdopted(move.roots[i].__ref, move.oldDoc.__ref, move.newDoc.__ref);
     }
-    var kids = root.childNodes;
-    for (var i = 0; i < kids.length; i++) enqueueAdoptedTreeLocal(kids[i], oldDoc, newDoc);
-    // A custom element inside a shadow tree is adopted with its host, so its
-    // adoptedCallback is owed the same pair of documents.
-    var shadow = shadowRootOfAny(root);
-    if (shadow) enqueueAdoptedTreeLocal(shadow, oldDoc, newDoc);
   }
   function prepareNodeMove(parent, node) {
     ensureLocalNode(parent);
@@ -604,22 +592,22 @@
       oldParent: node.parentNode
     };
   }
-  function disconnectMovedRoots(move) {
-    if (!move || !move.oldParent) return;
-    for (var i = 0; i < move.roots.length; i++) {
-      if (move.roots[i].isConnected) disconnectCustomElementTree(move.roots[i]);
+  // HTML's adopt, before insertion: remove the node from its old parent, then
+  // record adopted, so each custom element sees disconnected, adopted and
+  // connected in that order.
+  function adoptMovedRoots(move, node) {
+    if (!move || move.oldDoc === move.newDoc) return;
+    if (move.oldParent && node.nodeType !== 11 && node.parentNode === move.oldParent) {
+      moRemoveChild(move.oldParent.__ref, node.__ref);
     }
+    recordAdoptedRoots(move);
   }
   function finalizeNodeMove(move) {
     if (!move) return;
     if (move.oldDoc && move.newDoc && move.oldDoc !== move.newDoc) {
       setOwnerDocumentSnapshot(move.snapshot, move.newDoc);
-      for (var i = 0; i < move.roots.length; i++) {
-        rehomeTemplateOwners(move.roots[i]);
-        enqueueAdoptedTree(move.roots[i], move.oldDoc, move.newDoc);
-      }
+      for (var i = 0; i < move.roots.length; i++) rehomeTemplateOwners(move.roots[i]);
     }
-    for (var j = 0; j < move.roots.length; j++) connectCustomElementTree(move.roots[j]);
   }
   // DOM "insert a node into a parent before a child": a DocumentFragment
   // contributes its **children**, not itself. The children leave the fragment
@@ -656,7 +644,7 @@
   Node.prototype.appendChild = function(child) {
     ensureInsertable(this, child);
     var move = prepareNodeMove(this, child);
-    if (move.oldDoc !== move.newDoc) disconnectMovedRoots(move);
+    adoptMovedRoots(move, child);
     insertNodeInto(this, child, undefined);
     finalizeNodeMove(move);
     prepareScriptsAfterInsertion(this, move.roots);
@@ -900,7 +888,6 @@
       throw new DOMException("The node to be removed is not a child of this node.", "NotFoundError");
     }
     moRemoveChild(this.__ref, child.__ref);
-    disconnectCustomElementTree(child);
     return child;
   };
   Node.prototype.insertBefore = function(node, ref) {
@@ -909,7 +896,7 @@
       throw new DOMException("The reference node is not a child of this node.", "NotFoundError");
     }
     var move = prepareNodeMove(this, node);
-    if (move.oldDoc !== move.newDoc) disconnectMovedRoots(move);
+    adoptMovedRoots(move, node);
     insertNodeInto(this, node, ref ? ref.__ref : undefined);
     finalizeNodeMove(move);
     prepareScriptsAfterInsertion(this, move.roots);
@@ -951,15 +938,9 @@
     if (thisTop !== treeTopOf(node)) {
       throw new DOMException("moveBefore does not adopt: both nodes must share a root.", "HierarchyRequestError");
     }
+    // Custom elements: the arena records the disconnected + connected fallback
+    // pair for a connected move; connectedMoveCallback is not captured yet.
     moMoveBefore(this.__ref, node.__ref, ref ? ref.__ref : undefined);
-    // Custom elements: the spec fires connectedMoveCallback when defined, else
-    // the disconnected + connected fallback pair. genet's registry does not
-    // capture connectedMoveCallback yet (plan S4), so a connected-tree move
-    // fires the fallback pair; a detached-tree move fires nothing.
-    if (thisTop.nodeType === 9) {
-      disconnectCustomElementTree(node);
-      connectCustomElementTree(node);
-    }
     return node;
   };
   Node.prototype.replaceChild = function(newChild, oldChild) {
@@ -977,6 +958,7 @@
     if (reference === newChild) reference = newChild.nextSibling;
     var move = prepareNodeMove(this, newChild);
     if (newChild.parentNode) newChild.parentNode.removeChild(newChild);
+    recordAdoptedRoots(move);
     // Transfer before grouping: the store refuses cross-arena moves while an
     // observer transaction is active. Keep the original document snapshot.
     adoptIntoInsertionArena(this, newChild);
@@ -987,7 +969,6 @@
     } finally {
       moEndGroup();
     }
-    disconnectCustomElementTree(oldChild);
     finalizeNodeMove(move);
     prepareScriptsAfterInsertion(this, move.roots);
     return oldChild;
@@ -1231,7 +1212,6 @@
     moSetAttribute(this.__ref, name, newValue);
     if (name === 'style') inlineStyleStates.delete(this);
     resizeWebGlCanvas(this, name);
-    customElementAttributeChanged(this, name, oldValue, newValue);
     frameSourceChanged(this, name, oldValue, newValue);
     // The third re-preparation trigger: a connected script element gains a
     // `src` it did not have.
@@ -1244,14 +1224,9 @@
     configurable: true,
     get: function() { return String(__getInnerHtml(this.__ref)); },
     set: function(value) {
-      var oldChildren = this.childNodes;
-      for (var i = 0; i < oldChildren.length; i++) disconnectCustomElementTree(oldChildren[i]);
       moSetInnerHtml(this.__ref, String(value));
       var newChildren = this.childNodes;
-      for (var j = 0; j < newChildren.length; j++) {
-        upgradeCustomElementTree(newChildren[j]);
-        if (this.isConnected) connectCustomElementTree(newChildren[j]);
-      }
+      for (var j = 0; j < newChildren.length; j++) upgradeCustomElementTree(newChildren[j]);
       __refreshNamedProperties();
     }
   });
@@ -1299,7 +1274,6 @@
     var newValue = String(value);
     moSetAttributeNS(this.__ref, nsArg(ns), qname, newValue);
     if (qname === 'style') inlineStyleStates.delete(this);
-    customElementAttributeChanged(this, local, oldValue, newValue);
   };
   Element.prototype.getAttributeNS = function(ns, local) {
     return __getAttributeNS(this.__ref, nsArg(ns), String(local));
@@ -1313,7 +1287,6 @@
     if (oldValue === null) return;
     detachAttrView(this, nsArg(ns), local, oldValue);
     moRemoveAttributeNS(this.__ref, nsArg(ns), local);
-    customElementAttributeChanged(this, local, oldValue, null);
   };
   Element.prototype.hasAttribute = function(name) { return __getAttribute(this.__ref, String(name)) !== null; };
   Element.prototype.hasAttributes = function() { return __attributeRecords(this.__ref) !== ''; };
@@ -1336,7 +1309,6 @@
     moRemoveAttribute(this.__ref, name);
     if (name === 'style') inlineStyleStates.delete(this);
     resizeWebGlCanvas(this, name);
-    customElementAttributeChanged(this, name, oldValue, null);
   };
   Element.prototype.toggleAttribute = function(name, force) {
     var has = this.hasAttribute(name);
@@ -2157,7 +2129,7 @@
       var move = node ? prepareNodeMove(this, node) : null;
       if (node) {
         ensureInsertable(this, node, undefined, undefined, true);
-        disconnectMovedRoots(move);
+        adoptMovedRoots(move, node);
         adoptIntoInsertionArena(this, node);
       }
       moBeginGroup(this);
@@ -2304,7 +2276,6 @@
       moSetAttributeNS(slot.owner.__ref, slot.ns || '', name, v);
       slot.value = v;
       if (name === 'style') inlineStyleStates.delete(slot.owner);
-      customElementAttributeChanged(slot.owner, slot.local, oldValue, v);
     } else slot.value = v;
   }
   var attrValueDescriptor = {
@@ -2430,7 +2401,6 @@
     if (!byKey) { byKey = Object.create(null); privateSet(attrViews, el, byKey); }
     byKey[attrKey(slot.ns, slot.local)] = attr;
     if (name === 'style') inlineStyleStates.delete(el);
-    customElementAttributeChanged(el, slot.local, oldValue, newValue);
     return (old && old !== attr) ? old : null;
   }
   Element.prototype.setAttributeNode = function(attr) { return setAttrNode(this, attr); };
@@ -2446,7 +2416,6 @@
     }
     moRemoveAttributeNS(this.__ref, slot.ns || '', slot.local);
     detachAttrView(this, slot.ns, slot.local, oldValue);
-    customElementAttributeChanged(this, slot.local, oldValue, null);
     return attr;
   };
 
@@ -2543,26 +2512,178 @@
     return autonomousCustomElementDefinitions[el.localName] || null;
   }
 
-  function scheduleCustomElementReactions() {
-    if (customElementReactionScheduled) return;
-    customElementReactionScheduled = true;
-    Promise.resolve().then(flushCustomElementReactions);
-  }
+  // ---- HTML custom element reactions (§4.13.6) ----
+  //
+  // The arena records, at each mutation, which custom elements were connected,
+  // disconnected, adopted or had an attribute changed. Every member the IDL
+  // marks [CEReactions] runs inside `ceReactionsScope`: it pushes an element
+  // queue, and on the way out drains the arena's candidates into reactions and
+  // invokes that queue before returning to its caller. Candidates recorded
+  // with no scope open (the parser, a native host edit) go to the backup
+  // element queue, processed in a microtask.
+  var ceApply = Reflect.apply;
+  var ceShared = globalThis.__agentTimers.ceReactions ||
+      (globalThis.__agentTimers.ceReactions = { active: false });
+  var ceReactionsStack = [];
+  var ceBackupQueue = [];
+  var ceBackupScheduled = false;
+  var ceElementReactions = new WeakMap();
+  var ceResolved = Promise.resolve();
+  var ceThen = Promise.prototype.then;
 
-  function enqueueCustomElementReaction(el, name, args) {
-    customElementReactionQueue.push({ el: el, name: name, args: args || [] });
-    scheduleCustomElementReactions();
-  }
-
-  function flushCustomElementReactions() {
-    customElementReactionScheduled = false;
-    while (customElementReactionQueue.length) {
-      var reaction = customElementReactionQueue.shift();
-      var cb = reaction.el && reaction.el[reaction.name];
-      if (typeof cb === 'function') cb.apply(reaction.el, reaction.args);
+  function ceEnqueueElement(el) {
+    if (ceReactionsStack.length) {
+      ceReactionsStack[ceReactionsStack.length - 1].push(el);
+      return;
     }
-    if (customElementReactionQueue.length) scheduleCustomElementReactions();
+    ceBackupQueue.push(el);
+    if (ceBackupScheduled) return;
+    ceBackupScheduled = true;
+    ceApply(ceThen, ceResolved, [ceProcessBackupQueue]);
   }
+
+  function ceProcessBackupQueue() {
+    ceBackupScheduled = false;
+    ceDrainCandidates();
+    var queue = ceBackupQueue;
+    ceBackupQueue = [];
+    ceInvokeReactions(queue);
+  }
+
+  function ceReactionList(el) {
+    var list = ceElementReactions.get(el);
+    if (!list) {
+      list = [];
+      ceElementReactions.set(el, list);
+    }
+    return list;
+  }
+
+  // HTML's "enqueue a custom element callback reaction". Callbacks come from
+  // the definition, captured at define time, not from the element's prototype.
+  function ceEnqueueCallback(el, name, args) {
+    var def = upgradedCustomElements.get(el);
+    if (!def) return;
+    var callback = def.callbacks[name];
+    if (!callback) return;
+    if (name === 'attributeChangedCallback' && !observesAttribute(def, args[0])) return;
+    ceReactionList(el).push({ callback: callback, args: args });
+    ceEnqueueElement(el);
+  }
+
+  function ceInvokeReactions(queue) {
+    for (var i = 0; i < queue.length; i++) {
+      var el = queue[i];
+      var list = ceElementReactions.get(el);
+      while (list && list.length) {
+        var reaction = list.shift();
+        try {
+          ceApply(reaction.callback, el, reaction.args);
+        } catch (err) {
+          reportListenerException(err);
+        }
+      }
+    }
+  }
+
+  // Move the arena's candidates into reactions. Enqueueing only: nothing is
+  // invoked here, so this is safe at any point a scope is open.
+  function ceDrainCandidates() {
+    if (!ceShared.active) return;
+    if (domAgentDispatch) return domAgentDispatch('ceFlush');
+    ceRecords(__ceTake());
+  }
+
+  function ceUnescape(text) {
+    return text.replace(/\\(.)/g, function(_, c) {
+      return c === 'n' ? '\n' : c === 'r' ? '\r' : c === 't' ? '\t' : c;
+    });
+  }
+
+  function ceRecords(blob) {
+    if (!blob) return;
+    var lines = String(blob).split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      var f = lines[i].split('\t');
+      var el = nodeByRawId(f[1]);
+      if (!el || !upgradedCustomElements.get(el)) continue;
+      if (f[0] === 'C') ceEnqueueCallback(el, 'connectedCallback', []);
+      else if (f[0] === 'D') ceEnqueueCallback(el, 'disconnectedCallback', []);
+      else if (f[0] === 'J') {
+        ceEnqueueCallback(el, 'adoptedCallback', [nodeByRawId(f[2]), nodeByRawId(f[3])]);
+      } else if (f[0] === 'A') {
+        ceEnqueueCallback(el, 'attributeChangedCallback', [
+          ceUnescape(f[2]),
+          f[4] === '1' ? ceUnescape(f[5]) : null,
+          f[6] === '1' ? ceUnescape(f[7]) : null,
+          f[3] ? ceUnescape(f[3]) : null
+        ]);
+      }
+    }
+  }
+
+  // HTML's [CEReactions]: push an element queue, run the member, then drain
+  // and invoke that queue before returning.
+  function ceRunScoped(fn, self, args) {
+    ceReactionsStack.push([]);
+    try {
+      return ceApply(fn, self, args);
+    } finally {
+      ceDrainCandidates();
+      ceInvokeReactions(ceReactionsStack.pop());
+    }
+  }
+
+  function ceReactionsScope(fn) {
+    var scoped = function() {
+      if (!ceShared.active) return ceApply(fn, this, arguments);
+      return ceRunScoped(fn, this, arguments);
+    };
+    Object.defineProperty(scoped, 'name', { configurable: true, value: fn.name });
+    Object.defineProperty(scoped, 'length', { configurable: true, value: fn.length });
+    return scoped;
+  }
+
+  // The first definition in any realm of the agent turns recording on in
+  // every arena of the agent.
+  function ceActivate() {
+    if (ceShared.active) return;
+    ceShared.active = true;
+    if (domAgentDispatch) domAgentDispatch('ceActive', true);
+    else __ceRecording('1');
+  }
+
+  function installCustomElementReactions() {
+    var wrapped = new Map();
+    var members = String(__ceReactionMembers()).split(',');
+    for (var i = 0; i < members.length; i++) {
+      var dot = members[i].indexOf('.');
+      if (dot < 0) continue;
+      var Iface = globalThis[members[i].slice(0, dot)];
+      var name = members[i].slice(dot + 1);
+      var owner = Iface && Iface.prototype;
+      while (owner && !Object.prototype.hasOwnProperty.call(owner, name)) {
+        owner = Object.getPrototypeOf(owner);
+      }
+      if (!owner) continue;
+      var done = wrapped.get(owner);
+      if (!done) wrapped.set(owner, done = Object.create(null));
+      if (done[name]) continue;
+      done[name] = true;
+      var desc = Object.getOwnPropertyDescriptor(owner, name);
+      if (desc.set) desc.set = ceReactionsScope(desc.set);
+      else if (typeof desc.value === 'function') desc.value = ceReactionsScope(desc.value);
+      else continue;
+      Object.defineProperty(owner, name, desc);
+    }
+  }
+  globalThis.__cePump = function() {
+    ceDrainCandidates();
+    if (!ceBackupScheduled && ceBackupQueue.length) {
+      ceBackupScheduled = true;
+      ceApply(ceThen, ceResolved, [ceProcessBackupQueue]);
+    }
+  };
 
   function observesAttribute(def, attr) {
     var observed = def && def.observedAttributes;
@@ -2573,21 +2694,15 @@
     return false;
   }
 
-  function customElementAttributeChanged(el, attr, oldValue, newValue) {
-    var def = upgradedCustomElements.get(el);
-    if (!def || oldValue === newValue || !observesAttribute(def, attr)) return;
-    enqueueCustomElementReaction(el, 'attributeChangedCallback', [attr, oldValue, newValue]);
-  }
-
+  // Upgrade step 3: an attributeChangedCallback for each attribute the element
+  // already has, in its attribute list order, with its namespace.
   function enqueueInitialAttributeReactions(el, def) {
-    var observed = def && def.observedAttributes;
-    if (!observed) return;
-    for (var i = 0; i < observed.length; i++) {
-      var attr = observed[i];
-      var value = el.getAttribute(attr);
-      if (value !== null) {
-        enqueueCustomElementReaction(el, 'attributeChangedCallback', [attr, null, value]);
-      }
+    if (!def || !def.observedAttributes || !def.observedAttributes.length) return;
+    var attrs = el.attributes;
+    for (var i = 0; i < attrs.length; i++) {
+      var attr = attrs[i];
+      ceEnqueueCallback(el, 'attributeChangedCallback',
+        [attr.localName, null, attr.value, attr.namespaceURI]);
     }
   }
 
@@ -2619,27 +2734,25 @@
     }
   }
 
-  function connectCustomElement(el) {
-    var def = upgradedCustomElements.get(el);
-    if (!def || !el.isConnected || connectedCustomElements.get(el)) return;
-    connectedCustomElements.set(el, true);
-    enqueueCustomElementReaction(el, 'connectedCallback', []);
-  }
-
-  function disconnectCustomElement(el) {
-    var def = upgradedCustomElements.get(el);
-    if (!def || !connectedCustomElements.get(el)) return;
-    connectedCustomElements.delete(el);
-    enqueueCustomElementReaction(el, 'disconnectedCallback', []);
-  }
-
   function upgradeCustomElement(el, def) {
     if (!el || upgradedCustomElements.get(el) === def) return el;
+    // HTML upgrades only an undefined or uncustomized element; a failed one
+    // stays failed rather than rerunning its constructor at the next define.
+    var state = String(__ceState(el.__ref));
+    if (state === 'failed' || state === 'custom') return el;
     setElementPrototype(el, def.ctor.prototype);
     upgradedCustomElements.set(el, def);
-    constructCustomElement(el, def);
     enqueueInitialAttributeReactions(el, def);
-    connectCustomElement(el);
+    if (el.isConnected) ceEnqueueCallback(el, 'connectedCallback', []);
+    __ceSetState(el.__ref, 'failed');
+    try {
+      constructCustomElement(el, def);
+    } catch (err) {
+      upgradedCustomElements.delete(el);
+      ceElementReactions.delete(el);
+      throw err;
+    }
+    __ceSetState(el.__ref, 'custom');
     return el;
   }
 
@@ -2669,6 +2782,7 @@
     if (def.customizedBuiltIn) el.setAttribute('is', def.name);
     setElementPrototype(el, proto);
     upgradedCustomElements.set(el, def);
+    __ceSetState(el.__ref, 'custom');
     return el;
   }
 
@@ -2684,31 +2798,7 @@
     }
   }
 
-  function connectCustomElementTree(root) {
-    if (domAgentDispatch) return domAgentDispatch('connect', root);
-    return connectCustomElementTreeLocal(root);
-  }
-  function connectCustomElementTreeLocal(root) {
-    if (!root) return;
-    if (root.nodeType === 1) connectCustomElement(root);
-    var kids = root.childNodes;
-    for (var i = 0; i < kids.length; i++) {
-      connectCustomElementTreeLocal(kids[i]);
-    }
-  }
 
-  function disconnectCustomElementTree(root) {
-    if (domAgentDispatch) return domAgentDispatch('disconnect', root);
-    return disconnectCustomElementTreeLocal(root);
-  }
-  function disconnectCustomElementTreeLocal(root) {
-    if (!root) return;
-    if (root.nodeType === 1) disconnectCustomElement(root);
-    var kids = root.childNodes;
-    for (var i = 0; i < kids.length; i++) {
-      disconnectCustomElementTreeLocal(kids[i]);
-    }
-  }
 
   function customElementIsOption(options) {
     if (options === undefined || options === null) return null;
@@ -2871,20 +2961,15 @@
     // `prepareNodeMove` only snapshots for a move it already sees as crossing
     // documents; overriding the destination here can make it one.
     if (!move.snapshot && move.oldDoc !== move.newDoc) move.snapshot = snapshotMovedNodes(node);
-    if (move.oldParent) {
-      disconnectMovedRoots(move);
-      moRemoveChild(move.oldParent.__ref, node.__ref);
-    }
+    if (move.oldParent) moRemoveChild(move.oldParent.__ref, node.__ref);
     if (move.crossArena) {
       moFlush();
       domAgentDispatch('adopt', this.__ref, node.__ref);
     }
     if (move.oldDoc !== move.newDoc) {
       setOwnerDocumentSnapshot(move.snapshot, move.newDoc);
-      for (var i = 0; i < move.roots.length; i++) {
-        rehomeTemplateOwners(move.roots[i]);
-        enqueueAdoptedTree(move.roots[i], move.oldDoc, move.newDoc);
-      }
+      for (var i = 0; i < move.roots.length; i++) rehomeTemplateOwners(move.roots[i]);
+      recordAdoptedRoots(move);
     }
     return node;
   };
@@ -6244,9 +6329,6 @@
         var observedAttributes = [];
         if (callbacks.attributeChangedCallback) {
           observedAttributes = toDomStringSequence(ctor.observedAttributes);
-          for (var oi = 0; oi < observedAttributes.length; oi++) {
-            observedAttributes[oi] = String(observedAttributes[oi]).toLowerCase();
-          }
         }
         var disabledFeatures = toDomStringSequence(ctor.disabledFeatures).map(String);
         var formAssociated = !!ctor.formAssociated;
@@ -6285,8 +6367,9 @@
         autonomousCustomElementDefinitions[localName] = def;
       }
       customElementDefinitionsByCtor.set(ctor, def);
+      ceActivate();
+      ceRunScoped(upgradeCustomElementTree, null, [document]);
       if (pending[name]) { pending[name].resolve(ctor); delete pending[name]; }
-      upgradeCustomElementTree(document);
     };
     CustomElementRegistry.prototype.get = function(name) {
       var def = customElementDefinitions[name];
@@ -6309,7 +6392,9 @@
       pending[name] = slot;
       return slot.promise;
     };
-    CustomElementRegistry.prototype.upgrade = function(root) { upgradeCustomElementTree(root); };
+    CustomElementRegistry.prototype.upgrade = function(root) {
+      ceRunScoped(upgradeCustomElementTree, null, [root]);
+    };
     globalThis.CustomElementRegistry = CustomElementRegistry;
     globalThis.customElements = new CustomElementRegistry();
   })();
@@ -6842,10 +6927,20 @@
     __rebindDocument();
     __refreshNamedProperties();
   };
+  // The written source runs through the parser inside the call; at each
+  // element a definition may claim, the parser hands back so the upgrade and
+  // that insertion's reactions run before the write goes on.
+  function writeAndUpgrade(text, ref) {
+    var created = __docWrite(text, ref);
+    while (created === 'c') {
+      __ceUpgradeParsed(String(__docWriteCreated()));
+      created = __docWriteContinue();
+    }
+  }
   Document.prototype.write = function() {
     var text = '';
     for (var i = 0; i < arguments.length; i++) text += String(arguments[i]);
-    __docWrite(text, this.__ref);
+    writeAndUpgrade(text, this.__ref);
     pumpOpenStream(this.__ref);
     __rebindDocument();
     __refreshNamedProperties();
@@ -6853,7 +6948,7 @@
   Document.prototype.writeln = function() {
     var text = '';
     for (var i = 0; i < arguments.length; i++) text += String(arguments[i]);
-    __docWrite(text + '\n', this.__ref);
+    writeAndUpgrade(text + '\n', this.__ref);
     pumpOpenStream(this.__ref);
     __rebindDocument();
     __refreshNamedProperties();
@@ -6889,6 +6984,9 @@
     return n;
   };
   globalThis.__ceUpgradeParsed = function(ids) {
+    return ceRunScoped(ceUpgradeParsed, null, [ids]);
+  };
+  function ceUpgradeParsed(ids) {
     var list = String(ids).split(',');
     for (var i = 0; i < list.length; i++) {
       if (!list[i]) continue;
@@ -7006,10 +7104,8 @@
         case 'uaEvent': return dispatchUserAgentEvent(a, b, c);
         case 'wrap': return wrapNodeLocal(a);
         case 'owners': return setOwnerDocumentSnapshotLocal(a, b);
-        case 'adopted': return enqueueAdoptedTreeLocal(a, b, c);
         case 'templateOwners': return rehomeTemplateOwnersLocal(a);
-        case 'connect': return connectCustomElementTreeLocal(a);
-        case 'disconnect': return disconnectCustomElementTreeLocal(a);
+        case 'ceRecords': return ceRecords(a);
         case 'rangeRemove': return rangeWillRemoveLocal(a);
         case 'rangeInsert': return rangeDidInsertLocal(a);
         case 'rangeReplace': return rangeWillReplaceAllLocal(a);
@@ -7021,5 +7117,7 @@
       }
       throw new Error('Unknown private DOM hook operation: ' + String(op));
   };
+  // Last, once every DOM member exists: wrap the [CEReactions] members.
+  installCustomElementReactions();
   if (domRegisterHooks) domRegisterHooks(domRealmHooks);
 })();

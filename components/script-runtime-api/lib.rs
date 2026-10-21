@@ -1359,6 +1359,18 @@ impl<E: ScriptEngine> Runtime<E> {
         // Step 3: "While the event loop's microtask queue is not empty:"
         // Backend boundary: the VM owns the queue, budget behavior, and kept-object cleanup.
         self.trace_scheduler("pump_microtasks", "start", None);
+        // Custom element reactions recorded with no reactions scope open (the
+        // parser, a native host edit) go to the backup element queue, which
+        // the bootstrap processes in a microtask of this checkpoint.
+        let reacting = std::iter::once((self.top_realm(), self.host.clone()))
+            .chain(self.child_hosts().iter().map(|(&realm, host)| (realm, host.clone())))
+            .filter_map(|(realm, host)| host.borrow().dom.has_reaction_candidates().then_some(realm))
+            .collect::<Vec<_>>();
+        for realm in reacting {
+            if let Err(error) = self.call_task(realm, "__cePump", &[]) {
+                self.report_script_exception(&format!("custom element reactions: {error}"), None);
+            }
+        }
         // MutationObserver: hand the arena's pending record to the registry
         // before the queue is pumped, so "notify mutation observers" is a
         // microtask of *this* checkpoint. Costs nothing until something observes.

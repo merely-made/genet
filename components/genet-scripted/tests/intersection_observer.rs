@@ -230,3 +230,26 @@ both_engines!(scrolling_crosses_thresholds_and_stops_when_nothing_changes);
 both_engines!(takerecords_and_disconnect_and_unobserve);
 both_engines!(removed_and_hidden_targets_report_not_intersecting);
 both_engines!(entries_construct_from_an_init_and_keep_the_idl_shape);
+
+fn the_host_pump_updates_after_layout_and_skips_hidden_documents<E: ScriptEngine>() {
+    use genet_scripted::LiveryScriptedDocument;
+    let mut doc = LiveryScriptedDocument::<E>::parse(
+        "<!DOCTYPE html><html><body style='margin:0'><div id='t' style='height:50px'></div>\
+         <script>var seen = []; \
+         new IntersectionObserver(function(es) { seen.push(es[0].isIntersecting); }).observe(document.getElementById('t'));\
+         </script></body></html>",
+    )
+    .expect("document");
+    doc.set_hidden(true);
+    doc.pump(0.0);
+    doc.pump(1000.0);
+    doc.evaluate("console.log(seen.length)").expect("read");
+    assert_eq!(doc.console().last().map(String::as_str), Some("0"), "hidden: no update");
+    doc.set_hidden(false);
+    doc.pump(2000.0);
+    doc.pump(2016.0);
+    doc.evaluate("console.log(seen.join())").expect("read");
+    assert_eq!(doc.console().last().map(String::as_str), Some("true"));
+}
+
+both_engines!(the_host_pump_updates_after_layout_and_skips_hidden_documents);

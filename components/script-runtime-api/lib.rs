@@ -90,9 +90,11 @@ mod harness;
 mod messaging;
 pub mod parse;
 mod platform;
+mod secure_context;
 mod selector;
 mod streams;
 mod structured_clone;
+mod subtle;
 mod text_encoding;
 mod timing;
 mod webgl;
@@ -347,8 +349,8 @@ pub struct HostState {
     /// asked for a context carries nothing and adopts like any other element.
     pub canvas_contexts: std::collections::HashSet<u64>,
     /// The host's cryptographically secure random source for `crypto`. `None` =
-    /// the built-in ChaCha20 default (seeded from `std`'s OS-derived hash keys),
-    /// so `getRandomValues` works with no host wiring. Installed by
+    /// the operating system's CSPRNG through `getrandom` on native targets, and
+    /// no source at all on wasm. Installed by
     /// [`Runtime::set_random_source`]; an `Rc` so the native sink clones it out
     /// before calling (no live `HostState` borrow during the call).
     pub random: Option<std::rc::Rc<dyn RandomSource>>,
@@ -356,6 +358,12 @@ pub struct HostState {
     /// Entries hold no script references. Flush releases active buffers;
     /// finalization or runtime teardown removes the remaining metadata.
     pub(crate) text_decoders: text_encoding::DecoderRegistry,
+    /// `CryptoKey` material keyed by wrapper id; the authority on each key's
+    /// extractability and usages. Bytes are zeroised when an entry goes.
+    pub(crate) crypto_keys: subtle::KeyRegistry,
+    /// Whether this realm's environment is a secure context, which decides
+    /// whether its `[SecureContext]` members exist (secure_context.rs).
+    pub(crate) secure_context: secure_context::SecureContext,
     /// The page's resource route for worker scripts, `importScripts` and a
     /// worker `fetch()`. `None` = fall through to [`Self::fetch`]. Installed by
     /// [`Runtime::set_script_resource_loader`]; disk-mode WPT uses it, a hosted
@@ -600,6 +608,7 @@ const REALM_TASK_HOOKS: &[&str] = &[
     "__moPump", "__websocketOpen", "__websocketMessageText",
     "__websocketMessageBinary", "__websocketFlushed", "__websocketError",
     "__websocketClose", "__websocketPending", "__websocketFailAll",
+    "__subtleExposure",
 ];
 const AGENT_TASK_HOOKS: &[&str] = &[
     "__runTimers", "__nextTimerDelay", "__runOneAnimationFrameCallback",
@@ -2511,6 +2520,22 @@ impl<E: ScriptEngine> Runtime<E> {
         // `globalThis.location` is a live view of `base_url` (the `platform`
         // surface's getters re-read it), so updating the host base URL is enough;
         // no need to rebuild a location snapshot here.
+        let current = self.host.borrow().secure_context;
+        let derived = secure_context::for_document(url, None, current);
+        if derived != current {
+            self.set_secure_context(derived.0)?;
+        }
+        Ok(())
+    }
+
+    /// Whether the top document (or this worker) is a secure context, adding or
+    /// removing its `[SecureContext]` members (today Web Crypto's). The URL
+    /// decides by default ([`Self::set_base_url`]); a host that knows better
+    /// calls this before author script runs - WPT's runner, for one, mirrors
+    /// the rule that only `.https.` tests are served over HTTPS.
+    pub fn set_secure_context(&mut self, secure: bool) -> Result<(), E::Error> {
+        self.host.borrow_mut().secure_context = secure_context::SecureContext(secure);
+        self.call_task_top("__subtleExposure", &[if secure { "1" } else { "0" }])?;
         Ok(())
     }
 

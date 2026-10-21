@@ -591,7 +591,7 @@ fn normalize_url(url: &str) -> String {
 pub fn sha256_file(path: &Path) -> Result<String, String> {
     let bytes =
         fs::read(path).map_err(|error| format!("cannot read {}: {error}", path.display()))?;
-    Ok(format!("{:x}", Sha256::digest(bytes)))
+    Ok(Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect())
 }
 
 impl ConformanceReport {

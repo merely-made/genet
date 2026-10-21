@@ -181,9 +181,8 @@ pub struct CanonicalTextResource {
 
 impl CanonicalTextResource {
     pub(crate) fn for_text(text: &str) -> Self {
-        let digest = Sha256::digest(text.as_bytes());
         Self {
-            iri: format!("urn:sha256:{digest:x}"),
+            iri: format!("urn:sha256:{}", sha256_hex(text.as_bytes())),
             media_type: CANONICAL_TEXT_MEDIA_TYPE,
         }
     }
@@ -544,6 +543,11 @@ fn walk_headings<D: LayoutDom>(dom: &D, id: D::NodeId, out: &mut Vec<Heading>) {
 }
 
 /// `1`–`6` for `h1`–`h6`, else `None`.
+/// Lowercase hex SHA-256, the form fleece's identities and wire records carry.
+pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
+    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
+}
+
 fn heading_level(name: &str) -> Option<u8> {
     match name.as_bytes() {
         [b'h', d @ b'1'..=b'6'] => Some(d - b'0'),

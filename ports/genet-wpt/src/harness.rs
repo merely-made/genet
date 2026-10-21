@@ -818,6 +818,13 @@ fn run_with<E: ScriptEngine>(
     run_parsed_with(&mut rt, html, loader, completion, style)
 }
 
+/// WPT's serving rule: a test whose file name carries `.https.` is served over
+/// HTTPS, and only those run in a secure context.
+fn served_over_https(doc_url: &str) -> bool {
+    let path = doc_url.split(['?', '#']).next().unwrap_or(doc_url);
+    path.rsplit('/').next().is_some_and(|name| name.contains(".https."))
+}
+
 #[allow(clippy::too_many_arguments)]
 fn prepare_runtime<E: ScriptEngine>(
     rt: &mut Runtime<E>,
@@ -829,6 +836,11 @@ fn prepare_runtime<E: ScriptEngine>(
 ) {
     if let Some(base) = base_url {
         let _ = rt.set_base_url(base);
+        // Both modes give the page an http:// URL, which makes it a non-secure
+        // context. WPT serves a `.https.` test over HTTPS, so it is secure.
+        if served_over_https(base) {
+            let _ = rt.set_secure_context(true);
+        }
     }
     if let Some(h) = handler {
         rt.set_fetch_handler(h);
@@ -1829,6 +1841,15 @@ fn truncate(s: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_https_named_tests_are_served_over_https() {
+        assert!(super::served_over_https("http://web-platform.test/WebCryptoAPI/digest/digest.https.any.html"));
+        assert!(super::served_over_https("http://web-platform.test:8000/a/b.https.any.worker.html?1-10"));
+        assert!(!super::served_over_https("http://web-platform.test/WebCryptoAPI/historical.any.html"));
+        assert!(!super::served_over_https("http://web-platform.test/x.https/plain.html"));
+        assert!(!super::served_over_https("http://web-platform.test/plain.html?x.https.y"));
+    }
 
     /// `looks_like_xml` cuts its probe at 512 *bytes*, which can land inside a
     /// multi-byte character. Three `websockets/constructor/016.html` variants

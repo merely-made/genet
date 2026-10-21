@@ -185,3 +185,23 @@ both_engines!(scroll_containers_report_client_and_scroll_boxes);
 both_engines!(element_scroll_clamps_moves_boxes_and_reads_back);
 both_engines!(scrolled_container_reaches_paint_and_hit_test);
 both_engines!(viewport_scrolling_reaches_livery);
+
+fn inline_boxes_follow_their_text_across_lines<E: ScriptEngine>() {
+    let mut runtime = Runtime::<E>::new().expect("runtime");
+    runtime.load_dom(&StaticDocument::parse(
+        "<!DOCTYPE html><html><body><div id=c style='width:60px'>\
+         <span id=s>aaa bbb ccc ddd</span></div></body></html>",
+    ));
+    let cssom = LiveryCssom::install(&mut runtime, &["body{margin:0}"], Device::screen(300.0, 300.0));
+    cssom.frame(&mut runtime, 300, 300).expect("frame");
+    let out = run(
+        &mut runtime,
+        "var s = document.getElementById('s'); \
+         var rects = s.getClientRects(), box = s.getBoundingClientRect(); \
+         console.log([rects.length > 1, box.height > rects[0].height, \
+                      s.offsetHeight === Math.round(box.height), s.offsetTop === 0].join());",
+    );
+    assert_eq!(out[0], "true,true,true,true");
+}
+
+both_engines!(inline_boxes_follow_their_text_across_lines);

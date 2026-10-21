@@ -206,10 +206,17 @@ fn margin_arg<E: ScriptEngine>(
     Ok(sides)
 }
 
+fn root_value_owner<E: ScriptEngine>(
+    cx: &mut E::CallCx<'_>,
+    value: &E::Value,
+) -> Result<Option<crate::SharedHost>, E::Error> {
+    Ok(cx.owned_node(value)?.map(|node| node.host().clone()))
+}
+
 /// `__geomIntersection(targetRef, rootRef, rootMargin, scrollMargin)` ->
 /// `target;intersection;rootBounds;isIntersecting`, each rectangle
 /// `x,y,width,height` (the last two possibly empty), or empty without layout.
-/// An empty `rootRef` is the implicit root.
+/// A `rootRef` that is not a node is the implicit root.
 pub(crate) struct Intersection;
 impl<E: ScriptEngine> NativeFn<E> for Intersection {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
@@ -218,22 +225,23 @@ impl<E: ScriptEngine> NativeFn<E> for Intersection {
         let Some(target) = cx.owned_node(&target_value)? else {
             return cx.make_string("");
         };
-        let root_text = cx.value_to_string(&root_value)?;
-        let root = if root_text.is_empty() {
-            None
-        } else {
-            match cx.owned_node(&root_value)? {
-                Some(root) => Some(root.raw()),
-                None => return cx.make_string(""),
-            }
-        };
+        // Never stringify the reference: an element reflector is an embedder
+        // object, and not every engine can print one. A non-node is the viewport.
+        let root = cx.owned_node(&root_value)?.map(|root| root.raw());
         let request = IntersectionRequest {
             target: target.raw(),
             root,
             root_margin: margin_arg::<E>(cx, 2)?,
             scroll_margin: margin_arg::<E>(cx, 3)?,
         };
-        let Some(report) = handler::<E>(cx).and_then(|h| h.intersection(&request)) else {
+        // The target's own document answers; a root from another one cannot.
+        if let Some(owner) = root_value_owner::<E>(cx, &root_value)? {
+            if !Rc::ptr_eq(&owner, target.host()) {
+                return cx.make_string("");
+            }
+        }
+        let geometry = target.host().borrow().geometry.clone();
+        let Some(report) = geometry.and_then(|h| h.intersection(&request)) else {
             return cx.make_string("");
         };
         let rect = |r: [f32; 4]| format!("{},{},{},{}", r[0], r[1], r[2], r[3]);

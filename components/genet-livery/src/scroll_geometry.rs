@@ -70,6 +70,31 @@ where
     sum
 }
 
+/// The line boxes of an inline, non-replaced element as `[x, y, width, height]`
+/// in document space, in line order. `None` for anything that is not one or that
+/// has no recorded boxes, where its principal fragment is the answer.
+pub fn inline_boxes<D>(
+    dom: &D,
+    styles: &StylePlane<D::NodeId>,
+    fragments: &LiveryLayout<D::NodeId>,
+    node: D::NodeId,
+) -> Option<Vec<[f32; 4]>>
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    let style = styles.get(node)?;
+    if style.display != Display::Inline || crate::box_tree::is_replaced_element(dom, node) {
+        return None;
+    }
+    let boxes: Vec<[f32; 4]> = fragments
+        .inline_box_fragments(node)?
+        .iter()
+        .map(|part| [part.x, part.y, part.width, part.height])
+        .collect();
+    (!boxes.is_empty()).then_some(boxes)
+}
+
 /// Client box and scrollable overflow of `node`. `None` without a fragment or a
 /// style. A box that is inline and not replaced has no client box.
 pub fn scroll_metrics<D>(
@@ -90,7 +115,11 @@ where
     if style.display == Display::Inline && !crate::box_tree::is_replaced_element(dom, node) {
         return Some(ScrollMetrics::default());
     }
-    let edges = fragment_edges(style, fragment);
+    let mut edges = fragment_edges(style, fragment);
+    if style.display == Display::Table {
+        // The table wrapper box holds the table's border inside it.
+        edges.border = [0.0; 4];
+    }
     let client = (
         (fragment.width - edges.border[1] - edges.border[3]).max(0.0),
         (fragment.height - edges.border[0] - edges.border[2]).max(0.0),

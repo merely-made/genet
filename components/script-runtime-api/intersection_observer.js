@@ -20,6 +20,13 @@
   var observers = [];           // observers with at least one target
   var deliveryQueued = false;
 
+  // Brand checks that hold for a node from another realm, where `instanceof`
+  // does not: a node reflector has its `nodeType` and its host reference.
+  function isNode(value, type) {
+    return value !== null && typeof value === 'object' && value.nodeType === type &&
+           value.__ref !== undefined;
+  }
+
   function internals(object, expected) {
     var slot = slots.get(object);
     if (!slot || slot.kind !== expected) throw new TypeError('Illegal invocation');
@@ -95,7 +102,7 @@
         throw new TypeError("Failed to construct 'IntersectionObserverEntry': required member " + required[i] + ' is undefined');
       }
     }
-    if (!(init.target instanceof Element)) {
+    if (!isNode(init.target, 1)) {
       throw new TypeError("Failed to construct 'IntersectionObserverEntry': target is not an Element");
     }
     slots.set(this, {
@@ -154,7 +161,7 @@
     }
     options = options || {};
     var root = options.root === undefined ? null : options.root;
-    if (root !== null && !(root instanceof Element) && !(root instanceof Document)) {
+    if (root !== null && !isNode(root, 1) && !isNode(root, 9)) {
       throw new TypeError("Failed to construct 'IntersectionObserver': root must be an Element or a Document");
     }
     var rootMargin = parseMargin(options.rootMargin === undefined ? '0px' : options.rootMargin, 'rootMargin');
@@ -211,7 +218,7 @@
     value: function observe(target) {
       var slot = internals(this, 'observer');
       if (arguments.length === 0) throw new TypeError("Failed to execute 'observe': 1 argument required");
-      if (!(target instanceof Element)) {
+      if (!isNode(target, 1)) {
         throw new TypeError("Failed to execute 'observe' on 'IntersectionObserver': parameter 1 is not of type 'Element'");
       }
       for (var i = 0; i < slot.observations.length; i++) {
@@ -226,7 +233,7 @@
     value: function unobserve(target) {
       var slot = internals(this, 'observer');
       if (arguments.length === 0) throw new TypeError("Failed to execute 'unobserve': 1 argument required");
-      if (!(target instanceof Element)) {
+      if (!isNode(target, 1)) {
         throw new TypeError("Failed to execute 'unobserve' on 'IntersectionObserver': parameter 1 is not of type 'Element'");
       }
       slot.observations = slot.observations.filter(function(o) { return o.target !== target; });
@@ -304,11 +311,13 @@
     for (var i = 0; i < snapshot.length; i++) {
       var observer = snapshot[i];
       var slot = slots.get(observer);
-      var rootRef = slot.root === null || slot.root instanceof Document ? '' : slot.root.__ref;
+      var rootRef = slot.root === null || isNode(slot.root, 9) ? '' : slot.root.__ref;
       var margin = encodeMargin(slot.rootMargin);
       var scrollMargin = encodeMargin(slot.scrollMargin);
       for (var j = 0; j < slot.observations.length; j++) {
         var observation = slot.observations[j];
+        // A target that never was in the document has nothing to report yet.
+        if (observation.previousIndex === -1 && !observation.target.isConnected) continue;
         var blob = geomIntersection(observation.target.__ref, rootRef, margin, scrollMargin);
         if (!blob) continue;
         var report = readReport(blob);
@@ -317,12 +326,16 @@
         if (targetArea === 0) ratio = report.isIntersecting ? 1 : 0;
         else ratio = Math.min(1, report.intersectionNumbers[2] * report.intersectionNumbers[3] / targetArea);
         var index = report.isIntersecting ? thresholdIndex(slot.thresholds, ratio) : 0;
-        if (index !== observation.previousIndex || report.isIntersecting !== observation.previousIntersecting) {
+        // Below the first threshold the target does not count as intersecting,
+        // however its edges touch (w3c/IntersectionObserver#432).
+        var intersecting = report.isIntersecting && index > 0;
+        if (index !== observation.previousIndex || intersecting !== observation.previousIntersecting) {
+          report.isIntersecting = intersecting;
           slot.queue.push(makeEntry(observation, observer, time, report, ratio));
           queued++;
         }
         observation.previousIndex = index;
-        observation.previousIntersecting = report.isIntersecting;
+        observation.previousIntersecting = intersecting;
       }
     }
     if (queued && !deliveryQueued) {

@@ -5,6 +5,11 @@
 use std::hash::Hash;
 
 #[cfg(feature = "accesskit")]
+mod roles;
+#[cfg(feature = "accesskit")]
+pub use roles::{accesskit_aria_role, accesskit_role_token};
+
+#[cfg(feature = "accesskit")]
 use accesskit::{
     Action, HasPopup, Live, Node as AccessNode, NodeId as AccessNodeId, Orientation, Rect, Role,
     Toggled, TreeId, TreeInfo, TreeUpdate,

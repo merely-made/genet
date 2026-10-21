@@ -17,7 +17,7 @@ use super::*;
 /// DOM text/`aria-label` behavior, and attribute filters always inspect the DOM.
 /// [`text_present`] is unchanged.
 ///
-/// Results follow DOM order. The host must supply the projection of this same
+/// Results follow flattened DOM order. The host must supply the projection of this same
 /// retained DOM, whose semantic IDs equal [`LayoutDom::opaque_id`], and pair the
 /// result with current host geometry. This function neither computes names nor
 /// creates semantics or geometry for nodes absent from that projection.
@@ -26,36 +26,13 @@ pub fn matching_with_projection(
     sel: &Selector,
     projection: &DocumentA11yProjection,
 ) -> Vec<NodeId> {
-    let Match::Role(role) = &sel.matcher else {
-        return matching_classes(dom, sel);
-    };
-    let nodes: BTreeMap<_, _> = projection
-        .nodes()
-        .iter()
-        .map(|node| (node.id.get(), node))
-        .collect();
-    let mut pending = vec![dom.document()];
-    let mut result = Vec::new();
-    while let Some(node) = pending.pop() {
-        if let Some(semantic) = nodes.get(&dom.opaque_id(node))
-            && !semantic.state.hidden
-            && role_matches(semantic.role, role)
-            && sel.text.as_ref().is_none_or(|text| {
-                semantic
-                    .name
-                    .as_ref()
-                    .is_some_and(|name| name.contains(text))
-            })
-            && sel.attr.as_ref().is_none_or(|(name, value)| {
-                attr(dom, node, name).is_some_and(|attr| attr.contains(value))
-            })
-        {
-            result.push(node);
-        }
-        let children: Vec<_> = dom.dom_children(node).collect();
-        pending.extend(children.into_iter().rev());
-    }
-    result
+    matching_with_lookup(dom, sel, &DocumentLookup::new(dom, projection))
+        .into_iter()
+        .filter_map(|target| match target {
+            SemanticTarget::Dom(node) => Some(node),
+            _ => None,
+        })
+        .collect()
 }
 
 /// Prefer an exact owner-computed name among projected role matches.
@@ -72,32 +49,20 @@ pub fn matching_prefer_exact_with_projection(
     sel: &Selector,
     projection: &DocumentA11yProjection,
 ) -> Vec<NodeId> {
-    let matched = matching_with_projection(dom, sel, projection);
-    let (Match::Role(_), Some(text)) = (&sel.matcher, &sel.text) else {
-        return matched;
-    };
-    if text.is_empty() {
-        return matched;
-    }
-    let exact_names: BTreeMap<_, _> = projection
-        .nodes()
-        .iter()
-        .filter(|node| node.name.as_deref() == Some(text.as_str()))
-        .map(|node| (node.id.get(), ()))
-        .collect();
-    let exact: Vec<_> = matched
-        .iter()
-        .copied()
-        .filter(|node| exact_names.contains_key(&dom.opaque_id(*node)))
-        .collect();
-    if exact.is_empty() { matched } else { exact }
+    matching_prefer_exact_with_lookup(dom, sel, &DocumentLookup::new(dom, projection))
+        .into_iter()
+        .filter_map(|target| match target {
+            SemanticTarget::Dom(node) => Some(node),
+            _ => None,
+        })
+        .collect()
 }
 
 // This is a spelling adapter for the neutral role vocabulary, not DOM role
 // inference. In particular Unknown must not resurrect an unprojected ARIA role.
-fn role_matches(role: DocumentA11yRole, requested: &str) -> bool {
+pub(super) fn role_token(role: DocumentA11yRole) -> Option<&'static str> {
     use DocumentA11yRole::*;
-    let token = match role {
+    Some(match role {
         Window => "window",
         Document => "document",
         Article => "article",
@@ -122,8 +87,8 @@ fn role_matches(role: DocumentA11yRole, requested: &str) -> bool {
         ListBoxOption => "option",
         Table => "table",
         Row => "row",
-        Cell => return matches!(requested, "cell" | "gridcell"),
-        Image => return matches!(requested, "img" | "image"),
+        Cell => "cell",
+        Image => "img",
         Form => "form",
         Dialog => "dialog",
         Alert => "alert",
@@ -146,9 +111,8 @@ fn role_matches(role: DocumentA11yRole, requested: &str) -> bool {
         Status => "status",
         Log => "log",
         Note => "note",
-        Unknown => return false,
-    };
-    requested == token
+        Unknown => return None,
+    })
 }
 
 #[cfg(test)]
@@ -417,7 +381,10 @@ mod tests {
             ),
             [button]
         );
-        assert!(matching_estimated_fixture(&dom, &Selector::role("button").containing("[Save]")).is_empty());
+        assert!(
+            matching_estimated_fixture(&dom, &Selector::role("button").containing("[Save]"))
+                .is_empty()
+        );
     }
 
     #[test]
@@ -436,7 +403,10 @@ mod tests {
             matching_prefer_exact_with_projection(&dom, &selector, &projection),
             [detail]
         );
-        assert_eq!(matching_estimated_fixture(&dom, &selector), [workbench, detail]);
+        assert_eq!(
+            matching_estimated_fixture(&dom, &selector),
+            [workbench, detail]
+        );
     }
 
     #[test]
@@ -485,12 +455,8 @@ mod tests {
             .find(|node| node.id.get() == dom.opaque_id(first))
             .unwrap()
             .name = Some(String::new());
-        let empty_name = DocumentA11yProjection::new(
-            5,
-            projection.support().clone(),
-            projection.root(),
-            nodes,
-        );
+        let empty_name =
+            DocumentA11yProjection::new(5, projection.support().clone(), projection.root(), nodes);
         assert_eq!(
             matching_prefer_exact_with_projection(
                 &dom,
@@ -618,5 +584,184 @@ mod tests {
             [field]
         );
     }
+}
 
+#[cfg(all(test, feature = "accesskit"))]
+mod lookup_tests {
+    use super::*;
+    use layout_dom_api::{LayoutDomMut, QualName, ShadowRootInit};
+    fn element(dom: &mut ScriptedDom, parent: NodeId, tag: &str, role: &str) -> NodeId {
+        let q = |s: &str| QualName::new(None, Namespace::default(), LocalName::from(s));
+        let node = dom.create_element(q(tag));
+        dom.set_attribute(node, q("role"), role);
+        dom.set_attribute(node, q("aria-label"), "Owned name");
+        dom.append_child(parent, node);
+        node
+    }
+    fn projection(dom: &ScriptedDom) -> DocumentA11yProjection {
+        let styles = resolve_styles(
+            dom,
+            &StyleSet::cambium(&["* {display:block}"]),
+            &Device::screen(600.0, 600.0),
+            &InteractionStates::default(),
+        );
+        let fragments = layout(dom, &styles, 600.0, 600.0).unwrap();
+        genet_render::document_a11y_projection(dom, &fragments, None, 1)
+    }
+    #[test]
+    fn lookup_reads_shadow_and_assigned_nodes_in_flat_order() {
+        let mut dom = ScriptedDom::new();
+        let root = dom.document();
+        let host = element(&mut dom, root, "section", "group");
+        let decoy = element(&mut dom, host, "button", "button");
+        let shadow = dom.attach_shadow_unchecked(host, ShadowRootInit::default(), false);
+        let inside = element(&mut dom, shadow, "button", "button");
+        let slot = element(&mut dom, shadow, "slot", "group");
+        let fallback = element(&mut dom, slot, "button", "button");
+        let q = |s: &str| QualName::new(None, Namespace::default(), LocalName::from(s));
+        dom.set_attribute(decoy, q("slot"), "missing");
+        let assigned = element(&mut dom, host, "button", "button");
+        let p = projection(&dom);
+        assert_eq!(
+            matching_with_projection(&dom, &Selector::role("button"), &p),
+            [inside, assigned]
+        );
+        assert!(!matching_with_projection(&dom, &Selector::role("button"), &p).contains(&fallback));
+        dom.remove(assigned);
+        let p = projection(&dom);
+        assert_eq!(
+            matching_with_projection(&dom, &Selector::role("button"), &p),
+            [inside, fallback]
+        );
+    }
+    #[test]
+    fn composed_lookup_preserves_dom_roles_and_class_attribute_contracts() {
+        let mut dom = ScriptedDom::new();
+        let root = dom.document();
+        for role in [
+            "button",
+            "textbox",
+            "checkbox",
+            "slider",
+            "menu",
+            "menubar",
+            "cell",
+            "image",
+            "tree",
+            "status",
+            "group",
+            "spinbutton",
+            "paragraph",
+            "note",
+        ] {
+            element(&mut dom, root, "div", role);
+        }
+        element(&mut dom, root, "label", "label");
+        let p = projection(&dom);
+        let owner = DocumentLookup::new(&dom, &p);
+        let targets: BTreeMap<_, _> = owner
+            .nodes()
+            .into_iter()
+            .filter_map(|n| match n.target {
+                SemanticTarget::Dom(node) => Some((dom.opaque_id(node), node)),
+                _ => None,
+            })
+            .collect();
+        let tree = genet_render::accesskit_tree_from_projection(p.clone());
+        let composed = AccessKitLookup::new(&tree, |id| targets.get(&id).copied());
+        for role in [
+            "window",
+            "button",
+            "textbox",
+            "checkbox",
+            "slider",
+            "menu",
+            "menubar",
+            "cell",
+            "gridcell",
+            "image",
+            "img",
+            "tree",
+            "status",
+            "group",
+            "spinbutton",
+            "paragraph",
+            "note",
+            "label",
+            "text",
+            "unrecognized",
+        ] {
+            let sel = Selector::role(role).containing("Owned");
+            assert_eq!(
+                matching_with_lookup(&dom, &sel, &owner),
+                matching_with_lookup(&dom, &sel, &composed),
+                "{role}"
+            );
+        }
+    }
+    #[test]
+    fn generated_actions_keep_identity_exact_names_and_hidden_subtrees() {
+        use accesskit::{Node, NodeId as Id, Role};
+        let mut dom = ScriptedDom::new();
+        let root = dom.document();
+        let native = element(&mut dom, root, "button", "button");
+        let q = |s: &str| QualName::new(None, Namespace::default(), LocalName::from(s));
+        dom.set_attribute(native, q("aria-label"), "Pin selected in collection");
+        dom.set_attribute(native, q("data-key"), "native");
+        let p = projection(&dom);
+        let mut tree = genet_render::accesskit_tree_from_projection(p);
+        let root_id = tree.tree.as_ref().unwrap().root;
+        tree.nodes
+            .iter_mut()
+            .find(|(id, _)| *id == root_id)
+            .unwrap()
+            .1
+            .push_child(Id(999_001));
+        let mut action = Node::new(Role::Button);
+        action.set_label("Pin selected");
+        tree.nodes.push((Id(999_001), action));
+        let lookup =
+            AccessKitLookup::new(&tree, |id| (id == dom.opaque_id(native)).then_some(native));
+        let sel = Selector::role("button").containing("Pin selected");
+        assert_eq!(
+            matching_with_lookup(&dom, &sel, &lookup),
+            [
+                SemanticTarget::Dom(native),
+                SemanticTarget::Contributed(999_001)
+            ]
+        );
+        assert_eq!(
+            matching_prefer_exact_with_lookup(&dom, &sel, &lookup),
+            [SemanticTarget::Contributed(999_001)]
+        );
+        assert_eq!(
+            matching_prefer_exact_with_lookup(
+                &dom,
+                &sel.clone().with_attr("data-key", "native"),
+                &lookup
+            ),
+            [SemanticTarget::Dom(native)]
+        );
+        tree.nodes
+            .iter_mut()
+            .find(|(id, _)| *id == root_id)
+            .unwrap()
+            .1
+            .set_hidden();
+        let lookup =
+            AccessKitLookup::new(&tree, |id| (id == dom.opaque_id(native)).then_some(native));
+        assert!(matching_with_lookup(&dom, &sel, &lookup).is_empty());
+        // Explicit classes remain DOM selectors even with an unavailable tree.
+        dom.set_attribute(native, q("class"), "control");
+        let empty = accesskit::TreeUpdate {
+            nodes: vec![],
+            tree: None,
+            ..tree
+        };
+        let lookup = AccessKitLookup::new(&empty, |_| None);
+        assert_eq!(
+            matching_with_lookup(&dom, &Selector::class("control"), &lookup),
+            [SemanticTarget::Dom(native)]
+        );
+    }
 }

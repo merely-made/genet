@@ -13,6 +13,36 @@ remaining 47 assertion failures and 159 manual skips stay open; this is a
 bounded family closure. Earlier branch-status notes describe their original
 qualification stage.)*
 
+## Read-only selector intake, 2026-10-21
+
+Taproot now matches a borrowed `SemanticLookup` over an owner-computed
+observation. `DocumentLookup` traverses the flattened DOM, including shadow and
+assigned nodes; `AccessKitLookup` traverses a complete composed tree in its
+published child order and excludes hidden subtrees. Exact-name preference and
+role aliases are shared by both adapters. Explicit class filters keep their
+shallow DOM meaning. Attribute filters require a real DOM target; generated
+children do not inherit a producer slot's arbitrary attributes.
+
+`SemanticTarget` distinguishes actual DOM nodes from contributed semantic IDs.
+The host owns coordinates and action admission. A generated action must use its
+owner-supplied route, not a fabricated DOM node or guessed pointer gesture.
+This view does not allocate identities, retain a second catalogue, establish a
+presentation revision or confer a target-lifetime lease.
+
+Genet's accessibility code now owns the existing supported role spellings used
+by both the contributed selector adapter and Mere's browser mirror. Semantic
+window/text/label tokens remain distinct from browser ARIA emission. This is a
+spelling bridge for existing vocabularies, not a neutral contributor redesign.
+The 46-test Taproot native suite passes, including flat-tree assignment/fallback,
+DOM/composed role parity, generated exact-name preference, attribute refusal and
+hidden-subtree controls. Final source-sealed supplier and Mere receiving receipts
+live under `mere/support/family-promotion/diagnostics-selectors-*`; native/browser
+runtime and human assistive-technology acceptance are separate gates.
+
+The ordered consumer migration remains owned by
+`mere/design_docs/mere_docs/implementation_strategy/2026-06-08_system_diagnostics_and_accessibility_plan.md`.
+Target generations, broader Hest actions and full forward placement remain there.
+
 ## Sources and ownership
 
 The algorithm reference is [AccName 1.2, 23 September 2026 working

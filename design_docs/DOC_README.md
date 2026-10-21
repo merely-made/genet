@@ -1,5 +1,7 @@
 # genet Documentation Index
 
+Read-only selector intake (2026-10-21): the [accessible names plan](2026-09-26_accessible_names_plan.md#read-only-selector-intake-2026-10-21) records Taproot's shared borrowed lookup, flattened traversal, explicit generated targets and supplier-owned role spelling. Mere consumer qualification remains a separate receiving gate.
+
 Rust policy (2026-10-13): working toolchain 1.99.0 and shared MSRV 1.97.1, qualified separately. Canonical policy: `mere/design_docs/2026-08-12_family_composition_thesis_brief.md`, section "Shared Rust toolchain and minimum version".
 
 The canonical index for `genet/design_docs/`, per [`DOC_POLICY.md`](DOC_POLICY.md)

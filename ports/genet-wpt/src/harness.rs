@@ -1241,7 +1241,13 @@ fn drive_virtual<E: ScriptEngine>(rt: &mut Runtime<E>, render: &RenderSession) -
     // agrees with `performance` (Mark, 2026-10-20: "Real time plus skipped
     // waits"). A worker's reply arrives in real time on the same clock.
     let clock = rt.clock();
-    let mut now_ms = rt.clock_elapsed_ms();
+    // Timers run on a virtual queue clock that moves only by the jumps below, so
+    // a test's own timeout does not depend on machine load. `performance` and
+    // `Date` read the shared clock, which takes the same jumps on top of real
+    // time. While another agent runs, the queue follows wall time plus the jumps:
+    // a worker's reply arrives in real time.
+    let mut now_ms = 0.0f64;
+    let mut skipped_ms = 0.0f64;
     let mut turns = 0u64;
     let mut stop_reason = "harness-incomplete";
     loop {
@@ -1255,7 +1261,6 @@ fn drive_virtual<E: ScriptEngine>(rt: &mut Runtime<E>, render: &RenderSession) -
         turns += 1;
         harness_gc_turn(rt, turns);
         rt.run_microtasks();
-        now_ms = now_ms.max(rt.clock_elapsed_ms());
         let fired = match rt.run_timers(TIMER_BUDGET, now_ms) {
             Ok(value) => value,
             Err(error) => return HarnessOutcome::Threw(format!("runtime turn: {error:?}")),
@@ -1300,6 +1305,7 @@ fn drive_virtual<E: ScriptEngine>(rt: &mut Runtime<E>, render: &RenderSession) -
             break; // quiescent: no timer, no frame consumer, nothing happened
         }
         if workers_live {
+            now_ms = now_ms.max(start.elapsed().as_millis() as f64 + skipped_ms);
             if fired == 0 && rendered == 0 && acted == 0 && worked == 0 {
                 std::thread::sleep(Duration::from_millis(1)); // do not spin on the worker
             }
@@ -1325,6 +1331,7 @@ fn drive_virtual<E: ScriptEngine>(rt: &mut Runtime<E>, render: &RenderSession) -
         };
         clock.skip(step);
         now_ms += step;
+        skipped_ms += step;
     }
     finish_drive(rt, stop_reason)
 }

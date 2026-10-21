@@ -24,7 +24,7 @@
 //!
 //! [`ScriptedDom`]: genet_scripted_dom::ScriptedDom
 //!
-//! Use [`matching_with_projection`] for role/name targets, then pair its
+//! Use [`matching_with_lookup`] for composed role/name targets, then pair its
 //! results with the host's live geometry. [`matching_classes`] covers DOM class
 //! selectors. Estimated semantic and layout probes are fixture-only.
 
@@ -35,6 +35,14 @@ use genet_livery::{Device, InteractionStates, StylePlane, StyleSet, rendered_vis
 use genet_livery::layout;
 use genet_scripted_dom::{NodeId, ScriptedDom};
 use layout_dom_api::{LayoutDom, LocalName, Namespace};
+
+mod lookup;
+#[cfg(feature = "accesskit")]
+pub use lookup::AccessKitLookup;
+pub use lookup::{
+    DocumentLookup, SemanticLookup, SemanticNode, SemanticTarget,
+    matching_prefer_exact_with_lookup, matching_with_lookup,
+};
 
 mod projection;
 pub use projection::{matching_prefer_exact_with_projection, matching_with_projection};

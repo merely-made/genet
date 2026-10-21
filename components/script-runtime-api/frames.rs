@@ -1251,6 +1251,7 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
                 websocket,
                 worker_wake: wake,
                 worker_resource_wake: resource_wake,
+                secure_context: parent_host.borrow().secure_context,
             },
         };
         match open_document_realm::<E>(cx, &agent, plan) {
@@ -1293,6 +1294,9 @@ struct HostSeams {
     websocket: Option<Rc<dyn crate::WebSocketHandler>>,
     worker_wake: Option<std::sync::Arc<dyn Fn() + Send + Sync>>,
     worker_resource_wake: Option<std::sync::Arc<dyn Fn(String) + Send + Sync>>,
+    /// The creating document's secure context, which an `about:` or `data:`
+    /// document inherits.
+    secure_context: crate::secure_context::SecureContext,
 }
 
 /// Everything needed to put a document in a browsing context, whether it is the
@@ -1365,6 +1369,13 @@ fn open_document_realm<E: ScriptEngine>(
         .timer_state
         .clone()
         .ok_or(RealmError::Refused("agent timer state is unavailable"))?;
+    // A nested document also needs a secure parent; set before the realm's
+    // surfaces install, since they read it to expose `[SecureContext]` members.
+    let parent_secure = container.as_ref().and_then(|(realm, _)| {
+        agent.borrow().hosts.get(realm).map(|host| host.borrow().secure_context)
+    });
+    let secure_context =
+        crate::secure_context::for_document(&document_url, parent_secure, seams.secure_context);
     let mut fresh = HostState {
         dom: ScriptedDom::from_serialized_document(
             "<!doctype html><html><head></head><body></body></html>",
@@ -1379,6 +1390,7 @@ fn open_document_realm<E: ScriptEngine>(
         agent: Rc::downgrade(agent),
         viewport_size,
         worker_spawn: Some(crate::worker::worker_main::<E> as fn(_)),
+        secure_context,
         ..HostState::default()
     };
     let document = fresh.dom.document();
@@ -2544,6 +2556,7 @@ fn perform_navigation<E: ScriptEngine>(
                 websocket: host.websocket.clone(),
                 worker_wake: host.worker_wake.clone(),
                 worker_resource_wake: host.worker_resource_wake.clone(),
+                secure_context: host.secure_context,
             },
             host.viewport_size,
             host.script_loader.clone(),

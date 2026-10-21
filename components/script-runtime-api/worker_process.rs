@@ -81,9 +81,16 @@ struct Hello {
     backend: WorkerBackend,
     url: String,
     name: String,
+    /// The owner's secure context; absent from an older peer's hello.
+    #[serde(default = "secure_by_default")]
+    secure_context: bool,
     resource_timeout_ms: u64,
     max_frame_bytes: usize,
     max_queued_messages: usize,
+}
+
+fn secure_by_default() -> bool {
+    true
 }
 
 #[derive(Serialize, Deserialize)]
@@ -193,6 +200,7 @@ impl WorkerProcessHandle {
             backend: launcher.backend,
             url: boot.url,
             name: boot.name,
+            secure_context: boot.secure_context,
             resource_timeout_ms: launcher.resource_timeout.as_millis().min(u64::MAX as u128) as u64,
             max_frame_bytes: launcher.max_frame_bytes,
             max_queued_messages: launcher.max_queued_messages,
@@ -450,6 +458,7 @@ pub fn run_worker_process<E: ScriptEngine>(backend: WorkerBackend) -> io::Result
     worker_main::<E>(WorkerBoot {
         url: hello.url,
         name: hello.name,
+        secure_context: hello.secure_context,
         rx: to_rx,
         tx: crate::worker::WorkerSender::Process {
             tx: from_tx,

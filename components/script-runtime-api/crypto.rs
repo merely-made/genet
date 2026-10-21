@@ -5,10 +5,8 @@
 //! `crypto.getRandomValues` / `crypto.randomUUID` over a host random source.
 //!
 //! Same shape as the other surfaces: one native sink reaching [`HostState`], plus
-//! a JS bootstrap. `crypto.subtle` is deliberately absent — Web Crypto's
-//! algorithms are not implemented — but `crypto` is a real object with
-//! `Crypto.prototype`, so feature detection works instead of throwing a
-//! `ReferenceError` on the way in.
+//! a JS bootstrap. `crypto.subtle` is installed over this object by
+//! [`crate::subtle`], which draws key bytes from the same source.
 //!
 //! The default source is the operating system's CSPRNG through the `getrandom`
 //! crate on native targets. On wasm there is no default: the host installs the
@@ -42,6 +40,22 @@ fn default_fill(_buf: &mut [u8]) -> bool {
     false
 }
 
+/// Fill `buf` from the host's installed source, else the platform default.
+/// `false` when this host has neither.
+pub(crate) fn fill_random<E: ScriptEngine>(cx: &mut E::CallCx<'_>, buf: &mut [u8]) -> bool {
+    let source = cx.host_data().and_then(|d| {
+        d.downcast_ref::<RefCell<HostState>>()
+            .and_then(|h| h.borrow().random.clone())
+    });
+    match source {
+        Some(source) => {
+            source.fill(buf);
+            true
+        },
+        None => default_fill(buf),
+    }
+}
+
 /// `__crypto_random(n)` → `n` random bytes as a lossless binary string (each JS
 /// char code is one byte), the same convention the fetch sink uses, or `null`
 /// when no random source exists on this host.
@@ -56,17 +70,8 @@ impl<E: ScriptEngine> NativeFn<E> for CryptoRandom {
             .unwrap_or(0)
             .min(65536);
         let mut bytes = vec![0u8; n];
-        let source = cx.host_data().and_then(|d| {
-            d.downcast_ref::<RefCell<HostState>>()
-                .and_then(|h| h.borrow().random.clone())
-        });
-        match source {
-            Some(source) => source.fill(&mut bytes),
-            None => {
-                if !default_fill(&mut bytes) {
-                    return Ok(cx.make_null());
-                }
-            },
+        if !fill_random::<E>(cx, &mut bytes) {
+            return Ok(cx.make_null());
         }
         let s: String = bytes.iter().map(|&b| b as char).collect();
         cx.make_string(&s)
@@ -78,17 +83,21 @@ pub(crate) fn install_crypto_surface<E: ScriptEngine>(
 ) -> Result<(), crate::SurfaceError<E::Error>> {
     engine.set_function::<CryptoRandom>("__crypto_random", 1)?;
     engine.eval(CRYPTO_BOOTSTRAP)?;
-    Ok(())
+    crate::subtle::install_subtle_surface(engine)
 }
 
 /// `Crypto` with `getRandomValues` (integer typed arrays only, 65536-byte cap)
-/// and `randomUUID` (a version 4 UUID). `subtle` is absent by design.
+/// and `randomUUID` (a version 4 UUID). `subtle` is added by the subtle surface.
 const CRYPTO_BOOTSTRAP: &str = r#"
 (function() {
   var INTEGER_VIEWS = {
     Int8Array: 1, Uint8Array: 1, Uint8ClampedArray: 1, Int16Array: 1,
     Uint16Array: 1, Int32Array: 1, Uint32Array: 1, BigInt64Array: 1, BigUint64Array: 1
   };
+  // The intrinsic element type, which a subclass keeps and author code can't
+  // rename; `undefined` for a DataView or a non-view.
+  var typedTag = Object.getOwnPropertyDescriptor(
+    Object.getPrototypeOf(Uint8Array.prototype), Symbol.toStringTag).get;
   function randomBytes(n) {
     var s = __crypto_random(n), out = new Uint8Array(n);
     if (s === null) {
@@ -99,7 +108,11 @@ const CRYPTO_BOOTSTRAP: &str = r#"
   }
   function Crypto() {}
   Crypto.prototype.getRandomValues = function(view) {
-    if (!ArrayBuffer.isView(view) || !INTEGER_VIEWS[view.constructor && view.constructor.name]) {
+    var tag = typedTag.call(view);
+    if (tag === undefined && !ArrayBuffer.isView(view)) {
+      throw new TypeError("getRandomValues: argument is not an ArrayBufferView");
+    }
+    if (!INTEGER_VIEWS[tag]) {
       throw new DOMException("Argument is not an integer-typed ArrayBufferView", "TypeMismatchError");
     }
     if (view.byteLength > 65536) {

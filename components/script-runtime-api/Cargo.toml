@@ -42,6 +42,16 @@ url = { workspace = true }
 xpath = { workspace = true }
 encoding_rs = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+# Web Crypto's digests, HMAC, HKDF and PBKDF2 (subtle.rs). The RustCrypto 0.11
+# line, as ruled 2026-10-20 (design_docs/2026-10-20_webcrypto_subtle_plan.md);
+# pure Rust, so the wasm cone gains no getrandom. zeroize clears released key
+# material.
+sha1 = { workspace = true }
+sha2 = { workspace = true }
+hmac = { workspace = true }
+hkdf = { workspace = true }
+pbkdf2 = { workspace = true }
+zeroize = { workspace = true }
 
 [dev-dependencies]
 # Regenerates dom/html_interfaces_generated.rs from WPT's vendored WebIDL so the

@@ -195,7 +195,8 @@ Key pins from `Cargo.toml`:
 - Public Suffix List: `psl` 2.
 - HTTP/3: `quinn` 0.11, `h3` 0.0.8, `h3-quinn` 0.0.10, `webpki-roots` 1. h3 is
   pre-1.0; API churn is expected.
-- WebSocket: `tokio-tungstenite` 0.29 (rustls-tls-webpki-roots).
+- WebSocket: `tokio-tungstenite` 0.30, matching `murm-wire` message types;
+  the shared wire adapter owns TLS configuration.
 - Dev: `mockito` 1, `flate2` 1 (gzip test fixtures), `rcgen` 0.14 (self-signed
   cert for the in-process h3 test server).
 

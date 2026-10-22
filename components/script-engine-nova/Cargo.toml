@@ -23,13 +23,13 @@ script-engine-api = { path = "../script-engine-api" }
 
 [target.'cfg(all(target_pointer_width = "64", not(target_family = "wasm")))'.dependencies]
 # The Vano fork, named by git so a bare clone resolves.
-nova_vm = { version = "1", git = "https://github.com/merely-made/vano.git", rev = "fd9db00d225c22522f088713de7c9de512181dbf" }
+nova_vm = { version = "1", git = "https://github.com/merely-made/vano.git", rev = "b1f3d25d4b7c62ebfc4977346f55dc152ca2cc88" }
 
 [target.'cfg(all(target_pointer_width = "64", target_family = "wasm"))'.dependencies]
 # The first browser lane keeps ArrayBuffer/TypedArray but deliberately excludes
 # SharedArrayBuffer, Atomics, and Temporal. Shared JS memory is a later threaded
 # artifact; Temporal currently pulls a wasm32-only timezone provider.
-nova_vm = { version = "1", git = "https://github.com/merely-made/vano.git", rev = "fd9db00d225c22522f088713de7c9de512181dbf", default-features = false, features = [
+nova_vm = { version = "1", git = "https://github.com/merely-made/vano.git", rev = "b1f3d25d4b7c62ebfc4977346f55dc152ca2cc88", default-features = false, features = [
     "math",
     "json",
     "date",

@@ -446,8 +446,20 @@ pub trait ScriptEngine: Sized {
     /// Run pending microtasks. `Steps(n)` requests a completed-job count limit,
     /// not a bound on VM execution inside a job. A backend that cannot count
     /// jobs returns `UnsupportedBound` before running any. `Unbounded` opts into
-    /// a full checkpoint. Job errors are swallowed as unhandled rejections.
+    /// a full checkpoint. A job that throws is an unhandled rejection and does not
+    /// surface here; an error that cannot be thrown at all (an engine limit such as
+    /// stack exhaustion) is kept for [`take_pump_error`], never dropped.
+    ///
+    /// [`take_pump_error`]: ScriptEngine::take_pump_error
     fn pump(&mut self, budget: Budget) -> PumpOutcome;
+
+    /// Take the first uncatchable error a job (or module evaluation) raised since the
+    /// last call, as a one-line description. A backend whose queue survives a failing
+    /// job and reports nothing returns `None`. The host reports it as a script error:
+    /// it is how a job lost to an engine limit stays visible.
+    fn take_pump_error(&mut self) -> Option<String> {
+        None
+    }
 
     /// Drain pending microtasks to quiescence by explicitly choosing unbounded
     /// work. A counted-job pump cannot stop a job that spins inside the VM.

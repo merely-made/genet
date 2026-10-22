@@ -1433,6 +1433,11 @@ impl<E: ScriptEngine> Runtime<E> {
             }
         }
         self.engine.pump_microtasks();
+        // An error the engine could not throw (a limit, say) would otherwise cost
+        // the page its work without a trace: report it like any script failure.
+        if let Some(error) = self.engine.take_pump_error() {
+            self.report_script_exception(&format!("Job queue error: {error}"), None);
+        }
         self.flush_host_trace_events();
         self.trace_scheduler("pump_microtasks", "end", None);
     }

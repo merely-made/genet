@@ -7,6 +7,7 @@
 //! Retained Livery document ownership.
 
 use std::{
+    borrow::Cow,
     collections::{HashMap, HashSet},
     hash::Hash,
 };
@@ -29,7 +30,7 @@ use paint_list_api::DeviceIntSize;
 use crate::{
     IncrementalStyle, InteractionStates, LayoutError, LiveryLayout, LiveryPaintList, RestyleStats,
     StylePlane, StyleSet, TextDirective, TextRange, TextRect, TextSelection, TextSystem,
-    emit_paint_list_with_text_system_scrolled_with_images, hit_test_with_scroll,
+    emit_paint_list_with_text_system_scrolled_with_images_and_document_base, hit_test_with_scroll,
     layout::{
         RetainedRootFormatting, StickyScrollport, layout_retained_formatting_root,
         layout_with_text_system, resolve_container_query_styles,
@@ -128,7 +129,9 @@ where
         D: LayoutDom,
         D::NodeId: Copy + Eq + Hash,
     {
-        if dom.kind(node) == NodeKind::Text {
+        // Native controls retain their current text under the element's ID.
+        // Keep those virtual sources in DOM order during subtree replacement.
+        if dom.kind(node) == NodeKind::Text || dom.form_control_state(node).is_some() {
             sources.push(node);
         }
         for child in dom.dom_children(node) {
@@ -210,8 +213,9 @@ where
     transitions: Vec<PropertyTransition<D::NodeId>>,
     keyframe_animation: Option<KeyframeAnimation<D::NodeId>>,
     nested_scroll: HashMap<D::NodeId, (f32, f32)>,
-    image_sources: HashMap<String, Vec<u8>>,
+    image_sources: crate::image_resources::ImageResources,
     font_sources: HashMap<String, Vec<u8>>,
+    generic_font_sources: HashMap<String, Vec<u8>>,
     selection_anchor: Option<(D::NodeId, usize)>,
     selection_range: Option<TextRange<D::NodeId>>,
 }
@@ -329,8 +333,9 @@ where
             transitions: Vec::new(),
             keyframe_animation: None,
             nested_scroll: HashMap::new(),
-            image_sources: HashMap::new(),
+            image_sources: crate::image_resources::ImageResources::default(),
             font_sources: HashMap::new(),
+            generic_font_sources: HashMap::new(),
             selection_anchor: None,
             selection_range: None,
         }
@@ -338,6 +343,17 @@ where
 
     pub fn dom(&self) -> &D {
         &self.dom
+    }
+
+    /// Append the shared host validation overlay using this document's retained
+    /// font system. Bounds are in CSS viewport coordinates.
+    pub fn push_validation_notice(
+        &mut self,
+        list: &mut LiveryPaintList,
+        message: &str,
+    ) -> Option<[f32; 4]> {
+        let bounds = list.push_native_text_overlay(&mut self.text, message)?;
+        Some([bounds.min.x, bounds.min.y, bounds.width(), bounds.height()])
     }
 
     pub fn text_system(&self) -> &TextSystem {

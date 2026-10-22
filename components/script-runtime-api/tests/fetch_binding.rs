@@ -97,7 +97,7 @@ fn case_deferred_fetch_settles_later<E: ScriptEngine>() {
             headers: vec![],
             body: b"hi".to_vec(),
         },
-    );
+    ).unwrap();
     assert_eq!(read(&mut rt, "String(D.s)"), "200");
     assert_eq!(read(&mut rt, "D.b"), "hi");
     assert_eq!(
@@ -110,7 +110,7 @@ fn case_deferred_fetch_settles_later<E: ScriptEngine>() {
     rt.eval(r#"var F={}; fetch("http://x/b").then(function(){F.r="ok";}, function(e){F.r=(e instanceof TypeError)?"TypeError":"other";});"#).unwrap();
     rt.run_microtasks();
     let id_b = seen.borrow()[1].0;
-    rt.fail_fetch(id_b, "boom");
+    rt.fail_fetch(id_b, "boom").unwrap();
     assert_eq!(read(&mut rt, "F.r"), "TypeError");
 
     // (3) Mid-flight abort cancels the in-flight request and rejects with AbortError.
@@ -166,7 +166,7 @@ fn case_streaming_response_body_delivers_incrementally<E: ScriptEngine>() {
     ).unwrap();
     rt.run_microtasks();
     let id = seen.borrow()[0].0;
-    rt.start_stream(id, ok_meta("http://x/stream"));
+    rt.start_stream(id, ok_meta("http://x/stream")).unwrap();
     assert_eq!(
         read(&mut rt, "String(S.status)"),
         "200",
@@ -177,16 +177,16 @@ fn case_streaming_response_body_delivers_incrementally<E: ScriptEngine>() {
         "0",
         "no chunks before any push"
     );
-    rt.push_chunk(id, b"foo");
+    rt.push_chunk(id, b"foo").unwrap();
     assert_eq!(read(&mut rt, "S.chunks.join(',')"), "foo");
-    rt.push_chunk(id, b"bar");
+    rt.push_chunk(id, b"bar").unwrap();
     assert_eq!(read(&mut rt, "S.chunks.join(',')"), "foo,bar");
     assert_eq!(
         read(&mut rt, "String(S.done)"),
         "undefined",
         "not done until close"
     );
-    rt.close_stream(id);
+    rt.close_stream(id).unwrap();
     assert_eq!(read(&mut rt, "String(S.done)"), "true");
     assert_eq!(
         rt.pending_fetches(),
@@ -199,10 +199,10 @@ fn case_streaming_response_body_delivers_incrementally<E: ScriptEngine>() {
     rt.eval(r#"var T={}; fetch("http://x/s2").then(function(r){ return r.text(); }).then(function(t){ T.text = t; });"#).unwrap();
     rt.run_microtasks();
     let id2 = seen.borrow()[1].0;
-    rt.start_stream(id2, ok_meta("http://x/s2"));
-    rt.push_chunk(id2, b"hel");
-    rt.push_chunk(id2, b"lo");
-    rt.close_stream(id2);
+    rt.start_stream(id2, ok_meta("http://x/s2")).unwrap();
+    rt.push_chunk(id2, b"hel").unwrap();
+    rt.push_chunk(id2, b"lo").unwrap();
+    rt.close_stream(id2).unwrap();
     assert_eq!(
         read(&mut rt, "T.text"),
         "hello",
@@ -223,7 +223,7 @@ fn case_clone_of_live_streaming_body_rejects<E: ScriptEngine>() {
         .unwrap();
     rt.run_microtasks();
     let id = seen.borrow()[0].0;
-    rt.start_stream(id, ok_meta("http://x/live"));
+    rt.start_stream(id, ok_meta("http://x/live")).unwrap();
     // C.resp is a live (still-arriving) streaming Response. The buffered tee cannot
     // clone it losslessly, so clone() must throw rather than silently truncate.
     assert_eq!(
@@ -233,7 +233,7 @@ fn case_clone_of_live_streaming_body_rejects<E: ScriptEngine>() {
         ),
         "TypeError"
     );
-    rt.close_stream(id);
+    rt.close_stream(id).unwrap();
 }
 
 fn case_fetch_resolves_to_response_through_the_handler<E: ScriptEngine>() {
@@ -836,4 +836,194 @@ both_engines! {
     case_binary_body_round_trips_losslessly => (binary_body_round_trips_losslessly, binary_body_round_trips_losslessly_vano),
     case_stream_backed_body_semantics => (stream_backed_body_semantics, stream_backed_body_semantics_vano),
     case_writable_stream_and_pipe => (writable_stream_and_pipe, writable_stream_and_pipe_vano),
+}
+
+#[cfg(test)]
+mod phase_c_form_data_fixtures {
+    use super::*;
+    use std::{cell::RefCell, rc::Rc};
+    #[derive(Clone, Default)]
+    struct Capture(Rc<RefCell<Vec<FetchRequest>>>);
+    impl FetchHandler for Capture {
+        fn fetch(&self, request: FetchRequest) -> FetchOutcome {
+            let outcome = FetchOutcome {
+                network_error: false,
+                status: 200,
+                status_text: "OK".into(),
+                response_type: "basic".into(),
+                url: request.url.clone(),
+                redirected: false,
+                headers: request.headers.clone(),
+                body: request.body.clone().unwrap_or_default(),
+            };
+            self.0.borrow_mut().push(request);
+            outcome
+        }
+    }
+    fn fixture<E: ScriptEngine>() -> (Runtime<E>, Capture) {
+        let mut rt = Runtime::<E>::new().unwrap();
+        rt.set_base_url("https://forms.test/source").unwrap();
+        let capture = Capture::default();
+        rt.set_fetch_handler(Box::new(capture.clone()));
+        (rt, capture)
+    }
+    fn run<E: ScriptEngine>(rt: &mut Runtime<E>, source: &str) {
+        if let Err(error) = rt.eval(source) {
+            panic!("{}\n{source}", rt.describe_error(&error));
+        }
+    }
+    fn request<E: ScriptEngine>(rt: &mut Runtime<E>, capture: &Capture) -> FetchRequest {
+        rt.run_microtasks();
+        let requests = capture.0.borrow();
+        assert_eq!(requests.len(), 1);
+        let request = &requests[0];
+        FetchRequest {
+            method: request.method.clone(),
+            url: request.url.clone(),
+            headers: request.headers.clone(),
+            body: request.body.clone(),
+            cache: request.cache.clone(),
+            redirect: request.redirect.clone(),
+            mode: request.mode.clone(),
+            referrer: request.referrer.clone(),
+            referrer_policy: request.referrer_policy.clone(),
+            credentials: request.credentials.clone(),
+            integrity: request.integrity.clone(),
+            upgrade_insecure_requests: request.upgrade_insecure_requests,
+            block_all_mixed_content: request.block_all_mixed_content,
+        }
+    }
+    fn boundary(request: &FetchRequest) -> String {
+        request
+            .headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("content-type"))
+            .unwrap()
+            .1
+            .strip_prefix("multipart/form-data; boundary=")
+            .expect("actual multipart Content-Type")
+            .to_owned()
+    }
+    fn binary_payload<E: ScriptEngine>() {
+        let (mut rt, capture) = fixture::<E>();
+        run(
+            &mut rt,
+            r#"var fd=new FormData();fd.append('upload',new File([new Uint8Array([0,128,255])],'a.bin',{type:'application/octet-stream'}));fetch('/echo',{method:'POST',body:fd});"#,
+        );
+        let r = request(&mut rt, &capture);
+        let b = boundary(&r);
+        let mut expected=format!("--{b}\r\nContent-Disposition: form-data; name=\"upload\"; filename=\"a.bin\"\r\nContent-Type: application/octet-stream\r\n\r\n").into_bytes();
+        expected.extend_from_slice(&[0, 128, 255]);
+        expected.extend_from_slice(format!("\r\n--{b}--\r\n").as_bytes());
+        assert_eq!(
+            r.body.unwrap(),
+            expected,
+            "binary must not pass through UTF8 decode/encode"
+        );
+    }
+    fn escaped_headers<E: ScriptEngine>() {
+        let (mut rt, capture) = fixture::<E>();
+        run(
+            &mut rt,
+            r#"var fd=new FormData();fd.append('n\r"',new File([new Uint8Array([0,128,255])],'f\r"\n\\.bin'));fd.append('text','a\nb');fetch('/echo',{method:'POST',body:fd});"#,
+        );
+        let r = request(&mut rt, &capture);
+        let b = boundary(&r);
+        let mut expected=format!("--{b}\r\nContent-Disposition: form-data; name=\"n%0D%0A%22\"; filename=\"f%0D%22%0A\\.bin\"\r\nContent-Type: application/octet-stream\r\n\r\n").into_bytes();
+        expected.extend_from_slice(&[0, 128, 255]);
+        expected.extend_from_slice(format!("\r\n--{b}\r\nContent-Disposition: form-data; name=\"text\"\r\n\r\na\r\nb\r\n--{b}--\r\n").as_bytes());
+        assert_eq!(r.body.unwrap(), expected);
+    }
+    fn request_snapshot_private_fields<E: ScriptEngine>() {
+        let (mut rt, capture) = fixture::<E>();
+        run(
+            &mut rt,
+            r#"var original=new File([new Uint8Array([0,128,255])],'a.bin'),fd=new FormData();fd.append('upload',original);var req=new Request('https://forms.test/echo',{method:'POST',body:fd});fd.set('upload','late');original._b=new Uint8Array([9]);fd._l=[['fake','forged']];fetch(req.clone());"#,
+        );
+        let r = request(&mut rt, &capture);
+        let b = boundary(&r);
+        let mut expected=format!("--{b}\r\nContent-Disposition: form-data; name=\"upload\"; filename=\"a.bin\"\r\nContent-Type: application/octet-stream\r\n\r\n").into_bytes();
+        expected.extend_from_slice(&[0, 128, 255]);
+        expected.extend_from_slice(format!("\r\n--{b}--\r\n").as_bytes());
+        assert_eq!(
+            r.body.unwrap(),
+            expected,
+            "Request extraction snapshots FD and private bytes"
+        );
+    }
+    fn response_formdata_binary<E: ScriptEngine>() {
+        let (mut rt, _) = fixture::<E>();
+        run(
+            &mut rt,
+            r#"var prefix='--B\r\nContent-Disposition: form-data; name="upload"; filename="a.bin"\r\nContent-Type: application/octet-stream\r\n\r\n';var suffix='\r\n--B--\r\n';var parts=[new TextEncoder().encode(prefix),new Uint8Array([0,128,255]),new TextEncoder().encode(suffix)];var all=new Uint8Array(parts[0].length+3+parts[2].length);all.set(parts[0]);all.set(parts[1],parts[0].length);all.set(parts[2],parts[0].length+3);globalThis.result='pending';new Response(all,{headers:{'content-type':'multipart/form-data; boundary=B'}}).formData().then(function(fd){return fd.get('upload').arrayBuffer();}).then(function(b){result=Array.from(new Uint8Array(b)).join(',');});"#,
+        );
+        rt.run_microtasks();
+        assert_eq!(
+            read(&mut rt, "result"),
+            "0,128,255",
+            "multipart parser must decode only text parts"
+        );
+    }
+    fn blob_private_body<E: ScriptEngine>() {
+        let (mut rt, capture) = fixture::<E>();
+        run(
+            &mut rt,
+            r#"var original=new Blob([new Uint8Array([0,128,255])],{type:'application/test'});original._b=new Uint8Array([9]);Object.defineProperty(original,'type',{value:'shadow/type'});var saved=Blob;Blob=function(){throw new Error('public Blob constructor');};try{fetch('/echo',{method:'POST',body:original});}finally{Blob=saved;}"#,
+        );
+        let r = request(&mut rt, &capture);
+        assert_eq!(r.body.as_deref(), Some(&[0, 128, 255][..]));
+        assert_eq!(
+            r.headers
+                .iter()
+                .find(|(k, _)| k.eq_ignore_ascii_case("content-type"))
+                .map(|(_, v)| v.as_str()),
+            Some("application/test")
+        );
+    }
+    fn fake_body_union<E: ScriptEngine>() {
+        let (mut rt, capture) = fixture::<E>();
+        run(
+            &mut rt,
+            r#"var fake=Object.create(FormData.prototype);fake._l=[['forged','yes']];fake.toString=function(){return 'fake-plain';};fetch('/echo',{method:'POST',body:fake});"#,
+        );
+        let r = request(&mut rt, &capture);
+        assert_eq!(
+            r.body.as_deref(),
+            Some(&b"fake-plain"[..]),
+            "prototype fake is string BodyInit, not branded FD"
+        );
+    }
+    fn private_wire_tojson<E: ScriptEngine>() {
+        let (mut rt, capture) = fixture::<E>();
+        run(
+            &mut rt,
+            r#"var fd=new FormData();fd.append('upload',new File([new Uint8Array([0,128,255])],'a.bin'));var calls=0,saved={o:Object.getOwnPropertyDescriptor(Object.prototype,'toJSON'),a:Object.getOwnPropertyDescriptor(Array.prototype,'toJSON')},caught=null;function poison(){calls++;throw new Error('private wire exposed');}try{Object.defineProperty(Object.prototype,'toJSON',{configurable:true,value:poison});Object.defineProperty(Array.prototype,'toJSON',{configurable:true,value:poison});fetch('/echo',{method:'POST',body:fd});}catch(e){caught=e;}finally{function restore(o,k,d){if(d)Object.defineProperty(o,k,d);else delete o[k];}restore(Object.prototype,'toJSON',saved.o);restore(Array.prototype,'toJSON',saved.a);}if(caught || calls!==0)throw new Error('manual private wire must bypass inherited toJSON');"#,
+        );
+        let r = request(&mut rt, &capture);
+        assert!(r.body.unwrap().windows(3).any(|w| w == [0, 128, 255]));
+    }
+    fn xhr_fd_binary<E: ScriptEngine>() {
+        let (mut rt, capture) = fixture::<E>();
+        run(
+            &mut rt,
+            r#"var fd=new FormData();fd.append('upload',new File([new Uint8Array([0,128,255])],'a.bin'));var xhr=new XMLHttpRequest();xhr.open('POST','/echo',false);xhr.send(fd);"#,
+        );
+        let r = request(&mut rt, &capture);
+        let b = boundary(&r);
+        let mut expected=format!("--{b}\r\nContent-Disposition: form-data; name=\"upload\"; filename=\"a.bin\"\r\nContent-Type: application/octet-stream\r\n\r\n").into_bytes();
+        expected.extend_from_slice(&[0, 128, 255]);
+        expected.extend_from_slice(format!("\r\n--{b}--\r\n").as_bytes());
+        assert_eq!(r.body.unwrap(), expected, "XHR shares exact binary FD body");
+    }
+    macro_rules! both{($($name:ident=>$case:ident),*$(,)?)=>{$(mod $name{#[test]fn boa(){super::$case::<script_engine_boa::BoaEngine>();}#[cfg(target_pointer_width="64")]#[test]fn nova(){super::$case::<script_engine_nova::NovaEngine>();}})*};}
+    both! {
+        phase_c_fetch_form_data_binary_payload=>binary_payload,
+        phase_c_fetch_form_data_escaped_headers=>escaped_headers,
+        phase_c_fetch_form_data_request_snapshot=>request_snapshot_private_fields,
+        phase_c_fetch_form_data_response_binary=>response_formdata_binary,
+        phase_c_fetch_form_data_blob_private_body=>blob_private_body,
+        phase_c_fetch_form_data_fake_body_union=>fake_body_union,
+        phase_c_fetch_form_data_private_wire_tojson=>private_wire_tojson,
+        phase_c_fetch_form_data_xhr_binary=>xhr_fd_binary,
+    }
 }

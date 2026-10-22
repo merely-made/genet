@@ -1,10 +1,50 @@
 # Accessible names and descriptions
 
-**Status (2026-09-29):** bounded DOM names/descriptions and retained generated
+**Status (2026-10-16):** bounded DOM names/descriptions and retained generated
 text implemented, including scripted sessions on Boa and Vano. Focused joint
 semantic and native lowering gates pass. Cambium's exact-pin adoption is
 published and recorded below. Full AccName/HTML-AAM conformance and
 headed assistive-technology acceptance remain open.
+*(2026-10-16: the `get_computed_label` hook and families F, B, E and K are
+published on main. Family A embedded-control values are qualified on ThinkPad:
+both engines move 424/484 to 437/484 with exactly 13 gains, no prior-pass loss,
+and no missing/new assertions. The embedded-control file passes 29/29. The
+remaining 47 assertion failures and 159 manual skips stay open; this is a
+bounded family closure. Earlier branch-status notes describe their original
+qualification stage.)*
+
+## Read-only selector intake, 2026-10-21
+
+Taproot now matches a borrowed `SemanticLookup` over an owner-computed
+observation. `DocumentLookup` traverses the flattened DOM, including shadow and
+assigned nodes; `AccessKitLookup` traverses a complete composed tree in its
+published child order and excludes hidden subtrees. Exact-name preference and
+role aliases are shared by both adapters. Explicit class filters keep their
+shallow DOM meaning. Attribute filters require a real DOM target; generated
+children do not inherit a producer slot's arbitrary attributes.
+
+`SemanticTarget` distinguishes actual DOM nodes from contributed semantic IDs.
+The host owns coordinates and action admission. A generated action must use its
+owner-supplied route, not a fabricated DOM node or guessed pointer gesture.
+This view does not allocate identities, retain a second catalogue, establish a
+presentation revision or confer a target-lifetime lease.
+
+The optional `document-session-api/accesskit` spelling bridge owns the supported
+role spellings used
+by both the contributed selector adapter and Mere's browser mirror. Semantic
+window/text/label tokens remain distinct from browser ARIA emission. This is a
+spelling bridge for existing vocabularies, not a neutral contributor redesign.
+Taproot does not depend on the renderer to use the bridge; `genet-render`
+reexports the same functions for hosts. The default document contract remains
+renderer-neutral. The 46-test Taproot native suite passes, including flat-tree assignment/fallback,
+DOM/composed role parity, generated exact-name preference, attribute refusal and
+hidden-subtree controls. Final source-sealed supplier and Mere receiving receipts
+live under `mere/support/family-promotion/diagnostics-selectors-*`; native/browser
+runtime and human assistive-technology acceptance are separate gates.
+
+The ordered consumer migration remains owned by
+`mere/design_docs/mere_docs/implementation_strategy/2026-06-08_system_diagnostics_and_accessibility_plan.md`.
+Target generations, broader Hest actions and full forward placement remain there.
 
 ## Sources and ownership
 
@@ -114,7 +154,14 @@ local path overrides are not an adoption receipt.
 
 Complete role rules, computed visibility, shadow scope and flat-tree traversal,
 embedded controls, generated block spacing, WPT coverage and a headed physical
-screen-reader receipt remain explicit future work. Static Livery session wiring
+screen-reader receipt remain explicit future work.
+*(2026-10-14: shadow scope and flat-tree traversal are fixed on branch
+`shadow-a11y-walk`, not yet merged. Corrected 2026-10-14 by the
+`get_computed_label` lane: the fix is on main, rebased as `42cabb5a886` and
+`bd5f7ca0994`. Name from content follows AccName 2F's
+rendered child nodes, and ID references resolve within the referring node's
+own tree. See residual 11 and rulings 11.1–11.3 in
+[the Shadow DOM plan](2026-09-07_shadow_dom_plan.md#residuals).)* Static Livery session wiring
 uses the retained provider. At this September 26 receipt the scripted session
 exposed fragments without styles; the September 29 provider closes that gap.
 No new worktree, isolated
@@ -231,9 +278,10 @@ gates; physical AT and browser-hosted interaction remain open.
 
 Taproot selectors can explicitly name a host surface family with
 `surface:contributed role:button Calculate` or `Selector::on_surface`.
-Unscoped ordering and class/text/attribute meanings remain unchanged. An
-unknown family, or a host-computed Hit naming a different family, is refused
-before the mutating click hook. Miss/Unsupported may still reach a host's
+Unscoped ordering and class/text/attribute meanings remain unchanged. A
+host-computed Hit naming a different family is refused before the mutating
+click hook. Without a matching authoritative Hit, an unknown probe family is
+also refused. Miss/Unsupported may still reach a known family's host
 deferred click hook; that host owns target identity, scrolling and refusal.
 
 Genet-render publicly exposes `accesskit_tree_from_projection`, lowering the
@@ -389,3 +437,662 @@ found `visibility:hidden` and `aria-hidden` measurement probes by
     `rustfmt --check` is clean for every hunk changed here. The two diffs it
     still reports predate this change: `a11y/name.rs:248`, and the order of
     `genet-render/src/lib.rs`'s `pub use` blocks.
+
+## Scoped host-owned hits without probe inventory (2026-10-14)
+
+**Status (2026-10-14): implemented and verified.** This corrects the September 30 preflight
+for hosts whose current geometry is authoritative but whose shared-window DOM
+cannot be exposed as an independent per-family probe surface.
+
+### Findings
+
+Turnstone's A4 composition supplies a current `SelectorTarget::Hit` attributed
+to the requested pane family. `AutomatableExt::resolve` and `click` checked
+`with_surfaces` before honoring that answer, refusing the selector despite a
+matching physical target. A fabricated per-pane probe over the shared DOM would
+cross owner boundaries. The supplier needs no additional host API.
+
+### Implementation and done-conditions
+
+Resolve honors a matching authoritative Hit before the legacy DOM fallback.
+Scoped click validates a host Hit's family before its mutable hook; a matching
+Hit does not require probe inventory. Miss and Unsupported retain the existing
+inventory preflight for scoped hook admission. A known-family Miss may still
+enter the deferred reveal hook, but resolution never falls back to stale DOM
+geometry after an authoritative Miss.
+
+Done when focused native tests demonstrate scoped resolution and actual
+press/release without probe inventory, preserved hook admission for a matching
+Hit, refusal of a mismatched Hit before mutation, and refusal of missing-family
+Miss/Unsupported hooks. Existing known-family deferred reveal controls must
+continue to pass. Exact commands, source hashes and control logs belong to
+[`receipts/2026-10-14_taproot_owned_hits/`](receipts/2026-10-14_taproot_owned_hits/).
+Turnstone's physical consumer and Mere's dependency adoption are separate gates.
+
+### Progress and verification
+
+The tests-only pre-fix control on `1ec5d08d16e78f936e9ab366af9f36b7d6abc044`
+failed both matching-hit controls: scoped resolution returned `None`, and the
+host hook was never admitted. The three other scoped tests passed. After the
+repair, all **42 Taproot library tests passed, with zero failures or ignores**.
+This includes existing known-family deferred Miss/Unsupported hook controls,
+authoritative Miss without stale fallback, and unscoped physical delivery.
+
+Both runs used Rust 1.99.0 from the Code root, committed sibling dependency
+declarations, the same offline-generated lock, `--locked --offline -j 1`, and
+`CARGO_PROFILE_DEV_DEBUG=0`, `CARGO_PROFILE_TEST_DEBUG=0`.
+`CARGO_TARGET_DIR=C:/t/cargo-targets/genet` and
+`CARGO_BUILD_BUILD_DIR=C:/t/cargo-targets/genet/build` reused the stable target.
+The manifest was `worktrees/genet-taproot-owned-hits/Cargo.toml`; the command
+was `cargo +1.99.0 test --manifest-path <manifest> -p taproot --lib --locked
+--offline -j 1`, adding `scoped_` only for the pre-fix control. Rustfmt and
+`git diff --check` passed. Source hashes, exact commands, ignored lock copy,
+and raw logs are retained in the linked receipt. No isolated target or Cargo
+home was created. The worktree isolates the primary checkout's unrelated Forms
+work. These are native supplier tests; downstream Wasm, browser-hosted and
+physical Turnstone interaction remain consumer gates.
+
+## WPT `get_computed_label` hook (2026-10-14)
+
+**Status (2026-10-14): implemented and baselined on branch `computed-label`,
+not merged.**
+Mark asked for this after the Shadow DOM residual 11 fix
+([Shadow DOM plan](2026-09-07_shadow_dom_plan.md#residuals), rulings
+11.1–11.3). Until now, that fix had unit tests only. genet-wpt's testdriver
+backend (`ports/genet-wpt/src/harness.rs`, `TESTDRIVER_VENDOR_JS`) implemented
+only `action_sequence`, so every AccName WPT test threw at its first
+`test_driver.get_computed_label` call. This lane adds the hook, runs `accname/`
+before and after, and records the baseline.
+
+### Findings
+
+- **The corpus is 19 files, not 183.** `tests/wpt/tests/accname/` holds 183
+  files. 164 of them are `-manual` tests, the `foo.jpg` they use, and
+  `META.yml`. 19 are automated: 2 at the top level, 15 under `name/` and 2
+  under `name/shadowdom/` (`basic.html`, `slot.html`). 18 of the 19 go through
+  `AriaUtils.verifyLabelsBySelector` (`wai-aria/scripts/aria-utils.js:136`).
+  It compares the label, ASCII-whitespace-collapsed, against
+  `data-expectedlabel`. One file calls the hook directly. None uses
+  `get_computed_role`.
+- **The role hook is used elsewhere.** `get_computed_role` helpers appear in
+  html-aam (12 files), wai-aria (28), svg-aam (4), core-aam (1) and
+  graphics-aria (1).
+- **The crossing.** The vendor JS queues a request and returns a pending
+  promise. Each drive loop drains the queue with `rt.eval`, does the work on
+  the host, and settles the promise. `__nodeRawId(el.__ref)` returns
+  `NodeId::raw()`. That is what `ScriptedDom::opaque_id` returns
+  (`genet-scripted-dom/lib.rs:1619`) and what the projection keys each node
+  by (`neutral_node_id`, `genet-render/src/a11y.rs:670`). No translation is
+  needed.
+- **One production projection call.** genet-documents' scripted session
+  (`engines/scripted.rs:217`) builds the projection with
+  `document_a11y_projection_with_style` over
+  `with_retained_styled_frame_and_dom`. genet-wpt holds the same
+  `LiveryCssom`, so it can make the same call. The AccessKit lowering copies
+  the neutral name into the label word for word (`a11y.rs:559`).
+- **The projection covers rendered elements only.** `projection_walk` makes a
+  node for every element that has a fragment and is visibly rendered,
+  whatever its role. It skips `aria-hidden` subtrees and leaves out
+  CSS-hidden elements.
+- **Stale hashes in the residual 11 record.** The fix landed on main rebased,
+  as `42cabb5a886` (failing-first test) and `bd5f7ca0994` (fix).
+  `690cf560c04` and `c9d8faf7663`, cited in the Shadow DOM plan, are not
+  ancestors of main.
+
+### Rulings (2026-10-14)
+
+1. **The role hook.** *Question:* should `get_computed_role` land in the same
+   pass? AccName uses it in 0 files, and it needs a table mapping the 55
+   neutral roles to ARIA role strings, with judgment calls. *Options:* label
+   only, with roles as their own lane; or both now, running the AAM
+   directories too. Mark: **"Label only (Recommended)"**. *Follows:* this
+   lane implements `get_computed_label` only. `get_computed_role` keeps its
+   throwing default, and its table comes to Mark as its own design round.
+2. **The label source.** *Question:* which projection should the label come
+   from? *Options:* the neutral projection
+   (`document_a11y_projection_with_style`); the AccessKit lowering; or a new
+   direct name query that runs on any element. Mark: **"Neutral projection
+   (Recommended)"**. *Follows:* the hook makes the same call as the
+   production scripted session, generated text and CSS visibility included,
+   so WPT checks the names a host sees. genet-wpt needs no AccessKit feature.
+3. **An element absent from the projection.** *Question:* what should the
+   hook do for an element the projection leaves out (`display: none`,
+   `visibility: hidden`, `aria-hidden`, no fragment)? *Options:* reject with
+   a distinct message; or resolve `""`. Mark: **"Reject, distinct msg
+   (Recommended)"**. *Follows:* the hook rejects with "element not in
+   accessibility projection". The ledger counts these as their own family,
+   separate from wrong-name failures.
+4. **The dependency edge.** *Question:* may genet-wpt take a path dependency
+   on the in-workspace `genet-render`? *Options:* add it with default
+   features off; or route a name query through `genet-scripted` instead.
+   Mark: **"Add the path dep (Recommended)"**. *Follows:* `genet-render` with
+   `default-features = false, features = ["livery"]`. `image-decode` is
+   forwarded through genet-wpt's existing feature.
+5. **Name bugs the run finds.** *Question:* does any of the 52
+   name-computation failures belong in this lane? The candidates put were
+   the input value and alt names (family F) and `aria-label` on a `<slot>`
+   (family I). *Options:* none, report only; fix F here; fix I here; fix
+   both. Mark: **"None, report only (Recommended)"**. *Follows:* this lane
+   ends at the baseline. The ranked list below is open work, and each fix
+   gets its own lane, with this AccName run as its before/after instrument.
+6. **Recording.** *Question:* should phase 4 also correct the residual 11
+   record, whose hashes and merge status are stale? *Options:* record
+   everything with dated annotations; or record the baseline only. Mark:
+   **"Record all, annotate (Recommended)"**. *Follows:* dated annotations in
+   the Shadow DOM plan, this plan's "Remaining gates" note, and DOC_README's
+   two rows. The original wording is kept.
+
+### Phases and done-conditions
+
+1. **Design.** Done 2026-10-14. The rulings are above.
+2. **Implement, failing first.** A genet-wpt test page calls
+   `get_computed_label`. Before the hook it rejects. After it, the call
+   resolves to the AccName-correct string for an element whose name is known
+   (the control). A deliberately wrong expected string must still fail, and
+   an element absent from the projection must reject with the ruling 3
+   message.
+3. **Baseline.** Run `accname/` before and after, recording per-subdirectory
+   pass counts. `name/shadowdom/basic.html` and `slot.html` are named
+   explicitly. Each failure family is listed with a representative test,
+   with harness failures kept apart from name-computation failures.
+   Receipts go under `Code/testing/genet/wpt-ledger/`.
+4. **Record.** Findings and the baseline go here and into DOC_README's row.
+   The stale residual 11 hashes are corrected with dated annotations. Bugs
+   the run finds in name computation are reported as a ranked list, not
+   fixed here.
+
+### Progress
+
+**2026-10-14.** Phase 1 done: design reported, four rulings recorded.
+
+**2026-10-14.** Phases 2 and 3 done on `computed-label`. Failing first: all
+four subtests of `test_driver_get_computed_label_reads_the_projection` threw
+`TypeError: not a callable function` before the hook. After it, both known
+names resolve, the wrong expectation fails on the name, and the hidden element
+rejects with the ruling 3 message. One harness change was needed beyond the
+hook. In the virtual-clock drive loop, a turn that settles a label no longer
+advances the clock: the next `promise_test`'s request would otherwise meet its
+own timeout first. genet-wpt: 72 passed, 2 ignored. `accname/`: **0/405 →
+352/405** subtests, 0 → 5 all-pass files; `name/shadowdom/basic.html` 2/2,
+`slot.html` 2/4. The receipt and failure families are in
+`Code/testing/genet/wpt-ledger/2026-10-14_computed_label/results.md`. Phase 4
+(recording the baseline and families here) waits for Mark.
+
+### Baseline (2026-10-14)
+
+From `Code/testing/genet/wpt-ledger/2026-10-14_computed_label/`, with the
+dev-profile genet-wpt binary on Boa, `testharness accname --jobs 1`. 178
+files are enumerated; 159 manual files are skipped and 19 run.
+
+| Directory | Files | Before | After | All-pass after |
+|---|---:|---:|---:|---:|
+| `accname/` (top level) | 2 | 0/11 | 8/11 | 1 |
+| `accname/name/` | 15 | 0/388 | 340/388 | 3 |
+| `accname/name/shadowdom/` | 2 | 0/6 | 4/6 | 1 |
+| Total | 19 | 0/405 | 352/405 | 5 |
+
+Residual 11's pair: `shadowdom/basic.html` 2/2, `slot.html` 2/4 (family I
+below). One subtest is a projection failure, not a wrong name:
+`<dialog open>` is not in the projection and rejects
+(`comp_name_from_heading.tentative.html`). One file errors on both sides
+with a buckram layout panic (`comp_name_from_content.html`, 79
+`data-expectedlabel` cases, not counted in the 405): `atomic root … was
+formatted against AtomicBasis { width: 67.58594 } but sits in
+AtomicBasis { width: 64.38594 }`.
+
+The original October 14 ranking below describes 52 wrong-name gates and the
+separate layout panic. F, B, E and K have since shipped; A is qualified on ThinkPad
+as recorded below. The current maps contain 47 failing assertions, including
+25 exposed by K and one separate projection gap. The original priority order was:
+
+1. **F.** `input[type=button/submit/reset]` value and `input[type=image]`
+   alt are not used (4). `comp_host_language_label.html`.
+2. **B.** Name from content is used for roles that forbid it (group, dialog,
+   alertdialog, article, table, abbr), so heading, caption or `title` is
+   never reached (9). `comp_name_from_heading.tentative.html`,
+   `comp_tooltip.html`, `comp_labeledby_non_standard.html`.
+3. **E.** Whitespace across nested inline elements is dropped (5):
+   `button label` → `buttonlabel`. `comp_text_node.html`.
+4. **K.** The layout panic above, which hides a whole file.
+5. **A.** An embedded control's value inside a label is not used (13).
+   `comp_embedded_control.html`.
+6. **I.** `aria-label` on a `<slot>` replaces its slotted content in name
+   from content (2). `shadowdom/slot.html`. This is a follow-up to residual
+   11.
+7. **H.** Hidden-content edges (2): a visible child of a `visibility:hidden`
+   parent is dropped, and a hidden `aria-labelledby` target does not fall
+   back to `aria-label`.
+8. **G.** `aria-owns` is not supported (3). `aria-owns.html`.
+9. **D.** CSS `content` alt text (`content: "" / counter(seq)`) is ignored
+   (6).
+10. **C.** `::marker` text is missing from names (8; the tests are
+    tentative).
+
+Instrument notes:
+- The hook answers from the same projection call a scripted host makes, so
+  these results are what a host would see, not a separate name query.
+- `get_computed_role` still throws (ruling 1), so the AAM directories
+  remain unmeasured.
+
+**2026-10-14.** Phase 4 done. Rulings 5 and 6 are recorded, the baseline and
+ranked gates are above, and the residual 11 record is annotated.
+
+## Input button and image names (family F, 2026-10-15)
+
+**Status (2026-10-15): implemented and measured on branch
+`input-value-names`, not merged.** Mark asked for this lane: family F, ranked
+#1 in the Baseline above, using the AccName run as the before/after
+instrument.
+
+### Findings
+
+- `Names::compute_inner` (`components/genet-render/src/a11y/name.rs`) had no
+  host-language step for `input`. Its name-from-content branch blanks every
+  `input`, so `value` was never read, and the `alt` step was gated on
+  `tag == "img"`. Only `title` remained, so all four WPT inputs got `""`.
+- Not fixed here, reported: `document_role` (`a11y.rs:115`) maps every
+  `<input>` other than checkbox and radio to `TextField`. That includes
+  `button`, `submit`, `reset` and `image`, so a host announces "Submit, text
+  field". It belongs with the `get_computed_role` design round (ruling 1 of the
+  hook section).
+- `value` is exposed as the control value only for text-like types
+  (`text_control_value`, `a11y.rs:130`), so the four types never expose it
+  twice.
+- No automated test besides `comp_host_language_label.html` covers these
+  inputs. Manual AccName case 543 expects "Reset" for a bare `input[type=reset]`.
+- The HTML-AAM order was taken from memory and the spec text was not checked
+  locally. Treat the fallback order as unverified against the spec.
+
+### Rulings (2026-10-15)
+
+Mark: **"i accept the recommendations"**, on the five forks as put (the first
+option of each).
+
+1. **Default for submit and reset with no `value`.** *Options:* English
+   "Submit" and "Reset"; return `""` and build a localization hook first;
+   "Submit Query" for submit. Mark: recommendation 1(a). *Follows:* "Submit"
+   and "Reset", English, in one function, `default_button_name`.
+2. **Image input fallback order.** *Options:* alt, value, title, then
+   "Submit Query"; alt, title, then "Submit Query"; alt, title only. Mark:
+   recommendation 2(a). *Follows:* an empty `alt` or `value` counts as absent.
+3. **Precedence.** *Options:* `aria-labelledby`, `aria-label`, `<label>`, then
+   value or alt; or skip `<label>` for these types. Mark: recommendation 3(a).
+   *Follows:* the existing label step stays ahead of value and alt.
+4. **Value exposure.** *Options:* name only; or also expose as the value.
+   Mark: recommendation 4(a). *Follows:* no change to value exposure.
+5. **Scope.** *Options:* name only; or also map the four types to `Button`.
+   Mark: recommendation 5(a). *Follows:* the role bug is a separate lane.
+6. **Localization.** Mark: **"But note the localization step as unfinished"**.
+   *Follows:* the default strings are English only. This is open work, noted
+   at `default_button_name` in code and below.
+
+### Open
+
+- **Localization of "Submit", "Reset" and "Submit Query" is unfinished.**
+  There is no localization table in genet-render; the strings need a hook once
+  one exists.
+- The `TextField` role for button-like inputs, above.
+- The fallback order is to be verified against HTML-AAM.
+- Title is the name for a button input with no value or alt, and so is not
+  repeated as its description.
+
+### Result
+
+Failing first: `button_inputs_are_named_by_value_alt_title_then_a_default` and
+`button_input_names_yield_to_aria_and_labels_and_title_stays_a_description`
+failed before the fix (a `<button>` control and a deliberately wrong string,
+`#[should_panic]`, are in the same module). AccName WPT, dev-profile
+genet-wpt on Boa, `testharness accname --jobs 1`:
+
+| | Before | After |
+|---|---:|---:|
+| Subtests | 352/405 | **356/405** |
+| `comp_host_language_label.html` | 83/88 | 87/88 |
+
+The four `input[type=button|image|reset|submit]` subtests moved fail to pass.
+There were no other transitions. Receipts:
+`Code/testing/genet/wpt-ledger/2026-10-15_input_value_names/`
+(`transitions.txt`).
+
+## Nested whitespace (family E, 2026-10-15)
+
+**Status (2026-10-15): implemented and qualified on ThinkPad main;
+Mark approved publication.** Mark assigned this bounded standards slice
+separately from Forms C. The baseline starts at `e37762d752e`, including the
+published family F and B changes.
+Mark authorizes pulling and committing this slice; ask before pushing.
+
+### Implementation and done-conditions
+
+1. Build an unmodified runner in a lane-owned target/build directory, retain
+   its dependency lock and source/binary identities, and capture the complete
+   `accname` directory on Boa and Nova with one worker and matched settings.
+   Confirm the five deeply nested whitespace assertions in
+   `accname/name/comp_text_node.html`; record other failures, errors and skips
+   separately.
+2. Add failing-first regressions in `genet-render/src/a11y/name.rs` for
+   whitespace-only descendants, including referenced labels/descriptions.
+   Preserve existing unspaced inline concatenation, nonbreaking spaces,
+   hidden-content exclusion and root tooltip fallback. Fix the recursive
+   accumulator rather than inserting spaces between every element.
+3. Run the full render and WPT runner unit suites, rebuild with the same lock,
+   and repeat the matched AccName captures. Done means the five assertions
+   pass and no previous passing assertion is lost, with missing/duplicate
+   assertions and file outcomes accounted separately. Review the complete
+   diff and record evidence here and in the index before publication.
+
+### Findings and progress
+
+- 2026-10-15: `Names::compute_inner` returns content only when `flat(content)`
+  is nonempty. It therefore discards an inline subtree containing only a
+  space before the parent's raw concatenation can use that space. Text nodes
+  themselves already return their original contents. AccName 1.2's
+  [text-equivalent steps](https://www.w3.org/TR/2026/WD-accname-1.2-20261012/#computation-steps)
+  return text-node contents and accumulate child results. The fix must retain
+  meaningful separators through descendant recursion, leaving final
+  flattening and existing root fallback behavior intact.
+- 2026-10-15: the previous Forms owner released this dispatch without edits,
+  payloads or shared locks. Forms remains a separate paused lane. Evidence:
+  `Code/testing/genet/wpt-ledger/2026-10-15_accname_whitespace/`.
+- 2026-10-15: fresh baseline Boa reports 365/405; Nova reports 365/405 with
+  a 60-second drive deadline and 90-second worker timeout. The initial Nova
+  15/30-second diagnostic is retained separately (323/362, two incomplete
+  files); it is not the primary matched baseline. Both primary runs enumerate
+  178 files: 8 all-pass, 10 with failures, 1 layout panic, 159 manual skips.
+- 2026-10-15: all four added regressions fail against unchanged production
+  code, while the existing 55 render tests pass. The observed wrong strings
+  are `buttonlabel`, `Savefile`, `Openpanel` and `buttonWronglabel` (a nested
+  tooltip substituted for a whitespace separator). The fix preserves raw
+  nonempty descendant content; root flattening and tooltip fallback stay
+  unchanged. Read-only review found no actionable issue.
+
+### Result
+
+Both engines move **365/405 to 370/405**, with exactly the five deeply nested
+space assertions changing fail to pass. `comp_text_node.html` moves 45/50 to
+50/50. Every earlier passing assertion is preserved; there are no added or
+missing assertions and no other named transitions. Each final run has 9
+all-pass files, 9 files with failures, the same 1 layout-panic file, and 159
+manual skips. The 79 cases hidden by `comp_name_from_content.html`'s existing
+layout panic remain outside the 405 reported assertions.
+
+Fixed-code gates pass: **59 render tests, 72 WPT-runner unit tests and 1
+integration test**, zero failures. The WPT runner's two existing ignores
+remain explicit (`real_manifest_enumerates_sanely`, `real_test262_parses`).
+The same lock, providers, compiler, corpus and per-engine settings were used
+on each side. All build and runtime jobs held the shared heavy lock under
+kernel memory/swap limits and completed with zero memory pressure/OOM events.
+
+The [source identities, comparison and gate receipt](receipts/2026-10-15_accname_whitespace.json)
+record exact runner/map/log digests and commands. Raw maps, logs, the frozen
+lockfile and both runners remain in
+`Code/testing/genet/wpt-ledger/2026-10-15_accname_whitespace/`. The initial
+short-deadline Nova diagnostic is preserved alongside the accepted longer
+pair. Forms C, the other AccName families, the layout panic and human
+assistive-technology qualification retain their separate scopes.
+
+## Embedded control values (family A, 2026-10-16)
+
+**Status (2026-10-16): implemented and qualified on ThinkPad,
+based on published main `998ccbd3210`.**
+Mark authorized continuing the standards lane after K was published. Forms C
+stays separate and paused; ask before pushing this slice.
+
+### Findings and design
+
+The accepted K maps preserve 484 assertions and show 13 embedded-control
+failures in `comp_embedded_control.html` (16/29 pass). The baseline
+`Names::compute_inner` returned `aria-label` before considering a descendant's
+value; no embedded-value step existed. The existing `LayoutDom` interface already exposes current
+input/textarea values and option selectedness. Consume those views here without
+changing selection, validation or submission algorithms.
+
+Apply [AccName's embedded-control step](https://www.w3.org/TR/accname-1.2/#comp_embedded_control)
+before `aria-label` in recursive label/content traversal: text values, chosen
+option names, and range value text/value now/native value precedence. Preserve
+root control naming, self-reference handling, cycle guards and empty values.
+ARIA ownership remains its separately ranked gap.
+
+### Done-conditions and progress
+
+The first red run preserves 59 existing passes and fails five new regressions.
+Review then finds self-reference eligibility and ineffective-role edges: a
+second red run preserves 64 passes and fails both new tests. A final no-choice
+regression preserves 66 passes and fails for both native and ARIA comboboxes;
+option-bearing controls now contribute no value when nothing is selected,
+while text-only ARIA comboboxes retain their text-value fallback.
+
+The final render/WPT suite passes **140 tests** (67 render, 72 runner,
+1 integration), with two existing runner ignores. Follow-up read-only review
+finds no remaining actionable issue. Matched Boa and Nova maps agree exactly:
+**424/484 to 437/484**, all 13 transitions in `comp_embedded_control.html`,
+which passes **29/29**. No prior pass is lost; all 484 assertion identities
+remain; there are no file errors and the 159 manual skips are unchanged.
+
+Native select/range role reporting remains coarse in the neutral role owner;
+this name-only step recognizes native values without changing exported roles.
+Direct description references to adjustable controls use the shared
+name-computation path; that value-versus-label edge is not independently
+qualified by local fixtures. ARIA-owned/external popup options remain in the
+separate ownership family. No selection/validation/submission or layout
+implementation changed; K's CSS guard receipt remains its own dated evidence.
+
+[Source-bound receipt](receipts/2026-10-16_accname_embedded_controls.json).
+Raw maps, exact commands, lock, frozen before/after runners, source identities,
+red/green diagnostics and resource ownership are retained under
+`Code/testing/genet/wpt-ledger/2026-10-16_accname_embedded_controls/`.
+The earlier candidate maps are retained as diagnostics; final acceptance uses
+the runner built after the no-choice correction.
+
+1. Observe failing regressions for embedded text, ranges and choices, including
+   live value/selectedness changes and standalone control names.
+2. Implement in the existing render name owner, then pass render and WPT-runner
+   suites and both matched AccName captures. Preserve all 484 prior assertions
+   and prior passes; name all remaining failures rather than counting skips.
+3. Reuse K's baseline only after runner/lock/corpus identity checks; retain raw
+   evidence under `Code/testing/genet/wpt-ledger/2026-10-16_accname_embedded_controls/`.
+4. Review, update this plan/index and commit locally before requesting a push.
+
+## Layout admission (family K, 2026-10-15)
+
+**Status (2026-10-16): published on main as `998ccbd3210`, after Mark's
+explicit push approval.**
+Mark asked the standards lane to proceed after publishing family E. This
+slice removes the layout panic that prevented the 79 cases in
+`comp_name_from_content.html` from reporting. All 79 now report; 25 retain
+name-computation failures. Forms C remains separate.
+
+### Findings
+
+- The cached baseline build is byte-identical to family E's qualified runner.
+  The full WPT file fails in script-free layout too. Reducing it to 34
+  sections leaves two failing sections; reducing those to 20 tiny variants
+  leaves four failures, all a plain `a` or `span` wrapping an inline-block
+  with horizontal margins. Margin-free controls and `button`, `h3` and `div`
+  wrappers pass.
+- The baseline `ContainingBlockState::for_children` in `buckram/src/box_tree.rs`
+  set `normal_flow` to every parent, including a non-atomic inline. Consequently
+  `genet-livery`'s atomic basis pass sizes against the inline wrapper's text
+  fragment instead of its enclosing block, and its second layout changes that
+  spurious basis. The existing assertion correctly exposes the mismatch.
+- [CSS 2.2 section 10.1](https://www.w3.org/TR/CSS22/visudet.html#containing-block-details)
+  assigns static/relative elements to their nearest block container or
+  formatting-context ancestor. A positioned inline can still establish an
+  absolute containing block. Those two chains must remain distinct.
+
+### Progress
+
+- The full red Buckram suite preserves 271 old passes and fails the two new
+  ancestry regressions. Both numeric Livery regressions fail with the original
+  atomic-basis panic. Positive controls cover inline-table wrappers and natural
+  canvas sizes under both inline and inline-block display.
+- Candidate Buckram, Livery (including integrations), render and WPT-runner
+  suites pass 1,072 tests with zero failures and 11 existing ignores. All six
+  new structural/numeric regressions pass; four were observed failing before
+  the production fix, while inline-table and replaced-size checks are positive
+  controls.
+- Boa and Nova now report identical **424/484** results: all 405 prior
+  assertions are unchanged, and the formerly panicking file reports all 79
+  cases (54 pass, 25 fail). Neither engine reports an AccName file error;
+  159 manual skips remain. The newly visible failures cover CSS generated
+  content (15), child-box spacing (6), text transforms (3), and a nested
+  `aria-labelledby`/image case (1). These are separate name-computation gates.
+- The final fresh-context read-only review found no actionable issue in the
+  graph fix or evidence interpretation. The matched CSS comparison is complete:
+  all ten groups have identical maps, all 248 previously passing named
+  assertions survive, and none are missing. Existing failures, errors and
+  skips are unchanged.
+- The fresh unmodified runner is byte-identical to family E's accepted runner;
+  the exact frozen lock and corpus also match. The accepted 370/405 maps are
+  reused as before evidence, with their original source/commands/digests
+  retained in `accname-baseline-reuse.json`. This avoids rerunning identical
+  artifacts. New CSS guards get their own before captures.
+
+### Acceptance receipt
+
+[Source-bound receipt](receipts/2026-10-15_accname_layout_panic.json).
+Raw maps, commands, stdout/stderr, exact lock, binary identities, reduction
+fixtures, resource logs and named-assertion comparison are retained under
+`Code/testing/genet/wpt-ledger/2026-10-15_accname_layout_panic/`.
+The baseline AccName maps reuse family E's accepted artifacts only after a
+fresh current-main build proved byte-identical and the lock/corpus matched.
+CSS guards use Boa testharness; existing failures, errors, timeout/not-run
+assertions and reftest skips are not passes. These checks do not qualify GPU,
+visual, full CSS, full AccName/HTML-AAM or human AT behavior. Forms C stays
+separate and paused.
+
+### Implementation and done-conditions
+
+1. Add failing-first structural box-graph and numeric layout regressions for
+   inline wrappers, margins and percentage widths. Preserve inline-block and
+   inline-table containers, normal parent links, and absolute/fixed ancestry.
+2. Correct the normal-flow graph at materialization. Keep the two-pass sizing
+   model and its stability assertion; do not add settling loops or silence
+   the panic.
+3. Run Buckram, Livery, render and WPT-runner tests. Compare frozen before/after
+   AccName maps on both engines and bounded CSS sizing/normal-flow guards.
+   Done means the formerly errored file completes and reports its named cases,
+   every previous pass survives, and newly exposed name failures are recorded
+   as separate work rather than quietly folded into this fix.
+4. Review the complete change, retain source/lock/runner identities and raw
+   results under `Code/testing/genet/wpt-ledger/2026-10-15_accname_layout_panic/`,
+   update the canonical index, and commit locally before asking to push.
+
+## Role-gated names (family B, 2026-10-15)
+
+**Status (2026-10-15): implemented and measured on branch `role-gated-names`,
+not merged.** Mark asked for this lane: family B, ranked #2 in the Baseline
+above, using the AccName run as the before/after instrument.
+
+### Findings
+
+- `Names::compute_inner` (`components/genet-render/src/a11y/name.rs`) had no
+  role test. Name from content was the default for every role, apart from
+  inputs, the document, and the tags `html body main article nav form` when
+  not referenced. `alertdialog` is not in the neutral `DocumentA11yRole`. There
+  was no caption step and no heading step.
+- AccName 2F lets a node take content when its role allows it, or when it is
+  referenced or inside a content traversal. So the gate applies to the node
+  whose name is asked for, not to its descendants. A barred role inside a
+  `<button>` still contributes its text. The code threads a `descendant` flag
+  for this.
+- **Names are Genet's only text channel.** `projection_walk` visits elements
+  only, and Genet never emits `StaticText` nodes. The AccessKit lowering copies
+  the name into the label, and Taproot's `containing` filter matches the name.
+  So for paragraphs, generics, list items and live regions, the name is how a
+  host gets the visible text. A full ARIA allowlist would blank it. This is why
+  ruling 1 is a denylist, and why a full allowlist waits for projected text
+  nodes.
+- None of the 18 running AccName files expects a plain div, span or paragraph
+  to take a content name, so WPT cannot distinguish the options. The cost sits
+  on the host side.
+- **`<dialog open>` is absent from the projection** because
+  `CAMBIUM_UA_DEFAULTS` (`components/genet-livery/src/lib.rs:128`) has no
+  `dialog` rule, so a dialog is `display:inline`. An inline box holding only
+  whitespace and block children gets no fragment: `<dialog open><h2>x</h2>`
+  projects, `<dialog open>\n  <h2>x</h2>` rejects. Probed with temporary pages
+  (not committed). By reading the sheet, a closed `<dialog>` renders its
+  contents inline today; that was not rendered here.
+- html-aam has no `get_computed_label` tests. Only `accname/` covers this.
+- The AccName and HTML-AAM wording was taken from memory. No local copy of the
+  spec was read, and nothing was downloaded.
+
+### Rulings (2026-10-15)
+
+1. **Role gate.** *Question:* which roles stop taking content. *Options:* a
+   denylist (group, dialog, alertdialog, article, table); the full ARIA
+   allowlist; the denylist plus the other author-named containers. Mark:
+   **"Denylist (Recommended)"**. *Follows:* `group`, `dialog`, `alertdialog`,
+   `article` and `table`, native and ARIA, stop taking content. Everything else
+   is unchanged. `alertdialog` is read from the raw `role` attribute in
+   `name.rs` only, not added to the shared enum. *Reading, not ruled:* the
+   attribute is compared whole, trimmed and case-folded, as `document_role`
+   does.
+2. **Heading rule.** *Question:* implement the `.tentative` name-from-heading
+   rule? *Options:* both roles and native elements; roles only; no rule. Mark:
+   **"Implement, both (Recommended)"**. *Follows:* role `dialog`, `alertdialog`
+   and `article`, and native `<dialog>` and `<article>`, take the first heading:
+   DFS pre-order in flat-tree document order, any depth, hidden subtrees
+   skipped, after `aria-labelledby` and `aria-label`, before `title`. No heading
+   falls back to `title`, then to no name. **Native `<article>` now gets a
+   heading name, which a host sees.** *Reading, not ruled:* a heading is
+   anything `document_role` calls a heading (`h1`–`h6` or `role=heading`); a
+   heading whose own name is empty falls through; the heading's name is its
+   normal computation.
+3. **Table and abbr.** *Options:* caption and `abbr` only; also the `summary`
+   attribute; all generics title-first. Mark: **"Caption; abbr only
+   (Recommended)"**. *Follows:* a native `<table>` takes its first `<caption>`
+   child's text after `aria-labelledby` and `aria-label`; an empty caption falls
+   through to `title`; cell text is never used. Only `<abbr>` becomes
+   title-first (`title`, then content as today). No change to other generics.
+   *Reading, not ruled:* the caption and `abbr` steps, like the gate, apply to
+   the root of the computation only. Inside a content traversal an `abbr`
+   contributes its content. An `abbr` whose `title` names it does not repeat
+   the title as its description.
+4. **The dialog gap.** *Options:* a separate lane; add the two display rules
+   here; project fragment-less inline elements. Mark: **"Separate lane
+   (Recommended)"**. *Follows:* the UA stylesheet and layout are untouched. The
+   native `<dialog open>` subtest remains a projection rejection, and this lane
+   tops out at 9 of 10 reachable subtests.
+
+### Open gates
+
+- **Dialog display rules** (own lane, ruling 4): `dialog { display: block }`
+  and `dialog:not([open]) { display: none }` in `CAMBIUM_UA_DEFAULTS`, then top
+  layer and centering. It changes layout and paint, so it needs the layout and
+  reftest gate. After it, `comp_name_from_heading.tentative.html` should reach
+  6/6. `abbr`, `summary`, `details`, `fieldset` and `legend` also have no
+  display rule; not examined.
+- **Full ARIA allowlist** for name from content: waits until the projection
+  carries text nodes (`StaticText`). Until then the other author-named
+  containers (region, form, navigation, menu, toolbar, tablist and the like)
+  still take content.
+- **Block children are joined with no space** in names (`<h2>A</h2><p>p</p>`
+  gives `Ap`). Family E territory.
+- **`document_role` lacks** `option`, `summary`, `legend`, `abbr`, tooltip,
+  `alertdialog`, `columnheader` and `rowheader`.
+- Still open from the earlier ranking: E, K, A, I, H, G, D, C.
+
+### Result
+
+Failing first: `roles_that_forbid_content_take_no_name_from_it`,
+`dialogs_and_articles_are_named_by_their_first_heading_depth_first` and
+`tables_take_their_caption_never_their_cells_and_abbr_prefers_its_title`
+failed before the fix. Their controls pass on both sides: a `<button>` with
+content, a barred role inside a button, a cell, `<p>`, `<div>`, `role=alert`,
+and a `<span title>`. `deliberately_wrong_group_expectation_fails`
+(`#[should_panic]`) did not panic before the fix and does after.
+AccName WPT, dev-profile genet-wpt on Boa, `testharness accname --jobs 1`:
+
+| | Before (`636da6bbc65`) | After |
+|---|---:|---:|
+| Subtests | 356/405 | **365/405** |
+| All-pass files | 5 | 8 |
+
+Nine subtests moved fail to pass and nothing else moved: `comp_name_from_heading.tentative.html`
+alertdialog, article, dialog, group and DFS (5); `comp_tooltip.html` abbr and
+`div[role=group][title]` (2); `comp_host_language_label.html` `table > caption`
+(1); `comp_labeledby_non_standard.html` group (1). There were no pass-to-fail
+transitions. `comp_name_from_content.html` still dies on the buckram panic and
+holds no gated role. Rerun after the final rebase onto origin/main (`273431eff73`): still 365/405, 9 transitions against the baseline, none against the pre-rebase run. Tests: genet-render 55 (3 new behaviour tests, 1 wrong-expectation control), taproot 42, genet-documents 9 and genet-wpt 72 (2 ignored) all pass; genet-documents and genet-render were rerun after the rebase. Receipts:
+`Code/testing/genet/wpt-ledger/2026-10-15_role_gated_names/` (`transitions.txt`).

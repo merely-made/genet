@@ -11,6 +11,7 @@
 //! sticky-positioning pass that needs the laid-out scrollport.
 
 use super::*;
+use crate::invalidation::{MutationDependency, for_each_mutation_dependency};
 
 impl<D> LiveryDocument<D>
 where
@@ -53,44 +54,18 @@ where
         });
         let mut roots = Vec::new();
         for mutation in mutations {
-            match *mutation {
-                DomMutation::Inserted { parent, .. }
-                | DomMutation::Removed {
-                    former_parent: parent,
-                    ..
+            for_each_mutation_dependency(&self.dom, mutation, |dependency| {
+                let node = match dependency {
+                    MutationDependency::Element(node)
+                    | MutationDependency::SemanticOwner(node)
+                    | MutationDependency::Tree(node) => node,
+                    MutationDependency::Structure { boundary, .. } => boundary,
+                    MutationDependency::Removed(_) => return,
+                };
+                if self.dom.is_live(node) {
+                    self.insert_damage_root(&mut roots, self.formatting_damage_root(node));
                 }
-                | DomMutation::SubtreeReplaced { node: parent }
-                | DomMutation::FormControlStateChanged { node: parent }
-                | DomMutation::AttributeChanged { node: parent, .. } => {
-                    if self.dom.is_live(parent) {
-                        self.insert_damage_root(&mut roots, self.formatting_damage_root(parent));
-                    }
-                },
-                DomMutation::CharacterDataChanged { node } => {
-                    if !self.dom.is_live(node) {
-                        continue;
-                    }
-                    let parent = self.dom.parent(node).unwrap_or(node);
-                    if self.dom.is_live(parent) {
-                        self.insert_damage_root(&mut roots, self.formatting_damage_root(parent));
-                    }
-                },
-                DomMutation::Moved {
-                    from_parent,
-                    to_parent,
-                    ..
-                } => {
-                    if self.dom.is_live(from_parent) {
-                        self.insert_damage_root(
-                            &mut roots,
-                            self.formatting_damage_root(from_parent),
-                        );
-                    }
-                    if self.dom.is_live(to_parent) {
-                        self.insert_damage_root(&mut roots, self.formatting_damage_root(to_parent));
-                    }
-                },
-            }
+            });
         }
         self.last_layout_damage = Some(LayoutDamage {
             kind: LayoutDamageKind::Dom,
@@ -210,7 +185,10 @@ where
             &self.style_set,
             &self.device,
             &self.interactions,
-            &self.image_sources,
+            &crate::DocumentImageSources::new(
+                &self.image_sources,
+                self.style_set.document_base_url(),
+            ),
         )?;
         styles.resolve_ch_lengths(&mut self.text, self.device.viewport_sizes);
         // Animation ownership must be established before any retained
@@ -258,7 +236,10 @@ where
                 layout.fragments.reposition_stable_positioned_subtree(
                     &self.dom,
                     &styles,
-                    &self.image_sources,
+                    &crate::DocumentImageSources::new(
+                        &self.image_sources,
+                        self.style_set.document_base_url(),
+                    ),
                     node,
                     width as f32,
                     height as f32,
@@ -298,7 +279,10 @@ where
                 layout.fragments.resize_positioned_leaf(
                     &self.dom,
                     &styles,
-                    &self.image_sources,
+                    &crate::DocumentImageSources::new(
+                        &self.image_sources,
+                        self.style_set.document_base_url(),
+                    ),
                     node,
                     width as f32,
                     height as f32,
@@ -358,26 +342,29 @@ where
             && !self.style_set.has_container_queries()
             && let (Some(root), Some(previous)) = (local_root, self.layout.as_ref())
         {
-            let previous_styles = previous.styles.clone();
-            let previous_fragments = previous.fragments.clone();
             let dom_text_order = text_sources_in_dom_order(&self.dom);
             let mut candidate =
-                retained_table_owner(previous_fragments.boxes(), root).unwrap_or(root);
+                retained_table_owner(previous.fragments.boxes(), root).unwrap_or(root);
             loop {
                 let mut replaced_nodes = nodes_in_subtree(&self.dom, candidate);
-                replaced_nodes.extend(previous_fragments.generated_subtree_nodes(candidate));
+                replaced_nodes.extend(previous.fragments.generated_subtree_nodes(candidate));
                 match layout_retained_formatting_root(
                     &self.dom,
                     &styles,
-                    &previous_styles,
-                    &previous_fragments,
+                    &previous.styles,
+                    &previous.fragments,
                     candidate,
                     &mut self.text,
-                    &self.image_sources,
+                    &crate::DocumentImageSources::new(
+                        &self.image_sources,
+                        self.style_set.document_base_url(),
+                    ),
                 )? {
                     RetainedRootFormatting::Formatted(mut local) => {
-                        local.reconcile_identifiers(&previous_fragments);
-                        let mut fragments = previous_fragments.clone();
+                        local.reconcile_identifiers(&previous.fragments);
+                        // Only a formatted candidate gets a copy. Failed and
+                        // promoted roots leave the retained layout untouched.
+                        let mut fragments = previous.fragments.clone();
                         if fragments.replace_reconciled_local_formatting_subtree_from(
                             &local,
                             candidate,
@@ -431,7 +418,10 @@ where
             height as f32,
             self.device.viewport_sizes,
             &mut self.text,
-            &self.image_sources,
+            &crate::DocumentImageSources::new(
+                &self.image_sources,
+                self.style_set.document_base_url(),
+            ),
         )?;
         let previous = self.identity_source.take();
         if let Some(previous) = previous.as_ref() {
@@ -476,18 +466,16 @@ where
         height: u32,
     ) -> Result<LiveryPaintList, LayoutError> {
         let _paint_span = crate::phase::span(crate::phase::Phase::Paint);
-        let (mut styles, mut fragments) = self
+        let layout = self
             .layout
             .as_ref()
-            .map(|layout| (layout.styles.clone(), layout.fragments.clone()))
             .ok_or_else(|| LayoutError::retained_state("no retained layout to paint"))?;
         // The retained geometry stays stable between clock ticks, while
         // paint reads a fresh style sample at the current transition or
         // keyframe time.
-        self.apply_transitions(&mut styles);
-        self.apply_keyframe_animation(&mut styles);
-        self.apply_sticky_positioning(&mut fragments, &styles);
-        let list = emit_paint_list_with_text_system_scrolled_with_images(
+        let styles = self.sampled_paint_styles(layout);
+        let fragments = self.sticky_layout_with_styles(layout, &styles);
+        let list = emit_paint_list_with_text_system_scrolled_with_images_and_document_base(
             &self.dom,
             &styles,
             &fragments,
@@ -496,18 +484,78 @@ where
             &mut self.text,
             &self.nested_scroll,
             &self.image_sources,
+            self.style_set.document_base_url(),
         );
+        self.retain_active_data_urls(&styles);
         self.cached = Some(((width, height), list.clone()));
         self.style_only_damage = true;
         Ok(list.translated(-self.scroll.0, -self.scroll.1))
     }
 
-    pub(in crate::document) fn sticky_layout(
+    pub(in crate::document) fn sampled_paint_styles<'a>(
         &self,
-        layout: &LayoutState<D::NodeId>,
-    ) -> LiveryLayout<D::NodeId> {
-        let mut active = layout.fragments.clone();
-        self.apply_sticky_positioning(&mut active, &layout.styles);
+        layout: &'a LayoutState<D::NodeId>,
+    ) -> Cow<'a, StylePlane<D::NodeId>> {
+        let mut styles = Cow::Borrowed(&layout.styles);
+        if !self.transitions.is_empty() || self.keyframe_animation.is_some() {
+            self.apply_transitions(styles.to_mut());
+            self.apply_keyframe_animation(styles.to_mut());
+        }
+        styles
+    }
+
+    fn retain_active_data_urls(&self, styles: &StylePlane<D::NodeId>) {
+        if !self.image_sources.has_data_urls() {
+            return;
+        }
+        let mut active = styles
+            .background_image_urls()
+            .filter(|url| crate::image_resources::is_data_url(url))
+            .map(str::to_owned)
+            .collect::<HashSet<_>>();
+        let mut nodes = vec![self.dom.document()];
+        while let Some(node) = nodes.pop() {
+            nodes.extend(self.dom.flat_children(node));
+            if !self
+                .dom
+                .element_name(node)
+                .is_some_and(|name| name.local.as_str().eq_ignore_ascii_case("img"))
+            {
+                continue;
+            }
+            if let Some(source) = self.dom.attributes(node).find_map(|attribute| {
+                (attribute.name.ns.as_str().is_empty()
+                    && attribute.name.local.as_str().eq_ignore_ascii_case("src"))
+                .then_some(attribute.value)
+            }) {
+                let key = crate::image_resources::document_image_key(
+                    self.style_set.document_base_url(),
+                    source,
+                );
+                if crate::image_resources::is_data_url(&key) {
+                    active.insert(key);
+                }
+            }
+        }
+        self.image_sources.retain_data_urls(&active);
+    }
+
+    pub(in crate::document) fn sticky_layout<'a>(
+        &self,
+        layout: &'a LayoutState<D::NodeId>,
+    ) -> Cow<'a, LiveryLayout<D::NodeId>> {
+        self.sticky_layout_with_styles(layout, &layout.styles)
+    }
+
+    fn sticky_layout_with_styles<'a>(
+        &self,
+        layout: &'a LayoutState<D::NodeId>,
+        styles: &StylePlane<D::NodeId>,
+    ) -> Cow<'a, LiveryLayout<D::NodeId>> {
+        let mut active = Cow::Borrowed(&layout.fragments);
+        if layout.fragments.has_sticky_positioning() {
+            self.apply_sticky_positioning(active.to_mut(), styles);
+        }
         active
     }
 
@@ -516,12 +564,11 @@ where
         fragments: &mut LiveryLayout<D::NodeId>,
         styles: &StylePlane<D::NodeId>,
     ) {
-        let scrollport_geometry = fragments.clone();
         fragments.apply_sticky_positioning(
             styles,
             self.viewport.0 as f32,
             self.viewport.1 as f32,
-            |node| self.sticky_scrollport(node, styles, &scrollport_geometry),
+            |node, geometry| self.sticky_scrollport(node, styles, geometry),
         );
     }
 
@@ -569,12 +616,6 @@ where
         self.layout
             .as_ref()
             .or(self.identity_source.as_ref())
-            .is_some_and(|layout| {
-                layout
-                    .fragments
-                    .boxes()
-                    .iter()
-                    .any(|(_, css_box)| css_box.positioning == buckram::PositioningScheme::Sticky)
-            })
+            .is_some_and(|layout| layout.fragments.has_sticky_positioning())
     }
 }

@@ -112,6 +112,7 @@ pub(crate) fn content_report<D: LayoutDom>(dom: &D) -> document_session_api::Con
 pub(crate) fn semantic_clip_from_dom<D: LayoutDom>(address: &str, dom: &D) -> Option<DocumentClip> {
     let report = content_report(dom);
     let text = fleece::extract_main_text(dom).unwrap_or_else(|| report.headings.join("\n"));
+    let text = if text.trim().is_empty() { fleece::extract_text(dom) } else { text };
     let text = text.trim().to_string();
     (!text.is_empty()).then(|| DocumentClip {
         source_url: address.to_string(),

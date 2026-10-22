@@ -225,6 +225,12 @@ pub trait ScriptSrcLoader {
     fn resource_route(&self) -> Option<Box<dyn ScriptResourceLoader>> {
         None
     }
+
+    /// The response headers the test document arrived with (server mode); disk
+    /// mode has none. They seed the document policy container.
+    fn document_response_headers(&self) -> Vec<(String, String)> {
+        Vec::new()
+    }
 }
 
 /// Disk loader: resolve `<script src>` against the test dir / tests root, read the
@@ -510,6 +516,35 @@ fn run_test_with_webgl_and_style(
     engine: Engine,
     style: StyleRoute,
 ) -> HarnessOutcome {
+    run_test_with_encoding_and_style(
+        testharness_js,
+        html,
+        loader,
+        base_url,
+        handler,
+        websocket,
+        completion,
+        webgl,
+        engine,
+        style,
+        Default::default(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn run_test_with_encoding_and_style(
+    testharness_js: &str,
+    html: &str,
+    loader: &dyn ScriptSrcLoader,
+    base_url: Option<&str>,
+    handler: Option<Box<dyn FetchHandler>>,
+    websocket: Option<Box<dyn WebSocketHandler>>,
+    completion: Option<&dyn CompletionSource>,
+    webgl: Option<WebGlFactory>,
+    engine: Engine,
+    style: StyleRoute,
+    encoding: script_runtime_api::DocumentEncoding,
+) -> HarnessOutcome {
     let route = loader.resource_route();
 
     match engine {
@@ -524,6 +559,7 @@ fn run_test_with_webgl_and_style(
             webgl,
             style,
             route,
+            encoding,
         ),
         Engine::Nova => run_with::<script_engine_nova::NovaEngine>(
             testharness_js,
@@ -536,6 +572,7 @@ fn run_test_with_webgl_and_style(
             webgl,
             style,
             route,
+            encoding,
         ),
     }
 }
@@ -577,8 +614,10 @@ pub struct NovaHarnessTemplate {
 #[expect(dead_code, reason = "Nova convenience wrappers, reached another way")]
 impl NovaHarnessTemplate {
     pub fn new(testharness_js: &str) -> Result<Self, String> {
-        let mut rt = Runtime::<script_engine_nova::NovaEngine>::new()
-            .map_err(|e| format!("runtime init: {e:?}"))?;
+        let mut rt = Runtime::<script_engine_nova::NovaEngine>::with_clock(
+            script_runtime_api::SharedClock::skipping(),
+        )
+        .map_err(|e| format!("runtime init: {e:?}"))?;
         rt.load_testharness(testharness_js)
             .map_err(|e| format!("testharness load: {e:?}"))?;
         Ok(Self {
@@ -621,6 +660,31 @@ impl NovaHarnessTemplate {
         webgl: Option<WebGlFactory>,
         style: StyleRoute,
     ) -> HarnessOutcome {
+        self.run_test_with_encoding_and_style(
+            html,
+            loader,
+            base_url,
+            handler,
+            websocket,
+            completion,
+            webgl,
+            style,
+            Default::default(),
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub fn run_test_with_encoding_and_style(
+        &mut self,
+        html: &str,
+        loader: &dyn ScriptSrcLoader,
+        base_url: Option<&str>,
+        handler: Option<Box<dyn FetchHandler>>,
+        websocket: Option<Box<dyn WebSocketHandler>>,
+        completion: Option<&dyn CompletionSource>,
+        webgl: Option<WebGlFactory>,
+        style: StyleRoute,
+        encoding: script_runtime_api::DocumentEncoding,
+    ) -> HarnessOutcome {
         let route = loader.resource_route();
         if html_requests_long_timeout(html) {
             // Real WPT's realm/window-proxy state does not survive the current
@@ -637,6 +701,7 @@ impl NovaHarnessTemplate {
                 webgl,
                 style,
                 route,
+                encoding,
             );
         }
         let mut rt = match self.rt.snapshot_clone() {
@@ -649,9 +714,11 @@ impl NovaHarnessTemplate {
             collect_scripts(&doc, doc.document(), loader, &mut scripts);
             let test_src = scripts.join("\n;\n");
             rt.load_dom(&doc);
+            rt.set_document_encoding(encoding);
             prepare_runtime(&mut rt, base_url, handler, websocket, webgl, route);
             return run_loaded_with(&mut rt, &test_src, completion, style);
         }
+        rt.set_document_encoding(encoding);
         prepare_runtime(&mut rt, base_url, handler, websocket, webgl, route);
         run_parsed_with(&mut rt, html, loader, completion, style)
     }
@@ -721,8 +788,11 @@ fn run_with<E: ScriptEngine>(
     webgl: Option<WebGlFactory>,
     style: StyleRoute,
     route: Option<Box<dyn ScriptResourceLoader>>,
+    encoding: script_runtime_api::DocumentEncoding,
 ) -> HarnessOutcome {
-    let mut rt = match Runtime::<E>::new() {
+    let mut rt = match Runtime::<E>::with_clock(
+        script_runtime_api::SharedClock::skipping(),
+    ) {
         Ok(rt) => rt,
         Err(e) => return HarnessOutcome::Threw(format!("runtime init: {e:?}")),
     };
@@ -732,6 +802,7 @@ fn run_with<E: ScriptEngine>(
         collect_scripts(&doc, doc.document(), loader, &mut scripts);
         let test_src = scripts.join("\n;\n");
         rt.load_dom(&doc);
+        rt.set_document_encoding(encoding);
         prepare_runtime(&mut rt, base_url, handler, websocket, webgl, route);
         if let Err(e) = rt.load_testharness(testharness_js) {
             return HarnessOutcome::Threw(format!("testharness load: {e:?}"));
@@ -741,6 +812,7 @@ fn run_with<E: ScriptEngine>(
     if html_requests_long_timeout(html) {
         load_long_timeout_metadata(&mut rt);
     }
+    rt.set_document_encoding(encoding);
     prepare_runtime(&mut rt, base_url, handler, websocket, webgl, route);
     // The prelude: `testharness.js` and the results bridge are installed
     // *before* the first parsed script runs, which is where a real browser has
@@ -750,6 +822,13 @@ fn run_with<E: ScriptEngine>(
         return HarnessOutcome::Threw(format!("testharness load: {e:?}"));
     }
     run_parsed_with(&mut rt, html, loader, completion, style)
+}
+
+/// WPT's serving rule: a test whose file name carries `.https.` is served over
+/// HTTPS, and only those run in a secure context.
+fn served_over_https(doc_url: &str) -> bool {
+    let path = doc_url.split(['?', '#']).next().unwrap_or(doc_url);
+    path.rsplit('/').next().is_some_and(|name| name.contains(".https."))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -763,6 +842,11 @@ fn prepare_runtime<E: ScriptEngine>(
 ) {
     if let Some(base) = base_url {
         let _ = rt.set_base_url(base);
+        // Both modes give the page an http:// URL, which makes it a non-secure
+        // context. WPT serves a `.https.` test over HTTPS, so it is secure.
+        if served_over_https(base) {
+            let _ = rt.set_secure_context(true);
+        }
     }
     if let Some(h) = handler {
         rt.set_fetch_handler(h);
@@ -805,18 +889,20 @@ impl RenderSession {
     /// built before the parser has inserted a single `<style>` and still hold
     /// the whole cascade once it has. On the XML route the document is already
     /// loaded, and the same installation reads it immediately.
-    fn new<E: ScriptEngine>(rt: &mut Runtime<E>, _style: StyleRoute) -> Self {
+    fn new<E: ScriptEngine>(rt: &mut Runtime<E>, _style: StyleRoute) -> Result<Self, String> {
         let cssom = LiveryCssom::install_over_parse(
             rt,
             "about:blank",
             Device::screen(VIEWPORT_W, VIEWPORT_H),
         );
-        let _ = cssom.frame(rt, VIEWPORT_W as u32, VIEWPORT_H as u32);
+        cssom
+            .frame(rt, VIEWPORT_W as u32, VIEWPORT_H as u32)
+            .map_err(|error| format!("initial retained frame: {error:?}"))?;
         // `window.innerWidth`/`innerHeight` must agree with the session's
         // viewport: the wheel/scroll cluster computes its hit point from them
         // (`Math.floor(window.innerWidth / 2)`).
         rt.set_viewport_size(VIEWPORT_W, VIEWPORT_H);
-        Self { cssom }
+        Ok(Self { cssom })
     }
 
     /// Whether a declared CSS animation/transition is still live on the session
@@ -837,21 +923,27 @@ impl RenderSession {
     /// `design_docs/2026-09-12_css_3d_transforms_and_first_frame_plan.md`.
     /// Returns how much work happened (0 = the turn was a no-op), which feeds
     /// the quiescence check.
-    fn turn<E: ScriptEngine>(&self, rt: &mut Runtime<E>, now_ms: f64) -> usize {
-        let mut work = rt.run_animation_frame_callbacks(now_ms).unwrap_or(0);
+    fn turn<E: ScriptEngine>(&self, rt: &mut Runtime<E>, now_ms: f64) -> Result<usize, String> {
+        let mut work = rt
+            .run_animation_frame_callbacks(now_ms)
+            .map_err(|error| format!("animation task: {error:?}"))?;
         let pending = {
             let host = rt.host().borrow();
             host.dom.pending_mutations().1.len()
         };
-        if pending > 0
-            && self
-                .cssom
+        if pending > 0 {
+            self.cssom
                 .frame(rt, VIEWPORT_W as u32, VIEWPORT_H as u32)
-                .is_ok()
-        {
+                .map_err(|error| format!("retained frame: {error:?}"))?;
             work += pending;
         }
-        work
+        // The observers' update step runs after the callbacks and the relayout
+        // they caused, whether or not this turn changed the DOM: a scroll alone
+        // moves what intersects.
+        work += rt
+            .update_intersection_observations()
+            .map_err(|error| format!("intersection observations: {error:?}"))?;
+        Ok(work)
     }
 }
 
@@ -870,27 +962,31 @@ fn process_testdriver_actions<E: ScriptEngine>(
     render: &RenderSession,
     now_ms: &mut f64,
     virtual_clock: bool,
-) -> usize {
+) -> Result<usize, String> {
     let json = match rt.eval("String(typeof __tdTake === 'function' ? __tdTake() : '')") {
-        Ok(v) => rt.value_to_string(&v).unwrap_or_default(),
-        Err(_) => return 0,
+        Ok(v) => rt
+            .value_to_string(&v)
+            .map_err(|error| format!("action payload: {error:?}"))?,
+        Err(error) => return Err(format!("action queue: {error:?}")),
     };
     if json.is_empty() {
-        return 0;
+        return Ok(0);
     }
-    let settle = |rt: &mut Runtime<E>, err: Option<String>| {
+    let settle = |rt: &mut Runtime<E>, err: Option<String>| -> Result<(), String> {
         let call = match err {
             Some(m) => format!("__tdSettle({:?})", m),
             None => "__tdSettle()".to_string(),
         };
-        let _ = rt.eval(&call);
+        rt.eval(&call)
+            .map_err(|error| format!("action settlement: {error:?}"))?;
         rt.run_microtasks();
+        Ok(())
     };
     let sequences: Vec<webdriver::actions::ActionSequence> = match serde_json::from_str(&json) {
         Ok(s) => s,
         Err(e) => {
-            settle(rt, Some(format!("malformed actions payload: {e}")));
-            return 1;
+            settle(rt, Some(format!("malformed actions payload: {e}")))?;
+            return Ok(1);
         },
     };
     // The resolver holds a cheap retained-session clone, so `rt` stays free
@@ -906,8 +1002,8 @@ fn process_testdriver_actions<E: ScriptEngine>(
     {
         Ok(t) => t,
         Err(e) => {
-            settle(rt, Some(format!("{e:?}")));
-            return 1;
+            settle(rt, Some(format!("{e:?}")))?;
+            return Ok(1);
         },
     };
     // Per Touch Events, every event for one touch point goes to the element the
@@ -917,15 +1013,86 @@ fn process_testdriver_actions<E: ScriptEngine>(
         std::collections::HashMap::new();
     for tick in ticks {
         for event in tick.events {
-            dispatch_input_event(rt, render, &event, &mut touch_targets);
+            dispatch_input_event(rt, render, &event, &mut touch_targets)?;
         }
         if virtual_clock {
             *now_ms += tick.duration_ms as f64;
         }
-        let _ = render.turn(rt, *now_ms);
+        render.turn(rt, *now_ms)?;
     }
-    settle(rt, None);
-    1
+    settle(rt, None)?;
+    Ok(1)
+}
+
+/// Rejection for an element the projection leaves out (accessible names plan,
+/// ruling 3): hidden, `aria-hidden`, or without a box.
+const LABEL_ABSENT: &str = "element not in accessibility projection";
+
+/// Answer every queued `test_driver.get_computed_label` request from the
+/// neutral accessibility projection, built with the same style queries a
+/// scripted host session uses. Returns how many requests were settled.
+fn process_testdriver_labels<E: ScriptEngine>(
+    rt: &mut Runtime<E>,
+    render: &RenderSession,
+) -> usize {
+    let json = match rt.eval("String(typeof __tdTakeLabels === 'function' ? __tdTakeLabels() : '')")
+    {
+        Ok(v) => rt.value_to_string(&v).unwrap_or_default(),
+        Err(_) => return 0,
+    };
+    if json.is_empty() {
+        return 0;
+    }
+    let batch: Vec<(u64, String)> = serde_json::from_str(&json).unwrap_or_default();
+    // Names must reflect mutations made since the last turn.
+    let _ = render.cssom.frame(rt, VIEWPORT_W as u32, VIEWPORT_H as u32);
+    let answers: Vec<(u64, Result<String, &str>)> = {
+        let host = rt.host().borrow();
+        let dom = &host.dom;
+        render
+            .cssom
+            .with_retained_styled_frame(|styles, fragments, _, _| {
+                let projection = genet_render::document_a11y_projection_with_style(
+                    dom,
+                    fragments,
+                    None,
+                    0,
+                    None,
+                    &genet_render::A11yStyleQueries {
+                        generated: &|node| genet_livery::rendered_generated_text(dom, styles, node),
+                        rendered: &|node| genet_livery::rendered_visible(dom, styles, node),
+                    },
+                );
+                batch
+                    .iter()
+                    .map(|(seq, id)| {
+                        let node = id.parse::<u64>().ok().and_then(|raw| {
+                            projection.nodes().iter().find(|node| node.id.get() == raw)
+                        });
+                        let name = node
+                            .map(|node| node.name.clone().unwrap_or_default())
+                            .ok_or(LABEL_ABSENT);
+                        (*seq, name)
+                    })
+                    .collect()
+            })
+            .unwrap_or_else(|| {
+                batch
+                    .iter()
+                    .map(|(seq, _)| (*seq, Err("no rendered frame")))
+                    .collect()
+            })
+    };
+    for (seq, answer) in &answers {
+        let (ok, value) = match answer {
+            Ok(name) => (true, name.as_str()),
+            Err(message) => (false, *message),
+        };
+        let value = serde_json::to_string(value).unwrap_or_else(|_| "\"\"".into());
+        let _ = rt.eval(&format!("__tdSettleLabel({seq}, {ok}, {value})"));
+    }
+    rt.run_microtasks();
+    answers.len()
 }
 
 /// Map one interpreter [`InputEvent`] onto DOM events at the hit-tested node.
@@ -944,7 +1111,7 @@ fn dispatch_input_event<E: ScriptEngine>(
     render: &RenderSession,
     event: &crate::testdriver::input_events::InputEvent,
     touch_targets: &mut std::collections::HashMap<i32, DomNodeId>,
-) {
+) -> Result<(), String> {
     use crate::testdriver::WebViewPoint;
     use crate::testdriver::input_events::{InputEvent, MouseButtonAction, TouchEventType};
     let xy = |p: &WebViewPoint| match p {
@@ -962,7 +1129,7 @@ fn dispatch_input_event<E: ScriptEngine>(
             let (kind, target) = match t.event_type {
                 TouchEventType::Down => {
                     let Some(target) = hit(rt, (x, y)) else {
-                        return;
+                        return Ok(());
                     };
                     // Every later event for this touch point goes here.
                     touch_targets.insert(id, target);
@@ -972,56 +1139,65 @@ fn dispatch_input_event<E: ScriptEngine>(
                 // hit-test: the finger owns the element it landed on.
                 TouchEventType::Move => match touch_targets.get(&id) {
                     Some(&target) => ("touchmove", target),
-                    None => return,
+                    None => return Ok(()),
                 },
                 TouchEventType::Up => match touch_targets.remove(&id) {
                     Some(target) => ("touchend", target),
-                    None => return,
+                    None => return Ok(()),
                 },
                 TouchEventType::Cancel => match touch_targets.remove(&id) {
                     Some(target) => ("touchcancel", target),
-                    None => return,
+                    None => return Ok(()),
                 },
             };
-            let _ = rt.dispatch_touch_event(target.raw(), kind, f64::from(x), f64::from(y), id);
+            rt.dispatch_touch_event(target.raw(), kind, f64::from(x), f64::from(y), id)
+                .map_err(|error| format!("touch dispatch: {error:?}"))?;
         },
         InputEvent::Wheel(w) => {
             let (x, y) = xy(&w.point);
             let Some(target) = hit(rt, (x, y)) else {
-                return;
+                return Ok(());
             };
             // The interpreter negates the spec's deltas (its positive WheelDelta
             // scrolls the view up); the DOM event carries the spec sign, so
             // negate back.
-            let _ = rt.dispatch_wheel_event(
+            rt.dispatch_wheel_event(
                 target.raw(),
                 f64::from(x),
                 f64::from(y),
                 -w.delta.x,
                 -w.delta.y,
                 0, // DOM_DELTA_PIXEL
-            );
+            )
+            .map_err(|error| format!("wheel dispatch: {error:?}"))?;
         },
         InputEvent::MouseMove(m) => {
             let p = xy(&m.point);
-            let Some(target) = hit(rt, p) else { return };
+            let Some(target) = hit(rt, p) else {
+                return Ok(());
+            };
             for kind in ["pointermove", "mousemove"] {
-                let _ = rt.dispatch_event(target.raw(), kind);
+                rt.dispatch_event(target.raw(), kind)
+                    .map_err(|error| format!("event dispatch: {error:?}"))?;
             }
         },
         InputEvent::MouseButton(b) => {
             let p = xy(&b.point);
-            let Some(target) = hit(rt, p) else { return };
+            let Some(target) = hit(rt, p) else {
+                return Ok(());
+            };
             let kinds: &[&str] = match b.action {
                 MouseButtonAction::Down => &["pointerdown", "mousedown"],
                 MouseButtonAction::Up => &["pointerup", "mouseup", "click"],
             };
             for kind in kinds {
-                let _ = rt.dispatch_event(target.raw(), kind);
+                rt.dispatch_event(target.raw(), kind)
+                    .map_err(|error| format!("event dispatch: {error:?}"))?;
             }
         },
         _ => {},
     }
+    Ok(())
 }
 
 fn run_loaded_with<E: ScriptEngine>(
@@ -1032,7 +1208,10 @@ fn run_loaded_with<E: ScriptEngine>(
 ) -> HarnessOutcome {
     // H7a: every testharness run gets a rendering session. Built before the test
     // body runs so early `getComputedStyle` reads see the parse-time cascade.
-    let render = RenderSession::new(rt, style);
+    let render = match RenderSession::new(rt, style) {
+        Ok(render) => render,
+        Err(error) => return HarnessOutcome::Threw(error),
+    };
     if let Err(e) = rt.begin_loaded_testharness(test_src) {
         return HarnessOutcome::Threw(truncate(&format!("{e:?}"), 200));
     }
@@ -1056,7 +1235,11 @@ fn run_parsed_with<E: ScriptEngine>(
     completion: Option<&dyn CompletionSource>,
     style: StyleRoute,
 ) -> HarnessOutcome {
-    let render = RenderSession::new(rt, style);
+    let render = match RenderSession::new(rt, style) {
+        Ok(render) => render,
+        Err(error) => return HarnessOutcome::Threw(error),
+    };
+    rt.set_document_response_headers(loader.document_response_headers());
     let parser_loader = HarnessParserLoader { inner: loader };
     if let Err(e) = rt.begin_parsed_testharness(html, &parser_loader) {
         return HarnessOutcome::Threw(truncate(&format!("{e:?}"), 200));
@@ -1078,11 +1261,17 @@ fn run_parsed_with<E: ScriptEngine>(
 /// an rAF loop that never exits).
 fn drive_virtual<E: ScriptEngine>(rt: &mut Runtime<E>, render: &RenderSession) -> HarnessOutcome {
     let start = Instant::now();
+    // The runtime's skipping clock: real time plus every wait this loop jumps
+    // over instead of sleeping, so synchronous work still takes time and `Date`
+    // agrees with `performance` (Mark, 2026-10-20: "Real time plus skipped
+    // waits"). A worker's reply arrives in real time on the same clock.
+    let clock = rt.clock();
+    // Timers run on a virtual queue clock that moves only by the jumps below, so
+    // a test's own timeout does not depend on machine load. `performance` and
+    // `Date` read the shared clock, which takes the same jumps on top of real
+    // time. While another agent runs, the queue follows wall time plus the jumps:
+    // a worker's reply arrives in real time.
     let mut now_ms = 0.0f64;
-    // The virtual jumps taken so far. While another agent is running, the clock
-    // is wall time plus those jumps instead: a worker's reply arrives in real
-    // time, and a virtual jump to testharness's own 10s timeout would time the
-    // test out before the worker had started.
     let mut skipped_ms = 0.0f64;
     let mut turns = 0u64;
     let mut stop_reason = "harness-incomplete";
@@ -1097,17 +1286,35 @@ fn drive_virtual<E: ScriptEngine>(rt: &mut Runtime<E>, render: &RenderSession) -
         turns += 1;
         harness_gc_turn(rt, turns);
         rt.run_microtasks();
-        let fired = rt.run_timers(TIMER_BUDGET, now_ms);
-        let rendered = render.turn(rt, now_ms);
-        let acted = process_testdriver_actions(rt, render, &mut now_ms, true);
+        let fired = match rt.run_timers(TIMER_BUDGET, now_ms) {
+            Ok(value) => value,
+            Err(error) => return HarnessOutcome::Threw(format!("runtime turn: {error:?}")),
+        };
+        let rendered = match render.turn(rt, now_ms) {
+            Ok(value) => value,
+            Err(error) => return HarnessOutcome::Threw(format!("runtime turn: {error:?}")),
+        };
+        let labelled = process_testdriver_labels(rt, render);
+        let before_actions = now_ms;
+        let acted = match process_testdriver_actions(rt, render, &mut now_ms, true) {
+            Ok(work) => work + labelled,
+            Err(error) => return HarnessOutcome::Threw(error),
+        };
+        clock.skip(now_ms - before_actions);
         // Dedicated workers: answer their resource requests and deliver their
         // messages. A worker that has not reported idle can still speak, so it
         // holds the loop open the way a pending timer does.
         let worked = rt.pump_workers();
         let workers_live = rt.has_worker_work();
-        let has_raf = rt.has_animation_frame_callbacks();
+        let has_raf = match rt.has_animation_frame_callbacks() {
+            Ok(value) => value,
+            Err(error) => return HarnessOutcome::Threw(format!("runtime turn: {error:?}")),
+        };
         let animating = render.animating();
-        let next_timer = rt.next_timer_delay();
+        let next_timer = match rt.next_timer_delay() {
+            Ok(value) => value,
+            Err(error) => return HarnessOutcome::Threw(format!("runtime turn: {error:?}")),
+        };
         if rt.harness_completion().is_some() {
             break;
         }
@@ -1133,7 +1340,11 @@ fn drive_virtual<E: ScriptEngine>(rt: &mut Runtime<E>, render: &RenderSession) -
         // timer while frames are wanted, else straight to the next timer. A turn
         // that did work but scheduled nothing time-based loops once more at the
         // same instant and then quiesces.
-        let step = if has_raf || animating {
+        // A settled label resumes script that may ask for the next one; answer
+        // it at this instant, before the jump can fire a test's timeout.
+        let step = if labelled > 0 {
+            0.0
+        } else if has_raf || animating {
             match next_timer {
                 Some(d) if d < FRAME_MS => d.max(0.0),
                 _ => FRAME_MS,
@@ -1143,6 +1354,7 @@ fn drive_virtual<E: ScriptEngine>(rt: &mut Runtime<E>, render: &RenderSession) -
         } else {
             0.0
         };
+        clock.skip(step);
         now_ms += step;
         skipped_ms += step;
     }
@@ -1167,8 +1379,8 @@ fn drive_wall<E: ScriptEngine>(
 ) -> HarnessOutcome {
     let start = Instant::now();
     let deadline = drive_deadline();
-    // Virtual offset added to elapsed wall time by the quiescent jumps below.
-    let mut skipped_ms = 0.0f64;
+    // The quiescent jumps below skip the runtime's clock rather than sleep.
+    let skipping = rt.clock();
     let elapsed_ms =
         |start: Instant| (Instant::now().saturating_duration_since(start)).as_millis() as f64;
     let mut turns = 0u64;
@@ -1187,12 +1399,33 @@ fn drive_wall<E: ScriptEngine>(
             break;
         }
         rt.run_microtasks();
+        let mut delivery_error = None;
         let applied = cs.drain(&mut |c| match c {
-            FetchCompletion::StartStream(id, o) => rt.start_stream(id, o),
-            FetchCompletion::Chunk(id, b) => rt.push_chunk(id, &b),
-            FetchCompletion::Close(id) => rt.close_stream(id),
-            FetchCompletion::Error(id) => rt.error_stream(id),
-            FetchCompletion::Fail(id, m) => rt.fail_fetch(id, &m),
+            FetchCompletion::StartStream(id, o) => {
+                if let Err(error) = rt.start_stream(id, o) {
+                    delivery_error = Some(format!("fetch delivery: {error:?}"));
+                }
+            },
+            FetchCompletion::Chunk(id, b) => {
+                if let Err(error) = rt.push_chunk(id, &b) {
+                    delivery_error = Some(format!("fetch delivery: {error:?}"));
+                }
+            },
+            FetchCompletion::Close(id) => {
+                if let Err(error) = rt.close_stream(id) {
+                    delivery_error = Some(format!("fetch delivery: {error:?}"));
+                }
+            },
+            FetchCompletion::Error(id) => {
+                if let Err(error) = rt.error_stream(id) {
+                    delivery_error = Some(format!("fetch delivery: {error:?}"));
+                }
+            },
+            FetchCompletion::Fail(id, m) => {
+                if let Err(error) = rt.fail_fetch(id, &m) {
+                    delivery_error = Some(format!("fetch delivery: {error:?}"));
+                }
+            },
             FetchCompletion::WsOpen(id, p, e) => rt.ws_open(id, &p, &e),
             FetchCompletion::WsText(id, t) => rt.ws_message_text(id, &t),
             FetchCompletion::WsBinary(id, b) => rt.ws_message_binary(id, &b),
@@ -1200,22 +1433,40 @@ fn drive_wall<E: ScriptEngine>(
             FetchCompletion::WsError(id) => rt.ws_error(id),
             FetchCompletion::WsClose(id, c, r, clean) => rt.ws_close(id, c, &r, clean),
         });
-        let clock = elapsed_ms(start) + skipped_ms;
-        let fired = rt.run_timers(TIMER_BUDGET, clock);
-        let rendered = render.turn(rt, clock);
+        if let Some(error) = delivery_error.take() {
+            return HarnessOutcome::Threw(error);
+        }
+        let clock = rt.clock_elapsed_ms();
+        let fired = match rt.run_timers(TIMER_BUDGET, clock) {
+            Ok(value) => value,
+            Err(error) => return HarnessOutcome::Threw(format!("runtime turn: {error:?}")),
+        };
+        let rendered = match render.turn(rt, clock) {
+            Ok(value) => value,
+            Err(error) => return HarnessOutcome::Threw(format!("runtime turn: {error:?}")),
+        };
         // Wall-clock drive: tick durations are collapsed, not slept (the
         // interpreter reports them; a headed consumer would pace real frames).
         let mut wall_now = clock;
-        let acted = process_testdriver_actions(rt, render, &mut wall_now, false);
+        let acted = match process_testdriver_actions(rt, render, &mut wall_now, false) {
+            Ok(work) => work + process_testdriver_labels(rt, render),
+            Err(error) => return HarnessOutcome::Threw(error),
+        };
         let worked = rt.pump_workers();
         let workers_live = rt.has_worker_work();
-        let has_raf = rt.has_animation_frame_callbacks();
+        let has_raf = match rt.has_animation_frame_callbacks() {
+            Ok(value) => value,
+            Err(error) => return HarnessOutcome::Threw(format!("runtime turn: {error:?}")),
+        };
         let animating = render.animating();
         // A live WebSocket is outstanding network work exactly as an in-flight
         // fetch is: the peer can still speak, and the page cannot see it until
         // the loop applies the completion.
         let pending = rt.pending_fetches() + rt.pending_websockets();
-        let next_timer = rt.next_timer_delay();
+        let next_timer = match rt.next_timer_delay() {
+            Ok(value) => value,
+            Err(error) => return HarnessOutcome::Threw(format!("runtime turn: {error:?}")),
+        };
         if rt.harness_completion().is_some() {
             break;
         }
@@ -1244,7 +1495,7 @@ fn drive_wall<E: ScriptEngine>(
                 // sleeping to it. The wall deadline above still bounds a
                 // runaway self-rearming timer.
                 if let Some(d) = next_timer {
-                    skipped_ms += d.max(0.0);
+                    skipping.skip(d.max(0.0));
                     continue;
                 }
             }
@@ -1264,11 +1515,31 @@ fn drive_wall<E: ScriptEngine>(
                 cs.wait(
                     Duration::from_millis(wait_ms.ceil() as u64),
                     &mut |c| match c {
-                        FetchCompletion::StartStream(id, o) => rt.start_stream(id, o),
-                        FetchCompletion::Chunk(id, b) => rt.push_chunk(id, &b),
-                        FetchCompletion::Error(id) => rt.error_stream(id),
-                        FetchCompletion::Close(id) => rt.close_stream(id),
-                        FetchCompletion::Fail(id, m) => rt.fail_fetch(id, &m),
+                        FetchCompletion::StartStream(id, o) => {
+                            if let Err(error) = rt.start_stream(id, o) {
+                                delivery_error = Some(format!("fetch delivery: {error:?}"));
+                            }
+                        },
+                        FetchCompletion::Chunk(id, b) => {
+                            if let Err(error) = rt.push_chunk(id, &b) {
+                                delivery_error = Some(format!("fetch delivery: {error:?}"));
+                            }
+                        },
+                        FetchCompletion::Error(id) => {
+                            if let Err(error) = rt.error_stream(id) {
+                                delivery_error = Some(format!("fetch delivery: {error:?}"));
+                            }
+                        },
+                        FetchCompletion::Close(id) => {
+                            if let Err(error) = rt.close_stream(id) {
+                                delivery_error = Some(format!("fetch delivery: {error:?}"));
+                            }
+                        },
+                        FetchCompletion::Fail(id, m) => {
+                            if let Err(error) = rt.fail_fetch(id, &m) {
+                                delivery_error = Some(format!("fetch delivery: {error:?}"));
+                            }
+                        },
                         FetchCompletion::WsOpen(id, p, e) => rt.ws_open(id, &p, &e),
                         FetchCompletion::WsText(id, t) => rt.ws_message_text(id, &t),
                         FetchCompletion::WsBinary(id, b) => rt.ws_message_binary(id, &b),
@@ -1277,6 +1548,9 @@ fn drive_wall<E: ScriptEngine>(
                         FetchCompletion::WsClose(id, c, r, clean) => rt.ws_close(id, c, &r, clean),
                     },
                 );
+                if let Some(error) = delivery_error.take() {
+                    return HarnessOutcome::Threw(error);
+                }
             } else if wait_ms > 0.0 {
                 // Only timers/frames are outstanding: sleep until the soonest.
                 std::thread::sleep(Duration::from_millis(wait_ms.ceil() as u64));
@@ -1483,8 +1757,11 @@ fn is_testdriver_vendor_src(src: &str) -> bool {
 /// element-reference format carrying the node's raw ref (only the host can
 /// resolve geometry), queues the transaction, and returns a Promise the drive
 /// loop settles after running the ticks through the shared interpreter
-/// (`crate::testdriver::webdriver_actions::interpret_actions`). Commands beyond
-/// `action_sequence` keep their spec-honest throwing defaults;
+/// (`crate::testdriver::webdriver_actions::interpret_actions`).
+/// `get_computed_label` queues the node's raw id the same way and the drive
+/// loop answers from the accessibility projection
+/// ([`process_testdriver_labels`]). Other commands keep their spec-honest
+/// throwing defaults;
 /// `in_automation = true` makes them throw instead of waiting forever for a
 /// human.
 const TESTDRIVER_VENDOR_JS: &str = r#"
@@ -1527,6 +1804,32 @@ const TESTDRIVER_VENDOR_JS: &str = r#"
       globalThis.__tdQueue.push({ actions: fixed, resolve: resolve, reject: reject });
     });
   };
+  // Label requests carry a sequence number so concurrent promise_tests each
+  // settle their own promise; the host answers a whole batch per drive turn.
+  globalThis.__tdLabelSeq = 0;
+  globalThis.__tdLabelQueue = [];
+  globalThis.__tdLabelPending = {};
+  globalThis.__tdTakeLabels = function() {
+    if (globalThis.__tdLabelQueue.length === 0) { return ''; }
+    var batch = globalThis.__tdLabelQueue;
+    globalThis.__tdLabelQueue = [];
+    return JSON.stringify(batch);
+  };
+  globalThis.__tdSettleLabel = function(seq, ok, value) {
+    var p = globalThis.__tdLabelPending[seq];
+    delete globalThis.__tdLabelPending[seq];
+    if (!p) { return; }
+    if (ok) { p.resolve(value); } else { p.reject(new Error(value)); }
+  };
+  window.test_driver_internal.get_computed_label = function(element) {
+    var ref = element && element.__ref;
+    var id = ref === undefined ? '' : String(__nodeRawId(ref));
+    return new Promise(function(resolve, reject) {
+      var seq = ++globalThis.__tdLabelSeq;
+      globalThis.__tdLabelPending[seq] = { resolve: resolve, reject: reject };
+      globalThis.__tdLabelQueue.push([seq, id]);
+    });
+  };
 })();
 "#;
 
@@ -1560,6 +1863,15 @@ fn truncate(s: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_https_named_tests_are_served_over_https() {
+        assert!(super::served_over_https("http://web-platform.test/WebCryptoAPI/digest/digest.https.any.html"));
+        assert!(super::served_over_https("http://web-platform.test:8000/a/b.https.any.worker.html?1-10"));
+        assert!(!super::served_over_https("http://web-platform.test/WebCryptoAPI/historical.any.html"));
+        assert!(!super::served_over_https("http://web-platform.test/x.https/plain.html"));
+        assert!(!super::served_over_https("http://web-platform.test/plain.html?x.https.y"));
+    }
 
     /// `looks_like_xml` cuts its probe at 512 *bytes*, which can land inside a
     /// multi-byte character. Three `websockets/constructor/016.html` variants
@@ -1810,6 +2122,77 @@ test(function() {
         assert!(results[0].passed(), "Livery route should pass: {results:?}");
     }
 
+    fn retained_animation_turn<E: ScriptEngine>() {
+        let mut rt = Runtime::<E>::with_clock(
+            script_runtime_api::SharedClock::skipping(),
+        )
+        .expect("runtime");
+        let render = RenderSession::new(&mut rt, StyleRoute::Livery).expect("render session");
+        rt.parse_document_interleaved_with(
+            "<div id='box' style='width:10px;height:10px'></div>",
+            &HarnessParserLoader {
+                inner: &EmptyLoader,
+            },
+            false,
+        );
+        let node = {
+            let host = rt.host().borrow();
+            let mut pending = vec![host.dom.document()];
+            loop {
+                let node = pending.pop().expect("box node");
+                if host
+                    .dom
+                    .element_name(node)
+                    .is_some_and(|name| name.local.as_str() == "div")
+                {
+                    break node;
+                }
+                pending.extend(host.dom.dom_children(node));
+            }
+        };
+        render.turn(&mut rt, 0.0).expect("initial retained frame");
+        assert_eq!(
+            render.cssom.fragment_rect(node).expect("initial box")[2],
+            10.0
+        );
+        rt.eval("var order=[]; requestAnimationFrame(function(){order.push('frame'); document.getElementById('box').style.width='40px'; Promise.resolve().then(function(){order.push('micro');}); requestAnimationFrame(function(){order.push('next');});}); var cancelled=requestAnimationFrame(function(){order.push('cancelled');}); cancelAnimationFrame(cancelled);").unwrap();
+        assert!(rt.has_animation_frame_callbacks().unwrap());
+        rt.run_timers(0, 16.0).unwrap();
+        assert!(render.turn(&mut rt, 16.0).unwrap() > 0);
+        assert_eq!(
+            render
+                .cssom
+                .fragment_rect(node)
+                .expect("mutated retained box")[2],
+            40.0
+        );
+        let value = rt
+            .eval("order.join(',') + ':' + getComputedStyle(document.getElementById('box')).width")
+            .unwrap();
+        assert_eq!(
+            rt.engine_mut().value_to_string(&value).unwrap(),
+            "frame,micro:40px"
+        );
+        assert!(rt.has_animation_frame_callbacks().unwrap());
+        rt.run_timers(0, 32.0).unwrap();
+        assert!(render.turn(&mut rt, 32.0).unwrap() > 0);
+        assert!(!rt.has_animation_frame_callbacks().unwrap());
+        let value = rt.eval("order.join(',')").unwrap();
+        assert_eq!(
+            rt.engine_mut().value_to_string(&value).unwrap(),
+            "frame,micro,next"
+        );
+    }
+
+    #[test]
+    fn retained_animation_turn_on_boa() {
+        retained_animation_turn::<script_engine_boa::BoaEngine>();
+    }
+    #[test]
+    fn retained_animation_turn_on_nova() {
+        retained_animation_turn::<script_engine_nova::NovaEngine>();
+    }
+
     /// End to end through the H7a rendering session: the real WPT
     /// `animationevent-types.html` (negative delay, iteration-count 2, animates
     /// `left`) returns reported results without panicking. This test found the stylo
@@ -1917,6 +2300,72 @@ async_test(function(t) {
         assert!(
             results[0].passed(),
             "the synthesized click should complete the async_test: {results:?}"
+        );
+    }
+
+    /// `test_driver.get_computed_label` reads the element's name from the
+    /// neutral accessibility projection (accessible names plan, rulings 2-3).
+    /// Two known names resolve; a deliberately wrong expectation must still
+    /// fail; an element the projection leaves out rejects with its own message.
+    #[test]
+    fn test_driver_get_computed_label_reads_the_projection() {
+        let wpt = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/wpt");
+        let testharness_js =
+            fs::read_to_string(wpt.join("tests/resources/testharness.js")).expect("harness");
+        let tests_root = wpt.join("tests");
+        let base_dir = tests_root.join("accname");
+        let loader = DiskLoader::new(base_dir.as_path(), tests_root.as_path());
+        let html = r#"<!DOCTYPE html>
+<script src="/resources/testdriver.js"></script>
+<script src="/resources/testdriver-vendor.js"></script>
+<button id="labelled" aria-label="Known name">ignored</button>
+<button id="content">Save <span>draft</span></button>
+<div id="hidden" style="display:none" aria-label="Hidden name"></div>
+<script>
+function label(id) {
+  return test_driver.get_computed_label(document.getElementById(id));
+}
+promise_test(async () => {
+  assert_equals(await label('labelled'), 'Known name');
+}, 'aria-label');
+promise_test(async () => {
+  assert_equals(await label('content'), 'Save draft');
+}, 'name from content');
+promise_test(async () => {
+  assert_equals(await label('labelled'), 'Wrong name');
+}, 'wrong expectation');
+promise_test(async () => {
+  let message = 'resolved';
+  try { await label('hidden'); } catch (e) { message = String(e && e.message); }
+  assert_equals(message, 'element not in accessibility projection');
+}, 'absent element');
+</script>"#;
+        let results = unwrap_ran(run_test(
+            &testharness_js,
+            html,
+            &loader,
+            None,
+            None,
+            None,
+            Engine::Boa,
+        ));
+        let outcome = |name: &str| {
+            results
+                .iter()
+                .find(|r| r.name == name)
+                .unwrap_or_else(|| panic!("no subtest {name}: {results:?}"))
+        };
+        assert!(outcome("aria-label").passed(), "{results:?}");
+        assert!(outcome("name from content").passed(), "{results:?}");
+        assert!(outcome("absent element").passed(), "{results:?}");
+        let wrong = outcome("wrong expectation");
+        assert!(
+            !wrong.passed(),
+            "a wrong expected name must fail: {wrong:?}"
+        );
+        assert!(
+            format!("{wrong:?}").contains("Known name"),
+            "it fails on the name, not on the hook: {wrong:?}"
         );
     }
 

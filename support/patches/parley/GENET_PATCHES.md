@@ -43,10 +43,27 @@ Retire this fork when an upstream Parley release makes default-ignorable join
 controls non-covering during fallback selection while retaining them in the
 shaping buffer.
 
+## Line-break data reports the line's trailing whitespace
+
+`LineBreakData` carries `advance`, which includes trailing whitespace that
+hangs past the line's end edge. A caller that places lines beside floats has to
+compare only the content that must fit, but the yielded data hid the split, so
+a line whose content exactly filled the band beside a float (20 monospace
+glyphs in a 120px band) was measured as 126px by its hanging space and moved
+below the float. The patch adds `trailing_whitespace: f32` (the line's own
+`LineMetrics::trailing_whitespace`) to `LineBreakData`; `advance` is unchanged.
+Livery's float-band retry in `text.rs` now compares `advance - trailing_whitespace`.
+
+Retire this field when upstream Parley yields line metrics (or the hanging
+advance) with its line-break data.
+
 ## Receipts
 
 - `support/patches/parley/tests/join_controls.rs` proves ZWNJ keeps the selected
   face and receives no letter spacing.
+- `genet-livery`'s `live_shape_outside_reference_boxes_change_lines_but_not_float_placement`
+  and `live_inline_lines_in_an_ordinary_wrapper_share_outer_float_exclusions`
+  fail without the field's use and pass with it, on bundled Ahem metrics.
 - `components/genet-livery/tests/k5d_font_feature_resolution.rs` proves that
   `fi`, `f<ZWNJ>i`, and the U+FB01 presentation ligature keep one authored
   face's line metrics, and proves join controls do not add letter spacing.
@@ -64,3 +81,48 @@ Every commit that has touched this directory, newest first
 | `caa562d1e3a` | Add correlated Windows font fallback diagnostic and revise repair gates |
 | `29f93579d92` | Reconcile Livery css-text behavior |
 | `c36c34be0ad` | Implement Livery font feature resolution |
+
+## Font diagnostics admit payload work only during capture
+
+With `font-diagnostic` enabled, shaping now checks the thread-local capture
+owner before constructing cluster strings, candidate lists and family strings.
+Capture-off preserves font selection without building discarded events; active
+capture retains the same records and RAII lifetime. A real shaping regression
+uses bundled Lato with system fonts disabled and counts event construction.
+
+The vendored builder-parity tests referenced the absent upstream `parley_dev`
+font collection. They now register bundled Lato Medium/Bold; their English-text
+builder-equivalence assertions remain. The existing empty-layout tab-size
+mismatch reproduces with the pre-cut production source and is recorded in the
+2026-10-16 architecture audit receipt, rather than skipped or normalized away.
+
+## Complex-script dictionaries load at runtime
+
+Upstream's `complex-scripts` feature calls ICU's `new_dictionary` constructors,
+which compile the Thai, Lao, Khmer, Burmese, Chinese and Japanese segmenter
+dictionaries into the binary: about 3.7 MB, 2.4 MB gzipped, in a wasm page. Here
+the feature keeps the compiled non-complex rules and owns its segmenters, and a
+host loads the dictionaries when text asks for them:
+`segmenter_dictionaries::DictionaryBlob::new(bytes)` checks a blob once (clones
+share it), `LayoutContext::load_segmenter_dictionaries` loads it, and
+`LayoutContext::wanted_segmenter_dictionaries` names the groups text has met
+without them. Until a group loads, its scripts break by the plain rules.
+
+Blobs are `GSEGDIC1` followed by `[group][name length][name][u16 count LE][u16 LE…]`
+entries, read by a crate-local ICU data provider that projects each trie out of
+the shared bytes (no `icu_provider_blob`). `cargo run -p genet-parley --features
+complex-scripts --example export_segmenter_dictionaries -- <dir>` writes
+`segmenter-southeast-asian.dict` (1,773,143 B) and
+`segmenter-chinese-japanese.dict` (2,007,130 B) from ICU's baked data; the
+`dictionaries` tests check that loaded blobs break all six scripts exactly as
+the baked dictionaries do. `icu_provider`'s `sync` feature keeps
+`LayoutContext` `Send`.
+
+## One font stack with netrender and vello
+
+Parley's shaping moved from harfrust 0.8 to harfrust 0.12 and skrifa 0.42 to
+0.44, and fontique from read-fonts 0.39 to 0.41, matching the skrifa 0.44 /
+read-fonts 0.41 that netrender and vello use. A page linking both used to
+carry two read-fonts and two skrifa; it now carries one of each. No source
+change was needed, and genet-livery's 704 layout and paint tests pass
+unchanged.

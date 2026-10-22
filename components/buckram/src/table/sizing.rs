@@ -520,6 +520,10 @@ impl TableCellInlineMeasure {
 #[derive(Clone, Debug, PartialEq)]
 pub struct TableInlineSizingResult {
     pub intrinsic_sizes: IntrinsicSizes,
+    /// The auto-layout table's min/max border-edge contributions to a parent
+    /// formatting context, after its own min/max-width constraints. Fixed
+    /// layout results leave this absent.
+    pub wrapper_intrinsic_sizes: Option<IntrinsicSizes>,
     pub used_table_inline_size: f32,
     pub used_grid_inline_size: f32,
     /// The portion of the used grid width assigned to K4b column tracks.
@@ -588,6 +592,7 @@ impl TableInlineSizingResult {
         }
         Ok(Self {
             intrinsic_sizes,
+            wrapper_intrinsic_sizes: None,
             used_table_inline_size,
             used_grid_inline_size,
             assignable_column_inline_size,

@@ -1,0 +1,60 @@
+{
+  "recorded_at": "2026-10-14T07:21:20.762227+00:00",
+  "wire_supplier": "80d9959000fcd913634fd223538dfdbbec1f5e4f",
+  "receiving_base": "19947c3a3cb",
+  "checks": [
+    {
+      "scope": "netfetcher-git",
+      "compiler": "1.99.0",
+      "passed": 83,
+      "log_sha256": "07313f0c67880ad80685994fed95d9f32046705b7eee8078bd343b73512a54c5"
+    },
+    {
+      "scope": "netfetcher-msrv-git",
+      "compiler": "1.97.1",
+      "passed": 83,
+      "log_sha256": "162701824b81b9cf1fd35887b15fed462339b3a912b1789b481e611644eb3eb7"
+    },
+    {
+      "scope": "wpt-git",
+      "compiler": "1.99.0",
+      "passed": 1,
+      "log_sha256": "26bf37e04cc2843605ca9f03946e56755c5b68bcd9c04cef8f2a7902a8366a2b"
+    },
+    {
+      "scope": "wpt-worker-git",
+      "compiler": "1.99.0",
+      "passed": 4,
+      "log_sha256": "61422b1750aee8727da35ec168bc98fd29dcfdf6363c19c8f7f19d1785b1cc65"
+    }
+  ],
+  "inputs": {
+    "components/netfetcher/Cargo.toml": "2bbb3670745303da7f1f438e4790b35287ccb95a3b52513571d7b587f377a5b3",
+    "components/netfetcher/src/lib.rs": "d6b2e56d79ba51c97e997fd09bc29c0f8557ae292f4a9a8936935494c8c8273f",
+    "components/netfetcher/src/transport/hyper.rs": "8e1eed9637c5d920cb6d647e91528588268213bb8ca4b5939a21d2bb8b6bb2c6",
+    "components/netfetcher/src/websocket.rs": "c025a81d127021a3199be990bbbfb22060d63c322c8442587080b8c7ba1384d3",
+    "ports/genet-wpt/Cargo.toml": "fd00e24f93a74bdc00482bafd73179ced1cf3e676dac9bc5760dc24778ab2792",
+    "ports/genet-wpt/src/main.rs": "abe5b6aa8039c3875d7d61b6f092a17d7124210cb0c0eb4c3f815024ee9d7547",
+    "ports/genet-wpt/src/net.rs": "0306122f80d1fbd62530da8d7a882633a849f9ae900255e3a21355cb71e8dd09",
+    "ports/genet-wpt/tests/fetch_netfetcher.rs": "a02586df6df12fed4fdd95e2d1d559c3c670a4553a59d378639862717b7089c0"
+  },
+  "metadata_sha256": "cb82694898fc4dccd716d23af2547643d0bf9bdcac445204c1b2a4cf0041e9f6",
+  "one_wire_supplier": true,
+  "engine_genet_back_edges": [],
+  "foreign_git_manifests": [],
+  "deleted_shipping_engine": "components/netfetcher/src/h3_client.rs",
+  "public_contract_preserved": [
+    "netfetcher 0.1.1",
+    "default hyper-transport/h3/websocket",
+    "FetchContext.transport",
+    "Method/Transport/WireRequest/RawResponse",
+    "DefaultTransport::shared/accept_invalid_certs",
+    "Fetch/WebSocket entry points"
+  ],
+  "limits": [
+    "Focused JS Fetch and production initial-document worker tests; full upstream WPT corpus is not executed",
+    "WebGL fixture now requires webgl-tests; existing macOS compositor errors remain separate",
+    "Murm default pool remains process-wide; explicit host-selected HttpTransport pools have separate software trust/connection receipts",
+    "Registry release and headed/GPU acceptance are separate"
+  ]
+}

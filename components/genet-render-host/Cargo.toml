@@ -5,7 +5,8 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 publish = false
-rust-version = "1.92.0"
+
+rust-version = "1.97.1"
 description = "Target-neutral Genet present core: boot wgpu + a netrender Renderer, configure a surface on any wgpu target, and rasterize scenes into composable textures."
 
 [lib]
@@ -14,7 +15,7 @@ path = "src/lib.rs"
 
 [dependencies]
 # The present stack: a netrender Renderer rasterizes genet scenes and composites
-# them onto the surface (workspace path dep on the sibling netrender checkout).
+# them onto the surface, using the workspace's immutable Netrender source.
 netrender = { workspace = true }
 wgpu = { version = "30", default-features = false, features = ["std", "wgsl"] }
 # Host-neutral diagnostics facade (P3 raster spans); the app owns the subscriber.
@@ -24,5 +25,28 @@ tracing = "0.1"
 # whatever wgpu accepts, so a winit window and a browser canvas both reach this
 # crate without either dragging the other's dependencies into the build.
 
+[features]
+# Explicit actual-WebGPU acquired-surface diagnostics; ordinary hosts unchanged.
+browser-surface-readback-diagnostics = []
+# Wasm viewer artifacts that present only through Netrender's WebGL2 backend:
+# boot refuses and every RenderCore path is unreachable, so classic Vello,
+# wgpu boot and composition drop out of the build. Refused off wasm.
+without-classic-vello = ["netrender/without-classic-vello"]
+
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)', 'cfg(llvm_pgo)'] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3"
+wasm-bindgen = "=0.2.129"
+wasm-bindgen-futures = "0.4"
+web-time = "1"
+gloo-timers = { version = "0.3", features = ["futures"] }
+
+[dev-dependencies]
+# IMG-GPU gate (tests/image_gpu.rs): decoded document images through the shared device.
+genet-livery = { path = "../genet-livery" }
+genet-scripted-dom = { path = "../genet-scripted-dom" }
+paint_list_api = { workspace = true }
+paint_list_render = { workspace = true }
+image = { workspace = true }

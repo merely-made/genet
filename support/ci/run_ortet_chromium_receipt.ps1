@@ -19,6 +19,7 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $artifact = [IO.Path]::GetFullPath($ArtifactDir)
 $target = Join-Path $artifact 'target'
+. (Join-Path (Split-Path $PSScriptRoot -Parent) 'checked-native.ps1')
 
 if (-not (Test-Path $ChromePath)) { throw "Chrome was not found at $ChromePath." }
 New-Item -ItemType Directory -Path $artifact -Force | Out-Null
@@ -26,12 +27,21 @@ Copy-Item (Join-Path $repo 'ports\ortet\tests\web\receipt.html') (Join-Path $art
 Copy-Item (Join-Path $repo 'tests\wpt\tests\fonts\Ahem.ttf') (Join-Path $artifact 'Ahem.ttf') -Force
 
 Push-Location $repo
+$previousTargetDir = $env:CARGO_TARGET_DIR
+$hadTargetDir = Test-Path Env:CARGO_TARGET_DIR
 try {
     $env:CARGO_TARGET_DIR = $target
-    cargo build -p ortet --lib --target wasm32-unknown-unknown --locked --offline
-    wasm-bindgen (Join-Path $target 'wasm32-unknown-unknown\debug\ortet.wasm') --target web --out-dir $artifact --no-typescript
+    Invoke-CheckedNative -Description 'Ortet wasm build' -FilePath 'cargo' -Arguments @(
+        'build', '-p', 'ortet', '--lib', '--target', 'wasm32-unknown-unknown', '--locked', '--offline'
+    )
+    Invoke-CheckedNative -Description 'Ortet wasm-bindgen' -FilePath 'wasm-bindgen' -Arguments @(
+        (Join-Path $target 'wasm32-unknown-unknown\debug\ortet.wasm'), '--target', 'web',
+        '--out-dir', $artifact, '--no-typescript'
+    )
 
-    $python = (& python -c 'import sys; print(sys.executable)').Trim()
+    $python = (Invoke-CheckedNative -Description 'Python executable discovery' -FilePath 'python' -Arguments @(
+        '-c', 'import sys; print(sys.executable)'
+    )).Trim()
     if (-not $python) { throw 'Python could not report its executable path.' }
     $server = Start-Process -FilePath $python -ArgumentList @('-m', 'http.server', $HttpPort, '--directory', $artifact) -PassThru -WindowStyle Hidden
     try {
@@ -42,8 +52,10 @@ try {
             '--headless=new', '--disable-gpu-sandbox', "--user-data-dir=$profile",
             "--remote-debugging-port=$DebugPort", 'about:blank'
         ) -RedirectStandardError $stderr -PassThru -WindowStyle Hidden
-        & node (Join-Path $PSScriptRoot 'ortet_chromium_readback.mjs') --debug-port $DebugPort --url "http://127.0.0.1:$HttpPort/receipt.html" --artifact $artifact
-        if ($LASTEXITCODE -ne 0) { throw "Chromium readback failed; see $stderr." }
+        Invoke-CheckedNative -Description "Chromium readback; see $stderr" -FilePath 'node' -Arguments @(
+            (Join-Path $PSScriptRoot 'ortet_chromium_readback.mjs'), '--debug-port', "$DebugPort",
+            '--url', "http://127.0.0.1:$HttpPort/receipt.html", '--artifact', $artifact
+        )
     }
     finally {
         if ($chrome) { Stop-Process -Id $chrome.Id -ErrorAction SilentlyContinue }
@@ -51,5 +63,7 @@ try {
     }
 }
 finally {
+    if ($hadTargetDir) { $env:CARGO_TARGET_DIR = $previousTargetDir }
+    else { Remove-Item Env:CARGO_TARGET_DIR -ErrorAction SilentlyContinue }
     Pop-Location
 }

@@ -4,12 +4,11 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 // SPDX-License-Identifier: MPL-2.0
 
-//! F0's receipt: the consumed-longhand contract, asserted.
+//! The historical F0 consumed-longhand baseline, asserted.
 //!
-//! The cutover plan's F0 stage closes the gap between Livery's catalog and the
-//! 128 longhands the current Genet product path actually reads
-//! (`docs/2026-07-13_genet_consumed_css_property_audit.md`). Its receipt is
-//! "the census reads 128/128 consumed implemented".
+//! This table records an older consumer audit and bounded additions. The test
+//! checks whether those names still resolve in Livery's current catalog; it
+//! cannot prove that all current runtime readers appear in the table.
 //!
 //! That receipt lives here on purpose. The import tool that first produced
 //! the census needed a fork checkout, and both are deleted. This test reads
@@ -26,7 +25,7 @@ struct Consumed {
     consumers: String,
 }
 
-/// The audit's overlap table, as data. Parsed with the same `toml` the build
+/// The historical audit's overlap table, as data. Parsed with the same `toml` the build
 /// script uses, so the file cannot drift into a shape the generator rejects.
 fn consumed_set() -> Vec<Consumed> {
     let table: toml::Table = CONSUMED.parse().expect("consumed_longhands.toml parses");
@@ -56,10 +55,11 @@ fn consumed_set() -> Vec<Consumed> {
     entries
 }
 
-/// A consumed name is covered if the parser resolves it, as a longhand or as
+/// A baseline name is covered if the parser resolves it, as a longhand or as
 /// the other kind. Livery models a few upstream shorthands as single longhands
 /// (`background-position`), and the reverse; the catalog census treats those as
-/// covered, so this receipt must agree with it.
+/// covered, so this catalog-resolution receipt must agree with it. Resolution
+/// alone does not prove a property is consumed or fully implemented.
 fn is_covered(name: &str) -> bool {
     PropertyId::from_css_name(name).is_some() || ShorthandId::from_css_name(name).is_some()
 }
@@ -67,10 +67,8 @@ fn is_covered(name: &str) -> bool {
 /// Properties the catalog admits are only partly built.
 ///
 /// A partial property parses and honours a named subset of its
-/// specification. It is deliberately *not* counted as implemented: the
-/// point of this receipt is that recognising a value is not implementing
-/// its semantics, and a name count that ignores the difference is a
-/// conformance claim the catalog cannot support.
+/// specification. This ratchet counts it as resolved, while the separate
+/// partial report prevents a name count from becoming a conformance claim.
 fn partial_properties() -> Vec<(&'static str, &'static str)> {
     PropertyId::ALL
         .iter()
@@ -92,10 +90,15 @@ fn partial_properties_declare_the_subset_they_build() {
 }
 
 #[test]
-fn the_consumed_set_is_the_current_129_longhands() {
+fn the_historical_consumed_set_has_129_longhands() {
     let consumed = consumed_set();
     let declared = {
         let table: toml::Table = CONSUMED.parse().expect("parses");
+        assert_eq!(
+            table["meta"]["status"].as_str(),
+            Some("historical-baseline"),
+            "this fixed table must not claim to enumerate current runtime readers",
+        );
         table["meta"]["count"]
             .as_integer()
             .expect("meta.count is an integer") as usize
@@ -109,7 +112,7 @@ fn the_consumed_set_is_the_current_129_longhands() {
     assert_eq!(
         consumed.len(),
         129,
-        "the original audit plus live font-feature and shape-outside consumers is 129",
+        "the original audit plus later bounded additions records 129 names",
     );
     let unique: BTreeSet<&str> = consumed.iter().map(|entry| entry.name.as_str()).collect();
     assert_eq!(unique.len(), consumed.len(), "duplicate consumed names");
@@ -123,16 +126,16 @@ fn the_consumed_set_is_the_current_129_longhands() {
     }
 }
 
-/// How many consumed longhands Livery may still be missing.
+/// How many historical baseline names Livery may still fail to resolve.
 ///
-/// F0's receipt is this reaching 0; until then it is a ratchet. A permanently
-/// red test would just be noise everyone learns to skip, and it would block the
+/// F0's historical receipt is this reaching 0; until then it is a ratchet. A
+/// permanently red test would just be noise everyone learns to skip, and it would block the
 /// workspace-green rule the cutover plan's own receipts depend on. A ratchet is
 /// green today, cannot silently regress, and reports the remaining worklist on
 /// every run.
 ///
 /// **Lower this as F0 slices land. Never raise it.** Raising it means a
-/// consumed longhand stopped resolving, which is an F0 regression, not a new
+/// baseline name stopped resolving, which is an F0 regression, not a new
 /// baseline. When it reaches 0, replace the ratchet with a plain equality
 /// assertion and F0's receipt is closed.
 ///
@@ -142,26 +145,25 @@ fn the_consumed_set_is_the_current_129_longhands() {
 /// catalog reconciliation and the shape-outside consumer landed.
 const MAX_REMAINING: usize = 27;
 
-/// F0's receipt, as a ratchet. Prints the exact remaining worklist with the
-/// catalog group for each name, so a failure message is the next slice.
+/// F0's historical catalog-resolution receipt, as a ratchet. Prints the exact
+/// remaining baseline worklist with the catalog group for each name.
 #[test]
-fn f0_receipt_consumed_longhands_are_implemented() {
+fn f0_historical_consumed_longhands_still_resolve() {
     let consumed = consumed_set();
     let missing: Vec<&Consumed> = consumed
         .iter()
         .filter(|entry| !is_covered(&entry.name))
         .collect();
-    let implemented = consumed.len() - missing.len();
+    let resolved = consumed.len() - missing.len();
 
     let mut report = format!(
-        "F0 consumed-set parity: {implemented}/{} implemented, {} remaining \
+        "F0 historical consumed-set catalog resolution: {resolved}/{} names resolve, {} remaining \
          (ratchet allows {MAX_REMAINING}).\n",
         consumed.len(),
         missing.len(),
     );
-    // Partials are counted as implemented by every name-based census,
-    // including the one above. Say so on the same line, or the number reads
-    // as a conformance claim the catalog cannot support.
+    // Partials count as resolved by this name-based ratchet. Say so in the
+    // report, or the number reads as a conformance claim the catalog cannot support.
     let partial = partial_properties();
     if !partial.is_empty() {
         report.push_str(
@@ -174,7 +176,7 @@ fn f0_receipt_consumed_longhands_are_implemented() {
                 "    {name}{} - {note}
 ",
                 if consumed_here {
-                    " [in the consumed set]"
+                    " [in the historical consumed set]"
                 } else {
                     ""
                 },
@@ -192,7 +194,7 @@ fn f0_receipt_consumed_longhands_are_implemented() {
         }
     }
 
-    // A consumed name that is in neither table is worse than an unimplemented
+    // A baseline name that is in neither table is worse than an unimplemented
     // one: the census cannot count it, so it is invisible to the property
     // space and to F0's progress number. Never allowed, at any ratchet value.
     assert!(
@@ -205,8 +207,8 @@ fn f0_receipt_consumed_longhands_are_implemented() {
 
     assert!(
         missing.len() <= MAX_REMAINING,
-        "{report}\nF0 REGRESSED: {} consumed longhands are unimplemented, but the \
-         ratchet allows {MAX_REMAINING}. A consumed longhand stopped resolving. \
+        "{report}\nF0 REGRESSED: {} historical baseline names do not resolve, but the \
+         ratchet allows {MAX_REMAINING}. A baseline name stopped resolving. \
          Fix it rather than raising MAX_REMAINING.\nThis is F0 of \
          docs/2026-07-24_livery_fullweb_cutover_and_servo_retirement_plan.md.",
         missing.len(),
@@ -224,17 +226,16 @@ fn f0_receipt_consumed_longhands_are_implemented() {
 
 /// The multicol knockout (cutover plan D0, ruled 2026-07-25) removed
 /// `column-count`, `column-width`, and `column-span` from the F4 parity bar.
-/// It is only sound because none of them is consumed. If a future consumer
-/// starts reading one, the knockout has to be revisited, and this is where
-/// that shows up.
+/// The old F0 table did not include them. This assertion preserves that
+/// historical scope; it makes no claim about current multicol readers.
 #[test]
-fn the_multicol_knockout_does_not_touch_the_consumed_set() {
+fn the_historical_multicol_knockout_does_not_touch_the_baseline() {
     let consumed = consumed_set();
     for property in ["column-count", "column-width", "column-span"] {
         assert!(
             !consumed.iter().any(|entry| entry.name == property),
-            "{property} is in the consumed set, so the multicol knockout is no \
-             longer sound; see D0 of the cutover plan",
+            "{property} was added to the historical F0 baseline; revisit the \
+             D0 knockout or create a separate current-reader contract",
         );
     }
 }

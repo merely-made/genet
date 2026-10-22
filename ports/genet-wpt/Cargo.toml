@@ -5,7 +5,8 @@ authors.workspace = true
 license.workspace = true
 edition.workspace = true
 publish.workspace = true
-rust-version.workspace = true
+
+rust-version = "1.97.1"
 repository.workspace = true
 description = "genet-native web-platform-tests runner; subset-selectable."
 
@@ -28,6 +29,9 @@ layout_dom_api = { workspace = true }
 # the drive loop, which parses it with the pinned protocol types and runs it
 # through the shared tick interpreter (embedder_traits::webdriver_actions).
 webdriver = { workspace = true }
+# `test_driver_internal.get_computed_label` reads names from the neutral
+# accessibility projection (accessible names plan, rulings 2 and 4).
+genet-render = { path = "../../components/genet-render", default-features = false, features = ["livery"] }
 keyboard-types = { workspace = true }
 bitflags = { workspace = true }
 # MANIFEST.json reader (harness-exactness H1): the upstream WPT manifest is JSON.
@@ -68,18 +72,18 @@ tokio = { version = "1", features = ["rt", "macros"], optional = true }
 bytes = { version = "1", optional = true }
 url = { workspace = true, optional = true }
 
+# GPU conformance is explicitly selected for its attended validation lane.
+# The ordinary runner and focused CPU network gates omit the compositor.
+webgl_wgpu = { workspace = true, optional = true }
+pollster = { version = "1.0", optional = true }
+
 [features]
 default = ["image-decode"]
+webgl-tests = ["dep:webgl_wgpu", "dep:pollster"]
 netfetch = ["dep:netfetcher", "dep:tokio", "dep:bytes", "dep:url"]
 # Forwards genet-livery's image decoding; see its `image-decode` feature.
-image-decode = ["genet-livery/image-decode", "genet-scripted/image-decode"]
+image-decode = ["genet-livery/image-decode", "genet-scripted/image-decode", "genet-render/image-decode"]
 
 [dev-dependencies]
 # Offline mock server for the fetch()->netfetcher integration test.
 mockito = "1"
-# Real wgpu-backed WebGL context for running the Khronos conformance suite
-# through the harness: a WgpuWebGl bridge implements script-runtime-api's
-# WebGlHandler over webgl-wgpu's WebGlContext. Dev-only — the runner binary
-# stays graphics-free; only the conformance test wires a GPU.
-webgl_wgpu = { workspace = true }
-pollster = "1.0"

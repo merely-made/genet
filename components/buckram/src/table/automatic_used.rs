@@ -122,10 +122,14 @@ pub fn size_automatic_table_inline(
 
     let minimum = minimum.unwrap_or(0.0);
     let maximum = maximum.unwrap_or(f32::INFINITY).max(minimum);
-    let constrained_table_size = requested_table_size.max(minimum).min(maximum);
-    let used_table_inline_size = constrained_table_size
-        .max(caption_min)
-        .max(grid_intrinsic_sizes.min_content);
+    let constrain = |requested: f32| {
+        requested
+            .max(minimum)
+            .min(maximum)
+            .max(caption_min)
+            .max(grid_intrinsic_sizes.min_content)
+    };
+    let used_table_inline_size = constrain(requested_table_size);
     let used_grid_inline_size = table_size_to_grid_size(
         used_table_inline_size,
         input.sizing.table_constraints.box_sizing,
@@ -144,14 +148,29 @@ pub fn size_automatic_table_inline(
         &mut used_table_inline_size,
     );
 
-    TableInlineSizingResult::new(
+    let mut result = TableInlineSizingResult::new(
         &input.sizing,
         intrinsic_sizes,
         used_table_inline_size,
         used_grid_inline_size,
         column_sizes,
-    )
-    .map(TableAutomaticInlineSizingOutcome::Sized)
+    )?;
+    // The grid's intrinsic pair is expressed in the table's box-sizing edge.
+    // Apply the same CSS constraints as the selected width, then convert both
+    // ends to the border edge contributed by the generated wrapper.
+    result.wrapper_intrinsic_sizes = IntrinsicSizes::new(
+        table_size_to_grid_size(
+            constrain(intrinsic_sizes.min_content),
+            input.sizing.table_constraints.box_sizing,
+            table_offsets,
+        )?,
+        table_size_to_grid_size(
+            constrain(intrinsic_sizes.max_content),
+            input.sizing.table_constraints.box_sizing,
+            table_offsets,
+        )?,
+    );
+    Ok(TableAutomaticInlineSizingOutcome::Sized(result))
 }
 
 /// Publish the table-grid intrinsic pair under the grid's standards-owned
@@ -660,6 +679,46 @@ mod tests {
         assert_close(result.column_sizes[0], 96.66667);
         assert_close(result.column_sizes[1], 100.0);
         assert_close(result.column_sizes[2], 103.33333);
+    }
+
+    #[test]
+    fn auto_table_wrapper_intrinsics_respect_min_max_and_border_edges() {
+        let grid = grid(FlowAxes::HORIZONTAL_LTR);
+        let measures = measures();
+        let mut input = input(&grid, &measures);
+        input.sizing.border_metrics =
+            TableInlineBorderMetrics::Separated(TableSeparatedBorderMetrics {
+                table_offsets: super::super::CellInlineOffsets {
+                    padding_start: AffineLengthPercentage::px(10.0),
+                    padding_end: AffineLengthPercentage::px(10.0),
+                    ..Default::default()
+                },
+                inline_spacing: 0.0,
+            });
+        input.sizing.table_constraints.minimum =
+            InlineSizeConstraint::Value(AffineLengthPercentage::px(1.0));
+        input.sizing.table_constraints.maximum =
+            InlineSizeConstraint::Value(AffineLengthPercentage::px(1000.0));
+        let inactive = sized(size_automatic_table_inline(&input).expect("inactive bounds"));
+        let inactive_pair = inactive.wrapper_intrinsic_sizes.expect("auto wrapper pair");
+        // The column measures are 150/600; the wrapper also contains the
+        // table's 20px inline padding on both intrinsic passes.
+        assert_close(inactive_pair.min_content, 170.0);
+        assert_close(inactive_pair.max_content, 620.0);
+
+        input.sizing.table_constraints.minimum =
+            InlineSizeConstraint::Value(AffineLengthPercentage::px(250.0));
+        let active = sized(size_automatic_table_inline(&input).expect("active bounds"));
+        let active_pair = active.wrapper_intrinsic_sizes.expect("auto wrapper pair");
+        assert_close(active_pair.min_content, 270.0);
+        assert_close(active_pair.max_content, 620.0);
+
+        input.sizing.table_constraints.maximum =
+            InlineSizeConstraint::Value(AffineLengthPercentage::px(400.0));
+        let capped = sized(size_automatic_table_inline(&input).expect("active maximum"));
+        let capped_pair = capped.wrapper_intrinsic_sizes.expect("auto wrapper pair");
+        assert_close(capped_pair.min_content, 270.0);
+        assert_close(capped_pair.max_content, 420.0);
     }
 
     /// Surfaced by K4c5a's first live automatic shadow: with zero-slack

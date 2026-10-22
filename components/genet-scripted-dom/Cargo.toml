@@ -6,7 +6,8 @@ publish = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
-rust-version.workspace = true
+
+rust-version = "1.97.1"
 description = "Mutable scripted-DOM provider: LayoutDom + LayoutDomMut over a NodeId arena, recording DomMutations for retained Livery invalidation."
 
 [lib]
@@ -17,6 +18,8 @@ path = "lib.rs"
 engine_observables_api = { workspace = true }
 layout-dom-api = { version = "0.1.1", path = "../shared/layout-dom", features = ["capture"] }
 markup5ever = { workspace = true }
+# Native-only nested UnicodeSets negation fix; engine dependencies stay pinned.
+regress = { version = "=0.11.1", path = "../../support/patches/regress-0.11.1", features = ["utf16"] }
 # The HTML serializer (the `serialize` fn + `SerializeOpts` + void-element/escaping
 # logic) lives in html5ever; markup5ever only carries the `Serialize`/`Serializer`
 # traits. Already a genet workspace dep (genet-static-dom uses it for parsing).
@@ -24,11 +27,16 @@ html5ever = { workspace = true }
 # Reused for `set_inner_html` fragment parsing: parse via StaticDocument (a LayoutDom),
 # then walk it into the mutable arena. Avoids a second TreeSink impl.
 genet-static-dom = { version = "0.1.1", path = "../genet-static-dom" }
+genet-text = { version = "0.1.0", path = "../genet-text" }
 # Capture identities travel through a serialized journal. The `capture` feature
 # of layout-dom-api already puts serde in this crate's graph; a captured node
 # identity is this crate's own type, so it derives here rather than being
 # mirrored downstream.
 serde = { workspace = true, features = ["derive"] }
+# Forms URL validity reuses the workspace's already-locked WHATWG URL parser.
+url = { workspace = true }
+# Shared native form encoders use the already-locked workspace codec.
+encoding_rs = { workspace = true }
 
 [dev-dependencies]
 postcard = { workspace = true }

@@ -16,7 +16,7 @@
 use std::collections::{HashMap, HashSet};
 
 pub use genet_host_api::{ResourceFetcher, ResourceResponse};
-use layout_dom_api::{LayoutDom, LocalName, Namespace};
+use layout_dom_api::{DomMutation, LayoutDom, LocalName, Namespace};
 
 type ByteFetcher<'a> = dyn FnMut(&str) -> Option<Vec<u8>> + 'a;
 type ResponseFetcher<'a> = dyn FnMut(&str) -> Option<ResourceResponse> + 'a;
@@ -324,12 +324,31 @@ pub struct ResourceResponseSnapshot {
 }
 
 impl ResourceResponseSnapshot {
+    /// Associate a frame with the response fetched for its authored/requested URL.
+    /// Redirect destinations need not uniquely identify a response body.
+    pub fn frame_response(
+        &self,
+        frame: &ResolvedFrame,
+        parent_url: Option<&str>,
+    ) -> Option<ResourceResponse> {
+        if frame.source_kind != FrameSource::Src {
+            return None;
+        }
+        self.fetch_response(&resolve_url(parent_url, frame.authored_url.as_deref()?))
+    }
     pub fn insert(&mut self, requested_url: impl Into<String>, response: ResourceResponse) {
         self.responses.insert(requested_url.into(), response);
     }
 }
 
 impl ResourceFetcher for ResourceResponseSnapshot {
+    fn fetch_request(
+        &self,
+        _request: &genet_host_api::ResourceRequest,
+    ) -> Option<genet_host_api::ResourceFetchResponse> {
+        None
+    }
+
     fn fetch(&self, url: &str) -> Option<Vec<u8>> {
         self.responses
             .get(url)
@@ -338,6 +357,322 @@ impl ResourceFetcher for ResourceResponseSnapshot {
 
     fn fetch_response(&self, url: &str) -> Option<ResourceResponse> {
         self.responses.get(url).cloned()
+    }
+}
+
+/// Acquisition retained for one live document. Request identity belongs to the
+/// document resource graph, not to a transport-wide URL cache: each pass keeps
+/// only responses (including misses) still reachable from the current DOM.
+#[derive(Default)]
+pub struct RetainedResourceResolution {
+    document_url: Option<String>,
+    limits: Option<ResourceLimits>,
+    owners: HashMap<u64, ResourceOwnerFact>,
+    owner_order: Vec<u64>,
+    invalidated_owners: HashSet<u64>,
+    responses: HashMap<String, Option<ResourceResponse>>,
+    resolved: Option<ResolvedDocumentResources>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum ResourceOwnerFact {
+    InlineStyle(String),
+    LinkedStyle {
+        authored_url: String,
+        url: String,
+        media: Option<String>,
+    },
+    Resource {
+        authored_url: Option<String>,
+        url: Option<String>,
+        lazy: bool,
+    },
+    Frame {
+        src: Option<String>,
+        url: Option<String>,
+        srcdoc: Option<String>,
+        loading: Option<String>,
+        name: Option<String>,
+        sandbox: Option<String>,
+        allow: Option<String>,
+    },
+}
+
+impl ResourceOwnerFact {
+    fn request_url(&self) -> Option<&str> {
+        match self {
+            Self::LinkedStyle { url, .. } => Some(url),
+            Self::Resource {
+                url, lazy: false, ..
+            } => url.as_deref(),
+            Self::Frame {
+                url,
+                srcdoc: None,
+                loading,
+                ..
+            } if loading
+                .as_deref()
+                .is_none_or(|value| !value.trim().eq_ignore_ascii_case("lazy")) =>
+            {
+                url.as_deref()
+            },
+            _ => None,
+        }
+    }
+
+    fn acquisition_changed(&self, next: &Self) -> bool {
+        match (self, next) {
+            (Self::LinkedStyle { url: old, .. }, Self::LinkedStyle { url: new, .. }) => old != new,
+            (
+                Self::Resource {
+                    url: old,
+                    lazy: old_lazy,
+                    ..
+                },
+                Self::Resource {
+                    url: new,
+                    lazy: new_lazy,
+                    ..
+                },
+            ) => old != new || old_lazy != new_lazy,
+            (Self::Frame { .. }, Self::Frame { .. }) => self.request_url() != next.request_url(),
+            (Self::InlineStyle(old), Self::InlineStyle(new)) => old != new,
+            _ => self != next,
+        }
+    }
+
+    fn is_stylesheet(&self) -> bool {
+        matches!(self, Self::InlineStyle(_) | Self::LinkedStyle { .. })
+    }
+}
+
+impl RetainedResourceResolution {
+    /// Inserting a previously known owner starts a new acquisition lifetime,
+    /// even if a subtree replacement hid its removal from the journal. An
+    /// atomic `Moved` mutation deliberately does not have that meaning.
+    pub fn observe_mutations<D: LayoutDom>(
+        &mut self,
+        dom: &D,
+        document_url: Option<&str>,
+        mutations: &[DomMutation<D::NodeId>],
+    ) {
+        for mutation in mutations {
+            if let DomMutation::Inserted { node, .. } = mutation
+                && dom.is_live(*node)
+            {
+                let mut facts = HashMap::new();
+                let mut order = Vec::new();
+                collect_resource_owner_facts(
+                    dom,
+                    *node,
+                    document_url,
+                    &mut facts,
+                    &mut order,
+                    true,
+                );
+                self.invalidated_owners.extend(
+                    facts
+                        .keys()
+                        .filter(|id| self.owners.contains_key(id))
+                        .copied(),
+                );
+            }
+        }
+    }
+
+    /// Reconcile one live DOM, returning the same immutable ledger that a fresh
+    /// resolution would produce. Unchanged dependency inputs avoid even the
+    /// resource traversal; unrelated class and text edits need no acquisition.
+    pub fn reconcile<D: LayoutDom, Fetch: ResourceFetcher + ?Sized>(
+        &mut self,
+        dom: &D,
+        document_url: Option<&str>,
+        fetcher: &Fetch,
+        limits: ResourceLimits,
+    ) -> &ResolvedDocumentResources {
+        if self.document_url.as_deref() != document_url {
+            self.responses.clear();
+            self.owners.clear();
+            self.owner_order.clear();
+            self.invalidated_owners.clear();
+            self.resolved = None;
+            self.document_url = document_url.map(str::to_owned);
+        }
+        let limits_changed = self.limits != Some(limits);
+        self.limits = Some(limits);
+        let mut next_owners = HashMap::new();
+        let mut next_order = Vec::new();
+        collect_resource_owner_facts(
+            dom,
+            dom.document(),
+            document_url,
+            &mut next_owners,
+            &mut next_order,
+            true,
+        );
+        if !limits_changed
+            && self.owners == next_owners
+            && self.owner_order == next_order
+            && self.invalidated_owners.is_empty()
+            && self.resolved.is_some()
+        {
+            return self.resolved.as_ref().expect("checked retained resources");
+        }
+
+        for (&id, old) in &self.owners {
+            let next = next_owners.get(&id);
+            if !self.invalidated_owners.contains(&id)
+                && next.is_some_and(|next| !old.acquisition_changed(next))
+            {
+                continue;
+            }
+            if let Some(url) = old.request_url() {
+                self.responses.remove(url);
+            }
+            if old.is_stylesheet()
+                && let Some(previous) = &self.resolved
+            {
+                for url in stylesheet_owner_requests(previous, id) {
+                    self.responses.remove(&url);
+                }
+            }
+            if let Some(url) = next.and_then(ResourceOwnerFact::request_url) {
+                self.responses.remove(url);
+            }
+        }
+        for (&id, next) in &next_owners {
+            if !self.owners.contains_key(&id)
+                && let Some(url) = next.request_url()
+            {
+                // A replacement owner at the same URL is a new acquisition.
+                self.responses.remove(url);
+            }
+        }
+
+        let mut reached = HashSet::new();
+        let mut fetch = |url: &str| {
+            reached.insert(url.to_owned());
+            self.responses
+                .entry(url.to_owned())
+                .or_insert_with(|| fetcher.fetch_response(url))
+                .clone()
+        };
+        let resolved = resolve_responses_with_limits(dom, document_url, &mut fetch, limits);
+        self.responses.retain(|url, _| reached.contains(url));
+        self.owners = next_owners;
+        self.owner_order = next_order;
+        self.invalidated_owners.clear();
+        self.resolved = Some(resolved);
+        self.resolved.as_ref().expect("stored reconciled resources")
+    }
+}
+
+fn stylesheet_owner_requests(resources: &ResolvedDocumentResources, owner: u64) -> HashSet<String> {
+    let mut requests = HashSet::new();
+    for sheet in resources
+        .stylesheets
+        .iter()
+        .filter(|sheet| sheet.owner_node == Some(owner))
+    {
+        if let Some(url) = &sheet.requested_url {
+            requests.insert(url.clone());
+        }
+        requests.extend(
+            sheet
+                .imports
+                .iter()
+                .map(|import| import.resolved_url.clone()),
+        );
+        let mut fetch = |url: &str| {
+            requests.insert(url.to_owned());
+            None
+        };
+        let mut response_fetch: Option<&mut ResponseFetcher<'_>> = Some(&mut fetch);
+        let mut cached = HashMap::new();
+        let mut ignored = ResolvedDocumentResources::default();
+        collect_stylesheet_resources(
+            &sheet.text,
+            sheet.source_url.as_deref(),
+            &mut response_fetch,
+            &mut cached,
+            &mut ignored,
+        );
+    }
+    requests
+}
+
+fn collect_resource_owner_facts<D: LayoutDom>(
+    dom: &D,
+    node: D::NodeId,
+    document_url: Option<&str>,
+    facts: &mut HashMap<u64, ResourceOwnerFact>,
+    order: &mut Vec<u64>,
+    document_resources: bool,
+) {
+    let ns = Namespace::default();
+    let raw_attr = |name: &str| {
+        dom.attribute(node, &ns, &LocalName::from(name))
+            .map(str::to_owned)
+    };
+    let trimmed_attr = |name: &str| {
+        dom.attribute(node, &ns, &LocalName::from(name))
+            .map(str::trim)
+            .map(str::to_owned)
+    };
+    if let Some(name) = dom.element_name(node).map(|name| name.local.as_str()) {
+        let fact = if name.eq_ignore_ascii_case("style") {
+            let mut text = String::new();
+            collect_text(dom, node, &mut text);
+            Some(ResourceOwnerFact::InlineStyle(text))
+        } else if is_stylesheet_link(dom, node) {
+            trimmed_attr("href")
+                .filter(|url| !url.is_empty())
+                .map(|url| ResourceOwnerFact::LinkedStyle {
+                    url: resolve_url(document_url, &url),
+                    authored_url: url,
+                    media: trimmed_attr("media").filter(|media| !media.is_empty()),
+                })
+        } else if document_resources && matches!(name, "img" | "embed" | "object" | "video") {
+            let attribute = match name {
+                "object" => "data",
+                "video" => "poster",
+                _ => "src",
+            };
+            let authored_url = trimmed_attr(attribute).filter(|url| !url.is_empty());
+            Some(ResourceOwnerFact::Resource {
+                url: authored_url
+                    .as_deref()
+                    .map(|url| resolve_url(document_url, url)),
+                authored_url,
+                lazy: name == "img"
+                    && trimmed_attr("loading")
+                        .is_some_and(|value| value.eq_ignore_ascii_case("lazy")),
+            })
+        } else if document_resources && name.eq_ignore_ascii_case("iframe") {
+            let src = trimmed_attr("src").filter(|url| !url.is_empty());
+            Some(ResourceOwnerFact::Frame {
+                url: src.as_deref().map(|url| resolve_url(document_url, url)),
+                src,
+                srcdoc: raw_attr("srcdoc"),
+                loading: raw_attr("loading"),
+                name: raw_attr("name"),
+                sandbox: raw_attr("sandbox"),
+                allow: raw_attr("allow"),
+            })
+        } else {
+            None
+        };
+        if let Some(fact) = fact {
+            let id = dom.opaque_id(node);
+            facts.insert(id, fact);
+            order.push(id);
+        }
+    }
+    for child in dom.dom_children(node) {
+        collect_resource_owner_facts(dom, child, document_url, facts, order, document_resources);
+    }
+    if let Some(root) = dom.shadow_root(node) {
+        collect_resource_owner_facts(dom, root, document_url, facts, order, false);
     }
 }
 
@@ -452,6 +787,10 @@ impl<D: LayoutDom> StagedResourceResolution<D> {
     }
 
     /// Recover the caller's document after finishing its resource ledger.
+    pub fn response_snapshot(&self) -> ResourceResponseSnapshot {
+        self.responses.clone()
+    }
+
     pub fn into_document(self) -> D {
         self.dom
     }
@@ -470,6 +809,23 @@ impl ResolvedDocumentResources {
 
     /// Resolve resources with explicit host-selected bounds for recursive CSS
     /// imports and individual stylesheet bodies.
+    /// Resolve once, retaining the same raw responses for byte-aware consumers.
+    pub fn resolve_with_limits_and_snapshot<D: LayoutDom, Fetch: ResourceFetcher + ?Sized>(
+        dom: &D,
+        document_url: Option<&str>,
+        fetcher: &Fetch,
+        limits: ResourceLimits,
+    ) -> (Self, ResourceResponseSnapshot) {
+        let mut snapshot = ResourceResponseSnapshot::default();
+        let mut fetch = |url: &str| {
+            let response = fetcher.fetch_response(url)?;
+            snapshot.insert(url, response.clone());
+            Some(response)
+        };
+        let resources = resolve_responses_with_limits(dom, document_url, &mut fetch, limits);
+        (resources, snapshot)
+    }
+
     pub fn resolve_with_limits<D, Fetch>(
         dom: &D,
         document_url: Option<&str>,
@@ -1565,6 +1921,13 @@ mod tests {
 
     struct Fetch;
     impl ResourceFetcher for Fetch {
+        fn fetch_request(
+            &self,
+            _request: &genet_host_api::ResourceRequest,
+        ) -> Option<genet_host_api::ResourceFetchResponse> {
+            None
+        }
+
         fn fetch(&self, url: &str) -> Option<Vec<u8>> {
             match url {
                 "https://example.test/page/site.css" => Some(
@@ -1607,6 +1970,13 @@ mod tests {
 
     struct FrameFetch;
     impl ResourceFetcher for FrameFetch {
+        fn fetch_request(
+            &self,
+            _request: &genet_host_api::ResourceRequest,
+        ) -> Option<genet_host_api::ResourceFetchResponse> {
+            None
+        }
+
         fn fetch(&self, url: &str) -> Option<Vec<u8>> {
             match url {
                 "https://example.test/page/child.html" => Some(b"<p>child</p>".to_vec()),
@@ -1722,6 +2092,13 @@ mod tests {
     fn classifies_data_font_face_as_a_font_resource() {
         struct DataFontFetch;
         impl ResourceFetcher for DataFontFetch {
+            fn fetch_request(
+                &self,
+                _request: &genet_host_api::ResourceRequest,
+            ) -> Option<genet_host_api::ResourceFetchResponse> {
+                None
+            }
+
             fn fetch(&self, url: &str) -> Option<Vec<u8>> {
                 url.starts_with("data:font/ttf;base64,")
                     .then_some(vec![0, 1, 2])
@@ -1775,6 +2152,13 @@ mod tests {
     struct ResponseFetch;
 
     impl ResourceFetcher for ResponseFetch {
+        fn fetch_request(
+            &self,
+            _request: &genet_host_api::ResourceRequest,
+        ) -> Option<genet_host_api::ResourceFetchResponse> {
+            None
+        }
+
         fn fetch(&self, _url: &str) -> Option<Vec<u8>> {
             None
         }

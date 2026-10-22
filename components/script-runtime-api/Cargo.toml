@@ -6,6 +6,7 @@
 # arena) — a DOM dep, still no engine dep.
 # See docs/2026-05-26_pluggable_engines_testharness_plan.md.
 [package]
+rust-version = "1.97.1"
 name = "script-runtime-api"
 version = "0.0.0"
 edition = "2021"
@@ -17,16 +18,20 @@ name = "script_runtime_api"
 path = "lib.rs"
 
 [dependencies]
+genet-host-api = { workspace = true }
 browsing-context-api = { path = "../shared/browsing-context" }
 script-engine-api = { path = "../script-engine-api" }
 # The DOM the host surface scripts against: a NodeId arena implementing
 # LayoutDom + LayoutDomMut, recording DomMutations for retained Livery hosts.
 genet-scripted-dom = { path = "../genet-scripted-dom" }
+genet-events = { path = "../genet-events" }
 # The HTML and XML parsers behind DOMParser.parseFromString; the parsed tree is
 # copied into the scripted arena as a new Document.
 genet-static-dom = { path = "../genet-static-dom" }
+livery = { path = "../livery" }
 # QualName / Namespace / LocalName for create_element.
 layout-dom-api = { path = "../shared/layout-dom" }
+cadency = { path = "../cadency" }
 # Prefix (not re-exported by layout-dom-api) for createElementNS qualified names.
 markup5ever = { workspace = true }
 # WHATWG URL resolution for the document base URL + relative `fetch()` / `Request`
@@ -36,6 +41,17 @@ url = { workspace = true }
 # adapter and keeps the engine reusable.
 xpath = { workspace = true }
 encoding_rs = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+# Web Crypto's digests, HMAC, HKDF and PBKDF2 (subtle.rs). The RustCrypto 0.11
+# line, as ruled 2026-10-20 (design_docs/2026-10-20_webcrypto_subtle_plan.md);
+# pure Rust, so the wasm cone gains no getrandom. zeroize clears released key
+# material.
+sha1 = { workspace = true }
+sha2 = { workspace = true }
+hmac = { workspace = true }
+hkdf = { workspace = true }
+pbkdf2 = { workspace = true }
+zeroize = { workspace = true }
 
 [dev-dependencies]
 # Regenerates dom/html_interfaces_generated.rs from WPT's vendored WebIDL so the
@@ -55,6 +71,15 @@ pollster = "1.0"
 # getrandom (see the sonic-rs patch note in the root manifest); a wasm host
 # installs the browser's source through Runtime::set_random_source.
 getrandom = "0.4"
+serde_json = { workspace = true }
+
+# hr-time's shared monotonic clock, read from a system-wide source that pauses
+# during system sleep (timing.rs).
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_System_WindowsProgramming"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
 
 [target.'cfg(target_pointer_width = "64")'.dev-dependencies]
 script-engine-nova = { path = "../script-engine-nova" }

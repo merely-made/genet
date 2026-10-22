@@ -89,7 +89,17 @@ pub enum ShaderStage {
 /// and case-value typing.
 pub fn validate(tu: &TranslationUnit, source: &str, stage: ShaderStage) -> ValidationResult {
     let check_result = crate::check::check(tu);
-    let mut v = ValidatorVisitor::new(stage, check_result.types, tu.version);
+    validate_with_types(tu, source, stage, &check_result.types)
+}
+
+/// Validate using the type facts retained by the compiler's check phase.
+pub(crate) fn validate_with_types(
+    tu: &TranslationUnit,
+    source: &str,
+    stage: ShaderStage,
+    types: &std::collections::HashMap<Span, TypeKind>,
+) -> ValidationResult {
+    let mut v = ValidatorVisitor::new(stage, types.clone(), tu.version);
     walk_translation_unit(&mut v, tu);
     v.finalize(tu, source)
 }

@@ -4,17 +4,15 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 // SPDX-License-Identifier: MPL-2.0
 
-//! Retained fragmentation inputs and the ordinary block resume kernel.
+//! Retained fragmentation inputs and the experimental block resume kernel.
 //!
-//! This is deliberately a model layer. It records the state a formatter must
-//! carry across a fragmentainer boundary without introducing a second box
-//! tree or making a fragmentainer a backend-owned rectangle cache.
+//! The live adapter records unsupported sequential multicol input. The block
+//! resume kernel has only synthetic callers and is compiled only with
+//! `experimental-fragmentation-kernel` until a formatter consumes it.
 
-#![allow(dead_code)]
-
-use crate::{
-    BlockMarginState, BoxId, FlowAxes, FragmentId, FragmentTree, LogicalRect, LogicalSize,
-};
+#[cfg(feature = "experimental-fragmentation-kernel")]
+use crate::{BlockMarginState, FragmentId, FragmentTree};
+use crate::{BoxId, FlowAxes, LogicalRect, LogicalSize};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct FragmentationContextId(u32);
@@ -185,10 +183,12 @@ impl Fragmentainer {
 /// includes rounded shape geometry. K6b retains an explicit typed deferral
 /// rather than inventing a lossy public copy of that state.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg(feature = "experimental-fragmentation-kernel")]
 pub enum FloatExclusionState {
     Deferred,
 }
 
+#[cfg(feature = "experimental-fragmentation-kernel")]
 impl Default for FloatExclusionState {
     fn default() -> Self {
         Self::Deferred
@@ -196,6 +196,7 @@ impl Default for FloatExclusionState {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[cfg(feature = "experimental-fragmentation-kernel")]
 pub enum ClearanceState {
     /// Clearance ownership remains in the ordinary block formatter until the
     /// continuation path consumes the live float state.
@@ -204,6 +205,7 @@ pub enum ClearanceState {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[cfg(feature = "experimental-fragmentation-kernel")]
 pub enum InlineResumeState {
     #[default]
     Deferred,
@@ -213,6 +215,7 @@ pub enum InlineResumeState {
 /// children. Nested and inline state remain typed even when a given block has
 /// no nested child or inline content.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg(feature = "experimental-fragmentation-kernel")]
 pub struct BlockBreakToken {
     pub box_id: BoxId,
     pub next_child: usize,
@@ -241,16 +244,19 @@ pub struct DeferredBreakToken {
 /// rather than interpreting a numeric offset with formatter-specific meaning.
 #[derive(Clone, Debug, PartialEq)]
 pub enum BreakToken {
+    #[cfg(feature = "experimental-fragmentation-kernel")]
     Block(BlockBreakToken),
     Deferred(DeferredBreakToken),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg(feature = "experimental-fragmentation-kernel")]
 pub(crate) struct BlockFragmentChild {
     pub box_id: BoxId,
     pub block_size: f32,
 }
 
+#[cfg(feature = "experimental-fragmentation-kernel")]
 impl BlockFragmentChild {
     pub(crate) fn new(box_id: BoxId, block_size: f32) -> Self {
         assert!(block_size.is_finite() && block_size >= 0.0);
@@ -259,6 +265,7 @@ impl BlockFragmentChild {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[cfg(feature = "experimental-fragmentation-kernel")]
 pub(crate) struct BlockFragmentationState {
     pub carried_margin: BlockMarginState,
     pub float_exclusions: FloatExclusionState,
@@ -267,6 +274,7 @@ pub(crate) struct BlockFragmentationState {
     pub nested_child: Option<Box<BreakToken>>,
 }
 
+#[cfg(feature = "experimental-fragmentation-kernel")]
 impl Default for BlockFragmentationState {
     fn default() -> Self {
         Self {
@@ -280,6 +288,7 @@ impl Default for BlockFragmentationState {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[cfg(feature = "experimental-fragmentation-kernel")]
 pub(crate) struct BlockFragmentStep {
     pub fragment: Option<FragmentId>,
     pub next: Option<BlockBreakToken>,
@@ -288,6 +297,7 @@ pub(crate) struct BlockFragmentStep {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg(feature = "experimental-fragmentation-kernel")]
 pub(crate) enum BlockFragmentOutcome {
     Completed,
     Continued,
@@ -301,6 +311,7 @@ pub(crate) enum BlockFragmentOutcome {
 /// This intentionally handles breaks between ordinary children only; forced
 /// break, widows/orphans, and monolithic-child policy belong to the next
 /// formatter gate.
+#[cfg(feature = "experimental-fragmentation-kernel")]
 pub(crate) fn start_block_fragment(
     fragments: &mut FragmentTree,
     fragmentainer: FragmentainerId,
@@ -313,6 +324,7 @@ pub(crate) fn start_block_fragment(
 
 /// Resume an ordinary block from the token produced by the prior step. The
 /// token is the sole source of carried state on this path.
+#[cfg(feature = "experimental-fragmentation-kernel")]
 pub(crate) fn resume_block_fragment(
     fragments: &mut FragmentTree,
     fragmentainer: FragmentainerId,
@@ -337,6 +349,7 @@ pub(crate) fn resume_block_fragment(
     )
 }
 
+#[cfg(feature = "experimental-fragmentation-kernel")]
 fn emit_block_fragment(
     fragments: &mut FragmentTree,
     fragmentainer: FragmentainerId,
@@ -469,7 +482,7 @@ fn emit_block_fragment(
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "experimental-fragmentation-kernel"))]
 mod tests {
     use super::*;
     use crate::{

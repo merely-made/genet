@@ -51,6 +51,101 @@ use crate::timing::{FrameTiming, Phase, TimingLog, TimingSummary, json_string};
 #[cfg(feature = "scripted")]
 use crate::webgl::WebGlHost;
 
+#[cfg(feature = "scripted")]
+fn worker_helper(backend: script_runtime_api::WorkerBackend) -> Option<script_runtime_api::WorkerProcessLauncher> {
+    let executable = std::env::var_os("GENET_WORKER_HELPER")?;
+    let executable = std::path::PathBuf::from(executable);
+    executable.is_absolute().then(|| script_runtime_api::WorkerProcessLauncher::new(executable, backend))
+}
+
+/// The actual session-transition owner, borrowed by window and headless hosts.
+struct SessionDriver<'a> {
+    engine: &'a dyn SessionEngine<Scene>,
+    session: &'a mut Box<dyn DocumentSession<Scene>>,
+    address: &'a mut String,
+    a11y: &'a mut Accessibility,
+    captured: &'a mut bool,
+    viewport: (u32, u32),
+}
+#[derive(Default)]
+struct DriverOutcome {
+    installed: bool,
+    declined: bool,
+    address_changed: bool,
+    input: Option<document_session_api::SessionInputResult>,
+    error: Option<String>,
+}
+impl SessionDriver<'_> {
+    fn sync_address(&mut self) -> DriverOutcome {
+        let address_changed = self.session.current_address().is_some_and(|address| {
+            if address == *self.address { false } else { *self.address = address; true }
+        });
+        DriverOutcome { address_changed, ..Default::default() }
+    }
+    fn install(&mut self, session: Box<dyn DocumentSession<Scene>>, address: String) -> DriverOutcome {
+        let address = session.current_address().unwrap_or(address);
+        let address_changed = address != *self.address;
+        *self.session = session;
+        *self.address = address;
+        *self.captured = false;
+        self.a11y.replace_session();
+        DriverOutcome { installed: true, address_changed, ..Default::default() }
+    }
+    fn navigate(&mut self, target: &str) -> DriverOutcome {
+        let resolved = resolve_href(self.address, target);
+        if resolved == *self.address { return DriverOutcome::default(); }
+        let request = SessionSpawnRequest::new(&resolved).with_viewport(self.viewport.0, self.viewport.1);
+        match self.engine.spawn(&request) {
+            Ok(session) => self.install(session, resolved),
+            Err(error) => DriverOutcome { declined: true, error: Some(error.to_string()), ..Default::default() },
+        }
+    }
+    fn input(&mut self, input: SessionInput) -> DriverOutcome {
+        let result = self.session.input(input);
+        // Consuming here pairs the exact request with this Submit, before another input.
+        let mut outcome = match &result.effect {
+            SessionEffect::Submit(_) => {
+                match self.session.take_encoded_form_submission() {
+                    Some(encoded) if encoded.target.is_empty() || ["_self", "_parent", "_top"].iter()
+                        .any(|name| encoded.target.eq_ignore_ascii_case(name)) => {
+                        let spawn = SessionSpawnRequest::new(&encoded.request.url)
+                            .with_viewport(self.viewport.0, self.viewport.1);
+                        match self.engine.spawn_request(&spawn, &encoded.request) {
+                            Ok(loaded) => self.install(loaded.session, loaded.navigation_address),
+                            Err(error) => DriverOutcome { declined: true, error: Some(error.to_string()), ..Default::default() },
+                        }
+                    },
+                    _ => DriverOutcome { declined: true,
+                        error: Some("encoded submission or supported top target unavailable".into()), ..Default::default() },
+                }
+            },
+            SessionEffect::Navigate(target) => self.navigate(target),
+            _ => DriverOutcome::default(),
+        };
+        if !outcome.installed && !outcome.declined {
+            if let Some(capture) = result.capture { *self.captured = capture; }
+            outcome.address_changed |= self.sync_address().address_changed;
+        }
+        outcome.input = Some(result);
+        outcome
+    }
+    fn click(&mut self, x: f32, y: f32) -> DriverOutcome {
+        let press = self.input(SessionInput::PointerButton { x, y, button: SessionPointerButton::Primary,
+            state: SessionButtonState::Pressed, modifiers: SessionModifiers::default() });
+        if press.installed || press.declined { return press; }
+        let mut release = self.input(SessionInput::PointerButton { x, y, button: SessionPointerButton::Primary,
+            state: SessionButtonState::Released, modifiers: SessionModifiers::default() });
+        release.address_changed |= press.address_changed;
+        release
+    }
+    fn pump(&mut self, now: f64) -> DriverOutcome {
+        self.session.pump(now); self.sync_address()
+    }
+    fn frame(&mut self, width: u32, height: u32) -> (Scene, DriverOutcome) {
+        let frame = self.session.frame(width, height); (frame, self.sync_address())
+    }
+}
+
 /// What a completed run has to say for itself.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Outcome {
@@ -222,12 +317,15 @@ fn make_engine_with_wake(
                         fetcher,
                         wake,
                     );
-                Ok(Box::new(match webgl {
-                    Some(webgl) => {
-                        engine.with_options_factory(move |_| Ok(webgl.scripted_document_options()))
-                    },
-                    None => engine,
-                }))
+                let launcher = worker_helper(script_runtime_api::WorkerBackend::Boa);
+                Ok(Box::new(engine.with_options_factory(move |_| {
+                    let mut options = webgl.as_ref().map_or_else(
+                        genet_scripted::ScriptedDocumentOptions::default,
+                        WebGlHost::scripted_document_options,
+                    );
+                    options.worker_process_launcher = launcher.clone();
+                    Ok(options)
+                })))
             }
             #[cfg(not(feature = "scripted"))]
             {
@@ -247,12 +345,15 @@ fn make_engine_with_wake(
                         fetcher,
                         wake,
                     );
-                Ok(Box::new(match webgl {
-                    Some(webgl) => {
-                        engine.with_options_factory(move |_| Ok(webgl.scripted_document_options()))
-                    },
-                    None => engine,
-                }))
+                let launcher = worker_helper(script_runtime_api::WorkerBackend::Nova);
+                Ok(Box::new(engine.with_options_factory(move |_| {
+                    let mut options = webgl.as_ref().map_or_else(
+                        genet_scripted::ScriptedDocumentOptions::default,
+                        WebGlHost::scripted_document_options,
+                    );
+                    options.worker_process_launcher = launcher.clone();
+                    Ok(options)
+                })))
             }
             #[cfg(all(feature = "scripted-nova", not(target_pointer_width = "64")))]
             {
@@ -359,7 +460,7 @@ impl Ortet {
             session.element_ids_with_prefix(prefix)
         });
         let timing = TimingLog::new(config.warmup_frames);
-        Self {
+        let mut host = Self {
             address: config.address.clone(),
             pending_actions: config.actions.clone(),
             mutations,
@@ -397,7 +498,10 @@ impl Ortet {
             wake,
             #[cfg(feature = "scripted")]
             last_external_generation: None,
-        }
+        };
+        let outcome = host.session_driver().sync_address();
+        host.present_driver_outcome(&outcome);
+        host
     }
 
     fn outcome(&self) -> Outcome {
@@ -604,35 +708,43 @@ impl Ortet {
 
     /// Follow a link: resolve it against the current address and replace the
     /// session. Ortet keeps no history, so this is the whole of navigation.
-    fn navigate(&mut self, target: &str) {
-        let resolved = resolve_href(&self.address, target);
-        if resolved == self.address {
-            return;
+    fn session_driver(&mut self) -> SessionDriver<'_> {
+        let viewport = self.logical_size();
+        SessionDriver { engine: self.engine.as_ref(), session: &mut self.session,
+            address: &mut self.address, a11y: &mut self.a11y,
+            captured: &mut self.pointer_captured, viewport }
+    }
+    fn present_driver_outcome(&mut self, outcome: &DriverOutcome) {
+        if let Some(error) = &outcome.error { eprintln!("[ortet] {error}"); }
+        if let Some(result) = &outcome.input {
+            if let Some(window) = self.window.as_ref() {
+                if let Some(cursor) = result.cursor {
+                    window.set_cursor(match cursor {
+                        SessionCursor::Default => winit::window::CursorIcon::Default,
+                        SessionCursor::Pointer => winit::window::CursorIcon::Pointer,
+                        SessionCursor::Text => winit::window::CursorIcon::Text,
+                    });
+                }
+                window.set_ime_allowed(if outcome.installed { self.session.editable_focus() } else { result.editable });
+            }
         }
-        match spawn(self.engine.as_ref(), &resolved, self.logical_size()) {
-            Ok(session) => {
-                self.session = session;
-                self.a11y.replace_session();
-                self.address = resolved;
-                self.retitle();
-                self.publish_accessibility();
-                self.request_redraw();
-            },
-            Err(error) => eprintln!("[ortet] {error}"),
+        if outcome.address_changed || outcome.installed { self.retitle(); }
+        if outcome.installed { self.publish_accessibility(); }
+        if outcome.installed || outcome.address_changed || outcome.input.as_ref().is_some_and(|r| r.effect.is_handled()) {
+            self.request_redraw();
         }
     }
-
-    fn apply_click(&mut self, click: SessionClick) {
-        match click {
-            SessionClick::Navigate(target) => self.navigate(&target),
-            SessionClick::Submit(action) => {
-                // Collecting and confirming a request body is a product flow,
-                // and product flows are Mere's. Ortet says so instead of
-                // inventing one.
-                eprintln!("[ortet] form submission to {action} is not wired in this host");
-            },
-            SessionClick::Handled | SessionClick::Miss => {},
-        }
+    fn navigate(&mut self, target: &str) {
+        let outcome = self.session_driver().navigate(target);
+        self.present_driver_outcome(&outcome);
+    }
+    fn driver_click(&mut self, x: f32, y: f32) {
+        let outcome = self.session_driver().click(x, y);
+        self.present_driver_outcome(&outcome);
+    }
+    fn driver_frame(&mut self, width: u32, height: u32) -> Scene {
+        let (scene, outcome) = self.session_driver().frame(width, height);
+        self.present_driver_outcome(&outcome); scene
     }
 
     fn publish_accessibility(&mut self) {
@@ -770,9 +882,7 @@ impl Ortet {
                 },
                 RoutedAction::Dispatched => self.request_redraw(),
                 RoutedAction::Click { x, y } => {
-                    let _ = self.session.pointer_down(x, y);
-                    let click = self.session.pointer_up(x, y);
-                    self.apply_click(click);
+                    self.driver_click(x, y);
                 },
             }
         }
@@ -792,43 +902,24 @@ impl Ortet {
                 Action::Click { x, y } => {
                     // Press and release, the same pair a mouse produces: the
                     // Livery lane activates a link on the matching release.
-                    let _ = self.session.pointer_down(x, y);
-                    let click = self.session.pointer_up(x, y);
-                    self.apply_click(click);
+                    self.driver_click(x, y);
                 },
             }
         }
     }
 
     /// Dispatch one neutral input and apply everything the session asked the
-    /// host for. Returns `(handled, editable)` so the keyboard path can decide
-    /// whether its scroll default still applies.
-    fn apply_input(&mut self, input: SessionInput) -> (bool, bool) {
-        let result = self.session.input(input);
-        if let Some(capture) = result.capture {
-            self.pointer_captured = capture;
-        }
-        if let Some(window) = self.window.as_ref() {
-            if let Some(cursor) = result.cursor {
-                window.set_cursor(match cursor {
-                    SessionCursor::Default => winit::window::CursorIcon::Default,
-                    SessionCursor::Pointer => winit::window::CursorIcon::Pointer,
-                    SessionCursor::Text => winit::window::CursorIcon::Text,
-                });
-            }
-            window.set_ime_allowed(result.editable);
-        }
-        let handled = result.effect.is_handled();
-        match result.effect {
-            SessionEffect::Navigate(target) => self.navigate(&target),
-            SessionEffect::Submit(submission) => eprintln!(
-                "[ortet] form submission to {} is not wired in this host",
-                submission.action
-            ),
-            SessionEffect::Handled | SessionEffect::Cancelled => self.request_redraw(),
-            SessionEffect::Ignored => {},
-        }
-        (handled, result.editable)
+    /// host for. Returns whether the keyboard scroll default still applies.
+    fn apply_input(&mut self, input: SessionInput) -> bool {
+        let outcome = self.session_driver().input(input);
+        let editable = if outcome.installed { self.session.editable_focus() }
+            else { outcome.input.as_ref().is_some_and(|r| r.editable) };
+        let allows_default_scroll = outcome.input.as_ref().map_or_else(
+            || SessionEffect::Ignored.allows_default_scroll(editable),
+            |result| result.effect.allows_default_scroll(editable),
+        );
+        self.present_driver_outcome(&outcome);
+        allows_default_scroll
     }
 
     /// The per-frame shape the host crates document: apply the host mutation
@@ -845,7 +936,8 @@ impl Ortet {
             ..FrameTiming::default()
         };
         let now_ms = self.start.elapsed().as_secs_f64() * 1000.0;
-        self.session.pump(now_ms);
+        let outcome = self.session_driver().pump(now_ms);
+        self.present_driver_outcome(&outcome);
         if self.host.is_none() {
             return;
         }
@@ -856,12 +948,12 @@ impl Ortet {
         // The scene is produced before the host is borrowed: driving the
         // pending actions can replace the session, which needs `&mut self`.
         let (width, height) = self.logical_size();
-        let mut scene = self.session.frame(width, height);
+        let mut scene = self.driver_frame(width, height);
         if !self.pending_actions.is_empty() {
             self.drive_pending_actions();
             // The actions changed retained state (and may have replaced the
             // session). Present that, not the geometry probe above.
-            scene = self.session.frame(width, height);
+            scene = self.driver_frame(width, height);
         }
         timing.frame_us = phase.lap();
         // Drain the engine's phase spans for this frame. On the first frame
@@ -992,7 +1084,11 @@ impl Ortet {
 
 impl ApplicationHandler for Ortet {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if self.session.supports_freeze_resume() {
+            self.session.resume();
+        }
         if self.window.is_some() {
+            self.request_redraw();
             return;
         }
         let attributes = Window::default_attributes()
@@ -1063,7 +1159,7 @@ impl ApplicationHandler for Ortet {
         // Windows. Frame once to obtain the session's first real projection;
         // an honest empty document is used only if that engine has none.
         let (logical_width, logical_height) = self.logical_size();
-        let _ = self.session.frame(logical_width, logical_height);
+        let _ = self.driver_frame(logical_width, logical_height);
         let initial = self
             .a11y
             .publish(self.session.accessibility_projection())
@@ -1097,6 +1193,13 @@ impl ApplicationHandler for Ortet {
             window.set_visible(true);
             window.request_redraw();
         }
+    }
+
+    fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
+        if self.session.supports_freeze_resume() {
+            self.session.freeze();
+        }
+        self.wake_deadline = None;
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
@@ -1183,15 +1286,23 @@ impl ApplicationHandler for Ortet {
                 });
             },
             WindowEvent::KeyboardInput { event, .. } => {
-                let (handled, editable) = self.apply_input(SessionInput::Key {
+                let allows_default_scroll = self.apply_input(SessionInput::Key {
                     key: session_key_from_winit(&event.logical_key),
                     state: button_state_from_winit(event.state),
                     modifiers: self.modifiers,
                     repeat: event.repeat,
                 });
                 if event.state == ElementState::Pressed
-                    && !handled
-                    && !editable
+                    && !self.modifiers.meta && !(self.modifiers.control && !self.modifiers.alt)
+                    && let Some(text) = event.text.as_deref().or_else(||
+                        matches!(&event.logical_key, Key::Named(NamedKey::Space)).then_some(" "))
+                    && !text.is_empty() && text.chars().all(|c| !c.is_control())
+                    && matches!(session_key_from_winit(&event.logical_key), SessionKey::Character(_) | SessionKey::Space)
+                {
+                    let _ = self.apply_input(SessionInput::KeyboardText(text.to_owned()));
+                }
+                if event.state == ElementState::Pressed
+                    && allows_default_scroll
                     && let Some(key) =
                         scroll_key_from_winit(&event.logical_key, self.modifiers.shift)
                     && self.session.scroll_for_key(key)
@@ -1342,4 +1453,356 @@ mod tests {
         };
         assert!(error.contains("--features scripted-nova"), "{error}");
     }
+
+    // TASK5 DRAFT SHELL FIXTURES BEGIN. Driver adapter is absence only.
+    #[derive(Clone)]
+    struct T5ShellReply { final_address: String, fail: bool }
+    struct T5ShellSession {
+        marker: String, projected: Option<String>, pending_projection:Option<(String,String)>, effects: std::collections::VecDeque<SessionEffect>,
+        encoded: Option<genet_host_api::ResourceRequest>,
+        log: Arc<std::sync::Mutex<Vec<String>>>,
+    }
+    impl T5ShellSession {
+        fn callback(&mut self,event:String) {
+            self.log.lock().unwrap().push(event.clone());
+            if self.pending_projection.as_ref().is_some_and(|(on,_)|on==&event) {
+                self.projected=Some(self.pending_projection.take().unwrap().1);
+            }
+        }
+    }
+    impl DocumentSession<Scene> for T5ShellSession {
+        fn frame(&mut self,w:u32,h:u32)->Scene {
+            self.callback("frame".into()); Scene::new(w,h)
+        }
+        fn pump(&mut self,_now:f64) { self.callback("pump".into()); }
+        fn scroll_by(&mut self,_x:f32,_y:f32)->bool { false }
+        fn scroll_for_key(&mut self,_key:SessionScrollKey)->bool { false }
+        fn click_at(&mut self,_x:f32,_y:f32)->SessionClick {
+            self.log.lock().unwrap().push("legacy:click".into()); SessionClick::Miss
+        }
+        fn pointer_down(&mut self,_x:f32,_y:f32)->SessionClick {
+            self.log.lock().unwrap().push("legacy:down".into()); SessionClick::Handled
+        }
+        fn pointer_up(&mut self,_x:f32,_y:f32)->SessionClick {
+            self.log.lock().unwrap().push("legacy:up".into()); SessionClick::Miss
+        }
+        fn input(&mut self,input:SessionInput)->document_session_api::SessionInputResult {
+            let name=match input {
+                SessionInput::PointerButton{state,..}=>format!("input:{state:?}"),
+                SessionInput::PointerMoved{..}=>"input:move".into(),
+                SessionInput::Key{state,..}=>format!("input:key:{state:?}"),
+                _=>"input:other".into(),
+            };
+            self.callback(name);
+            document_session_api::SessionInputResult { effect:self.effects.pop_front().unwrap_or(SessionEffect::Ignored),
+                cursor:None,capture:None,editable:false }
+        }
+        fn current_address(&self)->Option<String> { self.projected.clone() }
+        fn take_encoded_form_submission(&mut self)->Option<document_session_api::SessionEncodedFormSubmission> {
+            self.log.lock().unwrap().push("take-encoded".into());
+            self.encoded.take().map(|r| document_session_api::SessionEncodedFormSubmission {
+                target: String::new(), request: document_session_api::SessionDocumentRequest {
+                    url:r.url,method:r.method,headers:r.headers,body:r.body,cache:r.cache,redirect:r.redirect,
+                    mode:r.mode,referrer:r.referrer,referrer_policy:r.referrer_policy,credentials:r.credentials,integrity:r.integrity,
+                }
+            })
+        }
+        fn links(&self)->Vec<document_session_api::SessionLink> {vec![]}
+        fn as_any_ref(&self)->&dyn std::any::Any {self}
+        fn as_any(&mut self)->&mut dyn std::any::Any {self}
+    }
+    struct T5ShellEngine { id:String, reply:T5ShellReply, log:Arc<std::sync::Mutex<Vec<String>>> }
+    impl SessionEngine<Scene> for T5ShellEngine {
+        fn engine_id(&self)->&str {&self.id}
+        fn spawn(&self,_request:&SessionSpawnRequest)->Result<Box<dyn DocumentSession<Scene>>,document_session_api::SessionError> {
+            self.log.lock().unwrap().push(format!("ordinary:{}",self.id));
+            if self.reply.fail {return Err(document_session_api::SessionError::SpawnFailed("fixture network failure".into()));}
+            Ok(Box::new(T5ShellSession { marker:"NEW".into(),projected:Some(self.reply.final_address.clone()),pending_projection:None,
+                effects:Default::default(),encoded:None,log:self.log.clone() }))
+        }
+        fn spawn_request(&self,_spawn:&SessionSpawnRequest,_request:&document_session_api::SessionDocumentRequest)
+            ->Result<document_session_api::SessionRequestSpawnResult<Scene>,document_session_api::SessionError> {
+            self.log.lock().unwrap().push(format!("rich:{}",self.id));
+            if self.reply.fail {return Err(document_session_api::SessionError::SpawnFailed("fixture network failure".into()));}
+            Ok(document_session_api::SessionRequestSpawnResult { navigation_address:self.reply.final_address.clone(),
+                session:Box::new(T5ShellSession { marker:"NEW".into(),projected:Some(self.reply.final_address.clone()),pending_projection:None,
+                    effects:Default::default(),encoded:None,log:self.log.clone() }) })
+        }
+    }
+    struct T5ShellState {
+        engine:Box<dyn SessionEngine<Scene>>,session:Box<dyn DocumentSession<Scene>>,
+        address:String,a11y:Accessibility,captured:bool,log:Arc<std::sync::Mutex<Vec<String>>>,
+    }
+    enum T5ShellCommand { Click(f32,f32),Input(SessionInput),Link(String),Initial,Pump(f64),Frame(u32,u32) }
+    #[derive(Debug)]
+    struct T5ShellResult { installed:bool,declined:bool,address_changed:bool }
+    // GREEN must replace this body with actual production SessionDriver calls only.
+    // Never put input/resolve/cache/status/installation algorithms in this adapter.
+    fn t5_shell_driver_absent(_state:&mut T5ShellState,_command:T5ShellCommand)->Option<T5ShellResult> {
+        let mut driver=SessionDriver {engine:_state.engine.as_ref(),session:&mut _state.session,address:&mut _state.address,
+            a11y:&mut _state.a11y,captured:&mut _state.captured,viewport:(320,240)};
+        let outcome=match _command {
+            T5ShellCommand::Click(x,y)=>driver.click(x,y),T5ShellCommand::Input(input)=>driver.input(input),
+            T5ShellCommand::Link(target)=>driver.navigate(&target),T5ShellCommand::Initial=>driver.sync_address(),
+            T5ShellCommand::Pump(now)=>driver.pump(now),T5ShellCommand::Frame(w,h)=>driver.frame(w,h).1,
+        };
+        Some(T5ShellResult {installed:outcome.installed,declined:outcome.declined,address_changed:outcome.address_changed})
+    }
+    fn t5_shell_request(method:&str)->genet_host_api::ResourceRequest {
+        genet_host_api::ResourceRequest {url:"https://forms.test/same".into(),method:method.into(),
+            headers:vec![("Content-Type".into(),"text/plain".into())],body:Some(vec![0,128,255]),
+            cache:"default".into(),redirect:"follow".into(),mode:"navigate".into(),
+            referrer:"https://forms.test/source".into(),referrer_policy:"no-referrer".into(),
+            credentials:"include".into(),integrity:String::new(),
+            upgrade_insecure_requests:false,block_all_mixed_content:false}
+    }
+    fn t5_shell_state(effects:Vec<SessionEffect>,encoded:Option<genet_host_api::ResourceRequest>,fail:bool)->T5ShellState {
+        let log=Arc::new(std::sync::Mutex::new(Vec::new()));
+        T5ShellState {engine:Box::new(T5ShellEngine{id:"chosen-factory".into(),
+                reply:T5ShellReply{final_address:"https://forms.test/final/index.html".into(),fail},log:log.clone()}),
+            session:Box::new(T5ShellSession{marker:"OLD".into(),projected:None,pending_projection:None,effects:effects.into(),encoded,log:log.clone()}),
+            address:"https://forms.test/same".into(),a11y:Accessibility::default(),captured:false,log}
+    }
+    fn t5_shell_submit()->SessionEffect {SessionEffect::Submit(document_session_api::SessionFormSubmission{
+        action:"https://forms.test/same".into(),method:document_session_api::SessionFormMethod::Post,
+        fields:vec![("q".into(),"legacy".into())]})}
+    fn t5_shell_key()->SessionInput {SessionInput::Key{key:SessionKey::Enter,state:SessionButtonState::Pressed,
+        modifiers:SessionModifiers::default(),repeat:false}}
+    fn t5_shell_run(state:&mut T5ShellState,command:T5ShellCommand)->T5ShellResult {
+        let result=t5_shell_driver_absent(state,command);
+        assert!(result.is_some(),"missing capability: production headless SessionDriver seam; no test-only routing substitute");
+        result.unwrap()
+    }
+    fn t5_shell_marker(state:&T5ShellState)->&str {
+        &state.session.as_any_ref().downcast_ref::<T5ShellSession>().unwrap().marker
+    }
+    #[test]
+    fn phase_c_t5_ortet_driver_click_uses_input() {
+        let mut s=t5_shell_state(vec![SessionEffect::Handled,t5_shell_submit()],Some(t5_shell_request("POST")),false);
+        t5_shell_run(&mut s,T5ShellCommand::Click(7.0,9.0));
+        let log=s.log.lock().unwrap();
+        assert_eq!(&log[..2],["input:Pressed","input:Released"]);
+        assert!(!log.iter().any(|x|x.starts_with("legacy:")));
+        assert!(log.iter().any(|x|x=="rich:chosen-factory"));
+    }
+    #[test]
+    fn phase_c_t5_ortet_submit_consumed_immediately() {
+        let mut s=t5_shell_state(vec![t5_shell_submit()],Some(t5_shell_request("POST")),false);
+        t5_shell_run(&mut s,T5ShellCommand::Input(t5_shell_key()));
+        assert_eq!(&*s.log.lock().unwrap(), &["input:key:Pressed","take-encoded","rich:chosen-factory"]);
+    }
+    #[test]
+    fn phase_c_t5_ortet_same_url_form_link_distinction() {
+        let mut s=t5_shell_state(vec![t5_shell_submit()],Some(t5_shell_request("POST")),false);
+        assert!(!t5_shell_run(&mut s,T5ShellCommand::Link("https://forms.test/same".into())).installed);
+        assert!(s.log.lock().unwrap().is_empty());
+        assert!(t5_shell_run(&mut s,T5ShellCommand::Input(t5_shell_key())).installed);
+        let mut get=t5_shell_state(vec![t5_shell_submit()],Some(genet_host_api::ResourceRequest{
+            body:None,headers:vec![],..t5_shell_request("GET")}),false);
+        assert!(t5_shell_run(&mut get,T5ShellCommand::Input(t5_shell_key())).installed);
+        assert_eq!(get.log.lock().unwrap().iter().filter(|x|x.as_str()=="rich:chosen-factory").count(),1);
+    }
+    #[test]
+    fn phase_c_t5_ortet_chosen_boxed_factory_retained() {
+        let mut s=t5_shell_state(vec![t5_shell_submit()],Some(t5_shell_request("POST")),false);
+        let id=s.engine.engine_id().to_owned();
+        t5_shell_run(&mut s,T5ShellCommand::Input(t5_shell_key()));
+        assert_eq!(s.engine.engine_id(),id);
+        assert_eq!(t5_shell_marker(&s),"NEW");
+        assert!(!s.log.lock().unwrap().iter().any(|x|x.starts_with("ordinary:")));
+    }
+    #[test]
+    fn phase_c_t5_ortet_final_address_install() {
+        let mut s=t5_shell_state(vec![t5_shell_submit()],Some(t5_shell_request("POST")),false);
+        s.captured=true;
+        assert!(t5_shell_run(&mut s,T5ShellCommand::Input(t5_shell_key())).installed);
+        assert!(!s.captured,"actual driver clears old capture after installation");
+        assert_eq!(s.address,"https://forms.test/final/index.html");
+        assert_eq!(t5_shell_marker(&s),"NEW");
+    }
+    #[test]
+    fn phase_c_t5_ortet_transport_failure_old_session() {
+        let mut s=t5_shell_state(vec![t5_shell_submit()],Some(t5_shell_request("POST")),true);
+        s.captured=true;
+        assert!(t5_shell_run(&mut s,T5ShellCommand::Input(t5_shell_key())).declined);
+        assert!(s.captured,"failed replacement keeps the old host state");
+        assert_eq!((t5_shell_marker(&s),s.address.as_str()),("OLD","https://forms.test/same"));
+        assert!(!s.log.lock().unwrap().iter().any(|x|x.starts_with("ordinary:")));
+    }
+    #[test]
+    fn phase_c_t5_ortet_latest_input_no_replay() {
+        let mut s=t5_shell_state(vec![t5_shell_submit(),SessionEffect::Ignored],Some(t5_shell_request("POST")),false);
+        t5_shell_run(&mut s,T5ShellCommand::Input(t5_shell_key()));
+        t5_shell_run(&mut s,T5ShellCommand::Input(SessionInput::PointerMoved{x:0.0,y:0.0,modifiers:SessionModifiers::default()}));
+        assert_eq!(s.log.lock().unwrap().iter().filter(|x|x.as_str()=="rich:chosen-factory").count(),1);
+    }
+    #[test]
+    fn phase_c_t5_ortet_encoded_absent_explicit_decline() {
+        let mut s=t5_shell_state(vec![t5_shell_submit()],None,false);
+        assert!(t5_shell_run(&mut s,T5ShellCommand::Input(t5_shell_key())).declined);
+        assert_eq!(t5_shell_marker(&s),"OLD");
+        assert!(!s.log.lock().unwrap().iter().any(|x|x.starts_with("rich:")||x.starts_with("ordinary:")));
+    }
+    #[test]
+    fn phase_c_t5_ortet_status_before_install() {
+        // Classification belongs to the real factory fixtures. Driver sees Ok/Err only.
+        for (label,fail) in [("404-readable",false),("204",true),("205",true),("opaque",true),("network",true)] {
+            let mut s=t5_shell_state(vec![t5_shell_submit()],Some(t5_shell_request("POST")),fail);
+            let r=t5_shell_run(&mut s,T5ShellCommand::Input(t5_shell_key()));
+            assert_eq!(r.installed,!fail,"driver factory outcome {label}");
+            assert_eq!(t5_shell_marker(&s),if fail {"OLD"}else{"NEW"});
+        }
+    }
+    #[test]
+    fn phase_c_t5_ortet_initial_address_projection() {
+        let mut s=t5_shell_state(vec![],None,false);
+        s.session.as_any().downcast_mut::<T5ShellSession>().unwrap().projected=Some("https://forms.test/final/index.html".into());
+        assert!(t5_shell_run(&mut s,T5ShellCommand::Initial).address_changed);
+        assert_eq!(s.address,"https://forms.test/final/index.html");
+        assert!(s.log.lock().unwrap().is_empty());
+    }
+    #[test]
+    fn phase_c_t5_ortet_driver_sync_input_pump_frame() {
+        let mut s=t5_shell_state(vec![SessionEffect::Ignored],None,false);
+        for (url,command,event) in [
+            ("https://forms.test/same#input",T5ShellCommand::Input(t5_shell_key()),"input:key:Pressed"),
+            ("https://forms.test/same#pump",T5ShellCommand::Pump(1.0),"pump"),
+            ("https://forms.test/same#frame",T5ShellCommand::Frame(320,240),"frame"),
+        ] {
+            s.session.as_any().downcast_mut::<T5ShellSession>().unwrap().pending_projection=Some((event.into(),url.into()));
+            assert!(t5_shell_run(&mut s,command).address_changed);
+            assert_eq!(s.address,url);
+            assert_eq!(s.log.lock().unwrap().last().map(String::as_str),Some(event));
+        }
+    }
+    #[test]
+    fn phase_c_t5_ortet_address_none_failure_preserves() {
+        let mut s=t5_shell_state(vec![t5_shell_submit()],Some(t5_shell_request("POST")),true);
+        assert!(!t5_shell_run(&mut s,T5ShellCommand::Initial).address_changed);
+        t5_shell_run(&mut s,T5ShellCommand::Input(t5_shell_key()));
+        assert_eq!(s.address,"https://forms.test/same");
+        assert_eq!(t5_shell_marker(&s),"OLD");
+    }
+    // TASK5 DRAFT SHELL FIXTURES END.
 }
+
+// TASK5 F2 INDEPENDENT REAL NATIVE DRIVER FIXTURES BEGIN.
+#[cfg(test)]
+mod f2_native_decline_tests {
+    use super::*;
+
+    #[derive(Clone, Default)]
+    struct FetchCalls(Arc<std::sync::Mutex<Vec<String>>>);
+    impl genet_host_api::ResourceFetcher for FetchCalls {
+        fn fetch(&self, url: &str) -> Option<Vec<u8>> {
+            self.0.lock().unwrap().push(format!("url:{url}"));
+            None
+        }
+        fn fetch_request(&self, request: &genet_host_api::ResourceRequest)
+            -> Option<genet_host_api::ResourceFetchResponse>
+        {
+            self.0.lock().unwrap().push(format!("request:{}:{}", request.method, request.url));
+            None
+        }
+    }
+
+    // This only selects a real painted node and its published geometry.
+    // Production SessionDriver owns all input, decline, transport and replacement.
+    fn point(session: &mut Box<dyn DocumentSession<Scene>>, name: &str) -> (f32, f32) {
+        session.frame(320, 240);
+        let projection = session.accessibility_projection().expect("real Livery projection");
+        let node = projection.nodes().iter().find(|node| node.name.as_deref() == Some(name)
+            && matches!(node.role, document_session_api::DocumentA11yRole::Button
+                | document_session_api::DocumentA11yRole::TextField))
+            .expect("real named native control");
+        let rect = node.bounds.expect("visible native control bounds");
+        assert!(rect.width > 0.0 && rect.height > 0.0);
+        (rect.x + rect.width * 0.5, rect.y + rect.height * 0.5)
+    }
+
+    fn check_target(target: &str) {
+        let fetch = FetchCalls::default();
+        let engine = LiverySessionEngine::new(fetch.clone());
+        let original_address = "https://forms.test/source#old";
+        let source = format!("<style>body{{margin:0}}input,button{{display:block;width:180px;height:32px;margin:6px}}</style><p>OLD</p><form action='/send' method='post'><input id='q' aria-label='Value' name='q' required value=''><button formtarget='{target}'>Attempt</button></form>");
+        let mut session = engine.spawn(&SessionSpawnRequest::new(original_address)
+            .with_body(source).with_viewport(320, 240)).expect("actual native Livery session");
+        assert!(session.as_any_ref().is::<genet_documents::LiveryDocumentSession>());
+        assert!(fetch.0.lock().unwrap().is_empty(), "supplied source creates no transport");
+        let mut address = original_address.to_string();
+        let mut a11y = Accessibility::default();
+        let mut captured = false;
+
+        // Control 1 runs before the target-decline assertion: invalid form is
+        // not a navigation intent, even when its submitter has this target.
+        let (x, y) = point(&mut session, "Attempt");
+        let invalid = SessionDriver { engine: &engine, session: &mut session, address: &mut address,
+            a11y: &mut a11y, captured: &mut captured, viewport: (320, 240) }.click(x, y);
+        assert!(!invalid.installed && !invalid.declined);
+        assert!(!matches!(&invalid.input.as_ref().unwrap().effect, SessionEffect::Submit(_)));
+        assert!(session.take_encoded_form_submission().is_none());
+        assert!(fetch.0.lock().unwrap().is_empty());
+        assert_eq!(address, original_address);
+
+        // Control 2 uses actual ordinary host input to make the form valid.
+        let (x, y) = point(&mut session, "Value");
+        let focus = SessionDriver { engine: &engine, session: &mut session, address: &mut address,
+            a11y: &mut a11y, captured: &mut captured, viewport: (320, 240) }.click(x, y);
+        assert!(!focus.installed && !focus.declined);
+        let edit = SessionDriver { engine: &engine, session: &mut session, address: &mut address,
+            a11y: &mut a11y, captured: &mut captured, viewport: (320, 240) }
+            .input(SessionInput::Text("ok".into()));
+        assert_eq!(edit.input.as_ref().unwrap().effect, SessionEffect::Handled);
+        assert!(!edit.installed && !edit.declined);
+        assert!(session.take_encoded_form_submission().is_none());
+        assert!(fetch.0.lock().unwrap().is_empty());
+        assert_eq!(address, original_address);
+
+        // A canceled composition is also a non-navigation outcome.
+        let preedit = SessionDriver { engine: &engine, session: &mut session, address: &mut address,
+            a11y: &mut a11y, captured: &mut captured, viewport: (320, 240) }
+            .input(SessionInput::Ime(SessionIme::Preedit { text: "draft".into(), selection: None }));
+        assert!(!preedit.installed && !preedit.declined);
+        let cancel = SessionDriver { engine: &engine, session: &mut session, address: &mut address,
+            a11y: &mut a11y, captured: &mut captured, viewport: (320, 240) }.input(SessionInput::Cancel);
+        assert_eq!(cancel.input.as_ref().unwrap().effect, SessionEffect::Cancelled);
+        assert!(!cancel.installed && !cancel.declined);
+        assert!(session.take_encoded_form_submission().is_none());
+        assert!(fetch.0.lock().unwrap().is_empty());
+        assert_eq!(address, original_address);
+
+        let (x, y) = point(&mut session, "Attempt");
+        a11y.publish(session.accessibility_projection()).expect("actual custody publication");
+        let original_custody = format!("{a11y:?}");
+        let original_session = (&*session as *const dyn DocumentSession<Scene>).cast::<()>();
+        captured = true;
+        let outcome = SessionDriver { engine: &engine, session: &mut session, address: &mut address,
+            a11y: &mut a11y, captured: &mut captured, viewport: (320, 240) }.click(x, y);
+        // These retention/transport observations run before the expected RED.
+        assert!(!outcome.installed);
+        assert!(!outcome.address_changed);
+        assert!(fetch.0.lock().unwrap().is_empty(), "unsupported target must not call either transport seam");
+        assert_eq!((&*session as *const dyn DocumentSession<Scene>).cast::<()>(), original_session);
+        assert_eq!(address, original_address);
+        assert_eq!(session.current_address().as_deref(), Some(original_address));
+        assert_eq!(format!("{a11y:?}"), original_custody, "no replacement of actual accessibility custody");
+        assert!(session.clip().unwrap().text.contains("OLD"));
+        assert!(outcome.declined, "valid unsupported target must be an explicit actual driver decline: {target}");
+        // These carrier assertions only run after the decline assertion passes.
+        assert!(matches!(&outcome.input.as_ref().unwrap().effect, SessionEffect::Submit(_)));
+        assert_eq!(outcome.error.as_deref(), Some("encoded submission or supported top target unavailable"));
+        assert!(session.take_encoded_form_submission().is_none());
+        assert!(captured, "decline retains old host capture state");
+    }
+
+    #[test]
+    fn phase_c_f2_ortet_real_native_child_target_declined() {
+        check_target("child");
+    }
+
+    #[test]
+    fn phase_c_f2_ortet_real_native_blank_target_declined() {
+        check_target("_blank");
+    }
+}
+// TASK5 F2 INDEPENDENT REAL NATIVE DRIVER FIXTURES END.

@@ -11,7 +11,10 @@ use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use genet_scripted_dom::{CapturedNodeId, NodeId, NodeIdentityError, ScriptedDom};
-use layout_dom_api::{CapturedQualName, DomMutation, FormControlState, LayoutDom, LayoutDomMut};
+use layout_dom_api::{
+    CapturedQualName, DomMutation, FormControlInteractionState, FormControlState, LayoutDom,
+    SelectOptionState,
+};
 use serde::{Deserialize, Serialize};
 
 fn capture_dir() -> Option<&'static PathBuf> {
@@ -71,6 +74,8 @@ pub(crate) struct DomCaptureRecorder {
     stylesheets: Vec<String>,
     layout_width: u32,
     layout_height: u32,
+    arena_id: u32,
+    mutation_cursor: u64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -113,6 +118,20 @@ pub(crate) enum RecordedMutation {
         node: CapturedNodeId,
         new_state: FormControlState,
     },
+    // New state has its own appended payload; old control records keep their
+    // exact field layout and enum tag.
+    FormControlInteractionStateChanged {
+        node: CapturedNodeId,
+        new_state: FormControlInteractionState,
+    },
+    OptionStateChanged {
+        node: CapturedNodeId,
+        new_state: SelectOptionState,
+    },
+    FormControlCustomValidityChanged {
+        node: CapturedNodeId,
+        message: String,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -153,6 +172,9 @@ impl RecordedMutation {
             | DomMutation::AttributeChanged { node, .. }
             | DomMutation::CharacterDataChanged { node }
             | DomMutation::FormControlStateChanged { node }
+            | DomMutation::FormControlInteractionStateChanged { node }
+            | DomMutation::OptionStateChanged { node }
+            | DomMutation::FormControlCustomValidityChanged { node }
             | DomMutation::SubtreeReplaced { node }
             | DomMutation::Moved { node, .. } => Some(*node),
             DomMutation::Removed { .. } => None,
@@ -202,6 +224,39 @@ impl RecordedMutation {
                         "control state mutation has no arena state",
                     )
                 })?,
+            },
+            DomMutation::FormControlInteractionStateChanged { node } => {
+                Self::FormControlInteractionStateChanged {
+                    node: capture_id(*node)?,
+                    new_state: dom.form_control_interaction_state(*node).ok_or_else(|| {
+                        io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "control interaction mutation has no arena state",
+                        )
+                    })?,
+                }
+            },
+            DomMutation::OptionStateChanged { node } => Self::OptionStateChanged {
+                node: capture_id(*node)?,
+                new_state: dom.option_selected_state(*node).ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "option mutation has no arena state",
+                    )
+                })?,
+            },
+            DomMutation::FormControlCustomValidityChanged { node } => {
+                Self::FormControlCustomValidityChanged {
+                    node: capture_id(*node)?,
+                    message: dom
+                        .form_control_custom_validity_message(*node)
+                        .ok_or_else(|| {
+                            io::Error::new(
+                                io::ErrorKind::InvalidData,
+                                "custom validity mutation has no arena state",
+                            )
+                        })?,
+                }
             },
             DomMutation::SubtreeReplaced { node } => Self::SubtreeReplaced {
                 node: capture_id(*node)?,
@@ -269,6 +324,9 @@ impl RecordedMutation {
             | Self::AttributeChanged { node, .. }
             | Self::CharacterDataChanged { node, .. }
             | Self::FormControlStateChanged { node, .. }
+            | Self::FormControlInteractionStateChanged { node, .. }
+            | Self::OptionStateChanged { node, .. }
+            | Self::FormControlCustomValidityChanged { node, .. }
             | Self::SubtreeReplaced { node, .. }
             | Self::Moved { node, .. } => *node,
         };
@@ -297,6 +355,9 @@ impl RecordedMutation {
             Self::AttributeChanged { node, .. }
             | Self::CharacterDataChanged { node, .. }
             | Self::FormControlStateChanged { node, .. }
+            | Self::FormControlInteractionStateChanged { node, .. }
+            | Self::OptionStateChanged { node, .. }
+            | Self::FormControlCustomValidityChanged { node, .. }
             | Self::SubtreeReplaced { node, .. } => vec![*node],
             Self::Moved {
                 node,
@@ -318,7 +379,7 @@ impl RecordedMutation {
 
 impl DomCaptureRecorder {
     pub(crate) fn from_env(
-        dom: &mut ScriptedDom,
+        dom: &ScriptedDom,
         stylesheets: &[String],
     ) -> io::Result<Option<Self>> {
         let Some(dir) = capture_dir() else {
@@ -327,7 +388,7 @@ impl DomCaptureRecorder {
         Self::open_in_dir(dir, dom, stylesheets).map(Some)
     }
 
-    fn open_in_dir(dir: &Path, dom: &mut ScriptedDom, stylesheets: &[String]) -> io::Result<Self> {
+    fn open_in_dir(dir: &Path, dom: &ScriptedDom, stylesheets: &[String]) -> io::Result<Self> {
         fs::create_dir_all(dir)?;
         let path = dir.join(session_file_name());
         Self::open_at_path(&path, dom, stylesheets)
@@ -335,15 +396,19 @@ impl DomCaptureRecorder {
 
     pub(crate) fn open_at_path(
         path: &Path,
-        dom: &mut ScriptedDom,
+        dom: &ScriptedDom,
         stylesheets: &[String],
     ) -> io::Result<Self> {
         let (layout_width, layout_height) = capture_viewport_seed()?;
+        let (base, pending) = dom.pending_mutations();
         let mut recorder = Self {
             writer: BufWriter::new(File::create(path)?),
             stylesheets: stylesheets.to_vec(),
             layout_width,
             layout_height,
+            arena_id: dom.arena_id(),
+            // The snapshot already contains every mutation through this point.
+            mutation_cursor: base.saturating_add(pending.len() as u64),
         };
         recorder.write_record(&DomCaptureRecord::SessionStart {
             snapshot_html: dom.inner_html(dom.document()),
@@ -351,27 +416,34 @@ impl DomCaptureRecorder {
             layout_width: recorder.layout_width,
             layout_height: recorder.layout_height,
         })?;
-        // The initial snapshot is post-parse DOM state, so the bootstrap clone
-        // mutations are baseline, not replayable deltas.
-        let mut bootstrap = Vec::new();
-        dom.drain_mutations(&mut bootstrap);
         Ok(recorder)
     }
 
-    pub(crate) fn record_pending(&mut self, dom: &mut ScriptedDom) -> io::Result<usize> {
-        // Validate the entire batch before consuming its mutation journal or
-        // writing any record. Imported identities require a capture translation
-        // protocol; refuse them through the recorder's ordinary disable path.
-        let (_, pending) = dom.pending_mutations();
-        if pending.is_empty() {
+    pub(crate) fn record_pending(&mut self, dom: &ScriptedDom) -> io::Result<usize> {
+        // Livery owns compaction for rendered documents; the headless document
+        // owns its own. A missing suffix cannot be reconstructed from the
+        // current DOM, so disable capture rather than write a gap.
+        let (base, pending) = dom.pending_mutations();
+        let end = base.saturating_add(pending.len() as u64);
+        if dom.arena_id() != self.arena_id
+            || self.mutation_cursor < base
+            || self.mutation_cursor > end
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "dom capture mutation history is unavailable",
+            ));
+        }
+        let unseen = &pending[(self.mutation_cursor - base) as usize..];
+        if unseen.is_empty() {
             return Ok(0);
         }
-        let mutations = pending
+        // Validate the entire batch before writing any record. Imported
+        // identities require capture translation through their origin arena.
+        let mutations = unseen
             .iter()
             .map(|m| RecordedMutation::capture(dom, m))
             .collect::<io::Result<Vec<_>>>()?;
-        let mut pending = Vec::new();
-        dom.drain_mutations(&mut pending);
         // Layout parity capture (a shadow `genet_layout::IncrementalLayout` kept
         // beside the recorder, applying each batch to record fragment-digest +
         // viewport alongside the DOM mutations) was retired with the
@@ -382,7 +454,8 @@ impl DomCaptureRecorder {
         // format for backward-compatible deserialization of old captures.
         let layout = None;
         self.write_record(&DomCaptureRecord::MutationBatch { mutations, layout })?;
-        Ok(pending.len())
+        self.mutation_cursor = end;
+        Ok(unseen.len())
     }
 
     fn write_record(&mut self, record: &DomCaptureRecord) -> io::Result<()> {
@@ -482,6 +555,71 @@ mod tests {
             new_data: "text".to_owned(),
         };
         assert_eq!(postcard::to_allocvec(&historical).unwrap()[0], 3);
+    }
+
+    #[test]
+    fn historical_control_payload_still_decodes_byte_for_byte() {
+        // Frozen pre-Phase-B tag 6, node 1:2 and the old control field order.
+        let bytes = [
+            6, 1, 2, 3, b'o', b'l', b'd', 0, 1, 0, 0, 1, 3, 2, 5, b'e', b'r', b'r', b'o', b'r',
+        ];
+        let decoded: RecordedMutation = postcard::from_bytes(&bytes).unwrap();
+        let RecordedMutation::FormControlStateChanged { node, new_state } = &decoded else {
+            panic!("historical control payload changed tag");
+        };
+        assert_eq!(
+            *node,
+            CapturedNodeId {
+                arena: 1,
+                serial: 2
+            }
+        );
+        assert_eq!(new_state.value, "old");
+        assert!(new_state.checked);
+        assert_eq!(new_state.selection_start, None);
+        assert_eq!(new_state.selection_end, Some(3));
+        assert_eq!(
+            new_state.selection_direction,
+            layout_dom_api::SelectionDirection::Backward
+        );
+        assert_eq!(new_state.custom_validity_message, "error");
+        assert_eq!(postcard::to_allocvec(&decoded).unwrap(), bytes);
+    }
+
+    #[test]
+    fn validation_capture_records_native_interaction_options_and_custom_messages() {
+        let mut dom = ScriptedDom::new();
+        let html = |local| {
+            QualName::new(
+                None,
+                Namespace::from("http://www.w3.org/1999/xhtml"),
+                LocalName::from(local),
+            )
+        };
+        let input = dom.create_element(html("input"));
+        dom.set_attribute(input, qual("type"), "number");
+        dom.set_form_control_user_value(input, "1e", Some(2), Some(2));
+        dom.commit_form_control_user_edit(input);
+        let option = dom.create_element(html("option"));
+        dom.set_option_selected(option, true, true);
+        let select = dom.create_element(html("select"));
+        dom.set_custom_validity(select, "Choose another option");
+        let mutations = [
+            DomMutation::FormControlInteractionStateChanged { node: input },
+            DomMutation::OptionStateChanged { node: option },
+            DomMutation::FormControlCustomValidityChanged { node: select },
+        ];
+        for mutation in mutations {
+            let record = RecordedMutation::capture(&dom, &mutation).unwrap();
+            let encoded = postcard::to_allocvec(&record).unwrap();
+            assert!(encoded[0] > 6);
+            let decoded: RecordedMutation = postcard::from_bytes(&encoded).unwrap();
+            assert_eq!(decoded, record);
+            assert_eq!(
+                decoded.replay_ids(&dom).unwrap(),
+                vec![decoded.replay_node(&dom).unwrap()]
+            );
+        }
     }
 
     #[test]

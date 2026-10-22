@@ -104,6 +104,14 @@ skip = [
     # Duplicated by getrandom 0.1 and getrandom 0.2
     "wasi",
 
+    # Web Crypto uses RustCrypto's digest 0.11 line (sha1, sha2, hmac; ruled
+    # 2026-10-20, design_docs/2026-10-20_webcrypto_subtle_plan.md). tungstenite
+    # still pulls sha1 0.10 and with it the digest 0.10 set.
+    "block-buffer",
+    "crypto-common",
+    "digest",
+    "sha1",
+
     # New versions of these dependencies is pulled in by GStreamer / GLib.
     "itertools",
 

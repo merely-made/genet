@@ -18,9 +18,13 @@ pub enum LogicalAxis {
 
 impl LogicalAxis {
     pub const fn to_physical(self, writing_mode: WritingMode) -> PhysicalAxis {
-        match (self, writing_mode.is_vertical()) {
-            (Self::Inline, false) | (Self::Block, true) => PhysicalAxis::Horizontal,
-            (Self::Inline, true) | (Self::Block, false) => PhysicalAxis::Vertical,
+        let axis = match self {
+            Self::Inline => css_flow::LogicalAxis::Inline,
+            Self::Block => css_flow::LogicalAxis::Block,
+        };
+        match axis.to_physical(flow_writing_mode(writing_mode)) {
+            css_flow::PhysicalAxis::Horizontal => PhysicalAxis::Horizontal,
+            css_flow::PhysicalAxis::Vertical => PhysicalAxis::Vertical,
         }
     }
 }
@@ -45,35 +49,35 @@ impl LogicalSide {
         writing_mode: WritingMode,
         direction: Direction,
     ) -> PhysicalSide {
-        match self {
-            Self::BlockStart => match writing_mode {
-                WritingMode::HorizontalTb => PhysicalSide::Top,
-                WritingMode::VerticalRl | WritingMode::SidewaysRl => PhysicalSide::Right,
-                WritingMode::VerticalLr | WritingMode::SidewaysLr => PhysicalSide::Left,
-            },
-            Self::BlockEnd => match writing_mode {
-                WritingMode::HorizontalTb => PhysicalSide::Bottom,
-                WritingMode::VerticalRl | WritingMode::SidewaysRl => PhysicalSide::Left,
-                WritingMode::VerticalLr | WritingMode::SidewaysLr => PhysicalSide::Right,
-            },
-            Self::InlineStart | Self::InlineEnd => {
-                let reversed = match writing_mode {
-                    WritingMode::SidewaysLr => matches!(direction, Direction::Ltr),
-                    _ => matches!(direction, Direction::Rtl),
-                };
-                let start = match (writing_mode.is_vertical(), reversed) {
-                    (false, false) => PhysicalSide::Left,
-                    (false, true) => PhysicalSide::Right,
-                    (true, false) => PhysicalSide::Top,
-                    (true, true) => PhysicalSide::Bottom,
-                };
-                if matches!(self, Self::InlineStart) {
-                    start
-                } else {
-                    start.opposite()
-                }
-            },
+        let side = match self {
+            Self::BlockStart => css_flow::LogicalSide::BlockStart,
+            Self::BlockEnd => css_flow::LogicalSide::BlockEnd,
+            Self::InlineStart => css_flow::LogicalSide::InlineStart,
+            Self::InlineEnd => css_flow::LogicalSide::InlineEnd,
+        };
+        match side.to_physical(flow_writing_mode(writing_mode), flow_direction(direction)) {
+            css_flow::PhysicalSide::Top => PhysicalSide::Top,
+            css_flow::PhysicalSide::Right => PhysicalSide::Right,
+            css_flow::PhysicalSide::Bottom => PhysicalSide::Bottom,
+            css_flow::PhysicalSide::Left => PhysicalSide::Left,
         }
+    }
+}
+
+const fn flow_writing_mode(writing_mode: WritingMode) -> css_flow::WritingMode {
+    match writing_mode {
+        WritingMode::HorizontalTb => css_flow::WritingMode::HorizontalTb,
+        WritingMode::VerticalRl => css_flow::WritingMode::VerticalRl,
+        WritingMode::VerticalLr => css_flow::WritingMode::VerticalLr,
+        WritingMode::SidewaysRl => css_flow::WritingMode::SidewaysRl,
+        WritingMode::SidewaysLr => css_flow::WritingMode::SidewaysLr,
+    }
+}
+
+const fn flow_direction(direction: Direction) -> css_flow::Direction {
+    match direction {
+        Direction::Ltr => css_flow::Direction::Ltr,
+        Direction::Rtl => css_flow::Direction::Rtl,
     }
 }
 
@@ -85,69 +89,109 @@ pub enum PhysicalSide {
     Left,
 }
 
-impl PhysicalSide {
-    const fn opposite(self) -> Self {
-        match self {
-            Self::Top => Self::Bottom,
-            Self::Right => Self::Left,
-            Self::Bottom => Self::Top,
-            Self::Left => Self::Right,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn inline_sides_follow_stylo_writing_mode_and_direction_rules() {
+    fn logical_sides_and_axes_follow_all_writing_modes_and_directions() {
         let cases = [
             (
                 WritingMode::HorizontalTb,
                 Direction::Ltr,
+                PhysicalSide::Top,
                 PhysicalSide::Left,
-                PhysicalSide::Right,
             ),
             (
                 WritingMode::HorizontalTb,
                 Direction::Rtl,
+                PhysicalSide::Top,
                 PhysicalSide::Right,
-                PhysicalSide::Left,
             ),
             (
                 WritingMode::VerticalRl,
                 Direction::Ltr,
+                PhysicalSide::Right,
                 PhysicalSide::Top,
+            ),
+            (
+                WritingMode::VerticalRl,
+                Direction::Rtl,
+                PhysicalSide::Right,
                 PhysicalSide::Bottom,
             ),
             (
                 WritingMode::VerticalLr,
-                Direction::Rtl,
-                PhysicalSide::Bottom,
+                Direction::Ltr,
+                PhysicalSide::Left,
                 PhysicalSide::Top,
+            ),
+            (
+                WritingMode::VerticalLr,
+                Direction::Rtl,
+                PhysicalSide::Left,
+                PhysicalSide::Bottom,
+            ),
+            (
+                WritingMode::SidewaysRl,
+                Direction::Ltr,
+                PhysicalSide::Right,
+                PhysicalSide::Top,
+            ),
+            (
+                WritingMode::SidewaysRl,
+                Direction::Rtl,
+                PhysicalSide::Right,
+                PhysicalSide::Bottom,
             ),
             (
                 WritingMode::SidewaysLr,
                 Direction::Ltr,
+                PhysicalSide::Left,
                 PhysicalSide::Bottom,
-                PhysicalSide::Top,
             ),
             (
                 WritingMode::SidewaysLr,
                 Direction::Rtl,
+                PhysicalSide::Left,
                 PhysicalSide::Top,
-                PhysicalSide::Bottom,
             ),
         ];
-        for (writing_mode, direction, start, end) in cases {
+        for (writing_mode, direction, block_start, inline_start) in cases {
             assert_eq!(
                 LogicalSide::InlineStart.to_physical(writing_mode, direction),
-                start
+                inline_start
             );
             assert_eq!(
+                LogicalSide::BlockStart.to_physical(writing_mode, direction),
+                block_start
+            );
+            let opposite = |side| match side {
+                PhysicalSide::Top => PhysicalSide::Bottom,
+                PhysicalSide::Right => PhysicalSide::Left,
+                PhysicalSide::Bottom => PhysicalSide::Top,
+                PhysicalSide::Left => PhysicalSide::Right,
+            };
+            assert_eq!(
                 LogicalSide::InlineEnd.to_physical(writing_mode, direction),
-                end
+                opposite(inline_start)
+            );
+            assert_eq!(
+                LogicalSide::BlockEnd.to_physical(writing_mode, direction),
+                opposite(block_start)
+            );
+            let inline_axis = if writing_mode.is_vertical() {
+                PhysicalAxis::Vertical
+            } else {
+                PhysicalAxis::Horizontal
+            };
+            assert_eq!(LogicalAxis::Inline.to_physical(writing_mode), inline_axis);
+            assert_eq!(
+                LogicalAxis::Block.to_physical(writing_mode),
+                match inline_axis {
+                    PhysicalAxis::Horizontal => PhysicalAxis::Vertical,
+                    PhysicalAxis::Vertical => PhysicalAxis::Horizontal,
+                }
             );
         }
     }

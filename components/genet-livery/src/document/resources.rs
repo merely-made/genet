@@ -21,10 +21,9 @@ where
     /// resolution and fetching.
     pub fn set_image_resource(&mut self, url: impl Into<String>, bytes: Vec<u8>) {
         let url = url.into();
-        if self.image_sources.get(&url) == Some(&bytes) {
+        if !self.image_sources.set(url, bytes) {
             return;
         }
-        self.image_sources.insert(url, bytes);
         self.invalidate_with_layout_damage(LayoutDamageKind::Resource);
     }
 
@@ -47,11 +46,9 @@ where
         &mut self,
         resources: impl IntoIterator<Item = (String, Vec<u8>)>,
     ) {
-        let next = resources.into_iter().collect::<HashMap<_, _>>();
-        if self.image_sources == next {
+        if !self.image_sources.replace(resources) {
             return;
         }
-        self.image_sources = next;
         self.invalidate_with_layout_damage(LayoutDamageKind::Resource);
     }
 
@@ -71,8 +68,34 @@ where
         self.invalidate_with_layout_damage(LayoutDamageKind::Resource);
     }
 
+    /// Replace explicit CSS-generic bindings atomically. The ledger survives
+    /// stylesheet and ordinary font-resource rebuilds; it never changes CSS.
+    pub fn replace_generic_font_resources(
+        &mut self,
+        resources: impl IntoIterator<Item = (String, Vec<u8>)>,
+    ) -> Result<(), crate::GenericFontError> {
+        let next = resources.into_iter().collect::<HashMap<_, _>>();
+        if self.generic_font_sources == next {
+            return Ok(());
+        }
+        let mut validation = TextSystem::new();
+        for (generic, bytes) in &next {
+            validation.register_generic_font_bytes(bytes.clone(), generic)?;
+        }
+        self.generic_font_sources = next;
+        self.rebuild_font_resources();
+        self.invalidate_with_layout_damage(LayoutDamageKind::Resource);
+        Ok(())
+    }
+
     pub(in crate::document) fn rebuild_font_resources(&mut self) {
         self.text = TextSystem::new();
+        // These immutable entries were all validated before ledger admission.
+        for (generic, bytes) in &self.generic_font_sources {
+            self.text
+                .register_generic_font_bytes(bytes.clone(), generic)
+                .expect("admitted generic font resource");
+        }
         let mut face_sources = HashSet::new();
         for face in self.style_set.font_faces() {
             if !face.is_host_loadable() {

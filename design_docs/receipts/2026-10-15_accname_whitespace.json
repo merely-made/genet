@@ -1,0 +1,459 @@
+{
+  "schema_version": 1,
+  "scope": "AccName family E: preserve nested whitespace in names and descriptions",
+  "source_base": {
+    "head": "e37762d752e423dc43f920bd728c83f70c47f2cc",
+    "status": "",
+    "files": {
+      "Cargo.toml": "18f7ee802df4cc9cd591b26c6350ea52eddc4fe364af193c93fc46c69384ccef",
+      "rust-toolchain.toml": "6b49400fdc050152657558a28bcc97d24b1fd20a85883b240e0f0e3d36db826f",
+      ".cargo/config.toml": "af174c7f9ac5ae8e0536a8fd2fa0251e680f23edab3ffbb5098aa914a48cdb01",
+      "components/genet-render/src/a11y/name.rs": "beeb04f7eea6476439e3c38403b6164f6192e655258fbe353ebaa73ad1c41c0c",
+      "tests/wpt/tests/accname/name/comp_text_node.html": "1f522d682239a5ca445804470bf23745b732aa05e931bbada9ef48e754a519e6",
+      "tests/wpt/meta/MANIFEST.json": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422"
+    },
+    "toolchain": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 23.1.1\n",
+    "runner_sha256": "e014044914a240405622fa4f3aa8d5bbdb644055220ef9583b9f6704afe932a9",
+    "lock_sha256": "75a0a55e3241f794661e2c5d390005e1d56229700d6cbd54f9e05b7034b50381",
+    "profile": "dev, CARGO_PROFILE_DEV_DEBUG=0",
+    "target": "/home/markik/Code/testing/genet/wpt-ledger/2026-10-15_accname_whitespace/target",
+    "build_dir": "/home/markik/Code/testing/genet/wpt-ledger/2026-10-15_accname_whitespace/target/build"
+  },
+  "candidate": {
+    "head": "e37762d752e423dc43f920bd728c83f70c47f2cc",
+    "files": {
+      "components/genet-render/src/a11y/name.rs": "885aa9a5c0cc28af9d121d98f6d0a902cf283a15bcc992367f07e1aae258f2ec",
+      "components/genet-render/src/a11y.rs": "8e39192c10280ce11c154b65c147d4fdfc4f20f0b7e28de7ce6ec4e8b3ab17f8"
+    },
+    "lock_sha256": "75a0a55e3241f794661e2c5d390005e1d56229700d6cbd54f9e05b7034b50381",
+    "runner_sha256": "dbf5282a902e489836bad5a757cdaf688dc82f29e42e987f2fda4eabc11f0399",
+    "profile": "dev, CARGO_PROFILE_DEV_DEBUG=0"
+  },
+  "production_patch_sha256": "63599718a2d4c9fe0dd7e10a51dd80f8b43f42202f9fd795c2e4236ec6a19fcc",
+  "corpus_files_sha256": "2a90d0571228f54b7beadff856f4e38c88ca78a3aaebfdf751457c9ab093cb9a",
+  "raw_evidence_directory": "/home/markik/Code/testing/genet/wpt-ledger/2026-10-15_accname_whitespace",
+  "raw_artifact_sha256": {
+    "baseline-boa": {
+      ".json": "d34e41ab254433fa429b096728d1f952752a3d5b52c19e01da027f340eb30ffb",
+      ".command.json": "df1253eecf8460fc6bc5a9059c34a0d9e83d850b4ec4dd43303c044c7fe3a0b9",
+      ".stdout": "7afcdfcc38a574cd158aa6368639f3a12fa97e2b4661a1f25e8aae79996d0e96",
+      ".stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "baseline-nova": {
+      ".json": "737a067846dd70742ba8ed587b8c25f25dc7a45980b94e411dd4d03058a690a3",
+      ".command.json": "0b814e025ac033b0b811318d3dfdef619cc01b854fe4cd85984a6b1d33088ab3",
+      ".stdout": "16c5b2ac06da6ddfd5d671cd1eb4e356ac785119b3ace4807a297b9d01befa0b",
+      ".stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "baseline-nova-long": {
+      ".json": "900fe65ac96b71d7bf8f5a175459c35b8e4f0999cd840dfcc085819bdd20e474",
+      ".command.json": "64b932117f9dd5958aa62fccd0cba9f234ccdf9bec738df98a9598a2f1503ff4",
+      ".stdout": "c704fcc052b920b26aa52a078202a289400211e6834eac1facf817ae62ee0f2b",
+      ".stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "candidate-boa": {
+      ".json": "31325ab72e6ad4929c1766da96deeb2413cd57f7b83cd6b87aa4b53ca80f3381",
+      ".command.json": "5d08c05c33febd5ad007af04a07d59ef5fafd1b72a924ffe431221630eb743f3",
+      ".stdout": "fc451ddd7dadeea6f45b9f1b8440c25cca45ca5b9ececcd50bd73397788685ce",
+      ".stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "candidate-nova-long": {
+      ".json": "08cd51b24e6af9ab1ab8cc90c21f3c63eaad3d4e69c8178995eb3e9c4560e41b",
+      ".command.json": "3d083516ac2897b824f327cc252dc9299738e3e264752b6434b1ad015610a917",
+      ".stdout": "fd30520d2327165c9c48d4e2cf0da98ed6969005d5f0bcec74d4c1e5bdf21d95",
+      ".stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "comparison": {
+    "boa": {
+      "before": {
+        "files": {
+          "fail": 10,
+          "pass": 8,
+          "skip": 159,
+          "error": 1
+        },
+        "assertions": {
+          "fail": 40,
+          "pass": 365
+        },
+        "errors": {
+          "accname/name/comp_name_from_content.html": {
+            "reason": "panic",
+            "status": "error"
+          }
+        }
+      },
+      "after": {
+        "files": {
+          "fail": 9,
+          "pass": 9,
+          "skip": 159,
+          "error": 1
+        },
+        "assertions": {
+          "fail": 35,
+          "pass": 370
+        },
+        "errors": {
+          "accname/name/comp_name_from_content.html": {
+            "reason": "panic",
+            "status": "error"
+          }
+        }
+      },
+      "transitions": [
+        {
+          "file": "accname/name/comp_text_node.html",
+          "name": "button with text node, with deeply nested space",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_text_node.html",
+          "name": "div[role=heading] with text node, with deeply nested space",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_text_node.html",
+          "name": "heading with text node, with deeply nested space",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_text_node.html",
+          "name": "link with text node, with deeply nested space",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_text_node.html",
+          "name": "span[role=button] with text node, with deeply nested space",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        }
+      ],
+      "missing": [],
+      "added": [],
+      "prior_pass_loss": [],
+      "file_transitions": [
+        {
+          "file": "accname/name/comp_text_node.html",
+          "before": "fail",
+          "after": "pass"
+        }
+      ]
+    },
+    "nova": {
+      "before": {
+        "files": {
+          "fail": 10,
+          "pass": 8,
+          "skip": 159,
+          "error": 1
+        },
+        "assertions": {
+          "fail": 40,
+          "pass": 365
+        },
+        "errors": {
+          "accname/name/comp_name_from_content.html": {
+            "reason": "panic",
+            "status": "error"
+          }
+        }
+      },
+      "after": {
+        "files": {
+          "fail": 9,
+          "pass": 9,
+          "skip": 159,
+          "error": 1
+        },
+        "assertions": {
+          "fail": 35,
+          "pass": 370
+        },
+        "errors": {
+          "accname/name/comp_name_from_content.html": {
+            "reason": "panic",
+            "status": "error"
+          }
+        }
+      },
+      "transitions": [
+        {
+          "file": "accname/name/comp_text_node.html",
+          "name": "button with text node, with deeply nested space",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_text_node.html",
+          "name": "div[role=heading] with text node, with deeply nested space",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_text_node.html",
+          "name": "heading with text node, with deeply nested space",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_text_node.html",
+          "name": "link with text node, with deeply nested space",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        },
+        {
+          "file": "accname/name/comp_text_node.html",
+          "name": "span[role=button] with text node, with deeply nested space",
+          "occurrence": 0,
+          "before": "fail",
+          "after": "pass"
+        }
+      ],
+      "missing": [],
+      "added": [],
+      "prior_pass_loss": [],
+      "file_transitions": [
+        {
+          "file": "accname/name/comp_text_node.html",
+          "before": "fail",
+          "after": "pass"
+        }
+      ]
+    }
+  },
+  "unit_tests": {
+    "red": {
+      "passed": 55,
+      "failed": 4,
+      "stdout_sha256": "a7fb04e7571ef0df701409ea251fe259998d835710b5e60f12a152396b1f773e"
+    },
+    "green": {
+      "render_passed": 59,
+      "wpt_unit_passed": 72,
+      "integration_passed": 1,
+      "failed": 0,
+      "ignored": [
+        "manifest::tests::real_manifest_enumerates_sanely",
+        "test262::tests::real_test262_parses"
+      ],
+      "stdout_sha256": "cfb6d6ac6b5e08002f58a3f103810969e3a3cb3563f52df23d1b0e188ea3bb59"
+    }
+  },
+  "resources": {
+    "baseline-build": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "+1.99.0",
+        "build",
+        "-p",
+        "genet-wpt",
+        "-j1"
+      ],
+      "exit_code": 0,
+      "memory_peak_bytes": 3977437184,
+      "memory_events": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "0",
+        "oom_group_kill": "0",
+        "sock_throttled": "1"
+      },
+      "resource_sha256": "3c99fc4da347cb982ef47d3d80c2e80371c31534bf77465fac7a39386c1ab2b5"
+    },
+    "baseline-capture": {
+      "command": [
+        "python3",
+        "-B",
+        "/home/markik/Code/testing/genet/wpt-ledger/2026-10-15_accname_whitespace/capture.py",
+        "baseline"
+      ],
+      "exit_code": 0,
+      "memory_peak_bytes": 512995328,
+      "memory_events": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "0",
+        "oom_group_kill": "0",
+        "sock_throttled": "0"
+      },
+      "resource_sha256": "30daa98be8d5f8f185bfd1ecd93e1866fe29cacea43c2816c4daed187599d491"
+    },
+    "red-render-tests": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--locked",
+        "-p",
+        "genet-render",
+        "--lib",
+        "-j1",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 101,
+      "memory_peak_bytes": 1741684736,
+      "memory_events": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "0",
+        "oom_group_kill": "0",
+        "sock_throttled": "0"
+      },
+      "resource_sha256": "92480bfd65e3864f21aef368388d3bbabf0acb5a0a94ea77935923ec49f95c7e"
+    },
+    "baseline-nova-long-capture": {
+      "command": [
+        "python3",
+        "-B",
+        "/home/markik/Code/testing/genet/wpt-ledger/2026-10-15_accname_whitespace/capture.py",
+        "baseline",
+        "nova-long"
+      ],
+      "exit_code": 0,
+      "memory_peak_bytes": 479453184,
+      "memory_events": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "0",
+        "oom_group_kill": "0",
+        "sock_throttled": "0"
+      },
+      "resource_sha256": "77b1d2e2bcc389d9d35b7d29749460a6226081cac63551639b1199e1bb0216b2"
+    },
+    "green-unit-tests": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--locked",
+        "-p",
+        "genet-render",
+        "-p",
+        "genet-wpt",
+        "-j1",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "memory_peak_bytes": 3106537472,
+      "memory_events": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "0",
+        "oom_group_kill": "0",
+        "sock_throttled": "0"
+      },
+      "resource_sha256": "35c1d47eb9da72e9918e119ac7c20e2256076e3f6dcbb530c25b985618597872"
+    },
+    "candidate-build": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "+1.99.0",
+        "build",
+        "--locked",
+        "-p",
+        "genet-wpt",
+        "-j1"
+      ],
+      "exit_code": 0,
+      "memory_peak_bytes": 1691848704,
+      "memory_events": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "0",
+        "oom_group_kill": "0",
+        "sock_throttled": "0"
+      },
+      "resource_sha256": "4defffe4d27adc0a16b4b478738fdcef3129479facd58906f36640beabcfd110"
+    },
+    "candidate-boa-capture": {
+      "command": [
+        "python3",
+        "-B",
+        "/home/markik/Code/testing/genet/wpt-ledger/2026-10-15_accname_whitespace/capture.py",
+        "candidate",
+        "boa"
+      ],
+      "exit_code": 0,
+      "memory_peak_bytes": 506720256,
+      "memory_events": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "0",
+        "oom_group_kill": "0",
+        "sock_throttled": "0"
+      },
+      "resource_sha256": "2f68e09f8d754833335bb7360039d8da2de2fb3b21e7826ce3f904d35d98820b"
+    },
+    "candidate-nova-long-capture": {
+      "command": [
+        "python3",
+        "-B",
+        "/home/markik/Code/testing/genet/wpt-ledger/2026-10-15_accname_whitespace/capture.py",
+        "candidate",
+        "nova-long"
+      ],
+      "exit_code": 0,
+      "memory_peak_bytes": 454574080,
+      "memory_events": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "0",
+        "oom_group_kill": "0",
+        "sock_throttled": "0"
+      },
+      "resource_sha256": "e63773dd0b174b0d1be928b33a039288161e5fb92aa5c162bd24e1c4f16e10db"
+    }
+  },
+  "review": "Fresh-context read-only reviewer: no actionable findings; runtime evidence verified after review.",
+  "limits": [
+    "Known comp_name_from_content.html layout panic remains separate from 405 reported assertions.",
+    "159 manual files are skipped on each primary run.",
+    "Initial Nova 15-second drive-deadline diagnostic is retained separately; primary Nova comparisons use 60 seconds and a 90-second worker timeout.",
+    "Forms C remains a separate paused lane; this receipt does not qualify Forms or whole AccName/HTML-AAM."
+  ]
+}

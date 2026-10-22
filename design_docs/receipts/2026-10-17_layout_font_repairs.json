@@ -1,0 +1,106 @@
+{
+  "date": "2026-10-17",
+  "base_commit": "02dfec532d916c022ec4fbd15e193733fa37f278",
+  "scope": "Nested-table intrinsic measurement and empty Parley tree root styles",
+  "source_sha256": {
+    "components/buckram/src/table/automatic_used.rs": "c9f51e1e462848b7d9fe9055e7feaddfe29e3fffda32f1f98ccce252ef16a762",
+    "components/buckram/src/table/sizing.rs": "d2f8b8f66b81bc0f144e7a7ac16e669c1b757dd775cc3a2f7b73e726ad1f42a1",
+    "components/genet-livery/src/document/tests.rs": "df63a2c77eda2c4c341f9f5aab3f3dc2a912784341a8fd2b3ccaf6abe23f4691",
+    "components/genet-livery/src/layout.rs": "0f1063381f84909efcbc890fea8b57d8cc6600ef2bb13fd31e2819d22c75e403",
+    "components/genet-livery/src/layout/build_block.rs": "8017a940ccabc096866355bd4bcc27749d53e047b67bf5132726d8a3a52da5ca",
+    "components/genet-livery/src/layout/build_inline.rs": "c220e62c1f935244683ea24600a53f7ed0256d03dbe5d0a6e76a22004b2d881a",
+    "components/genet-livery/tests/table_sibling_blocks.rs": "dbfa5d4112c04c3d0b6f47966da057de1d078837fb53e1f60dc608f43f83a153",
+    "support/patches/parley/src/resolve/tree.rs": "8714710b9f7763755d6d634628d33ed5895ba0111ddd263ac011e7704e230f33",
+    "support/patches/parley/src/tests/test_builders.rs": "77eeb6596b792bad79ef2a0a5071260d16d7ef1ee69bc60a7df741d5758aea0c"
+  },
+  "cargo_lock_sha256": "a3a837c915e30ce279b3546d003f7261a210547c68f56c50f2c1a0886b78c526",
+  "dependency_changes": false,
+  "resource_limits": {
+    "lock": "/home/markik/Code/testing/machine-heavy.lock",
+    "memory_max": "5G",
+    "memory_swap_max": 0,
+    "cpu_quota": "150%",
+    "nice": 10,
+    "cargo_jobs": 1,
+    "test_threads": 1,
+    "timeout_seconds": 600
+  },
+  "gates": [
+    {
+      "label": "parley-final",
+      "command": "timeout --signal=TERM --kill-after=10s 600s cargo test --offline --locked -j1 -p genet-parley --features font-diagnostic --lib -- --test-threads=1",
+      "passed": 61,
+      "failed": 0,
+      "ignored": 0,
+      "exit_status": 0,
+      "peak_rss_kib": 308876,
+      "swaps": 0,
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/layout-font-repairs/parley-final.log",
+      "sha256": "2322a262470a512713cea30396dd7214ed80edd889ad740671a760601a188b1f"
+    },
+    {
+      "label": "buckram-table-verified",
+      "command": "timeout --signal=TERM --kill-after=10s 600s cargo test --offline --locked -j1 -p buckram --lib table:: -- --test-threads=1",
+      "passed": 110,
+      "failed": 0,
+      "ignored": 0,
+      "exit_status": 0,
+      "peak_rss_kib": 422624,
+      "swaps": 0,
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/layout-font-repairs/buckram-table-verified.log",
+      "sha256": "7321ee4a4efe9a1b093d61f2ce7c8a0058d5985535e83d0ec3b65d7b6e513d5d"
+    },
+    {
+      "label": "livery-verified",
+      "command": "timeout --signal=TERM --kill-after=10s 600s cargo test --offline --locked -j1 -p genet-livery --lib --test table_sibling_blocks --test anonymous_tables --test css_text_lane --test text_fragment_line_box --no-fail-fast -- --test-threads=1",
+      "passed": 387,
+      "failed": 0,
+      "ignored": 2,
+      "exit_status": 0,
+      "peak_rss_kib": 784788,
+      "swaps": 0,
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/layout-font-repairs/livery-verified.log",
+      "sha256": "af01a5bb4da6de5b4c98b3154aaec16805c29a44d9b14190a9340ff975bee48b"
+    }
+  ],
+  "raw_directory": "/home/markik/Code/testing/audits/genet-architecture-20261017/layout-font-repairs",
+  "intermediate_attempts": {
+    "parley-retained.log": "New fixture incorrectly expected no shaped runs; empty layout intentionally shapes a cursor-space run. Corrected assertion; production fix unchanged.",
+    "buckram-table-final.log": "New fixture omitted 20px table padding from expected wrapper edge; corrected expected values, preserving production conversion.",
+    "table-focused.log": "Earlier passing implementation before constraint-aware owner refinement.",
+    "livery-retained.log": "Earlier passing implementation before final constraint and retained-mutation regressions."
+  },
+  "browser_reference": {
+    "artifacts": [
+      "table-reference.cjs",
+      "table-reference.log",
+      "table-reference.json",
+      "table-constraints-reference.cjs",
+      "table-constraints-reference.log",
+      "table-constraints-reference.json"
+    ],
+    "boundary": "Chromium/Ahem reference fixtures, not Genet browser or GPU qualification; verifies equal plain/nested columns and effect of active minimum."
+  },
+  "remaining_limits": [
+    "Two existing Livery lib tests remain ignored; see raw summary and qualification ledger.",
+    "NetRender corpus mismatch, fragmentation, platform and standards lanes remain separate.",
+    "No downstream Mere or Turnstone pin changes in this repair."
+  ],
+  "raw_artifact_sha256": {
+    "run-gate-long.sh": "82236216d061a73e85379f0950dbcd63c2521133f0987d29a468949dd51a3a03",
+    "run-command.sh": "d504eb54c4bfd5e049fd22adce93a630f158385143c6c83353a49ab0a58924aa",
+    "table-reference.cjs": "5d98bd1798546ad32f469de132390b8e9a5e8910283c493acb5576719589ad09",
+    "table-reference.log": "cb056eeb98d8c1f99b37cff73f9975066a6ba6b8bd8f6a69d45c009e78a16048",
+    "table-reference.json": "50f6ce32754898ce862587d83f98931f02138a8654f09ffca07110c305a73356",
+    "parley-retained.log": "40deb363664b285e4f4417069824ab042accd5714a0297eb4b605c5bb0c9062c",
+    "table-focused.log": "27d61f7bae53b0cec6ed693e53e4dcad800e0da80724489bc9ec93b9e623dae4",
+    "parley-final.log": "2322a262470a512713cea30396dd7214ed80edd889ad740671a760601a188b1f",
+    "livery-retained.log": "64f65501dcf292e1c7b02763baaab33fbe0538e5c9ca3157e29b5e890672c8dc",
+    "table-constraints-reference.cjs": "8c0a2d463442c225290ea67a7cd46b5a9732fef38d4958409699ad56422caa3e",
+    "table-constraints-reference.log": "04ce92d4927d864660ccdcaf337d22120eedd5b259095e57eaddbfc77f173be0",
+    "table-constraints-reference.json": "a7117a4cc295a4db2f3cee2df9dc9fa4e9fceb61088bf7872ae31d1618b25990",
+    "buckram-table-final.log": "6c486a6272f5cb4c4109cac84722cdb4f2761c400b655c31490ca5c0e79bf3f0",
+    "buckram-table-verified.log": "7321ee4a4efe9a1b093d61f2ce7c8a0058d5985535e83d0ec3b65d7b6e513d5d",
+    "livery-verified.log": "af01a5bb4da6de5b4c98b3154aaec16805c29a44d9b14190a9340ff975bee48b"
+  }
+}

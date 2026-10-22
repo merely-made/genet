@@ -16,7 +16,7 @@ use genet_scripted_dom::ObservedMutation;
 
 /// Escape a field for the tab/newline-delimited record protocol. Same shape as
 /// the inline-style protocol next door: text values may contain either.
-fn escape(value: &str) -> String {
+pub(super) fn escape(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
     for c in value.chars() {
         match c {
@@ -45,7 +45,7 @@ fn id_or_blank(id: Option<NodeId>, dom: &ScriptedDom) -> String {
     }
 }
 
-fn old_field(old: Option<&String>) -> String {
+pub(super) fn old_field(old: Option<&String>) -> String {
     match old {
         Some(value) => format!("1\t{}", escape(value)),
         None => "0\t".to_owned(),

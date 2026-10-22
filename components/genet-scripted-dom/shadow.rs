@@ -519,10 +519,14 @@ impl ScriptedDom {
     /// Replace a shadow root's children wholesale (used when `attachShadow`
     /// reuses a declarative root).
     fn replace_shadow_children(&mut self, root: NodeId, new_children: Vec<NodeId>) {
+        let was_connected = self.reaction_recording && self.is_connected(root);
         let existing = std::mem::take(&mut self.node_mut(root).children);
         for child in existing {
             self.node_mut(child).parent = None;
             self.structure_epoch += 1;
+            if was_connected {
+                self.record_disconnected(child);
+            }
         }
         for child in new_children {
             self.attach_silent(root, child);

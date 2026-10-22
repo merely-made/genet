@@ -83,6 +83,28 @@ fn table(row: &str) -> String {
 }
 
 fn render_with_body_style(position: &str, body_style: &str, content: &str) -> Rendered {
+    render_with_text_system(position, body_style, content, TextSystem::new())
+}
+
+/// A text system whose generic families all resolve to Ahem, whose glyphs
+/// advance exactly one em, so a fixture's column widths do not depend on the
+/// platform's monospace font.
+fn ahem_text_system() -> TextSystem {
+    let ahem = include_bytes!("../../../tests/wpt/tests/fonts/Ahem.ttf");
+    let mut text = TextSystem::new();
+    for generic in ["serif", "sans-serif", "monospace", "system-ui"] {
+        text.register_generic_font_bytes(ahem.to_vec(), generic)
+            .expect("Ahem binds to every generic family");
+    }
+    text
+}
+
+fn render_with_text_system(
+    position: &str,
+    body_style: &str,
+    content: &str,
+    mut text: TextSystem,
+) -> Rendered {
     let document = StaticDocument::parse(&format!(
         "<body style='margin:0;font-family:monospace;{body_style}'>\
          <div style='position:relative;width:784px;height:300px'>\
@@ -95,7 +117,6 @@ fn render_with_body_style(position: &str, body_style: &str, content: &str) -> Re
         &Device::screen(800.0, 600.0),
         &InteractionStates::default(),
     );
-    let mut text = TextSystem::new();
     let (styles, layout) = layout_with_text_system(
         &document,
         &styles,
@@ -200,9 +221,13 @@ fn inherited_nowrap_aligns_sibling_table_glyphs_with_block_rows() {
 
 #[test]
 fn inferred_cells_with_nested_tables_match_html_table_glyphs() {
-    let generated = render_with_body_style(
+    // Ahem at 16px (the layer's 2em of an 8px body) keeps the three 14-glyph
+    // columns inside the 784px container, so this checks inferred-cell
+    // geometry rather than the constrained-width distribution, which the
+    // ignored test below records separately.
+    let generated = render_with_text_system(
         "relative",
-        "",
+        "font-size:8px",
         "<span style='display:table-row'>\
            <span>Row 1, </span><span>Col 1</span>\
            <span style='display:table-cell'>Row 1, Col 2</span>\
@@ -218,17 +243,108 @@ fn inferred_cells_with_nested_tables_match_html_table_glyphs() {
            <span style='display:table-cell'>Row 333, Col 2</span>\
            <span>Row </span><span>333, </span><span>Col </span><span>3</span>\
          </span>",
+        ahem_text_system(),
     );
-    let html = render_with_body_style(
+    let html = render_with_text_system(
         "relative",
-        "",
+        "font-size:8px",
         "<table cellpadding=0 cellspacing=0 style='margin:0;padding:0;border:none'>\
            <tr><td>Row 1, Col 1</td><td>Row 1, Col 2</td><td>Row 1, Col 3</td></tr>\
            <tr><td>Row 22, Col 1</td><td>Row 22, Col 2</td><td>Row 22, Col 3</td></tr>\
            <tr><td>Row 333, Col 1</td><td>Row 333, Col 2</td><td>Row 333, Col 3</td></tr>\
          </table>",
+        ahem_text_system(),
     );
     assert_glyph_points_match(generated, html);
+}
+
+/// A nested auto-width table contributes its intrinsic width to the outer
+/// cell. Its selected layout width must not bias the outer column measures.
+#[test]
+fn nested_table_cell_does_not_change_constrained_column_distribution() {
+    let rows = |third: &str| {
+        format!(
+            "<span style='display:table-row'><span id=c1 style='display:table-cell'>Row 1, Col 1</span>\
+             <span id=c2 style='display:table-cell'>Row 1, Col 2</span>{third}</span>\
+             <span style='display:table-row'><span style='display:table-cell'>Row 22, Col 1</span>\
+             <span style='display:table-cell'>Row 22, Col 2</span>\
+             <span style='display:table-cell'>Row 22, Col 3</span></span>"
+        )
+    };
+    let plain = render_with_text_system(
+        "relative",
+        "",
+        &rows("<span style='display:table-cell'>Row 1, Col 3</span>"),
+        ahem_text_system(),
+    );
+    for constraints in ["", "min-width:1px", "max-width:10000px"] {
+        let nested = render_with_text_system(
+            "relative",
+            "",
+            &rows(&format!(
+                "<span style='display:table;{constraints}'>Row 1, Col 3</span>"
+            )),
+            ahem_text_system(),
+        );
+        for id in ["c1", "c2"] {
+            let (plain, nested) = (plain.normalized_rect(id), nested.normalized_rect(id));
+            assert!(
+                (plain.2 - nested.2).abs() <= 0.5,
+                "#{id} width with {constraints:?}: plain cells {}, nested table {}",
+                plain.2,
+                nested.2
+            );
+        }
+    }
+}
+
+#[test]
+fn active_nested_table_minimum_constrains_outer_column() {
+    let row = |minimum: &str| {
+        format!(
+            "<span style='display:table-row'>\
+             <span id=c1 style='display:table-cell'>Row 1, Col 1</span>\
+             <span style='display:table-cell'>Row 1, Col 2</span>\
+             <span style='display:table;{minimum}'>Row 1, Col 3</span></span>\
+             <span style='display:table-row'>\
+             <span style='display:table-cell'>Row 22, Col 1</span>\
+             <span style='display:table-cell'>Row 22, Col 2</span>\
+             <span style='display:table-cell'>Row 22, Col 3</span></span>"
+        )
+    };
+    let automatic = render_with_text_system("relative", "", &row(""), ahem_text_system());
+    let minimum =
+        render_with_text_system("relative", "", &row("min-width:400px"), ahem_text_system());
+    let auto_first = automatic.normalized_rect("c1").2;
+    let minimum_first = minimum.normalized_rect("c1").2;
+    assert!(
+        minimum_first + 10.0 < auto_first,
+        "an active 400px nested minimum constrains its column: auto {auto_first}, min {minimum_first}"
+    );
+}
+
+#[test]
+fn explicit_width_nested_table_still_constrains_its_outer_column() {
+    let row = |width: &str| {
+        format!(
+            "<span style='display:table-row'>\
+             <span id=c1 style='display:table-cell'>Row 1, Col 1</span>\
+             <span style='display:table-cell'>Row 1, Col 2</span>\
+             <span id=nested style='display:table;{width}'>Row 1, Col 3</span></span>"
+        )
+    };
+    let automatic = render_with_text_system("relative", "", &row(""), ahem_text_system());
+    let explicit = render_with_text_system("relative", "", &row("width:400px"), ahem_text_system());
+    let automatic_first = automatic.normalized_rect("c1").2;
+    let explicit_first = explicit.normalized_rect("c1").2;
+    assert!(
+        explicit_first + 10.0 < automatic_first,
+        "an authored nested width must constrain its column: auto {automatic_first}, 400px {explicit_first}"
+    );
+    assert!(
+        (explicit.normalized_rect("nested").2 - 400.0).abs() <= 0.5,
+        "the nested table keeps its authored 400px width"
+    );
 }
 
 #[test]

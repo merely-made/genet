@@ -214,3 +214,11 @@ its own types) is deferred; for now netfetcher owns its Fetch types.
 ## License
 
 MPL-2.0 (lineage from Servo's `net`).
+
+
+Wire ownership (2026-10-14): the default HTTP/1-2-3 and raw WebSocket
+connector delegate to `murm-wire`; Fetch and browser WebSocket policy remain
+here. `WireTransport` adapts a host-selected engine with explicit trust and
+pool partitioning. The public crate name/version, default feature names and
+Fetch/WebSocket entry points are unchanged. See
+`genet/design_docs/2026-10-14_netfetcher_wire_adoption_plan.md`.

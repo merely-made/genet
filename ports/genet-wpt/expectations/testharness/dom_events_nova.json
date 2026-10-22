@@ -1,0 +1,4169 @@
+{
+  "command": "testharness",
+  "engine": "nova",
+  "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
+  "policy": "exact",
+  "renderer": "livery",
+  "runner_sha256": "363d6abe361f0567bbd9439f954c62bf17ff926080122f296acfc9a57c68c4a2",
+  "subset": "dom/events",
+  "tests": {
+    "dom/events/AddEventListenerOptions-once.any.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Once listener should be invoked only once",
+          "status": "pass"
+        },
+        {
+          "name": "Once listener should be invoked only once even if the event is nested",
+          "status": "pass"
+        },
+        {
+          "name": "Once listener should be added / removed like normal listeners",
+          "status": "pass"
+        },
+        {
+          "name": "Multiple once listeners should be invoked even if the stopImmediatePropagation is set",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 4,
+      "subtests_total": 4
+    },
+    "dom/events/AddEventListenerOptions-once.any.worker.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "dom/events/AddEventListenerOptions-passive.any.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Supports passive option on addEventListener only",
+          "status": "fail"
+        },
+        {
+          "name": "preventDefault should be ignored if-and-only-if the passive option is true",
+          "status": "pass"
+        },
+        {
+          "name": "returnValue should be ignored if-and-only-if the passive option is true",
+          "status": "pass"
+        },
+        {
+          "name": "passive behavior of one listener should be unaffected by the presence of other listeners",
+          "status": "pass"
+        },
+        {
+          "name": "Equivalence of option values",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 4,
+      "subtests_total": 5
+    },
+    "dom/events/AddEventListenerOptions-passive.any.worker.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "dom/events/AddEventListenerOptions-signal.any.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Passing an AbortSignal to addEventListener options should allow removing a listener",
+          "status": "fail"
+        },
+        {
+          "name": "Passing an AbortSignal to addEventListener does not prevent removeEventListener",
+          "status": "pass"
+        },
+        {
+          "name": "Passing an AbortSignal to addEventListener works with the once flag",
+          "status": "fail"
+        },
+        {
+          "name": "Removing a once listener works with a passed signal",
+          "status": "pass"
+        },
+        {
+          "name": "Passing an AbortSignal to multiple listeners",
+          "status": "fail"
+        },
+        {
+          "name": "Passing an AbortSignal to addEventListener works with the capture flag",
+          "status": "fail"
+        },
+        {
+          "name": "Aborting from a listener does not call future listeners",
+          "status": "fail"
+        },
+        {
+          "name": "Adding then aborting a listener in another listener does not call it",
+          "status": "pass"
+        },
+        {
+          "name": "Aborting from a nested listener should remove it",
+          "status": "pass"
+        },
+        {
+          "name": "Passing null as the signal should throw",
+          "status": "fail"
+        },
+        {
+          "name": "Passing null as the signal should throw (listener is also null)",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 4,
+      "subtests_total": 11
+    },
+    "dom/events/AddEventListenerOptions-signal.any.worker.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "dom/events/Body-FrameSet-Event-Handlers.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Set HTMLBodyElement.onblur",
+          "status": "pass"
+        },
+        {
+          "name": "Enumerate HTMLBodyElement.onblur",
+          "status": "fail"
+        },
+        {
+          "name": "Reflect HTMLBodyElement.onblur",
+          "status": "fail"
+        },
+        {
+          "name": "Forward HTMLBodyElement.onblur to Window",
+          "status": "fail"
+        },
+        {
+          "name": "Set HTMLFrameSetElement.onblur",
+          "status": "pass"
+        },
+        {
+          "name": "Enumerate HTMLFrameSetElement.onblur",
+          "status": "fail"
+        },
+        {
+          "name": "Reflect HTMLFrameSetElement.onblur",
+          "status": "fail"
+        },
+        {
+          "name": "Forward HTMLFrameSetElement.onblur to Window",
+          "status": "fail"
+        },
+        {
+          "name": "Set HTMLBodyElement.onerror",
+          "status": "pass"
+        },
+        {
+          "name": "Enumerate HTMLBodyElement.onerror",
+          "status": "fail"
+        },
+        {
+          "name": "Reflect HTMLBodyElement.onerror",
+          "status": "fail"
+        },
+        {
+          "name": "Forward HTMLBodyElement.onerror to Window",
+          "status": "fail"
+        },
+        {
+          "name": "Set HTMLFrameSetElement.onerror",
+          "status": "pass"
+        },
+        {
+          "name": "Enumerate HTMLFrameSetElement.onerror",
+          "status": "fail"
+        },
+        {
+          "name": "Reflect HTMLFrameSetElement.onerror",
+          "status": "fail"
+        },
+        {
+          "name": "Forward HTMLFrameSetElement.onerror to Window",
+          "status": "fail"
+        },
+        {
+          "name": "Set HTMLBodyElement.onfocus",
+          "status": "pass"
+        },
+        {
+          "name": "Enumerate HTMLBodyElement.onfocus",
+          "status": "fail"
+        },
+        {
+          "name": "Reflect HTMLBodyElement.onfocus",
+          "status": "fail"
+        },
+        {
+          "name": "Forward HTMLBodyElement.onfocus to Window",
+          "status": "fail"
+        },
+        {
+          "name": "Set HTMLFrameSetElement.onfocus",
+          "status": "pass"
+        },
+        {
+          "name": "Enumerate HTMLFrameSetElement.onfocus",
+          "status": "fail"
+        },
+        {
+          "name": "Reflect HTMLFrameSetElement.onfocus",
+          "status": "fail"
+        },
+        {
+          "name": "Forward HTMLFrameSetElement.onfocus to Window",
+          "status": "fail"
+        },
+        {
+          "name": "Set HTMLBodyElement.onload",
+          "status": "pass"
+        },
+        {
+          "name": "Enumerate HTMLBodyElement.onload",
+          "status": "fail"
+        },
+        {
+          "name": "Reflect HTMLBodyElement.onload",
+          "status": "fail"
+        },
+        {
+          "name": "Forward HTMLBodyElement.onload to Window",
+          "status": "fail"
+        },
+        {
+          "name": "Set HTMLFrameSetElement.onload",
+          "status": "pass"
+        },
+        {
+          "name": "Enumerate HTMLFrameSetElement.onload",
+          "status": "fail"
+        },
+        {
+          "name": "Reflect HTMLFrameSetElement.onload",
+          "status": "fail"
+        },
+        {
+          "name": "Forward HTMLFrameSetElement.onload to Window",
+          "status": "fail"
+        },
+        {
+          "name": "Set HTMLBodyElement.onscroll",
+          "status": "pass"
+        },
+        {
+          "name": "Enumerate HTMLBodyElement.onscroll",
+          "status": "fail"
+        },
+        {
+          "name": "Reflect HTMLBodyElement.onscroll",
+          "status": "fail"
+        },
+        {
+          "name": "Forward HTMLBodyElement.onscroll to Window",
+          "status": "fail"
+        },
+        {
+          "name": "Set HTMLFrameSetElement.onscroll",
+          "status": "pass"
+        },
+        {
+          "name": "Enumerate HTMLFrameSetElement.onscroll",
+          "status": "fail"
+        },
+        {
+          "name": "Reflect HTMLFrameSetElement.onscroll",
+          "status": "fail"
+        },
+        {
+          "name": "Forward HTMLFrameSetElement.onscroll to Window",
+          "status": "fail"
+        },
+        {
+          "name": "Set HTMLBodyElement.onresize",
+          "status": "pass"
+        },
+        {
+          "name": "Enumerate HTMLBodyElement.onresize",
+          "status": "fail"
+        },
+        {
+          "name": "Reflect HTMLBodyElement.onresize",
+          "status": "fail"
+        },
+        {
+          "name": "Forward HTMLBodyElement.onresize to Window",
+          "status": "fail"
+        },
+        {
+          "name": "Set HTMLFrameSetElement.onresize",
+          "status": "pass"
+        },
+        {
+          "name": "Enumerate HTMLFrameSetElement.onresize",
+          "status": "fail"
+        },
+        {
+          "name": "Reflect HTMLFrameSetElement.onresize",
+          "status": "fail"
+        },
+        {
+          "name": "Forward HTMLFrameSetElement.onresize to Window",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 12,
+      "subtests_total": 48
+    },
+    "dom/events/CustomEvent.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "CustomEvent dispatching.",
+          "status": "pass"
+        },
+        {
+          "name": "First parameter to initCustomEvent should be mandatory.",
+          "status": "pass"
+        },
+        {
+          "name": "initCustomEvent's default parameter values.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 3
+    },
+    "dom/events/Event-cancelBubble.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "cancelBubble must be false when an event is initially created.",
+          "status": "pass"
+        },
+        {
+          "name": "Initializing an event must set cancelBubble to false.",
+          "status": "fail"
+        },
+        {
+          "name": "stopPropagation() must set cancelBubble to true.",
+          "status": "pass"
+        },
+        {
+          "name": "stopImmediatePropagation() must set cancelBubble to true.",
+          "status": "pass"
+        },
+        {
+          "name": "Event.cancelBubble=false must have no effect.",
+          "status": "pass"
+        },
+        {
+          "name": "Event.cancelBubble=false must have no effect during event propagation.",
+          "status": "pass"
+        },
+        {
+          "name": "cancelBubble must be false after an event has been dispatched.",
+          "status": "pass"
+        },
+        {
+          "name": "Event.cancelBubble=true must set the stop propagation flag.",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 7,
+      "subtests_total": 8
+    },
+    "dom/events/Event-constants.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Constants for eventPhase on Event interface object.",
+          "status": "pass"
+        },
+        {
+          "name": "Constants for eventPhase on Event prototype object.",
+          "status": "pass"
+        },
+        {
+          "name": "Constants for eventPhase on Event object.",
+          "status": "pass"
+        },
+        {
+          "name": "Constants for eventPhase on CustomEvent object.",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 4,
+      "subtests_total": 4
+    },
+    "dom/events/Event-constructors.any.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Event-constructors",
+          "status": "fail"
+        },
+        {
+          "name": "Event-constructors 1",
+          "status": "fail"
+        },
+        {
+          "name": "Event-constructors 2",
+          "status": "fail"
+        },
+        {
+          "name": "Event-constructors 3",
+          "status": "fail"
+        },
+        {
+          "name": "Event-constructors 4",
+          "status": "fail"
+        },
+        {
+          "name": "Event-constructors 5",
+          "status": "fail"
+        },
+        {
+          "name": "Event-constructors 6",
+          "status": "pass"
+        },
+        {
+          "name": "Event-constructors 7",
+          "status": "pass"
+        },
+        {
+          "name": "Event-constructors 8",
+          "status": "pass"
+        },
+        {
+          "name": "Event-constructors 9",
+          "status": "pass"
+        },
+        {
+          "name": "Event-constructors 10",
+          "status": "pass"
+        },
+        {
+          "name": "Event-constructors 11",
+          "status": "pass"
+        },
+        {
+          "name": "Event-constructors 12",
+          "status": "pass"
+        },
+        {
+          "name": "Event-constructors 13",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 7,
+      "subtests_total": 14
+    },
+    "dom/events/Event-constructors.any.worker.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "dom/events/Event-defaultPrevented-after-dispatch.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Default prevention via preventDefault",
+          "status": "pass"
+        },
+        {
+          "name": "Default prevention via returnValue",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 2
+    },
+    "dom/events/Event-defaultPrevented.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "When an event is created, defaultPrevented should be initialized to false.",
+          "status": "pass"
+        },
+        {
+          "name": "initEvent should work correctly (not cancelable).",
+          "status": "pass"
+        },
+        {
+          "name": "preventDefault() should not change defaultPrevented if cancelable is false.",
+          "status": "pass"
+        },
+        {
+          "name": "returnValue should not change defaultPrevented if cancelable is false.",
+          "status": "pass"
+        },
+        {
+          "name": "initEvent should work correctly (cancelable).",
+          "status": "pass"
+        },
+        {
+          "name": "preventDefault() should change defaultPrevented if cancelable is true.",
+          "status": "pass"
+        },
+        {
+          "name": "returnValue should change defaultPrevented if cancelable is true.",
+          "status": "pass"
+        },
+        {
+          "name": "initEvent should unset defaultPrevented.",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 8,
+      "subtests_total": 8
+    },
+    "dom/events/Event-dispatch-bubble-canceled.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Setting cancelBubble=true prior to dispatchEvent()",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/Event-dispatch-bubbles-false.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "In window.document with click event",
+          "status": "pass"
+        },
+        {
+          "name": "In window.document with load event",
+          "status": "pass"
+        },
+        {
+          "name": "In window.document.cloneNode(true)",
+          "status": "pass"
+        },
+        {
+          "name": "In new Document()",
+          "status": "pass"
+        },
+        {
+          "name": "In DOMImplementation.createHTMLDocument()",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 5,
+      "subtests_total": 5
+    },
+    "dom/events/Event-dispatch-bubbles-true.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "In window.document with click event",
+          "status": "pass"
+        },
+        {
+          "name": "In window.document with load event",
+          "status": "pass"
+        },
+        {
+          "name": "In window.document.cloneNode(true)",
+          "status": "pass"
+        },
+        {
+          "name": "In new Document()",
+          "status": "pass"
+        },
+        {
+          "name": "In DOMImplementation.createHTMLDocument()",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 5,
+      "subtests_total": 5
+    },
+    "dom/events/Event-dispatch-click.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "basic with click()",
+          "status": "fail"
+        },
+        {
+          "name": "basic with dispatchEvent()",
+          "status": "fail"
+        },
+        {
+          "name": "basic with wrong event class",
+          "status": "pass"
+        },
+        {
+          "name": "look at parents only when event bubbles",
+          "status": "pass"
+        },
+        {
+          "name": "look at parents when event bubbles",
+          "status": "fail"
+        },
+        {
+          "name": "pick the first with activation behavior <input type=checkbox>",
+          "status": "fail"
+        },
+        {
+          "name": "pick the first with activation behavior <a href>",
+          "status": "timeout"
+        },
+        {
+          "name": "pick the first with activation behavior <input type=radio>",
+          "status": "fail"
+        },
+        {
+          "name": "event state during post-click handling",
+          "status": "timeout"
+        },
+        {
+          "name": "redispatch during post-click handling",
+          "status": "timeout"
+        },
+        {
+          "name": "disabled checkbox still has activation behavior",
+          "status": "pass"
+        },
+        {
+          "name": "disabled checkbox still has activation behavior, part 2",
+          "status": "fail"
+        },
+        {
+          "name": "disabled radio still has activation behavior",
+          "status": "fail"
+        },
+        {
+          "name": "disconnected checkbox should be checked",
+          "status": "fail"
+        },
+        {
+          "name": "disconnected radio should be checked",
+          "status": "fail"
+        },
+        {
+          "name": "disconnected checkbox should be checked from dispatchEvent(new MouseEvent('click'))",
+          "status": "fail"
+        },
+        {
+          "name": "disconnected radio should be checked from dispatchEvent(new MouseEvent('click'))",
+          "status": "fail"
+        },
+        {
+          "name": "disabled checkbox should be checked from dispatchEvent(new MouseEvent(\"click\"))",
+          "status": "fail"
+        },
+        {
+          "name": "disabled radio should be checked from dispatchEvent(new MouseEvent(\"click\"))",
+          "status": "fail"
+        },
+        {
+          "name": "disabled checkbox should fire onclick",
+          "status": "pass"
+        },
+        {
+          "name": "disabled radio should fire onclick",
+          "status": "pass"
+        },
+        {
+          "name": "disabled checkbox should get legacy-canceled-activation behavior",
+          "status": "fail"
+        },
+        {
+          "name": "disabled radio should get legacy-canceled-activation behavior",
+          "status": "fail"
+        },
+        {
+          "name": "disabled checkbox should get legacy-canceled-activation behavior 2",
+          "status": "pass"
+        },
+        {
+          "name": "disabled radio should get legacy-canceled-activation behavior 2",
+          "status": "pass"
+        },
+        {
+          "name": "disabling checkbox in onclick listener shouldn't suppress oninput",
+          "status": "timeout"
+        },
+        {
+          "name": "disabling checkbox in onclick listener shouldn't suppress onchange",
+          "status": "timeout"
+        },
+        {
+          "name": "disabling radio in onclick listener shouldn't suppress oninput",
+          "status": "timeout"
+        },
+        {
+          "name": "disabling radio in onclick listener shouldn't suppress onchange",
+          "status": "timeout"
+        },
+        {
+          "name": "disconnected form should not submit",
+          "status": "pass"
+        },
+        {
+          "name": "disabled submit button should not activate",
+          "status": "pass"
+        },
+        {
+          "name": "submit button should not activate if the event listener disables it",
+          "status": "pass"
+        },
+        {
+          "name": "submit button that morphed from checkbox should not activate",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 11,
+      "subtests_total": 33
+    },
+    "dom/events/Event-dispatch-click.tentative.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "disabled checkbox should not be checked from label click",
+          "status": "pass"
+        },
+        {
+          "name": "disabled radio should not be checked from label click",
+          "status": "pass"
+        },
+        {
+          "name": "disabled checkbox should not be checked from label click by dispatchEvent",
+          "status": "pass"
+        },
+        {
+          "name": "disabled radio should not be checked from label click by dispatchEvent",
+          "status": "pass"
+        },
+        {
+          "name": "checkbox morphed into another type should not mutate checked state",
+          "status": "pass"
+        },
+        {
+          "name": "radio morphed into another type should not steal the existing checked state",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 6,
+      "subtests_total": 6
+    },
+    "dom/events/Event-dispatch-detached-click.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Click event on an element not in the document",
+          "status": "pass"
+        },
+        {
+          "name": "Click event can be dispatched to an element that is not in the document.",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 2
+    },
+    "dom/events/Event-dispatch-detached-input-and-change.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "detached checkbox should not emit input or change events on click().",
+          "status": "pass"
+        },
+        {
+          "name": "detached radio should not emit input or change events on click().",
+          "status": "pass"
+        },
+        {
+          "name": "detached checkbox should not emit input or change events on dispatchEvent(new MouseEvent('click')).",
+          "status": "pass"
+        },
+        {
+          "name": "detached radio should not emit input or change events on dispatchEvent(new MouseEvent('click')).",
+          "status": "pass"
+        },
+        {
+          "name": "attached checkbox should emit input and change events on click().",
+          "status": "fail"
+        },
+        {
+          "name": "attached radio should emit input and change events on click().",
+          "status": "fail"
+        },
+        {
+          "name": "attached checkbox should emit input and change events on dispatchEvent(new MouseEvent('click')).",
+          "status": "fail"
+        },
+        {
+          "name": "attached radio should emit input and change events on dispatchEvent(new MouseEvent('click')).",
+          "status": "fail"
+        },
+        {
+          "name": "attached to shadow dom checkbox should emit input and change events on click().",
+          "status": "fail"
+        },
+        {
+          "name": "attached to shadow dom radio should emit input and change events on click().",
+          "status": "fail"
+        },
+        {
+          "name": "attached to shadow dom checkbox should emit input and change events on dispatchEvent(new MouseEvent('click')).",
+          "status": "fail"
+        },
+        {
+          "name": "attached to shadow dom radio should emit input and change events on dispatchEvent(new MouseEvent('click')).",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 4,
+      "subtests_total": 12
+    },
+    "dom/events/Event-dispatch-handlers-changed.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": " Dispatch additional events inside an event listener ",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/Event-dispatch-listener-order.window.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Event-dispatch-listener-order",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/Event-dispatch-multiple-cancelBubble.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Multiple dispatchEvent() and cancelBubble",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/Event-dispatch-multiple-stopPropagation.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": " Multiple dispatchEvent() and stopPropagation() ",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/Event-dispatch-omitted-capture.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "EventTarget.addEventListener with the capture argument omitted",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/Event-dispatch-on-disabled-elements.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Can dispatch untrusted 'click' Events at disabled HTML elements.",
+          "status": "pass"
+        },
+        {
+          "name": "Can dispatch untrusted Events at disabled HTML elements.",
+          "status": "pass"
+        },
+        {
+          "name": "Can dispatch CustomEvents at disabled HTML elements.",
+          "status": "fail"
+        },
+        {
+          "name": "Calling click() on disabled elements must not dispatch events.",
+          "status": "pass"
+        },
+        {
+          "name": "CSS Transitions transitionrun, transitionstart, transitionend events fire on disabled form elements",
+          "status": "timeout"
+        },
+        {
+          "name": "CSS Transitions transitioncancel event fires on disabled form elements",
+          "status": "not-run"
+        },
+        {
+          "name": "CSS Animation animationstart, animationiteration, animationend fire on disabled form elements",
+          "status": "not-run"
+        },
+        {
+          "name": "CSS Animation's animationcancel event fires on disabled form elements",
+          "status": "not-run"
+        },
+        {
+          "name": "Real clicks on disabled elements must not dispatch events.",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 3,
+      "subtests_total": 9
+    },
+    "dom/events/Event-dispatch-order-at-target.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Listeners are invoked in correct order (AT_TARGET phase)",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/Event-dispatch-order.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Event phases order",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/Event-dispatch-other-document.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Custom event on an element in another document",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/Event-dispatch-propagation-stopped.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": " Calling stopPropagation() prior to dispatchEvent() ",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/Event-dispatch-redispatch.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Redispatching DOMContentLoaded event after being dispatched",
+          "status": "fail"
+        },
+        {
+          "name": "Redispatching mouseup event whose default action dispatches a click event",
+          "status": "not-run"
+        },
+        {
+          "name": "Redispatching event which is being dispatched",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "dom/events/Event-dispatch-reenter.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": " Dispatch additional events inside an event listener ",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/Event-dispatch-single-activation-behavior.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When clicking child <INPUT type=checkbox></INPUT> of parent <INPUT type=radio></INPUT>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <INPUT type=checkbox></INPUT> of parent <FORM><INPUT type=submit></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <INPUT type=checkbox></INPUT> of parent <FORM><INPUT type=image></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <INPUT type=checkbox></INPUT> of parent <FORM><INPUT type=reset></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <INPUT type=checkbox></INPUT> of parent <FORM><BUTTON type=submit></BUTTON></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <INPUT type=checkbox></INPUT> of parent <FORM><BUTTON type=reset></BUTTON></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <INPUT type=checkbox></INPUT> of parent <A></A>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <INPUT type=checkbox></INPUT> of parent <AREA></AREA>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <INPUT type=checkbox></INPUT> of parent <DETAILS><SUMMARY></SUMMARY></DETAILS>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <INPUT type=checkbox></INPUT> of parent <LABEL><INPUT type=checkbox></INPUT><SPAN></SPAN></LABEL>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <INPUT type=checkbox></INPUT> of parent <LABEL><BUTTON type=button></BUTTON></LABEL>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <INPUT type=radio></INPUT> of parent <INPUT type=checkbox></INPUT>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <INPUT type=radio></INPUT> of parent <FORM><INPUT type=submit></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <INPUT type=radio></INPUT> of parent <FORM><INPUT type=image></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <INPUT type=radio></INPUT> of parent <FORM><INPUT type=reset></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <INPUT type=radio></INPUT> of parent <FORM><BUTTON type=submit></BUTTON></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <INPUT type=radio></INPUT> of parent <FORM><BUTTON type=reset></BUTTON></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <INPUT type=radio></INPUT> of parent <A></A>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <INPUT type=radio></INPUT> of parent <AREA></AREA>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <INPUT type=radio></INPUT> of parent <DETAILS><SUMMARY></SUMMARY></DETAILS>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <INPUT type=radio></INPUT> of parent <LABEL><INPUT type=checkbox></INPUT><SPAN></SPAN></LABEL>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <INPUT type=radio></INPUT> of parent <LABEL><BUTTON type=button></BUTTON></LABEL>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=submit></INPUT></FORM> of parent <INPUT type=checkbox></INPUT>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=submit></INPUT></FORM> of parent <INPUT type=radio></INPUT>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=submit></INPUT></FORM> of parent <FORM><INPUT type=image></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=submit></INPUT></FORM> of parent <FORM><INPUT type=reset></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=submit></INPUT></FORM> of parent <FORM><BUTTON type=submit></BUTTON></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=submit></INPUT></FORM> of parent <FORM><BUTTON type=reset></BUTTON></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=submit></INPUT></FORM> of parent <A></A>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=submit></INPUT></FORM> of parent <AREA></AREA>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=submit></INPUT></FORM> of parent <DETAILS><SUMMARY></SUMMARY></DETAILS>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=submit></INPUT></FORM> of parent <LABEL><INPUT type=checkbox></INPUT><SPAN></SPAN></LABEL>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=submit></INPUT></FORM> of parent <LABEL><BUTTON type=button></BUTTON></LABEL>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=image></INPUT></FORM> of parent <INPUT type=checkbox></INPUT>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=image></INPUT></FORM> of parent <INPUT type=radio></INPUT>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=image></INPUT></FORM> of parent <FORM><INPUT type=submit></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=image></INPUT></FORM> of parent <FORM><INPUT type=reset></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=image></INPUT></FORM> of parent <FORM><BUTTON type=submit></BUTTON></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=image></INPUT></FORM> of parent <FORM><BUTTON type=reset></BUTTON></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=image></INPUT></FORM> of parent <A></A>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=image></INPUT></FORM> of parent <AREA></AREA>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=image></INPUT></FORM> of parent <DETAILS><SUMMARY></SUMMARY></DETAILS>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=image></INPUT></FORM> of parent <LABEL><INPUT type=checkbox></INPUT><SPAN></SPAN></LABEL>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=image></INPUT></FORM> of parent <LABEL><BUTTON type=button></BUTTON></LABEL>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=reset></INPUT></FORM> of parent <INPUT type=checkbox></INPUT>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=reset></INPUT></FORM> of parent <INPUT type=radio></INPUT>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=reset></INPUT></FORM> of parent <FORM><INPUT type=submit></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=reset></INPUT></FORM> of parent <FORM><INPUT type=image></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=reset></INPUT></FORM> of parent <FORM><BUTTON type=submit></BUTTON></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=reset></INPUT></FORM> of parent <FORM><BUTTON type=reset></BUTTON></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=reset></INPUT></FORM> of parent <A></A>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=reset></INPUT></FORM> of parent <AREA></AREA>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=reset></INPUT></FORM> of parent <DETAILS><SUMMARY></SUMMARY></DETAILS>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=reset></INPUT></FORM> of parent <LABEL><INPUT type=checkbox></INPUT><SPAN></SPAN></LABEL>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><INPUT type=reset></INPUT></FORM> of parent <LABEL><BUTTON type=button></BUTTON></LABEL>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><BUTTON type=submit></BUTTON></FORM> of parent <INPUT type=checkbox></INPUT>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><BUTTON type=submit></BUTTON></FORM> of parent <INPUT type=radio></INPUT>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><BUTTON type=submit></BUTTON></FORM> of parent <FORM><INPUT type=submit></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><BUTTON type=submit></BUTTON></FORM> of parent <FORM><INPUT type=image></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><BUTTON type=submit></BUTTON></FORM> of parent <FORM><INPUT type=reset></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><BUTTON type=submit></BUTTON></FORM> of parent <FORM><BUTTON type=reset></BUTTON></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><BUTTON type=submit></BUTTON></FORM> of parent <A></A>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><BUTTON type=submit></BUTTON></FORM> of parent <AREA></AREA>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><BUTTON type=submit></BUTTON></FORM> of parent <DETAILS><SUMMARY></SUMMARY></DETAILS>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><BUTTON type=submit></BUTTON></FORM> of parent <LABEL><INPUT type=checkbox></INPUT><SPAN></SPAN></LABEL>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><BUTTON type=submit></BUTTON></FORM> of parent <LABEL><BUTTON type=button></BUTTON></LABEL>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><BUTTON type=reset></BUTTON></FORM> of parent <INPUT type=checkbox></INPUT>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><BUTTON type=reset></BUTTON></FORM> of parent <INPUT type=radio></INPUT>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><BUTTON type=reset></BUTTON></FORM> of parent <FORM><INPUT type=submit></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><BUTTON type=reset></BUTTON></FORM> of parent <FORM><INPUT type=image></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><BUTTON type=reset></BUTTON></FORM> of parent <FORM><INPUT type=reset></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><BUTTON type=reset></BUTTON></FORM> of parent <FORM><BUTTON type=submit></BUTTON></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><BUTTON type=reset></BUTTON></FORM> of parent <A></A>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><BUTTON type=reset></BUTTON></FORM> of parent <AREA></AREA>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><BUTTON type=reset></BUTTON></FORM> of parent <DETAILS><SUMMARY></SUMMARY></DETAILS>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><BUTTON type=reset></BUTTON></FORM> of parent <LABEL><INPUT type=checkbox></INPUT><SPAN></SPAN></LABEL>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <FORM><BUTTON type=reset></BUTTON></FORM> of parent <LABEL><BUTTON type=button></BUTTON></LABEL>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <A></A> of parent <INPUT type=checkbox></INPUT>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <A></A> of parent <INPUT type=radio></INPUT>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <A></A> of parent <FORM><INPUT type=submit></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <A></A> of parent <FORM><INPUT type=image></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <A></A> of parent <FORM><INPUT type=reset></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <A></A> of parent <FORM><BUTTON type=submit></BUTTON></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <A></A> of parent <FORM><BUTTON type=reset></BUTTON></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <A></A> of parent <AREA></AREA>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <A></A> of parent <DETAILS><SUMMARY></SUMMARY></DETAILS>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <A></A> of parent <LABEL><INPUT type=checkbox></INPUT><SPAN></SPAN></LABEL>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <A></A> of parent <LABEL><BUTTON type=button></BUTTON></LABEL>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <AREA></AREA> of parent <INPUT type=checkbox></INPUT>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <AREA></AREA> of parent <INPUT type=radio></INPUT>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <AREA></AREA> of parent <FORM><INPUT type=submit></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <AREA></AREA> of parent <FORM><INPUT type=image></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <AREA></AREA> of parent <FORM><INPUT type=reset></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <AREA></AREA> of parent <FORM><BUTTON type=submit></BUTTON></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <AREA></AREA> of parent <FORM><BUTTON type=reset></BUTTON></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <AREA></AREA> of parent <A></A>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <AREA></AREA> of parent <DETAILS><SUMMARY></SUMMARY></DETAILS>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <AREA></AREA> of parent <LABEL><INPUT type=checkbox></INPUT><SPAN></SPAN></LABEL>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <AREA></AREA> of parent <LABEL><BUTTON type=button></BUTTON></LABEL>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <DETAILS><SUMMARY></SUMMARY></DETAILS> of parent <INPUT type=checkbox></INPUT>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <DETAILS><SUMMARY></SUMMARY></DETAILS> of parent <INPUT type=radio></INPUT>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <DETAILS><SUMMARY></SUMMARY></DETAILS> of parent <FORM><INPUT type=submit></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <DETAILS><SUMMARY></SUMMARY></DETAILS> of parent <FORM><INPUT type=image></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <DETAILS><SUMMARY></SUMMARY></DETAILS> of parent <FORM><INPUT type=reset></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <DETAILS><SUMMARY></SUMMARY></DETAILS> of parent <FORM><BUTTON type=submit></BUTTON></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <DETAILS><SUMMARY></SUMMARY></DETAILS> of parent <FORM><BUTTON type=reset></BUTTON></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <DETAILS><SUMMARY></SUMMARY></DETAILS> of parent <A></A>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <DETAILS><SUMMARY></SUMMARY></DETAILS> of parent <AREA></AREA>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <DETAILS><SUMMARY></SUMMARY></DETAILS> of parent <LABEL><INPUT type=checkbox></INPUT><SPAN></SPAN></LABEL>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <DETAILS><SUMMARY></SUMMARY></DETAILS> of parent <LABEL><BUTTON type=button></BUTTON></LABEL>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <LABEL><INPUT type=checkbox></INPUT><SPAN></SPAN></LABEL> of parent <INPUT type=checkbox></INPUT>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <LABEL><INPUT type=checkbox></INPUT><SPAN></SPAN></LABEL> of parent <INPUT type=radio></INPUT>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <LABEL><INPUT type=checkbox></INPUT><SPAN></SPAN></LABEL> of parent <FORM><INPUT type=submit></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <LABEL><INPUT type=checkbox></INPUT><SPAN></SPAN></LABEL> of parent <FORM><INPUT type=image></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <LABEL><INPUT type=checkbox></INPUT><SPAN></SPAN></LABEL> of parent <FORM><INPUT type=reset></INPUT></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <LABEL><INPUT type=checkbox></INPUT><SPAN></SPAN></LABEL> of parent <FORM><BUTTON type=submit></BUTTON></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <LABEL><INPUT type=checkbox></INPUT><SPAN></SPAN></LABEL> of parent <FORM><BUTTON type=reset></BUTTON></FORM>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <LABEL><INPUT type=checkbox></INPUT><SPAN></SPAN></LABEL> of parent <A></A>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <LABEL><INPUT type=checkbox></INPUT><SPAN></SPAN></LABEL> of parent <AREA></AREA>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <LABEL><INPUT type=checkbox></INPUT><SPAN></SPAN></LABEL> of parent <DETAILS><SUMMARY></SUMMARY></DETAILS>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <LABEL><INPUT type=checkbox></INPUT><SPAN></SPAN></LABEL> of parent <LABEL><BUTTON type=button></BUTTON></LABEL>, only child should be activated.",
+          "status": "fail"
+        },
+        {
+          "name": "When clicking child <LABEL><BUTTON type=button></BUTTON></LABEL> of parent <INPUT type=checkbox></INPUT>, only child should be activated.",
+          "status": "pass"
+        },
+        {
+          "name": "When clicking child <LABEL><BUTTON type=button></BUTTON></LABEL> of parent <INPUT type=radio></INPUT>, only child should be activated.",
+          "status": "pass"
+        },
+        {
+          "name": "When clicking child <LABEL><BUTTON type=button></BUTTON></LABEL> of parent <FORM><INPUT type=submit></INPUT></FORM>, only child should be activated.",
+          "status": "pass"
+        },
+        {
+          "name": "When clicking child <LABEL><BUTTON type=button></BUTTON></LABEL> of parent <FORM><INPUT type=image></INPUT></FORM>, only child should be activated.",
+          "status": "pass"
+        },
+        {
+          "name": "When clicking child <LABEL><BUTTON type=button></BUTTON></LABEL> of parent <FORM><INPUT type=reset></INPUT></FORM>, only child should be activated.",
+          "status": "pass"
+        },
+        {
+          "name": "When clicking child <LABEL><BUTTON type=button></BUTTON></LABEL> of parent <FORM><BUTTON type=submit></BUTTON></FORM>, only child should be activated.",
+          "status": "pass"
+        },
+        {
+          "name": "When clicking child <LABEL><BUTTON type=button></BUTTON></LABEL> of parent <FORM><BUTTON type=reset></BUTTON></FORM>, only child should be activated.",
+          "status": "pass"
+        },
+        {
+          "name": "When clicking child <LABEL><BUTTON type=button></BUTTON></LABEL> of parent <A></A>, only child should be activated.",
+          "status": "pass"
+        },
+        {
+          "name": "When clicking child <LABEL><BUTTON type=button></BUTTON></LABEL> of parent <AREA></AREA>, only child should be activated.",
+          "status": "pass"
+        },
+        {
+          "name": "When clicking child <LABEL><BUTTON type=button></BUTTON></LABEL> of parent <DETAILS><SUMMARY></SUMMARY></DETAILS>, only child should be activated.",
+          "status": "pass"
+        },
+        {
+          "name": "When clicking child <LABEL><BUTTON type=button></BUTTON></LABEL> of parent <LABEL><INPUT type=checkbox></INPUT><SPAN></SPAN></LABEL>, only child should be activated.",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 11,
+      "subtests_total": 132
+    },
+    "dom/events/Event-dispatch-target-moved.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Event propagation path when an element in it is moved within the DOM",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/Event-dispatch-target-removed.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Event propagation path when an element in it is removed from the DOM",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/Event-dispatch-throwing-multiple-globals.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "exception thrown in event listener function should result in error event on listener's global",
+          "status": "fail"
+        },
+        {
+          "name": "exception thrown in event listener interface object should result in error event on listener's global",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "dom/events/Event-dispatch-throwing.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Throwing in event listener with a single listeners",
+          "status": "fail"
+        },
+        {
+          "name": "Throwing in event listener with multiple listeners",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "dom/events/Event-init-while-dispatching.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Calling initKeyboardEvent while dispatching.",
+          "status": "fail"
+        },
+        {
+          "name": "Calling initMouseEvent while dispatching.",
+          "status": "fail"
+        },
+        {
+          "name": "Calling initCustomEvent while dispatching.",
+          "status": "fail"
+        },
+        {
+          "name": "Calling initUIEvent while dispatching.",
+          "status": "fail"
+        },
+        {
+          "name": "Calling initEvent while dispatching.",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 5
+    },
+    "dom/events/Event-initEvent.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Properties of initEvent(type, true, true)",
+          "status": "fail"
+        },
+        {
+          "name": "Properties of initEvent(type, true, false)",
+          "status": "fail"
+        },
+        {
+          "name": "Properties of initEvent(type, false, true)",
+          "status": "fail"
+        },
+        {
+          "name": "Properties of initEvent(type, false, false)",
+          "status": "fail"
+        },
+        {
+          "name": "Calling initEvent multiple times (getting type).",
+          "status": "pass"
+        },
+        {
+          "name": "Calling initEvent multiple times (not getting type).",
+          "status": "pass"
+        },
+        {
+          "name": "Calling initEvent must not have an effect during dispatching.",
+          "status": "pass"
+        },
+        {
+          "name": "Calling initEvent must unset the stop propagation flag.",
+          "status": "fail"
+        },
+        {
+          "name": "Calling initEvent must unset the stop immediate propagation flag.",
+          "status": "fail"
+        },
+        {
+          "name": "Calling initEvent during propagation.",
+          "status": "pass"
+        },
+        {
+          "name": "First parameter to initEvent should be mandatory.",
+          "status": "fail"
+        },
+        {
+          "name": "Tests initEvent's default parameter values.",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 5,
+      "subtests_total": 12
+    },
+    "dom/events/Event-isTrusted.any.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Event-isTrusted",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/Event-isTrusted.any.worker.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "dom/events/Event-propagation.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Newly-created Event",
+          "status": "pass"
+        },
+        {
+          "name": "After stopPropagation()",
+          "status": "pass"
+        },
+        {
+          "name": "Reinitialized after stopPropagation()",
+          "status": "pass"
+        },
+        {
+          "name": "After stopImmediatePropagation()",
+          "status": "pass"
+        },
+        {
+          "name": "Reinitialized after stopImmediatePropagation()",
+          "status": "pass"
+        },
+        {
+          "name": "After cancelBubble=true",
+          "status": "pass"
+        },
+        {
+          "name": "Reinitialized after cancelBubble=true",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 7,
+      "subtests_total": 7
+    },
+    "dom/events/Event-returnValue.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "When an event is created, returnValue should be initialized to true.",
+          "status": "pass"
+        },
+        {
+          "name": "preventDefault() should not change returnValue if cancelable is false.",
+          "status": "pass"
+        },
+        {
+          "name": "returnValue=false should have no effect if cancelable is false.",
+          "status": "pass"
+        },
+        {
+          "name": "preventDefault() should change returnValue if cancelable is true.",
+          "status": "pass"
+        },
+        {
+          "name": "returnValue should change returnValue if cancelable is true.",
+          "status": "pass"
+        },
+        {
+          "name": "initEvent should unset returnValue.",
+          "status": "pass"
+        },
+        {
+          "name": "returnValue=true should have no effect once the canceled flag was set.",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 7,
+      "subtests_total": 7
+    },
+    "dom/events/Event-stopImmediatePropagation.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Event's stopImmediatePropagation",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/Event-stopPropagation-cancel-bubbling.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Event-stopPropagation-cancel-bubbling",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/Event-subclasses-constructors.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Event constructor (no argument)",
+          "status": "fail"
+        },
+        {
+          "name": "Event constructor (undefined argument)",
+          "status": "fail"
+        },
+        {
+          "name": "Event constructor (null argument)",
+          "status": "fail"
+        },
+        {
+          "name": "Event constructor (empty argument)",
+          "status": "fail"
+        },
+        {
+          "name": "Event constructor (argument with default values)",
+          "status": "fail"
+        },
+        {
+          "name": "Event constructor (argument with non-default values)",
+          "status": "fail"
+        },
+        {
+          "name": "UIEvent constructor (no argument)",
+          "status": "fail"
+        },
+        {
+          "name": "UIEvent constructor (undefined argument)",
+          "status": "fail"
+        },
+        {
+          "name": "UIEvent constructor (null argument)",
+          "status": "fail"
+        },
+        {
+          "name": "UIEvent constructor (empty argument)",
+          "status": "fail"
+        },
+        {
+          "name": "UIEvent constructor (argument with default values)",
+          "status": "fail"
+        },
+        {
+          "name": "UIEvent constructor (argument with non-default values)",
+          "status": "fail"
+        },
+        {
+          "name": "FocusEvent constructor (no argument)",
+          "status": "fail"
+        },
+        {
+          "name": "FocusEvent constructor (undefined argument)",
+          "status": "fail"
+        },
+        {
+          "name": "FocusEvent constructor (null argument)",
+          "status": "fail"
+        },
+        {
+          "name": "FocusEvent constructor (empty argument)",
+          "status": "fail"
+        },
+        {
+          "name": "FocusEvent constructor (argument with default values)",
+          "status": "fail"
+        },
+        {
+          "name": "FocusEvent constructor (argument with non-default values)",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent constructor (no argument)",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent constructor (undefined argument)",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent constructor (null argument)",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent constructor (empty argument)",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent constructor (argument with default values)",
+          "status": "fail"
+        },
+        {
+          "name": "MouseEvent constructor (argument with non-default values)",
+          "status": "fail"
+        },
+        {
+          "name": "WheelEvent constructor (no argument)",
+          "status": "fail"
+        },
+        {
+          "name": "WheelEvent constructor (undefined argument)",
+          "status": "fail"
+        },
+        {
+          "name": "WheelEvent constructor (null argument)",
+          "status": "fail"
+        },
+        {
+          "name": "WheelEvent constructor (empty argument)",
+          "status": "fail"
+        },
+        {
+          "name": "WheelEvent constructor (argument with default values)",
+          "status": "fail"
+        },
+        {
+          "name": "WheelEvent constructor (argument with non-default values)",
+          "status": "fail"
+        },
+        {
+          "name": "KeyboardEvent constructor (no argument)",
+          "status": "fail"
+        },
+        {
+          "name": "KeyboardEvent constructor (undefined argument)",
+          "status": "fail"
+        },
+        {
+          "name": "KeyboardEvent constructor (null argument)",
+          "status": "fail"
+        },
+        {
+          "name": "KeyboardEvent constructor (empty argument)",
+          "status": "fail"
+        },
+        {
+          "name": "KeyboardEvent constructor (argument with default values)",
+          "status": "fail"
+        },
+        {
+          "name": "KeyboardEvent constructor (argument with non-default values)",
+          "status": "fail"
+        },
+        {
+          "name": "CompositionEvent constructor (no argument)",
+          "status": "fail"
+        },
+        {
+          "name": "CompositionEvent constructor (undefined argument)",
+          "status": "fail"
+        },
+        {
+          "name": "CompositionEvent constructor (null argument)",
+          "status": "fail"
+        },
+        {
+          "name": "CompositionEvent constructor (empty argument)",
+          "status": "fail"
+        },
+        {
+          "name": "CompositionEvent constructor (argument with default values)",
+          "status": "fail"
+        },
+        {
+          "name": "CompositionEvent constructor (argument with non-default values)",
+          "status": "fail"
+        },
+        {
+          "name": "SubclassedEvent constructor (no argument)",
+          "status": "fail"
+        },
+        {
+          "name": "SubclassedEvent constructor (undefined argument)",
+          "status": "fail"
+        },
+        {
+          "name": "SubclassedEvent constructor (null argument)",
+          "status": "fail"
+        },
+        {
+          "name": "SubclassedEvent constructor (empty argument)",
+          "status": "fail"
+        },
+        {
+          "name": "SubclassedEvent constructor (argument with default values)",
+          "status": "fail"
+        },
+        {
+          "name": "SubclassedEvent constructor (argument with non-default values)",
+          "status": "fail"
+        },
+        {
+          "name": "UIEvent constructor (view argument with wrong type)",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 49
+    },
+    "dom/events/Event-timestamp-cross-realm-getter.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "event.timeStamp is initialized using event's relevant global object",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/Event-timestamp-high-resolution.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Constructed MouseEvent timestamp should be high resolution and have the same time origin as performance.now()",
+          "status": "fail"
+        },
+        {
+          "name": "Constructed KeyboardEvent timestamp should be high resolution and have the same time origin as performance.now()",
+          "status": "fail"
+        },
+        {
+          "name": "Constructed WheelEvent timestamp should be high resolution and have the same time origin as performance.now()",
+          "status": "fail"
+        },
+        {
+          "name": "Constructed FocusEvent timestamp should be high resolution and have the same time origin as performance.now()",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "dom/events/Event-timestamp-high-resolution.https.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Constructed GamepadEvent timestamp should be high resolution and have the same time origin as performance.now()",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/Event-timestamp-safe-resolution.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Event timestamp should not have a resolution better than 5 microseconds",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/Event-type-empty.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "initEvent",
+          "status": "pass"
+        },
+        {
+          "name": "Constructor",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 2
+    },
+    "dom/events/Event-type.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Event.type should initially be the empty string",
+          "status": "pass"
+        },
+        {
+          "name": "Event.type should be initialized by initEvent",
+          "status": "pass"
+        },
+        {
+          "name": "Event.type should be initialized by the constructor",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 3,
+      "subtests_total": 3
+    },
+    "dom/events/EventListener-addEventListener.sub.window.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "EventListener.addEventListener doesn't throw when a cross origin object is passed in.",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/EventListener-handleEvent-cross-realm.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "EventListener is cross-realm plain object without 'handleEvent' property",
+          "status": "fail"
+        },
+        {
+          "name": "EventListener is cross-realm plain object with non-callable 'handleEvent' property",
+          "status": "fail"
+        },
+        {
+          "name": "EventListener is cross-realm plain object with revoked Proxy as 'handleEvent' property",
+          "status": "fail"
+        },
+        {
+          "name": "EventListener is cross-realm non-callable revoked Proxy",
+          "status": "fail"
+        },
+        {
+          "name": "EventListener is cross-realm callable revoked Proxy",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 5
+    },
+    "dom/events/EventListener-handleEvent.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "calls `handleEvent` method of `EventListener`",
+          "status": "pass"
+        },
+        {
+          "name": "performs `Get` every time event is dispatched",
+          "status": "pass"
+        },
+        {
+          "name": "doesn't call `handleEvent` method on callable `EventListener`",
+          "status": "pass"
+        },
+        {
+          "name": "rethrows errors when getting `handleEvent`",
+          "status": "pass"
+        },
+        {
+          "name": "throws if `handleEvent` is falsy and not callable",
+          "status": "pass"
+        },
+        {
+          "name": "throws if `handleEvent` is thruthy and not callable",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 6,
+      "subtests_total": 6
+    },
+    "dom/events/EventListener-incumbent-global-1.sub.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Check the incumbent global EventListeners  are called with",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/EventListener-incumbent-global-2.sub.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Check the incumbent global EventListeners  are called with",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/EventListener-invoke-legacy.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Listener of transitionend",
+          "status": "timeout"
+        },
+        {
+          "name": "Legacy listener of transitionend",
+          "status": "timeout"
+        },
+        {
+          "name": "Listener of animationend",
+          "status": "timeout"
+        },
+        {
+          "name": "Legacy listener of animationend",
+          "status": "timeout"
+        },
+        {
+          "name": "Listener of animationstart",
+          "status": "timeout"
+        },
+        {
+          "name": "Legacy listener of animationstart",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 6
+    },
+    "dom/events/EventListenerOptions-capture.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Capture boolean should be honored correctly",
+          "status": "pass"
+        },
+        {
+          "name": "Capture option should be honored correctly",
+          "status": "pass"
+        },
+        {
+          "name": "Supports capture option",
+          "status": "fail"
+        },
+        {
+          "name": "Equivalence of option values",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 3,
+      "subtests_total": 4
+    },
+    "dom/events/EventTarget-add-listener-platform-object.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "addEventListener with a platform object",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/EventTarget-add-remove-listener.any.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Removing an event listener without explicit capture arg should succeed",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/EventTarget-add-remove-listener.any.worker.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "dom/events/EventTarget-addEventListener.any.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Adding a null event listener should succeed",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/EventTarget-addEventListener.any.worker.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "dom/events/EventTarget-constructible.any.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "A constructed EventTarget can be used as expected",
+          "status": "pass"
+        },
+        {
+          "name": "A constructed EventTarget implements dispatch correctly",
+          "status": "pass"
+        },
+        {
+          "name": "EventTarget can be subclassed",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 3
+    },
+    "dom/events/EventTarget-constructible.any.worker.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "dom/events/EventTarget-dispatchEvent-returnvalue.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Return value of EventTarget.dispatchEvent() affected by preventDefault().",
+          "status": "pass"
+        },
+        {
+          "name": "Return value of EventTarget.dispatchEvent() affected by returnValue.",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 2
+    },
+    "dom/events/EventTarget-dispatchEvent.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Calling dispatchEvent(null).",
+          "status": "pass"
+        },
+        {
+          "name": "If the event's initialized flag is not set, an InvalidStateError must be thrown (BeforeUnloadEvent).",
+          "status": "pass"
+        },
+        {
+          "name": "If the event's initialized flag is not set, an InvalidStateError must be thrown (CompositionEvent).",
+          "status": "pass"
+        },
+        {
+          "name": "If the event's initialized flag is not set, an InvalidStateError must be thrown (CustomEvent).",
+          "status": "pass"
+        },
+        {
+          "name": "If the event's initialized flag is not set, an InvalidStateError must be thrown (DeviceMotionEvent).",
+          "status": "pass"
+        },
+        {
+          "name": "If the event's initialized flag is not set, an InvalidStateError must be thrown (DeviceOrientationEvent).",
+          "status": "pass"
+        },
+        {
+          "name": "If the event's initialized flag is not set, an InvalidStateError must be thrown (DragEvent).",
+          "status": "pass"
+        },
+        {
+          "name": "If the event's initialized flag is not set, an InvalidStateError must be thrown (Event).",
+          "status": "pass"
+        },
+        {
+          "name": "If the event's initialized flag is not set, an InvalidStateError must be thrown (Events).",
+          "status": "pass"
+        },
+        {
+          "name": "If the event's initialized flag is not set, an InvalidStateError must be thrown (FocusEvent).",
+          "status": "pass"
+        },
+        {
+          "name": "If the event's initialized flag is not set, an InvalidStateError must be thrown (HashChangeEvent).",
+          "status": "pass"
+        },
+        {
+          "name": "If the event's initialized flag is not set, an InvalidStateError must be thrown (HTMLEvents).",
+          "status": "pass"
+        },
+        {
+          "name": "If the event's initialized flag is not set, an InvalidStateError must be thrown (KeyboardEvent).",
+          "status": "pass"
+        },
+        {
+          "name": "If the event's initialized flag is not set, an InvalidStateError must be thrown (MessageEvent).",
+          "status": "pass"
+        },
+        {
+          "name": "If the event's initialized flag is not set, an InvalidStateError must be thrown (MouseEvent).",
+          "status": "pass"
+        },
+        {
+          "name": "If the event's initialized flag is not set, an InvalidStateError must be thrown (MouseEvents).",
+          "status": "pass"
+        },
+        {
+          "name": "If the event's initialized flag is not set, an InvalidStateError must be thrown (StorageEvent).",
+          "status": "pass"
+        },
+        {
+          "name": "If the event's initialized flag is not set, an InvalidStateError must be thrown (SVGEvents).",
+          "status": "pass"
+        },
+        {
+          "name": "If the event's initialized flag is not set, an InvalidStateError must be thrown (TextEvent).",
+          "status": "pass"
+        },
+        {
+          "name": "If the event's initialized flag is not set, an InvalidStateError must be thrown (UIEvent).",
+          "status": "pass"
+        },
+        {
+          "name": "If the event's initialized flag is not set, an InvalidStateError must be thrown (UIEvents).",
+          "status": "pass"
+        },
+        {
+          "name": "If the event's dispatch flag is set, an InvalidStateError must be thrown.",
+          "status": "pass"
+        },
+        {
+          "name": "Exceptions from event listeners must not be propagated.",
+          "status": "pass"
+        },
+        {
+          "name": "Event listeners added during dispatch should be called",
+          "status": "pass"
+        },
+        {
+          "name": "Capturing event listeners should be called before non-capturing ones",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 25,
+      "subtests_total": 25
+    },
+    "dom/events/EventTarget-removeEventListener.any.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "removing a null event listener should succeed",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/EventTarget-removeEventListener.any.worker.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "dom/events/EventTarget-this-of-listener.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "the this value inside the event listener callback should be the node",
+          "status": "fail"
+        },
+        {
+          "name": "the this value inside the event listener object handleEvent should be the object",
+          "status": "fail"
+        },
+        {
+          "name": "dispatchEvent should invoke the current handleEvent method of the object",
+          "status": "fail"
+        },
+        {
+          "name": "addEventListener should not require handleEvent to be defined on object listeners",
+          "status": "fail"
+        },
+        {
+          "name": "handleEvent properties added to a function before addEventListener are not reached",
+          "status": "fail"
+        },
+        {
+          "name": "handleEvent properties added to a function after addEventListener are not reached",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 6
+    },
+    "dom/events/KeyEvent-initKeyEvent.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "KeyboardEvent.initKeyEvent shouldn't be defined (created by createEvent(\"KeyboardEvent\")",
+          "status": "pass"
+        },
+        {
+          "name": "KeyboardEvent.initKeyEvent shouldn't be defined (created by constructor)",
+          "status": "pass"
+        },
+        {
+          "name": "KeyboardEvent.prototype.initKeyEvent shouldn't be defined",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 3,
+      "subtests_total": 3
+    },
+    "dom/events/click-on-absolute-pseudo.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Click on pseudo-element that disappears on mousedown",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/event-disabled-dynamic.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "disabled is honored properly in presence of dynamic changes",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/event-global-extra.window.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "window.event for constructors from another global: EventTarget",
+          "status": "fail"
+        },
+        {
+          "name": "window.event for constructors from another global: XMLHttpRequest",
+          "status": "fail"
+        },
+        {
+          "name": "window.event and element from another document",
+          "status": "fail"
+        },
+        {
+          "name": "window.event and moving an element post-dispatch",
+          "status": "fail"
+        },
+        {
+          "name": "window.event should not be affected by nodes moving post-dispatch",
+          "status": "fail"
+        },
+        {
+          "name": "Listener from a different global",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 6
+    },
+    "dom/events/event-global-is-still-set-when-coercing-beforeunload-result.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "window.event is still set when 'beforeunload' result is coerced to string",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/event-global-is-still-set-when-reporting-exception-onerror.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "window.onerror handler restores window.event after it reports an exception",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/event-global-set-before-handleEvent-lookup.window.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "window.event is set before 'handleEvent' lookup",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/event-global.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "event exists on window, which is initially set to undefined",
+          "status": "fail"
+        },
+        {
+          "name": "window.event is only defined during dispatch",
+          "status": "fail"
+        },
+        {
+          "name": "window.event is undefined if the target is in a shadow tree (event dispatched outside shadow tree)",
+          "status": "fail"
+        },
+        {
+          "name": "window.event is undefined if the target is in a shadow tree (event dispatched inside shadow tree)",
+          "status": "fail"
+        },
+        {
+          "name": "window.event is undefined inside window.onerror if the target is in a shadow tree (ErrorEvent dispatched inside shadow tree)",
+          "status": "fail"
+        },
+        {
+          "name": "window.event is set to the current event during dispatch",
+          "status": "fail"
+        },
+        {
+          "name": "window.event is set to the current event, which is the event passed to dispatch",
+          "status": "fail"
+        },
+        {
+          "name": "window.event is set to the current event, which is the event passed to dispatch (2)",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 8
+    },
+    "dom/events/event-global.worker.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "dom/events/event-handler-attribute-replace-preserves-passive.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Replacing a wheel event handler attribute on body via setAttribute preserves its passive flag",
+          "status": "pass"
+        },
+        {
+          "name": "Replacing a wheel event handler attribute on document element via setAttribute preserves its passive flag",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 2
+    },
+    "dom/events/event-src-element-nullable.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Event srcElement should be nullable",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/focus-event-document-move.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Moving a node during mousedown should not crash",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/handler-count.html?document": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Test addEventListener/removeEventListener on the document.",
+          "status": "timeout"
+        },
+        {
+          "name": "Test setting onanimationstart handler on the document.",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "dom/events/handler-count.html?element": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Test addEventListener/removeEventListener on the element.",
+          "status": "timeout"
+        },
+        {
+          "name": "Test setting onanimationstart handler on the element.",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "dom/events/handler-count.html?window": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Test addEventListener/removeEventListener on the window.",
+          "status": "timeout"
+        },
+        {
+          "name": "Test setting onanimationstart handler on the window.",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "dom/events/keypress-dispatch-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "dom/events/label-default-action.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Label default action should not trigger when clicked button removes itself",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/legacy-pre-activation-behavior.window.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Use NONE phase during legacy-pre-activation behavior",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/mouse-event-retarget.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "offsetX is correctly adjusted",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/no-focus-events-at-clicking-editable-content-in-link.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Click editable element in link",
+          "status": "fail"
+        },
+        {
+          "name": "Click editable link",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "dom/events/non-cancelable-when-passive/generic-events-stay-cancelable.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "A generic event with only passive listeners remains cancelable",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/non-passive-mousewheel-event-listener-on-body.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "non-passive mousewheel event listener on body",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/non-passive-mousewheel-event-listener-on-div.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "non-passive mousewheel event listener on div",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/non-passive-mousewheel-event-listener-on-document.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "non-passive mousewheel event listener on document",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/non-passive-mousewheel-event-listener-on-root.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "non-passive mousewheel event listener on root",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/non-passive-mousewheel-event-listener-on-window.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "non-passive mousewheel event listener on window",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/non-passive-touchmove-event-listener-on-body.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "non-passive touchmove event listener on body",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/non-passive-touchmove-event-listener-on-div.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "non-passive touchmove event listener on div",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/non-passive-touchmove-event-listener-on-document.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "non-passive touchmove event listener on document",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/non-passive-touchmove-event-listener-on-root.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "non-passive touchmove event listener on root",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/non-passive-touchmove-event-listener-on-window.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "non-passive-touchmove-event-listener-on-window",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/non-passive-touchstart-event-listener-on-body.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "non-passive touchstart event listener on body",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/non-passive-touchstart-event-listener-on-div.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "non-passive touchstart event listener on div",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/non-passive-touchstart-event-listener-on-document.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "non-passive touchstart event listener on document",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/non-passive-touchstart-event-listener-on-root.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "non-passive touchstart event listener on root",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/non-passive-touchstart-event-listener-on-window.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "non-passive touchstart event listener on window",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/non-passive-wheel-event-listener-on-body.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "non-passive wheel event listener on body",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/non-passive-wheel-event-listener-on-div.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "non-passive wheel event listener on div",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/non-passive-wheel-event-listener-on-document.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "non-passive wheel event listener on document",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/non-passive-wheel-event-listener-on-root.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "non-passive wheel event listener on root",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/non-passive-wheel-event-listener-on-window.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "non-passive wheel event listener on window",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/passive-mousewheel-event-listener-on-body.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "passive mousewheel event listener on body",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/passive-mousewheel-event-listener-on-div.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "passive mousewheel event listener on div",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/passive-mousewheel-event-listener-on-document.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "passive mousewheel event listener on document",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/passive-mousewheel-event-listener-on-root.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "passive mousewheel event listener on root",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/passive-mousewheel-event-listener-on-window.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "passive mousewheel event listener on window",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/passive-touchmove-event-listener-on-body.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "passive touchmove event listener on body",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/passive-touchmove-event-listener-on-div.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "passive touchmove event listener on div",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/passive-touchmove-event-listener-on-document.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "passive touchmove event listener on document",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/passive-touchmove-event-listener-on-root.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "passive touchmove event listener on root",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/passive-touchmove-event-listener-on-window.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "passive touchmove event listener on window",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/passive-touchstart-event-listener-on-body.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "passive touchstart event listener on body",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/passive-touchstart-event-listener-on-div.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "passive touchstart event listener on div",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/passive-touchstart-event-listener-on-document.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "passive touchstart event listener on document",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/passive-touchstart-event-listener-on-root.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "passive touchstart event listener on root",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/passive-touchstart-event-listener-on-window.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "passive touchstart event listener on window",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/passive-wheel-event-listener-on-body.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "passive wheel event listener on body",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/passive-wheel-event-listener-on-div.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "passive wheel event listener on div",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/passive-wheel-event-listener-on-document.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "passive wheel event listener on document",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/passive-wheel-event-listener-on-root.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "passive wheel event listener on root",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/passive-wheel-event-listener-on-window.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "passive wheel event listener on window",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/non-cancelable-when-passive/synthetic-events-cancelable.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Synthetic wheel event with interface WheelEvent is not cancelable",
+          "status": "pass"
+        },
+        {
+          "name": "Synthetic wheel event with interface Event is not cancelable",
+          "status": "pass"
+        },
+        {
+          "name": "Synthetic mousewheel event with interface WheelEvent is not cancelable",
+          "status": "pass"
+        },
+        {
+          "name": "Synthetic mousewheel event with interface Event is not cancelable",
+          "status": "pass"
+        },
+        {
+          "name": "Synthetic touchstart event with interface TouchEvent is not cancelable",
+          "status": "pass"
+        },
+        {
+          "name": "Synthetic touchstart event with interface Event is not cancelable",
+          "status": "pass"
+        },
+        {
+          "name": "Synthetic touchmove event with interface TouchEvent is not cancelable",
+          "status": "pass"
+        },
+        {
+          "name": "Synthetic touchmove event with interface Event is not cancelable",
+          "status": "pass"
+        },
+        {
+          "name": "Synthetic touchend event with interface TouchEvent is not cancelable",
+          "status": "pass"
+        },
+        {
+          "name": "Synthetic touchend event with interface Event is not cancelable",
+          "status": "pass"
+        },
+        {
+          "name": "Synthetic touchcancel event with interface TouchEvent is not cancelable",
+          "status": "pass"
+        },
+        {
+          "name": "Synthetic touchcancel event with interface Event is not cancelable",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 12,
+      "subtests_total": 12
+    },
+    "dom/events/passive-by-default.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "touchstart listener is passive by default for Object",
+          "status": "fail"
+        },
+        {
+          "name": "touchstart listener is passive with {passive:undefined} for Object",
+          "status": "fail"
+        },
+        {
+          "name": "touchstart listener is non-passive with {passive:false} for Object",
+          "status": "pass"
+        },
+        {
+          "name": "touchstart listener is passive with {passive:true} for Object",
+          "status": "pass"
+        },
+        {
+          "name": "touchstart listener is passive by default for Node",
+          "status": "fail"
+        },
+        {
+          "name": "touchstart listener is passive with {passive:undefined} for Node",
+          "status": "fail"
+        },
+        {
+          "name": "touchstart listener is non-passive with {passive:false} for Node",
+          "status": "pass"
+        },
+        {
+          "name": "touchstart listener is passive with {passive:true} for Node",
+          "status": "pass"
+        },
+        {
+          "name": "touchstart listener is passive by default for HTMLHtmlElement",
+          "status": "fail"
+        },
+        {
+          "name": "touchstart listener is passive with {passive:undefined} for HTMLHtmlElement",
+          "status": "fail"
+        },
+        {
+          "name": "touchstart listener is non-passive with {passive:false} for HTMLHtmlElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchstart listener is passive with {passive:true} for HTMLHtmlElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchstart listener is passive by default for HTMLBodyElement",
+          "status": "fail"
+        },
+        {
+          "name": "touchstart listener is passive with {passive:undefined} for HTMLBodyElement",
+          "status": "fail"
+        },
+        {
+          "name": "touchstart listener is non-passive with {passive:false} for HTMLBodyElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchstart listener is passive with {passive:true} for HTMLBodyElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchstart listener is non-passive by default for HTMLDivElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchstart listener is non-passive with {passive:undefined} for HTMLDivElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchstart listener is non-passive with {passive:false} for HTMLDivElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchstart listener is passive with {passive:true} for HTMLDivElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchmove listener is passive by default for Object",
+          "status": "fail"
+        },
+        {
+          "name": "touchmove listener is passive with {passive:undefined} for Object",
+          "status": "fail"
+        },
+        {
+          "name": "touchmove listener is non-passive with {passive:false} for Object",
+          "status": "pass"
+        },
+        {
+          "name": "touchmove listener is passive with {passive:true} for Object",
+          "status": "pass"
+        },
+        {
+          "name": "touchmove listener is passive by default for Node",
+          "status": "fail"
+        },
+        {
+          "name": "touchmove listener is passive with {passive:undefined} for Node",
+          "status": "fail"
+        },
+        {
+          "name": "touchmove listener is non-passive with {passive:false} for Node",
+          "status": "pass"
+        },
+        {
+          "name": "touchmove listener is passive with {passive:true} for Node",
+          "status": "pass"
+        },
+        {
+          "name": "touchmove listener is passive by default for HTMLHtmlElement",
+          "status": "fail"
+        },
+        {
+          "name": "touchmove listener is passive with {passive:undefined} for HTMLHtmlElement",
+          "status": "fail"
+        },
+        {
+          "name": "touchmove listener is non-passive with {passive:false} for HTMLHtmlElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchmove listener is passive with {passive:true} for HTMLHtmlElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchmove listener is passive by default for HTMLBodyElement",
+          "status": "fail"
+        },
+        {
+          "name": "touchmove listener is passive with {passive:undefined} for HTMLBodyElement",
+          "status": "fail"
+        },
+        {
+          "name": "touchmove listener is non-passive with {passive:false} for HTMLBodyElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchmove listener is passive with {passive:true} for HTMLBodyElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchmove listener is non-passive by default for HTMLDivElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchmove listener is non-passive with {passive:undefined} for HTMLDivElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchmove listener is non-passive with {passive:false} for HTMLDivElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchmove listener is passive with {passive:true} for HTMLDivElement",
+          "status": "pass"
+        },
+        {
+          "name": "wheel listener is passive by default for Object",
+          "status": "fail"
+        },
+        {
+          "name": "wheel listener is passive with {passive:undefined} for Object",
+          "status": "fail"
+        },
+        {
+          "name": "wheel listener is non-passive with {passive:false} for Object",
+          "status": "pass"
+        },
+        {
+          "name": "wheel listener is passive with {passive:true} for Object",
+          "status": "pass"
+        },
+        {
+          "name": "wheel listener is passive by default for Node",
+          "status": "fail"
+        },
+        {
+          "name": "wheel listener is passive with {passive:undefined} for Node",
+          "status": "fail"
+        },
+        {
+          "name": "wheel listener is non-passive with {passive:false} for Node",
+          "status": "pass"
+        },
+        {
+          "name": "wheel listener is passive with {passive:true} for Node",
+          "status": "pass"
+        },
+        {
+          "name": "wheel listener is passive by default for HTMLHtmlElement",
+          "status": "fail"
+        },
+        {
+          "name": "wheel listener is passive with {passive:undefined} for HTMLHtmlElement",
+          "status": "fail"
+        },
+        {
+          "name": "wheel listener is non-passive with {passive:false} for HTMLHtmlElement",
+          "status": "pass"
+        },
+        {
+          "name": "wheel listener is passive with {passive:true} for HTMLHtmlElement",
+          "status": "pass"
+        },
+        {
+          "name": "wheel listener is passive by default for HTMLBodyElement",
+          "status": "fail"
+        },
+        {
+          "name": "wheel listener is passive with {passive:undefined} for HTMLBodyElement",
+          "status": "fail"
+        },
+        {
+          "name": "wheel listener is non-passive with {passive:false} for HTMLBodyElement",
+          "status": "pass"
+        },
+        {
+          "name": "wheel listener is passive with {passive:true} for HTMLBodyElement",
+          "status": "pass"
+        },
+        {
+          "name": "wheel listener is non-passive by default for HTMLDivElement",
+          "status": "pass"
+        },
+        {
+          "name": "wheel listener is non-passive with {passive:undefined} for HTMLDivElement",
+          "status": "pass"
+        },
+        {
+          "name": "wheel listener is non-passive with {passive:false} for HTMLDivElement",
+          "status": "pass"
+        },
+        {
+          "name": "wheel listener is passive with {passive:true} for HTMLDivElement",
+          "status": "pass"
+        },
+        {
+          "name": "mousewheel listener is passive by default for Object",
+          "status": "fail"
+        },
+        {
+          "name": "mousewheel listener is passive with {passive:undefined} for Object",
+          "status": "fail"
+        },
+        {
+          "name": "mousewheel listener is non-passive with {passive:false} for Object",
+          "status": "pass"
+        },
+        {
+          "name": "mousewheel listener is passive with {passive:true} for Object",
+          "status": "pass"
+        },
+        {
+          "name": "mousewheel listener is passive by default for Node",
+          "status": "fail"
+        },
+        {
+          "name": "mousewheel listener is passive with {passive:undefined} for Node",
+          "status": "fail"
+        },
+        {
+          "name": "mousewheel listener is non-passive with {passive:false} for Node",
+          "status": "pass"
+        },
+        {
+          "name": "mousewheel listener is passive with {passive:true} for Node",
+          "status": "pass"
+        },
+        {
+          "name": "mousewheel listener is passive by default for HTMLHtmlElement",
+          "status": "fail"
+        },
+        {
+          "name": "mousewheel listener is passive with {passive:undefined} for HTMLHtmlElement",
+          "status": "fail"
+        },
+        {
+          "name": "mousewheel listener is non-passive with {passive:false} for HTMLHtmlElement",
+          "status": "pass"
+        },
+        {
+          "name": "mousewheel listener is passive with {passive:true} for HTMLHtmlElement",
+          "status": "pass"
+        },
+        {
+          "name": "mousewheel listener is passive by default for HTMLBodyElement",
+          "status": "fail"
+        },
+        {
+          "name": "mousewheel listener is passive with {passive:undefined} for HTMLBodyElement",
+          "status": "fail"
+        },
+        {
+          "name": "mousewheel listener is non-passive with {passive:false} for HTMLBodyElement",
+          "status": "pass"
+        },
+        {
+          "name": "mousewheel listener is passive with {passive:true} for HTMLBodyElement",
+          "status": "pass"
+        },
+        {
+          "name": "mousewheel listener is non-passive by default for HTMLDivElement",
+          "status": "pass"
+        },
+        {
+          "name": "mousewheel listener is non-passive with {passive:undefined} for HTMLDivElement",
+          "status": "pass"
+        },
+        {
+          "name": "mousewheel listener is non-passive with {passive:false} for HTMLDivElement",
+          "status": "pass"
+        },
+        {
+          "name": "mousewheel listener is passive with {passive:true} for HTMLDivElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchend listener is non-passive by default for Object",
+          "status": "pass"
+        },
+        {
+          "name": "touchend listener is non-passive with {passive:undefined} for Object",
+          "status": "pass"
+        },
+        {
+          "name": "touchend listener is non-passive with {passive:false} for Object",
+          "status": "pass"
+        },
+        {
+          "name": "touchend listener is passive with {passive:true} for Object",
+          "status": "pass"
+        },
+        {
+          "name": "touchend listener is non-passive by default for Node",
+          "status": "pass"
+        },
+        {
+          "name": "touchend listener is non-passive with {passive:undefined} for Node",
+          "status": "pass"
+        },
+        {
+          "name": "touchend listener is non-passive with {passive:false} for Node",
+          "status": "pass"
+        },
+        {
+          "name": "touchend listener is passive with {passive:true} for Node",
+          "status": "pass"
+        },
+        {
+          "name": "touchend listener is non-passive by default for HTMLHtmlElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchend listener is non-passive with {passive:undefined} for HTMLHtmlElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchend listener is non-passive with {passive:false} for HTMLHtmlElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchend listener is passive with {passive:true} for HTMLHtmlElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchend listener is non-passive by default for HTMLBodyElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchend listener is non-passive with {passive:undefined} for HTMLBodyElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchend listener is non-passive with {passive:false} for HTMLBodyElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchend listener is passive with {passive:true} for HTMLBodyElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchend listener is non-passive by default for HTMLDivElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchend listener is non-passive with {passive:undefined} for HTMLDivElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchend listener is non-passive with {passive:false} for HTMLDivElement",
+          "status": "pass"
+        },
+        {
+          "name": "touchend listener is passive with {passive:true} for HTMLDivElement",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 68,
+      "subtests_total": 100
+    },
+    "dom/events/pointer-event-document-move.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Moving a node to new document should move the registered event listeners together",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/preventDefault-during-activation-behavior.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "behavior of preventDefault during activation behavior",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/relatedTarget.window.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Reset if target pointed to a shadow tree",
+          "status": "fail"
+        },
+        {
+          "name": "Retarget a shadow-tree relatedTarget",
+          "status": "fail"
+        },
+        {
+          "name": "Reset if target pointed to a shadow tree pre-dispatch",
+          "status": "fail"
+        },
+        {
+          "name": "Retarget a shadow-tree relatedTarget, part 2",
+          "status": "fail"
+        },
+        {
+          "name": "Reset targets on early return",
+          "status": "fail"
+        },
+        {
+          "name": "Reset targets before activation behavior",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 6
+    },
+    "dom/events/remove-all-listeners.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Removing all listeners and then adding a new one should work.",
+          "status": "pass"
+        },
+        {
+          "name": "Nested usage of once listeners should work.",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 2
+    },
+    "dom/events/replace-event-listener-null-browsing-context-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "dom/events/scrolling/iframe-chains.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Wheel scroll in iframe chains to containing element.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/scrolling/input-text-scroll-event-when-using-arrow-keys.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/save-iframe-scroll-offset-when-display-none.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Ensure that the scroll position is not lost when the local iframe is set to display:none and shown again.",
+          "status": "pass"
+        },
+        {
+          "name": "Ensure that the scroll position is not lost when the remote iframe is set to display:none and shown again.",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 2
+    },
+    "dom/events/scrolling/scroll-cross-origin-iframes.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Verify sibling cross-origin iframes can wheel-scroll.",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/scrolling/scroll-event-fired-to-element.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "scrollTop and scrollLeft should fire scroll event.",
+          "status": "fail"
+        },
+        {
+          "name": "scrollTop and scrollLeft being set with the same value.",
+          "status": "fail"
+        },
+        {
+          "name": "scrollTop and scrollLeft being set with invalid scroll offset.",
+          "status": "pass"
+        },
+        {
+          "name": "scrollTop and scrollLeft when scrolling above maximum offset.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 4
+    },
+    "dom/events/scrolling/scroll-event-fired-to-iframe.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "scrollX and scrollY should fire scroll event.",
+          "status": "fail"
+        },
+        {
+          "name": "scrollX and scrollY being set with the same value.",
+          "status": "pass"
+        },
+        {
+          "name": "scrollX and scrollY being set with invalid scroll Scroll.",
+          "status": "pass"
+        },
+        {
+          "name": "scrollX and scrollY when scrolling above maximum Scroll.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 4
+    },
+    "dom/events/scrolling/scrollIntoView-in-onscroll-to-sticky.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "scrollIntoView-in-onscroll-to-sticky",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/scrolling/scrollend-event-fired-after-instant-scroll-in-microtask.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "scrolling state is false at the end of the test",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/scrolling/scrollend-event-fired-after-sequence-of-scrolls.tentative.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-after-snap.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-for-mandatory-snap-point-after-load.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-for-programmatic-scroll.html?include=root-scrollBy-auto": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-for-programmatic-scroll.html?include=root-scrollBy-smooth": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-for-programmatic-scroll.html?include=root-scrollTo-auto": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-for-programmatic-scroll.html?include=root-scrollTo-smooth": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-for-programmatic-scroll.html?include=subframe-scrollBy-auto": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-for-programmatic-scroll.html?include=subframe-scrollBy-smooth": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-for-programmatic-scroll.html?include=subframe-scrollTo-auto": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-for-programmatic-scroll.html?include=subframe-scrollTo-smooth": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-for-scroll-attr-change.html?include=root-scrollLeft-auto": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-for-scroll-attr-change.html?include=root-scrollLeft-smooth": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-for-scroll-attr-change.html?include=root-scrollTop-auto": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-for-scroll-attr-change.html?include=root-scrollTop-smooth": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-for-scroll-attr-change.html?include=subframe-scrollLeft-auto": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-for-scroll-attr-change.html?include=subframe-scrollLeft-smooth": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-for-scroll-attr-change.html?include=subframe-scrollTop-auto": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-for-scroll-attr-change.html?include=subframe-scrollTop-smooth": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-for-scrollIntoView.html?include=nested-scrollIntoView": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-for-scrollIntoView.html?include=root-inline-end-block-end-behavior-auto": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-for-scrollIntoView.html?include=root-inline-start-block-start-behavior-smooth": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-for-scrollIntoView.html?include=subframe-inline-end-block-end-behavior-auto": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-for-scrollIntoView.html?include=subframe-inline-start-block-start-behavior-smooth": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-to-document.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-to-element-with-overscroll-behavior.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fired-to-window.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fires-for-repeat-key-ending-after-scroll-container-end-is-reached.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fires-on-visual-viewport.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-fires-to-iframe-window.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-for-user-scroll.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-handler-content-attributes.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-not-fired-after-removing-scroller.tentative.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/scrollend-event-not-fired-on-no-scroll.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "No scroll via wheel on div shouldn't fire scrollend.",
+          "status": "fail"
+        },
+        {
+          "name": "No scroll via keys on div shouldn't fire scrollend.",
+          "status": "not-run"
+        },
+        {
+          "name": "No scroll via wheel on document shouldn't fire scrollend.",
+          "status": "not-run"
+        },
+        {
+          "name": "No scroll via keys on document shouldn't fire scrollend.",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "dom/events/scrolling/scrollend-fires-to-text-input.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "scrolled input field should receive scrollend when setting scrollLeft.",
+          "status": "fail"
+        },
+        {
+          "name": "scrolled input field should receive scrollend with scrollBy({ behavior: 'smooth' }).",
+          "status": "not-run"
+        },
+        {
+          "name": "scrolled input field should receive scrollend with scrollBy({ behavior: 'instant' }).",
+          "status": "not-run"
+        },
+        {
+          "name": "scrolled input field should receive scrollend with scrollTo({ behavior: 'smooth' }).",
+          "status": "not-run"
+        },
+        {
+          "name": "scrolled input field should receive scrollend with scrollTo({ behavior: 'instant' }).",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 5
+    },
+    "dom/events/scrolling/scrollend-with-snap-on-fractional-offset.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "snap to fractional offset fires scrollend exactly once.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/scrolling/wheel-event-composed.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "wheel event must be composed",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/scrolling/wheel-event-no-scroll-after-prevent-default.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "When `preventDefault` is called on a WheelEvent, scrolling should be prevented.",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "dom/events/scrolling/wheel-event-transactions-basic.html?include=scroll-over-scrollable-child": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/wheel-event-transactions-basic.html?include=target-basic": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/wheel-event-transactions-basic.html?include=transaction-not-bound-to-scroll-frame": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/wheel-event-transactions-multiple-action-chains.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Two separate webdriver action chains should have different wheel event transactions",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/scrolling/wheel-event-transactions-target-display-change.html?include=contents": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/wheel-event-transactions-target-display-change.html?include=none": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/wheel-event-transactions-target-elements.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Wheel event transactions target elements",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/scrolling/wheel-event-transactions-target-move.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Move the initial wheel event target.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/scrolling/wheel-event-transactions-target-removal.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Remove the initial wheel event target.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "dom/events/scrolling/wheel-event-transactions-target-resize.html?include=passive-false": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/scrolling/wheel-event-transactions-target-resize.html?include=passive-true": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "dom/events/shadow-relatedTarget.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "relatedTarget should not leak at capturing phase, at window object.",
+          "status": "fail"
+        },
+        {
+          "name": "relatedTarget should not leak at target.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "dom/events/webkit-animation-end-event.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "dom/events/webkit-animation-iteration-event.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "dom/events/webkit-animation-start-event.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "dom/events/webkit-transition-end-event.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "dom/events/window-composed-path.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "window target has an empty path after dispatch",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    }
+  },
+  "version": 1
+}

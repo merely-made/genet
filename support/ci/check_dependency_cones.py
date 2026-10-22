@@ -542,6 +542,34 @@ def resolved_cone(metadata: dict, package: str) -> set[str]:
     return seen_names
 
 
+# The only current JS-free static tier is genet-static-dom. Keep its normal
+# resolved cone free of script engines and the render/host/media/WebGL systems;
+# older profile launchers also named a genet-static-html package that no longer
+# exists. This uses the same package-ID walk as the Ortet boundary witness.
+STATIC_DOM_FORBIDDEN = frozenset({
+    "boa", "boa_engine", "nova", "nova_vm", "mozjs", "mozjs-sys",
+    "script-runtime-api", "servo-script", "servo-script-bindings", "servo-media",
+    "servo-storage", "servo-storage-traits", "regress", "webgl-essl",
+    "servo-webgl-essl", "servo-webgl-wgpu", "genet-scripted",
+    "genet-scripted-dom", "genet-scripted-worker", "genet-render",
+    "genet-render-host", "genet-compositor", "genet-winit-host",
+    "netrender", "wgpu",
+})
+STATIC_DOM_FORBIDDEN_PREFIXES = ("script-engine-", "servo-media-")
+
+
+def assert_static_dom_cone(metadata: dict) -> None:
+    cone = resolved_cone(metadata, "genet-static-dom")
+    breached = sorted(
+        name for name in cone
+        if name in STATIC_DOM_FORBIDDEN
+        or name.startswith(STATIC_DOM_FORBIDDEN_PREFIXES)
+    )
+    if breached:
+        fail(f"genet-static-dom resolved cone reaches forbidden crates: {breached}")
+    print(f"genet-static-dom cone: {len(cone)} packages, no script/render/host/media/WebGL dependencies")
+
+
 def self_test_resolved_cone() -> None:
     """Exercise the resolve walk with Cargo-shaped package ids and edge kinds."""
     def package(identifier: str, name: str) -> dict:
@@ -763,6 +791,7 @@ def main() -> None:
     self_test_mere_witness()
     resolved = cargo_metadata_resolved()
     assert_no_mere_source(resolved)
+    assert_static_dom_cone(resolved)
     assert_ortet_cone(resolved)
     assert_netfetcher_semantics_cone()
     self_test_ortet_wasm_cone()

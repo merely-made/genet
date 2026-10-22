@@ -60,8 +60,6 @@ use taffy::{
     },
 };
 
-type ImageSources = HashMap<String, Vec<u8>>;
-
 use crate::{
     InteractionStates, LegacyDescendantAlignment, StylePlane, StyleSet, TextSystem,
     box_tree::GeneratedBoxTree,
@@ -106,7 +104,10 @@ use transaction::*;
 // The transaction and retained-root entries keep their crate and public
 // paths: lib.rs, the document and its frame reach them as `layout::<name>`.
 pub(crate) use retained::{layout_retained_formatting_root, retained_table_owner};
-pub use transaction::{layout, layout_with_text_system, used_value_context};
+pub use transaction::{
+    estimated_used_value_context, layout, layout_with_text_system,
+    used_value_context_with_text_system,
+};
 // These four converters are crate vocabulary: text, paint, table sizing and
 // the retained document all call them as `layout::<name>`. Re-exporting keeps
 // those call sites exactly as they were.
@@ -121,6 +122,41 @@ pub(crate) use tables::TablePaintModel;
 
 /// Physical geometry used at the DOM compatibility edge and by inline atoms.
 pub(crate) type Fragment = PhysicalRect;
+
+/// An already sized auto-width table inside a cell being measured for another
+/// table. Its wrapper uses the selected width for layout, but contributes the
+/// table's intrinsic pair to the outer cell's min/max-content queries.
+#[derive(Clone, Copy)]
+struct IntrinsicTableWrapper {
+    node: AlgorithmNodeId,
+    sizes: IntrinsicSizes,
+    used: f32,
+}
+
+fn set_query_table_wrapper_width<Context, Source>(
+    tree: &mut AlgorithmTree<Context, Source>,
+    wrapper: AlgorithmNodeId,
+    width: f32,
+) {
+    tree.style_mut(wrapper).size.width = Dimension::length(width);
+    tree.set_table_wrapper_inline_size(wrapper, width);
+}
+
+fn nested_table_wrappers_in_cell<Context, Source>(
+    tree: &AlgorithmTree<Context, Source>,
+    root: AlgorithmNodeId,
+    wrappers: &HashMap<AlgorithmNodeId, IntrinsicTableWrapper>,
+) -> Vec<IntrinsicTableWrapper> {
+    let mut pending = vec![root];
+    let mut nested = Vec::new();
+    while let Some(node) = pending.pop() {
+        if let Some(table) = wrappers.get(&node) {
+            nested.push(*table);
+        }
+        pending.extend_from_slice(tree.children(node));
+    }
+    nested
+}
 
 /// The static physical rectangle and content-scroll offset of one sticky
 /// scrollport. The offset is added in layout space before ordinary scroll
@@ -381,7 +417,7 @@ fn text_baselines(context: &TextMeasure, width: f32) -> Option<(f32, f32)> {
 /// captions count for nothing either way. Whether any line or counted row
 /// did.
 fn feed_line_baselines<Context, Source>(
-    tree: &mut AlgorithmTree<Style, Context, Source>,
+    tree: &mut AlgorithmTree<Context, Source>,
     root: AlgorithmNodeId,
     table_rows: bool,
     line_baselines: impl Fn(&Context, f32) -> Option<(f32, f32)>,
@@ -729,7 +765,7 @@ fn verify_one_table<Id>(
 /// a taller content box, which is why the measurement pass leaves the height
 /// automatic.
 fn format_table_cell<Context, Source>(
-    tree: &mut AlgorithmTree<Style, Context, Source>,
+    tree: &mut AlgorithmTree<Context, Source>,
     node: AlgorithmNodeId,
     request: TableCellLayoutInput,
     cell: &CellBlockInput,
@@ -822,7 +858,7 @@ fn format_table_cell<Context, Source>(
 /// Parent block, flex, and grid contexts consume these declared outputs
 /// through `AlgorithmTree::propagate_declared_baselines`; no post-layout
 /// traversal of backend children is involved.
-fn populate_inline_baselines(tree: &mut AlgorithmTree<Style, InlineMeasure, Vec<BoxId>>) {
+fn populate_inline_baselines(tree: &mut AlgorithmTree<InlineMeasure, Vec<BoxId>>) {
     let direct = tree
         .node_ids()
         .filter_map(|node| {
@@ -844,7 +880,7 @@ fn populate_inline_baselines(tree: &mut AlgorithmTree<Style, InlineMeasure, Vec<
 /// root. The map is keyed by Buckram box identity, never a backend node or a
 /// completed normal-flow rectangle.
 fn positioned_intrinsic_sizes<Context, Source>(
-    tree: &mut AlgorithmTree<Style, Context, Source>,
+    tree: &mut AlgorithmTree<Context, Source>,
     candidates: &[(BoxId, AlgorithmNodeId)],
     mut measure: impl FnMut(
         AlgorithmSize<Option<f32>>,
@@ -890,7 +926,7 @@ where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
-    resolve_container_relative_styles_with_images(dom, styles, viewport, &ImageSources::new())
+    resolve_container_relative_styles_with_images(dom, styles, viewport, &HashMap::new())
 }
 
 /// Iterate size-query cascade and container-unit resolution until the style
@@ -913,7 +949,7 @@ where
         style_set,
         device,
         interactions,
-        &ImageSources::new(),
+        &HashMap::new(),
     )
 }
 
@@ -925,7 +961,7 @@ pub fn resolve_container_query_styles_with_images<D>(
     style_set: &StyleSet,
     device: &Device,
     interactions: &InteractionStates<D::NodeId>,
-    image_sources: &ImageSources,
+    image_sources: &dyn crate::ImageSourceLookup,
 ) -> Result<StylePlane<D::NodeId>, LayoutError>
 where
     D: LayoutDom,
@@ -1030,7 +1066,7 @@ fn resolve_container_relative_styles_with_images<D>(
     dom: &D,
     styles: &StylePlane<D::NodeId>,
     viewport: ViewportSizes,
-    image_sources: &ImageSources,
+    image_sources: &dyn crate::ImageSourceLookup,
 ) -> Result<StylePlane<D::NodeId>, LayoutError>
 where
     D: LayoutDom,
@@ -1043,7 +1079,7 @@ fn resolve_container_relative_styles_with_text<D>(
     dom: &D,
     styles: &StylePlane<D::NodeId>,
     viewport: ViewportSizes,
-    image_sources: &ImageSources,
+    image_sources: &dyn crate::ImageSourceLookup,
     mut text: Option<&mut TextSystem>,
 ) -> Result<StylePlane<D::NodeId>, LayoutError>
 where
@@ -1226,6 +1262,40 @@ pub fn content_box_rect(style: &ComputedValues, fragment: &TreeFragment) -> (f32
         width,
         height,
     )
+}
+
+/// A fragment's resolved border and padding widths, `[top, right, bottom, left]`.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct FragmentEdges {
+    pub border: [f32; 4],
+    pub padding: [f32; 4],
+}
+
+/// Resolve a fragment's border and padding widths with the same em and
+/// percentage-basis approximations as [`content_box_size`].
+pub fn fragment_edges(style: &ComputedValues, fragment: &TreeFragment) -> FragmentEdges {
+    let em = match style.font_size {
+        FontSize::Value(CssLengthPercentage::Length(Length {
+            value,
+            unit: livery::values::LengthUnit::Px,
+        })) => value,
+        _ => 16.0,
+    };
+    let pad = |value| length_percentage_px(value, em, fragment.width);
+    FragmentEdges {
+        border: [
+            border_width_px(style.border_top_style, style.border_top_width, em),
+            border_width_px(style.border_right_style, style.border_right_width, em),
+            border_width_px(style.border_bottom_style, style.border_bottom_width, em),
+            border_width_px(style.border_left_style, style.border_left_width, em),
+        ],
+        padding: [
+            pad(style.padding_top.0),
+            pad(style.padding_right.0),
+            pad(style.padding_bottom.0),
+            pad(style.padding_left.0),
+        ],
+    }
 }
 
 struct FragmentOutput<'a> {
@@ -1638,7 +1708,7 @@ fn supports_float_avoidance<Id>(
 }
 
 fn supports_intrinsic_shrink_to_fit<Id, Context, Source>(
-    tree: &AlgorithmTree<Style, Context, Source>,
+    tree: &AlgorithmTree<Context, Source>,
     node: AlgorithmNodeId,
     boxes: &GeneratedBoxTree<Id>,
     box_id: BoxId,
@@ -1883,7 +1953,7 @@ where
 type TableFragmentPlane = HashMap<BoxId, TableFragments>;
 
 fn collect_fragments<Id>(
-    tree: &AlgorithmTree<Style, TextMeasure, Option<BoxId>>,
+    tree: &AlgorithmTree<TextMeasure, Option<BoxId>>,
     boxes: &GeneratedBoxTree<Id>,
     node: AlgorithmNodeId,
     cursor: FragmentCursor,
@@ -2003,7 +2073,7 @@ where
     reason = "one recursive walk; six of the eight are context invariant across               the whole walk and the other two are the per-node cursor"
 )]
 fn collect_inline_fragments<Id>(
-    tree: &AlgorithmTree<Style, InlineMeasure, Vec<BoxId>>,
+    tree: &AlgorithmTree<InlineMeasure, Vec<BoxId>>,
     boxes: &GeneratedBoxTree<Id>,
     node: AlgorithmNodeId,
     cursor: FragmentCursor,
@@ -2638,7 +2708,7 @@ fn apply_replaced_intrinsic_style<D>(
     dom: &D,
     id: D::NodeId,
     computed: &ComputedValues,
-    image_sources: &ImageSources,
+    image_sources: &dyn crate::ImageSourceLookup,
     font_size: f32,
     block_level_flow: bool,
     containing_width: f32,
@@ -2888,7 +2958,7 @@ where
 fn positioned_replaced_input<D>(
     dom: &D,
     id: D::NodeId,
-    image_sources: &ImageSources,
+    image_sources: &dyn crate::ImageSourceLookup,
     style: &BlockStyle,
 ) -> Option<buckram::ReplacedSize>
 where
@@ -2909,7 +2979,7 @@ where
 fn replaced_intrinsic_size<D>(
     dom: &D,
     id: D::NodeId,
-    image_sources: &ImageSources,
+    image_sources: &dyn crate::ImageSourceLookup,
 ) -> Option<(f32, f32)>
 where
     D: LayoutDom,
@@ -2933,13 +3003,8 @@ where
             && attribute.name.local.as_str().eq_ignore_ascii_case("src"))
         .then_some(attribute.value)
     })?;
-    let bytes = if let Ok(data_url) = data_url::DataUrl::process(source) {
-        data_url.decode_to_vec().ok()?.0
-    } else {
-        image_sources.get(source)?.clone()
-    };
-    let (width, height) = crate::image_decode::decode(&bytes)?.dimensions();
-    Some((width as f32, height as f32))
+    let image = image_sources.decoded_document(source)?;
+    Some((image.width as f32, image.height as f32))
 }
 
 fn canvas_intrinsic_dimension<D>(dom: &D, id: D::NodeId, attribute: &str, default: f32) -> f32

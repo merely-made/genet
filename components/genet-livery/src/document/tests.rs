@@ -9,12 +9,252 @@ use genet_scripted_dom::{NodeId, ScriptedDom};
 use layout_dom_api::{LayoutDomMut, QualName};
 use paint_list_api::PaintList;
 
+#[cfg(feature = "image-decode")]
+#[test]
+fn retained_image_layout_and_paint_share_pixels_across_frames() {
+    use crate::ImageSourceLookup as _;
+    use std::sync::Arc;
+
+    let blue = image::RgbaImage::from_pixel(2, 3, image::Rgba([0, 0, 255, 255]));
+    let mut png = Vec::new();
+    blue.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .expect("encode image fixture");
+    let mut document = LiveryDocument::new(
+        ScriptedDom::from_serialized_document(
+            "<html><body><div style='height:400px'><img src='shared.png'></div></body></html>",
+        ),
+        StyleSet::cambium(&["body { margin: 0; }"]),
+        Device::screen(160.0, 120.0),
+    );
+    document.set_image_resource("shared.png", png.clone());
+    let first = document.frame(160, 120).expect("first frame");
+    let first_pixels = &first.images()[0].data;
+    let layout_pixels = document
+        .image_sources
+        .decoded("shared.png")
+        .expect("layout decode");
+    assert_eq!((layout_pixels.width, layout_pixels.height), (2, 3));
+    assert!(Arc::ptr_eq(first_pixels, &layout_pixels.data));
+
+    let cached = document.frame(160, 120).expect("cached frame");
+    assert!(Arc::ptr_eq(first_pixels, &cached.images()[0].data));
+    assert!(document.scroll_by(0.0, 25.0));
+    assert!(document.scroll().1 > 0.0);
+    let scrolled = document.frame(160, 120).expect("scrolled cached frame");
+    assert!(Arc::ptr_eq(first_pixels, &scrolled.images()[0].data));
+    let mut parent = LiveryPaintList::new(paint_list_api::DeviceIntSize::new(160, 120), 1);
+    let absorbed = parent.absorb_frame_commands(&first);
+    assert!(!absorbed.is_empty());
+    assert!(Arc::ptr_eq(first_pixels, &parent.images()[0].data));
+    document.replace_image_resources([("shared.png".into(), png)]);
+    let unchanged = document.frame(160, 120).expect("unchanged resource frame");
+    assert!(Arc::ptr_eq(first_pixels, &unchanged.images()[0].data));
+
+    let red = image::RgbaImage::from_pixel(1, 1, image::Rgba([255, 0, 0, 255]));
+    let mut replacement = Vec::new();
+    red.write_to(
+        &mut std::io::Cursor::new(&mut replacement),
+        image::ImageFormat::Png,
+    )
+    .expect("encode replacement");
+    document.replace_image_resources([("shared.png".into(), replacement)]);
+    let changed = document.frame(160, 120).expect("replacement frame");
+    assert_eq!(
+        (changed.images()[0].width, changed.images()[0].height),
+        (1, 1)
+    );
+    assert!(!Arc::ptr_eq(first_pixels, &changed.images()[0].data));
+
+    document.replace_image_resources(std::iter::empty());
+    let removed = document.frame(160, 120).expect("removed resource frame");
+    assert!(removed.images().is_empty());
+}
+
+#[cfg(feature = "image-decode")]
+#[test]
+fn retained_data_url_layout_and_paint_use_one_cached_raster() {
+    use crate::ImageSourceLookup as _;
+    use base64::Engine as _;
+    use std::sync::Arc;
+
+    let image = image::RgbaImage::from_pixel(2, 3, image::Rgba([0, 0, 255, 255]));
+    let mut png = Vec::new();
+    image
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .expect("encode data image");
+    let url = format!(
+        "data:image/png;base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(png)
+    );
+    let dom = ScriptedDom::from_serialized_document(&format!(
+        "<html><body><img src='{url}'></body></html>"
+    ));
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&["body { margin: 0; }"]),
+        Device::screen(160.0, 120.0),
+    );
+    let list = document.frame(160, 120).expect("data image frame");
+    let cached = document
+        .image_sources
+        .decoded(&url)
+        .expect("cached data image");
+    assert_eq!((cached.width, cached.height), (2, 3));
+    assert!(Arc::ptr_eq(&list.images()[0].data, &cached.data));
+    let next = document.frame(160, 120).expect("cached frame");
+    assert!(Arc::ptr_eq(&list.images()[0].data, &next.images()[0].data));
+}
+
+#[cfg(feature = "image-decode")]
+#[test]
+fn changing_background_data_urls_retires_old_pixels_but_keeps_hidden_img() {
+    use crate::ImageSourceLookup as _;
+    use base64::Engine as _;
+    use std::sync::Arc;
+
+    let data_url = |color: [u8; 4]| {
+        let image = image::RgbaImage::from_pixel(2, 3, image::Rgba(color));
+        let mut png = Vec::new();
+        image
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .expect("encode data image");
+        format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(png)
+        )
+    };
+    let hidden_url = data_url([0, 0, 255, 255]);
+    let first_background = data_url([255, 0, 0, 255]);
+    let html = format!(
+        "<html><body><img src='{hidden_url}' style='visibility:hidden'><div id=bg style=\"width:20px;height:20px;background-image:url({first_background})\"></div></body></html>"
+    );
+    let mut document = LiveryDocument::new(
+        ScriptedDom::from_serialized_document(&html),
+        StyleSet::cambium(&["body { margin: 0; }"]),
+        Device::screen(160.0, 120.0),
+    );
+    document.frame(160, 120).expect("initial image frame");
+    let hidden_pixels = document
+        .image_sources
+        .decoded(&hidden_url)
+        .expect("hidden image cached");
+    let background = by_id(document.dom(), "bg");
+    for color in [[0, 255, 0, 255], [255, 255, 0, 255], [0, 255, 255, 255]] {
+        let url = data_url(color);
+        let style = format!("width:20px;height:20px;background-image:url({url})");
+        document.mutate_dom(|dom| dom.set_attribute(background, attr("style"), &style));
+        let list = document.frame(160, 120).expect("changed background frame");
+        assert_eq!(document.image_sources.cached_data_url_count(), 2);
+        assert!(
+            list.commands()
+                .iter()
+                .filter_map(|command| match command {
+                    paint_list_api::PaintCmd::DrawImage(image) => list
+                        .images()
+                        .iter()
+                        .find(|resource| resource.key == image.image_key),
+                    _ => None,
+                })
+                .any(|resource| resource.data.starts_with(&color)),
+            "current background paints decoded pixels"
+        );
+        let retained_hidden = document
+            .image_sources
+            .decoded(&hidden_url)
+            .expect("active hidden image");
+        assert!(Arc::ptr_eq(&hidden_pixels.data, &retained_hidden.data));
+    }
+    document
+        .mutate_dom(|dom| dom.set_attribute(background, attr("style"), "width:20px;height:20px"));
+    document.frame(160, 120).expect("background removed frame");
+    assert_eq!(document.image_sources.cached_data_url_count(), 1);
+}
+
+#[cfg(feature = "image-decode")]
+#[test]
+fn retained_root_img_src_changes_retire_prior_data_urls() {
+    use base64::Engine as _;
+
+    let data_url = |color: [u8; 4]| {
+        let image = image::RgbaImage::from_pixel(2, 3, image::Rgba(color));
+        let mut png = Vec::new();
+        image
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .expect("encode image");
+        format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(png)
+        )
+    };
+    let first_url = data_url([255, 0, 0, 255]);
+    let html = format!(
+        "<html><body><div id=scope><img id=target src='{first_url}'></div><div id=outside>outside</div></body></html>"
+    );
+    let mut dom = ScriptedDom::from_serialized_document(&html);
+    dom.drain_mutations(&mut Vec::new());
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&[
+            "body { margin: 0; } #scope { display: flex; width: 100px; } #outside { width: 80px; }",
+        ]),
+        Device::screen(160.0, 120.0),
+    );
+    document.frame(160, 120).expect("first image frame");
+    let target = by_id(document.dom(), "target");
+    let scope = by_id(document.dom(), "scope");
+    for (revision, color) in [[0, 255, 0, 255], [0, 0, 255, 255]].into_iter().enumerate() {
+        let url = data_url(color);
+        let previous_relayout = document.retained_root_relayout_generation;
+        // The empty image's own Inline context cannot be a retained root.
+        // A same-batch inert ancestor change selects the supported Flex root.
+        document.mutate_dom(|dom| {
+            dom.set_attribute(target, attr("src"), &url);
+            dom.set_attribute(scope, attr("data-revision"), &revision.to_string());
+        });
+        assert_eq!(
+            document.last_layout_damage(),
+            Some(&LayoutDamage {
+                kind: LayoutDamageKind::Dom,
+                roots: vec![scope],
+                full_document: false,
+            })
+        );
+        let list = document
+            .frame(160, 120)
+            .expect("retained image replacement");
+        assert_eq!(
+            document.retained_root_relayout_generation,
+            previous_relayout + 1,
+            "src replacement uses retained-root formatting"
+        );
+        assert_eq!(document.image_sources.cached_data_url_count(), 1);
+        assert!(
+            list.images()
+                .iter()
+                .any(|resource| resource.data.starts_with(&color))
+        );
+    }
+}
+
 fn attr(name: &str) -> QualName {
     QualName::new(None, Namespace::from(""), LocalName::from(name))
 }
 
 fn by_id(dom: &ScriptedDom, id: &str) -> NodeId {
     find_id(dom, dom.document(), id).expect("fixture node")
+}
+
+/// Resolve every CSS generic family to Ahem, so geometry that depends on a
+/// document's default or generic text does not vary with the host platform's
+/// font mapping. Ahem's content area is exactly one em.
+fn bind_ahem_generics(document: &mut LiveryDocument<ScriptedDom>) {
+    let ahem = include_bytes!("../../../../tests/wpt/tests/fonts/Ahem.ttf");
+    document
+        .replace_generic_font_resources(
+            ["serif", "sans-serif", "monospace", "system-ui"]
+                .map(|generic| (generic.to_owned(), ahem.to_vec())),
+        )
+        .expect("Ahem binds to every generic family");
 }
 
 fn generated_ids(
@@ -974,6 +1214,77 @@ fn retained_root_formatter_replaces_a_fixed_size_table_and_its_paint_plane() {
 }
 
 #[test]
+fn retained_nested_auto_table_remeasures_outer_columns_like_fresh_layout() {
+    let html = |inner_text: &str| {
+        format!(
+            "<html><body><div id=host><span id=outer>\
+             <span class=row><span id=c1 class=cell>Row 1, Col 1</span>\
+             <span id=c2 class=cell>Row 1, Col 2</span>\
+             <span id=inner>{inner_text}</span></span>\
+             <span class=row><span class=cell>Row 22, Col 1</span>\
+             <span class=cell>Row 22, Col 2</span>\
+             <span class=cell>Row 22, Col 3</span></span>\
+             </span></div></body></html>"
+        )
+    };
+    let styles = || {
+        StyleSet::cambium(&["html, body { margin:0; font:16px monospace; } \
+             #host { width:600px; } #outer { display:table; width:600px; border-spacing:0; } \
+             .row { display:table-row; } .cell { display:table-cell; } \
+             #inner { display:table; border-spacing:0; }"])
+    };
+    let geometry = |document: &LiveryDocument<ScriptedDom>| {
+        let layout = document.layout.as_ref().expect("completed table frame");
+        ["c1", "c2", "inner"].map(|id| {
+            layout
+                .fragments
+                .get(by_id(document.dom(), id))
+                .unwrap_or_else(|| panic!("fragment for #{id}"))
+                .physical_rect()
+        })
+    };
+    let mut dom = ScriptedDom::from_serialized_document(&html("short label"));
+    dom.drain_mutations(&mut Vec::new());
+    let mut retained = LiveryDocument::new(dom, styles(), Device::screen(640.0, 240.0));
+    bind_ahem_generics(&mut retained);
+    retained.frame(640, 240).expect("initial retained frame");
+    let initial = geometry(&retained);
+
+    let final_text = "word ".repeat(40);
+    retained.mutate_dom(|dom| {
+        let inner = by_id(dom, "inner");
+        let text = dom.dom_children(inner).next().expect("inner table text");
+        dom.set_text(text, &final_text);
+    });
+    retained.frame(640, 240).expect("mutated retained frame");
+    let changed = geometry(&retained);
+    assert!(changed[2].width > initial[2].width + 10.0);
+    assert!(
+        changed[2].width <= 600.5,
+        "inner table keeps its used width"
+    );
+
+    let mut fresh_dom = ScriptedDom::from_serialized_document(&html(&final_text));
+    fresh_dom.drain_mutations(&mut Vec::new());
+    let mut fresh = LiveryDocument::new(fresh_dom, styles(), Device::screen(640.0, 240.0));
+    bind_ahem_generics(&mut fresh);
+    fresh.frame(640, 240).expect("fresh final frame");
+    let expected = geometry(&fresh);
+    for (index, id) in ["c1", "c2", "inner"].into_iter().enumerate() {
+        let retained_rect = changed[index];
+        let fresh_rect = expected[index];
+        assert_near(retained_rect.x, fresh_rect.x, &format!("#{id} x"));
+        assert_near(
+            retained_rect.width,
+            fresh_rect.width,
+            &format!("#{id} width"),
+        );
+    }
+    retained.frame(640, 240).expect("cached retained frame");
+    assert_eq!(geometry(&retained), changed);
+}
+
+#[test]
 fn retained_root_formatter_replaces_a_captioned_fixed_size_table() {
     let initial = "<html><body><table id=table><caption id=caption>caption</caption><tbody><tr id=row><td id=first></td></tr></tbody></table><div id=outside></div></body></html>";
     let final_document = "<html><body><table id=table><caption id=caption>caption</caption><tbody><tr id=row><td id=first></td><td id=second></td></tr></tbody></table><div id=outside></div></body></html>";
@@ -1866,12 +2177,14 @@ fn positioned_inset_reuse_updates_nested_scroll_range() {
     let styles = || {
         StyleSet::cambium(&["html, body, div { margin: 0; padding: 0; } \
              #scroller { position: relative; width: 100px; height: 80px; overflow-y: auto; } \
-             #positioned { position: absolute; left: 0; top: 200px; width: 100px; height: 20px; }"])
+             #positioned { position: absolute; left: 0; top: 200px; width: 100px; height: 20px; \
+             font-size: 8px; }"])
     };
     let mut dom = ScriptedDom::from_serialized_document(initial);
     let mut initial_mutations = Vec::new();
     dom.drain_mutations(&mut initial_mutations);
     let mut retained = LiveryDocument::new(dom, styles(), Device::screen(160.0, 120.0));
+    bind_ahem_generics(&mut retained);
     retained.frame(160, 120).expect("initial frame");
     let positioned = by_id(retained.dom(), "positioned");
     let scroller = by_id(retained.dom(), "scroller");
@@ -1892,6 +2205,7 @@ fn positioned_inset_reuse_updates_nested_scroll_range() {
     let mut fresh_mutations = Vec::new();
     fresh_dom.drain_mutations(&mut fresh_mutations);
     let mut fresh = LiveryDocument::new(fresh_dom, styles(), Device::screen(160.0, 120.0));
+    bind_ahem_generics(&mut fresh);
     fresh.frame(160, 120).expect("fresh final frame");
     let fresh_scroller = by_id(fresh.dom(), "scroller");
     let fresh_layout = fresh.layout.as_ref().expect("fresh final layout");
@@ -2107,6 +2421,77 @@ fn retained_document_uses_intrinsic_positioned_width_between_insets() {
 }
 
 #[test]
+fn ordinary_paint_and_queries_borrow_retained_planes_until_sampling_needs_a_copy() {
+    let mut dom = ScriptedDom::from_serialized_document(
+        "<html><body><div id=target>target</div><div style='height: 240px'></div></body></html>",
+    );
+    dom.drain_mutations(&mut Vec::new());
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&["html, body { margin: 0; padding: 0; } #target { height: 20px; }"]),
+        Device::screen(160.0, 80.0),
+    );
+    document.frame(160, 80).expect("initial frame");
+    let target = by_id(document.dom(), "target");
+    let layout = document.layout.as_ref().expect("retained layout");
+    let style_owner = &layout.styles as *const _;
+    let fragment_owner = &layout.fragments as *const _;
+    assert!(matches!(
+        document.sampled_paint_styles(layout),
+        std::borrow::Cow::Borrowed(_)
+    ));
+    let active = document.sticky_layout(layout);
+    assert!(matches!(&active, std::borrow::Cow::Borrowed(_)));
+    assert!(std::ptr::eq(active.as_ref(), &layout.fragments));
+    assert_eq!(document.hit_test(10.0, 10.0), Some(target));
+    assert!(document.scroll_at(10.0, 10.0, 0.0, 30.0));
+    document
+        .paint_active_layout(160, 80)
+        .expect("ordinary repaint");
+    let layout = document
+        .layout
+        .as_ref()
+        .expect("retained layout after repaint");
+    assert_eq!(&layout.styles as *const _, style_owner);
+    assert_eq!(&layout.fragments as *const _, fragment_owner);
+
+    let base_opacity = layout
+        .styles
+        .get(target)
+        .expect("target style")
+        .get(PropertyId::Opacity);
+    assert!(document.animate_opacity(target, 0.2, 0.8, 0.0, 1000.0));
+    assert!(document.pump(500.0));
+    let layout = document.layout.as_ref().expect("retained animated layout");
+    let sampled = document.sampled_paint_styles(layout);
+    assert!(matches!(&sampled, std::borrow::Cow::Owned(_)));
+    assert_ne!(
+        sampled
+            .get(target)
+            .expect("sampled style")
+            .get(PropertyId::Opacity),
+        base_opacity
+    );
+    document
+        .paint_active_layout(160, 80)
+        .expect("animation repaint");
+    let layout = document
+        .layout
+        .as_ref()
+        .expect("retained layout after animation");
+    assert_eq!(
+        layout
+            .styles
+            .get(target)
+            .expect("base style")
+            .get(PropertyId::Opacity),
+        base_opacity
+    );
+    assert_eq!(&layout.styles as *const _, style_owner);
+    assert_eq!(&layout.fragments as *const _, fragment_owner);
+}
+
+#[test]
 fn sticky_scrolls_its_retained_fragment_without_relayout() {
     let mut dom = ScriptedDom::from_serialized_document(
         "<html><body><div id=spacer></div><div id=sticky>sticky</div><div id=tail></div></body></html>",
@@ -2136,6 +2521,7 @@ fn sticky_scrolls_its_retained_fragment_without_relayout() {
     document.frame(160, 80).expect("scrolled sticky frame");
 
     let active = document.sticky_layout(document.layout.as_ref().expect("retained layout"));
+    assert!(matches!(&active, std::borrow::Cow::Owned(_)));
     let sticky_rect = active
         .get(sticky)
         .map(|fragment| fragment.physical_rect())
@@ -2318,9 +2704,11 @@ fn positioned_descendant_extends_its_scroll_container_range() {
         dom,
         StyleSet::cambium(&["html, body { margin: 0; padding: 0; } \
              #scroller { position: relative; width: 100px; height: 80px; overflow-y: auto; } \
-             #positioned { position: absolute; top: 200px; width: 100px; height: 20px; }"]),
+             #positioned { position: absolute; top: 200px; width: 100px; height: 20px; \
+             font-size: 8px; }"]),
         Device::screen(160.0, 120.0),
     );
+    bind_ahem_generics(&mut document);
     document.frame(160, 120).expect("positioned overflow frame");
     let scroller = by_id(document.dom(), "scroller");
     let layout = document.layout.as_ref().expect("retained layout");
@@ -2847,6 +3235,606 @@ fn css_checked_reads_live_checkbox_state_instead_of_the_default_attribute() {
 }
 
 #[test]
+fn css_validation_selectors_track_candidate_and_user_validity() {
+    let mut dom = ScriptedDom::from_serialized_document(
+        "<html><body><form id=form><fieldset><input id=field required minlength=2></fieldset></form></body></html>",
+    );
+    dom.drain_mutations(&mut Vec::new());
+    let field = by_id(&dom, "field");
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&[
+            "html, body { margin: 0; } input, form, fieldset { display:block; width:50px; height:24px; background:#f00; } input:user-invalid { background:#00f; } input:user-valid { background:#00f; } form:invalid { background:#0f0; } form:valid { background:#f0f; } fieldset:invalid { background:#ff0; }",
+        ]),
+        Device::screen(120.0, 80.0),
+    );
+    let colors = |document: &mut LiveryDocument<ScriptedDom>| {
+        document
+            .frame(120, 80)
+            .expect("frame")
+            .commands()
+            .iter()
+            .filter_map(|command| match command {
+                paint_list_api::PaintCmd::DrawRect(rect) => Some(rect.color),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let initial = colors(&mut document);
+    let red = paint_list_api::ColorF::new(1.0, 0.0, 0.0, 1.0);
+    let blue = paint_list_api::ColorF::new(0.0, 0.0, 1.0, 1.0);
+    let green = paint_list_api::ColorF::new(0.0, 1.0, 0.0, 1.0);
+    let yellow = paint_list_api::ColorF::new(1.0, 1.0, 0.0, 1.0);
+    let magenta = paint_list_api::ColorF::new(1.0, 0.0, 1.0, 1.0);
+    assert!(
+        initial.contains(&red),
+        "required empty control is invalid: {initial:?}"
+    );
+    assert!(
+        initial.contains(&green),
+        "form aggregates invalid descendants: {initial:?}"
+    );
+    assert!(
+        initial.contains(&yellow),
+        "fieldset aggregates invalid descendants: {initial:?}"
+    );
+    assert!(
+        !initial.contains(&blue),
+        "user-invalid waits until user validity: {initial:?}"
+    );
+
+    document.mutate_dom(|dom| {
+        assert!(dom.set_form_control_user_value(field, "x", Some(1), Some(1)));
+        assert!(dom.commit_form_control_user_edit(field));
+    });
+    let touched_invalid = colors(&mut document);
+    assert!(
+        touched_invalid.contains(&blue),
+        "user-invalid follows committed invalid user input: {touched_invalid:?}"
+    );
+
+    document.mutate_dom(|dom| {
+        assert!(dom.set_form_control_user_value(field, "ok", Some(2), Some(2)));
+        assert!(dom.commit_form_control_user_edit(field));
+    });
+    let edited = colors(&mut document);
+    assert!(
+        edited.contains(&blue),
+        "user-valid follows the committed valid value: {edited:?}"
+    );
+    assert!(
+        edited.contains(&magenta),
+        "form becomes valid when all owned candidates are valid: {edited:?}"
+    );
+
+    let form = by_id(document.dom(), "form");
+    let (new_control, _) = document.mutate_dom(|dom| {
+        let control = dom.create_element(QualName::new(
+            None,
+            Namespace::from("http://www.w3.org/1999/xhtml"),
+            LocalName::from("input"),
+        ));
+        dom.set_attribute(control, attr("required"), "");
+        dom.append_child(form, control);
+        control
+    });
+    let inserted = colors(&mut document);
+    assert!(
+        inserted.contains(&green),
+        "inserting a required candidate invalidates its form aggregate: {inserted:?}"
+    );
+    assert!(
+        !inserted.contains(&magenta),
+        "stale :valid form styling is removed after insertion: {inserted:?}"
+    );
+
+    document.mutate_dom(|dom| dom.remove(new_control));
+    let removed = colors(&mut document);
+    assert!(
+        removed.contains(&magenta),
+        "removing the candidate restores form validity: {removed:?}"
+    );
+}
+
+#[test]
+fn option_selectedness_restyles_the_external_select_form_owner() {
+    let mut dom = ScriptedDom::from_serialized_document(
+        "<html><body><form id=form></form><section><select id=select form=form required><option value=''></option><option id=choice value=ok>ok</option></select></section></body></html>",
+    );
+    dom.drain_mutations(&mut Vec::new());
+    let choice = by_id(&dom, "choice");
+    let form = by_id(&dom, "form");
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&[
+            "html, body { margin:0; } form { display:block; height:24px; } form:invalid { width:40px; background:#f00; } form:valid { width:80px; background:#0f0; }",
+        ]),
+        Device::screen(160.0, 120.0),
+    );
+    document.frame(160, 120).expect("initial frame");
+    assert_eq!(
+        document
+            .style_session
+            .styles()
+            .computed_style(form, "width"),
+        Some("40px".to_owned()),
+    );
+    document.mutate_dom(|dom| {
+        assert!(dom.set_option_selected_by_script(choice, true));
+    });
+    assert_eq!(
+        document
+            .style_session
+            .styles()
+            .computed_style(form, "width"),
+        Some("80px".to_owned()),
+        "selectedness invalidates the form outside the select's ancestor chain",
+    );
+    let damage = document.last_layout_damage().expect("DOM damage");
+    let form_root = document.formatting_damage_root(form);
+    assert!(
+        damage.roots.contains(&form_root),
+        "the form's formatting root must receive retained damage: {damage:?}",
+    );
+    let paint = document.frame(160, 120).expect("updated frame");
+    assert!(paint.commands().iter().any(|command| {
+        matches!(command, paint_list_api::PaintCmd::DrawRect(rect)
+            if rect.color == paint_list_api::ColorF::new(0.0, 1.0, 0.0, 1.0))
+    }));
+    document.mutate_dom(|dom| {
+        assert!(dom.set_select_selected_index(by_id(dom, "select"), 0));
+    });
+    assert_eq!(
+        document
+            .style_session
+            .styles()
+            .computed_style(form, "width"),
+        Some("40px".to_owned()),
+        "returning to the placeholder invalidates the form again",
+    );
+}
+
+#[test]
+fn non_form_id_blocker_restyles_external_form_association() {
+    let mut dom = ScriptedDom::from_serialized_document(
+        "<html><body><div id=blocker></div><form id=target></form><input id=control form=target required></body></html>",
+    );
+    dom.drain_mutations(&mut Vec::new());
+    let blocker = by_id(&dom, "blocker");
+    let form = by_id(&dom, "target");
+    let control = by_id(&dom, "control");
+    assert_eq!(dom.form_control_form_owner(control), Some(form));
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&[
+            "html, body { margin:0; } form { display:block; height:24px; } form:invalid { width:40px; background:#f00; } form:valid { width:80px; background:#0f0; }",
+        ]),
+        Device::screen(160.0, 120.0),
+    );
+    document.frame(160, 120).expect("initial frame");
+    let width = |document: &LiveryDocument<ScriptedDom>| {
+        document
+            .style_session
+            .styles()
+            .computed_style(form, "width")
+    };
+    assert_eq!(width(&document), Some("40px".to_owned()));
+
+    document.mutate_dom(|dom| dom.set_attribute(blocker, attr("id"), "target"));
+    assert_eq!(document.dom().form_control_form_owner(control), None);
+    assert_eq!(
+        width(&document),
+        Some("80px".to_owned()),
+        "the earlier non-form ID match removes the control from form validity",
+    );
+
+    document.mutate_dom(|dom| dom.set_attribute(blocker, attr("id"), "blocker"));
+    assert_eq!(document.dom().form_control_form_owner(control), Some(form));
+    assert_eq!(
+        width(&document),
+        Some("40px".to_owned()),
+        "restoring the ID restores external form ownership and invalidity",
+    );
+}
+
+#[test]
+fn moving_selected_placeholder_option_restyles_select_without_selectedness_change() {
+    let mut dom = ScriptedDom::from_serialized_document(
+        "<html><body><select id=select required><optgroup id=group><option id=empty value='' selected></option><option value=ok>ok</option></optgroup></select></body></html>",
+    );
+    dom.drain_mutations(&mut Vec::new());
+    let select = by_id(&dom, "select");
+    let group = by_id(&dom, "group");
+    let empty = by_id(&dom, "empty");
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&[
+            "html, body { margin:0; } select { display:block; height:24px; } select:invalid { width:40px; background:#f00; } select:valid { width:80px; background:#0f0; }",
+        ]),
+        Device::screen(160.0, 120.0),
+    );
+    document.frame(160, 120).expect("initial frame");
+    let width = |document: &LiveryDocument<ScriptedDom>| {
+        document
+            .style_session
+            .styles()
+            .computed_style(select, "width")
+    };
+    assert_eq!(width(&document), Some("80px".to_owned()));
+    assert!(
+        document
+            .dom()
+            .option_selected_state(empty)
+            .unwrap()
+            .selected
+    );
+
+    document.mutate_dom(|dom| dom.insert_before(select, empty, Some(group)));
+    assert!(
+        document
+            .dom()
+            .option_selected_state(empty)
+            .unwrap()
+            .selected
+    );
+    assert_eq!(
+        width(&document),
+        Some("40px".to_owned()),
+        "moving the selected empty option out of optgroup makes it the placeholder",
+    );
+
+    document.mutate_dom(|dom| dom.append_child(group, empty));
+    assert!(
+        document
+            .dom()
+            .option_selected_state(empty)
+            .unwrap()
+            .selected
+    );
+    assert_eq!(
+        width(&document),
+        Some("80px".to_owned()),
+        "returning the unchanged selection to optgroup clears placeholder status",
+    );
+}
+
+#[test]
+fn radio_group_validity_restyles_separate_fieldset_and_group_attributes() {
+    let mut dom = ScriptedDom::from_serialized_document(
+        "<html><body><form id=owner></form><section><fieldset id=first-set><input id=first type=radio name=group form=owner></fieldset><fieldset id=peer-set><input id=peer type=radio name=group form=owner required></fieldset></section></body></html>",
+    );
+    dom.drain_mutations(&mut Vec::new());
+    let first = by_id(&dom, "first");
+    let peer = by_id(&dom, "peer");
+    let peer_set = by_id(&dom, "peer-set");
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&[
+            "html, body { margin:0; } fieldset { display:block; height:24px; } fieldset:invalid { width:40px; background:#f00; } fieldset:valid { width:80px; background:#0f0; }",
+        ]),
+        Device::screen(160.0, 120.0),
+    );
+    document.frame(160, 120).expect("initial frame");
+    let width = |document: &LiveryDocument<ScriptedDom>| {
+        document
+            .style_session
+            .styles()
+            .computed_style(peer_set, "width")
+    };
+    assert_eq!(width(&document), Some("40px".to_owned()));
+
+    document.mutate_dom(|dom| assert!(dom.set_form_control_checked(first, true)));
+    assert_eq!(
+        width(&document),
+        Some("80px".to_owned()),
+        "checking the radio makes the required peer valid across fieldsets",
+    );
+    let damage = document.last_layout_damage().expect("radio damage");
+    assert!(
+        damage
+            .roots
+            .contains(&document.formatting_damage_root(document.dom().document()))
+    );
+    let checked_paint = document.frame(160, 120).expect("checked radio frame");
+    assert!(checked_paint.commands().iter().any(|command| {
+        matches!(command, paint_list_api::PaintCmd::DrawRect(rect)
+            if rect.color == paint_list_api::ColorF::new(0.0, 1.0, 0.0, 1.0))
+    }));
+
+    document.mutate_dom(|dom| assert!(dom.set_form_control_checked(first, false)));
+    assert_eq!(width(&document), Some("40px".to_owned()));
+    document.mutate_dom(|dom| dom.remove_attribute(peer, attr("required")));
+    assert_eq!(
+        width(&document),
+        Some("80px".to_owned()),
+        "changing requiredness invalidates the radio group tree",
+    );
+    document.mutate_dom(|dom| dom.set_attribute(peer, attr("required"), ""));
+    assert_eq!(width(&document), Some("40px".to_owned()));
+
+    document.mutate_dom(|dom| assert!(dom.set_form_control_checked(first, true)));
+    assert_eq!(width(&document), Some("80px".to_owned()));
+    document.mutate_dom(|dom| dom.set_attribute(first, attr("name"), "other"));
+    assert_eq!(
+        width(&document),
+        Some("40px".to_owned()),
+        "renaming a checked radio separates the required peer from its group",
+    );
+    document.mutate_dom(|dom| dom.set_attribute(first, attr("name"), "group"));
+    assert_eq!(width(&document), Some("80px".to_owned()));
+
+    document.mutate_dom(|dom| dom.set_attribute(first, attr("type"), "text"));
+    assert_eq!(
+        width(&document),
+        Some("40px".to_owned()),
+        "changing a radio's type invalidates its former group",
+    );
+}
+
+#[test]
+fn radio_group_membership_restyles_peer_without_form_or_fieldset() {
+    let mut dom = ScriptedDom::from_serialized_document(
+        "<html><body><section id=first-section><input id=first type=radio name=group></section><section><input id=peer type=radio name=group required></section></body></html>",
+    );
+    let detached_section = dom.create_element(QualName::new(
+        None,
+        Namespace::from("http://www.w3.org/1999/xhtml"),
+        LocalName::from("section"),
+    ));
+    dom.drain_mutations(&mut Vec::new());
+    let first = by_id(&dom, "first");
+    let first_section = by_id(&dom, "first-section");
+    let peer = by_id(&dom, "peer");
+    dom.set_form_control_checked(first, true);
+    dom.drain_mutations(&mut Vec::new());
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&[
+            "html, body { margin:0; } input { display:block; height:24px; } input:invalid { width:40px; background:#f00; } input:valid { width:80px; background:#0f0; }",
+        ]),
+        Device::screen(160.0, 120.0),
+    );
+    document.frame(160, 120).expect("initial frame");
+    let width = |document: &LiveryDocument<ScriptedDom>| {
+        document
+            .style_session
+            .styles()
+            .computed_style(peer, "width")
+    };
+    assert_eq!(width(&document), Some("80px".to_owned()));
+
+    // ScriptedDom retires nodes on remove(), so move the same checked node to
+    // a detached tree to model leaving and rejoining this radio group's tree.
+    document.mutate_dom(|dom| dom.append_child(detached_section, first));
+    assert_eq!(
+        width(&document),
+        Some("40px".to_owned()),
+        "removing the checked radio makes its required peer invalid",
+    );
+    document.mutate_dom(|dom| dom.append_child(first_section, first));
+    assert_eq!(
+        width(&document),
+        Some("80px".to_owned()),
+        "reinserting the checked radio restores the peer's valid group",
+    );
+}
+
+#[test]
+fn shared_mutation_dependencies_match_fresh_selectors_and_geometry() {
+    fn compare(
+        label: &str,
+        initial: &str,
+        css: &str,
+        target_id: &str,
+        before_width: &str,
+        after_width: &str,
+        mutate: fn(&mut ScriptedDom),
+    ) {
+        let mut retained_dom = ScriptedDom::from_serialized_document(initial);
+        retained_dom.drain_mutations(&mut Vec::new());
+        let mut retained = LiveryDocument::new(
+            retained_dom,
+            StyleSet::cambium(&[css]),
+            Device::screen(200.0, 160.0),
+        );
+        retained.frame(200, 160).expect("initial retained frame");
+        let target = by_id(retained.dom(), target_id);
+        assert_eq!(
+            retained
+                .style_session
+                .styles()
+                .computed_style(target, "width"),
+            Some(before_width.to_owned()),
+            "{label}: initial selector",
+        );
+
+        retained.mutate_dom(mutate);
+        assert_eq!(
+            retained
+                .style_session
+                .styles()
+                .computed_style(target, "width"),
+            Some(after_width.to_owned()),
+            "{label}: retained selector after mutation",
+        );
+        let retained_paint = retained.frame(200, 160).expect("retained final frame");
+
+        let mut fresh_dom = ScriptedDom::from_serialized_document(initial);
+        fresh_dom.drain_mutations(&mut Vec::new());
+        // The mutation may create an earlier duplicate ID (the form blocker
+        // case), so keep the identity of the same target from the initial DOM.
+        let fresh_target = by_id(&fresh_dom, target_id);
+        mutate(&mut fresh_dom);
+        let mut fresh = LiveryDocument::new(
+            fresh_dom,
+            StyleSet::cambium(&[css]),
+            Device::screen(200.0, 160.0),
+        );
+        let fresh_paint = fresh.frame(200, 160).expect("fresh final frame");
+        assert_eq!(
+            fresh
+                .style_session
+                .styles()
+                .computed_style(fresh_target, "width"),
+            Some(after_width.to_owned()),
+            "{label}: fresh selector",
+        );
+        let rect = |document: &LiveryDocument<ScriptedDom>, node: NodeId| {
+            document
+                .layout
+                .as_ref()
+                .and_then(|layout| layout.fragments.get(node))
+                .map(|fragment| (fragment.x, fragment.y, fragment.width, fragment.height))
+                .expect("target fragment")
+        };
+        assert_eq!(
+            rect(&retained, target),
+            rect(&fresh, fresh_target),
+            "{label}: geometry"
+        );
+        assert_eq!(
+            format!("{:?}", retained_paint.commands()),
+            format!("{:?}", fresh_paint.commands()),
+            "{label}: paint",
+        );
+        assert_eq!(
+            retained.content_height(0),
+            fresh.content_height(0),
+            "{label}: document extent",
+        );
+    }
+
+    let radio_css = "html, body { margin:0; } input { display:block; height:24px; } input:invalid { width:40px; background:#f00; } input:valid { width:80px; background:#0f0; }";
+    let form_css = "html, body { margin:0; } form { display:block; height:24px; } form:invalid { width:40px; background:#f00; } form:valid { width:80px; background:#0f0; }";
+    compare(
+        "former radio type",
+        "<html><body><section><input id=first type=radio name=g checked></section><section><input id=peer type=radio name=g required></section></body></html>",
+        radio_css,
+        "peer",
+        "80px",
+        "40px",
+        |dom| dom.set_attribute(by_id(dom, "first"), attr("type"), "text"),
+    );
+    compare(
+        "external form association",
+        "<html><body><form id=old></form><form id=new></form><input id=control form=old required></body></html>",
+        form_css,
+        "old",
+        "40px",
+        "80px",
+        |dom| dom.set_attribute(by_id(dom, "control"), attr("form"), "new"),
+    );
+    compare(
+        "earlier non-form ID blocker",
+        "<html><body><div id=blocker></div><form id=target></form><input id=control form=target required></body></html>",
+        form_css,
+        "target",
+        "40px",
+        "80px",
+        |dom| dom.set_attribute(by_id(dom, "blocker"), attr("id"), "target"),
+    );
+    compare(
+        "removed candidate",
+        "<html><body><form id=owner><input id=control required></form></body></html>",
+        form_css,
+        "owner",
+        "40px",
+        "80px",
+        |dom| dom.remove(by_id(dom, "control")),
+    );
+    compare(
+        "former and current fieldsets",
+        "<html><body><fieldset id=from><input id=control required></fieldset><fieldset id=to></fieldset></body></html>",
+        "html, body { margin:0; } fieldset { display:block; height:24px; } fieldset:invalid { width:40px; background:#f00; } fieldset:valid { width:80px; background:#0f0; }",
+        "from",
+        "40px",
+        "80px",
+        |dom| dom.append_child(by_id(dom, "to"), by_id(dom, "control")),
+    );
+    compare(
+        "selected placeholder reparent",
+        "<html><body><select id=select required><optgroup id=group><option id=empty value='' selected></option><option value=ok>ok</option></optgroup></select></body></html>",
+        "html, body { margin:0; } select { display:block; height:24px; } select:invalid { width:40px; background:#f00; } select:valid { width:80px; background:#0f0; }",
+        "select",
+        "80px",
+        "40px",
+        |dom| {
+            dom.insert_before(
+                by_id(dom, "select"),
+                by_id(dom, "empty"),
+                Some(by_id(dom, "group")),
+            )
+        },
+    );
+    compare(
+        "radio state",
+        "<html><body><section><input id=first type=radio name=g></section><section><input id=peer type=radio name=g required></section></body></html>",
+        radio_css,
+        "peer",
+        "40px",
+        "80px",
+        |dom| {
+            assert!(dom.set_form_control_checked(by_id(dom, "first"), true));
+        },
+    );
+    compare(
+        "interaction state",
+        "<html><body><form id=owner><input id=control required></form></body></html>",
+        "html, body { margin:0; } input { display:block; height:24px; width:80px; background:#0f0; } input:user-invalid { width:40px; background:#f00; }",
+        "control",
+        "80px",
+        "40px",
+        |dom| dom.mark_form_submission_user_validity(by_id(dom, "owner")),
+    );
+    compare(
+        "custom validity",
+        "<html><body><form id=owner><input id=control value=ok></form></body></html>",
+        form_css,
+        "owner",
+        "80px",
+        "40px",
+        |dom| {
+            assert!(dom.set_custom_validity(by_id(dom, "control"), "bad"));
+        },
+    );
+}
+
+#[test]
+fn radio_state_and_interaction_or_custom_validity_have_distinct_group_facts() {
+    use crate::invalidation::{MutationDependency, for_each_mutation_dependency};
+
+    let dom = ScriptedDom::from_serialized_document(
+        "<html><body><form id=owner><input id=radio type=radio name=group required></form></body></html>",
+    );
+    let radio = by_id(&dom, "radio");
+    let form = by_id(&dom, "owner");
+    for (mutation, widens_group) in [
+        (DomMutation::FormControlStateChanged { node: radio }, true),
+        (
+            DomMutation::FormControlInteractionStateChanged { node: radio },
+            false,
+        ),
+        (
+            DomMutation::FormControlCustomValidityChanged { node: radio },
+            false,
+        ),
+    ] {
+        let mut direct = false;
+        let mut form_owner = false;
+        let mut group_tree = false;
+        for_each_mutation_dependency(&dom, &mutation, |fact| match fact {
+            MutationDependency::Element(node) => direct |= node == radio,
+            MutationDependency::SemanticOwner(node) => form_owner |= node == form,
+            MutationDependency::Tree(_) => group_tree = true,
+            MutationDependency::Structure { .. } | MutationDependency::Removed(_) => {},
+        });
+        assert!(direct, "radio itself needs its changed selector or style");
+        assert!(form_owner, "the form aggregates its control's validity");
+        assert_eq!(group_tree, widens_group, "{mutation:?}");
+    }
+}
+
+#[test]
 fn text_inside_an_inline_block_has_caret_hit_and_selection_geometry() {
     let (document, atom, source) = inline_atom_document("inline-block");
     let layout = document.layout.as_ref().expect("completed frame");
@@ -3063,6 +4051,61 @@ fn assert_near(actual: f32, expected: f32, what: &str) {
         (actual - expected).abs() <= 0.5,
         "{what}: expected {expected}, got {actual}",
     );
+}
+
+/// Ordinary inline ancestors are not sizing containers for an atomic child.
+#[test]
+fn a_margined_atom_inside_a_plain_inline_uses_the_enclosing_block() {
+    for wrapper in ["span", "a href='#'"] {
+        let tag = wrapper.split_ascii_whitespace().next().unwrap();
+        let before = crate::layout::basis_passes();
+        let rects = atomic_rects(
+            &format!(
+                "<div style='width:200px'><{wrapper}><span id=atom \
+                 style='display:inline-block;margin:0 2px'>this is an </span>\
+                 <dfn>example</dfn></{tag}></div>"
+            ),
+            "",
+            800.0,
+            &["atom"],
+        );
+        assert!(rects[0].2 < 196.0, "the short atom fits its column");
+        assert_eq!(
+            crate::layout::basis_passes(),
+            before,
+            "a fitting atom does not resolve against its inline wrapper"
+        );
+    }
+}
+
+#[test]
+fn replaced_atoms_inside_inline_wrappers_keep_their_natural_size() {
+    for display in ["inline", "inline-block"] {
+        let rects = atomic_rects(
+            &format!(
+                "<span><canvas id=atom width=80 height=30 \
+                 style='display:{display}'></canvas></span>"
+            ),
+            "",
+            800.0,
+            &["atom"],
+        );
+        assert_near(rects[0].2, 80.0, "the canvas's natural width");
+        assert_near(rects[0].3, 30.0, "the canvas's natural height");
+    }
+}
+
+#[test]
+fn a_percentage_atom_looks_through_nested_positioned_inlines() {
+    let rects = atomic_rects(
+        "<div style='width:200px'><a href='#' style='position:relative'>prefix\
+         <span><span id=atom style='display:inline-block;width:50%;height:10px'>\
+         x</span></span>suffix</a></div>",
+        "",
+        800.0,
+        &["atom"],
+    );
+    assert_near(rects[0].2, 100.0, "half the block's 200px content width");
 }
 
 /// Buckram K7: an atomic inline box's percentage width resolves against its
@@ -3330,4 +4373,160 @@ fn a_line_ending_in_a_break_has_height_even_when_empty() {
         );
         assert_near(block[0].3, expected, &format!("the height of {body:?}"));
     }
+}
+
+#[test]
+fn generic_font_ledger_survives_rebuild_and_invalid_batch_is_atomic() {
+    let bytes = include_bytes!("../../../../tests/wpt/tests/fonts/Ahem.ttf").to_vec();
+    let dom =
+        ScriptedDom::from_serialized_document("<html><body><p>Real generic text</p></body></html>");
+    let mut document = LiveryDocument::new(
+        dom,
+        StyleSet::cambium(&["p { font:16px sans-serif; }"]),
+        Device::screen(300.0, 100.0),
+    );
+    document
+        .replace_generic_font_resources([("sans-serif".into(), bytes.clone())])
+        .unwrap();
+    let glyph_fonts = |list: &LiveryPaintList| {
+        assert!(list.commands().iter().any(
+            |op| matches!(op, paint_list_api::PaintCmd::DrawText(run) if !run.glyphs.is_empty())
+        ));
+        assert!(
+            list.fonts()
+                .iter()
+                .any(|face| face.data.as_slice() == bytes)
+        );
+    };
+    glyph_fonts(&document.frame(300, 100).unwrap());
+    document.set_font_resource("unrelated-face", bytes.clone()); // actual text-context rebuild
+    glyph_fonts(&document.frame(280, 120).unwrap());
+    let accepted = document.generic_font_sources.clone();
+    assert_eq!(
+        document.replace_generic_font_resources([
+            ("serif".into(), bytes.clone()),
+            ("sans-serif".into(), vec![0])
+        ]),
+        Err(crate::GenericFontError::InvalidFont)
+    );
+    assert_eq!(document.generic_font_sources, accepted);
+    glyph_fonts(&document.frame(300, 100).unwrap());
+    document
+        .replace_generic_font_resources([("sans-serif".into(), bytes.clone())])
+        .unwrap();
+    glyph_fonts(&document.frame(300, 100).unwrap());
+}
+
+/// A keyed list of flex rows, each leading with text beside a span. Row 50 is at y=1000, so a
+/// retained text frame left at the local origin paints elsewhere than a fresh
+/// layout of the same final document.
+fn flex_row_list(rows: usize, changed: Option<usize>) -> String {
+    let mut html = String::from("<html><body><div id=list>");
+    for row in 0..rows {
+        let label = if changed == Some(row) {
+            "changed".to_owned()
+        } else {
+            format!("label {row}")
+        };
+        html.push_str(&format!(
+            "<div id=row{row} class=row>{label}<span>tail</span></div>"
+        ));
+    }
+    html.push_str("</div></body></html>");
+    html
+}
+
+fn assert_retained_text_edit_paints_like_fresh(rows: usize, row: usize) {
+    let styles = || {
+        StyleSet::cambium(&["html, body { margin: 0; padding: 0; } \
+             .row { display: flex; width: 300px; height: 20px; } \
+             .row span { width: 100px; height: 20px; margin-left: 100px; }"])
+    };
+    let mut dom = ScriptedDom::from_serialized_document(&flex_row_list(rows, None));
+    dom.drain_mutations(&mut Vec::new());
+    let mut retained = LiveryDocument::new(dom, styles(), Device::screen(300.0, 400.0));
+    retained.frame(300, 400).expect("initial retained frame");
+    let local_generation = retained.retained_root_relayout_generation;
+
+    retained.mutate_dom(|dom| {
+        let row = by_id(dom, &format!("row{row}"));
+        let text = dom.dom_children(row).next().expect("row text");
+        dom.set_text(text, "changed");
+    });
+    let retained_paint = retained.frame(300, 400).expect("retained frame");
+    assert_eq!(
+        retained.retained_root_relayout_generation,
+        local_generation + 1,
+        "the text edit takes the selected-root formatter",
+    );
+
+    let mut fresh_dom = ScriptedDom::from_serialized_document(&flex_row_list(rows, Some(row)));
+    fresh_dom.drain_mutations(&mut Vec::new());
+    let mut fresh = LiveryDocument::new(fresh_dom, styles(), Device::screen(300.0, 400.0));
+    let fresh_paint = fresh.frame(300, 400).expect("fresh final frame");
+    assert_eq!(
+        format!("{:?}", retained_paint.commands()),
+        format!("{:?}", fresh_paint.commands()),
+        "retained text must paint where a fresh layout paints it",
+    );
+}
+
+#[test]
+fn retained_text_edit_in_a_keyed_flex_row_list_paints_like_fresh_layout() {
+    assert_retained_text_edit_paints_like_fresh(100, 50);
+}
+
+#[test]
+fn retained_text_edit_in_a_thousand_flex_rows_paints_like_fresh_layout() {
+    assert_retained_text_edit_paints_like_fresh(1000, 500);
+}
+
+/// Text under a block container is not itself a formatting root, so the
+/// selected-root formatter promotes it to the nearest admitted ancestor.
+#[test]
+fn retained_text_edit_under_a_block_cell_promotes_and_paints_like_fresh_layout() {
+    let html = |changed: bool| {
+        let mut html = String::from("<html><body><div id=list>");
+        for row in 0..100 {
+            let label = if changed && row == 50 {
+                "changed".to_owned()
+            } else {
+                format!("label {row}")
+            };
+            html.push_str(&format!(
+                "<div class=row><div id=cell{row}>{label}</div><div>tail</div></div>"
+            ));
+        }
+        html.push_str("</div></body></html>");
+        html
+    };
+    let styles = || {
+        StyleSet::cambium(&["html, body { margin: 0; padding: 0; } \
+             .row { display: flex; width: 300px; height: 20px; } \
+             .row div { width: 100px; height: 20px; }"])
+    };
+    let mut dom = ScriptedDom::from_serialized_document(&html(false));
+    dom.drain_mutations(&mut Vec::new());
+    let mut retained = LiveryDocument::new(dom, styles(), Device::screen(300.0, 400.0));
+    retained.frame(300, 400).expect("initial retained frame");
+    let local_generation = retained.retained_root_relayout_generation;
+    retained.mutate_dom(|dom| {
+        let cell = by_id(dom, "cell50");
+        let text = dom.dom_children(cell).next().expect("cell text");
+        dom.set_text(text, "changed");
+    });
+    let retained_paint = retained.frame(300, 400).expect("retained frame");
+    assert_eq!(
+        retained.retained_root_relayout_generation,
+        local_generation + 1,
+        "the block-cell text edit promotes to an admitted ancestor",
+    );
+    let mut fresh_dom = ScriptedDom::from_serialized_document(&html(true));
+    fresh_dom.drain_mutations(&mut Vec::new());
+    let mut fresh = LiveryDocument::new(fresh_dom, styles(), Device::screen(300.0, 400.0));
+    let fresh_paint = fresh.frame(300, 400).expect("fresh final frame");
+    assert_eq!(
+        format!("{:?}", retained_paint.commands()),
+        format!("{:?}", fresh_paint.commands()),
+    );
 }

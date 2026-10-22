@@ -1,5 +1,39 @@
 # HTML forms: value state, validation and submission
 
+**Current status, 2026-10-16:** Phases A and B are qualified and published.
+Phase C's implementation is published, including native activation; final
+acceptance remains open. F12's published redirect-base repair passes the
+original 285 affected tests on Windows as well as the earlier ThinkPad checks.
+Mark directed this continuation onto O-PC, so F11's Windows qualification
+continues there.
+
+The closing review found three submission defects: missing submission
+user-validity transitions, redundant submitter checks after listener mutations,
+and silent script-free validation failures. Their repair passes 678 Windows
+tests under Rust 1.99.1, with zero failures or ignores, including the new RED
+regressions, existing validation/FormData checks, and all original 285 affected
+native/scripted occurrences. The private native hook is deleted on both engines.
+[Windows repair receipt](receipts/2026-10-16_forms_submission_review_windows.json).
+
+Fresh O-PC native Livery, Boa and Nova transport, final accessibility and visual
+checks pass, including the redirected relative image. The script-free invalid
+notice also paints and exposes an assertive alert. The actual Chrome browser
+submission run passes all 20 cases and the separate editing-only control under
+the unchanged evidence checker, with zero uncaught JavaScript exceptions.
+
+That browser run found and qualified three host repairs: release the canvas
+borrow before synchronous focus callbacks; repaint the retained source after
+submission so its hit-test layout remains usable; and reject superseded source
+responses before fetching their dependencies. The browser checks bind the exact
+Wasm artifact, trusted input, request bytes, response timing and painted proof
+markers. They do not qualify general browser text rendering. See the
+[Windows host receipt](receipts/2026-10-16_forms_native_browser_windows.json).
+
+Windows covering gates, matched WPT/guard maps and final Checkpoint C reporting
+remain open. Earlier ThinkPad receipts retain their recorded Linux scope.
+
+The dated status paragraphs below record earlier qualification stages.
+
 **Status, 2026-10-08:** Genet's Forms value model and F4 repair at
 `e84f9c7f9aec23320c539784961d1465f8a53a9b` are published on main, as is Mere's
 permanent repin at `632c1d29` through published integration `eafb8643`. Fresh
@@ -13,6 +47,20 @@ Cleromancy's current public-pin integration passes 23 ThinkPad tests at
 `9789d64e` and is published through `ff3b1f53`. Forms Phase A is published;
 Phase B and C retain separate checkpoints, and sibling adoption of Mere's new
 Forms dependency family remains distinct from F5 mechanical compatibility.
+
+**Checkpoint note, 2026-10-09:** Phase B is qualified and published on main
+at `a0d95ebd6e20220e3430870365112a608b4f83ff`. Mark approved proceeding with
+Phase C after its publication report. Submission work is in progress under
+C5, with builds and matched gates on ThinkPad. The Phase C execution section
+below owns current tasks and done-conditions; earlier Phase B progress entries
+remain historical evidence.
+
+**Checkpoint C note, 2026-10-20:** the Windows qualification run is complete on O-PC (candidate
+and control captures matched with zero lost passes, twelve covering gates green, three reused);
+see "Checkpoint C qualification run on O-PC" at the end of Progress. **Accepted by Mark on
+2026-10-20:** "Accept, with the formdata-event timeout as a follow-up (Recommended)". Phase C is
+qualified at the prepared epoch; the follow-ups are named in that section and in
+`receipts/2026-10-20_forms_checkpoint_c_windows.json`.
 
 The eleven-crate 1,943-pass receipt belongs to Genet
 `b8a3ec1d6abe88e07438ca4d53b9ca4d2b92111d`, with zero failures and nine ignores.
@@ -143,6 +191,191 @@ Drawing children remain in the DOM. Ordinary native HTML inputs and textareas
 keep their existing Genet projection. Text-valued SetValue routing remains the
 separate pre-existing gap identified under F3.
 
+### F7: reuse the native URL parser, 2026-10-08
+
+Question as put: "One further dependency choice: may `genet-scripted-dom`
+also reuse the already-locked `url` 2.5.8 parser for URL validity? The Forms
+brief forbids new dependency edges. Its current scheme-only check accepts
+malformed values such as `http://`; using the existing parser would keep
+package versions and checksums fixed."
+
+Options: use the existing URL parser in the DOM (recommended); keep URL
+parsing behind an existing host bridge.
+
+Mark's answer, verbatim: "use the existing one, or if it needs updating,
+update the existing one and then use it".
+
+The existing 2.5.8 API can parse these absolute URLs, so add the workspace
+dependency to `genet-scripted-dom` and preserve its version and checksum.
+URL-derived validity stays in the same native view read by script and CSS.
+
+### F8: native pattern matcher, 2026-10-08
+
+Question as put: "May Forms reuse the already-locked `regress` 0.11.1 library
+directly for HTML `pattern` validation? This adds a dependency edge that the
+brief forbids, but preserves package versions and lets script and CSS read the
+same native result."
+
+Mark's answer, verbatim: "Use the existing native matcher (Recommended)".
+
+Consequence: add that direct edge with UTF-16 support, retaining all locked
+package identities, versions and checksums. Compile HTML's UnicodeSets pattern
+with both the library's Unicode and UnicodeSets flags enabled; omit malformed
+patterns, match the whole applicable value, and check each multiple-email item.
+Native validity remains authoritative for script and CSS. The library exposes
+no public backtracking execution budget; document this implementation limit
+and qualify bounded difficult-pattern fixtures without inventing a new policy.
+
+### F9: native validation notice and accessible alert, 2026-10-08
+
+Question as put: "Should `reportValidity()` show a native validation notice and
+a screen-reader alert now? This requires a new host reporting path, including
+fields inside iframes. Initial English messages would be replaceable by the
+embedder; custom messages would stay exact."
+
+Mark's answer, verbatim: "Include the native notice and accessible alert
+(Recommended)".
+
+Consequence: share native message generation between `validationMessage` and
+host feedback; expose an embedder-replaceable initial English catalog and
+preserve normalized custom message text exactly. Queue reports after uncanceled
+invalid events, drain them during the normal document pump/render, preserve
+realm and node identity, and paint feedback outside the authored DOM. Expose
+the same notice as an assertive accessible alert, including child-frame reports.
+Static `checkValidity()` keeps its existing event/boolean behavior. Submission
+and new select/checkbox interaction widgets remain outside Checkpoint B.
+
+### F11: qualify Checkpoint C on the Windows box, 2026-10-15
+
+Question as put: "Where to qualify. (a) This Windows box: a fresh matched
+before/after on current main, with 'before' = main with the 56 Phase C files
+reversed (a three-file merge). The Linux Checkpoint B numbers are cited for
+reference only. (b) Resume the ThinkPad harness: the same platform as B, but
+its tooling is frozen at an older main and another session is using that
+machine." Options: (a) recommended, (b).
+
+Mark's answer, verbatim: "This Windows box (Recommended)".
+
+Consequence: candidate is current main; the control is current main with the
+Phase C product changes of the six Phase C commits reversed. Both are built
+and captured on the Windows box with the same toolchain, providers and
+policies. Linux Checkpoint B and pre-integration numbers are reference only.
+The six Linux Livery baseline failures are not an allowance here: any Livery
+failure on Windows is a regression to investigate.
+
+Continuation, 2026-10-16: Mark directed "then ssh into o-pc". Work resumed
+on Windows O-PC under this ruling.
+
+### F12: fix the scripted post-redirect base URL inside Phase C, 2026-10-15
+
+Question as put: "The Boa redirect-address bug: (a) reproduce it here, add a
+failing test, fix it inside Phase C (the plan already requires that the final
+address after a redirect becomes the document's address), or (b) record it as
+a limitation." The finding: the ThinkPad native live run of 2026-10-14 loaded
+the post-307 page on Boa, but requested its relative `proof.png` as
+`/case/boa/proof.png` (404) rather than `/case/boa/final/proof.png`; Livery
+was correct and Nova was not run.
+
+Mark's answer, verbatim: "Reproduce, test, fix (Recommended)".
+
+Consequence: reproduce on Windows, add a failing test before the fix, fix it
+as Phase C work and run the live case on Livery, Boa and Nova.
+
+### F13: newest wasm-bindgen, live browser check in Checkpoint C, 2026-10-15
+
+Question as put: "The live browser (Wasm) submission check: (a) leave it out
+of Checkpoint C as a named limitation (blocked on 2026-10-14 for want of a
+WebGPU browser; the ThinkPad package pinned wasm-bindgen 0.2.127 and this box
+has 0.2.129), or (b) run it in Chrome on this machine."
+
+Mark's answer, verbatim: "pin the newest wasm-bindgen".
+
+*Reading, not ruled:* pin the newest released wasm-bindgen with a matching
+wasm-bindgen-cli, then run the live browser submission check in Chrome on this
+box as part of Checkpoint C; stop and report if WebGPU is blocked for a reason
+unrelated to the version. Checked 2026-10-15: crates.io's newest wasm-bindgen
+and wasm-bindgen-cli are 0.2.129 (published 2026-09-25), which main already
+pins exactly (`genet-render-host`, `genet-scripted-worker`, `ortet`,
+`support/build-scripted-workers.ps1`) and this box has installed. No pin
+change is needed.
+
+### F14: Rust 1.99.1, and the ThinkPad lane's rulings R19-R26, 2026-10-15
+
+Question as put: "The R19-R26 rulings in the ThinkPad lane's notes (e.g.
+'qualify with Rust 1.99', 'a toolchain change needs a new matched
+before/after'): copy them into the plan as dated history labelled 'agent
+rulings, not Mark's', or confirm them as his."
+
+Mark's answer, verbatim: "1.99.1 just dropped, which we should adopt. tells ya
+how i felt about 1.99 too, huh".
+
+*Reading, not ruled:* qualify under Rust 1.99.1 (released 2026-10-13,
+installed minimal with the wasm32 target on 2026-10-15) via explicit
+`cargo +1.99.1`. R19-R26 are recorded below as the ThinkPad lane's rulings,
+with R19's toolchain amended by this ruling. The repository's
+`rust-toolchain.toml` (channel 1.99.0) is not changed here; a family-wide
+toolchain bump is decided separately.
+
+### F15: Checkpoint C runs on O-PC, 2026-10-18
+
+Question as put (after the 2026-10-18 state report): Checkpoint C is unstarted and F11's
+Windows choice was recorded as pending a platform clarification; the ThinkPad's live
+browser leg was blocked for want of a WebGPU-capable browser. Where does final
+qualification run?
+
+Mark's answer, verbatim: "Let's do it on o-pc. If the thinkpad doesn't have a webgpu-capable
+browser, might as well".
+
+Consequence: F11 stands and is no longer pending. All of Checkpoint C runs on O-PC (this
+Windows box, Chrome 155.0.8059.80 installed): the fresh control, the 15 covering gates, the
+matched capture, the native live submission and the F13 live Chrome check. The ThinkPad's
+2026-10-13/14 and 2026-10-16 receipts stay as evidence of the candidate's behaviour on Linux,
+not as Windows qualification. The control must be reconstructed to account for the F12
+repair on the same 56 paths, as the 2026-10-16 entry says.
+
+### F16: Checkpoint C qualifies the prepared epoch, 2026-10-18
+
+Question as put: which source epoch does Checkpoint C qualify? The Windows lane prepared
+everything at `e3911fb6b2d` plus `8fa73497` (both in main): candidate WPT runner built and
+frozen, candidate controls assessed, native live run and Chrome 155 browser submission
+passed, the 59-path control projection staged in `genet-forms-c-control`, 18 capture chunks
+and 15 gate rows frozen. Current main is 55 commits and 311 files past that.
+
+Mark's answer, verbatim: **"Prepared epoch (Recommended)"**.
+
+Consequence: candidate is `e3911fb6b2d`+`8fa73497`; only the control is built new. The 55
+later commits are a named limitation of the Checkpoint C report, with a follow-up delta gate
+on them, not part of this qualification.
+
+### F17: the guard's RAM floor is 6 GiB for this run, 2026-10-18
+
+Question as put: the lane's guarded wrapper refuses to start unless 12 GiB of RAM is
+available (4 GiB compiler cap plus the 8 GiB floor) and 30 GiB of disk; RAM was 9.9 GB free
+of 31 with no single hog, and the control build was refused on that check on the 16th.
+Options: free RAM and launch at 12 GiB; lower the floor to 6 GiB; hold until quiet.
+
+Mark's answer, verbatim: **"Lower the floor to 6 GiB"**.
+
+Consequence: a new wrapper revision with `FLOOR = 6 GiB` (cap unchanged at 4 GiB, so the
+guard needs 10 GiB available at launch), content-hashed like its predecessor and named in
+`build-wrapper-name.txt`; every receipt it writes records the new wrapper hash and floor. The
+6 GiB floor is this run's ruling, not a family-wide policy. The STOP sentinel from the
+2026-10-16 pause is removed at launch and remains the kill switch: recreating it stops the
+sequence before its next job.
+
+### F18: unattended, sequential, one report at the end, 2026-10-18
+
+Question as put: remaining work in order is the cold control runner build, 76 capture rows
+across both engines and both roles (2,468 submission and encoding records plus prior maps,
+CSS slices and controls), 12 of the 15 covering gates (3 reused), then whole-change review
+and the Checkpoint C report. Options: unattended sequential; stage by stage with check-ins;
+gates first.
+
+Mark's answer, verbatim: **"Unattended, sequential, report at the end (Recommended)"**.
+
+Consequence: the stages chain under one owned job at a time, stopping on the first incomplete
+receipt; the report carries every count, every refusal and the limitation list.
+
 ## Phases and done-conditions
 
 ### A: one live control value
@@ -175,6 +408,419 @@ After Checkpoint A approval, implement ValidityState, barring, validation
 methods/messages, invalid events and validity selectors. Done when focused
 controls and both-engine constraints plus Phase A maps qualify, every movement
 is attributed and no previous pass is lost. Stop at Checkpoint B before C.
+
+The first bounded audit confirms that native validation is absent. The
+input/textarea record already owns custom messages; validation needs native
+listed-control coverage, derived flags and barring, live script wrappers,
+trusted cancelable `invalid` events, selectors and genuine edit provenance.
+Expand native listed controls as the brief requires, distinguishing barred
+fieldset/output/object APIs from form-wide methods and aggregate selectors.
+Form-associated custom-element internals are a separate existing gap, with
+only callback-name recognition implemented today.
+
+HTML fixes user-validity transitions and reset/clone behavior; these are not
+new policy choices. Track user edits separately from script assignments so
+length constraints and bad-input status cannot be guessed from sanitized
+values. Preserve custom validity messages on reset and omit them on cloning;
+reset user validity as HTML specifies. A live `ValidityState` getter must read
+the same native state used by selectors, including while a control is barred.
+Keep the shipped `FormControlState` field layout intact: append separate
+capture records for interaction facts, option selectedness and nonlegacy
+custom messages. The interaction metadata distinguishes last-change origin
+from a pending committed edit and preserves an incomplete number draft with
+its internal UTF-16 caret. The editor reads a derived editing view; script
+still reads the sanitized value and its applicable selection APIs.
+
+F8 and F9 approve the direct DOM edge to already-locked `regress` 0.11.1 and
+a Genet-owned validation notice/accessible alert with replaceable initial
+English messages. Their implementation and fresh qualification are in progress.
+Both frozen starting engines depend on that matcher, including UTF-16 support.
+The newer Boa pin uses 0.12.0 while Vano retains 0.11.1; F8's native
+matcher uses already-locked 0.11.1. No package/version change is
+proposed for that edge. Source review finds Unicode-set support in both
+versions, but `Flags::from("v")` leaves the separate `unicode` flag false.
+The native UTF-16 adapter must set both flags and qualify supplementary
+characters, set operations and malformed-pattern omission. Its UTF-16
+executor exposes no public backtracking budget.
+Do not run validation through page-overridable RegExp properties. Do not
+insert validation feedback into author-observable DOM.
+F7 separately approves the already-locked URL parser edge. The first review
+also corrects requiredness versus mutability, button/object/input barring,
+radio-group requiredness, email grammar, textarea length flags, optional time
+seconds, and reversed periodic time ranges. Those follow HTML rather than
+requiring further semantic rulings. These changes are not qualified until
+the native tests and matched WPT runs finish.
+
+Starting controls are in
+`Code/testing/genet/forms/phase-b-constraint-validation.html` (20 cases).
+The fresh Linux corpus, source, lock, runner, environment and before maps must
+be bound before implementation gates; Phase A's earlier Windows measurements
+retain their own platform/source boundaries. Match baseline and candidate
+deadline and worker count, preserve raw partial/error rows, and stop at
+Checkpoint B before submission.
+
+The ThinkPad starting maps are complete at `6cb2284a33d`, using the frozen
+runner SHA `087c4347...`, the Phase A integration lock SHA `9809247c...`,
+Linux corpus inventory SHA `6c9b599f...` and WPT manifest SHA `d5ec5be9...`.
+Both engines record the same starting counts: constraints 0/877,
+the-input-element 928/1,853, textfieldselection 667/739 and infrastructure
+31/120. Those runner totals include partial rows. Completed-file input counts
+are 920/1,806; all four directories have 1,618/3,542 completed-file passes
+per engine. The input error files separately contain 47 partial rows:
+eight passes, seven failures, 28 not-run and four timeout rows.
+Each engine has 219 file records: 31 passing, 124 failing, nine
+errored and 55 skipped. Assertion rows in errored files remain partial
+evidence. All eight runner processes exit zero; that is not suite success.
+The 20 added controls fail on both frozen starting engines. A separate
+inventory pins all 5,047 tracked WPT resource files, including the harness
+resources outside the focused archive. Builds and maps use installed
+Rust 1.98.1 explicitly for both stages; the repository's toolchain pin is
+unchanged. Runs are serialized with one worker to respect ThinkPad memory.
+
+The in-progress compile preview is identified by source archive
+`5cbe1cf0...` atop `6cb2284a33d` and controlled lock SHA `f540a7c8...`.
+Its sole lock change adds the approved existing URL edge. This preview is
+not Checkpoint B qualification. Its first crate stops at two compile errors
+before tests: a sibling-module private helper and an overlapping mutation
+journal borrow. The local repair exposes the helper within the arena owner
+and snapshots change booleans before recording mutations. Subsequent review repairs public window
+redispatch of trusted invalid events using agent-private weak bookkeeping,
+tests per-interface receiver checks and snapshots invalid candidates before
+any listener runs. These source changes require their own final gates.
+Calendar range ordering compares validated components exactly, while step
+calculations retain finite f64 precision for enormous years; that remaining
+limit is not presented as an HTML rule. Step rounding tolerances scale with
+the calculation's floating-point error rather than accepting a fixed small
+nonzero remainder.
+
+The repaired preview compiles its arena crate, then stops with 78 passing
+tests and four fixture failures. Two radio fixtures used separate detached
+trees, the listed-controls expectation omitted its fieldset, and the large
+year overflow fixture set `min` instead of `max`. Corrections retain the
+actual semantic assertions while fixing those inputs and expectations.
+Cross-realm fixtures additionally cover borrowed validation getters,
+adoption/clone state and public invalid-event redispatch. Agent-private weak
+registries keep one validity object per canonical wrapper and allocate it
+with the wrapper's creation-realm prototype. This repair awaits execution;
+the new integration tests require completed validation messages as well.
+
+The fixture-repaired preview (`de3aa02b...`, 22 owned files) executes 82 arena
+tests with zero failures. Its runtime crate compiles and executes 173 passes
+and two failures before later crate gates stop. Both failing runtime cases
+append controls directly to a document that already has its document element;
+the Vano error is `HierarchyRequestError`. The fixture now loads an HTML body
+and appends its form and external control there. Preserve that failed run
+and its source/resource guards; the correction needs a new source snapshot.
+The selectedness review also repairs size parsing, first-enabled fallback,
+reset normalization, multiple removal, option-list barriers and wrapped
+placeholder eligibility against the current HTML algorithms. These changes
+remain unqualified until their own remote gates execute. Pattern matching
+and validation feedback still await the two explicit answers.
+
+The subsequent select/runtime repair freeze (`4352315a...`, the same 22 owned
+files and controlled lock) adds selected-option insertion and preserves
+selection during moves within one list. Public `option.selected` assignments
+ask for reset; `select.selectedIndex = -1` still permits no selection. A
+two-selected-option subtree fixture checks that the last inserted selected
+option wins without dirtying. The runtime fixture also reads live select
+validity through both engines. Later local work adds the private native
+`validationMessage` custom-message branch, returning empty for valid or barred
+controls, and its interface-brand/adoption fixtures. The built-in catalog
+and report feedback remain pending; that partial binding is not full message
+conformance and is not part of the `4352315a...` freeze.
+The next API preview is `3ef27ae3...`, including the custom-message branch;
+its full cross-realm suite can now run independently of built-in wording.
+Subsequent native review corrects current HTML button Auto candidacy:
+missing/invalid type validates only without command/commandfor and outside
+a direct select parent; explicit submit remains a candidate. That correction
+and its native fixture are not part of the `3ef27ae3...` freeze and need final
+source qualification. A pre-existing Mere/Djinn compiler delays the remote
+preview start; it is preserved and is not interrupted by this lane.
+The custom-message preview subsequently starts after that owner exits, with
+11 GiB available, and stops before tests at a compile error: the new script
+option setter calls `is_html_option` from its sibling module. Expose that
+existing helper within the DOM crate (`pub(super)`) and retain the stopped
+receipt, whose source, lock, WPT/CSS and runner guards pass. The next freeze
+must include this repair and the reviewed button Auto correction.
+
+The shared-option-helper preview (`d713e251...`) passes all 89 arena tests
+and all 177 runtime library tests with no failures or ignores. Gate three
+stops during compilation of Livery: the new attribute-invalidation patterns
+omit the existing `old_value` member. Add `..` to both patterns and retain
+the stopped receipt with its passing source/resource guards. No gate-three
+tests or later gates ran. The next preview also captures the built-in String
+conversion for `setCustomValidity`, rejects primitive Symbols as WebIDL
+requires, and preserves exceptions from authored `toString` methods. Two
+engine fixtures check poisoned global String, newline normalization, one
+conversion, exact thrown-object identity and receiver-brand ordering. These
+new cases and the two Livery compile repairs require a fresh frozen run;
+the unchanged arena preview keeps its separate 89-pass receipt.
+Read-only review additionally finds that option-state mutations invalidate
+their select but omit its external form owner. Both retained style and
+formatting-damage paths now include form owners of the relevant ancestors.
+A fixture selects a nonempty option in a required external select, checks
+the form's computed width and paint, then returns to the empty placeholder.
+The existing user-validity paint fixture now uses `mutate_dom`, handing each
+exact recorded batch to the retained document instead of calling a nonexistent
+mutable accessor. All of these new Livery checks still await execution.
+Before launching the next gate, fixture review catches an unchanged-empty
+assignment that cannot set user validity. The fixture now types one character
+into a `minlength=2` control before commit: a real user change remains invalid,
+then the two-character edit becomes valid. The transferred `c81aed33...`
+snapshot is preserved as an applied-only preview with no tests, and replaced
+by a separately frozen fixture correction. No provenance algorithm changes.
+Further static review borrows the attribute's non-Copy qualified name in the
+retained damage match instead of moving it from a borrowed mutation. Keep
+the runtime gate's exact source unchanged and apply this correction only at
+a stopped gate boundary; it needs the subsequent Livery compilation.
+The borrowed-attribute runtime gate executes 177 passes and two new fixture
+failures, with no ignores. Both report `Error:1` rather than `TypeError:1`
+for the last brand check: its `document.createElement('div')` setup invokes
+the intentionally replaced global String before `setCustomValidity` can run.
+Create that wrong receiver before poisoning String. Preserve the stopped
+run; no later gates ran, and this correction changes the fixture only.
+Further read-only invalidation review finds a radio-group dependency:
+checking one radio can clear another unchecked required radio's missing
+value without changing its checkedness, leaving its separate external
+fieldset's style stale. Both invalidation paths now conservatively widen
+current-radio state changes and radio name/required/type changes to their
+containing DOM tree, considering the old attribute when a type changes away
+from radio. Unrelated inputs retain their prior scope. No reverse group index
+exists, so this favors correct external-peer and fieldset styling at the cost
+of a full-tree restyle for these radio mutations. A retained fixture covers
+selection and grouping changes across two externally associated fieldsets.
+The previously frozen arena sources stay unchanged; the repair needs execution.
+Structural membership changes use the same containing-tree rule when a tree
+contains radios, including when it contains no form or fieldset. A fixture
+removes and reinserts a checked radio in a separate section from its required
+peer, checking the peer's style both ways. Structural edits elsewhere in a
+radio-containing tree therefore widen conservatively too; trees without
+these controls retain the old scope. These local additions follow the frozen
+`f45401dc...` preview and cannot use its unmodified-source receipt.
+The `f45401dc...` runtime gate passes all 179 tests without failures or
+ignores, including both corrected DOMString conversion fixtures. The runner
+then advances to `genet-scripted`; later native rendering and cross-realm
+gates remain unqualified until they complete.
+That compile stops in Livery before tests: the new helper's `QualName` type
+is not imported by `document/frame.rs`. Qualify it as
+`layout_dom_api::QualName`; this is a compile-only correction. Preserve the
+runtime 179-pass source binding and the stopped capture gate. The standalone
+radio-membership archive (`abaca823...`) remains frozen-only, without a
+remote application or tests; the next bundle combines membership coverage
+with this type-path correction at an idle boundary.
+The `0105ecef...` preview compiles Livery and passes all 88 scripted-document
+library tests without failures or ignores, including capture compatibility.
+Its Livery library gate stops with 304 passes and 18 failures. Ten failures
+concern retained-root damage/formatting, two report foreign or retired NodeIds
+(including the new radio-removal fixture), and six concern layout geometry or
+scroll ranges. Preserve the full failed run and passing source/resource guards;
+later package and integration gates did not start. Review invalidation safety
+and scope before changing those assertions, and execute a matched clean-source
+Livery baseline to attribute the geometry failures rather than assuming they
+are platform differences. The stopped evidence archive is `a566f84a...`.
+Further API review follows the DOM Standard's event-firing rule: borrowed
+validation must create an invalid event in the target's relevant realm.
+Register a private realm-local event factory alongside the existing canonical
+wrapper validity factory, preserving constructor-override protection and the
+agent-shared trust registry. The existing six-case integration target now
+checks event realm/prototype and a replaced child Event constructor on both
+engines. Those local runtime changes are outside the frozen `0105ecef...`
+run and need their own executed control and restored-source qualification.
+The negative event-realm control (`7c5e36ed...`) uses unchanged `0105ecef...`
+production and only the strengthened integration fixture. It executes six
+cases: four pass, while the borrowed-validation case fails once on each
+engine. Its source, lock, resource and frozen-binary guards match before and
+after. Preserve that failed control; the positive realm-factory repair still
+needs execution. A receipt timing-field error is retained with a separate
+amendment using its UTC start/end, rather than rewriting the raw receipt.
+The matched tracked-source baseline at `6cb2284a33d` and original lock
+`9809247c...` executes 318 Livery tests: 312 pass and six fail. Those failures
+are exactly the two scroll-range and four float/shape-outside cases from the
+preview. Its two new untracked preview files are retained but inert in this
+library-only baseline; all tracked source blobs match the commit. None of the
+ten retained-root failures or transferred-subtree panic reproduce. The
+baseline archive is `5d32f350...`, with unchanged source/resource guards.
+This attributes those twelve preview failures separately from the six
+pre-existing Linux failures, without altering any baseline assertions.
+
+The next local repair guards validity reads on retired/foreign IDs and keeps
+ordinary ID mutations local in trees without form-related dependencies. ID
+mutations in form-containing trees still widen, including a non-form element
+that blocks a later form's first-ID association. Both selectors now trust a
+native validity view's no-owner result instead of recreating ownership from
+matching attributes. New engine and retained-style fixtures check duplicate
+form IDs and toggling an earlier non-form blocker. Select structural mutations
+invalidate their select and external form owner even if selectedness stays
+unchanged; a placeholder move into/out of an optgroup checks that case. The
+radio-membership fixture moves its node into a detached tree and back, since
+the arena's destructive `remove` retires its ID.
+
+Native-editor review also clears stale bad-input drafts and caret/focus
+metadata on genuine type-state changes, retaining user-validity and custom
+validity. Existing editable date/month/week/time/datetime-local controls now
+preserve partial user drafts through the same derived editing view used for
+numbers. Script assignments clear those drafts. Length flags explicitly
+require dirty value and last-user-change provenance. These corrections and
+their three native fixtures await fresh execution; the earlier 89-pass arena
+receipt does not qualify these changed native sources.
+The combined positive preview is frozen as `690762af...` (22 owned paths,
+controlled lock `f540a7c8...`). Its arena gate passes 92 tests with no failures
+or ignores. The runtime library passes 181 tests, and all six cross-realm
+integration cases pass, including the two event-realm assertions that failed
+in the negative control. Later package gates are running. Subsequent review
+keeps editing-UI cleanup
+separate from value provenance: if a type change leaves the API value unchanged,
+retain the last-user-change fact so newly applicable length constraints remain
+observable. A new local fixture checks user-entered number `123` changed to
+text with `maxlength=2`, then search, and a sanitizing transition that clears
+the value. This inference follows HTML's last-value-change condition and type
+transition steps; it does not assert additional origin rules for every
+conversion. The correction is outside `690762af...`. The fixture-only negative
+control `56b0c383...` executes exactly one failing case at the expected
+`too_long` assertion after number-to-text, with 92 other cases filtered.
+Source and lock guards pass. Its runner misclassifies the expected zero-pass,
+one-failure summary, so preserve the original receipt and a separate
+classification amendment. The restored positive snapshot `261dd437...`
+passes all 93 arena tests with zero failures or ignores. Root verifies the
+source manifests, exact fixture/production deltas, raw output hashes, runner,
+lock and timing for both controls. The supplemental negative archive is
+`eee6bd2f...`, and the positive archive is `dd0fc8c0...`. An incorrectly
+reported amendment digest is corrected in a separate verification record;
+the amendment and original raw receipt are unchanged.
+Concurrent main commit `a26cd7b66734` adopts Boa `494ae680...` and its browser
+host feature. It changes no owned Forms files, but the compatible lock now
+resolves ICU 2.3 instead of the frozen previews' ICU 2.2. Keep the current
+ThinkPad queue at `6cb2284a...` and lock `f540a7c8...`; its results qualify
+that tuple only. Do not combine its before maps with a newer-pin candidate as
+though dependencies matched. Final publication needs a new frozen starting
+runner, lock, focused controls, WPT maps and CSS maps at the updated main
+dependency tuple before applying Forms. Preserve the existing old-tuple maps
+and controls as separate evidence. The stable Boa lane's adapter/compile
+qualification is recorded in `2026-10-08_boa_stable_upstream_refresh.md`;
+its aggregate Forms/WPT qualification remains separate.
+The new baseline lock is prepared as `fd4a121e...` from the public qualified
+878-package resolution, removing only the concurrent native-DOM URL edge.
+Its frozen URL-only preview candidate is `28ee4fe8...`; the guarded accounting
+confirms identical package identities, versions, sources, checksums and all
+other edges. These locks are frozen inputs; current build evidence follows.
+Published main `cca45fc7...` subsequently merges the line-breaking owner's
+paragraph-boundary index and qualification documentation. Forms' eight-line
+draft-display change in `text.rs` merges cleanly with that published code;
+all other owned source bytes remain intact. The incoming index adds three
+tests and one ignored timing observation. Final starting measurements move
+to exact `cca45fc7...` with the same `fd4a121e...` lock before applying Forms.
+Fresh locked ThinkPad metadata resolves 874 packages/nodes and confirms the
+public Boa, Vano and netrender revisions without config or source overlays.
+The fresh optimized ThinkPad starting runner builds successfully at exact
+`cca45fc7...` and lock `fd4a121e...`, with binary SHA `ab486cec...` and
+build receipt SHA `b64ead5a...`. Cargo reports 22m13s; the receipt envelope
+includes preflight and post-build checks. Root verifies the complete 22-member
+evidence archive `8ff2775b...`, raw output/exit hashes, metadata pins and resource
+identities. Its four-font inventory `e1356987...` supplements the preserved
+WPT and Linux corpus inventories. Upstream checkout status contains only
+Cargo markers; a separate amendment `0b022bed...` verifies Vano's unchanged
+test262 gitlink and empty tracked-source diff. Markers and raw evidence remain
+intact. The fresh Livery baseline executes 322 cases: 315 pass, six fail and
+one timing observation is ignored. Root verifies the raw results and exact
+same six failure names as the old clean-source baseline. Its receipt
+`284ee6af...` mistakenly embeds owner JSON in the start-time field; the
+separate `fe49ac25...` amendment supplies the owner's timestamp while
+preserving the original. The verified wall interval is 306.105 seconds and
+test execution takes 8.22 seconds. The unchanged B01-B20 controls subsequently
+execute on both engines with 0/20 passes, all twenty named failures and no
+errors or skips. Root verifies their 25-member archive `15b69aad...`, raw
+results and source/lock/binary/fixture/font bindings. Their constant config
+boolean is not a separate per-run config observation; the runner's build
+receipt contains that audit. Starting WPT and CSS maps still need to complete;
+the Livery result remains a baseline with six known failures.
+The starting-map capture review preserves the failed CSS preflight caused by
+a missing Git working directory. The corrected preflights verify all 5,047
+WPT resources, 60,998 CSS tracked files and four fonts before any maps run.
+Root also catches a summary-parser error that preflight does not exercise:
+named-group `findall` returns tuples, and the parser reads only the header.
+The V4 wrapper `36f79365...` instead checks both header settings and final
+stdout totals against each result map. Its replay verifies all eight archived
+Forms maps and sixteen CSS maps, with failing controls for the old parser,
+incorrect pass totals, duplicate summaries and a missing final summary.
+Before and candidate retain identical wrapper bytes with explicit frozen
+stage configs. The fresh before runner is separately frozen at 75,877,952
+bytes with unchanged binary SHA `ab486cec...`. The V4 preflights pass and all
+eight fresh starting Forms maps complete their capture checks. Root's strict
+accounting verifies build/font/corpus/provider bindings and raw stdout totals.
+Each engine has 219 files: 31 pass, 124 fail, nine error and 55 skip. Completed
+files retain 1,618/3,542 subtest passes; errored files separately retain eight
+passes, seven failures, 28 not-run rows and four timeouts, making 1,626/3,589
+rows including partial results. Status comparison with the old dependency
+tuple observes zero movements in all eight maps; it is not candidate acceptance.
+The raw archive `7f490671...` contains 99 regular files and one directory entry.
+All sixteen fresh CSS slices also complete their capture checks. Root verifies
+2,731 file records: 1,044 verified passes, one reference-unverified pass, 872
+failures and 814 skips, with zero errors. Their test processes exit 1 for the
+baseline failures; the capture stage exits 0 with complete results and passing
+guards. Each map records the static renderer engine `none`, despite the
+historical `--engine boa` argument. Original expectation files, policy script
+and reference map remain unchanged. The `f2160d39...` raw archive contains
+215 regular files and one directory entry. Comparing statuses against the old
+tuple observes zero movements; final acceptance still requires the matched
+Forms candidate. Both fresh starting stages are now ready, and ThinkPad has
+no active compiler or runner owner. Matcher and report-feedback choices
+remain unanswered without a response timer.
+The `690762af...` scripted-document gate also passes all 88 tests. Its Livery
+gate executes 324 cases with 318 passes and the exact six clean-source baseline
+failures, with no ignores. All ten retained-root regressions and the transferred
+subtree panic are repaired, and the six added Forms/invalidation cases pass.
+Record the baseline failures as such; this is not a zero-failure Livery gate.
+The remaining old-tuple library gates pass nine editor tests, ten Livery
+selector tests and 42 render/accessibility tests. The shared layout-DOM
+library compiles and has zero tests. All raw hashes and before/after source
+and lock guards are verified in the complete queue archive `64ae5f82...`.
+The last command mistakenly requests `genet-wpt --lib`, which has no library
+target and executes no tests. Preserve that invocation error separately from
+test failures. The corrected binary-target gate passes 73 tests with zero
+failures and three ignores on unchanged `690762af...` source and lock
+`f540a7c8...`. Its source and lock guards pass. This queue still precedes the
+final provenance correction and the updated Boa dependency tuple.
+
+Read-only report-feedback tracing identifies the existing native request
+pattern `HostState.scroll_into_view`, consumed during scripted layout.
+Validation has no equivalent presentation queue, message provider or notice
+UI. A timer-triggered report also needs a session drain, since input effects
+alone cannot carry it, and child-frame targets require realm identity.
+The host would own visible presentation and the transient accessible alert,
+outside author DOM. This is seam evidence for the still-unanswered notice
+choice, not an implemented queue, catalog or host feature.
+The final method audit finds matching static-validation snapshots, negative
+results after canceled invalid events and native external-form ownership.
+Method calls leave user-validity unchanged; genuine text-edit commits own its
+transition. `commit_select_user_selection` has direct native tests but no
+production picker caller. Select interaction therefore remains a host seam,
+and these API receipts do not qualify a native select picker.
+
+The ThinkPad's faithful starting run of the checked-in 16-slice CSS guard
+passes mediaqueries and css-position, then stops at text-align with
+unexpected results against the Windows expectation file. That completed
+slice has 52 passes, 34 failures, 28 skips and zero errors; the GPU starts
+successfully. Preserve the stopped guard as a platform baseline failure.
+Matched Linux starting maps for all sixteen unchanged slices are recorded
+separately with the frozen starting binary; they do not rewrite repository
+expectations or imply that the checked guard passed. Candidate qualification
+must reject new losses against those Linux starting rows.
+
+All sixteen Linux starting maps complete with zero errored rows across 2,731
+files: 1,044 verified passes, one reference-unverified pass, 872 failures
+and 814 skips. The evidence-only `--write-expectations` commands each exit
+one because raw reftest failures exist; every file count agrees with its
+complete map. That differs from the stopped checked-expectation guard and
+does not establish a passing `unexpected=0` guard. Preserve the malformed
+subset-parser helper attempt separately: it fails before rendering; the
+corrected v2 maps bind the frozen runner and all input inventories.
+Root verifies all 225 archived evidence files against their inventory. The
+guard/map receipts' `before.lock_sha256 = f540a7c8...` records the then-active
+dirty preview checkout, not the frozen baseline binary's build lock. The
+binary's actual build tuple remains clean `6cb2284a33d`, lock `9809247c...`
+and binary `087c4347...`. Preserve the original receipts with a provenance
+amendment separating those two tuples; no baseline result is attributed to
+compiled preview code.
 
 ### C: submission
 
@@ -333,7 +979,7 @@ same build settings and public dependency lock:
   WPT manifest SHA256 `D5EC5BE9BF1A75ED00D7E7AB28AFE8A694A55E11682BA74305874D70B18DD422`;
   1,649-file corpus SHA256 `C24C04EC10FC9924D334AEBFE5789A20F179F3971683202193C5652C93B3C50C`.
 
-The prescribed Livery/jobs4/timeout120/drive15 maps remain immutable. The first
+The prescribed Livery/jobs4/timeout 120/drive15 maps remain immutable. The first
 corrected run has no original baseline pass losses, but Vano `select-event.html`
 stops at 265/270 rows; an unchanged repeat stops at 222/270 and leaves five
 original passing rows unobserved. These are accounted as pass-to-missing, not
@@ -1030,3 +1676,590 @@ retains the eafb source boundary; it does not qualify those later changes.
   sources are recorded in `mere-forms-current-knot-repin-review-proposal.json`.
   No source substitution or public-source acceptance is inferred from these
   local-candidate gates. Checkpoint A publication remains the open decision.
+
+- 2026-10-08: Mark explicitly answers F8 and F9, approving the already-locked
+  native matcher and native notice with an accessible alert. Three bounded
+  Luna agents implement matching, the message/report bridge, and host painting
+  in separate ownership seams; root implements the session alert projection.
+  Native reports retain physical realm/node ownership and agent enqueue order.
+  The native alert is outside the authored DOM and uses the actual notice's
+  top-session viewport bounds, independent of target scroll or child-frame
+  geometry. Repeated reports receive fresh semantic identity; Escape dismisses
+  the current notice. Source formatting is limited evidence: these new edits
+  have not been compiled or executed, and are not Checkpoint B qualification.
+  Runtime catalog replacement exists; the public document construction/options
+  seam still needs review so embedders can set wording before authored scripts.
+- 2026-10-08: Mark requests a handoff because this orchestration chat is long,
+  and chooses a fresh Forms chat on the ThinkPad. Stop local agents after their
+  stable source checkpoint, freeze the owned source and approved F7/F8 lock,
+  and transfer those inputs plus the handoff record to ThinkPad evidence.
+  Preserve the complete fresh CCA starting maps, font/resources and raw
+  receipts. No new candidate build, source application, WPT run, commit or push
+  is inferred from preparing this handoff. The next chat owns candidate
+  qualification and publication through Checkpoint B, then stops before C.
+
+- 2026-10-08, ThinkPad Forms takeover: all 31 transferred source hashes, lock and 17 input evidence hashes verified. Inherited report-red disappeared during temporary-server handoff without test output or receipt; immutable partial evidence remains and unchanged rerun reproduced both-engine form.reportValidity failures. Fixed queueing the first unhandled entry. Narrow-overlay regression reproduced out-of-viewport bounds; scaled margin/padding and background clipping pass the restored regression. Custom whitespace already passed before explicit Preserve shaping, correcting the earlier unconfirmed review finding. Added both-engine adoption/realm-teardown feedback fixtures. Native editor draft dom_mut calls did not compile; existing mutate_dom capture supplies the correct retained mutation path. Child alert fixtures now pump queued iframe parsing before access. Pattern bypass, missing catalog installation, and suppressed native sink have executed intended failures; exact production bytes restored before full qualification. No Checkpoint B acceptance or Phase C work is inferred. Raw receipts and continuation ledger live under Code/testing/genet/forms/thinkpad/phase-b-thinkpad-*.
+
+- 2026-10-08, restored library qualification: the nine-target run binds unchanged source and records 60/2 document tests, 323/6/1 Livery, 42 render passes, 131 scripted passes, 95 DOM passes, 26 Boa adapter passes, nine Vano adapter passes, and 185/2 runtime tests; layout-dom has no tests. The six Livery failures exactly match the refreshed baseline. All new host catalog/adoption/teardown fixtures pass. Four additional failures block acceptance: the runtime ordering fixture illegally redeclared window.top (renamed its control variable); retained subtree merging omitted virtual native-control sources (collect those existing arena carriers in DOM order); and captured scripted pointer release outside its target returned Miss (consume the captured release without navigation, as the existing test contract requires). These corrections await restored verification. The collector adds the previously clean components/genet-livery/src/document.rs to the owned source set, now 32 files. No provider or lock change is involved.
+
+
+### 2026-10-08 final review repair gate
+
+The restored nine-library run is source-stable: runtime187/0, documents61/1,
+Livery 323/6/1, render42/0, scripted131/0, arena95/0, layout0/0, Boa 26/0 and
+Vano 9/0. Navigation capture and cross-realm report ordering are now positive.
+The six Livery failures remain the named baseline. The remaining document
+failure has a real missing highlight: initial and selected scene rectangle
+lists are empty, and the post-relayout control range returns None.
+
+Fresh whole-change review adds two P2 findings. Four new arena cases execute
+RED (95 old passes, four intended failures): required whitespace-only option
+placeholder, normalized option value/setter, space-separated datetime bounds,
+and space-separated datetime step bases. The repair shares HTML-aware option
+text/value between native getters, setters, validity and public script
+projections; explicit value attributes stay exact and non-ASCII whitespace
+stays intact. Datetime comparison and step conversion accept the same two
+separators as existing value sanitization. Both-engine public integration
+cases are added; their execution remains pending.
+
+The textarea failure comes from retained-root formatting omitting the atomic
+and native control text preparation that complete layout performs. The repair
+prepares that formatting subtree before its text frame is merged, alongside
+the earlier virtual-source order preservation. It visits the changed subtree,
+rather than traversing the full document once for every retained root. The
+previously clean layout/query.rs and layout/retained.rs are added to owned
+source guards (34 paths total); exact HEAD preimages are preserved in the
+ThinkPad receipt directory. This is a bounded retained text repair required
+by the native editor fixture, without adding interaction widgets or submission.
+The RED/diagnostic gate is immutable and source-stable. These repairs require
+the next full gate and matched WPT/CSS maps before acceptance.
+
+
+### 2026-10-09 crate qualification and runner freeze
+
+The final source-stable library/integration gate executes documents62/0,
+Livery 323/6/1 (exact six named baseline failures), render42/0, scripted131/0,
+arena99/0, layout0/0, Boa 26/0, Vano 9/0, runtime187/0 and the cross-realm Forms
+integration 8/0. The original textarea highlight assertion now passes; all
+four reviewer regressions execute RED then GREEN. Public option/datetime
+normalization passes on both engines. The netfetch genet-wpt binary gate
+executes75/0/3 ignored. No additional crate failure is accepted. Raw receipts
+and complete failure lists remain under Code/testing/genet/forms/thinkpad.
+
+The next frozen candidate manifest binds34 owned paths and the approved lock.
+Its executable code is identical to these passing gates; this dated progress
+entry is a documentation-only addition. The optimized runner, unchanged20,
+eight exact Forms maps, sixteen CSS maps, loss rejection and movement
+attribution remain required before qualified publication. Checkpoint B is
+not yet declared complete; Phase C remains stopped.
+
+## Checkpoint B qualified main publication, 2026-10-09
+
+ThinkPad Forms owns the transferred work. The sending chat stopped source edits
+and gate launches. The inherited report-red disappeared without a receipt;
+its interruption remains recorded and the unchanged rerun reproduced the two
+intended form-report failures before repair. All subsequent gates bind actual
+source, lock, argv, toolchain and raw output. Phase C submission remains stopped.
+
+### F10: native nested-negation correction
+
+Mark answered the concrete dependency choice, verbatim: "Apply and qualify the
+vendored fix (recommended)". The native DOM edge now uses the vendored
+`support/patches/regress-0.11.1` path with unchanged version, features and
+dependency requirements. The workspace excludes that directory from membership.
+Boa and Vano retain their registry dependencies and original source pins. All
+878 prior lock identities/checksums remain intact; one local identity is added.
+All 46 upstream files match the checksum-verified registry archive. The only
+upstream code delta retains the complement returned by `CodePointSet::inverted()`.
+
+The new native test is RED before that two-line fix and GREEN afterward: nested
+negation on either side of an intersection, subtraction and a UTF16 emoji range.
+The original unchanged20 probe is 0/20 before and 19/20 after on both engines.
+Its B09 pattern `[a-z&&[^aeiou]]+` is invalid v syntax: a range needs a nested
+class when used as an intersection operand. The original fixture and results
+remain unchanged. A separately named copy changes only that pattern to
+`[[a-z]&&[^aeiou]]+`, preserving all 20 names and assertions. It is 0/20 before,
+19/20 with the unpatched matcher and 20/20 with the fixed candidate, on both
+engines. Node 24.19.0 independently confirms the anchored grammar and values.
+See [ECMAScript ClassIntersection grammar](https://tc39.es/ecma262/multipage/text-processing.html#prod-ClassIntersection).
+
+### Qualified source and behavior
+
+The arena supplies live validity flags, barring, custom messages and interaction
+state to script and selectors. Form validation visits associated controls in
+tree order, dispatches trusted invalid events and preserves false results when
+listeners cancel. Native owner-routed reporting supplies a clipped Livery
+notice and an assertive Alert projection in the top session, including child
+realms. The message catalog is installed before authored scripts and is
+replaceable by the embedder; custom-message whitespace and full accessible
+text are preserved. Repeated reports replace the active notice. Adoption and
+realm teardown drop stale routes. The native paint path is
+`components/genet-livery/src/paint.rs` (`validation_notice_layout` and notice
+painting), with shaping in `text.rs` and session accessibility in
+`genet-documents/src/engines/scripted.rs`.
+
+Fresh whole-change review found two further defects. HTML-aware option text
+normalization now serves option/select value and required-placeholder checks;
+datetime-local bound/step parsing accepts a space or T separator. Four native
+RED cases and both-engine public fixtures pass after repair. Retained editing
+now prepares atomic control text only inside the changed subtree before merge;
+the original textarea selection rectangle assertion passes. Captured pointer
+release outside is consumed without navigation. Tiny notice geometry is tested
+at viewport widths 1, 4, 24, 40 and 320. Whitespace already passed before the
+explicit Preserve style; no whitespace RED claim is made.
+
+Pattern bypass and catalog omission each produced the two intended engine
+failures. Suppressed native reporting produced the intended host/catalog,
+adoption, top-alert and corrected child-alert failures. The first sink attempt
+was a compile failure and the first child cases were setup failures; neither
+is counted as semantic evidence. Production bytes were restored before the
+positive gates.
+
+### Matched qualification
+
+Release `+1.98.1 --locked -j1`, `--test-threads=1`: Documents 62, Livery 323,
+Render 42, Scripted 131, native DOM 100, WPT bin 75, layout seam 0, Boa 26, Vano 9,
+Runtime 187 and public Forms integration 8 pass. Total 963 passes, exactly six
+allowed Livery failures and four existing ignores. The six retained names are
+recorded in `phase-b-thinkpad-vendored-crates-forms-wpt.summary.json`; no extra
+failure exists. The optimized netfetch runner is an actual successful build
+with unchanged source and lock, frozen SHA256 `54acfcc6cd2bb7cba840400dc2adbd9ef9b0e772efbba72986749e38c22b68b2`.
+
+The immutable v4 wrapper completes eight Forms maps (219 source files per
+engine) and sixteen static Livery CSS slices (2,731 files), with one worker,
+timeout 120 and drive-deadline 15. All source/resource/build guards pass.
+
+| Matched slice, each engine | Before | Candidate |
+|---|---:|---:|
+| constraints | 0/877 | 825/911 |
+| the-input-element | 928/1853 | 957/1853 |
+| textfieldselection | 667/739 | 667/739 |
+| form-control-infrastructure | 31/120 | 101/120 |
+
+The table includes partial error rows, preserving their exact named identities
+and duplicate occurrence numbers. Completed-only totals are 1,618/3,542 before
+and 2,541/3,576 after; partial rows separately contribute 8/47 and 9/47 passing
+rows. Observed totals are 1,626/3,589 to 2,550/3,623 on each engine. That is 924
+additional passes per engine. Every old file and subtest pass survives,
+including passes in ERROR files. All 88 file movements and 1,850 subtest movements
+have source/case/occurrence attribution, with raw before text where available.
+The aggregate logger omits individual failure text for the partial radio row;
+its exact fail-to-pass identity is retained and its validity cause is explicitly
+inferred from the unchanged source and pre-B absent projection.
+
+CSS has zero movements or pass losses: 1,045 passes, of which 1,044 are verified
+and one is reference-unverified; 872 failures and 814 skips remain. The existing
+Windows checked-expectation guard is distinct from this fresh Linux matched
+pass-preservation qualification. Expectations and corpus files were not changed.
+
+The corpus inventory/archive, 5,047 resource inventory entries, four font bytes
+and all provider pins match the before build. Fresh font inventory SHA256 is
+`e13569870b0ddc0c2673b67cceb61ca3c809e7e708d0c27d446282d0fa780ea2`.
+The final freeze owns 82 paths; publication updates only the three canonical
+documents after the map freeze, with executable source hashes held identical.
+Existing provider/test262 `.cargo-ok` markers are preserved. Preflight status
+aggregation and workspace-exclusion hash corrections have separate preserved
+config versions and failure receipts; the v4 wrapper and map policies are unchanged.
+
+### Evidence and remaining bounds
+
+Evidence root: `/home/markik/Code/testing/genet/forms/thinkpad`. The final source
+manifest, library summary, runner receipt, map stage receipts, strict accounting,
+movement attribution, native vendor provenance and prepublication verification
+use `phase-b-thinkpad-vendored-*` / `phase-b-thinkpad-checkpoint-b-*` names.
+Original archives, raw controls, before binaries and preliminary captures remain.
+
+The matcher has no public execution budget. On both engines, the unchanged
+`infinite_backtracking.tentative.html` moves from an unsupported-API FAIL to
+ERROR/hang-killed; this is a liveness limitation, not a gain. Huge-year step
+arithmetic retains its f64 precision limit. Alert/notice geometry and routing
+are qualified projections, not headed assistive-technology validation. Existing
+picker/widget interaction gaps and the remaining WPT failures stay visible.
+These are scoped results; a browser-wide WPT percentage was not refreshed.
+Phase C submission requires the next human checkpoint.
+
+## Phase C execution, 2026-10-09
+
+**Status:** in progress. Mark approved proceeding after the published Checkpoint B report with “Proceed, orchestrate at will”. Checkpoint B is published at `a0d95ebd6e20220e3430870365112a608b4f83ff`; remote main and a clean checkout match. Its 963 passing tests, six explicitly named baseline Livery failures and four existing ignores remain the starting evidence. Root owns qualification and publication on main under the carried approvals. No subsequent feature lane is authorized by this continuation.
+
+**Goal:** complete C5 submission using native live control state, exact charset-dependent bytes and existing browsing-context navigation. The brief remains the spec, together with current HTML, URL, Encoding and XMLHttpRequest standards. The two external reconnaissance reports at `Code/testing/genet/forms/thinkpad/phase-c-{native,navigation}-recon.md` record verified seams; they do not substitute for execution evidence.
+
+### Global Constraints
+
+- Source authorities are WHATWG HTML, URL, Encoding, XMLHttpRequest, their normative Unicode data and unchanged WPT. Original implementation code is written from those algorithms; no unapproved source copying.
+- Use the already-locked `encoding_rs` and `url`; only the original spec's approved `encoding_rs` workspace edge may be added to native scripted-dom so both hosts share the encoder. No new packages, versions, provider identities or other dependency edges. Preserve the original ignored Cargo.lock as a baseline and audit/freeze the sole native dependency-list change.
+- Root owns every build, test launch, commit and publication. Workers do not launch Cargo or edit sources during an active source-bound gate. Gates use installed `+1.98.1`, `--release --locked -j1`, release debug0, incremental0, and test-threads1, after the Cargo/rustc owner guard.
+- Continue in the current clean main checkout, as already approved. Create isolation only for an actual collision. No provider or corpus/expectation edits.
+- Native DOM state owns current control values and selected-file bytes. Scripts project state and dispatch events; there is no page-script-owned submission value model. No arena/host borrow across authored JS callbacks.
+- Existing LayoutDom implementors must not acquire mandatory new methods. File state can remain native arena-only; optional shared projection accessors require defaults.
+- Matched Phase C captures cover all33 form-submission-0 records and all46 encode-form sources /584 variants per engine. The brief's584 total includes five base files absent from the literal trailing-hyphen glob. Preserve ERROR partial rows and exact duplicate occurrences. Require zero old pass losses in Phase A/B and CSS maps.
+- New auxiliary windows, a native file picker and custom-element form association are existing capability gaps. Preserve them explicitly; implement existing-context targets, programmatic selected files and ordinary native controls completely. No fabricated new-window navigation.
+
+### Review Focus
+
+1. Listener reentrancy/mutations must clear per-form construction/submission flags and use the final mutable formdata list without holding native borrows.
+2. Files retain exact binary bytes and JS identity through selected lists, FormData, adoption and events; realm teardown must not orphan adopted selections.
+3. Charset conversion, newline normalization, numeric-reference replacement and multipart header escaping follow independently derived byte fixtures.
+4. POST/redirect requests retain method, body, headers and initiator policies through host adapters; default URL-only hosts decline unsupported requests.
+5. Target selection, detached contexts, canceled validation/submit/click and consecutive planned submissions preserve the existing WindowProxy/lifecycle contract.
+
+### Task 1: request-aware document navigation
+
+**Files:** `components/genet-host-api/lib.rs`, `components/genet-scripted/resource_bridge.rs`, `components/script-runtime-api/frames.rs`, `ports/ortet/src/fetch.rs`, `components/script-runtime-api/tests/navigation_requests.rs`; existing navigation and bridge tests as needed. No changes to submission/FormData surfaces in this task.
+
+**Produces:** a host-owned ResourceRequest record carrying URL, method, headers, body and existing fetch policy fields; optional `ResourceFetcher::fetch_request(&ResourceRequest) -> Option<ResourceFetchResponse>` with a distinct richer response record whose default preserves plain GET compatibility and declines unsupported requests; request-aware `frames::navigate_request<E>(cx, from, target, request: FetchRequest, replace)` alongside the ordinary URL wrapper. The PendingNavigation owns its request until the existing navigation task executes. Product adapters forward rather than reinterpret method/body. The response final URL becomes the document/history identity. Extend named target resolution through existing contexts without inventing auxiliary windows. Keep script/frame loading behavior and same-document GET navigation intact.
+
+- [x] Write real both-engine failing navigation tests using recording FetchHandler: POST bytes `[0,128,255]` and Content-Type survive, redirected final URL binds document and history, named child target preserves its WindowProxy, no loader-only downgrade. Add a product bridge recording ResourceFetcher test for rich forwarding and a URL-only default refusal test. Assert independent literal values, not helper output.
+- [x] Hand root the exact red Cargo commands and pause product writes until their receipts. Root runs runtime integration test and bridge fixture filters under the serial gate contract.
+- [x] Implement request queue, network fallback and host forwarding. GET fragment branches must not consume POST; release borrows before host fetch. Do not replace the existing navigation lifecycle.
+- [x] Root qualified new fixtures and navigation/top-level/frame lifecycle plus host library:74passes; Cargo targetmetadata confirms private fixture is not auto-discovered; Ortet check passed. Scoped review resolved product loader redirect loss. Commit `0d86542939af8f946136c5b289c8338679cedade` owns Task1 only. Task3 completed the full runtime suite:195 library and674 integration passes across57 groups, zero failures/ignores. The earlier interrupted receipt remains preserved and unqualified.
+
+### Task 2: native entries and charset encoders
+
+**Files:** new `components/genet-scripted-dom/forms_submission.rs` and native directionality/classifier files as needed, arena `lib.rs`, `forms.rs`, `forms_validation.rs`; new native `form_encoding.rs`, Unicode source/license/generator/provenance and runtime `form_encoding.rs` re-export. Task1 interfaces are consumed without rewriting navigation.
+
+**Produces:** public native FormFile /FormEntry /FormEntryValue records with stable file identity and immutable bytes; node-owned selected-file accessors; `form_submission_entries(form, submitter, encoding_name, image_position)` preserving native association/tree order and successful-control filtering; shared native pure encoding selection/urlencoded/text-plain/multipart functions returning exact bytes/content type, re-exported by runtime for scripted consumers. Keep FormControlState's existing capture layout intact. Expose shared disabled/datalist helpers within the arena rather than duplicate algorithms.
+
+- [x] Add native failing tests for external association/order, disabled first-legend exception, datalist exclusion, current/default separation, checked controls, submitter/image entries, selected disabled options, empty/multiple files and reset/clone/adoption. Add pure byte fixtures for spaces/plus/ampersand/tilde, CR/LF, duplicates, windows-1252/Shift_JIS, unrepresentable scalars, UTF16 output fallback, multipart header CR/LF/quote and binary `[0,128,255]`.
+- [x] Root executes applicable native and encoder red filters before production code. New APIs may be initially expressed through test-local adapters to reproduce semantic missing behavior; compile errors alone are not red evidence.
+- [x] Implement native traversal and pure encoders from standards. `_charset_` takes the supplied encoding; FormData constructors will supply UTF-8. File content is never converted through text. Directionality uses actual native ancestry/auto rules for dirname entries. Generate classification data from official Unicode17 DerivedBidiClass with its license, source hash, generator and exhaustive scalar validation; no new dependency edge or copied implementation. Carried network approval permits fetching normative data.
+- [x] Root executes green filters and full native DOM/runtime libraries. Report exports/signatures and exact fixture evidence for Task3. Only the approved native encoding_rs dependency-list change is permitted; root audits unchanged package/version/checksum/provider sets and freezes both locks.
+
+### Task 3: document encoding through real loads
+
+**Files:** new shared native `components/genet-scripted-dom/html_encoding.rs` and native document metadata in `lib.rs`; runtime `lib.rs`, `frames.rs`, DOM document bindings and focused integration tests; scripted document/livery source loading; unscripted Livery source preparation and document-resource frame loading as needed; WPT runner initial document source paths in `ports/genet-wpt/src/{net,testharness,harness,main}.rs`. These are byte-to-document seams, not form bindings. Use the native approved encoding_rs owner. Read `Code/testing/genet/forms/thinkpad/phase-c-document-encoding-recon.md` for verified paths and current standards.
+
+**Produces:** one shared HTML byte decoder preserving source, selected canonical document encoding and confidence; native encoding per Document node, with UTF-8 defaults for already-Unicode documents. Carry chosen encoding into initial/top/frame document parsing before authored scripts execute, and preserve it through navigation. Form adoption observes destination document encoding. Existing public String-source entrypoints and legacy host records retain compatibility through additive optional helpers/setters, without new dependency edges.
+
+- [x] Add meaningful failing byte/document fixtures: BOM versus conflicting header/meta, supported header versus meta, invalid header fallback, comments and false meta in tag attributes, duplicate attribute rules and http-equiv pragma, meta UTF-16/x-user-defined adjustments, configured fallback, real EUC-KR/Shift_JIS bytes and canonical characterSet. Add both-engine initial-load/navigation/secondary document/adoption assertions. The actual WPT initial netfetch loader must be exercised, not just a pure decoder. No compile-error-only RED.
+- [x] Root runs RED while workers pause. Implement normative BOM/header/prescan precedence and at most first1024-byte prescan using original code, not regex shortcuts. Preserve Encoding::decode's actual selected encoding. User/default fallback is explicit input/configuration. Identify confidence and the late declaration/parser-restart limitation precisely; do not claim full Encoding lane conformance.
+- [x] Runtime/document constructors initialize metadata before parser scripts. DOMParser and createHTMLDocument remain UTF-8 Unicode inputs; srcdoc/blank special rules are verified against primary standards. No mandatory LayoutDom methods or added mandatory fields on public ResourceResponse/SessionSpawnRequest. Do not parse live DOM meta as a substitute for original byte decoding.
+- [x] Root runs GREEN, complete covering libraries/integration and WPT loader checks. Report exact exports/source gates for the subsequent FormData/submission worker. Preserve initial-load/final-URL identity and snapshot-template source metadata.
+
+### Task 4: FormData and submission bindings
+
+**Files:** new runtime `form_data.rs` / `form_submission.rs` as appropriate; `fetch.rs`, runtime `lib.rs`, `dom/mod.rs`, `dom/form_controls.rs`, `dom/bootstrap.js`; `tests/forms_submission.rs` and byte-safe FormData Fetch integration fixtures. Consume Task2 records/encoders and Task1 navigation. Extend the shared native encoder with an efficient deterministic collision-free boundary selection helper consumed by scripted and unscripted multipart callers. Select a valid RFC boundary absent from the actual encoded part headers/values/binary bytes before adding delimiters; no clock/counter-only collision assumption or new entropy dependency. Preserve caller-supplied primitive for literal byte fixtures. Include actual delimiter collisions and chunk-spanning bytes; do not search intended delimiters in the final body.
+
+**Produces:** native entry-list bridge and private branded FormData/File storage; `FormData(form, submitter)`, selected FileList/DataTransfer bridge necessary for programmatic file assignment; SubmitEvent/FormDataEvent; form.submit/requestSubmit; private activation and implicit-submission hooks callable by native hosts. Methods perform receiver/submitter/owner validation before work. Share native records, preserve cross-realm File identity and mutable formdata event lists, and use encoding_rs for submission bytes. Fetch(fd) uses UTF-8 and the same binary-safe multipart primitive.
+
+- [x] Write both-engine semantic red fixtures for constructor entries, duplicate set order/live iterators, Blob-to-File identity, shared formdata edits, recursive construction cleanup, cross-realm brands/adoption, submit() bypass versus requestSubmit validation/event behavior, canceled events, submitter overrides, `_charset_`, GET query replacement/fragment and POST binary body.
+- [x] Root executes red on unchanged production and freezes each control. Implement only after meaningful failures, preserving constructor exposure and event initialization semantics. No page globals or mutable `_l`/`_b` properties are authority.
+- [x] Complete shared native construction/encoder/navigation bridges, captured per-form flags and trusted UA event construction. Recheck connectedness/ownership after listener mutations as specified; multiple planned submissions replace the form's earlier queued task. Keep every callback outside native borrows. Share the native guarded implicit-submission decision and disabled projection between runtime and script-free hosts, so default-button tree order and normalized blocker types have one authority.
+- [x] Root executes green and full runtime libraries/integration suite, including existing Fetch binary/realm/navigation tests. Report test counts and movement causes; retain every genuine limitation.
+
+### Task 5: native activation and final qualification
+
+**Host boundaries:** the native request-aware factory preserves full request fields through its chosen fetcher. The browser host uses an explicit limited source-fetch policy for exact bytes and representable request fields, because browser RequestInit rejects navigate mode and owns origin/referrer/forbidden headers. Known unsupported intent declines before transport; real browser receipts are separate from wasm compilation. Scripted focus/key routing for submission is in scope; existing script-free textarea editing is preserved, while absent scripted text editing and physical child hit geometry remain explicit. Existing named-child form navigation still requires qualification.
+
+**Files:** `components/genet-scripted/livery.rs`, `components/genet-documents/src/engines/scripted.rs`, `components/genet-documents/src/engines/livery.rs`, `components/shared/document-session-api/src/session_engine.rs`; public host/session fixtures and Genet-owned Ortet shell/web submission routes and necessary existing web-sys features. Preserve legacy session submission/effect/input shapes. Add a distinct encoded submission record and optional default DocumentSession consuming accessor, paired with the latest input and cleared on the next input. Add an optional request-aware SessionEngine spawn seam if needed to retain the selected factory and its fetcher. Ortet consumes authoritative query/body bytes through actual transport, without a second GET after POST. Unsupported targets/transports decline explicitly. Reuse native entries/encoders; no second algorithm. Mere is outside scope and its legacy route limitations remain explicit. Canonical plan/index/ledger updated by root.
+
+- [x] Add failing physical click/Enter fixtures for default submitter, disabled default button, multiple implicit blockers, single eligible text control, textarea newline, click cancellation, child-frame request routing and byte-exact session submission.
+- [x] Root executes red, then connect scripted native events to the private activation hook and unscripted sessions to the shared native algorithm. Use actual top-session host policy; keep paint untouched unless a concrete defect requires it.
+- [ ] Root qualifies seven required crates, runtime integration, both adapters and native host/session fixtures under serial gates; permit only the six recorded baseline Livery failures, retain ignores separately. Freeze actual final source/lock/resources/providers and build a fresh netfetch runner.
+- [ ] Capture matched before/after all33 submission and584 encoding records on both engines using live WPT server and original deadlines. Preserve eight PhaseB maps, original20 and corrected20 controls, and sixteen CSS slices. Attribute every file/assertion movement by unchanged source/name/occurrence, keeping partial ERROR/timeouts separate. Inspect zero oldpassloss and all source/build/resource guards.
+- [ ] Fresh whole-change review, resolve findings, reconcile canonical docs, commit/push qualified owned work under carried authority. Report Checkpoint C with hashes, fixtures/controls, WPT attribution, per-crate counts, limits and preserved evidence. Stop after this checkpoint.
+
+### Phase C qualified progress, 2026-10-09
+
+Task1 request-aware navigation is committed at `0d86542939af8f946136c5b289c8338679cedade`; the independent transport-supplied location fixture follow-up is `7fd3ddd0eaece16f0b3341d47790becc56ff785e`. Task2 native entries, Unicode17 directionality and shared encoders are committed at `80d481529c3e96775185f069755e7b0c7ade87ce`. Its shared native Auto-state button predicate is consumed by the remaining work. The locked879 package identities/versions/sources/checksums remain fixed; the sole approved native encoding_rs dependency-list edge changes lock SHA from `853946ec7ee2869dc61d87fc8fd9a407b2e22f7b5a1ac5e1d7b6fef7cf786a22` to `36a2ca937af642376141be6d01099a27476843974438678e9ac72f6a1a9bbba4`.
+
+Task3 document encoding is committed at `c94733cea4bdb79f558277cc295b84d35d112092`. It carries canonical encoding/confidence through raw HTML loads, realms, navigation, native/prepared frames and actual WPT loader/template paths. First1024-byte prescan is supported; late declaration parser restart is not claimed. Independent semantic RED57 plus review-fix RED8 preceded production. Two Important findings, MIME empty-unquoted parameter handling and successful empty frame responses, were fixed and scoped re-reviewed clean. Root verified all16 committed product Git blobs against the qualified source, all63 frozen original scenario/helper bodies and both fix modules, and raw receipt hashes. Focused65; covering native168, full runtime869 (195 unit plus674 integration), scripted145, documents70, resources18 and WPT80 pass, zero failures. Three existing WPT ignores remain separate. Audit: `/home/markik/Code/testing/genet/forms/thinkpad/phase-c-task3-final-source-receipt-audit-v1.json`; Git proof: `phase-c-task3-postcommit-git-blob-verification-v1.json`.
+
+Task4 FormData and submission bindings are committed at `5c45bdf0a75` and qualified: F1-F7 and the Nova private-alias finding are addressed, with an accepted scoped review and no new Critical or Important finding. Root verified 212 focused tests, 187 full native tests and 1,062 full runtime tests (211 unit plus 851 integration across 59 groups), zero failures or ignores, on unchanged reviewed source. Every prior 869 runtime and 168 native passing occurrence is retained. The earlier user-requested compile interruption remains preserved separately, with exit -2 and zero executed test summaries. The resumed receipt and qualification audit are `/home/markik/Code/testing/genet/forms/thinkpad/phase-c-thinkpad-forms-runtime-full-resume-v1.receipt.json` and `phase-c-task4-resumed-final-qualification-audit-v1.json`. Checkpoint C remains pending host and final qualification.
+
+Task5 native activation and host submission routes are implemented after the frozen 85-scenario RED qualification. Typed submission records preserve exact native entry/encoding bytes through session factories and Ortet transport; scripted and native activation share the native submission decision. Redirects inherit fragments under ruling R14. The native editor clip correction preserves semantic page clips and suppresses editor-local selection; its scoped review is accepted. On the recorded pre-integration sources, the Documents covering gate passed 135 tests and the complete runtime gate passed 1,064 tests (211 unit plus 853 integration), with no failures or ignores. Raw receipts and root audits remain under `/home/markik/Code/testing/genet/forms/thinkpad`, including `phase-c-task5-native-editor-clip-fix2-controls-f1-documents-root-audit-v1.json` and `phase-c-task5-runtime-fragment-expectation-complete-root-audit-v1.json`.
+
+Mark explicitly requested committing, pushing and merging this progress on 2026-10-11. This publication preserves the completed Forms commits and integrates upstream main, including the Vello overrides; it does not grant Checkpoint C. The remaining covering gates, fresh native/wasm/WPT artifacts, live native and browser transport receipts, matched Phase C WPT captures and final whole-change review remain pending. The browser adapter preflight returned no GPU adapter. Historical gate receipts retain their actual source identities and must not be presented as fresh tests of the upstream integration. Root retains the final qualification obligation.
+
+### 2026-10-15, Livery baseline failures triaged and closed on Linux
+
+The "six explicitly named baseline Livery failures" were recorded on the Fedora ThinkPad (Linux), not on Windows; the three further integration failures that surfaced alongside them were not in that baseline. All nine tests were written on Windows (2026-07-27 to 2026-09-29) and passed there, so the cause is the platform. Windows maps `monospace` to Consolas (advance 0.5498 em, content height 1 em) and default serif/sans to Times New Roman/Arial; Linux maps them to Noto. With serif/sans mapped to the metric-compatible Liberation fonts through a private fontconfig file, six of the nine passed unchanged, which attributes them to fonts.
+
+| Test | Cause | Resolution |
+|---|---|---|
+| `positioned_descendant_extends_its_scroll_container_range`, `positioned_inset_reuse_updates_nested_scroll_range` | Platform fonts: Noto Serif line height exceeds the fixture's 20px box, adding 2px of scroll range | Bind Ahem to the CSS generics; positioned text set to 8px |
+| `live_shape_outside_keeps_forced_break_lines_in_the_selected_float_band` | Platform fonts: Consolas content height equals 1 em, Noto Sans Mono's does not | Ahem generics |
+| `live_multi_child_float_and_atomic_inline_use_intrinsic_subtrees` | Platform fonts: 104.46289 is 19 Consolas advances | Ahem at 5px; max-content now asserts 95 |
+| `shared_inline_group_height_contains_its_painted_lines` | Platform fonts: Noto Sans content area (21.8px at 16px) exceeds the 20px line height | Ahem generics |
+| `inferred_cells_with_nested_tables_match_html_table_glyphs` | Platform fonts, then a real defect: with wider fonts the fixture overflows its 784px container, which exposes the constrained-width defect below | Ahem at 16px so the columns fit; defect recorded by an ignored test |
+| `counters_paint_like_literal_text_and_preserve_dom_selection` | Over-strict assertion: generated and literal text agree on glyphs but differ in the last float bits of the origins | Glyph identity exact, origins within 1e-3 |
+| `live_shape_outside_reference_boxes_change_lines_but_not_float_placement`, `live_inline_lines_in_an_ordinary_wrapper_share_outer_float_exclusions` | Real bug, hidden by Consolas widths: Parley's line `advance` includes hanging trailing whitespace, so a line whose content exactly filled the band beside a float (126px counted against 120px) was moved below the float | `break_inline_lines` compares `advance - trailing_whitespace`; the field is added to the `genet-parley` fork's `LineBreakData` (see its `GENET_PATCHES.md`). Both tests fail without the fix, on Ahem |
+
+Tests that depend on a platform font now bind the bundled Ahem face to every generic family (`replace_generic_font_resources`, `register_generic_font_bytes`) instead of being skipped.
+
+Two defects found during triage are recorded with `#[ignore]`d repro tests, not fixed here:
+- `layout::tests::inline_block_min_content_excludes_hanging_trailing_space`: an inline-block's min-content width includes the hanging space (50px; CSS gives 40px, so shrink-to-fit in 45px should be 45px).
+- `table_sibling_blocks::nested_table_cell_does_not_change_constrained_column_distribution`: when table content exceeds its container, a nested `display:table` in an inferred cell changes the outer columns (196px against 261px for plain cells or an HTML table). Separately, the HTML-table case there is 784px wide in a layer whose content box is 782px.
+
+Linux result at this change: `cargo test --no-fail-fast -p genet-livery` passes 663 with 0 failures and 9 ignored across 47 targets. The Livery "six known failures" baseline above no longer applies to Linux, and a Livery failure on this platform is now a regression to investigate. The parley field needs a `genet-parley` republish before the next `genet-livery` publish. The Windows suite was not re-run here.
+
+### 2026-10-13/14, ThinkPad qualification attempt (recorded 2026-10-15)
+
+This work was not written into the repository at the time. Its evidence is at
+`thinkpad-l14-f:~/Code/testing/genet/forms/thinkpad` (`phase-c-20261013-*`,
+`phase-c-20261014-*`), with the lane's own record in
+`phase-c-20261013-resume-ledger-v1.md` and `phase-c-20261014-continuation-v1.md`.
+R19-R26 are that lane's rulings, not Mark's; F14 amends R19.
+
+- **R19:** qualify then-current main `2b84478e836` with installed Rust 1.99.0
+  and committed renderer pins; earlier receipts keep their 1.98.1 identities.
+  *Amended by F14: Rust 1.99.1.*
+- **R20:** exact-match WPT accounting needs identical providers and toolchain
+  on both sides, so a renderer or toolchain change needs a new matched control
+  epoch. The original B and C-before captures are preserved, not reused.
+- **R21:** the provider helper verifies Git modes, tracked blobs and gitlinks,
+  allowing only Cargo's `.cargo-ok` marker inside Test262.
+- **R22:** fresh epoch tooling binds both lock snapshots, all Cargo
+  configuration locations, all 15 covering-gate rows and kernel-resource
+  receipts.
+- **R23:** four render-host hardware fault tests, added after `4bc7558` and
+  declared ignored upstream, are accounted by name; no hardware fault
+  qualification is claimed.
+- **R24:** a candidate native build failed after the control build replaced
+  a shared Cargo artifact; control builds must use their own target dirs.
+- **R25:** control runner v1 was refused as a baseline because
+  `document-session-api` was not compiled from control source; the control
+  was rebuilt in isolated target/build dirs compiling all eight changed
+  dependencies.
+- **R26:** a rebuilt, cached control binds the exact raw Git status before
+  Cargo; only its artifact audit qualifies as the matched baseline.
+
+Results on `2b84478e836`, source freeze `ad7e87c4`, Rust 1.99.0: all 15
+covering gates passed with no new failure (native-only 25, scripted 145,
+Livery 323 with the six Linux failures and one ignore, render 42, WPT unit 80
+with three ignores, Boa adapter 26, Nova adapter 9, Ortet 55, resources 18,
+Documents 135, runtime 1,064, session API 22, native DOM 187, netfetcher
+redirect 3, render-host 9 with the four R23 ignores). The control and
+candidate runners were built and the capture configs hydrated, but **no
+matched capture ran**. The last run, the native live submission v3 of
+2026-10-14, passed on Livery, failed network verification on Boa (the
+post-redirect relative image was requested from the pre-redirect directory;
+F12) and never reached Nova. The live browser leg was blocked for want of a
+WebGPU browser. The lane stopped there; the ThinkPad later rebooted.
+
+### 2026-10-15, Windows qualification begins
+
+F11-F14 are ruled above. Worktree `Code/worktrees/genet-forms-c`, branch
+`forms-phase-c`, from origin/main `636da6bbc65`. Rust 1.99.1 installed; the
+lock is generated offline from the cargo cache (`--offline`, nothing
+downloaded), SHA256 `36934732b27f96da2e0bd1ea2e50bbdffce8c840e76e743d1b56b254915bb37c`.
+Evidence: `Code/testing/genet/forms/phase-c-windows-20261015/`. Of the 56
+Phase C product paths, only `ports/genet-wpt/src/{harness,main}.rs` and
+`ports/ortet/Cargo.toml` changed on main after `2b84478e836`.
+
+### 2026-10-16, F12 work resumes on ThinkPad
+
+Mark reopened Forms work in the standards lane after the published AccName
+slices. Current main is `9258e01d8e7`; the fresh implementer owns the repair.
+The old owner remains a context resource and must not start another build.
+The inherited F12 test design is already committed on main by `273431eff73`;
+its earlier compile interruption is not RED evidence.
+
+Rust 1.99.1 minimal plus the wasm32 target are installed here, without changing
+the repository-wide toolchain pin. A fresh isolated release target and exact
+lock snapshot are under
+`Code/testing/genet/forms/thinkpad/phase-c-20261016-f12/`. The inherited Boa/Nova
+ignored tests were run with `cargo +1.99.1 test --release --locked -j1`
+under the shared heavy lock and kernel memory guard. Both failed: Boa and
+Nova requested `https://forms.test/proof.css` and `/proof.png` instead of
+the new document's `/final/` resources. A separate retained-CSSOM control
+also failed when replacement and original DOM mutation counters matched.
+
+The repair in `components/genet-scripted/livery.rs` reads the current host's
+document base URL and tracks DOM arena identity. A replacement arena forces
+resource/style reconciliation and invalidates retained layout and paint even
+when mutation counters or resource ledgers match. The two inherited redirect
+tests are enabled. The fresh release suites pass 137 Documents tests, 146
+scripted tests and two integration tests, with zero failures or ignores.
+All three observed RED tests pass in those suites. Independent read-only
+review found no actionable F12 issue.
+
+The fresh Ortet release build and live native rerun also pass. Livery, Boa and
+Nova each exit zero and pass the unchanged network verifier: exactly four
+requests per route, `q=é` encoded as `713de90d0a`, a 307-preserved POST to the
+final address and the relative image requested from `/final/proof.png`.
+All three screenshots are byte-identical and were individually inspected:
+the final heading, green marker and green relative image paint correctly;
+their final accessibility projections expose the final address, heading and
+image. No stale source button remains in those final projections or images.
+The historical failing receipt is unchanged. The compact source-bound
+[local repair receipt](receipts/2026-10-16_forms_redirect_base.json) records
+the raw log, compiler, exact lock, binary and review identities. All five
+owned runs completed with zero OOM or memory-limit events.
+
+F11's Windows final-qualification choice remains in force pending Mark's
+answer to the explicit platform clarification; local repair work does not
+close Checkpoint C. Source identities, RED and GREEN logs and resource
+receipts are in the new evidence directory above. The paused Windows notes
+below are historical and do not supersede these fresh local outcomes.
+
+The six inherited capture configs were inspected: all their configured output
+directories are absent. They describe the older `2b84478e836` source epoch;
+their binaries are not fresh qualification for this repair. The original
+56-path control projection also predates `273431eff73` and this F12 patch.
+Constructing a fresh pre-C control must account for the later C repair/tests
+on those same paths while preserving unrelated main changes; reversing only
+the old six commits without auditing the resulting source is insufficient.
+
+### Paused 2026-10-15
+
+Mark paused this lane on 2026-10-15 to protect the weekly budget. Checkpoint C
+is **not** reached. No covering gate, matched capture, live native run or
+browser check ran on Windows.
+
+Done on branch `forms-phase-c` (from `636da6bbc65`, not pushed):
+
+- F11-F14 and the ThinkPad R19-R26 history recorded (`2f387790779`).
+- Rust 1.99.1 installed (minimal, with `wasm32-unknown-unknown`); the offline
+  lock above is saved as `candidate.Cargo.lock` in the evidence folder.
+- F12 repro test written in `components/genet-documents/src/engines/tests.rs`:
+  `{boa,nova}_phase_c_t5_scripted_redirected_subresource_base`. A top-level
+  POST from `https://forms.test/source` installs
+  `https://forms.test/final/index.html`, whose `proof.css` and `proof.png`
+  must be requested from `/final/`, not from the initiating document's
+  directory. **It has never compiled or run.** The RED build was stopped
+  during dependency compilation when the lane paused (`f12-red.log`). Both
+  tests carry `#[ignore]` so the branch cannot turn the Documents gate red;
+  run them with `-- --ignored` for RED, then remove the attribute with the fix.
+- The ThinkPad native live-run tool (`server.py`, SHA256 `34093d86…`, the
+  same tool as the 2026-10-14 run) is copied to `native-tool/` in the
+  evidence folder.
+
+*Reading, not verified:* the F12 defect is the scripted host's live
+stylesheet/image source. `LiveryCssom::install_live` stores the document URL
+once in `LiveStylesheetSource::document_url`
+(`components/genet-scripted/livery.rs`), and `synchronize_live_styles`
+resolves every later stylesheet and image against it. A top-level navigation
+inside the scripted runtime installs a new top host and arena. The document
+keeps painting through its original `self.cssom`, so the new document's
+subresources resolve against the first document's URL. Links are unaffected
+because they read `host.document_base_url()`, which explains the
+current-address/links fixtures passing. The candidate fix is to resolve
+against the host's current `document_base_url()` and to re-resolve and
+invalidate when the arena changes. It is not written yet.
+
+Left for Checkpoint C, in order *(all done on O-PC by 2026-10-20; see the qualification run
+section at the end of Progress)*:
+
+1. Run the F12 tests RED (Boa and Nova), write the fix, then GREEN plus the
+   Documents and scripted suites it touches.
+2. Build the control. Its worktree is `Code/worktrees/genet-forms-c-control`
+   (branch `forms-phase-c-control`, clean at `636da6bbc65`; delete it if the
+   lane is abandoned). Plain `git revert` of the six Phase C commits stops at
+   the first one: `d7b524140a7` conflicts in this plan and in
+   `ports/ortet/Cargo.toml`. The reversal needs manual resolution limited to
+   the 56 product paths, documentation untouched. The attempt was aborted.
+3. Run the 15 covering gates on the candidate under `cargo +1.99.1 --release
+   --locked -j1`, with zero Livery failures allowed on Windows (F11).
+4. Build control and candidate `genet-wpt --features netfetch` runners in
+   separate target dirs (R24/R25). Capture both engines on the 33
+   form-submission and 584 encoding variants, the eight Phase B maps, the 16
+   CSS slices and the original/corrected 20 controls. Attribute every
+   movement; any lost earlier pass is a stop-and-report.
+5. Run the native live submission on Livery, Boa and Nova.
+6. Run the live Chrome submission check under wasm-bindgen 0.2.129 (F13).
+7. Whole-change review, Checkpoint C report, ledger and DOC_README rows.
+
+### 2026-10-18, state recorded during a branch sweep
+
+Mark asked (2026-10-18) whether Phase C was still in limbo; it is. Facts checked against
+the tree during the mere and genet branch sweep:
+
+- The Phase C product commit `e3911fb6b2d` (Fix form submission validity, listener
+  transitions and feedback) is in main; branches `forms-phase-c` and
+  `forms-phase-c-control` are both merged and 53 behind main.
+- Checkpoint C has not run: no covering gate, matched capture, live native run or browser
+  check on Windows since the 2026-10-15 pause. The F12 repro tests still carry `#[ignore]`.
+- `Code/worktrees/genet-forms-c-control` holds the aborted manual reversal: 59 staged
+  changes (40 modified, 19 deleted, 636 insertions, 15,395 deletions) from 2026-10-16 04:59,
+  uncommitted. `Code/worktrees/genet-forms-c` holds one uncommitted change,
+  `ports/ortet/src/web.rs` (+21/-4), a guard that refuses a held source once a newer
+  navigation has won.
+
+Mark's ruling (2026-10-18): **"Keep both for resumption (Recommended)"**. The lane is paused,
+not abandoned; both worktrees stay as they are. Main was fast-forwarded 61 commits the same
+day, so a resumption starts by merging main into `forms-phase-c` and rebuilding the control
+from the recipe above.
+
+
+### Checkpoint C qualification run on O-PC, 2026-10-18 to 2026-10-20
+
+**Status:** the run is complete; acceptance of Checkpoint C is Mark's call and is not claimed
+here. Everything below ran on O-PC under toolchain 1.99.1 at the prepared epoch (F16):
+candidate `e3911fb6b2d` with `8fa73497` and the v4/v5 review manifest's `ports/ortet/src/web.rs`;
+control the 59-path inverse C projection over the same head. Evidence lives in `Code/testing/genet/forms/phase-c-windows-20261016/`,
+bound by `checkpoint_c_report_20261020.json`.
+
+**Runs.** Four chain runs and one standalone build under the guarded wrapper (floor 6 GiB, F17):
+r1 and r2 stopped on memory refusals at the wrapper's 10 GiB launch check (the box sat on that
+line); r3 completed the candidate side except CSS and was killed by a session restart; the
+control build then ran alone (`qual-wpt-build-control-v2`, 1,790 s, all eight projection packages
+compiled fresh, binary `e969c828f0d5…`); r4 ran 11:40 to 19:48 UTC on 2026-10-19 and completed
+the rest. Three rows were relabelled: two memory refusals and the CSS slice below.
+
+**Tooling amendments**, each hashed in `continuation-20261018-amendments.json` and
+`continuation-20261019-amendments.json`, the frozen 2026-10-16 tools untouched beside them: the
+wrapper revision for F17; v2 manifests carrying the `~/.cargo/config.toml` that appeared on the
+17th (`[profile.dev] debug = 0`, no effect on release builds); a per-row memory wait and relabel
+retries in the capture runner; and, on Mark's answer **"Complete means ran to summary
+(Recommended)"** (2026-10-19), a reftest row is complete when it ran to its summary and wrote
+its map at exit 0 or 1, because `genet-wpt` exits 1 whenever any reftest fails in
+write-expectations mode (`reftest.rs` 887-891); the ThinkPad's own B baseline carries such an
+exit 1. The exit code stays in every `process.json`.
+
+**Matched capture, candidate against control, 188 paired rows, zero lost passes.**
+
+| Stage | Pairs | Same | Lost | Gained | Changed |
+|---|---|---|---|---|---|
+| Submission and encoding (c) | 158 | 430 | 0 | 974,758 | 126,832 |
+| Controls (original, corrected, new, both engines) | 6 | 84 | 0 | 42 | 0 |
+| Phase B maps (b) | 8 | 7,602 | 0 | 76 | 6 |
+| CSS slices | 16 | 2,731 | 0 | 0 | 0 |
+
+File statuses, each engine: encoding 584 files, candidate Boa 439 pass / 145 error, candidate
+Nova 571 pass / 13 error, control 583 error / 1 fail on both engines; forms 33 files, candidate
+8 pass / 18 fail / 7 error, control 27 fail / 6 error, identical on Boa and Nova. The 974 thousand
+gains are encoding subtests the control enumerates as not-run under erroring files and the
+candidate passes; the 126 thousand "changed" rows are placeholder subtests the control lists
+under files that error on both sides and the candidate does not enumerate (sample:
+`eucjp-encode-form-errors-han.html?12001-13000`, 1,000 placeholders against 400). CSS is
+byte-for-byte the same on both sides and deviates from the checked-in Linux expectations on zero
+of 16 slices. Controls: `original-b20` and `corrected-b20` 20/20 on both sides and engines;
+`new-c20` 0/20 on the control and 20/20 on the candidate, both engines.
+
+Forms movements, the same on both engines: gained `FormDataEvent.window`, `SubmitEvent.window`,
+`form-data-set-empty-file.window`, `newline-normalization`,
+`reparent-form-during-planned-navigation-task` (fail to pass) and `form-double-submit`,
+`form-double-submit-3`, `url-encoded` (error to pass); `form-double-submit-2` moved from a harness
+error to a run that fails its one assertion. Five files moved fail to error:
+`text-plain.window`, `multipart-formdata.window`, `urlencoded2.window`, `submit-file.sub` and
+`form-double-submit-multiple-targets`. In each the control fails every case outright, the
+candidate passes the first case and then the formdata-event case hits the harness timeout,
+leaving the remaining cases not run. That is attributed, not a lost pass, and is the named
+follow-up of this run: the formdata-event submission path under the WPT harness on Windows.
+The Boa/Nova gap on encoding errors (145 against 13 files) is recorded as observed. Phase B maps:
+`the-input-element` gained 38 subtests per engine (button, checkbox and files cases) with three
+changed; the other six maps are identical.
+
+**Covering gates.** Twelve run in release under the wrapper, 1,743 passed, 0 failed, 0 historical
+pass losses, 0 issues: native-only 25, Livery 342 with 2 ignored, render 67, WPT unit 81 with
+3 ignored, Boa adapter 26, Nova adapter 9, Ortet 55, resources 18, runtime 1,078, session API 22,
+netfetcher redirect 3, render-host 17 with the four R23 ignores. Three reused on the same product
+bytes per the plan's policy: scripted 145, Documents and native DOM from `review-green-native-v2`.
+Livery on Windows: zero failures, so F11's no-allowance rule is met.
+
+**Already on record from 2026-10-16 on this box:** the F12 repair review (678 passed), the native
+live submission on Livery, Boa and Nova, and the Chrome 155 browser submission check under
+wasm-bindgen 0.2.129 (F13).
+
+**Limitations.** Main is 55 commits past the candidate (F16); that delta is not qualified here.
+The ThinkPad's C-before maps are not on this machine, so the only cross-epoch reference used is
+the checked-in CSS expectations. The run spanned two session restarts and memory contention from
+other builds; every job's receipt records its own memory floor and minimum. `checkpoint_c_complete`
+stays false in every receipt until Mark accepts.
+
+**Accepted, 2026-10-20.** Mark, asked whether Checkpoint C is reached: **"Accept, with the
+formdata-event timeout as a follow-up (Recommended)"**. `checkpoint_c_complete` is true in
+`checkpoint_c_report_20261020.json` and its repo copy. Follow-ups, unnumbered until Mark numbers
+them: the formdata-event harness timeout on Windows; the delta gate for the 55 main commits past
+the candidate epoch.

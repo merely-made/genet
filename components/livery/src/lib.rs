@@ -13,6 +13,7 @@
 #![forbid(unsafe_code)]
 
 pub mod cascade;
+mod css_comments;
 pub mod custom;
 pub mod media;
 pub mod selector;

@@ -4,7 +4,7 @@
 
 //! Per-document capabilities installed before authored scripts execute.
 
-use script_runtime_api::WebGlFactory;
+use script_runtime_api::{ValidationMessageCatalog, WebGlFactory, WorkerPolicy};
 
 /// Host capabilities for one live scripted document.
 ///
@@ -13,4 +13,13 @@ use script_runtime_api::WebGlFactory;
 #[derive(Default)]
 pub struct ScriptedDocumentOptions {
     pub webgl: Option<WebGlFactory>,
+    /// Built-in constraint-validation wording installed before any authored
+    /// scripts run. Custom validity text remains exact and bypasses this.
+    pub validation_message_catalog: ValidationMessageCatalog,
+    /// Explicit worker lifetime contract, installed before parser scripts.
+    pub worker_policy: WorkerPolicy,
+    /// Native helper for killable worker trees. Absent means required
+    /// cancellation refuses Worker creation before executing authored script.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub worker_process_launcher: Option<script_runtime_api::WorkerProcessLauncher>,
 }

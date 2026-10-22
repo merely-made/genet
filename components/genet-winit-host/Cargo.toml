@@ -5,7 +5,8 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 publish = false
-rust-version = "1.92.0"
+
+rust-version = "1.97.1"
 description = "Shared Genet-on-winit presentation plumbing: a wgpu surface, netrender Renderer, wheel translation, and AccessKit bridge."
 
 [lib]
@@ -39,3 +40,7 @@ accesskit_macos = { workspace = true }
 
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
 accesskit_unix = { workspace = true }
+
+[dev-dependencies]
+# Match the Unix adapter's consumer; guest-tree update order is tested at each boundary.
+accesskit_consumer = "=0.39.1"

@@ -7,6 +7,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
+import { gzipSync } from "node:zlib";
 
 const values = new Map();
 for (let index = 2; index < process.argv.length; index += 2) values.set(process.argv[index], process.argv[index + 1]);
@@ -15,10 +16,12 @@ const port = Number(values.get("--port"));
 if (!artifact || !Number.isInteger(port)) throw new Error("usage: --artifact DIR --port PORT");
 
 const requests = [];
+const heldPolicyResponses = new Set();
 const image = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFUlEQVR4nGN87mb0n4GBgYEJRIAwACTNAmJ9gJg8AAAAAElFTkSuQmCC",
   "base64",
 );
+const gzipPolicyBody = gzipSync(Buffer.from("fourmore"));
 const ahem = () => readFileSync(join(artifact, "Ahem.ttf"));
 const record = (path, status) => {
   requests.push({ path, status });
@@ -30,16 +33,18 @@ const text = (response, status, body, contentType) => {
 };
 const staticTypes = {
   "/http_receipt.html": "text/html; charset=utf-8",
+  "/fetch_policy_receipt.html": "text/html; charset=utf-8",
   "/ortet.js": "text/javascript; charset=utf-8",
   "/ortet_bg.wasm": "application/wasm",
 };
 
 const server = createServer((request, response) => {
   const path = new URL(request.url ?? "/", "http://127.0.0.1").pathname;
-  if (staticTypes[path]) {
+  const snippet = /^\/snippets\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+\.js$/.test(path);
+  if (staticTypes[path] || snippet) {
     const bytes = readFileSync(join(artifact, path.slice(1)));
     record(path, 200);
-    response.writeHead(200, { "content-type": staticTypes[path], "content-length": bytes.length, "cache-control": "no-store" });
+    response.writeHead(200, { "content-type": staticTypes[path] ?? "text/javascript; charset=utf-8", "content-length": bytes.length, "cache-control": "no-store" });
     response.end(bytes);
     return;
   }
@@ -52,6 +57,57 @@ const server = createServer((request, response) => {
   if (path === "/__stats") {
     record(path, 200);
     text(response, 200, JSON.stringify({ requests }), "application/json");
+    return;
+  }
+  if (path === "/__release") {
+    record(path, 200);
+    for (const held of heldPolicyResponses) held.end("done");
+    heldPolicyResponses.clear();
+    text(response, 200, "released", "text/plain; charset=utf-8");
+    return;
+  }
+  if (path === "/policy/chunked") {
+    record(path, 200);
+    response.writeHead(200, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" });
+    response.write("four");
+    setTimeout(() => response.end("more"), 25);
+    return;
+  }
+  if (path === "/policy/gzip") {
+    record(path, 200);
+    response.writeHead(200, {
+      "content-type": "text/plain; charset=utf-8",
+      "content-encoding": "gzip",
+      "content-length": gzipPolicyBody.length,
+      "cache-control": "no-store",
+    });
+    response.end(gzipPolicyBody);
+    return;
+  }
+  if (path === "/policy/redirect") {
+    record(path, 302);
+    response.writeHead(302, { location: "/policy/chunked", "cache-control": "no-store" });
+    response.end();
+    return;
+  }
+  if (path === "/policy/slow") {
+    record(path, 200);
+    response.writeHead(200, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" });
+    response.write("first");
+    setTimeout(() => response.end("late"), 350);
+    return;
+  }
+  if (path === "/policy/hold") {
+    record(path, 200);
+    heldPolicyResponses.add(response);
+    response.on("close", () => heldPolicyResponses.delete(response));
+    response.writeHead(200, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" });
+    response.write("held");
+    return;
+  }
+  if (path === "/policy/short") {
+    record(path, 200);
+    text(response, 200, "ok", "text/plain; charset=utf-8");
     return;
   }
   if (path === "/site/page/index.html") {

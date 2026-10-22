@@ -34,11 +34,6 @@ pub(crate) fn decode(bytes: &[u8]) -> Option<DecodedImage> {
 
 #[cfg(feature = "image-decode")]
 impl DecodedImage {
-    /// Natural width and height in image pixels.
-    pub(crate) fn dimensions(&self) -> (u32, u32) {
-        (self.0.width(), self.0.height())
-    }
-
     /// Width, height and straight RGBA8 pixels, row-major.
     pub(crate) fn into_rgba8(self) -> (u32, u32, Vec<u8>) {
         let rgba = self.0.to_rgba8();
@@ -49,10 +44,6 @@ impl DecodedImage {
 
 #[cfg(not(feature = "image-decode"))]
 impl DecodedImage {
-    pub(crate) fn dimensions(&self) -> (u32, u32) {
-        match *self {}
-    }
-
     pub(crate) fn into_rgba8(self) -> (u32, u32, Vec<u8>) {
         match self {}
     }
@@ -75,7 +66,6 @@ mod tests {
     #[test]
     fn decodes_size_and_pixels_with_the_feature() {
         let image = decode(BLUE_2X3_PNG).expect("feature build decodes PNG");
-        assert_eq!(image.dimensions(), (2, 3));
         let (width, height, rgba) = image.into_rgba8();
         assert_eq!((width, height), (2, 3));
         assert_eq!(rgba.len(), 2 * 3 * 4);

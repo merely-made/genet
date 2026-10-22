@@ -27,6 +27,7 @@ fn caching_cx() -> FetchContext {
         transport: crate::transport::default_transport(),
         redirect_limit: FetchContext::DEFAULT_REDIRECT_LIMIT,
         cache_max_body_bytes: FetchContext::DEFAULT_CACHE_MAX_BODY_BYTES,
+        response_max_body_bytes: None,
     }
 }
 
@@ -155,6 +156,7 @@ async fn records_set_cookie_through_the_jar() {
         transport: crate::transport::default_transport(),
         redirect_limit: FetchContext::DEFAULT_REDIRECT_LIMIT,
         cache_max_body_bytes: FetchContext::DEFAULT_CACHE_MAX_BODY_BYTES,
+        response_max_body_bytes: None,
     };
     let res = fetch(
         Request::get(format!("{}/c", server.url()).parse().unwrap()),
@@ -325,6 +327,7 @@ fn mixed_content_active_passive_split() {
         &mut img,
         Destination::Image,
         true,
+        false,
         &cx
     ));
     assert_eq!(img.scheme(), "https", "passive mixed content is upgraded");
@@ -336,6 +339,7 @@ fn mixed_content_active_passive_split() {
         &mut script,
         Destination::Other,
         true,
+        false,
         &cx
     ));
     let mut xhr: Url = "http://example.org/api".parse().unwrap();
@@ -343,6 +347,7 @@ fn mixed_content_active_passive_split() {
         &mut xhr,
         Destination::None,
         true,
+        false,
         &cx
     ));
 
@@ -352,9 +357,60 @@ fn mixed_content_active_passive_split() {
         &mut insecure,
         Destination::Other,
         false,
+        false,
         &cx
     ));
     assert_eq!(insecure.scheme(), "http");
+}
+
+#[test]
+fn upgrade_insecure_requests_upgrades_every_http_url_but_loopback() {
+    use crate::Destination;
+    let cx = FetchContext::permissive();
+
+    // Any destination, secure context or not: upgraded, never blocked, port kept.
+    for (dest, secure) in [
+        (Destination::None, false),
+        (Destination::None, true),
+        (Destination::Other, true),
+        (Destination::Image, false),
+    ] {
+        let mut url: Url = "http://example.org:8443/x".parse().unwrap();
+        assert!(!resolve_mixed_content(&mut url, dest, secure, true, &cx));
+        assert_eq!(url.as_str(), "https://example.org:8443/x");
+    }
+    // Without the policy the same URL is left alone outside a secure context.
+    let mut off: Url = "http://example.org/x".parse().unwrap();
+    assert!(!resolve_mixed_content(
+        &mut off,
+        Destination::None,
+        false,
+        false,
+        &cx
+    ));
+    assert_eq!(off.scheme(), "http");
+    // Loopback hosts are already potentially trustworthy.
+    for host in ["localhost", "a.localhost", "127.0.0.1", "[::1]"] {
+        let mut local: Url = format!("http://{host}/x").parse().unwrap();
+        assert!(!resolve_mixed_content(
+            &mut local,
+            Destination::None,
+            false,
+            true,
+            &cx
+        ));
+        assert_eq!(local.scheme(), "http", "{host}");
+    }
+    // https is untouched.
+    let mut secure: Url = "https://example.org/x".parse().unwrap();
+    assert!(!resolve_mixed_content(
+        &mut secure,
+        Destination::None,
+        true,
+        true,
+        &cx
+    ));
+    assert_eq!(secure.as_str(), "https://example.org/x");
 }
 
 #[test]
@@ -479,6 +535,7 @@ async fn records_alt_svc_h3_advertisement() {
         transport: crate::transport::default_transport(),
         redirect_limit: FetchContext::DEFAULT_REDIRECT_LIMIT,
         cache_max_body_bytes: FetchContext::DEFAULT_CACHE_MAX_BODY_BYTES,
+        response_max_body_bytes: None,
     };
     let _ = fetch(Request::get(server.url().parse().unwrap()), &cx)
         .await
@@ -643,4 +700,183 @@ async fn the_cache_body_cap_is_the_contexts_policy() {
             "a five-byte body against a cap of {cap}"
         );
     }
+}
+
+/// A transport with a caller-selected wire body and no implicit Content-Length.
+#[derive(Clone)]
+struct FixedBodyTransport {
+    headers: Vec<(String, String)>,
+    chunks: Vec<bytes::Bytes>,
+}
+
+impl crate::transport::Transport for FixedBodyTransport {
+    fn send(
+        &self,
+        _request: crate::transport::WireRequest,
+    ) -> crate::transport::TransportFuture<'_> {
+        let headers = self.headers.clone();
+        let chunks = self.chunks.clone();
+        Box::pin(async move {
+            Some(crate::transport::RawResponse {
+                status: 200,
+                headers,
+                body: Box::pin(futures_util::stream::iter(
+                    chunks.into_iter().map(Ok::<_, std::io::Error>),
+                )),
+            })
+        })
+    }
+}
+
+#[tokio::test]
+async fn unknown_length_body_obeys_decoded_cache_cap() {
+    use crate::cache::HttpCache;
+
+    let url: Url = "http://example.test/chunked".parse().unwrap();
+    let key = crate::cache::cache_key("GET", &url);
+    let transport = Arc::new(FixedBodyTransport {
+        headers: vec![("cache-control".to_owned(), "max-age=60".to_owned())],
+        chunks: vec![
+            bytes::Bytes::from_static(b"he"),
+            bytes::Bytes::from_static(b"llo"),
+        ],
+    });
+
+    for (cap, stored) in [(0u64, false), (4, false), (5, true)] {
+        let cache = Arc::new(InMemoryHttpCache::new());
+        let mut cx = caching_cx()
+            .with_transport(transport.clone())
+            .with_cache_max_body_bytes(cap);
+        cx.cache = cache.clone();
+        let body = fetch(Request::get(url.clone()), &cx)
+            .await
+            .bytes()
+            .await
+            .unwrap();
+        assert_eq!(body.as_ref(), b"hello", "the full body reaches the caller");
+        assert_eq!(cache.get(&key).is_some(), stored, "cap {cap}");
+    }
+
+    let cache = Arc::new(InMemoryHttpCache::new());
+    let mut cx = caching_cx()
+        .with_transport(Arc::new(FixedBodyTransport {
+            headers: vec![("cache-control".to_owned(), "max-age=60".to_owned())],
+            chunks: vec![],
+        }))
+        .with_cache_max_body_bytes(0);
+    cx.cache = cache.clone();
+    assert!(
+        fetch(Request::get(url), &cx)
+            .await
+            .bytes()
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(cache.get(&key).unwrap().body.len(), 0);
+}
+
+#[tokio::test]
+async fn compressed_body_obeys_decoded_cache_cap() {
+    use crate::cache::HttpCache;
+    use std::io::Write;
+
+    let decoded = vec![b'a'; 4096];
+    let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    encoder.write_all(&decoded).unwrap();
+    let encoded = encoder.finish().unwrap();
+    let cap = 128u64;
+    assert!((encoded.len() as u64) < cap, "wire body must fit the cap");
+
+    let transport = Arc::new(FixedBodyTransport {
+        headers: vec![
+            ("cache-control".to_owned(), "max-age=60".to_owned()),
+            ("content-encoding".to_owned(), "gzip".to_owned()),
+            ("content-length".to_owned(), encoded.len().to_string()),
+        ],
+        chunks: vec![bytes::Bytes::from(encoded)],
+    });
+    let cache = Arc::new(InMemoryHttpCache::new());
+    let mut cx = caching_cx()
+        .with_transport(transport)
+        .with_cache_max_body_bytes(cap);
+    cx.cache = cache.clone();
+    let url: Url = "http://example.test/compressed".parse().unwrap();
+    let key = crate::cache::cache_key("GET", &url);
+
+    let body = fetch(Request::get(url), &cx).await.bytes().await.unwrap();
+    assert_eq!(body.as_ref(), decoded.as_slice());
+    assert!(cache.get(&key).is_none(), "decoded expansion is not cached");
+}
+
+#[tokio::test]
+async fn cache_overflow_releases_buffer_and_keeps_streaming() {
+    use crate::cache::HttpCache;
+    use futures_util::StreamExt;
+
+    let cache = Arc::new(InMemoryHttpCache::new());
+    let mut body = super::cache_phase::CachingBody {
+        inner: Box::pin(futures_util::stream::iter(
+            [
+                bytes::Bytes::from_static(b"ab"),
+                bytes::Bytes::from_static(b"cde"),
+                bytes::Bytes::from_static(b"f"),
+            ]
+            .into_iter()
+            .map(Ok::<_, std::io::Error>),
+        )),
+        acc: bytes::BytesMut::new(),
+        max_body_bytes: 4,
+        cache: cache.clone(),
+        key: "test".to_owned(),
+        status: 200,
+        headers: vec![],
+        stored_at: std::time::SystemTime::now(),
+        poisoned: false,
+        done: false,
+    };
+
+    assert_eq!(body.next().await.unwrap().unwrap().as_ref(), b"ab");
+    assert_eq!(&body.acc[..], b"ab");
+    assert_eq!(body.next().await.unwrap().unwrap().as_ref(), b"cde");
+    assert!(body.acc.is_empty());
+    assert_eq!(body.acc.capacity(), 0, "overflow releases cached bytes");
+    assert_eq!(body.next().await.unwrap().unwrap().as_ref(), b"f");
+    assert!(body.next().await.is_none());
+    assert!(cache.get("test").is_none());
+}
+
+#[tokio::test]
+async fn cache_stream_error_releases_partial_buffer_without_storing() {
+    use crate::cache::HttpCache;
+    use futures_util::StreamExt;
+    use std::io::{Error, ErrorKind};
+
+    let cache = Arc::new(InMemoryHttpCache::new());
+    let mut body = super::cache_phase::CachingBody {
+        inner: Box::pin(futures_util::stream::iter([
+            Ok(bytes::Bytes::from_static(b"partial")),
+            Err(Error::new(ErrorKind::InvalidData, "broken decode")),
+            Ok(bytes::Bytes::from_static(b"unreachable")),
+        ])),
+        acc: bytes::BytesMut::new(),
+        max_body_bytes: 1024,
+        cache: cache.clone(),
+        key: "error-test".to_owned(),
+        status: 200,
+        headers: vec![],
+        stored_at: std::time::SystemTime::now(),
+        poisoned: false,
+        done: false,
+    };
+
+    assert_eq!(body.next().await.unwrap().unwrap().as_ref(), b"partial");
+    assert!(body.acc.capacity() > 0);
+    let error = body.next().await.unwrap().unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::InvalidData);
+    assert_eq!(error.to_string(), "broken decode");
+    assert_eq!(body.acc.capacity(), 0, "partial cache bytes are released");
+    assert!(body.next().await.is_none());
+    assert!(body.next().await.is_none());
+    assert!(cache.get("error-test").is_none());
 }

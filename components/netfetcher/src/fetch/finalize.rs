@@ -117,10 +117,20 @@ pub(super) async fn finalize_response(
     // mismatch is a network error. (Bypasses the streaming/cache paths — an
     // integrity request needs the whole body anyway.)
     if sri::is_enforced(&request.integrity) {
-        let bytes = match ResponseBody::new(body).bytes().await {
-            Ok(b) => b,
-            Err(_) => return Response::network_error(),
-        };
+        let mut body = ResponseBody::new(body);
+        let mut bytes = BytesMut::new();
+        while let Some(chunk) = body.next_chunk().await {
+            let Ok(chunk) = chunk else {
+                return Response::network_error();
+            };
+            if cx.response_max_body_bytes.is_some_and(|max| {
+                chunk.len() > max.saturating_sub(bytes.len())
+            }) {
+                return Response::network_error();
+            }
+            bytes.extend_from_slice(&chunk);
+        }
+        let bytes = bytes.freeze();
         if !sri::verify(&request.integrity, &bytes) {
             return Response::network_error();
         }
@@ -136,8 +146,8 @@ pub(super) async fn finalize_response(
     // Cacheable GET 200 → stream the body straight through, teeing it into the
     // cache as it is read. The response resolves at its headers (no buffering up
     // front, so a slow or never-read body cannot stall it); the entry is stored
-    // only once the body is read to completion. A body whose declared length
-    // exceeds the cache cap is streamed without teeing (not worth a cache slot).
+    // only once the body is read to completion. A declared length above the cap
+    // bypasses teeing; the tee also checks decoded bytes as they arrive.
     if let Some(key) = cache_key {
         if cache::is_cacheable(status, &headers) && !over_cache_size_cap(cx, &headers) {
             let mut stored_headers = headers;
@@ -145,6 +155,7 @@ pub(super) async fn finalize_response(
             let caching = CachingBody {
                 inner: body,
                 acc: BytesMut::new(),
+                max_body_bytes: cx.cache_max_body_bytes,
                 cache: cx.cache.clone(),
                 key: key.to_owned(),
                 status,

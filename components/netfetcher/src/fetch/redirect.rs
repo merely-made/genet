@@ -117,9 +117,12 @@ pub(super) fn process_redirect(
             if *redirects_remaining == 0 {
                 return RedirectStep::Done(Response::network_error());
             }
-            let Ok(next) = current_url.join(&location) else {
+            let Ok(mut next) = current_url.join(&location) else {
                 return RedirectStep::Done(Response::network_error());
             };
+            if next.fragment().is_none() {
+                next.set_fragment(current_url.fragment());
+            }
             // A redirect to a URL embedding credentials (user:password@host) is a
             // network error for any non-navigate request (WHATWG HTTP-redirect fetch).
             if (!next.username().is_empty() || next.password().is_some())
@@ -163,7 +166,13 @@ pub(super) fn process_redirect(
                 });
             }
             *current_url = next;
-            if resolve_mixed_content(current_url, request.destination, secure_context, cx) {
+            if resolve_mixed_content(
+                current_url,
+                request.destination,
+                secure_context,
+                request.upgrade_insecure_requests,
+                cx,
+            ) {
                 return RedirectStep::Done(Response::network_error());
             }
             url_list.push(current_url.clone());

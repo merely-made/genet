@@ -1,0 +1,29 @@
+{
+  "command": [
+    "cargo",
+    "+1.99.0",
+    "test",
+    "--manifest-path",
+    "repos/genet/Cargo.toml",
+    "--locked",
+    "--offline",
+    "-j2",
+    "--no-fail-fast",
+    "-p",
+    "genet-render",
+    "-p",
+    "genet-render-host",
+    "-p",
+    "genet-livery"
+  ],
+  "cwd": "C:\\Users\\mark_\\Code",
+  "exit_code": 0,
+  "elapsed_seconds": 1085.3,
+  "environment": {
+    "CARGO_TARGET_DIR": "C:\\t\\cargo-targets\\genet",
+    "CARGO_BUILD_BUILD_DIR": "C:\\t\\cargo-targets\\genet\\build",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0"
+  }
+}

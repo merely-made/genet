@@ -9,7 +9,7 @@ rows are added as lanes open and as consumers name a dependency.
 **Baseline:** the [web platform WPT census](2026-09-06_web_platform_wpt_census.md).
 Every census-measured row carries that run's subtests-passed-over-total, so a
 later census diffs against it. These are historical baseline counts, not current
-implementation status. See the dated reconciliation below before assigning work.
+implementation status. The dated reconciliation below supplies later evidence.
 
 **Backend ownership and naming:** Vano is our fork of Nova, maintained and
 available to improve or change as needed for the stack. It is Genet's primary
@@ -23,43 +23,49 @@ revision; new status prose calls the current backend Vano.
 ## Purpose
 
 *Develop and adhere to these standards, and we unlock these features.* The
-left three columns are genet facts: the standard, where genet stands, and
+columns connect genet facts: the standard, where genet stands, and
 what adhering means in this engine. The right column is what mere and the
-products get for it. The ledger orders the grind by payoff rather than by
-WPT directory order, and it gives a mere plan one place to say "we depend on
-row N" instead of re-deriving the engine's state.
+products could get for it. The ledger connects standards to named consumers
+and gives a mere plan one place to say "we depend on row N" instead of
+re-deriving the engine's state. It is a map of relevance and dependencies, not
+an implementation order. Open qualifications describe the limits of recorded
+evidence, without assigning a future proof or task.
 
 Rules for a row:
 
 - The census count is copied, never estimated. A row with no WPT directory
   says so.
 - "Adhering means" names the engine surface, not a percentage.
-- "Unlocks" names a consumer that exists or a plan that names it. A feature
-  nobody has asked for is not a row.
+- "Unlocks" names a consumer that exists or a plan that names it.
+- "Registry" names the spec ids in the family spec registry,
+  `merelyllc.com/content/specs.toml`. Since Mark's ruling D2 of 2026-10-18
+  admission is spec-first and belongs to the registry, which records every
+  spec genet answers to whether or not a consumer has asked. This ledger keeps
+  the consumer-linked subset: a row here is a spec with a named consumer.
 - When a lane closes a row's gap, the row keeps its founding count and gains
   a dated receipt; a lane receipt does not imply full conformance or a new
   whole-platform census. Counts always retain their date, engine and scope.
 
 ## Ledger
 
-| # | Standard | Census 2026-09-06 | Adhering means | Unlocks |
-|---|---|---|---|---|
-| 1 | Unicode segmentation, UAX #29 | no WPT directory; `Intl.Segmenter` under `intl` | one conformant word, sentence and grapheme segmenter as a genet component (ruled to found, 2026-09-07) | mere's search tokenizer, find-in-page word mode, `esp` lexical features, reading time, selection by word |
-| 2 | Selection API | 0 / 280 | `getSelection`, ranges over the layout DOM | web clip as a real gesture, quote with provenance, find-in-page highlighting |
-| 3 | Accessibility tree, ARIA and AccName | not measured (no testharness lane) | roles and names computed per spec | field-weighted recall index from the reader's model, agent-driven pages, the inspector as a test oracle |
-| 4 | Intersection Observer | 0 / 104 | viewport intersection callbacks | dwell and "interesting interaction" for frecency, lazy media, attention receipts for the trail pane |
-| 5 | High Resolution Time, Performance Timeline | 0 / 14, 0 / 73 | monotonic clocks, performance entries | `dwell_ms` filled honestly, page-load receipts, the timing half of the capture record |
-| 6 | Mutation Observer | 9 files fail on the missing global | DOM change notifications | re-extract body text on SPA navigation so the index tracks what was read |
-| 7 | URL | 351 / 519 | WHATWG parsing and canonicalization | page identity starts from canonical URLs; browser-history import matches ours |
-| 8 | Encoding | 7,109 / 1,329,450 (legacy multibyte slices dominate) | labels and decoders | history and bookmark import from every browser's export |
-| 9 | IndexedDB, Storage | 5 / 880, 0 / 75 | the storage APIs and quota | muniment's OPFS lane hosted by our own engine; browsing memory in the browser |
-| 10 | Web Crypto | 3 / 199 (86 files miss `crypto`) | SubtleCrypto over our primitives | pack signing and sealing in the browser lane; personae in a web host |
-| 11 | Workers | 17 / 574 | dedicated workers, message passing | indexing and embedding off the document thread; `esp` in the browser |
-| 12 | Web Messaging, BroadcastChannel | 49 / 209 | channels across contexts | graphshell's remote-projection wire planes hosted in-page |
-| 13 | JSON-LD and microdata in documents | no WPT directory | parse and expose `application/ld+json` and microdata | `mere-linked-data` ingest straight from visited pages |
-| 14 | Custom Elements, Shadow DOM | 2,041 / 3,674, 18 / 8,654 | the component model | Cambium widgets hosted inside web documents |
-| 15 | CSS Transforms 2 | 143 / 2,296 — `css/css-transforms`, measured 2026-09-07, not in the 2026-09-06 census ([harness repair plan](2026-09-07_wpt_harness_repair_plan.md) gate F6, its first measurement) | Livery parses, computes and serializes `matrix3d`, `translate3d`, `rotate3d`, `scale3d`, `perspective` / `perspective-origin`, `transform-style`, `backface-visibility`, 3D `transform-origin` and the individual `translate` / `rotate` / `scale` properties, and lowers each element to netrender's column-major 4x4 `Transform` with z-sorting inside a 3D rendering context | the games wing's live voxel faces and per-part rotation: `isometry/mesocosm/design_docs/2026-09-11_orthographic_voxel_presentation_plan.md` L1 and L5, founded in genet by the [CSS 3D transforms and first-frame plan](2026-09-12_css_3d_transforms_and_first_frame_plan.md) T1 |
-| 16 | First-frame scaling for many positioned boxes | no WPT directory: this is an engine cost, not a conformance surface. The measurement of record is `Code/testing/wing/l0b_genet_element_ceiling.md` (first frame 4.6 to 4.9 s at 5,000 elements, 60 to 132 s at 20,000, 15 to 17 min at 50,000) | linear rather than quadratic first-frame cost in the number of positioned boxes — the per-box whole-tree passes in `FragmentTree::resize_leaf` / `translate_subtree` / `recompute_overflow` removed — plus parse, style, layout and paint spans behind a flag so cost is attributable without fixture variants | the games wing's live-all-the-time default: `isometry/mesocosm/design_docs/2026-09-11_orthographic_voxel_presentation_plan.md` L0 verdict and L5, founded in genet by the [CSS 3D transforms and first-frame plan](2026-09-12_css_3d_transforms_and_first_frame_plan.md) T2 and T3 |
+| # | Standard | Registry | Census 2026-09-06 | Adhering means | Unlocks |
+|---|---|---|---|---|---|
+| 1 | Unicode segmentation, UAX #29 | `uax29` | no WPT directory; `Intl.Segmenter` under `intl` | one conformant word, sentence and grapheme segmenter as a genet component (ruled to found, 2026-09-07) | mere's search tokenizer, find-in-page word mode, `esp` lexical features, reading time, selection by word |
+| 2 | Selection API | `selection-api` | 0 / 280 | `getSelection`, ranges over the layout DOM | web clip as a real gesture, quote with provenance, find-in-page highlighting |
+| 3 | Accessibility tree, ARIA and AccName | `accname-1.2`, `wai-aria-1.2` | not measured (no testharness lane) | roles and names computed per spec | field-weighted recall index from the reader's model, agent-driven pages, the inspector as a test oracle |
+| 4 | Intersection Observer | `intersection-observer` | 0 / 104 | viewport intersection callbacks | dwell and "interesting interaction" for frecency, lazy media, attention receipts for the trail pane |
+| 5 | High Resolution Time, Performance Timeline | `hr-time-3`, `performance-timeline` | 0 / 14, 0 / 73 | monotonic clocks, performance entries | `dwell_ms` filled honestly, page-load receipts, the timing half of the capture record |
+| 6 | Mutation Observer | `dom` | 9 files fail on the missing global | DOM change notifications | re-extract body text on SPA navigation so the index tracks what was read |
+| 7 | URL | `url` | 351 / 519 | WHATWG parsing and canonicalization | page identity starts from canonical URLs; browser-history import matches ours |
+| 8 | Encoding | `encoding` | 7,109 / 1,329,450 (legacy multibyte slices dominate) | labels and decoders | history and bookmark import from every browser's export |
+| 9 | IndexedDB, Storage | `IndexedDB-3`, `storage` | 5 / 880, 0 / 75 | the storage APIs and quota | muniment's OPFS lane hosted by our own engine; browsing memory in the browser |
+| 10 | Web Crypto | `webcrypto-2` | 3 / 199 (86 files miss `crypto`) | SubtleCrypto over our primitives | pack signing and sealing in the browser lane; personae in a web host |
+| 11 | Workers | `html` | 17 / 574 | dedicated workers, message passing | indexing and embedding off the document thread; `esp` in the browser |
+| 12 | Web Messaging, BroadcastChannel | `html` | 49 / 209 | channels across contexts | graphshell's remote-projection wire planes hosted in-page |
+| 13 | JSON-LD and microdata in documents | `json-ld11`, `html-microdata` | no WPT directory | parse and expose `application/ld+json` and microdata | `mere-linked-data` ingest straight from visited pages |
+| 14 | Custom Elements, Shadow DOM | `html`, `dom` | 2,041 / 3,674, 18 / 8,654 | the component model | Cambium widgets hosted inside web documents |
+| 15 | CSS Transforms 2 | `css-transforms-2` | 143 / 2,296 — `css/css-transforms`, measured 2026-09-07, not in the 2026-09-06 census ([harness repair plan](2026-09-07_wpt_harness_repair_plan.md) gate F6, its first measurement) | Livery parses, computes and serializes `matrix3d`, `translate3d`, `rotate3d`, `scale3d`, `perspective` / `perspective-origin`, `transform-style`, `backface-visibility`, 3D `transform-origin` and the individual `translate` / `rotate` / `scale` properties, and lowers each element to netrender's column-major 4x4 `Transform` with z-sorting inside a 3D rendering context | the games wing's live voxel faces and per-part rotation: `isometry/mesocosm/design_docs/2026-09-11_orthographic_voxel_presentation_plan.md` L1 and L5, founded in genet by the [CSS 3D transforms and first-frame plan](2026-09-12_css_3d_transforms_and_first_frame_plan.md) T1 |
+| 16 | First-frame scaling for many positioned boxes | none: an engine cost, not a spec | no WPT directory: this is an engine cost, not a conformance surface. The measurement of record is `Code/testing/wing/l0b_genet_element_ceiling.md` (first frame 4.6 to 4.9 s at 5,000 elements, 60 to 132 s at 20,000, 15 to 17 min at 50,000) | linear rather than quadratic first-frame cost in the number of positioned boxes — the per-box whole-tree passes in `FragmentTree::resize_leaf` / `translate_subtree` / `recompute_overflow` removed — plus parse, style, layout and paint spans behind a flag so cost is attributable without fixture variants | the games wing's live-all-the-time default: `isometry/mesocosm/design_docs/2026-09-11_orthographic_voxel_presentation_plan.md` L0 verdict and L5, founded in genet by the [CSS 3D transforms and first-frame plan](2026-09-12_css_3d_transforms_and_first_frame_plan.md) T2 and T3 |
 
 ## Implementation reconciliation — 2026-09-26
 
@@ -69,7 +75,7 @@ Their denominators grew as more tests could execute; they are not percentages
 of implementation completeness. Focused coverage on both backends is separate
 evidence from these WPT counts.
 
-| Row | Recorded implementation and receipt | Remaining qualification / next proof |
+| Row | Recorded implementation and receipt | Evidence limits / unmeasured behavior |
 |---|---|---|
 | 2, Selection API | [Selection/Range](2026-09-07_selection_range_plan.md) landed 2026-09-07: selection **28,582/33,621**, 12 all-pass files; live ranges, Livery geometry and selection paint projection. Subsequent DOM node work removed additional range blockers. | Exercise the consumer's gesture-to-clip path; retain the plan's selection movement, scheduling and geometry qualifications. The founding 0/280 does not describe the landed surface. |
 | 4, Intersection Observer | Founding census **0/104**; this reconciliation establishes no later implementation receipt. | Scope viewport geometry and delivery against a named consumer. Intersection evidence alone does not establish dwell or attention. |
@@ -126,18 +132,38 @@ file; it is excluded from the fixed-budget totals. A fully paired run with
 identical profiles/budgets, the optional in-process snapshot route, server-mode
 families and full-browser rendering acceptance remain separate open gates.
 
-Candidates a lane should add when it opens: `editing` (contenteditable for
-a writing product), `streams` (extraction starts before the page finishes),
-`service-workers` (offline products).
+Other connections identified here: `editing` relates to contenteditable in
+a writing product; `streams` to extraction during loading; `service-workers`
+to offline web products. These are relevance cues, not additions assigned to
+a future lane.
 
 ## Conformance targets, 2026-10-02
 
-**Forms Phase A execution, 2026-10-07:** the
+**Forms execution, 2026-10-08:** the
 [forms plan](2026-10-07_forms_value_validation_submission_plan.md) carries C1/C5/C6.
-Mark answered "Proceed" to the recommended input value/placeholder/password
-and textarea live-value rendering scope. Arena state, consumer migration and
-starting gates are assembling. No Forms passing count or final acceptance is
-claimed; Checkpoint A still precedes validation and submission.
+Phase A's arena value model, native consumers and bounded value/paint/layout
+repair are published on main at `e84f9c7f`, with Mere's verified published-source
+repin and qualified Turnstone/Cleromancy compatibility. F1-F9 record Mark's
+rendering, consumer, accessibility and native URL-parser rulings. Mark authorized
+Phase B through its constraint-validation checkpoint. Checkpoint B is qualified
+for main publication on 2026-10-09: 963 passes, exactly six allowed Livery
+failures and four existing ignores; 924 additional Forms assertions per engine
+with every old pass retained, including partial ERROR rows. All 2,731 matched
+CSS results are unchanged (1,044 verified passes plus one unverified pass).
+F8/F9 provide native validity, notices, a configurable catalog and an Alert
+projection; F10 records the native-only matcher correction. The plan preserves
+the invalid original probe, corrected 20/20 supplemental control and native
+backtracking timeout limit. Mark authorized Phase C on 2026-10-09. Request-aware
+navigation, shared native encoders and document encoding are committed;
+FormData/submission bindings at `5c45bdf0a75` have 212 focused, 187 full native
+and 1,062 full runtime passes plus an accepted scoped review. Root verified
+every earlier passing occurrence on unchanged reviewed source; the interrupted
+compile receipt for the physics `.as_str()` handoff remains separate. Native
+activation and host submission routes have scoped pre-integration Documents
+(135) and runtime (1,064) results. Mark requested progress publication and
+upstream integration on 2026-10-11. Final host qualification, matched C captures
+and Checkpoint C remain pending;
+these targeted fixtures do not update the WPT percentage.
 
 **Encoding execution, 2026-10-05:** the
 [API plan](2026-10-05_encoding_textdecoder_plan.md) retains C1/C2/C4 and the
@@ -309,6 +335,21 @@ Rulings on the corrected picture:
 the form-control value model. Where the current value lives is shared by
 script, the native editor, paint and accessibility, so that brief's first
 checkpoint brings the representation back to Mark.
+
+**Conformance targets, 2026-10-20 (Mark's answers; unnumbered until Mark numbers them).**
+Asked, against the 2026-09-29 Vano census (33,824 of 144,238 subtests; pre-encoding,
+pre-streams, pre-forms-C), which conformance targets get briefed next, any number
+selectable among: the fetch and request-security cluster (fetch 27%, referrer-policy 0%,
+mixed-content 0%, CSP 5%, upgrade-insecure 0%, about 20,700 subtests, on the qualified
+netfetcher wire adoption); WebCrypto (107 of 9,652, 86 files lacking `crypto`); the component
+model (dom, html/dom, custom-elements, shadow-dom, about 7,100); a paired census refresh
+first. Mark: **"Fetch and request security cluster (Recommended),WebCrypto,Component model"**.
+Each is briefed to a separate implementing agent, as C1 did; the census refresh was not
+selected. Asked whether intersection-observer (0 of 118), hr-time (13 of 26),
+performance-timeline (70 of 115) and Mutation Observer's missing global are briefed as one
+small lane for the trail and frecency unlocks. Mark: **"Yes, one bundled lane
+(Recommended)"**. WebCrypto carries the standing security rule: maintained libraries and
+standards only, no own crypto math.
 
 ## Consumers on record
 

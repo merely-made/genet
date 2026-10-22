@@ -13,48 +13,74 @@
 //! events. Fetches in an older navigation are ignored when a newer generation
 //! wins; aborting their browser requests is a separate follow-up.
 
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::cell::{Cell, RefCell};
+use std::rc::{Rc, Weak};
+use std::sync::Arc;
 
 use document_session_api::session_engine::{
-    DocumentSession, SessionButtonState, SessionEffect, SessionEngine, SessionInput, SessionKey,
+    DocumentSession, SessionButtonState, SessionDocumentRequest, SessionEffect,
+    SessionEncodedFormSubmission, SessionEngine, SessionInput, SessionInputResult, SessionKey,
     SessionModifiers, SessionPointerButton, SessionScrollKey, SessionSpawnRequest,
 };
 use genet_document_resources::ResourceLimits;
 use genet_documents::{LiveryResourcePreparation, LiverySessionEngine, LocalFetcher};
 use genet_host_api::navigation::resolve_href;
 use genet_host_api::{ResourceFetchPolicy, ResourceResponse};
-use genet_render_host::{RenderCore, WindowSurface};
+use genet_render_host::{
+    BrowserFrameStartError, PendingBrowserFrame, RasterizeFailure, RenderCore, SurfaceAcquire,
+    WindowSurface,
+};
+#[cfg(feature = "browser-frame-fixture")]
+use genet_render_host::BrowserFrameSubmission;
 use netrender::{ColorLoad, ExternalTexturePlacement, NetrenderOptions, Scene};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, spawn_local};
 use web_sys::{
-    Event, EventTarget, HtmlCanvasElement, KeyboardEvent, PointerEvent, Response, WheelEvent,
+    AbortController, AbortSignal, Event, EventTarget, HtmlCanvasElement, KeyboardEvent,
+    PointerEvent, Response, WheelEvent,
 };
 
-/// Browser-host bounds for one navigation.  The defaults retain the shared
-/// host response cap and make the aggregate/resource caps explicit here.
+/// Browser-host bounds for one navigation. The remote fetch policy is the
+/// same host contract the native transport consumes. Aggregate byte and
+/// resource counts belong to this browser document preparation path.
 #[wasm_bindgen]
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct BrowserResourceLimits {
-    max_response_bytes: u32,
+    policy: ResourceFetchPolicy,
     max_total_bytes: u32,
     max_resources: u32,
+    active_fetches: Rc<Cell<usize>>,
 }
 
 impl Default for BrowserResourceLimits {
     fn default() -> Self {
         let policy = ResourceFetchPolicy::default();
         Self {
-            max_response_bytes: policy.max_response_bytes.min(u32::MAX as usize) as u32,
+            policy,
             max_total_bytes: policy
                 .max_response_bytes
                 .saturating_mul(4)
                 .min(u32::MAX as usize) as u32,
             max_resources: 64,
+            active_fetches: Rc::new(Cell::new(0)),
         }
+    }
+}
+
+impl BrowserResourceLimits {
+    fn validate(&self) -> Result<(), JsValue> {
+        // Fetch's followed redirects expose only the final response. The
+        // browser's fixed redirect limit is 20; a different host cap cannot
+        // be counted or enforced through this API.
+        if self.policy.max_redirects != ResourceFetchPolicy::default().max_redirects {
+            return Err(JsValue::from_str("browser fetch cannot enforce a custom redirect limit"));
+        }
+        if self.policy.timeout.as_millis() > i32::MAX as u128 {
+            return Err(JsValue::from_str("browser fetch timeout exceeds timer range"));
+        }
+        Ok(())
     }
 }
 
@@ -63,10 +89,28 @@ impl BrowserResourceLimits {
     #[wasm_bindgen(constructor)]
     pub fn new(max_response_bytes: u32, max_total_bytes: u32, max_resources: u32) -> Self {
         Self {
-            max_response_bytes,
+            policy: ResourceFetchPolicy {
+                max_response_bytes: max_response_bytes as usize,
+                ..ResourceFetchPolicy::default()
+            },
             max_total_bytes,
             max_resources,
+            active_fetches: Rc::new(Cell::new(0)),
         }
+    }
+
+    /// Configure the same remote-request policy used by the native host.
+    /// The browser owns redirect following and supports only its fixed cap.
+    pub fn set_fetch_policy(&mut self, max_redirects: u32, max_concurrent_fetches: u32,
+        timeout_ms: u32) -> Result<(), JsValue> {
+        let mut policy = self.policy;
+        policy.max_redirects = max_redirects;
+        policy.max_concurrent_fetches = max_concurrent_fetches as usize;
+        policy.timeout = std::time::Duration::from_millis(timeout_ms as u64);
+        let candidate = Self { policy, ..self.clone() };
+        candidate.validate()?;
+        self.policy = policy;
+        Ok(())
     }
 }
 
@@ -85,20 +129,21 @@ pub async fn start_with_limits(
     address: String,
     limits: BrowserResourceLimits,
 ) -> Result<(), JsValue> {
+    limits.validate()?;
     let (layout_width, layout_height, scale, physical_width, physical_height) =
         canvas_size(&canvas)?;
     canvas.set_width(physical_width);
     canvas.set_height(physical_height);
     canvas.set_tab_index(0);
-    let loaded = load_session(&address, layout_width, layout_height, limits).await?;
+    let loaded = load_session(&address, layout_width, layout_height, limits.clone()).await?;
     let options = NetrenderOptions {
         tile_cache_size: Some(64),
         enable_vello: true,
         ..NetrenderOptions::for_untrusted_content()
     };
-    let core = RenderCore::boot_async(options)
+    let core = Arc::new(RenderCore::boot_async(options)
         .await
-        .map_err(|error| JsValue::from_str(&format!("could not boot renderer: {error}")))?;
+        .map_err(|error| JsValue::from_str(&format!("could not boot renderer: {error}")))?);
     let surface = core
         .create_surface(
             wgpu::SurfaceTarget::Canvas(canvas.clone()),
@@ -124,7 +169,15 @@ pub async fn start_with_limits(
         browser_limits: limits,
         navigation_generation: 0,
         pending_navigation: None,
+        self_weak: Weak::new(),
+        render_running: false,
+        render_queued: false,
+        surface_resize_pending: false,
+        surface_size_generation: 0,
+        render_revision: 0,
+        outdated_retry_remaining: 0,
     }));
+    host.borrow_mut().self_weak = Rc::downgrade(&host);
     host.borrow_mut().render();
     install_dom_events(&host)?;
     Ok(())
@@ -132,7 +185,7 @@ pub async fn start_with_limits(
 
 struct WebOrtet {
     canvas: HtmlCanvasElement,
-    core: RenderCore,
+    core: Arc<RenderCore>,
     surface: WindowSurface,
     address: String,
     session: Box<dyn DocumentSession<Scene>>,
@@ -146,8 +199,17 @@ struct WebOrtet {
     pointer_capture_id: Option<i32>,
     browser_limits: BrowserResourceLimits,
     navigation_generation: u64,
-    pending_navigation: Option<String>,
+    pending_navigation: Option<BrowserNavigation>,
+    self_weak: Weak<RefCell<WebOrtet>>,
+    render_running: bool,
+    render_queued: bool,
+    surface_resize_pending: bool,
+    surface_size_generation: u64,
+    render_revision: u64,
+    outdated_retry_remaining: u8,
 }
+
+enum BrowserNavigation { Link(String), Form(SessionEncodedFormSubmission) }
 
 struct LoadedSession {
     session: Box<dyn DocumentSession<Scene>>,
@@ -156,34 +218,13 @@ struct LoadedSession {
 
 impl WebOrtet {
     fn render(&mut self) {
-        let scene = self.session.frame(self.layout_width, self.layout_height);
-        let (_texture, view) = self.core.rasterize_scaled(
-            &scene,
-            self.physical_width,
-            self.physical_height,
-            ColorLoad::Clear(wgpu::Color::WHITE),
-            self.scale,
-        );
-        let Some(frame) = self.surface.acquire(&self.core) else {
-            return;
-        };
-        let target = frame
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-        self.core.renderer().compose_external_texture(
-            &view,
-            &target,
-            self.surface.format(),
-            self.physical_width,
-            self.physical_height,
-            ExternalTexturePlacement::new([
-                0.0,
-                0.0,
-                self.physical_width as f32,
-                self.physical_height as f32,
-            ]),
-        );
-        self.core.queue().present(frame);
+        self.render_revision = self.render_revision.wrapping_add(1);
+        self.outdated_retry_remaining = 1;
+        self.render_queued = true;
+        if !self.render_running {
+            self.render_running = true;
+            spawn_local(run_render_queue(self.self_weak.clone()));
+        }
     }
 
     fn resize(&mut self) {
@@ -195,8 +236,8 @@ impl WebOrtet {
         if (physical_width, physical_height) != (self.physical_width, self.physical_height) {
             self.canvas.set_width(physical_width);
             self.canvas.set_height(physical_height);
-            self.surface
-                .resize(&self.core, physical_width, physical_height);
+            self.surface_resize_pending = true;
+            self.surface_size_generation = self.surface_size_generation.wrapping_add(1);
         }
         self.layout_width = layout_width;
         self.layout_height = layout_height;
@@ -206,26 +247,32 @@ impl WebOrtet {
         self.render();
     }
 
-    fn dispatch_input(&mut self, input: SessionInput) -> Option<bool> {
+    fn sync_address(&mut self) {
+        if let Some(address) = self.session.current_address() { self.address = address; }
+    }
+    fn dispatch_input(&mut self, input: SessionInput) -> SessionInputResult {
         let result = self.session.input(input);
-        let capture = result.capture;
-        match result.effect {
+        match &result.effect {
             SessionEffect::Navigate(target) => {
-                self.pending_navigation = Some(resolve_href(&self.address, &target));
+                self.pending_navigation = Some(BrowserNavigation::Link(resolve_href(&self.address, target)));
             },
-            SessionEffect::Submit(submission) => {
-                web_sys::console::warn_1(
-                    &format!(
-                        "[ortet] form submission to {} is not wired in this host",
-                        submission.action
-                    )
-                    .into(),
-                );
+            SessionEffect::Submit(_) => {
+                match self.session.take_encoded_form_submission() {
+                    Some(encoded) => self.pending_navigation = Some(BrowserNavigation::Form(encoded)),
+                    None => {
+                        self.navigation_generation = self.navigation_generation.wrapping_add(1);
+                        web_sys::console::warn_1(&JsValue::from_str("[ortet] encoded submission unavailable"));
+                    },
+                }
+                // Focus changes can retire the old hit-test layout. Keep the
+                // source interactive while its navigation is still pending.
+                self.render();
             },
             SessionEffect::Handled | SessionEffect::Cancelled => self.render(),
             SessionEffect::Ignored => {},
         }
-        capture
+        self.sync_address();
+        result
     }
 
     fn capture_pointer(&mut self, pointer_id: i32) {
@@ -260,41 +307,231 @@ impl WebOrtet {
     }
 }
 
-fn launch_pending_navigation(host: &Rc<RefCell<WebOrtet>>) {
-    let Some((generation, address, width, height, limits)) = (|| {
-        let mut host = host.borrow_mut();
-        let address = host.pending_navigation.take()?;
-        if address == host.address {
-            return None;
+enum BrowserRenderAttempt {
+    Retry,
+    Pending {
+        pending: PendingBrowserFrame,
+        surface_frame: Option<(wgpu::Texture, wgpu::SurfaceTexture)>,
+        core: std::sync::Weak<RenderCore>,
+        size_generation: u64,
+        render_revision: u64,
+        outdated: bool,
+    },
+    Refused(RasterizeFailure),
+    Idle,
+}
+
+#[cfg(feature = "browser-frame-fixture")]
+fn emit_frame_fixture_event(canvas: &HtmlCanvasElement, name: &str) {
+    if let Ok(event) = Event::new(name) {
+        let _ = canvas.dispatch_event(&event);
+    }
+}
+
+/// A queued redraw does not borrow the host across an await. The checked
+/// frame admission covers retained scene production, rasterization, surface
+/// composition, and the actual GPU completion ledger. Presentation follows
+/// only after acceptance on the original Core and deadline.
+async fn run_render_queue(host: Weak<RefCell<WebOrtet>>) {
+    loop {
+        let Some(owner) = host.upgrade() else { return; };
+        let attempt = {
+            let mut state = owner.borrow_mut();
+            if !state.render_queued {
+                state.render_running = false;
+                BrowserRenderAttempt::Idle
+            } else {
+                let core = state.core.clone();
+                match core.try_begin_browser_frame() {
+                    Err(BrowserFrameStartError::Busy) => BrowserRenderAttempt::Retry,
+                    Err(BrowserFrameStartError::Refused(error)) => {
+                        state.render_queued = false;
+                        state.render_running = false;
+                        BrowserRenderAttempt::Refused(error)
+                    },
+                    Ok(mut submission) => {
+                        state.render_queued = false;
+                        let (layout_width, layout_height) = (state.layout_width, state.layout_height);
+                        let scene = state.session.frame(layout_width, layout_height);
+                        state.sync_address();
+                        let size_generation = state.surface_size_generation;
+                        let render_revision = state.render_revision;
+                        let outdated = Cell::new(false);
+                        let result = submission.submit(|commands| {
+                            if state.surface_resize_pending {
+                                let (width, height) = (state.physical_width, state.physical_height);
+                                state.surface.resize(&core, width, height);
+                                state.surface_resize_pending = false;
+                            }
+                            let (texture, view) = commands.rasterize_scaled_for(
+                                0,
+                                &scene,
+                                state.physical_width,
+                                state.physical_height,
+                                ColorLoad::Clear(wgpu::Color::WHITE),
+                                state.scale,
+                            )?;
+                            let frame = match state.surface.acquire_status(&core) {
+                                SurfaceAcquire::Frame(frame) => frame,
+                                SurfaceAcquire::DeviceLost(loss) => {
+                                    return Err(RasterizeFailure::DeviceLost(loss));
+                                },
+                                SurfaceAcquire::Reconfigured => {
+                                    outdated.set(true);
+                                    return Ok(None);
+                                },
+                                SurfaceAcquire::Unavailable { .. } => {
+                                    return Ok(None);
+                                },
+                                SurfaceAcquire::SurfaceLost => {
+                                    return Ok(None);
+                                },
+                            };
+                            let target = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
+                            commands.compose_external_texture(
+                                &view,
+                                &target,
+                                state.surface.format(),
+                                state.physical_width,
+                                state.physical_height,
+                                ExternalTexturePlacement::new([
+                                    0.0,
+                                    0.0,
+                                    state.physical_width as f32,
+                                    state.physical_height as f32,
+                                ]),
+                            )?;
+                            Ok(Some((texture, frame)))
+                        });
+                        match submission.seal() {
+                            Ok(pending) => BrowserRenderAttempt::Pending {
+                                pending,
+                                surface_frame: result.ok().flatten(),
+                                core: Arc::downgrade(&core),
+                                size_generation,
+                                render_revision,
+                                outdated: outdated.get(),
+                            },
+                            Err(error) => BrowserRenderAttempt::Refused(error),
+                        }
+                    },
+                }
+            }
+        };
+        drop(owner);
+        match attempt {
+            BrowserRenderAttempt::Idle => return,
+            BrowserRenderAttempt::Retry => {
+                gloo_timers::future::TimeoutFuture::new(16).await;
+            },
+            BrowserRenderAttempt::Refused(error) => {
+                if let Some(owner) = host.upgrade() {
+                    let mut state = owner.borrow_mut();
+                    state.render_running = false;
+                }
+                web_sys::console::warn_1(&JsValue::from_str(&format!("[ortet] browser frame refused: {error}")));
+                return;
+            },
+            BrowserRenderAttempt::Pending { pending, surface_frame, core, size_generation, render_revision, outdated } => {
+                // The fixture queues a real resize event here, after submission
+                // and outside the host borrow, before the completion wait.
+                #[cfg(feature = "browser-frame-fixture")]
+                if surface_frame.is_some() {
+                    if let Some(owner) = host.upgrade() {
+                        let canvas = owner.borrow().canvas.clone();
+                        emit_frame_fixture_event(&canvas, "ortet-fixture-submitted");
+                    }
+                }
+                match pending.wait().await {
+                    Ok(accepted) => {
+                        if let Some((_texture, frame)) = surface_frame {
+                            let (size_is_current, render_is_current) = host.upgrade().map(|owner| {
+                                let state = owner.borrow();
+                                (state.surface_size_generation == size_generation,
+                                 state.render_revision == render_revision)
+                            }).unwrap_or((false, false));
+                            match (accepted.check_current(), core.upgrade(), size_is_current && render_is_current) {
+                                (Ok(()), Some(core), true) => {
+                                    core.queue().present(frame);
+                                    #[cfg(feature = "browser-frame-fixture")]
+                                    if let Some(owner) = host.upgrade() {
+                                        let canvas = owner.borrow().canvas.clone();
+                                        emit_frame_fixture_event(&canvas, "ortet-fixture-presented");
+                                    }
+                                },
+                                (Err(error), _, _) => web_sys::console::warn_1(&JsValue::from_str(
+                                    &format!("[ortet] browser frame expired before presentation: {error}"),
+                                )),
+                                _ => {
+                                    #[cfg(feature = "browser-frame-fixture")]
+                                    if size_is_current && !render_is_current {
+                                        if let Some(owner) = host.upgrade() {
+                                            let canvas = owner.borrow().canvas.clone();
+                                            emit_frame_fixture_event(&canvas, "ortet-fixture-stale-skipped");
+                                        }
+                                    }
+                                },
+                            }
+                        }
+                        if outdated {
+                            let retry = host.upgrade().is_some_and(|owner| {
+                                let mut state = owner.borrow_mut();
+                                if state.render_revision == render_revision
+                                    && state.outdated_retry_remaining > 0 {
+                                    state.outdated_retry_remaining -= 1;
+                                    state.render_queued = true;
+                                    true
+                                } else {
+                                    false
+                                }
+                            });
+                            if retry { gloo_timers::future::TimeoutFuture::new(16).await; }
+                        }
+                    },
+                    Err(error) => web_sys::console::warn_1(&JsValue::from_str(
+                        &format!("[ortet] browser frame failed: {error}"),
+                    )),
+                }
+            },
         }
+    }
+}
+
+fn launch_pending_navigation(host: &Rc<RefCell<WebOrtet>>) {
+    let Some((generation, address, request, width, height, limits)) = (|| {
+        let mut host = host.borrow_mut();
+        let navigation = host.pending_navigation.take()?;
+        if matches!(&navigation, BrowserNavigation::Link(address) if address == &host.address) { return None; }
         host.navigation_generation = host.navigation_generation.wrapping_add(1);
-        Some((
-            host.navigation_generation,
-            address,
-            host.layout_width,
-            host.layout_height,
-            host.browser_limits,
-        ))
-    })() else {
-        return;
-    };
+        let (address, request) = match navigation {
+            BrowserNavigation::Link(address) => {
+                if address == host.address { return None; } (address, None)
+            },
+            BrowserNavigation::Form(encoded) => {
+                if !encoded.target.is_empty() && !["_self", "_parent", "_top"].iter()
+                    .any(|target| encoded.target.eq_ignore_ascii_case(target)) {
+                    web_sys::console::warn_1(&JsValue::from_str("[ortet] unsupported native form target")); return None;
+                }
+                if let Err(error) = browser_request(&encoded.request, None) { web_sys::console::warn_1(&error); return None; }
+                (encoded.request.url.clone(), Some(encoded.request))
+            },
+        };
+        Some((host.navigation_generation, address, request, host.layout_width, host.layout_height, host.browser_limits.clone()))
+    })() else { return; };
     let host = host.clone();
     spawn_local(async move {
-        match load_session(&address, width, height, limits).await {
+        match load_session_request(&address, width, height, limits, request.as_ref(), || {
+            host.borrow().navigation_generation == generation
+        }).await {
             Ok(loaded) => {
                 let mut host = host.borrow_mut();
-                if host.navigation_generation != generation {
-                    return;
-                }
-                host.session = loaded.session;
-                host.address = loaded.navigation_address;
-                host.render();
+                if host.navigation_generation != generation { return; }
+                host.release_captured_pointer(); host.session = loaded.session;
+                host.address = loaded.navigation_address; host.render();
             },
             Err(error) => {
                 if host.borrow().navigation_generation == generation {
-                    web_sys::console::warn_1(
-                        &format!("[ortet] could not open {address}: {error:?}").into(),
-                    );
+                    web_sys::console::warn_1(&format!("[ortet] could not open {address}: {error:?}").into());
                 }
             },
         }
@@ -307,9 +544,20 @@ async fn load_session(
     height: u32,
     limits: BrowserResourceLimits,
 ) -> Result<LoadedSession, JsValue> {
+    load_session_request(address, width, height, limits, None, || true).await
+}
+
+async fn load_session_request(address: &str, width: u32, height: u32,
+    limits: BrowserResourceLimits, outbound: Option<&SessionDocumentRequest>,
+    is_current: impl Fn() -> bool) -> Result<LoadedSession, JsValue> {
+    let check_current = || if is_current() { Ok(()) } else {
+        Err(JsValue::from_str("superseded browser navigation"))
+    };
+    check_current()?;
     let request = SessionSpawnRequest::new(address).with_viewport(width, height);
     let engine = LiverySessionEngine::new(LocalFetcher);
     if !is_remote_http(address) {
+        if outbound.is_some() { return Err(JsValue::from_str("unsupported browser form transport")); }
         let session = engine
             .spawn(&request)
             .map_err(|error| JsValue::from_str(&format!("could not open {address}: {error}")))?;
@@ -322,7 +570,10 @@ async fn load_session(
     if limits.max_resources == 0 {
         return Err(JsValue::from_str("browser resource count limit exceeded"));
     }
-    let source_response = fetch_browser_response(address, &limits, &mut total_bytes).await?;
+    let source_response = fetch_browser_request(address, outbound, &limits, &mut total_bytes).await?;
+    // A held source may finish after a newer navigation has already won.
+    // Refuse it before preparing or fetching any of its dependencies.
+    check_current()?;
     let navigation_address = redirected_navigation_address(address, &source_response.final_url);
     let mut staged =
         LiveryResourcePreparation::new(&request, source_response, ResourceLimits::default());
@@ -333,6 +584,7 @@ async fn load_session(
             break;
         }
         for request in pending {
+            check_current()?;
             resources = resources.saturating_add(1);
             if resources > limits.max_resources as usize {
                 return Err(JsValue::from_str("browser resource count limit exceeded"));
@@ -363,24 +615,162 @@ async fn fetch_browser_response(
     limits: &BrowserResourceLimits,
     total_bytes: &mut usize,
 ) -> Result<ResourceResponse, JsValue> {
+    fetch_browser_request(url, None, limits, total_bytes).await
+}
+
+/// Translate a native navigation into the browser's supported source-fetch lane.
+/// The neutral record retains native intent and the raw source URL for eligibility.
+fn browser_request(request: &SessionDocumentRequest, signal: Option<&AbortSignal>) -> Result<web_sys::Request, JsValue> {
+    let window = web_sys::window().ok_or_else(|| JsValue::from_str("browser window unavailable"))?;
+    let outer_origin = window.location().origin()?;
+    let initiator = web_sys::Url::new(&request.referrer)?;
+    let destination = web_sys::Url::new(&request.url)?;
+    if !matches!(initiator.protocol().as_str(), "http:" | "https:") || initiator.origin() != outer_origin {
+        return Err(JsValue::from_str("embedded source origin cannot initiate browser form fetch"));
+    }
+    if !matches!(destination.protocol().as_str(), "http:" | "https:")
+        || !matches!(request.method.as_str(), "GET" | "POST")
+        || request.method == "GET" && request.body.is_some()
+        || !matches!(request.cache.as_str(), "default" | "no-store" | "reload" | "no-cache" | "force-cache" | "only-if-cached")
+        || !matches!(request.redirect.as_str(), "follow" | "error" | "manual")
+        || !matches!(request.mode.as_str(), "navigate" | "cors" | "same-origin")
+        || !matches!(request.credentials.as_str(), "omit" | "same-origin" | "include")
+        || !matches!(request.referrer_policy.as_str(), "" | "no-referrer" | "no-referrer-when-downgrade" | "same-origin"
+            | "origin" | "strict-origin" | "origin-when-cross-origin" | "strict-origin-when-cross-origin" | "unsafe-url") {
+        return Err(JsValue::from_str("unsupported browser form request field"));
+    }
+    let mode = if request.mode == "navigate" {
+        if destination.origin() == outer_origin { "same-origin" } else { "cors" }
+    } else { request.mode.as_str() };
+    if request.cache == "only-if-cached" && mode != "same-origin" {
+        return Err(JsValue::from_str("unsupported browser cache and mode combination"));
+    }
+    let init = web_sys::RequestInit::new();
+    if let Some(signal) = signal {
+        js_sys::Reflect::set(init.as_ref(), &JsValue::from_str("signal"), signal.as_ref())?;
+    }
+    for (key, value) in [("method", request.method.as_str()), ("cache", request.cache.as_str()),
+        ("redirect", request.redirect.as_str()), ("mode", mode), ("referrer", request.referrer.as_str()),
+        ("referrerPolicy", request.referrer_policy.as_str()), ("credentials", request.credentials.as_str()),
+        ("integrity", request.integrity.as_str())] {
+        js_sys::Reflect::set(init.as_ref(), &JsValue::from_str(key), &JsValue::from_str(value))?;
+    }
+    let headers = web_sys::Headers::new()?;
+    for (name, value) in &request.headers {
+        // Fetch silently strips forbidden headers: decline fields this lane cannot forward.
+        if !name.eq_ignore_ascii_case("content-type") {
+            return Err(JsValue::from_str("unsupported browser form header"));
+        }
+        headers.append(name, value)?;
+    }
+    js_sys::Reflect::set(init.as_ref(), &JsValue::from_str("headers"), headers.as_ref())?;
+    if let Some(body) = &request.body {
+        let bytes = js_sys::Uint8Array::from(body.as_slice());
+        js_sys::Reflect::set(init.as_ref(), &JsValue::from_str("body"), bytes.as_ref())?;
+    }
+    web_sys::Request::new_with_str_and_init(&request.url, &init)
+}
+
+struct BrowserFetchPermit {
+    active: Rc<Cell<usize>>,
+}
+
+impl Drop for BrowserFetchPermit {
+    fn drop(&mut self) {
+        self.active.set(self.active.get() - 1);
+    }
+}
+
+/// One elapsed deadline includes admission, response headers and every body
+/// read. Aborting the request also stops a pending browser stream read.
+struct BrowserFetchDeadline {
+    window: web_sys::Window,
+    controller: AbortController,
+    timer_id: i32,
+    _callback: Closure<dyn FnMut()>,
+    expired: Rc<Cell<bool>>,
+    ends_at_ms: f64,
+}
+
+impl BrowserFetchDeadline {
+    fn new(window: &web_sys::Window, timeout: std::time::Duration) -> Result<Self, JsValue> {
+        let performance = window.performance().ok_or_else(|| JsValue::from_str("browser clock unavailable"))?;
+        let expired = Rc::new(Cell::new(false));
+        let controller = AbortController::new()?;
+        let abort = controller.clone();
+        let timeout_expired = Rc::clone(&expired);
+        let callback = Closure::<dyn FnMut()>::new(move || {
+            timeout_expired.set(true);
+            abort.abort();
+        });
+        let timer_id = window.set_timeout_with_callback_and_timeout_and_arguments_0(
+            callback.as_ref().unchecked_ref(), timeout.as_millis() as i32,
+        )?;
+        Ok(Self {
+            window: window.clone(),
+            controller,
+            timer_id,
+            _callback: callback,
+            expired,
+            ends_at_ms: performance.now() + timeout.as_secs_f64() * 1000.0,
+        })
+    }
+
+    fn check(&self) -> Result<(), JsValue> {
+        if self.expired.get()
+            || self.window.performance().is_some_and(|clock| clock.now() >= self.ends_at_ms)
+        {
+            Err(JsValue::from_str("browser fetch deadline exceeded"))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn transport_error(&self, error: JsValue) -> JsValue {
+        self.check().err().unwrap_or(error)
+    }
+}
+
+impl Drop for BrowserFetchDeadline {
+    fn drop(&mut self) {
+        self.window.clear_timeout_with_handle(self.timer_id);
+        self.controller.abort();
+    }
+}
+
+async fn fetch_browser_request(url: &str, outbound: Option<&SessionDocumentRequest>,
+    limits: &BrowserResourceLimits, total_bytes: &mut usize) -> Result<ResourceResponse, JsValue> {
+    limits.validate()?;
     let window =
         web_sys::window().ok_or_else(|| JsValue::from_str("browser window is unavailable"))?;
-    let response = JsFuture::from(window.fetch_with_str(url))
-        .await?
-        .dyn_into::<Response>()?;
-    if !response.ok() {
-        return Err(JsValue::from_str(&format!(
-            "HTTP status {}",
-            response.status()
-        )));
+    let deadline = BrowserFetchDeadline::new(&window, limits.policy.timeout)?;
+    if limits.policy.max_concurrent_fetches == 0 {
+        return Err(JsValue::from_str("browser fetch admission capacity is zero"));
     }
-    if response
-        .headers()
-        .get("content-length")?
-        .and_then(|length| length.parse::<usize>().ok())
-        .is_some_and(|length| length > limits.max_response_bytes as usize)
-    {
-        return Err(JsValue::from_str("browser response byte limit exceeded"));
+    while limits.active_fetches.get() >= limits.policy.max_concurrent_fetches {
+        deadline.check()?;
+        gloo_timers::future::TimeoutFuture::new(16).await;
+    }
+    deadline.check()?;
+    limits.active_fetches.set(limits.active_fetches.get() + 1);
+    let _permit = BrowserFetchPermit { active: Rc::clone(&limits.active_fetches) };
+    let signal = deadline.controller.signal();
+    let request = match outbound {
+        Some(request) => browser_request(request, Some(&signal))?,
+        None => {
+            let init = web_sys::RequestInit::new();
+            js_sys::Reflect::set(init.as_ref(), &JsValue::from_str("signal"), signal.as_ref())?;
+            web_sys::Request::new_with_str_and_init(url, &init)?
+        },
+    };
+    deadline.check()?;
+    let response = JsFuture::from(window.fetch_with_request(&request))
+        .await.map_err(|error| deadline.transport_error(error))?
+        .dyn_into::<Response>()?;
+    deadline.check()?;
+    let kind = js_sys::Reflect::get(response.as_ref(), &JsValue::from_str("type"))?.as_string().unwrap_or_default();
+    if matches!(response.status(), 0 | 204 | 205) || !matches!(kind.as_str(), "basic" | "cors" | "default") {
+        return Err(JsValue::from_str("browser response cannot install a document"));
     }
     let final_url = if response.url().is_empty() {
         url.to_owned()
@@ -388,15 +778,17 @@ async fn fetch_browser_response(
         response.url()
     };
     let content_type = response.headers().get("content-type")?;
-    let body = response
-        .body()
-        .ok_or_else(|| JsValue::from_str("browser response body is unavailable"))?;
+    let Some(body) = response.body() else {
+        deadline.check()?;
+        return Ok(ResourceResponse { final_url, content_type, bytes: Vec::new() });
+    };
     let reader = body
         .get_reader()
         .dyn_into::<web_sys::ReadableStreamDefaultReader>()?;
     let mut bytes = Vec::new();
     loop {
-        let read = JsFuture::from(reader.read()).await?;
+        let read = JsFuture::from(reader.read()).await.map_err(|error| deadline.transport_error(error))?;
+        deadline.check()?;
         if js_sys::Reflect::get(&read, &JsValue::from_str("done"))?
             .as_bool()
             .unwrap_or(false)
@@ -406,7 +798,7 @@ async fn fetch_browser_response(
         let chunk =
             js_sys::Uint8Array::new(&js_sys::Reflect::get(&read, &JsValue::from_str("value"))?);
         let length = chunk.length() as usize;
-        if bytes.len().saturating_add(length) > limits.max_response_bytes as usize
+        if bytes.len().saturating_add(length) > limits.policy.max_response_bytes
             || total_bytes.saturating_add(length) > limits.max_total_bytes as usize
         {
             let _ = reader.cancel();
@@ -415,6 +807,7 @@ async fn fetch_browser_response(
         bytes.extend_from_slice(&chunk.to_vec());
         *total_bytes += length;
     }
+    deadline.check()?;
     Ok(ResourceResponse {
         final_url,
         content_type,
@@ -431,13 +824,210 @@ fn is_remote_http(address: &str) -> bool {
 /// Keep an explicitly requested fragment while replacing the transport base
 /// with the redirect-final document identity.
 fn redirected_navigation_address(requested: &str, final_url: &str) -> String {
-    let final_base = final_url
-        .split_once('#')
-        .map_or(final_url, |(base, _)| base);
-    requested.split_once('#').map_or_else(
-        || final_base.to_owned(),
-        |(_, fragment)| format!("{final_base}#{fragment}"),
-    )
+    if final_url.contains('#') { return final_url.to_owned(); }
+    requested.split_once('#').map_or_else(|| final_url.to_owned(),
+        |(_, fragment)| format!("{final_url}#{fragment}"))
+}
+
+/// Browser-only receipt hook. It calls the same fetch function as document
+/// preparation, while allowing concurrent requests before a renderer starts.
+#[cfg(feature = "browser-fetch-fixture")]
+#[wasm_bindgen]
+pub struct BrowserFetchFixture {
+    limits: BrowserResourceLimits,
+}
+
+#[cfg(feature = "browser-fetch-fixture")]
+#[wasm_bindgen]
+impl BrowserFetchFixture {
+    #[wasm_bindgen(constructor)]
+    pub fn new(limits: BrowserResourceLimits) -> Result<Self, JsValue> {
+        limits.validate()?;
+        Ok(Self { limits })
+    }
+
+    pub fn fetch(&self, url: String) -> js_sys::Promise {
+        let limits = self.limits.clone();
+        wasm_bindgen_futures::future_to_promise(async move {
+            let mut total_bytes = 0;
+            let response = fetch_browser_request(&url, None, &limits, &mut total_bytes).await?;
+            Ok(JsValue::from_f64(response.bytes.len() as f64))
+        })
+    }
+
+    /// Exercise a queued request's own deadline while another request holds
+    /// the same admission pool. This override is confined to receipt builds.
+    pub fn fetch_with_timeout(&self, url: String, timeout_ms: u32) -> js_sys::Promise {
+        let mut limits = self.limits.clone();
+        limits.policy.timeout = std::time::Duration::from_millis(timeout_ms as u64);
+        wasm_bindgen_futures::future_to_promise(async move {
+            let mut total_bytes = 0;
+            let response = fetch_browser_request(&url, None, &limits, &mut total_bytes).await?;
+            Ok(JsValue::from_f64(response.bytes.len() as f64))
+        })
+    }
+}
+
+/// Real-WebGPU lifecycle probe used by `tests/web/checked_frame.html`.
+/// Its own shared Core keeps the destructive loss case away from the visible
+/// Ortet canvas while exercising the same lease and completion implementation.
+#[cfg(feature = "browser-frame-fixture")]
+fn submit_probe_frame(
+    submission: &mut BrowserFrameSubmission,
+    core: &RenderCore,
+    surface: &WindowSurface,
+    surface_id: u64,
+    color: wgpu::Color,
+    called: &Cell<bool>,
+) -> Result<Option<(wgpu::Texture, wgpu::SurfaceTexture)>, RasterizeFailure> {
+    let scene = Scene::new(64, 64);
+    submission.submit(|commands| {
+        called.set(true);
+        let (texture, view) = commands.rasterize_scaled_for(
+            surface_id, &scene, 64, 64, ColorLoad::Clear(color), 1.0,
+        )?;
+        let frame = match surface.acquire_status(core) {
+            SurfaceAcquire::Frame(frame) => frame,
+            SurfaceAcquire::DeviceLost(loss) => return Err(RasterizeFailure::DeviceLost(loss)),
+            SurfaceAcquire::SurfaceLost
+            | SurfaceAcquire::Reconfigured
+            | SurfaceAcquire::Unavailable { .. } => return Ok(None),
+        };
+        let target = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
+        commands.compose_external_texture(
+            &view, &target, surface.format(), 64, 64,
+            ExternalTexturePlacement::new([0.0, 0.0, 64.0, 64.0]),
+        )?;
+        Ok(Some((texture, frame)))
+    })
+}
+
+#[cfg(feature = "browser-frame-fixture")]
+#[wasm_bindgen]
+pub async fn probe_browser_frame_contract(
+    canvas_a: HtmlCanvasElement,
+    canvas_b: HtmlCanvasElement,
+    witness: js_sys::Function,
+) -> Result<String, JsValue> {
+    let core = Arc::new(RenderCore::boot_async(NetrenderOptions {
+        tile_cache_size: Some(8),
+        enable_vello: true,
+        ..NetrenderOptions::for_untrusted_content()
+    }).await.map_err(|error| JsValue::from_str(&format!("probe boot: {error}")))?);
+    let surface_a = core.create_surface(wgpu::SurfaceTarget::Canvas(canvas_a), 64, 64)
+        .map_err(|error| JsValue::from_str(&format!("surface A: {error}")))?;
+    let surface_b = core.create_surface(wgpu::SurfaceTarget::Canvas(canvas_b), 64, 64)
+        .map_err(|error| JsValue::from_str(&format!("surface B: {error}")))?;
+    let red = wgpu::Color { r: 0.8, g: 0.1, b: 0.1, a: 1.0 };
+    let blue = wgpu::Color { r: 0.1, g: 0.2, b: 0.8, a: 1.0 };
+    let mut presented_a = 0u32;
+    let mut presented_b = 0u32;
+
+    let unsubmitted = core.try_begin_browser_frame()
+        .map_err(|error| JsValue::from_str(&format!("unsubmitted admission: {error:?}")))?;
+    if !matches!(core.try_begin_browser_frame(), Err(BrowserFrameStartError::Busy)) {
+        return Err(JsValue::from_str("unsubmitted lease did not own the shared Core"));
+    }
+    drop(unsubmitted);
+    let mut busy = core.try_begin_browser_frame()
+        .map_err(|error| JsValue::from_str(&format!("busy admission: {error:?}")))?;
+    if !matches!(core.try_begin_browser_frame(), Err(BrowserFrameStartError::Busy)) {
+        return Err(JsValue::from_str("shared-Core busy admission was not refused"));
+    }
+    let a_called = Cell::new(false);
+    let a_frame = submit_probe_frame(&mut busy, &core, &surface_a, 0xa, red, &a_called)
+        .map_err(|error| JsValue::from_str(&format!("surface A submit: {error}")))?
+        .ok_or_else(|| JsValue::from_str("surface A did not acquire"))?;
+    if !a_called.get() { return Err(JsValue::from_str("surface A submission did not run")); }
+    let accepted = busy.seal().map_err(|error| JsValue::from_str(&format!("surface A seal: {error}")))?
+        .wait().await.map_err(|error| JsValue::from_str(&format!("surface A completion: {error}")))?;
+    accepted.check_current().map_err(|error| JsValue::from_str(&format!("surface A acceptance: {error}")))?;
+    let (_texture, frame) = a_frame;
+    core.queue().present(frame);
+    presented_a += 1;
+    drop(accepted);
+
+    let mut dropped = core.try_begin_browser_frame()
+        .map_err(|error| JsValue::from_str(&format!("drop admission: {error:?}")))?;
+    let drop_called = Cell::new(false);
+    let dropped_frame = submit_probe_frame(&mut dropped, &core, &surface_a, 0xa, red, &drop_called)
+        .map_err(|error| JsValue::from_str(&format!("drop submit: {error}")))?
+        .ok_or_else(|| JsValue::from_str("drop frame did not acquire"))?;
+    if !drop_called.get() { return Err(JsValue::from_str("dropped frame submission did not run")); }
+    let pending = dropped.seal().map_err(|error| JsValue::from_str(&format!("drop seal: {error}")))?;
+    drop(dropped_frame); // Submitted but deliberately never presented.
+    drop(pending);
+    if !matches!(core.try_begin_browser_frame(), Err(BrowserFrameStartError::Busy)) {
+        return Err(JsValue::from_str("dropped pending frame released its Core before completion"));
+    }
+    let drop_deadline = js_sys::Date::now() + 6000.0;
+    let mut after_drop = loop {
+        match core.try_begin_browser_frame() {
+            Ok(frame) => break frame,
+            Err(BrowserFrameStartError::Busy) if js_sys::Date::now() < drop_deadline => {
+                gloo_timers::future::TimeoutFuture::new(16).await;
+            },
+            Err(other) => return Err(JsValue::from_str(&format!("dropped frame did not retire: {other:?}"))),
+        }
+    };
+    let b_called = Cell::new(false);
+    let b_frame = submit_probe_frame(&mut after_drop, &core, &surface_b, 0xb, blue, &b_called)
+        .map_err(|error| JsValue::from_str(&format!("surface B submit: {error}")))?
+        .ok_or_else(|| JsValue::from_str("surface B did not acquire"))?;
+    if !b_called.get() { return Err(JsValue::from_str("surface B submission did not run")); }
+    let accepted = after_drop.seal().map_err(|error| JsValue::from_str(&format!("surface B seal: {error}")))?
+        .wait().await.map_err(|error| JsValue::from_str(&format!("surface B completion: {error}")))?;
+    accepted.check_current().map_err(|error| JsValue::from_str(&format!("surface B acceptance: {error}")))?;
+    let (_texture, frame) = b_frame;
+    core.queue().present(frame);
+    presented_b += 1;
+    drop(accepted);
+
+    // The page reads actual A/B canvas pixels before the destructive loss
+    // case can clear those browser surfaces. Its Promise must settle first.
+    let proof = witness.call0(&JsValue::NULL)?;
+    JsFuture::from(proof.dyn_into::<js_sys::Promise>()?).await?;
+
+    let before_refusals = (presented_a, presented_b);
+
+    let mut expired = core.try_begin_browser_frame()
+        .map_err(|error| JsValue::from_str(&format!("deadline admission: {error:?}")))?;
+    gloo_timers::future::TimeoutFuture::new(5100).await;
+    let expired_called = Cell::new(false);
+    if !matches!(submit_probe_frame(&mut expired, &core, &surface_a, 0xa, red, &expired_called), Err(RasterizeFailure::ProviderError(_)))
+        || expired_called.get() {
+        return Err(JsValue::from_str("expired frame was not refused by its original deadline"));
+    }
+    drop(expired);
+    if (presented_a, presented_b) != before_refusals {
+        return Err(JsValue::from_str("deadline refusal presented a frame"));
+    }
+
+    let mut lost = core.try_begin_browser_frame()
+        .map_err(|error| JsValue::from_str(&format!("loss admission: {error:?}")))?;
+    core.device().destroy();
+    let loss_deadline = js_sys::Date::now() + 5000.0;
+    while core.device_failure().is_none() && js_sys::Date::now() < loss_deadline {
+        gloo_timers::future::TimeoutFuture::new(16).await;
+    }
+    if core.device_failure().is_none() {
+        return Err(JsValue::from_str("actual device-loss callback did not arrive"));
+    }
+    // Both facts now hold. Loss must win even though the original clock has
+    // expired and cancellation has already retired the admission.
+    gloo_timers::future::TimeoutFuture::new(5100).await;
+    let lost_called = Cell::new(false);
+    if !matches!(submit_probe_frame(&mut lost, &core, &surface_b, 0xb, blue, &lost_called), Err(RasterizeFailure::DeviceLost(_)))
+        || lost_called.get() {
+        return Err(JsValue::from_str("device loss did not outrank frame deadline"));
+    }
+    if !matches!(core.try_begin_browser_frame(), Err(BrowserFrameStartError::Refused(RasterizeFailure::DeviceLost(_)))) {
+        return Err(JsValue::from_str("lost Core admitted a new frame"));
+    }
+    if (presented_a, presented_b) != before_refusals {
+        return Err(JsValue::from_str("device-loss refusal presented a frame"));
+    }
+    Ok(format!("unsubmitted=reusable busy=refused drop=retired_after_completion presented_a={presented_a} presented_b={presented_b} timeout=refused loss=priority refusal_presents=0"))
 }
 
 #[cfg(test)]
@@ -484,7 +1074,10 @@ fn install_dom_events(host: &Rc<RefCell<WebOrtet>>) -> Result<(), JsValue> {
             let Some(event) = event.dyn_ref::<PointerEvent>() else {
                 return;
             };
-            let _ = host.borrow().canvas.focus();
+            // Focusing synchronously invokes our focus listener, which needs
+            // a mutable host borrow of its own.
+            let canvas = { host.borrow().canvas.clone() };
+            let _ = canvas.focus();
             {
                 let mut state = host.borrow_mut();
                 state.cursor = state.pointer_position(event);
@@ -497,7 +1090,7 @@ fn install_dom_events(host: &Rc<RefCell<WebOrtet>>) -> Result<(), JsValue> {
                     button: pointer_button(event.button()),
                     state: SessionButtonState::Pressed,
                     modifiers,
-                }) == Some(true)
+                }).capture == Some(true)
                 {
                     state.capture_pointer(event.pointer_id());
                 }
@@ -571,17 +1164,32 @@ fn install_dom_events(host: &Rc<RefCell<WebOrtet>>) -> Result<(), JsValue> {
                 state.modifiers = modifiers_from_key(event);
                 let modifiers = state.modifiers;
                 let key = session_key(event.key());
+                let text = match &key {
+                    SessionKey::Character(value) => Some(value.clone()),
+                    SessionKey::Space => Some(" ".to_owned()),
+                    _ => None,
+                };
                 let scroll = scroll_key(&key, modifiers.shift);
-                state.dispatch_input(SessionInput::Key {
+                let result = state.dispatch_input(SessionInput::Key {
                     key,
                     state: SessionButtonState::Pressed,
                     modifiers,
                     repeat: event.repeat(),
                 });
-                if let Some(scroll) = scroll
-                    && state.session.scroll_for_key(scroll)
-                {
+                let mut text_handled = false;
+                if !event.is_composing() && !modifiers.meta && !(modifiers.control && !modifiers.alt) {
+                    if let Some(text) = text {
+                        if text.chars().all(|c| !c.is_control()) {
+                            text_handled = state.dispatch_input(SessionInput::KeyboardText(text)).effect.is_handled();
+                        }
+                    }
+                }
+                let scrolled = result.effect.allows_default_scroll(result.editable)
+                    && scroll.is_some_and(|scroll| state.session.scroll_for_key(scroll));
+                if result.effect.is_handled() || text_handled || (result.editable && scroll.is_some()) || scrolled {
                     event.prevent_default();
+                }
+                if scrolled {
                     state.render();
                 }
             }

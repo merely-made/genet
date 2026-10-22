@@ -1,0 +1,37 @@
+[
+  {
+    "name": "netrender",
+    "version": "0.1.2",
+    "source": "git+https://github.com/merely-made/netrender.git?rev=c74b7cb28090c28b1c6d80b08dcdea18aff48d3e#c74b7cb28090c28b1c6d80b08dcdea18aff48d3e"
+  },
+  {
+    "name": "netrender-vello",
+    "version": "0.11.0",
+    "source": "git+https://github.com/mark-ik/vello?rev=2eae6243881d5b24c984d5ee35dde509ca5db782#2eae6243881d5b24c984d5ee35dde509ca5db782"
+  },
+  {
+    "name": "netrender_device",
+    "version": "0.1.2",
+    "source": "git+https://github.com/merely-made/netrender.git?rev=c74b7cb28090c28b1c6d80b08dcdea18aff48d3e#c74b7cb28090c28b1c6d80b08dcdea18aff48d3e"
+  },
+  {
+    "name": "paint_list_api",
+    "version": "0.1.2",
+    "source": "git+https://github.com/merely-made/netrender.git?rev=c74b7cb28090c28b1c6d80b08dcdea18aff48d3e#c74b7cb28090c28b1c6d80b08dcdea18aff48d3e"
+  },
+  {
+    "name": "paint_list_render",
+    "version": "0.1.2",
+    "source": "git+https://github.com/merely-made/netrender.git?rev=c74b7cb28090c28b1c6d80b08dcdea18aff48d3e#c74b7cb28090c28b1c6d80b08dcdea18aff48d3e"
+  },
+  {
+    "name": "vello_encoding",
+    "version": "0.11.0",
+    "source": "git+https://github.com/mark-ik/vello?rev=2eae6243881d5b24c984d5ee35dde509ca5db782#2eae6243881d5b24c984d5ee35dde509ca5db782"
+  },
+  {
+    "name": "vello_shaders",
+    "version": "0.11.0",
+    "source": "git+https://github.com/mark-ik/vello?rev=2eae6243881d5b24c984d5ee35dde509ca5db782#2eae6243881d5b24c984d5ee35dde509ca5db782"
+  }
+]

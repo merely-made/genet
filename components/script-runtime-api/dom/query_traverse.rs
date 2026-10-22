@@ -29,80 +29,81 @@ impl<E: ScriptEngine> NativeFn<E> for RemoveAttribute {
     }
 }
 
-/// `__matches(element, selector)` → `"true"`/`"false"`.
+/// `__matches(element, selector, htmlDocument)` → `"true"`/`"false"`, or
+/// `"syntax:..."` for an invalid selector list.
 pub(crate) struct Matches;
 impl<E: ScriptEngine> NativeFn<E> for Matches {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
         let el = cx.arg(0);
+        let sel_v = cx.arg(1);
+        let sel = cx.value_to_string(&sel_v)?;
+        let selectors = match crate::selector::parse(&sel) {
+            Ok(selectors) => selectors,
+            Err(error) => return cx.make_string(&format!("syntax:{error}")),
+        };
         let Some(id) = cx.owned_node(&el)? else {
             return cx.make_string("false");
         };
-        let sel_v = cx.arg(1);
-        let sel = cx.value_to_string(&sel_v)?;
-        let matched = id.with_dom(|dom| crate::selector::parse(&sel).matches(dom, id.id()));
+        let html_v = cx.arg(2);
+        let html = cx.value_to_string(&html_v)? == "true";
+        let matched = id.with_dom(|dom| crate::selector::matches(&selectors, dom, id.id(), html));
         cx.make_string(if matched { "true" } else { "false" })
     }
 }
 
-/// `__querySelector(scope, selector)` → the first matching descendant's reflector,
-/// or `null`. `scope` is an element or the document.
+/// `__querySelector(scope, selector, htmlDocument)` → the first matching
+/// descendant's reflector, `null`, or a `syntax:` error string.
 pub(crate) struct QuerySelector;
 impl<E: ScriptEngine> NativeFn<E> for QuerySelector {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
         let scope = cx.arg(0);
+        let sel_v = cx.arg(1);
+        let sel = cx.value_to_string(&sel_v)?;
+        let selectors = match crate::selector::parse(&sel) {
+            Ok(selectors) => selectors,
+            Err(error) => return cx.make_string(&format!("syntax:{error}")),
+        };
         let Some(id) = cx.owned_node(&scope)? else {
             return Ok(cx.make_null());
         };
-        let sel_v = cx.arg(1);
-        let sel = cx.value_to_string(&sel_v)?;
-        match id.with_dom(|dom| crate::selector::parse(&sel).query_first(dom, id.id())) {
+        let html_v = cx.arg(2);
+        let html = cx.value_to_string(&html_v)? == "true";
+        match id.with_dom(|dom| crate::selector::query_first(&selectors, dom, id.id(), html)) {
             Some(node) => reflect_pinned::<E>(cx, node.raw() as u64),
             None => Ok(cx.make_null()),
         }
     }
 }
 
-/// `__querySelectorAllCount(scope, selector)` → match count (as a string). Paired
-/// with `__querySelectorAllItem`, the count/item pattern used elsewhere.
-pub(crate) struct QuerySelectorAllCount;
-impl<E: ScriptEngine> NativeFn<E> for QuerySelectorAllCount {
+/// `__querySelectorAll(scope, selector, htmlDocument, append)` computes one
+/// static snapshot. All reflectors are materialized before calling script, so
+/// script-side wrapping and mutation cannot change later snapshot members.
+pub(crate) struct QuerySelectorAll;
+impl<E: ScriptEngine> NativeFn<E> for QuerySelectorAll {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
         let scope = cx.arg(0);
-        let Some(id) = cx.owned_node(&scope)? else {
-            return cx.make_string("0");
-        };
         let sel_v = cx.arg(1);
         let sel = cx.value_to_string(&sel_v)?;
-        let n = id.with_dom(|dom| crate::selector::parse(&sel).query_all(dom, id.id()).len());
-        cx.make_string(&n.to_string())
-    }
-}
-
-/// `__querySelectorAllItem(scope, selector, i)` → the i-th match's reflector, or
-/// `undefined`.
-pub(crate) struct QuerySelectorAllItem;
-impl<E: ScriptEngine> NativeFn<E> for QuerySelectorAllItem {
-    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
-        let scope = cx.arg(0);
-        let Some(id) = cx.owned_node(&scope)? else {
-            return Ok(cx.undefined());
+        let selectors = match crate::selector::parse(&sel) {
+            Ok(selectors) => selectors,
+            Err(error) => return cx.make_string(&format!("syntax:{error}")),
         };
-        let sel_v = cx.arg(1);
-        let sel = cx.value_to_string(&sel_v)?;
-        let i_v = cx.arg(2);
-        let i = cx
-            .value_to_string(&i_v)?
-            .parse::<usize>()
-            .unwrap_or(usize::MAX);
-        match id.with_dom(|dom| {
-            crate::selector::parse(&sel)
-                .query_all(dom, id.id())
-                .get(i)
-                .copied()
-        }) {
-            Some(node) => reflect_pinned::<E>(cx, node.raw() as u64),
-            None => Ok(cx.undefined()),
+        let Some(id) = cx.owned_node(&scope)? else {
+            return cx.make_string("ok");
+        };
+        let html_v = cx.arg(2);
+        let html = cx.value_to_string(&html_v)? == "true";
+        let append = cx.arg(3);
+        let nodes = id.with_dom(|dom| crate::selector::query_all(&selectors, dom, id.id(), html));
+        let mut reflectors = Vec::with_capacity(nodes.len());
+        for node in nodes {
+            reflectors.push(reflect_pinned::<E>(cx, node.raw() as u64)?);
         }
+        let this = cx.undefined();
+        for reference in reflectors {
+            E::call_from_call(cx, &append, &this, &[reference])?;
+        }
+        cx.make_string("ok")
     }
 }
 

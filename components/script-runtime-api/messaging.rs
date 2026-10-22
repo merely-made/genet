@@ -125,7 +125,9 @@ const MESSAGING_BOOTSTRAP: &str = r#"
       // and let the host route it by port id.
       var payload = globalThis.__scSerialize(message, transfer);
       var minted = globalThis.__portTakePending();
-      globalThis.__portForward(peer._remote, payload, minted.join(','));
+      if (globalThis.__portForward(peer._remote, payload, minted.join(',')) === '0') {
+        throw new DOMException('Worker message queue is full or closed.', 'QuotaExceededError');
+      }
       return;
     }
     var data = globalThis.__structuredClone(message, transfer);

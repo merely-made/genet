@@ -11,159 +11,222 @@
 use super::*;
 
 /// One test262 outcome.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum T262 {
     Pass,
     Fail,
     Skip,
+    Unsupported,
+    Error,
 }
 
-/// Run one test262 test on engine `E` and classify it.
-///
-/// **module** (`flags: [module]`) installs the harness preamble as a script, then
-/// evaluates the test as a module (imports resolved against the test's directory).
-/// Otherwise it assembles (harness + includes + test) for each strict variant and
-/// evals. A positive test passes iff it does not throw; a negative test passes iff it
-/// throws an error of the expected type (matched against the thrown value's toString).
-/// `async` tests report completion through `$DONE`; `module` tests run as ES modules.
+/// Run every required variant through the shared routing and outcome policy.
 pub(crate) fn run_262<E: ScriptEngine>(
     hns: &test262::Harness,
     test_src: &str,
     meta: &test262::Test262Meta,
     path: &Path,
 ) -> T262 {
-    if meta.flags.r#async {
-        return run_262_async::<E>(hns, test_src, meta);
-    }
-    if meta.flags.module {
-        return run_262_module::<E>(hns, test_src, meta, path);
-    }
-    let negative = meta.negative.as_ref();
-    for &strict in &test262::strict_variants(&meta.flags) {
-        let Ok(script) = hns.assemble(test_src, meta, strict) else {
-            return T262::Skip; // a missing include file
-        };
-        // Ok(()) = ran without throwing; Err(desc) = threw, with the error's toString.
-        let outcome = std::panic::catch_unwind(AssertUnwindSafe(|| -> Result<(), String> {
-            let mut rt = script_runtime_api::Runtime::<E>::new().map_err(|_| String::new())?;
-            match rt.eval(&script) {
-                Ok(_) => Ok(()),
-                Err(e) => Err(rt.describe_error(&e)),
-            }
+    let Ok(preamble) = hns.preamble(meta) else {
+        return T262::Error; // missing harness include is infrastructure failure
+    };
+    for route in test262::body_routes(&meta.flags) {
+        let observation = std::panic::catch_unwind(AssertUnwindSafe(|| {
+            observe_262::<E>(&preamble, test_src, route, path,
+                meta.negative.as_ref().is_some_and(|n| n.error_type == "Test262Error"))
         }));
-        let ran = match outcome {
-            Ok(r) => r,
-            Err(_) => return T262::Fail, // the engine panicked on this source
+        let observation = match observation {
+            Ok(value) => value,
+            Err(_) => return T262::Error,
         };
-        let ok = match (negative, ran) {
-            (None, Ok(())) => true,     // positive: must not throw
-            (None, Err(_)) => false,    // positive: threw
-            (Some(_), Ok(())) => false, // negative: must throw
-            (Some(neg), Err(desc)) => negative_matches(&desc, neg), // negative: right type
+        if std::env::var_os("GENET_TEST262_DIAGNOSTICS").is_some() {
+            eprintln!("test262 {} {:?}: {:?}", path.display(), route, observation);
+        }
+        let result = match test262::classify(meta.negative.as_ref(), &observation) {
+            test262::Outcome::Pass => T262::Pass,
+            test262::Outcome::Fail => T262::Fail,
+            test262::Outcome::Unsupported => T262::Unsupported,
+            test262::Outcome::Error => T262::Error,
         };
-        if !ok {
-            return T262::Fail;
+        if result != T262::Pass {
+            return result;
         }
     }
     T262::Pass
 }
 
-/// Whether a thrown error's description satisfies a `negative:` expectation. Both
-/// engines name the JS constructor (e.g. "TypeError") in the thrown value's `toString`;
-/// Nova additionally reports a parse failure as the literal "parse error", so a
-/// parse-phase negative also matches that.
-pub(crate) fn negative_matches(desc: &str, neg: &test262::Negative) -> bool {
-    desc.contains(&neg.error_type)
-        || (matches!(neg.phase.as_str(), "parse" | "early") && desc.contains("parse error"))
-}
-
-/// Module test: evaluate the harness preamble as a sloppy script (so its globals
-/// land on `globalThis`), then run the test as a module. Imports resolve against the
-/// importing file's directory (the entry module's referrer is its own path).
-pub(crate) fn run_262_module<E: ScriptEngine>(
-    hns: &test262::Harness,
+/// Set up the harness separately from the body so setup failures cannot satisfy
+/// a negative test. The body uses the engines' phase and native-error evidence.
+fn observe_262<E: ScriptEngine>(
+    preamble: &str,
     test_src: &str,
-    meta: &test262::Test262Meta,
+    route: test262::BodyRoute,
     path: &Path,
-) -> T262 {
-    let Ok(preamble) = hns.preamble(meta) else {
-        return T262::Skip; // a missing include file
+    track_harness_error: bool,
+) -> test262::Observation {
+    use test262::{BodyRoute, Observation};
+    let Ok(mut rt) = script_runtime_api::Runtime::<E>::new() else {
+        return Observation::SetupError;
     };
-    let negative = meta.negative.is_some();
-    let base = path.to_string_lossy().into_owned();
-    let test_src = test_src.to_string();
-    let outcome = std::panic::catch_unwind(AssertUnwindSafe(move || {
-        let Ok(mut rt) = script_runtime_api::Runtime::<E>::new() else {
-            return true;
-        };
-        if rt.eval(&preamble).is_err() {
-            return true; // the harness itself failed to load
+    let completion = match route {
+        BodyRoute::Script { completion, .. } | BodyRoute::Module { completion } => completion,
+    };
+    if completion {
+        // The harness may print a diagnostic, but print is not completion authority.
+        if rt.eval("globalThis.print=function(_s){};").is_err() {
+            return Observation::SetupError;
         }
-        let mut resolve = |specifier: &str, referrer: &str| -> Option<(String, String)> {
-            let target = Path::new(referrer).parent()?.join(specifier);
-            let src = std::fs::read_to_string(&target).ok()?;
-            Some((target.to_string_lossy().into_owned(), src))
-        };
-        rt.eval_module(&test_src, &base, &mut resolve).is_err()
-    }));
-    let threw = match outcome {
-        Ok(t) => t,
-        Err(_) => return T262::Fail,
-    };
-    if threw != negative {
-        T262::Fail
-    } else {
-        T262::Pass
     }
+    if !preamble.is_empty() && rt.eval(preamble).is_err() {
+        return Observation::SetupError;
+    }
+    let identity_check = if track_harness_error {
+        match rt.eval(include_str!("test262_error_identity.js")) {
+            Ok(check) => Some(check),
+            Err(_) => return Observation::SetupError,
+        }
+    } else {
+        None
+    };
+    // ScriptEngine::Value is a rooted handle across engine calls. This callable
+    // lives only in Rust; no author-visible global can change its closure state.
+    let completion_poll = if completion {
+        match rt.eval(include_str!("test262_completion.js")) {
+            Ok(poll) => Some(poll),
+            Err(_) => return Observation::SetupError,
+        }
+    } else {
+        None
+    };
+    let resolver_io_error = std::rc::Rc::new(std::cell::Cell::new(false));
+    let pending_module = match route {
+        BodyRoute::Script { strict, .. } => {
+            let source = if strict {
+                format!("\"use strict\";\n{test_src}")
+            } else {
+                test_src.to_string()
+            };
+            let realm = rt.top_realm();
+            let observed = rt.engine_mut().observe_script(realm, &source);
+            if observed.observation != script_engine_api::ExecutionObservation::Completed {
+                return identify_262_error(&mut rt, observed, identity_check.as_ref());
+            }
+            None
+        },
+        BodyRoute::Module { .. } => {
+            let Ok(base_path) = path.canonicalize() else {
+                return Observation::SetupError;
+            };
+            let base = base_path.to_string_lossy();
+            let delayed_error = std::rc::Rc::clone(&resolver_io_error);
+            if !rt.engine_mut().set_owned_module_resolver(Some(Box::new(move |specifier, referrer| {
+                resolve_test_module(specifier, referrer, &delayed_error)
+            }))) {
+                return Observation::Execution(script_engine_api::ExecutionObservation::Unsupported);
+            }
+            let mut resolve = |specifier: &str, referrer: &str| {
+                resolve_test_module(specifier, referrer, &resolver_io_error)
+            };
+            let realm = rt.top_realm();
+            let observed = rt.engine_mut().observe_module(realm, test_src, &base, &mut resolve);
+            if resolver_io_error.get() {
+                return Observation::SetupError;
+            }
+            match observed {
+                script_engine_api::ModuleObservation::Final(result)
+                    if result.observation == script_engine_api::ExecutionObservation::Completed => None,
+                script_engine_api::ModuleObservation::Final(other) =>
+                    return identify_262_error(&mut rt, other, identity_check.as_ref()),
+                script_engine_api::ModuleObservation::Pending(handle) => Some(handle),
+            }
+        },
+    };
+    if completion || pending_module.is_some() {
+        if rt.run_event_loop(1024).is_err() {
+            return Observation::SetupError;
+        }
+    }
+    if resolver_io_error.get() {
+        return Observation::SetupError;
+    }
+    if let Some(pending) = pending_module.as_ref() {
+        let observed = rt.engine_mut().poll_module(pending);
+        if observed.observation != script_engine_api::ExecutionObservation::Completed {
+            return identify_262_error(&mut rt, observed, identity_check.as_ref());
+        }
+    }
+    if completion {
+        let poll = completion_poll.as_ref().expect("async route has poll");
+        let Ok(value) = rt.engine_mut().call_function(poll, poll, &[]) else {
+            return Observation::SetupError;
+        };
+        let Ok(status) = rt.value_to_string(&value) else {
+            return Observation::SetupError;
+        };
+        return match status.as_str() {
+            "1" => Observation::Completed,
+            "2" => Observation::CompletionFailure,
+            "0" => Observation::Incomplete,
+            _ => Observation::SetupError,
+        };
+    }
+    Observation::Completed
 }
 
-/// Async test: the test signals completion through `$DONE`, which the harness's
-/// `doneprintHandle.js` reports via `print`. We shim `print` into a JS buffer, run the
-/// test, drive the event loop to settle promise/timer jobs, then read the buffer back
-/// and scan for the `Test262:AsyncTestComplete` sentinel (absent or `…Failure` = fail).
-///
-/// Re-enabled once per-test worker-subprocess isolation existed: each async test runs
-/// in its own reaped process bounded by `--timeout`, so a non-settling test is a clean
-/// timeout, not the cross-test memory blow-up that forced the earlier in-process revert.
-pub(crate) fn run_262_async<E: ScriptEngine>(
-    hns: &test262::Harness,
-    test_src: &str,
-    meta: &test262::Test262Meta,
-) -> T262 {
-    let Ok(preamble) = hns.preamble(meta) else {
-        return T262::Skip; // a missing include file
-    };
-    let negative = meta.negative.is_some();
-    // `print` is defined before `$DONE` is invoked; `doneprintHandle.js` (in the
-    // preamble) calls it on completion. The host captures `console`, but the test262
-    // async harness uses `print`, so route it into a buffer we can read back.
-    let script = format!(
-        "globalThis.__262log='';globalThis.print=function(s){{__262log+=String(s)+'\\n';}};\n{preamble}{test_src}"
-    );
-    let outcome = std::panic::catch_unwind(AssertUnwindSafe(move || -> bool {
-        let Ok(mut rt) = script_runtime_api::Runtime::<E>::new() else {
-            return true;
+fn identify_262_error<E: ScriptEngine>(
+    rt: &mut script_runtime_api::Runtime<E>,
+    result: script_engine_api::ObservedExecution<E::Value>,
+    identity_check: Option<&E::Value>,
+) -> test262::Observation {
+    use script_engine_api::ExecutionObservation;
+    if let (Some(check), Some(thrown), ExecutionObservation::Failed { phase, .. }) =
+        (identity_check, result.thrown.as_ref(), result.observation)
+    {
+        let Ok(value) = rt.engine_mut().call_function(check, check, std::slice::from_ref(thrown)) else {
+            return test262::Observation::SetupError;
         };
-        if rt.eval(&script).is_err() {
-            return true; // threw synchronously before completing
+        let Ok(marked) = rt.value_to_string(&value) else {
+            return test262::Observation::SetupError;
+        };
+        if std::env::var_os("GENET_TEST262_DIAGNOSTICS").is_some() {
+            eprintln!("test262 private harness identity: {marked}, outcome: {:?}", result.observation);
         }
-        let _ = rt.run_event_loop(1024); // settle promise/timer jobs (breaks when idle)
-        let log = rt
-            .eval("__262log")
-            .ok()
-            .and_then(|v| rt.value_to_string(&v).ok())
-            .unwrap_or_default();
-        let passed =
-            log.contains("Test262:AsyncTestComplete") && !log.contains("Test262:AsyncTestFailure");
-        !passed // threw-style: true = did not pass
-    }));
-    let threw = match outcome {
-        Ok(t) => t,
-        Err(_) => return T262::Fail,
+        if marked == "1" {
+            return test262::Observation::HarnessError { phase };
+        }
+        if marked != "0" {
+            return test262::Observation::SetupError;
+        }
+    }
+    test262::Observation::Execution(result.observation)
+}
+
+fn resolve_test_module(
+    specifier: &str,
+    referrer: &str,
+    io_error: &std::cell::Cell<bool>,
+) -> Option<(String, String)> {
+    let Some(parent) = Path::new(referrer).parent() else {
+        io_error.set(true);
+        return None;
     };
-    if threw != negative {
-        T262::Fail
-    } else {
-        T262::Pass
+    let target = parent.join(specifier);
+    match std::fs::read_to_string(&target) {
+        Ok(source) => match target.canonicalize() {
+            Ok(identity) => Some((identity.to_string_lossy().into_owned(), source)),
+            Err(_) => {
+                io_error.set(true);
+                None
+            },
+        },
+        // A missing import is an authored module-resolution failure. Let the
+        // engine report its phase and native error; missing harness includes
+        // are checked separately before this point.
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(_) => {
+            io_error.set(true);
+            None
+        },
     }
 }
 
@@ -189,13 +252,13 @@ pub(crate) fn run_262_on(
 /// hanging test (the engines cannot be step-metered) kills only this process.
 pub(crate) fn test262_one(args: &Args) {
     use std::io::Write;
-    // A panicking test is caught by run_262's catch_unwind (→ Fail); silence the hook.
+    // A panicking test is caught by run_262's catch_unwind (→ Error); silence the hook.
     panic::set_hook(Box::new(|_| {}));
 
     let t262_root = Path::new(&args.tests_root).join("third_party/test262");
     let hns = match test262::Harness::load(&t262_root.join("harness")) {
         Ok(h) => h,
-        Err(_) => std::process::exit(2), // parent sees no output → counts as skip
+        Err(_) => std::process::exit(2), // parent sees no output → counts as error
     };
     let path = t262_root.join("test").join(&args.subset);
     let Ok(src) = fs::read_to_string(&path) else {
@@ -218,22 +281,35 @@ pub(crate) fn t262_word(t: &T262) -> &'static str {
         T262::Pass => "pass",
         T262::Fail => "fail",
         T262::Skip => "skip",
+        T262::Unsupported => "unsupported",
+        T262::Error => "error",
     }
 }
 
-/// Parse a `<engine> <pass|fail|skip>` line from a worker's output. `None` if the
+/// Parse a worker result line. `None` if the
 /// engine never reported (it hung, or the worker died before reaching it).
 pub(crate) fn parse_engine_result(out: &str, engine: &str) -> Option<T262> {
     for line in out.lines() {
-        if let Some(rest) = line.strip_prefix(engine) {
+        if let Some(rest) = line.strip_prefix(engine).and_then(|s| s.strip_prefix(' ')) {
             return Some(match rest.trim() {
                 "pass" => T262::Pass,
                 "fail" => T262::Fail,
-                _ => T262::Skip,
+                "skip" => T262::Skip,
+                "unsupported" => T262::Unsupported,
+                "error" => T262::Error,
+                _ => return None,
             });
         }
     }
     None
+}
+
+fn parse_worker_results(out: &str) -> Option<(T262, T262)> {
+    let lines: Vec<_> = out.lines().collect();
+    if lines.len() != 2 || !lines[0].starts_with("boa ") || !lines[1].starts_with("nova ") {
+        return None;
+    }
+    Some((parse_engine_result(lines[0], "boa")?, parse_engine_result(lines[1], "nova")?))
 }
 
 pub(crate) fn is_262_test(p: &Path) -> bool {
@@ -287,6 +363,10 @@ pub(crate) fn test262_cmd(args: &Args) {
     }
     let mut files = Vec::new();
     collect_262(&subset_dir, &mut files);
+    if files.is_empty() {
+        eprintln!("test262 subset contains no runnable tests: {}", subset_dir.display());
+        std::process::exit(2);
+    }
     let test_root = t262_root.join("test");
 
     // Boa and Nova cannot be step-metered (eval_bounded is unbounded for both), so a
@@ -306,12 +386,15 @@ pub(crate) fn test262_cmd(args: &Args) {
         boa_only: u64,
         nova_only: u64,
         skipped: u64,
+        unsupported: u64,
+        error: u64,
         timeout: u64,
         worklist: Vec<String>,
         timeouts: Vec<String>,
+        excluded: Vec<(String, T262, T262)>,
     }
 
-    let jobs = std::thread::available_parallelism().map_or(4, |n| n.get());
+    let jobs = args.jobs;
     let verbose = args.verbose;
     let test_root = test_root.as_path();
     let files = &files;
@@ -361,21 +444,22 @@ pub(crate) fn test262_cmd(args: &Args) {
                             .stderr(std::process::Stdio::null())
                             .spawn();
                         let Ok(mut child) = spawned else {
-                            t.skipped += 1;
+                            t.error += 1;
+                            t.excluded.push((name, T262::Error, T262::Error));
                             continue;
                         };
 
                         let start = std::time::Instant::now();
-                        let timed_out = loop {
+                        let (timed_out, status) = loop {
                             match child.try_wait() {
-                                Ok(Some(_)) => break false,
+                                Ok(Some(status)) => break (false, Some(status)),
                                 Ok(None) => {},
-                                Err(_) => break false,
+                                Err(_) => break (false, None),
                             }
                             if start.elapsed() >= test_timeout {
                                 let _ = child.kill();
                                 let _ = child.wait();
-                                break true;
+                                break (true, None);
                             }
                             std::thread::sleep(std::time::Duration::from_millis(10));
                         };
@@ -397,16 +481,28 @@ pub(crate) fn test262_cmd(args: &Args) {
                             t.timeouts.push(format!("{name} ({eng})"));
                             continue;
                         }
-                        let (b, n) = match (boa, nova) {
-                            (Some(b), Some(n)) => (b, n),
-                            (Some(b), None) => (b, T262::Fail), // nova crashed mid-test
-                            (None, Some(n)) => (T262::Fail, n), // boa crashed mid-test
-                            (None, None) => {
-                                t.skipped += 1; // worker produced nothing (load/early crash)
+                        if !status.is_some_and(|status| status.success()) {
+                            t.error += 1;
+                            t.excluded.push((name, boa.unwrap_or(T262::Error), nova.unwrap_or(T262::Error)));
+                            continue;
+                        }
+                        let (b, n) = match parse_worker_results(&out) {
+                            Some(pair) => pair,
+                            None => {
+                                t.error += 1;
+                                t.excluded.push((name, boa.unwrap_or(T262::Error), nova.unwrap_or(T262::Error)));
                                 continue;
                             },
                         };
                         match (b, n) {
+                            (T262::Error, _) | (_, T262::Error) => {
+                                t.error += 1;
+                                t.excluded.push((name, b, n));
+                            },
+                            (T262::Unsupported, _) | (_, T262::Unsupported) => {
+                                t.unsupported += 1;
+                                t.excluded.push((name, b, n));
+                            },
                             (T262::Skip, _) | (_, T262::Skip) => t.skipped += 1,
                             (T262::Pass, T262::Pass) => t.both_pass += 1,
                             (T262::Fail, T262::Fail) => t.both_fail += 1,
@@ -432,9 +528,12 @@ pub(crate) fn test262_cmd(args: &Args) {
             total.boa_only += t.boa_only;
             total.nova_only += t.nova_only;
             total.skipped += t.skipped;
+            total.unsupported += t.unsupported;
+            total.error += t.error;
             total.timeout += t.timeout;
             total.worklist.extend(t.worklist);
             total.timeouts.extend(t.timeouts);
+            total.excluded.extend(t.excluded);
         }
         total
     });
@@ -443,15 +542,25 @@ pub(crate) fn test262_cmd(args: &Args) {
     nova_worklist.sort();
     let mut timeouts = tally.timeouts;
     timeouts.sort();
+    let mut excluded = tally.excluded;
+    excluded.sort_by(|a, b| a.0.cmp(&b.0));
+    assert_eq!(
+        tally.both_pass + tally.both_fail + tally.boa_only + tally.nova_only +
+        tally.timeout + tally.skipped + tally.unsupported + tally.error,
+        files.len() as u64,
+        "every discovered test262 file must have exactly one accounted outcome",
+    );
     println!(
         "\ntest262 compare [{subset_label}]: both-pass={} both-fail={} boa-only={} (Nova gap) \
-         nova-only={} timeout={} skipped={} (module/async/missing)",
+         nova-only={} timeout={} skipped={} unsupported-excluded={} error-excluded={}",
         tally.both_pass,
         tally.both_fail,
         tally.boa_only,
         tally.nova_only,
         tally.timeout,
         tally.skipped,
+        tally.unsupported,
+        tally.error,
     );
     if !timeouts.is_empty() {
         println!(
@@ -465,6 +574,21 @@ pub(crate) fn test262_cmd(args: &Args) {
         }
         if timeouts.len() > 40 {
             println!("  … and {} more", timeouts.len() - 40);
+        }
+    }
+    if !excluded.is_empty() {
+        println!(
+            "\nExcluded outcomes (test-level; boa and nova preserved) — {} test(s):",
+            excluded.len()
+        );
+        for (name, boa, nova) in excluded.iter().take(40) {
+            println!("  {name} boa={} nova={}", t262_word(boa), t262_word(nova));
+        }
+        if excluded.len() > 40 {
+            println!(
+                "  … and {} more in the worklist artifact",
+                excluded.len() - 40
+            );
         }
     }
     if !nova_worklist.is_empty() {
@@ -484,13 +608,15 @@ pub(crate) fn test262_cmd(args: &Args) {
         use std::io::Write;
         let mut buf = format!(
             "# test262 worklist [{subset_label}]\n\
-             # both-pass={} both-fail={} boa-only={} nova-only={} timeout={} skipped={}\n",
+             # both-pass={} both-fail={} boa-only={} nova-only={} timeout={} skipped={} unsupported-excluded={} error-excluded={}\n",
             tally.both_pass,
             tally.both_fail,
             tally.boa_only,
             tally.nova_only,
             tally.timeout,
             tally.skipped,
+            tally.unsupported,
+            tally.error,
         );
         buf.push_str(&format!(
             "\n## Timeouts (hang or pathological slowness; engine) — {}\n",
@@ -499,6 +625,17 @@ pub(crate) fn test262_cmd(args: &Args) {
         for t in &timeouts {
             buf.push_str(t);
             buf.push('\n');
+        }
+        buf.push_str(&format!(
+            "\n## Excluded outcomes (test-level; boa and nova preserved) — {}\n",
+            excluded.len()
+        ));
+        for (name, boa, nova) in &excluded {
+            buf.push_str(&format!(
+                "{name} boa={} nova={}\n",
+                t262_word(boa),
+                t262_word(nova)
+            ));
         }
         buf.push_str(&format!(
             "\n## Nova gaps (pass on Boa, fail on Nova) — {}\n",
@@ -514,7 +651,155 @@ pub(crate) fn test262_cmd(args: &Args) {
                 nova_worklist.len(),
                 timeouts.len()
             ),
-            Err(e) => eprintln!("failed to write worklist to {out_path}: {e}"),
+            Err(e) => {
+                eprintln!("failed to write worklist to {out_path}: {e}");
+                std::process::exit(2);
+            },
         }
+    }
+    if tally.error != 0 {
+        eprintln!("test262 encountered {} infrastructure error(s)", tally.error);
+        std::process::exit(2);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fixture(name: &str) -> (PathBuf, test262::Harness) {
+        let dir = std::env::temp_dir().join(format!("genet-t262-{name}-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("assert.js"), "").unwrap();
+        fs::write(dir.join("sta.js"), "").unwrap();
+        fs::write(dir.join("doneprintHandle.js"), include_str!("../../../tests/wpt/tests/third_party/test262/harness/doneprintHandle.js")).unwrap();
+        let harness = test262::Harness::load(&dir).unwrap();
+        (dir, harness)
+    }
+
+    fn check_both(harness: &test262::Harness, path: &Path, source: &str, want: T262) {
+        if !path.exists() {
+            fs::write(path, source).unwrap();
+        }
+        let meta = test262::parse_meta(source);
+        assert_eq!(run_262::<script_engine_boa::BoaEngine>(harness, source, &meta, path), want, "Boa: {source}");
+        assert_eq!(run_262::<script_engine_nova::NovaEngine>(harness, source, &meta, path), want, "Nova: {source}");
+    }
+
+    #[test]
+    fn negative_requires_phase_and_native_error_identity() {
+        let (dir, harness) = fixture("negative");
+        let path = dir.join("entry.js");
+        check_both(&harness, &path,
+            "/*---\nnegative:\n  phase: parse\n  type: SyntaxError\n---*/\nlet = ;", T262::Pass);
+        check_both(&harness, &path,
+            "/*---\nnegative:\n  phase: runtime\n  type: TypeError\n---*/\nthrow new TypeError('expected');", T262::Pass);
+        check_both(&harness, &path,
+            "/*---\nnegative:\n  phase: runtime\n  type: TypeError\n---*/\nlet e = new TypeError(); Object.defineProperty(e, 'message', {get() {throw new Error('getter')}}); e.name='SyntaxError'; e.constructor=SyntaxError; throw e;", T262::Pass);
+        check_both(&harness, &path,
+            "/*---\nnegative:\n  phase: runtime\n  type: TypeError\n---*/\nthrow new SyntaxError('wrong');", T262::Fail);
+        check_both(&harness, &path,
+            "/*---\nnegative:\n  phase: runtime\n  type: SyntaxError\n---*/\nlet = ;", T262::Fail);
+        check_both(&harness, &path,
+            "/*---\nnegative:\n  phase: runtime\n  type: TypeError\n---*/\nthrow {name:'TypeError', constructor:TypeError};", T262::Fail);
+        fs::write(dir.join("sta.js"), include_str!("../../../tests/wpt/tests/third_party/test262/harness/sta.js")).unwrap();
+        let error_harness = test262::Harness::load(&dir).unwrap();
+        check_both(&error_harness, &path,
+            "/*---\nnegative:\n  phase: runtime\n  type: Test262Error\n---*/\nthrow new Test262Error();", T262::Pass);
+        check_both(&error_harness, &path,
+            "/*---\nnegative:\n  phase: runtime\n  type: Test262Error\n---*/\nif (!Object.prototype.hasOwnProperty.call(Test262Error, 'thrower') || Object.getPrototypeOf(Test262Error) !== Function.prototype) throw new TypeError('constructor shape'); Test262Error.thrower();", T262::Pass);
+        check_both(&error_harness, &path,
+            "/*---\nnegative:\n  phase: runtime\n  type: Test262Error\n---*/\nthrow {__proto__: Test262Error.prototype, constructor: Test262Error, name: 'Test262Error'};", T262::Fail);
+        fs::write(dir.join("assert.js"), include_str!("../../../tests/wpt/tests/third_party/test262/harness/assert.js")).unwrap();
+        let assert_harness = test262::Harness::load(&dir).unwrap();
+        check_both(&assert_harness, &path,
+            "/*---\nnegative:\n  phase: runtime\n  type: Test262Error\n---*/\ntry { assert.throws(Test262Error, () => { throw new Test262Error(); }); } catch (_) { throw new TypeError('assert.throws changed'); } throw new Test262Error.prototype.constructor();", T262::Pass);
+    }
+
+    #[test]
+    fn harness_and_completion_failures_do_not_pass() {
+        let (dir, harness) = fixture("completion");
+        let path = dir.join("entry.js");
+        check_both(&harness, &path,
+            "/*---\nincludes: [missing.js]\nnegative:\n  phase: runtime\n  type: TypeError\n---*/\nthrow new TypeError();", T262::Error);
+        fs::write(dir.join("bad.js"), "throw new TypeError('setup');").unwrap();
+        check_both(&harness, &path,
+            "/*---\nincludes: [bad.js]\nnegative:\n  phase: runtime\n  type: TypeError\n---*/\n0;", T262::Error);
+        check_both(&harness, &path, "/*---\nflags: [async]\n---*/\n$DONE();", T262::Pass);
+        check_both(&harness, &path, "/*---\nflags: [async]\n---*/\n0;", T262::Fail);
+        check_both(&harness, &path, "/*---\nflags: [async]\n---*/\n$DONE(new Error('bad'));", T262::Fail);
+    }
+
+    #[test]
+    fn module_linking_and_async_imports_use_module_route() {
+        let (dir, harness) = fixture("module");
+        let path = dir.join("entry.js");
+        fs::write(dir.join("dep.js"), "export const answer = 42;").unwrap();
+        check_both(&harness, &path,
+            "/*---\nflags: [module]\nnegative:\n  phase: resolution\n  type: SyntaxError\n---*/\nimport {missing} from './dep.js';", T262::Pass);
+        check_both(&harness, &path,
+            "/*---\nflags: [module, async]\n---*/\nimport {answer} from './dep.js'; if (answer === 42) $DONE();", T262::Pass);
+        check_both(&harness, &path,
+            "/*---\nflags: [module, async]\n---*/\nimport {answer} from './dep.js';", T262::Fail);
+        check_both(&harness, &path,
+            "/*---\nflags: [module, async]\n---*/\nawait new Promise(resolve => setTimeout(resolve, 0)); $DONE();", T262::Pass);
+        check_both(&harness, &path,
+            "/*---\nflags: [module, async]\n---*/\nPromise.resolve().then(() => import('./dep.js')).then(ns => { if (ns.answer === 42) $DONE(); else $DONE(new Error('bad import')); }, $DONE);", T262::Pass);
+        fs::write(dir.join("realm.js"), "globalThis.realmMarker = 42;").unwrap();
+        fs::write(dir.join("realm-dep.js"), "export const marker = globalThis.realmMarker;").unwrap();
+        let realm_harness = test262::Harness::load(&dir).unwrap();
+        check_both(&realm_harness, &path,
+            "/*---\nflags: [module, async]\nincludes: [realm.js]\n---*/\nPromise.resolve().then(() => import('./realm-dep.js')).then(ns => { if (ns.marker === 42) $DONE(); else $DONE(new Error('wrong realm')); }, $DONE);", T262::Pass);
+        check_both(&harness, &path,
+            "/*---\nflags: [module]\nnegative:\n  phase: runtime\n  type: TypeError\n---*/\nawait new Promise(resolve => setTimeout(resolve, 0)); throw new TypeError('late');", T262::Pass);
+        check_both(&harness, &path,
+            "/*---\nflags: [module]\nnegative:\n  phase: runtime\n  type: TypeError\n---*/\nawait new Promise(resolve => setTimeout(resolve, 0)); throw new SyntaxError('wrong');", T262::Fail);
+    }
+
+    #[test]
+    fn circular_dynamic_import_uses_entry_module_identity() {
+        let (dir, _) = fixture("circular-import");
+        fs::write(dir.join("assert.js"), include_str!("../../../tests/wpt/tests/third_party/test262/harness/assert.js")).unwrap();
+        fs::write(dir.join("verify-dfs-a_FIXTURE.js"), include_str!("../../../tests/wpt/tests/third_party/test262/test/language/module-code/verify-dfs-a_FIXTURE.js")).unwrap();
+        fs::write(dir.join("verify-dfs-b_FIXTURE.js"), include_str!("../../../tests/wpt/tests/third_party/test262/test/language/module-code/verify-dfs-b_FIXTURE.js")).unwrap();
+        let harness = test262::Harness::load(&dir).unwrap();
+        let source = include_str!("../../../tests/wpt/tests/third_party/test262/test/language/module-code/verify-dfs.js");
+        check_both(&harness, &dir.join("verify-dfs.js"), source, T262::Pass);
+    }
+
+    fn check_replaced_resolver<E: ScriptEngine>() {
+        use script_engine_api::{ExecutionObservation, ModuleObservation};
+        let mut runtime = script_runtime_api::Runtime::<E>::new().unwrap();
+        let realm = runtime.top_realm();
+        let entry = "/test262/entry.js";
+        for answer in [1, 2] {
+            assert!(runtime.engine_mut().set_owned_module_resolver(Some(Box::new(
+                move |_, _| Some(("/test262/dep.js".into(), format!("export const answer = {answer};"))),
+            ))));
+            let mut resolve = |_: &str, _: &str| {
+                Some(("/test262/dep.js".into(), format!("export const answer = {answer};")))
+            };
+            let source = format!("import {{answer}} from './dep.js'; if (answer !== {answer}) throw new Error('stale module');");
+            assert!(matches!(
+                runtime.engine_mut().observe_module(realm, &source, entry, &mut resolve),
+                ModuleObservation::Final(script_engine_api::ObservedExecution {
+                    observation: ExecutionObservation::Completed, ..
+                }),
+            ), "replacement must load dependency version {answer}");
+        }
+    }
+
+    #[test]
+    fn replacing_owned_resolver_starts_fresh_graph() {
+        check_replaced_resolver::<script_engine_boa::BoaEngine>();
+        check_replaced_resolver::<script_engine_nova::NovaEngine>();
+    }
+
+    #[test]
+    fn malformed_worker_words_have_no_success_path() {
+        assert_eq!(parse_engine_result("boa pass\nnova banana\n", "nova"), None);
+        assert_eq!(parse_engine_result("boa pass\n", "nova"), None);
+        assert_eq!(parse_worker_results("boa pass\nnova banana\n"), None);
+        assert_eq!(parse_worker_results("boa pass\nboa fail\nnova pass\n"), None);
     }
 }

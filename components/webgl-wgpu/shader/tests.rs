@@ -15,8 +15,8 @@
 //!   stage interface,
 //! * `@group(0) @binding(N)` decorations for the uniform Block
 //!   and any samplers, and
-//! * the narrow [`ProgramReflection`] view that `webgl-wgpu`'s
-//!   programs / draw paths consult.
+//! * the complete [`ProgramReflection`] attribute, uniform, and
+//!   sampler lists that programs and draw paths consult.
 //!
 //! Anything finer-grained (which struct field name `webgl-essl`
 //! lays out the uniform Block with, what naming `wgsl-out`
@@ -39,17 +39,15 @@ fn canonical_essl_pair_translates_through_webgl_essl() {
     assert!(translated.fragment_wgsl.contains("@fragment"));
     assert!(translated.fragment_wgsl.contains("@location(0)"));
     assert_eq!(
-        translated.reflection.position_attribute,
-        VertexAttributeReflection {
+        translated.reflection.attributes,
+        vec![VertexAttributeReflection {
             name: "a_position".to_string(),
             location: 0,
             kind: VertexAttributeKind::Float32x2,
-        }
+        }]
     );
-    assert_eq!(translated.reflection.color_attribute, None);
-    assert_eq!(translated.reflection.texcoord_attribute, None);
-    assert_eq!(translated.reflection.fragment_color_uniform, None);
-    assert_eq!(translated.reflection.fragment_texture_uniform, None);
+    assert!(translated.reflection.uniforms.is_empty());
+    assert!(translated.reflection.samplers.is_empty());
     assert_eq!(
         translated.reflection.fragment_float_precision,
         WebGlPrecision::Medium
@@ -107,6 +105,22 @@ fn canonical_fragment_accepts_float_precision_variants() {
 }
 
 #[test]
+fn fragment_precision_ignores_comment_text_and_other_types() {
+    let fragment = r#"
+precision lowp float;
+/* precision highp float; */
+precision mediump int;
+void main() { gl_FragColor = vec4(1.0); }
+"#;
+    let translated = translate_canonical_essl_pair(CANONICAL_TRIANGLE_VERTEX_SHADER, fragment)
+        .expect("fragment translates");
+    assert_eq!(
+        translated.reflection.fragment_float_precision,
+        WebGlPrecision::Low
+    );
+}
+
+#[test]
 fn canonical_pair_lowers_varying_color_to_wgsl() {
     let vertex = r#"
 attribute vec2 a_position;
@@ -135,14 +149,20 @@ void main() {
     assert!(translated.vertex_wgsl.contains("@location(1)"));
     assert!(translated.fragment_wgsl.contains("@location(0)"));
     assert_eq!(
-        translated.reflection.color_attribute,
-        Some(VertexAttributeReflection {
-            name: "a_color".to_string(),
-            location: 1,
-            kind: VertexAttributeKind::Float32x4,
-        })
+        translated.reflection.attributes,
+        vec![
+            VertexAttributeReflection {
+                name: "a_position".to_string(),
+                location: 0,
+                kind: VertexAttributeKind::Float32x2,
+            },
+            VertexAttributeReflection {
+                name: "a_color".to_string(),
+                location: 1,
+                kind: VertexAttributeKind::Float32x4,
+            },
+        ]
     );
-    assert_eq!(translated.reflection.texcoord_attribute, None);
 }
 
 #[test]
@@ -161,15 +181,16 @@ void main() {
     assert!(translated.fragment_wgsl.contains("@group(0)"));
     assert!(translated.fragment_wgsl.contains("@binding(0)"));
     assert_eq!(
-        translated.reflection.fragment_color_uniform,
-        Some(UniformReflection {
+        translated.reflection.uniforms,
+        vec![UniformReflection {
             name: "u_color".to_string(),
             binding: 0,
             kind: UniformKind::Float32x4,
             member_index: 0,
             block_offset: 0,
             block_size: 16,
-        })
+            matrix_stride: None,
+        }]
     );
 }
 
@@ -198,28 +219,32 @@ void main() {
     assert!(translated.vertex_wgsl.contains("@location(1)"));
     assert!(translated.fragment_wgsl.contains("@group(0)"));
     // Uniform Block reserves @binding(0); image binds at (1),
-    // sampler at (2). The narrow reflection carries the image
-    // binding; pipeline.rs derives the sampler one by `+1`.
+    // sampler at (2).
     assert!(translated.fragment_wgsl.contains("@binding(1)"));
     assert!(translated.fragment_wgsl.contains("@binding(2)"));
     assert_eq!(
-        translated.reflection.texcoord_attribute,
-        Some(VertexAttributeReflection {
-            name: "a_uv".to_string(),
-            location: 1,
-            kind: VertexAttributeKind::Float32x2,
-        })
+        translated.reflection.attributes,
+        vec![
+            VertexAttributeReflection {
+                name: "a_position".to_string(),
+                location: 0,
+                kind: VertexAttributeKind::Float32x2,
+            },
+            VertexAttributeReflection {
+                name: "a_uv".to_string(),
+                location: 1,
+                kind: VertexAttributeKind::Float32x2,
+            },
+        ]
     );
     assert_eq!(
-        translated.reflection.fragment_texture_uniform,
-        Some(UniformReflection {
+        translated.reflection.samplers,
+        vec![SamplerReflection {
             name: "u_texture".to_string(),
-            binding: 1,
+            image_binding: 1,
+            sampler_binding: 2,
             kind: UniformKind::Sampler2D,
-            member_index: 0,
-            block_offset: 0,
-            block_size: 0,
-        })
+        }]
     );
 }
 
@@ -235,8 +260,47 @@ void main() {
     let translated = translate_canonical_essl_pair(vertex, CANONICAL_TRIANGLE_FRAGMENT_SHADER)
         .expect("renamed vertex translates");
 
-    assert_eq!(translated.reflection.position_attribute.name, "position");
-    assert_eq!(translated.reflection.position_attribute.location, 0);
+    assert_eq!(translated.reflection.attributes.len(), 1);
+    assert_eq!(translated.reflection.attributes[0].name, "position");
+    assert_eq!(translated.reflection.attributes[0].location, 0);
+}
+
+#[test]
+fn vertex_without_attributes_translates_with_empty_reflection() {
+    let vertex = "void main() { gl_Position = vec4(0.0, 0.0, 0.0, 1.0); }";
+    let translated = translate_canonical_essl_pair(vertex, CANONICAL_TRIANGLE_FRAGMENT_SHADER)
+        .expect("vertex with no attributes translates");
+
+    assert!(translated.reflection.attributes.is_empty());
+}
+
+#[test]
+fn reordered_vertex_attributes_keep_declared_locations() {
+    let vertex = r#"
+attribute vec4 a_color;
+attribute vec2 a_position;
+void main() {
+    gl_Position = vec4(a_position, 0.0, 1.0) * a_color;
+}
+"#;
+    let translated = translate_canonical_essl_pair(vertex, CANONICAL_TRIANGLE_FRAGMENT_SHADER)
+        .expect("reordered attributes translate");
+
+    assert_eq!(
+        translated.reflection.attributes,
+        vec![
+            VertexAttributeReflection {
+                name: "a_color".to_string(),
+                location: 0,
+                kind: VertexAttributeKind::Float32x4,
+            },
+            VertexAttributeReflection {
+                name: "a_position".to_string(),
+                location: 1,
+                kind: VertexAttributeKind::Float32x2,
+            },
+        ]
+    );
 }
 
 #[test]
@@ -249,14 +313,41 @@ fn cache_key_normalizes_on_source_text() {
     let same = canonical_essl_cache_key(
         CANONICAL_TRIANGLE_VERTEX_SHADER,
         CANONICAL_TRIANGLE_FRAGMENT_SHADER,
-    )
-    .expect("cache key");
+    );
     let again = canonical_essl_cache_key(
         CANONICAL_TRIANGLE_VERTEX_SHADER,
         CANONICAL_TRIANGLE_FRAGMENT_SHADER,
-    )
-    .expect("cache key");
+    );
     assert_eq!(same, again);
+}
+
+#[test]
+fn linked_program_allows_unused_bool_uniform() {
+    let fragment = r#"
+precision mediump float;
+uniform bool u_unused;
+void main() { gl_FragColor = vec4(1.0); }
+"#;
+    let translated = translate_canonical_essl_pair(CANONICAL_TRIANGLE_VERTEX_SHADER, fragment)
+        .expect("unused bool uniform is outside the uniform block");
+    assert!(translated.reflection.uniforms.is_empty());
+    assert_eq!(translated.reflection.uniform_block_size, 0);
+}
+
+#[test]
+fn unsupported_uniform_before_supported_uniform_does_not_shift_member_index() {
+    let fragment = r#"
+precision mediump float;
+uniform bool u_unused;
+uniform float u_alpha;
+void main() { gl_FragColor = vec4(u_alpha); }
+"#;
+    let translated = translate_canonical_essl_pair(CANONICAL_TRIANGLE_VERTEX_SHADER, fragment)
+        .expect("unsupported unused uniform does not disturb linked block members");
+    assert_eq!(translated.reflection.uniforms.len(), 1);
+    assert_eq!(translated.reflection.uniforms[0].name, "u_alpha");
+    assert_eq!(translated.reflection.uniforms[0].member_index, 0);
+    assert_eq!(translated.reflection.uniforms[0].block_offset, 0);
 }
 
 #[test]
@@ -357,12 +448,19 @@ void main() {
     assert!(translated.vertex_wgsl.contains("@location(1)"));
     assert!(translated.fragment_wgsl.contains("@location(0)"));
     assert_eq!(
-        translated.reflection.color_attribute,
-        Some(VertexAttributeReflection {
-            name: "a_color".to_string(),
-            location: 1,
-            kind: VertexAttributeKind::Float32x4,
-        })
+        translated.reflection.attributes,
+        vec![
+            VertexAttributeReflection {
+                name: "a_position".to_string(),
+                location: 0,
+                kind: VertexAttributeKind::Float32x2,
+            },
+            VertexAttributeReflection {
+                name: "a_color".to_string(),
+                location: 1,
+                kind: VertexAttributeKind::Float32x4,
+            },
+        ]
     );
 }
 
@@ -384,12 +482,10 @@ void main() {
 }
 
 #[test]
-fn broadened_fragment_accepts_multiple_uniforms_narrow_picks_first_vec4() {
+fn broadened_fragment_reflects_multiple_uniforms() {
     // The old parser allowed at most one uniform of one shape;
-    // a `vec4 + float` pair would have been rejected. The narrow
-    // [`ProgramReflection`] picks the first vec4 (since only one
-    // `fragment_color_uniform` slot is exposed); webgl-essl's
-    // wider reflection still carries every uniform.
+    // a `vec4 + float` pair would have been rejected. Reflection
+    // carries both members with their distinct Block offsets.
     let fragment = r#"
 precision mediump float;
 uniform vec4 u_color;
@@ -401,15 +497,27 @@ void main() {
     let translated = translate_canonical_essl_pair(CANONICAL_TRIANGLE_VERTEX_SHADER, fragment)
         .expect("multi-uniform fragment translates");
     assert_eq!(
-        translated.reflection.fragment_color_uniform,
-        Some(UniformReflection {
-            name: "u_color".to_string(),
-            binding: 0,
-            kind: UniformKind::Float32x4,
-            member_index: 0,
-            block_offset: 0,
-            block_size: 16,
-        })
+        translated.reflection.uniforms,
+        vec![
+            UniformReflection {
+                name: "u_color".to_string(),
+                binding: 0,
+                kind: UniformKind::Float32x4,
+                member_index: 0,
+                block_offset: 0,
+                block_size: 16,
+                matrix_stride: None,
+            },
+            UniformReflection {
+                name: "u_brightness".to_string(),
+                binding: 0,
+                kind: UniformKind::Float32,
+                member_index: 1,
+                block_offset: 16,
+                block_size: 4,
+                matrix_stride: None,
+            },
+        ]
     );
 }
 
@@ -429,4 +537,87 @@ void main() {
     let translated = translate_canonical_essl_pair(CANONICAL_TRIANGLE_VERTEX_SHADER, fragment)
         .expect("built-in function fragment translates");
     assert!(translated.fragment_wgsl.contains("@location(0)"));
+}
+
+#[test]
+fn linked_uniform_reflection_unions_shared_and_stage_local_uniforms() {
+    let vertex = r#"
+attribute vec2 a_position;
+uniform vec4 u_shared;
+uniform float u_vertex_only;
+void main() {
+    gl_Position = vec4(a_position + u_shared.xy * 0.05 + vec2(u_vertex_only * 0.01), 0.0, 1.0);
+}
+"#;
+    let fragment = r#"
+precision mediump float;
+uniform float u_fragment_only;
+uniform vec4 u_shared;
+void main() {
+    gl_FragColor = vec4(u_shared.rgb, u_fragment_only);
+}
+"#;
+    let translated = translate_canonical_essl_pair(vertex, fragment)
+        .expect("linked uniform declarations translate");
+
+    assert_eq!(
+        translated
+            .reflection
+            .uniforms
+            .iter()
+            .map(|uniform| uniform.name.as_str())
+            .collect::<Vec<_>>(),
+        ["u_shared", "u_vertex_only", "u_fragment_only"]
+    );
+    assert_eq!(
+        translated
+            .reflection
+            .uniforms
+            .iter()
+            .map(|uniform| uniform.block_offset)
+            .collect::<Vec<_>>(),
+        [0, 16, 20]
+    );
+}
+
+#[test]
+fn mat2_followed_by_scalar_reflects_scalar_at_emitted_wgsl_offset() {
+    let fragment = r#"
+precision mediump float;
+uniform mat2 u_matrix;
+uniform float u_alpha;
+void main() {
+    gl_FragColor = vec4(u_matrix[0], u_alpha, 1.0);
+}
+"#;
+    let translated = translate_canonical_essl_pair(CANONICAL_TRIANGLE_VERTEX_SHADER, fragment)
+        .expect("mat2-plus-scalar program translates");
+    let alpha = translated
+        .reflection
+        .uniforms
+        .iter()
+        .find(|uniform| uniform.name == "u_alpha")
+        .expect("u_alpha reflected");
+
+    assert_eq!(alpha.block_offset, 16);
+}
+
+#[test]
+fn linked_uniform_sampler_scalar_name_conflict_is_rejected() {
+    let vertex = r#"
+attribute vec2 a_position;
+uniform float u_conflict;
+void main() {
+    gl_Position = vec4(a_position * u_conflict, 0.0, 1.0);
+}
+"#;
+    let fragment = r#"
+precision mediump float;
+uniform sampler2D u_conflict;
+void main() {
+    gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0);
+}
+"#;
+
+    assert!(translate_canonical_essl_pair(vertex, fragment).is_err());
 }

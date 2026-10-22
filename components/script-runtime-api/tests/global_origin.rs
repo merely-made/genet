@@ -1,7 +1,7 @@
 // Copyright 2026 Mark Alan Boykin
 // SPDX-License-Identifier: MPL-2.0
 use script_engine_api::ScriptEngine;
-use script_runtime_api::{NoScriptLoader, Runtime, ScriptResourceLoader};
+use script_runtime_api::{NoScriptLoader, Runtime, ScriptResourceLoader, WorkerPolicy};
 
 struct Documents;
 impl ScriptResourceLoader for Documents {
@@ -63,12 +63,16 @@ fn navigation<E: ScriptEngine>() {
 }
 fn worker<E: ScriptEngine>() {
     let mut rt = runtime::<E>();
+    rt.set_worker_policy(WorkerPolicy::TrustedCooperative {
+        resource_timeout: std::time::Duration::from_secs(30),
+        shutdown_grace: std::time::Duration::from_millis(500),
+    });
     rt.eval("var answer; var w = new Worker('/worker.js'); w.onmessage = function(e) { answer = e.data; w.terminate(); }; w.onerror = function(e) { answer = 'error: ' + e.message; };").unwrap();
     let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         rt.run_event_loop(100).unwrap();
         rt.pump_workers();
-        rt.run_timers(64, 10000.0);
+        rt.run_timers(64, 10000.0).unwrap();
         let v = rt.eval("answer === 'https://a.test'").unwrap();
         if rt.value_to_string(&v).unwrap() == "true" { break; }
         let debug = rt.eval("String(answer)").unwrap();
@@ -76,8 +80,31 @@ fn worker<E: ScriptEngine>() {
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
 }
+fn secure_context<E: ScriptEngine>() {
+    let mut rt = runtime::<E>();
+    check(&mut rt, "isSecureContext === true && self.isSecureContext === window.isSecureContext");
+    rt.eval("var f = document.createElement('iframe'); f.src = 'https://a.test/child'; f.setAttribute('sandbox', 'allow-scripts'); document.body.append(f);").unwrap();
+    let child = rt.frame_realms(rt.top_realm())[0].1;
+    let v = rt.eval_in_realm(child, "isSecureContext === false").unwrap();
+    assert_eq!(rt.value_to_string(&v).unwrap(), "true");
+    for (url, expected) in [
+        ("http://web-platform.test:8000/x", "false"),
+        ("http://localhost:8000/x", "true"),
+        ("http://127.0.0.1/x", "true"),
+        ("http://[::1]:8000/x", "true"),
+        ("http://a.localhost/x", "true"),
+        ("https://web-platform.test:8443/x", "true"),
+        ("data:text/html,hello", "false"),
+        ("about:blank", "false"),
+    ] {
+        let mut bare = Runtime::<E>::new().unwrap();
+        bare.set_base_url(url).unwrap();
+        let v = bare.eval("isSecureContext").unwrap();
+        assert_eq!(bare.value_to_string(&v).unwrap(), expected, "{url}");
+    }
+}
 macro_rules! both { ($($f:ident => ($b:ident,$n:ident)),*) => { $(
     #[test] fn $b() { $f::<script_engine_boa::BoaEngine>(); }
     #[cfg(target_pointer_width="64")] #[test] fn $n() { $f::<script_engine_nova::NovaEngine>(); }
 )* }; }
-both! { inherited => (inherited_boa,inherited_nova), opaque => (opaque_boa,opaque_nova), replaceable => (replaceable_boa,replaceable_nova), navigation => (navigation_boa,navigation_nova), worker => (worker_boa,worker_nova) }
+both! { inherited => (inherited_boa,inherited_nova), opaque => (opaque_boa,opaque_nova), replaceable => (replaceable_boa,replaceable_nova), navigation => (navigation_boa,navigation_nova), worker => (worker_boa,worker_nova), secure_context => (secure_context_boa,secure_context_nova) }

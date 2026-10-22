@@ -165,9 +165,17 @@ fn run_one(test: &TestCase, args: &Args, ctx: &mut RunCtx<'_>) -> OneOutcome {
     // Build the testharness HTML: a real .html document's contents, or a
     // synthesized wrapper for a `.any.js` / `.window.js` test.
     #[cfg(feature = "netfetch")]
-    let html = if let Some(s) = ctx.server {
-        match net::http_get(&s.doc_url(test.name())) {
-            Some(t) => t,
+    let (html, encoding, final_url) = if let Some(s) = ctx.server {
+        // A `.https.` test is a secure-context page on the https origin, so the
+        // page origin that fetches, XHR and sockets are initiated from follows
+        // the test, not the run.
+        net::set_page_origin(s.origin_for(test.name()));
+        match net::http_get_document(&s.doc_url(test.name()), Default::default()) {
+            Some(t) => (
+                t.document.source,
+                t.document.encoding,
+                Some((t.final_url, t.headers)),
+            ),
             None => {
                 return OneOutcome {
                     record: ActualRecord::with_reason(test, "error", "fetch-load-failed"),
@@ -177,8 +185,9 @@ fn run_one(test: &TestCase, args: &Args, ctx: &mut RunCtx<'_>) -> OneOutcome {
             },
         }
     } else {
-        match build_test_html_disk(test) {
-            TestHtml::Html(h) => h,
+        let (html, encoding) = build_test_html_disk_encoded(test);
+        match html {
+            TestHtml::Html(h) => (h, encoding, None),
             TestHtml::Skip(reason) => {
                 return plain(ActualRecord::with_reason(test, "skip", reason));
             },
@@ -192,7 +201,9 @@ fn run_one(test: &TestCase, args: &Args, ctx: &mut RunCtx<'_>) -> OneOutcome {
         }
     };
     #[cfg(not(feature = "netfetch"))]
-    let html = match build_test_html_disk(test) {
+    let (html, encoding) = build_test_html_disk_encoded(test);
+    #[cfg(not(feature = "netfetch"))]
+    let html = match html {
         TestHtml::Html(h) => h,
         TestHtml::Skip(reason) => {
             return plain(ActualRecord::with_reason(test, "skip", reason));
@@ -218,8 +229,10 @@ fn run_one(test: &TestCase, args: &Args, ctx: &mut RunCtx<'_>) -> OneOutcome {
         #[cfg(feature = "netfetch")]
         if let Some(s) = ctx.server {
             let (ev_tx, ev_rx) = std::sync::mpsc::channel::<net::FetchEvent>();
-            let doc_url = s.doc_url(test.name());
-            let loader = s.loader(&doc_url);
+            let (doc_url, doc_headers) = final_url
+                .clone()
+                .unwrap_or_else(|| (s.doc_url(test.name()), Vec::new()));
+            let loader = s.loader(&doc_url, doc_headers);
             let handler = net::NetFetchHandler::new(ev_tx.clone());
             // The `WebSocket` seam rides the same per-test channel: `wpt serve`
             // hosts ws/wss endpoints, so server mode is where a socket can
@@ -227,17 +240,19 @@ fn run_one(test: &TestCase, args: &Args, ctx: &mut RunCtx<'_>) -> OneOutcome {
             let sockets = net::NetWebSocketHandler::new(ev_tx);
             let completion = net::ChannelCompletion::new(ev_rx);
             if let Some(template) = ctx.nova_template.as_mut() {
-                return template.run_test_with_style_and_ws(
+                return template.run_test_with_encoding_and_style(
                     &html,
                     &loader,
                     Some(&doc_url),
                     Some(Box::new(handler)),
                     Some(Box::new(sockets)),
                     Some(&completion),
+                    None,
                     args.renderer.harness_style(),
+                    encoding,
                 );
             }
-            return harness::run_test_with_style_and_ws(
+            return harness::run_test_with_encoding_and_style(
                 testharness_js,
                 &html,
                 &loader,
@@ -245,30 +260,38 @@ fn run_one(test: &TestCase, args: &Args, ctx: &mut RunCtx<'_>) -> OneOutcome {
                 Some(Box::new(handler)),
                 Some(Box::new(sockets)),
                 Some(&completion),
+                None,
                 args.engine,
                 args.renderer.harness_style(),
+                encoding,
             );
         }
         let doc_url = test.disk_doc_url();
         if let Some(template) = ctx.nova_template.as_mut() {
-            return template.run_test_with_style(
+            return template.run_test_with_encoding_and_style(
                 &html,
                 &disk,
                 Some(&doc_url),
                 None,
                 None,
+                None,
+                None,
                 args.renderer.harness_style(),
+                encoding,
             );
         }
-        harness::run_test_with_style(
+        harness::run_test_with_encoding_and_style(
             testharness_js,
             &html,
             &disk,
             Some(&doc_url),
             None,
             None,
+            None,
+            None,
             args.engine,
             args.renderer.harness_style(),
+            encoding,
         )
     }));
 
@@ -661,6 +684,12 @@ fn run_worker(
     if let Some(base) = server_base {
         command.arg("--server-base").arg(base);
     }
+    if let Some(base) = &args.server_https_base {
+        command.arg("--server-https-base").arg(base);
+    }
+    if let Some(base) = &args.server_h2_base {
+        command.arg("--server-h2-base").arg(base);
+    }
     let Ok(mut child) = command.spawn() else {
         return OneOutcome {
             record: ActualRecord::with_reason(test, "error", "worker-spawn-failed"),
@@ -719,5 +748,129 @@ fn run_worker(
         record: ActualRecord::with_reason(test, "error", "worker-crashed"),
         detail: Some("(worker died without reporting)".to_string()),
         failures: Vec::new(),
+    }
+}
+
+#[cfg(all(test, feature = "netfetch"))]
+mod phase_c_document_encoding_fixtures {
+    use super::*;
+    const HARNESS: &str = r#"
+var tests=[],results=[],complete=[];
+function setup(){}
+function add_result_callback(f){results.push(f)}
+function add_completion_callback(f){complete.push(f)}
+function assert_true(v,m){if(!v)throw new Error(m||'assert_true')}
+function test(f,name){var t={name:name,status:0,message:null};try{f()}catch(e){t.status=1;t.message=String(e)}tests.push(t);for(var i=0;i<results.length;i++)results[i](t)}
+addEventListener('load',function(){for(var i=0;i<complete.length;i++)complete[i](tests.slice(),{status:0,message:null})});
+"#;
+    fn args(engine: harness::Engine) -> Args {
+        Args {
+            command: "testharness".into(),
+            subset: String::new(),
+            tests_root: env!("CARGO_MANIFEST_DIR").into(),
+            verbose: false,
+            engine,
+            renderer: ReftestRenderer::Livery,
+            device_scale: 1.0,
+            server_base: None,
+            server_https_base: None,
+            server_h2_base: None,
+            spawn_server: false,
+            timeout_secs: 30,
+            drive_deadline_secs: 15,
+            harness_gc: true,
+            in_process: true,
+            jobs: 1,
+            test_path: None,
+            worklist_out: None,
+            walk_discovery: true,
+            expectations: None,
+            write_expectations: None,
+            expectation_policy: ExpectationPolicy::Exact,
+            write_table_ledger: None,
+            reference_verification: None,
+            reftest_results: vec![],
+            testharness_results: vec![],
+            write_conformance: None,
+            conformance_baseline: None,
+            allow_incomplete_conformance: false,
+            allow_unpinned_conformance_inputs: false,
+        }
+    }
+    fn test_case(page: &str) -> TestCase {
+        TestCase {
+            path: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(page),
+            url: page.into(),
+            kind: Kind::Testharness,
+            refs: vec![],
+            fuzzy: None,
+            long_timeout: false,
+            from_manifest: false,
+        }
+    }
+    fn run_initial(engine: harness::Engine, template: bool) {
+        let mut server = mockito::Server::new();
+        let blank = server
+            .mock("GET", "/common/blank.html")
+            .with_status(200)
+            .with_body("")
+            .create();
+        let sj = server.mock("GET","/sj.html").with_status(200).with_header("Content-Type","text/html;charset=shift_jis")
+            .with_body(b"<meta charset=utf-8><input id=v value='\x82\xA0'><script>test(function(){assert_true(document.getElementById('v').value==='\\u3042','initial bytes')},'bytes');test(function(){assert_true(document.characterSet==='Shift_JIS','parser-time charset')},'charset')</script>").expect(1).create();
+        let kr = server.mock("GET","/kr.html").with_status(200).with_header("Content-Type","text/html;charset=euc-kr")
+            .with_body(b"<input id=v value='\xB0\xA1'><script>test(function(){assert_true(document.getElementById('v').value==='\\uAC00','initial bytes')},'bytes');test(function(){assert_true(document.characterSet==='EUC-KR','parser-time charset')},'charset')</script>").expect(1).create();
+        let unicode = server.mock("GET","/utf8.html").with_status(200).with_header("Content-Type","text/html;charset=utf-8")
+            .with_body("<meta charset=shift_jis><input id=v value='é'><script>test(function(){assert_true(document.getElementById('v').value==='é','fresh UTF8 bytes')},'bytes');test(function(){assert_true(document.characterSet==='UTF-8','fresh charset')},'charset')</script>").expect(1).create();
+        let server_ctx = Some(net::ServerCtx::connect(server.url()).unwrap());
+        let args = args(engine);
+        let mut nova = template
+            .then(|| harness::NovaHarnessTemplate::new(HARNESS).expect("snapshot template"));
+        let mut ctx = RunCtx {
+            testharness_js: HARNESS,
+            server: &server_ctx,
+            nova_template: nova.as_mut(),
+        };
+        // All sources run even on RED, so one metadata failure cannot mask the
+        // template's subsequent-source reset and actual byte-load behavior.
+        let outcomes = ["sj.html", "kr.html", "utf8.html"]
+            .map(|page| run_one(&test_case(page), &args, &mut ctx));
+        let actual = outcomes
+            .iter()
+            .map(|outcome| {
+                (
+                    outcome.record.status,
+                    outcome.record.subtests,
+                    outcome.failures.clone(),
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            actual
+                .iter()
+                .map(|(status, count, _)| (*status, *count))
+                .collect::<Vec<_>>(),
+            vec![
+                ("pass", Some((2, 2))),
+                ("pass", Some((2, 2))),
+                ("pass", Some((2, 2)))
+            ],
+            "actual run_one initial loader/harness: {actual:?}"
+        );
+        blank.assert();
+        sj.assert();
+        kr.assert();
+        unicode.assert();
+    }
+    #[test]
+    fn phase_c_document_encoding_wpt_run_one_initial_boa() {
+        run_initial(harness::Engine::Boa, false);
+    }
+    #[test]
+    fn phase_c_document_encoding_wpt_run_one_initial_nova() {
+        run_initial(harness::Engine::Nova, false);
+    }
+    #[test]
+    fn phase_c_document_encoding_wpt_run_one_nova_template_sources() {
+        run_initial(harness::Engine::Nova, true);
     }
 }

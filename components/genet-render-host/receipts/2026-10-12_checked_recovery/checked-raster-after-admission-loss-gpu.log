@@ -1,0 +1,72 @@
+warning: patch `netrender-vello v0.11.0 (https://github.com/mark-ik/vello?rev=2eae6243881d5b24c984d5ee35dde509ca5db782#2eae6243)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	/Users/markik/Code/worktrees/vello-release-adoption/research/vello_research
+warning: patch `vello_encoding v0.11.0 (https://github.com/mark-ik/vello?rev=2eae6243881d5b24c984d5ee35dde509ca5db782#2eae6243)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	/Users/markik/Code/worktrees/vello-release-adoption/research/vello_encoding
+warning: patch `vello_shaders v0.11.0 (https://github.com/mark-ik/vello?rev=2eae6243881d5b24c984d5ee35dde509ca5db782#2eae6243)` was not used in the crate graph
+  |
+  = help: perhaps you meant one of the following:
+          	/Users/markik/Code/worktrees/vello-release-adoption/research/vello_shaders
+warning: patch `netrender_text v0.1.1 (/Users/markik/Code/worktrees/netrender-cambium-resource-bridge/netrender_text)` was not used in the crate graph
+warning: patch `netrender_text v0.1.1 (/Users/markik/Code/worktrees/netrender-cambium-resource-bridge/netrender_text)` was not used in the crate graph
+warning: patch `glifo v0.4.0 (/Users/markik/Code/worktrees/vello-release-adoption/glifo)` was not used in the crate graph
+warning: patch `vello_common v0.3.0 (/Users/markik/Code/worktrees/vello-release-adoption/vello_common)` was not used in the crate graph
+warning: patch `vello_cpu v0.3.0 (/Users/markik/Code/worktrees/vello-release-adoption/vello_cpu)` was not used in the crate graph
+warning: patch `vello_gpu v0.3.0 (/Users/markik/Code/worktrees/vello-release-adoption/vello_gpu)` was not used in the crate graph
+help: Check that the patched package version and available features are compatible
+      with the dependency requirements. If the patch has a different version from
+      what is locked in the Cargo.lock file, run `cargo update` to use the new
+      version. This may also occur with an optional dependency that is not enabled.
+    Blocking waiting for file lock on package cache
+     Locking 7 packages to latest compatible versions
+      Adding netrender v0.1.2 (/Users/markik/Code/worktrees/netrender-cambium-resource-bridge/netrender)
+      Adding netrender-vello v0.11.0 (/Users/markik/Code/worktrees/vello-release-adoption/research/vello_research)
+      Adding netrender_device v0.1.2 (/Users/markik/Code/worktrees/netrender-cambium-resource-bridge/netrender_device)
+      Adding paint_list_api v0.1.2 (/Users/markik/Code/worktrees/netrender-cambium-resource-bridge/paint_list_api)
+      Adding paint_list_render v0.1.2 (/Users/markik/Code/worktrees/netrender-cambium-resource-bridge/paint_list_render)
+      Adding vello_encoding v0.11.0 (/Users/markik/Code/worktrees/vello-release-adoption/research/vello_encoding)
+      Adding vello_shaders v0.11.0 (/Users/markik/Code/worktrees/vello-release-adoption/research/vello_shaders)
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling vello_shaders v0.11.0 (/Users/markik/Code/worktrees/vello-release-adoption/research/vello_shaders)
+   Compiling vello_encoding v0.11.0 (/Users/markik/Code/worktrees/vello-release-adoption/research/vello_encoding)
+   Compiling netrender_device v0.1.2 (/Users/markik/Code/worktrees/netrender-cambium-resource-bridge/netrender_device)
+   Compiling netrender-vello v0.11.0 (/Users/markik/Code/worktrees/vello-release-adoption/research/vello_research)
+warning: function `submit` is never used
+  --> /Users/markik/Code/worktrees/netrender-cambium-resource-bridge/netrender_device/src/frame.rs:19:15
+   |
+19 | pub(crate) fn submit(queue: &wgpu::Queue, encoder: wgpu::CommandEncoder) {
+   |               ^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `netrender_device` (lib) generated 1 warning
+   Compiling netrender v0.1.2 (/Users/markik/Code/worktrees/netrender-cambium-resource-bridge/netrender)
+   Compiling genet-render-host v0.2.0 (/Users/markik/Code/worktrees/genet-vello-release-adoption/components/genet-render-host)
+    Finished `test` profile [unoptimized] target(s) in 10.00s
+     Running unittests src/lib.rs (/Users/markik/Code/targets/mere-s2s3/debug/deps/genet_render_host-86de0a0095371ec6)
+
+running 1 test
+test admitted_raster_tests::actual_device_destroy_after_raster_admission_is_typed_and_does_not_panic ... 
+thread 'admitted_raster_tests::actual_device_destroy_after_raster_admission_is_typed_and_does_not_panic' (24466026) panicked at /Users/markik/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wgpu-30.0.1/src/backend/wgpu_core.rs:1965:22:
+wgpu error: Validation Error
+
+Caused by:
+  In Queue::write_buffer
+    Buffer with 'vello.scene' label is invalid
+
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    admitted_raster_tests::actual_device_destroy_after_raster_admission_is_typed_and_does_not_panic
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.14s
+
+error: test failed, to rerun pass `-p genet-render-host --lib`

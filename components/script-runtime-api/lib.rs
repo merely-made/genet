@@ -33,9 +33,13 @@
 //! `docs/2026-05-26_pluggable_engines_testharness_plan.md`.
 
 use std::cell::RefCell;
+use std::collections::VecDeque;
 
 use std::rc::Rc;
 
+pub use genet_scripted_dom::html_encoding::{
+    DocumentEncoding, EncodingConfidence, HtmlDecodeOptions,
+};
 use genet_scripted_dom::{NodeId, ScriptedDom};
 use layout_dom_api::LayoutDom;
 use script_engine_api::{
@@ -75,35 +79,66 @@ impl<T: script_engine_api::CallCx + ?Sized> OwnerResolvedCx for T {}
 
 mod crypto;
 mod dom;
+mod events;
 mod fetch;
+pub mod form_encoding;
+mod form_data;
+mod form_submission;
+pub use form_submission::FormKeyModifiers;
 mod frames;
 mod harness;
 mod messaging;
 pub mod parse;
 mod platform;
+mod policy;
+mod secure_context;
 mod selector;
 mod streams;
 mod structured_clone;
+mod subtle;
 mod text_encoding;
 mod timing;
 mod webgl;
 mod websocket;
 mod worker;
+#[cfg(not(target_arch = "wasm32"))]
+mod worker_process;
 
 pub use crypto::RandomSource;
 pub use dom::markup_insertion::{MarkupState, ReadyState};
 pub use dom::{
     ComputedStyleHandler, CookieProvider, InlineStyleHandler, InlineStyleValueResult,
-    MediaQueryHandler, SelectionHandler, StyleSheetHandler, StyleSheetImportOwner,
+    ElementMetrics, GeometryHandler, IntersectionReport, IntersectionRequest, MediaQueryHandler, SelectionHandler, StyleSheetHandler, StyleSheetImportOwner,
     StyleSheetImportRule, StyleSheetMutationError, StyleSheetRule, StyleSheetRuleKind,
 };
 pub use fetch::{FetchHandler, FetchOutcome, FetchRequest};
 pub use harness::{HarnessCompletion, TestResult};
 pub use parse::{NoScriptLoader, ParseReport, ParserScriptLoader};
+pub use timing::{SharedClock, TimeResolution};
 pub use platform::StorageProvider;
 pub use webgl::{WebGlFactory, WebGlHandler};
 pub use websocket::{WebSocketHandler, WebSocketRequest};
-pub use worker::ScriptResourceLoader;
+pub use worker::{ScriptResourceLoader, WorkerPolicy, WorkerShutdownReport};
+#[cfg(not(target_arch = "wasm32"))]
+pub use worker_process::{WorkerBackend, WorkerProcessLauncher, run_worker_process};
+
+pub use genet_scripted_dom::{ValidationMessageCatalog, ValidationMessageKind};
+
+/// A host-native request to show validation feedback for a control. It is not
+/// inserted into the authored DOM or exposed to page script.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ValidationReport {
+    pub realm: RealmId,
+    pub node: NodeId,
+    pub message: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct PendingValidationReport {
+    pub(crate) sequence: u64,
+    pub(crate) node: NodeId,
+    pub(crate) message: String,
+}
 
 /// Installation errors preserve the existing main-realm engine error.
 #[derive(Debug)]
@@ -141,6 +176,30 @@ impl<'cx, E: ScriptEngine + 'cx> Surface<'_, 'cx, E> {
         name: &str,
         length: usize,
     ) -> Result<(), SurfaceError<E::Error>> {
+        // These setup-only aliases are captured by trusted bootstrap and then
+        // deleted. Predeclare their flags before a value-only native installer
+        // can create a nonconfigurable property. A refusal aborts registration.
+        if name.starts_with("__webgl_") || matches!(
+            name,
+            "__formFileAllocate"
+                | "__hostFormEdit"
+                | "__formFilesReplace"
+                | "__formFilesSnapshot"
+                | "__formEntrySnapshot"
+                | "__formDataEncode"
+                | "__formControlInfo"
+                | "__formSubmitterCheck"
+                | "__formImplicitDecision"
+                | "__formMeta"
+                | "__formSubmissionPlan"
+                | "__formSubmissionUserValidity"
+                | "__domRegisterHooks"
+        ) {
+            self.eval(&format!(
+                "Object.defineProperty(globalThis, {}, {{value:undefined,writable:true,enumerable:false,configurable:true}})",
+                js_str(name)
+            ))?;
+        }
         match self {
             Self::Engine { engine, realm } if *realm == MAIN_REALM => engine
                 .set_function::<F>(name, length)
@@ -157,11 +216,14 @@ impl<'cx, E: ScriptEngine + 'cx> Surface<'_, 'cx, E> {
 
 /// State the runtime's native callbacks share, stored as the engine's single
 /// host-data slot (`Rc<dyn Any>`). One aggregate so every host object reaches the
-/// same place; grows as host objects are added (the event-loop task queue and
-/// `EventTarget` listeners land here as they graduate from JS bootstraps).
+/// same place; grows as host objects are added (the event-loop task queue
+/// graduates here from its JS bootstrap; `EventTarget` listeners already live in
+/// the agent's `genet-events` registry).
 #[derive(Default)]
 pub struct HostState {
     pub(crate) agent: std::rc::Weak<RefCell<AgentState>>,
+    /// Native `reportValidity()` feedback, drained by the owning user agent.
+    pub(crate) pending_validation_reports: VecDeque<PendingValidationReport>,
     /// `console.log` / `console.error` output, in call order.
     pub console: Vec<String>,
     /// The document (viewport) scroll offset in CSS px, the script side of
@@ -233,6 +295,12 @@ pub struct HostState {
     /// range geometry is empty and the projection goes nowhere. Script remains
     /// the only owner of the selection either way.
     pub selection: Option<std::rc::Rc<dyn SelectionHandler>>,
+    /// The host's layout seam for element geometry (`getBoundingClientRect`,
+    /// `client*` / `offset*` / `scroll*`) and for scrolling the viewport and
+    /// elements. `None` = no layout bound: boxes are empty, metrics are zero and
+    /// the viewport scroll falls back to the deferred
+    /// [`viewport_scroll`](Self::viewport_scroll) field.
+    pub geometry: Option<std::rc::Rc<dyn GeometryHandler>>,
     /// The selected CSS engine's specified-value normalizer for
     /// `element.style`. `None` preserves authored values verbatim.
     pub inline_style: Option<std::rc::Rc<dyn InlineStyleHandler>>,
@@ -259,6 +327,10 @@ pub struct HostState {
     /// Creation-time inherited fallback for about:blank / iframe srcdoc.
     /// `base_url` remains the visible document URL.
     pub about_base_url: Option<String>,
+    /// The initial document's response headers, as the host that loaded it saw
+    /// them (`Runtime::set_document_response_headers`). They seed the document
+    /// policy container; see `policy`.
+    pub(crate) document_response_headers: Vec<(String, String)>,
     document_base_cache: RefCell<DocumentBaseCache>,
     /// `window.localStorage` backing: an ordered key→value store (insertion
     /// order, for `key(n)` / `Object.keys`). The in-memory default (tests / WPT /
@@ -272,24 +344,14 @@ pub struct HostState {
     /// [`Runtime::set_local_storage_provider`]; an `Rc` so the native sink clones it
     /// out before calling (no live `HostState` borrow during the call).
     pub local_storage: Option<std::rc::Rc<dyn StorageProvider>>,
-    /// `window.history` entries: `(serialized state JSON, document URL)`, the
-    /// session history the `platform` surface's `__history*` sinks drive
-    /// (`pushState` / `replaceState` / `state` / `length` / `go`). The current
-    /// entry is [`history_index`](Self::history_index). Seeded with one entry on
-    /// first use. `popstate` / real navigation are not wired (the scripted tier
-    /// has none); the URL + state bookkeeping is correct.
-    pub history: Vec<(String, String)>,
-    /// Index of the current entry in [`history`](Self::history).
-    pub history_index: usize,
-    /// The host's WebGL context factory. `None` = no WebGL support (every
-    /// `__webgl_*` sink no-ops or yields 0 / NO_ERROR, and contexts mint to
-    /// index `-1`). Installed by [`Runtime::set_webgl_factory`]; invoked once
-    /// per `getContext('webgl')` with the canvas drawing-buffer size, the
-    /// result pushed into [`Self::webgl_contexts`].
+    /// The host's WebGL context factory. With no factory, or when the factory
+    /// returns `None`, canvas `getContext('webgl')` returns null. Installed by
+    /// [`Runtime::set_webgl_factory`]; invoked with the canvas drawing-buffer
+    /// size. Only successful results enter [`Self::webgl_contexts`].
     pub webgl_factory: Option<WebGlFactory>,
-    /// Live WebGL contexts, indexed by the registry id the JS context object
-    /// carries (`_ctx`). Each `__webgl_*` sink routes to one of these by its
-    /// leading context-id argument. Grows by one per `getContext('webgl')`.
+    /// Live WebGL contexts, indexed by the id in the JS bootstrap's private
+    /// context brand. Each captured `__webgl_*` sink routes by its leading
+    /// context-id argument. Grows by one per `getContext('webgl')`.
     pub webgl_contexts: Vec<Box<dyn WebGlHandler>>,
     /// Canvas elements that have minted a live drawing context, by raw node id.
     /// A context's registry index means something only in *this* host, and the
@@ -298,8 +360,8 @@ pub struct HostState {
     /// asked for a context carries nothing and adopts like any other element.
     pub canvas_contexts: std::collections::HashSet<u64>,
     /// The host's cryptographically secure random source for `crypto`. `None` =
-    /// the built-in ChaCha20 default (seeded from `std`'s OS-derived hash keys),
-    /// so `getRandomValues` works with no host wiring. Installed by
+    /// the operating system's CSPRNG through `getrandom` on native targets, and
+    /// no source at all on wasm. Installed by
     /// [`Runtime::set_random_source`]; an `Rc` so the native sink clones it out
     /// before calling (no live `HostState` borrow during the call).
     pub random: Option<std::rc::Rc<dyn RandomSource>>,
@@ -307,6 +369,12 @@ pub struct HostState {
     /// Entries hold no script references. Flush releases active buffers;
     /// finalization or runtime teardown removes the remaining metadata.
     pub(crate) text_decoders: text_encoding::DecoderRegistry,
+    /// `CryptoKey` material keyed by wrapper id; the authority on each key's
+    /// extractability and usages. Bytes are zeroised when an entry goes.
+    pub(crate) crypto_keys: subtle::KeyRegistry,
+    /// Whether this realm's environment is a secure context, which decides
+    /// whether its `[SecureContext]` members exist (secure_context.rs).
+    pub(crate) secure_context: secure_context::SecureContext,
     /// The page's resource route for worker scripts, `importScripts` and a
     /// worker `fetch()`. `None` = fall through to [`Self::fetch`]. Installed by
     /// [`Runtime::set_script_resource_loader`]; disk-mode WPT uses it, a hosted
@@ -314,6 +382,11 @@ pub struct HostState {
     pub script_loader: Option<std::rc::Rc<dyn ScriptResourceLoader>>,
     /// Live dedicated workers this agent owns, indexed by the id script holds.
     workers: Vec<worker::WorkerHandle>,
+    /// Required cancellation is the default. Hosts that trust their worker
+    /// scripts must opt into cooperative shutdown explicitly.
+    worker_policy: WorkerPolicy,
+    #[cfg(not(target_arch = "wasm32"))]
+    worker_process_launcher: Option<std::sync::Arc<WorkerProcessLauncher>>,
     /// Host wake sink copied into each worker so an idle/message transition
     /// wakes a sleeping UI event loop.
     pub(crate) worker_wake: Option<std::sync::Arc<dyn Fn() + Send + Sync>>,
@@ -353,7 +426,10 @@ struct DocumentBaseCache {
 impl HostState {
     /// The document URL, or its captured about-document fallback base.
     pub fn fallback_base_url(&self) -> Option<&str> {
-        let is_about = self.base_url.as_deref().and_then(|url| url::Url::parse(url).ok())
+        let is_about = self
+            .base_url
+            .as_deref()
+            .and_then(|url| url::Url::parse(url).ok())
             .is_some_and(|url| url.scheme() == "about" && matches!(url.path(), "blank" | "srcdoc"));
         if is_about {
             self.about_base_url.as_deref().or(self.base_url.as_deref())
@@ -534,11 +610,112 @@ pub struct Runtime<E: ScriptEngine> {
     opaque_roots: OpaqueRootState,
 }
 
+const REALM_TASK_HOOKS: &[&str] = &[
+    "__dispatchHostEvent", "__dispatchTransition", "__dispatchTouch",
+    "__dispatchWheel", "__dispatchAnimation", "__dispatchScriptLoadError", "__dispatchFrameLoad",
+    "__reportListenerException", "__reportScriptException", "__fetchSettle", "__fetchFail",
+    "__fetchStartStream", "__fetchPushChunk", "__fetchClose", "__fetchError",
+    "__fetchPendingCount", "__fetchFailAll",
+    "__moPump", "__ioUpdate", "__websocketOpen", "__websocketMessageText",
+    "__websocketMessageBinary", "__websocketFlushed", "__websocketError",
+    "__websocketClose", "__websocketPending", "__websocketFailAll",
+    "__subtleExposure",
+];
+const AGENT_TASK_HOOKS: &[&str] = &[
+    "__runTimers", "__nextTimerDelay", "__runOneAnimationFrameCallback",
+    "__hasAnimationFrameCallbacks",
+];
+
+fn capture_task_hooks<E: ScriptEngine>(
+    engine: &mut E,
+    realm: RealmId,
+    names: &[&'static str],
+) -> Result<std::collections::BTreeMap<(RealmId, &'static str), Rc<E::Value>>, RealmError> {
+    let mut hooks = std::collections::BTreeMap::new();
+    for &name in names {
+        let source = format!("globalThis.{name}");
+        let value = if realm == MAIN_REALM {
+            engine.eval(&source).map_err(|e| RealmError::Engine(engine.describe_error(&e)))?
+        } else {
+            engine.eval_in_realm(realm, &source)?
+        };
+        hooks.insert((realm, name), Rc::new(value));
+        // The agent's already-retained private state carries the same handles
+        // through ScriptEngineSnapshot. It is absent from authored globals.
+        let hide = if name == "__reportListenerException" { "" } else { "delete globalThis." };
+        let remove = format!(
+            "(function(){{var p=globalThis.__agentTimers.taskHooks||(globalThis.__agentTimers.taskHooks=Object.create(null));\
+             var r=p[{realm}]||(p[{realm}]=Object.create(null));r[{key}]=globalThis.{name};\
+             {hide}{name};}})()",
+            key = js_str(name),
+        );
+        if realm == MAIN_REALM {
+            engine.eval(&remove).map_err(|e| RealmError::Engine(engine.describe_error(&e)))?;
+        } else {
+            engine.eval_in_realm(realm, &remove)?;
+        }
+    }
+    Ok(hooks)
+}
+
+fn restored_task_hooks<E: ScriptEngine>(
+    engine: &mut E,
+    realm: RealmId,
+    names: &[&'static str],
+) -> Result<std::collections::BTreeMap<(RealmId, &'static str), Rc<E::Value>>, E::Error> {
+    let mut hooks = std::collections::BTreeMap::new();
+    for &name in names {
+        let source = format!(
+            "globalThis.__agentTimers.taskHooks[{realm}][{}]",
+            js_str(name),
+        );
+        hooks.insert((realm, name), Rc::new(engine.eval(&source)?));
+    }
+    Ok(hooks)
+}
+
+/// The frame loader installs a realm while the VM is already inside a native
+/// callback. Capture its private entry points before removing setup globals.
+pub(crate) fn capture_task_hooks_from_call<E: ScriptEngine>(
+    cx: &mut E::CallCx<'_>,
+    agent: &Rc<RefCell<AgentState>>,
+    realm: RealmId,
+) -> Result<(), RealmError> {
+    let mut hooks = std::collections::BTreeMap::new();
+    for &name in REALM_TASK_HOOKS {
+        let value = E::eval_from_call(cx, &format!("globalThis.{name}"))?;
+        hooks.insert((realm, name), Rc::new(value) as Rc<dyn std::any::Any>);
+        let hide = if name == "__reportListenerException" { "" } else { "delete globalThis." };
+        let remove = format!(
+            "(function(){{var p=globalThis.__agentTimers.taskHooks||(globalThis.__agentTimers.taskHooks=Object.create(null));\
+             var r=p[{realm}]||(p[{realm}]=Object.create(null));r[{key}]=globalThis.{name};\
+             {hide}{name};}})()",
+            key = js_str(name),
+        );
+        E::eval_from_call(cx, &remove)?;
+    }
+    agent.borrow_mut().task_hooks.extend(hooks);
+    Ok(())
+}
+
 /// Realm-owned state shared with native frame creation. Hosts point back weakly.
 #[derive(Default)]
 pub(crate) struct AgentState {
+    /// The process's shared clock, and its reading when this agent's timer
+    /// queue started (the zero of `run_timers`' `now_ms`).
+    pub(crate) clock: timing::SharedClock,
+    pub(crate) clock_base: f64,
+    /// Type-erased rooted callables, keyed by their creation realm. Frame
+    /// teardown can release them without needing the concrete backend type.
+    pub(crate) task_hooks: std::collections::BTreeMap<(RealmId, &'static str), Rc<dyn std::any::Any>>,
     pub(crate) dom_adoption: dom::adoption::AgentDomState,
+    /// The one listener registry every realm of the agent dispatches through.
+    pub(crate) events: Rc<RefCell<genet_events::Registry>>,
+    /// Allocator for the ids of windows and plain `EventTarget` objects.
+    pub(crate) next_event_target: u64,
     pub(crate) frames: crate::frames::FrameState,
+    pub(crate) validation_message_catalog: ValidationMessageCatalog,
+    pub(crate) next_validation_report_sequence: u64,
     pub(crate) child_host_initializer: Option<Rc<dyn Fn(RealmId, &SharedHost)>>,
     /// Whether a host lets a *top-level* navigation proceed. HTML gives the
     /// user agent the last word on where the top-level browsing context may go,
@@ -687,26 +864,61 @@ fn install_window_proxy_in_realm<E: ScriptEngine>(
     Ok(Some(engine.eval_in_realm(realm, WINDOW_PROXY_BOOTSTRAP)?))
 }
 
+/// Point the engine's `Date` at the shared clock, so `Date.now()` and
+/// `performance` never drift apart (a harness skip moves both).
+fn install_date_source<E: ScriptEngine>(engine: &mut E, clock: &SharedClock) {
+    let clock = clock.clone();
+    engine.set_date_source(Rc::new(move || clock.epoch_now_ms()));
+}
+
 impl<E: ScriptEngine> Runtime<E> {
     /// Construct an engine and install the `Window` host surface on it.
     pub fn new() -> Result<Self, E::Error> {
-        Self::with_scope(GlobalScopeKind::Window)
+        Self::with_clock(SharedClock::process())
+    }
+
+    /// Construct a window runtime over an explicit shared clock: a harness's
+    /// skipping clock, or an embedder's controlled one.
+    pub fn with_clock(clock: SharedClock) -> Result<Self, E::Error> {
+        Self::with_scope(GlobalScopeKind::Window, clock)
     }
 
     /// The same surface with a worker global: no `window`, and a read-only
     /// `self`. Used by [`worker::worker_main`] on the worker thread.
-    pub(crate) fn new_worker() -> Result<Self, E::Error> {
-        Self::with_scope(GlobalScopeKind::Worker)
+    /// The shared clock this runtime reads.
+    pub fn clock(&self) -> SharedClock {
+        self.agent.borrow().clock.clone()
     }
 
-    fn with_scope(scope: GlobalScopeKind) -> Result<Self, E::Error> {
+    /// Milliseconds on the shared clock since this runtime's timer queue
+    /// started: the `now_ms` a host passes to [`run_timers`](Self::run_timers)
+    /// when its timers should follow the shared clock.
+    pub fn clock_elapsed_ms(&self) -> f64 {
+        let agent = self.agent.borrow();
+        agent.clock.now_ms() - agent.clock_base
+    }
+
+    pub(crate) fn new_worker(clock: SharedClock) -> Result<Self, E::Error> {
+        Self::with_scope(GlobalScopeKind::Worker, clock)
+    }
+
+    fn with_scope(
+        scope: GlobalScopeKind,
+        clock: SharedClock,
+    ) -> Result<Self, E::Error> {
         let mut engine = E::new()?;
+        install_date_source(&mut engine, &clock);
         let host: SharedHost = Rc::new(RefCell::new(HostState::default()));
         // The default viewport: the same 800x600 the media-query evaluator
         // already assumes, so a host that never calls `set_viewport_size` still
         // has `innerWidth`/`innerHeight` agree with `matchMedia`.
         host.borrow_mut().viewport_size = (800.0, 600.0);
         let agent = Rc::new(RefCell::new(AgentState::default()));
+        {
+            let mut agent = agent.borrow_mut();
+            agent.clock_base = clock.now_ms();
+            agent.clock = clock;
+        }
         host.borrow_mut().agent = Rc::downgrade(&agent);
         agent.borrow_mut().register(MAIN_REALM, host.clone());
         engine.set_host_data(host.clone());
@@ -753,9 +965,21 @@ impl<E: ScriptEngine> Runtime<E> {
         }
         let timer_state = engine.eval("globalThis.__agentTimers")?;
         let cancel_realm_tasks = engine.eval("globalThis.__agentTimers.cancelRealm")?;
+        let mut task_hooks = capture_task_hooks(&mut engine, MAIN_REALM, REALM_TASK_HOOKS)
+            .map_err(|e| engine.eval(&format!("throw new Error({})", js_str(&e.to_string()))).err().expect("error construction"))?;
+        task_hooks.extend(
+            capture_task_hooks(&mut engine, MAIN_REALM, AGENT_TASK_HOOKS)
+                .map_err(|e| engine.eval(&format!("throw new Error({})", js_str(&e.to_string()))).err().expect("error construction"))?,
+        );
         engine.eval("delete globalThis.__agentTimers")?;
-        agent.borrow_mut().timer_state = Some(Rc::new(timer_state));
-        agent.borrow_mut().cancel_realm_tasks = Some(Rc::new(cancel_realm_tasks));
+        {
+            let mut agent = agent.borrow_mut();
+            agent.timer_state = Some(Rc::new(timer_state));
+            agent.cancel_realm_tasks = Some(Rc::new(cancel_realm_tasks));
+            agent.task_hooks.extend(task_hooks.into_iter().map(|(key, value)| {
+                (key, value as Rc<dyn std::any::Any>)
+            }));
+        }
         host.borrow_mut().worker_spawn = Some(worker::worker_main::<E> as fn(_));
         let mut runtime = Self {
             engine,
@@ -824,6 +1048,40 @@ impl<E: ScriptEngine> Runtime<E> {
         self.agent.borrow().frames.top_realm()
     }
 
+    /// Replace the built-in wording used by `validationMessage` and native
+    /// validation feedback. The catalog is agent-wide, so child realms created
+    /// later observe the same replacement.
+    pub fn set_validation_message_catalog(&mut self, catalog: ValidationMessageCatalog) {
+        self.agent.borrow_mut().validation_message_catalog = catalog;
+    }
+
+    /// Drain pending native validation feedback from every live document realm.
+    /// Reports retain the physical owner realm even when a borrowed method was
+    /// invoked through a wrapper created in another realm.
+    pub fn take_validation_reports(&mut self) -> Vec<ValidationReport> {
+        let top = self.top_realm();
+        let mut hosts = self.child_hosts();
+        if let Ok(host) = self.host_in_realm(top) {
+            hosts.insert(top, host);
+        }
+        let mut reports = Vec::new();
+        for (realm, host) in hosts {
+            let pending = std::mem::take(&mut host.borrow_mut().pending_validation_reports);
+            reports.extend(pending.into_iter().map(|report| {
+                (
+                    report.sequence,
+                    ValidationReport {
+                        realm,
+                        node: report.node,
+                        message: report.message,
+                    },
+                )
+            }));
+        }
+        reports.sort_by_key(|(sequence, _)| *sequence);
+        reports.into_iter().map(|(_, report)| report).collect()
+    }
+
     /// Evaluate in the top-level context's current realm. The engine's plain
     /// `eval` is the bootstrap realm's, which is deliberately not the document's
     /// any more; every internal top-document evaluation goes through here.
@@ -836,6 +1094,83 @@ impl<E: ScriptEngine> Runtime<E> {
                 Ok(value) => Ok(value),
                 Err(error) => Err(self.engine_error(&error.to_string())),
             }
+        }
+    }
+
+    /// Invoke an installation-time rooted bridge. Arguments are minted as JS
+    /// strings, never parsed as source; bridge code converts numeric fields.
+    fn call_task(
+        &mut self,
+        realm: RealmId,
+        name: &'static str,
+        args: &[&str],
+    ) -> Result<E::Value, RealmError> {
+        self.host_in_realm(realm)?;
+        let function = self
+            .agent
+            .borrow()
+            .task_hooks
+            .get(&(realm, name))
+            .cloned()
+            .ok_or(RealmError::Refused("private task hook is unavailable"))?;
+        let function = function
+            .downcast_ref::<E::Value>()
+            .ok_or(RealmError::Refused("private task hook belongs to another engine"))?;
+        let args = args
+            .iter()
+            .map(|value| self.engine.host_string(value))
+            .collect::<Result<Vec<_>, _>>()?;
+        let result = self.engine.call_function(&function, &function, &args);
+        self.flush_host_trace_events();
+        result
+    }
+
+    fn call_task_top(&mut self, name: &'static str, args: &[&str]) -> Result<E::Value, E::Error> {
+        self.call_task(self.top_realm(), name, args)
+            .map_err(|error| self.engine_error(&error.to_string()))
+    }
+
+    fn task_text(&mut self, value: &E::Value) -> Result<String, E::Error> {
+        self.engine.value_to_string(value)
+    }
+
+    fn task_count(&mut self, value: &E::Value) -> Result<usize, E::Error> {
+        let text = self.task_text(value)?;
+        text.parse().map_err(|_| self.engine_error("private task hook returned an invalid count"))
+    }
+
+    fn task_boolean(&mut self, value: &E::Value) -> Result<bool, E::Error> {
+        match self.task_text(value)?.as_str() {
+            "true" => Ok(true),
+            "false" => Ok(false),
+            _ => Err(self.engine_error("private task hook returned an invalid boolean")),
+        }
+    }
+
+    /// Report a parsed script failure through the same guarded window error
+    /// path used for listener exceptions. Parsing continues after this report.
+    pub fn report_script_exception(&mut self, message: &str, source: Option<&str>) {
+        if let Err(error) = self.call_task_top(
+            "__reportScriptException",
+            &[message, source.unwrap_or("")],
+        ) {
+            self.host.borrow_mut().console.push(format!(
+                "Uncaught: {message} (error reporting failed: {})",
+                self.engine.describe_error(&error)
+            ));
+        }
+    }
+
+    /// The external `<script>` owns a nonbubbling resource `error` event.
+    pub(crate) fn report_script_load_failure(&mut self, node: NodeId, source: &str) {
+        let result = self.call_task_top("__dispatchScriptLoadError", &[&node.raw().to_string()]);
+        if let Err(error) = result {
+            self.host.borrow_mut().console.push(format!(
+                "Script load failed ({source}); error dispatch failed: {}",
+                self.engine.describe_error(&error)
+            ));
+        } else {
+            self.host.borrow_mut().console.push(format!("Script load failed: {source}"));
         }
     }
 
@@ -868,6 +1203,9 @@ impl<E: ScriptEngine> Runtime<E> {
             if host.script_loader.is_none() {
                 host.script_loader = parent.script_loader.clone();
             }
+            host.worker_policy = parent.worker_policy;
+            #[cfg(not(target_arch = "wasm32"))]
+            { host.worker_process_launcher = parent.worker_process_launcher.clone(); }
             if host.worker_wake.is_none() {
                 host.worker_wake = parent.worker_wake.clone();
             }
@@ -922,6 +1260,14 @@ impl<E: ScriptEngine> Runtime<E> {
                 SurfaceError::Realm(e) => e,
                 SurfaceError::Engine(e) => RealmError::Engine(self.engine.describe_error(&e)),
             })?;
+            let hooks = capture_task_hooks(
+                &mut self.engine,
+                realm,
+                REALM_TASK_HOOKS,
+            )?;
+            self.agent.borrow_mut().task_hooks.extend(hooks.into_iter().map(|(key, value)| {
+                (key, value as Rc<dyn std::any::Any>)
+            }));
             self.engine.eval_in_realm(
                 realm,
                 "delete globalThis.__agentTimers; delete globalThis.__realmId",
@@ -931,6 +1277,13 @@ impl<E: ScriptEngine> Runtime<E> {
             Ok(())
         })();
         if let Err(error) = result {
+            let cancel = self.agent.borrow().cancel_realm_tasks.clone();
+            if let Some(cancel) = cancel.as_ref().and_then(|value| value.downcast_ref::<E::Value>()) {
+                if let Ok(id) = self.engine.host_string(&realm.to_string()) {
+                    let _ = self.engine.call_function(cancel, cancel, &[id]);
+                }
+            }
+            self.agent.borrow_mut().task_hooks.retain(|(owner, _), _| *owner != realm);
             {
                 let mut agent = self.agent.borrow_mut();
                 agent.dom_adoption.remove_realm(realm);
@@ -1055,15 +1408,28 @@ impl<E: ScriptEngine> Runtime<E> {
         // Step 3: "While the event loop's microtask queue is not empty:"
         // Backend boundary: the VM owns the queue, budget behavior, and kept-object cleanup.
         self.trace_scheduler("pump_microtasks", "start", None);
+        // Custom element reactions recorded with no reactions scope open (the
+        // parser, a native host edit) go to the backup element queue, which
+        // the bootstrap processes in a microtask of this checkpoint.
+        let reacting = std::iter::once((self.top_realm(), self.host.clone()))
+            .chain(self.child_hosts().iter().map(|(&realm, host)| (realm, host.clone())))
+            .filter_map(|(realm, host)| host.borrow().dom.has_reaction_candidates().then_some(realm))
+            .collect::<Vec<_>>();
+        for realm in reacting {
+            if let Err(error) = self.call_task(realm, "__cePump", &[]) {
+                self.report_script_exception(&format!("custom element reactions: {error}"), None);
+            }
+        }
         // MutationObserver: hand the arena's pending record to the registry
         // before the queue is pumped, so "notify mutation observers" is a
         // microtask of *this* checkpoint. Costs nothing until something observes.
-        if self.host.borrow().dom.is_observing() {
-            let _ = self.eval_top("__moPump()");
-        }
-        for (&realm, host) in &self.child_hosts() {
-            if host.borrow().dom.is_observing() {
-                let _ = self.engine.eval_in_realm(realm, "__moPump()");
+        let observing = std::iter::once((self.top_realm(), self.host.clone()))
+            .chain(self.child_hosts().iter().map(|(&realm, host)| (realm, host.clone())))
+            .filter_map(|(realm, host)| host.borrow().dom.is_observing().then_some(realm))
+            .collect::<Vec<_>>();
+        for realm in observing {
+            if let Err(error) = self.call_task(realm, "__moPump", &[]) {
+                self.report_script_exception(&format!("MutationObserver delivery: {error}"), None);
             }
         }
         self.engine.pump_microtasks();
@@ -1088,13 +1454,17 @@ impl<E: ScriptEngine> Runtime<E> {
             "start",
             Some(format!("type={event_type};node={raw_node_id}")),
         );
-        // Pass the node id as a *string* literal, not a bare number: a tagged
-        // raw NodeId can exceed 2^53 and lose precision as a JS f64, corrupting
-        // its doc-tag high bits and tripping the scripted-DOM fence. The
-        // `__dispatchSynthetic` bridge does `String(rawId)` anyway.
-        let v = match self.eval_top(&format!(
-            "__dispatchSynthetic(\"{raw_node_id}\", {event_type:?})"
-        )) {
+        if event_type == "click" {
+            let result = self.dispatch_form_activation(raw_node_id, None);
+            self.flush_host_trace_events();
+            match result {
+                Ok(proceed) => self.trace_scheduler("dispatch_event", "end", Some(format!("proceed={proceed}"))),
+                Err(_) => self.trace_scheduler("dispatch_event", "error", None),
+            }
+            return result;
+        }
+        // The tagged raw id crosses as a decimal string, preserving all 64 bits.
+        let v = match self.call_task_top("__dispatchHostEvent", &[&raw_node_id.to_string(), event_type]) {
             Ok(value) => value,
             Err(error) => {
                 self.flush_host_trace_events();
@@ -1103,11 +1473,13 @@ impl<E: ScriptEngine> Runtime<E> {
             },
         };
         self.flush_host_trace_events();
-        let proceed = self
-            .engine
-            .value_to_string(&v)
-            .map(|s| s != "false")
-            .unwrap_or(true);
+        let proceed = match self.task_boolean(&v) {
+            Ok(proceed) => proceed,
+            Err(error) => {
+                self.trace_scheduler("dispatch_event", "error", None);
+                return Err(error);
+            },
+        };
         self.perform_microtask_checkpoint();
         self.trace_scheduler("dispatch_event", "end", Some(format!("proceed={proceed}")));
         Ok(proceed)
@@ -1126,16 +1498,9 @@ impl<E: ScriptEngine> Runtime<E> {
         property_name: &str,
         elapsed_time: f64,
     ) -> Result<(), E::Error> {
-        // Pass the node id as a *string* literal, not a bare number: a tagged
-        // raw NodeId can exceed 2^53 and lose precision as a JS f64 (the
-        // `__dispatchTransition` bridge does `String(rawId)` anyway). `{:?}`
-        // renders each &str as a quoted, escaped literal (valid JS), so a
-        // property name / event type can't break out of the call expression.
-        let expr = format!(
-            "__dispatchTransition(\"{raw_node_id}\", {event_type:?}, {property_name:?}, {elapsed_time})"
-        );
-        self.eval_top(&expr)?;
-        self.flush_host_trace_events();
+        self.call_task_top("__dispatchTransition", &[
+            &raw_node_id.to_string(), event_type, property_name, &elapsed_time.to_string(),
+        ])?;
         self.perform_microtask_checkpoint();
         Ok(())
     }
@@ -1168,17 +1533,11 @@ impl<E: ScriptEngine> Runtime<E> {
         y: f64,
         identifier: i32,
     ) -> Result<bool, E::Error> {
-        // Node id as a *string*: a tagged raw NodeId can exceed 2^53 (the
-        // precision bug the transitions plan hit).
-        let expr =
-            format!("__dispatchTouch(\"{raw_node_id}\", {event_type:?}, {x}, {y}, {identifier})");
-        let v = self.eval_top(&expr)?;
-        self.flush_host_trace_events();
-        let proceed = self
-            .engine
-            .value_to_string(&v)
-            .map(|s| s != "false")
-            .unwrap_or(true);
+        let v = self.call_task_top("__dispatchTouch", &[
+            &raw_node_id.to_string(), event_type, &x.to_string(), &y.to_string(),
+            &identifier.to_string(),
+        ])?;
+        let proceed = self.task_boolean(&v)?;
         self.perform_microtask_checkpoint();
         Ok(proceed)
     }
@@ -1198,16 +1557,11 @@ impl<E: ScriptEngine> Runtime<E> {
         delta_y: f64,
         delta_mode: u32,
     ) -> Result<bool, E::Error> {
-        let expr = format!(
-            "__dispatchWheel(\"{raw_node_id}\", {x}, {y}, {delta_x}, {delta_y}, {delta_mode})"
-        );
-        let v = self.eval_top(&expr)?;
-        self.flush_host_trace_events();
-        let proceed = self
-            .engine
-            .value_to_string(&v)
-            .map(|s| s != "false")
-            .unwrap_or(true);
+        let v = self.call_task_top("__dispatchWheel", &[
+            &raw_node_id.to_string(), &x.to_string(), &y.to_string(),
+            &delta_x.to_string(), &delta_y.to_string(), &delta_mode.to_string(),
+        ])?;
+        let proceed = self.task_boolean(&v)?;
         self.perform_microtask_checkpoint();
         Ok(proceed)
     }
@@ -1227,14 +1581,9 @@ impl<E: ScriptEngine> Runtime<E> {
         animation_name: &str,
         elapsed_time: f64,
     ) -> Result<(), E::Error> {
-        // Node id as a *string* literal: a tagged raw NodeId can exceed 2^53 and
-        // lose precision as a JS f64. `{:?}` renders each &str as a quoted, escaped
-        // literal, so a name or event type cannot break out of the call expression.
-        let expr = format!(
-            "__dispatchAnimation(\"{raw_node_id}\", {event_type:?}, {animation_name:?}, {elapsed_time})"
-        );
-        self.eval_top(&expr)?;
-        self.flush_host_trace_events();
+        self.call_task_top("__dispatchAnimation", &[
+            &raw_node_id.to_string(), event_type, animation_name, &elapsed_time.to_string(),
+        ])?;
         self.perform_microtask_checkpoint();
         Ok(())
     }
@@ -1594,6 +1943,11 @@ impl<E: ScriptEngine> Runtime<E> {
             let HostState { dom, pins, .. } = &mut *host;
             totals.1 += dom.collect(pins.iter());
         }
+        // Listeners go with their node: drop the targets no store holds any more.
+        let events = self.agent.borrow().events.clone();
+        events
+            .borrow_mut()
+            .retain_nodes(|id| dom::adoption::owner_host(&self.host, id).is_some());
         totals
     }
 
@@ -1719,18 +2073,31 @@ impl<E: ScriptEngine> Runtime<E> {
     /// against the virtual clock at `now_ms` (the real elapsed time of the run), and
     /// return how many fired. Real-time gating lets a short abort timer fire at its
     /// delay while the far-future testharness timeout stays pending.
-    pub fn run_timers(&mut self, budget: u32, now_ms: f64) -> usize {
+    pub fn run_timers(&mut self, budget: u32, now_ms: f64) -> Result<usize, E::Error> {
         self.trace_scheduler(
             "run_timers",
             "start",
             Some(format!("budget={budget};now_ms={now_ms}")),
         );
         self.perform_microtask_checkpoint();
+        if budget == 0 {
+            // Advancing the scheduler clock is useful even when this turn does
+            // not admit a timer task (worker deadline anchoring).
+            let value = self.call_task(MAIN_REALM, "__runTimers", &["0", &now_ms.to_string()])
+                .map_err(|error| self.engine_error(&error.to_string()))?;
+            self.task_count(&value)?;
+        }
         let mut fired = 0;
         for _ in 0..budget {
             // Step 2.6: "Perform oldestTask's steps."
             // The host drive loop supplies `now_ms`; the JS timer queue chooses one due task.
-            let n = self.run_one_timer_task(Some(now_ms)).unwrap_or(0);
+            let n = match self.run_one_timer_task(Some(now_ms)) {
+                Ok(n) => n,
+                Err(error) => {
+                    self.trace_scheduler("run_timers", "error", None);
+                    return Err(error);
+                },
+            };
             if n == 0 {
                 break;
             }
@@ -1739,7 +2106,7 @@ impl<E: ScriptEngine> Runtime<E> {
             self.perform_microtask_checkpoint();
         }
         self.trace_scheduler("run_timers", "end", Some(format!("fired={fired}")));
-        fired
+        Ok(fired)
     }
 
     /// Run the window's animation frame callbacks against the frame timestamp
@@ -1762,23 +2129,15 @@ impl<E: ScriptEngine> Runtime<E> {
         loop {
             // Step 3: "For each handle in callbackHandles, if handle exists in
             // callbacks: ... Invoke callback with « now » and "report"."
-            let v = match self.engine.eval(&format!(
-                "String(globalThis.__runOneAnimationFrameCallback({now_ms}))"
-            )) {
+            let v = match self.call_task(MAIN_REALM, "__runOneAnimationFrameCallback", &[&now_ms.to_string()]) {
                 Ok(value) => value,
                 Err(error) => {
                     self.flush_host_trace_events();
                     self.trace_scheduler("run_animation_frame_callbacks", "error", None);
-                    return Err(error);
+                    return Err(self.engine_error(&error.to_string()));
                 },
             };
-            self.flush_host_trace_events();
-            let n = self
-                .engine
-                .value_to_string(&v)
-                .ok()
-                .and_then(|s| s.parse::<usize>().ok())
-                .unwrap_or(0);
+            let n = self.task_count(&v)?;
             if n == 0 {
                 break;
             }
@@ -1796,37 +2155,58 @@ impl<E: ScriptEngine> Runtime<E> {
         Ok(ran)
     }
 
+    /// Run the "update intersection observations" steps in every realm that has
+    /// observers: the host calls this once per rendering turn, after the
+    /// animation frame callbacks and the relayout they caused. Entries are
+    /// queued, and delivered later as a task. Returns how many were queued.
+    pub fn update_intersection_observations(&mut self) -> Result<usize, E::Error> {
+        let mut queued = 0usize;
+        let mut realms = vec![self.top_realm()];
+        let mut next = 0;
+        while next < realms.len() {
+            let parent = realms[next];
+            next += 1;
+            for (_, realm) in self.frame_realms(parent) {
+                realms.push(realm);
+            }
+        }
+        for realm in realms {
+            let v = self
+                .call_task(realm, "__ioUpdate", &[])
+                .map_err(|error| self.engine_error(&error.to_string()))?;
+            queued += self.task_count(&v)?;
+        }
+        Ok(queued)
+    }
+
     /// Whether any animation frame callbacks are registered. The host uses this
     /// (alongside its own animation state) to keep requesting frames only while
     /// script is animating, so idle surfaces stop ticking.
-    pub fn has_animation_frame_callbacks(&mut self) -> bool {
-        self.engine
-            .eval("String(globalThis.__hasAnimationFrameCallbacks())")
-            .ok()
-            .and_then(|v| self.engine.value_to_string(&v).ok())
-            .map(|s| s == "true")
-            .unwrap_or(false)
+    pub fn has_animation_frame_callbacks(&mut self) -> Result<bool, E::Error> {
+        let value = self
+            .call_task(MAIN_REALM, "__hasAnimationFrameCallbacks", &[])
+            .map_err(|error| self.engine_error(&error.to_string()))?;
+        self.task_boolean(&value)
     }
 
     fn run_one_timer_task(&mut self, now_ms: Option<f64>) -> Result<usize, E::Error> {
         if now_ms.is_none() && self.pending_fetches() > 0 {
             return Ok(0);
         }
-        let expr = match now_ms {
-            Some(now_ms) => format!("String(globalThis.__runTimers(1,{now_ms}))"),
-            None => "String(globalThis.__runTimers(1))".to_string(),
+        let now_text = now_ms.map(|now| now.to_string());
+        let args = match now_text.as_deref() {
+            Some(now) => vec!["1", now],
+            None => vec!["1"],
         };
-        let v = match self.engine.eval(&expr) {
+        let v = match self.call_task(MAIN_REALM, "__runTimers", &args) {
             Ok(value) => value,
             Err(error) => {
                 self.flush_host_trace_events();
                 self.trace_scheduler("timer_task", "error", None);
-                return Err(error);
+                return Err(self.engine_error(&error.to_string()));
             },
         };
-        self.flush_host_trace_events();
-        let s = self.engine.value_to_string(&v)?;
-        let fired = s.parse().unwrap_or(0);
+        let fired = self.task_count(&v)?;
         if fired > 0 {
             self.trace_scheduler("timer_task", "performed", Some(format!("fired={fired}")));
         }
@@ -1836,15 +2216,16 @@ impl<E: ScriptEngine> Runtime<E> {
     /// Milliseconds until the next timer is due (relative to the last `run_timers`
     /// virtual clock), or `None` if no timer is scheduled. The drive loop sleeps at
     /// most this long so a timer fires near its real deadline.
-    pub fn next_timer_delay(&mut self) -> Option<f64> {
-        let d: f64 = self
-            .engine
-            .eval("String(globalThis.__nextTimerDelay())")
-            .ok()
-            .and_then(|v| self.engine.value_to_string(&v).ok())
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(-1.0);
-        if d < 0.0 { None } else { Some(d) }
+    pub fn next_timer_delay(&mut self) -> Result<Option<f64>, E::Error> {
+        let value = self
+            .call_task(MAIN_REALM, "__nextTimerDelay", &[])
+            .map_err(|error| self.engine_error(&error.to_string()))?;
+        let text = self.task_text(&value)?;
+        let delay: f64 = text.parse().map_err(|_| self.engine_error("invalid timer delay"))?;
+        if !delay.is_finite() {
+            return Err(self.engine_error("invalid timer delay"));
+        }
+        Ok(if delay < 0.0 { None } else { Some(delay) })
     }
 
     /// The per-subtest results collected so far (the driver reads this after the run
@@ -1887,6 +2268,11 @@ impl<E: ScriptEngine> Runtime<E> {
     /// and the projection is dropped.
     pub fn set_selection_handler(&mut self, handler: Box<dyn SelectionHandler>) {
         self.host.borrow_mut().selection = Some(std::rc::Rc::from(handler));
+    }
+
+    /// Install the host's geometry seam; see [`GeometryHandler`].
+    pub fn set_geometry_handler(&mut self, handler: Box<dyn GeometryHandler>) {
+        self.host.borrow_mut().geometry = Some(std::rc::Rc::from(handler));
     }
 
     /// Install specified-value parsing and canonical serialization for the
@@ -1949,13 +2335,51 @@ impl<E: ScriptEngine> Runtime<E> {
         self.host.borrow_mut().random = Some(std::rc::Rc::from(source));
     }
 
-    /// Install the host's WebGL context factory (e.g. one that mints a
-    /// webgl-wgpu context over a real `wgpu::Device` at the requested size).
-    /// Until set, the JS `WebGLRenderingContext` methods no-op or return
-    /// `gl.NO_ERROR`. The factory is called once per `getContext('webgl')`,
-    /// so each `<canvas>` gets its own independent context.
+    /// Install the page's loader for worker scripts and worker fetches.
     pub fn set_script_resource_loader(&mut self, loader: Box<dyn ScriptResourceLoader>) {
         self.host.borrow_mut().script_loader = Some(loader.into());
+    }
+
+    /// Choose the native worker lifetime contract before creating workers.
+    /// `RequireCancellation` admits a native worker only when a matching
+    /// helper process is configured. `TrustedCooperative` permits workers that
+    /// may detach after `shutdown_grace` if script does not yield.
+    pub fn set_worker_policy(&mut self, policy: WorkerPolicy) {
+        self.host.borrow_mut().worker_policy = policy;
+        for host in self.child_hosts().values() {
+            host.borrow_mut().worker_policy = policy;
+        }
+    }
+
+    /// Install the native helper chosen by the host before authored scripts
+    /// create Workers. Without it, required cancellation refuses creation.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn set_worker_process_launcher(&mut self, launcher: WorkerProcessLauncher) {
+        let launcher = std::sync::Arc::new(launcher);
+        self.host.borrow_mut().worker_process_launcher = Some(launcher.clone());
+        for host in self.child_hosts().values() {
+            host.borrow_mut().worker_process_launcher = Some(launcher.clone());
+        }
+    }
+
+    /// Stop directly owned workers and report thread and process outcomes.
+    /// Descendants inside a helper process are reclaimed with that process;
+    /// descendants of trusted worker threads remain untracked.
+    pub fn shutdown_workers(&mut self) -> WorkerShutdownReport {
+        let hosts: Vec<SharedHost> = self.agent.borrow().host_lifetimes.iter()
+            .filter_map(|host| host.upgrade()).collect();
+        let mut report = WorkerShutdownReport::default();
+        for host in hosts {
+            let one = worker::shutdown(&host);
+            report.direct_joined += one.direct_joined;
+            report.direct_detached += one.direct_detached;
+            report.processes_joined += one.processes_joined;
+            report.processes_killed += one.processes_killed;
+            report.processes_crashed += one.processes_crashed;
+            report.processes_failed += one.processes_failed;
+            report.descendants_untracked |= one.descendants_untracked;
+        }
+        report
     }
 
     /// Install the host wake sink copied into dedicated workers. Workers are
@@ -1987,11 +2411,22 @@ impl<E: ScriptEngine> Runtime<E> {
         worker::has_work(&self.host) || self.child_hosts().values().any(worker::has_work)
     }
 
+    /// Install the host's WebGL context factory (e.g. one that mints a
+    /// webgl-wgpu context over a real `wgpu::Device` at the requested size).
+    /// Until set, canvas `getContext('webgl')` returns null. A factory can
+    /// also return `None` to refuse an individual creation. Each successful
+    /// canvas request gets its own independent context.
     pub fn set_webgl_factory(&mut self, factory: WebGlFactory) {
         self.host.borrow_mut().webgl_factory = Some(factory);
     }
 
-    fn eval_fetch_completion(&mut self, id: u64, source: &str, terminal: bool) {
+    fn deliver_fetch_completion(
+        &mut self,
+        id: u64,
+        hook: &'static str,
+        payload: Option<&str>,
+        terminal: bool,
+    ) -> Result<(), RealmError> {
         let realm = self
             .agent
             .borrow()
@@ -1999,35 +2434,32 @@ impl<E: ScriptEngine> Runtime<E> {
             .get(&id)
             .copied()
             .unwrap_or_else(|| self.agent.borrow().frames.top_realm());
-        if realm == MAIN_REALM {
-            let _ = self.engine.eval(source);
-        } else {
-            let _ = self.engine.eval_in_realm(realm, source);
-        }
+        let id_text = id.to_string();
+        let result = match payload {
+            Some(payload) => self.call_task(realm, hook, &[&id_text, payload]),
+            None => self.call_task(realm, hook, &[&id_text]),
+        };
+        // A task gets its checkpoint even if its body threw after scheduling jobs.
+        self.perform_microtask_checkpoint();
+        result?;
         if terminal {
             self.agent.borrow_mut().fetch_realms.remove(&id);
         }
+        Ok(())
     }
 
     /// Resolve the pending `fetch()` Promise `id` with `outcome` (a deferred host
-    /// calls this when the reply arrives). Rust cannot call a held JS function, so
-    /// this evals the `__fetchSettle` entry point (the same shape as `__runTimers`)
-    /// and pumps microtasks. Holds no `HostState` borrow across the eval.
-    pub fn settle_fetch(&mut self, id: u64, outcome: FetchOutcome) {
+    /// calls this when the reply arrives). The private retained hook runs in
+    /// the requesting document's realm and gets a task checkpoint.
+    pub fn settle_fetch(&mut self, id: u64, outcome: FetchOutcome) -> Result<(), RealmError> {
         let json = fetch::encode_outcome(&outcome);
-        let js = format!("globalThis.__fetchSettle({},{});", id, js_str(&json));
-        // Fetch task source: perform the host completion task, then checkpoint.
-        self.eval_fetch_completion(id, &js, true);
-        self.perform_microtask_checkpoint();
+        self.deliver_fetch_completion(id, "__fetchSettle", Some(&json), true)
     }
 
     /// Reject the pending `fetch()` Promise `id` as a network error with `message`
     /// (a `TypeError`, per Fetch). For a deferred host's failed request.
-    pub fn fail_fetch(&mut self, id: u64, message: &str) {
-        let js = format!("globalThis.__fetchFail({},{});", id, js_str(message));
-        // Fetch task source: perform the host completion task, then checkpoint.
-        self.eval_fetch_completion(id, &js, true);
-        self.perform_microtask_checkpoint();
+    pub fn fail_fetch(&mut self, id: u64, message: &str) -> Result<(), RealmError> {
+        self.deliver_fetch_completion(id, "__fetchFail", Some(message), true)
     }
 
     /// Early-settle the pending `fetch()` Promise `id` with a streaming response:
@@ -2035,98 +2467,77 @@ impl<E: ScriptEngine> Runtime<E> {
     /// incrementally via [`push_chunk`](Self::push_chunk) then
     /// [`close_stream`](Self::close_stream). For a host that streams a response body
     /// as it arrives rather than buffering the whole thing.
-    pub fn start_stream(&mut self, id: u64, meta: FetchOutcome) {
+    pub fn start_stream(&mut self, id: u64, meta: FetchOutcome) -> Result<(), RealmError> {
         let json = fetch::encode_outcome(&meta);
-        let js = format!("globalThis.__fetchStartStream({},{});", id, js_str(&json));
-        // Fetch task source: resolve the response task before body chunks arrive.
-        self.eval_fetch_completion(id, &js, false);
-        self.perform_microtask_checkpoint();
+        self.deliver_fetch_completion(id, "__fetchStartStream", Some(&json), false)
     }
 
     /// Push a body chunk to a streaming response started with
     /// [`start_stream`](Self::start_stream). Bytes cross as a JS array literal (no
     /// string-escape hazard), feeding the response's `ReadableStream` controller.
-    pub fn push_chunk(&mut self, id: u64, bytes: &[u8]) {
-        let mut lit = String::with_capacity(bytes.len() * 4 + 2);
-        lit.push('[');
-        for (i, b) in bytes.iter().enumerate() {
-            if i > 0 {
-                lit.push(',');
-            }
-            lit.push_str(&b.to_string());
-        }
-        lit.push(']');
-        // Fetch task source: deliver one body-chunk task, then checkpoint.
-        self.eval_fetch_completion(
-            id,
-            &format!("globalThis.__fetchPushChunk({},{});", id, lit),
-            false,
-        );
-        self.perform_microtask_checkpoint();
+    pub fn push_chunk(&mut self, id: u64, bytes: &[u8]) -> Result<(), RealmError> {
+        let binary: String = bytes.iter().map(|byte| char::from(*byte)).collect();
+        self.deliver_fetch_completion(id, "__fetchPushChunk", Some(&binary), false)
     }
 
     /// Close a streaming response started with [`start_stream`](Self::start_stream):
     /// the body's `ReadableStream` ends and pending reads resolve `done`.
-    pub fn close_stream(&mut self, id: u64) {
-        // Fetch task source: deliver the end-of-body task, then checkpoint.
-        self.eval_fetch_completion(id, &format!("globalThis.__fetchClose({});", id), true);
-        self.perform_microtask_checkpoint();
+    pub fn close_stream(&mut self, id: u64) -> Result<(), RealmError> {
+        self.deliver_fetch_completion(id, "__fetchClose", None, true)
     }
 
     /// Error a streaming response started with [`start_stream`](Self::start_stream):
     /// the body's `ReadableStream` errors so pending/future reads reject with a
     /// `TypeError`. The response itself stays resolved (the failure is mid-body,
     /// e.g. a `Content-Encoding` decode error), so only body consumption rejects.
-    pub fn error_stream(&mut self, id: u64) {
-        // Fetch task source: deliver the body-error task, then checkpoint.
-        self.eval_fetch_completion(id, &format!("globalThis.__fetchError({});", id), true);
-        self.perform_microtask_checkpoint();
+    pub fn error_stream(&mut self, id: u64) -> Result<(), RealmError> {
+        self.deliver_fetch_completion(id, "__fetchError", None, true)
     }
 
     /// Reject every still-pending `fetch()` Promise with `message` (a `TypeError`).
     /// The host drive loop calls this at its wall-clock deadline so a test that
     /// awaits a never-settling fetch records a failure rather than hanging.
     pub fn fail_all_pending(&mut self, message: &str) {
-        let js = format!(
-            "(function(){{var p=globalThis.__pending;for(var k in p){{var e=p[k];delete p[k];if(e){{\
-             if(e.controller){{try{{e.controller.error(new TypeError({m}));}}catch(x){{}}}}\
-             if(!e.settled){{e.settled=true;e.reject(new TypeError({m}));}}}}}}}})();",
-            m = js_str(message)
-        );
-        self.agent.borrow_mut().fetch_realms.clear();
-        // Fetch task source: reject outstanding fetches at the host deadline, then checkpoint.
-        let _ = self.eval_top(&js);
-        for &realm in self.child_hosts().keys() {
-            let _ = self.engine.eval_in_realm(realm, &js);
+        let realms = std::iter::once(self.top_realm())
+            .chain(self.child_hosts().keys().copied())
+            .collect::<Vec<_>>();
+        for realm in realms {
+            match self.call_task(realm, "__fetchFailAll", &[message]) {
+                Ok(_) => self.agent.borrow_mut().fetch_realms.retain(|_, owner| *owner != realm),
+                Err(error) => {
+                    self.report_script_exception(&format!("fetch failure delivery: {error}"), None);
+                }
+            }
         }
+        // Failed realms keep their routing so a later delivery can retry them.
         self.perform_microtask_checkpoint();
     }
 
     /// How many `fetch()` Promises are still pending. The host drive loop reads this
     /// to know when script has quiesced (no in-flight fetches left to settle).
     pub fn pending_fetches(&mut self) -> usize {
-        let mut total = self.pending_fetches_in_realm(self.top_realm()).unwrap_or(0);
-        for realm in self.child_hosts().keys().copied().collect::<Vec<_>>() {
-            total += self.pending_fetches_in_realm(realm).unwrap_or(0);
+        let realms = std::iter::once(self.top_realm())
+            .chain(self.child_hosts().keys().copied())
+            .collect::<Vec<_>>();
+        let mut total = 0;
+        for realm in realms {
+            match self.pending_fetches_in_realm(realm) {
+                Ok(count) => total += count,
+                Err(error) => {
+                    self.report_script_exception(&format!("fetch pending count: {error}"), None);
+                    total += 1; // Uncertain state must keep the host drive loop alive.
+                }
+            }
         }
         total
     }
 
     pub fn pending_fetches_in_realm(&mut self, realm: RealmId) -> Result<usize, RealmError> {
-        let js = "String((function(){var p=globalThis.__pending,n=0;for(var k in p){var e=p[k];if(e&&(!e.settled||e.awaiting))n++;}return n;})())";
-        let value = if realm == MAIN_REALM {
-            self.engine
-                .eval(js)
-                .map_err(|e| RealmError::Engine(self.engine.describe_error(&e)))?
-        } else {
-            self.eval_in_realm(realm, js)?
-        };
-        Ok(self
-            .engine
-            .value_to_string(&value)
+        let value = self.call_task(realm, "__fetchPendingCount", &[])?;
+        self.engine.value_to_string(&value)
             .map_err(|e| RealmError::Engine(self.engine.describe_error(&e)))?
             .parse()
-            .unwrap_or(0))
+            .map_err(|_| RealmError::Refused("private fetch pending hook returned an invalid count"))
     }
 
     /// Complete a deferred resource in its requesting realm, then checkpoint the agent.
@@ -2146,12 +2557,10 @@ impl<E: ScriptEngine> Runtime<E> {
             return Err(RealmError::Refused("fetch belongs to another realm"));
         }
         let json = fetch::encode_outcome(&outcome);
-        self.eval_in_realm(
-            realm,
-            &format!("globalThis.__fetchSettle({id},{});", js_str(&json)),
-        )?;
-        self.agent.borrow_mut().fetch_realms.remove(&id);
+        let result = self.call_task(realm, "__fetchSettle", &[&id.to_string(), &json]);
         self.perform_microtask_checkpoint();
+        result?;
+        self.agent.borrow_mut().fetch_realms.remove(&id);
         Ok(())
     }
 
@@ -2170,12 +2579,10 @@ impl<E: ScriptEngine> Runtime<E> {
         {
             return Err(RealmError::Refused("fetch belongs to another realm"));
         }
-        self.eval_in_realm(
-            realm,
-            &format!("globalThis.__fetchFail({id},{});", js_str(message)),
-        )?;
-        self.agent.borrow_mut().fetch_realms.remove(&id);
+        let result = self.call_task(realm, "__fetchFail", &[&id.to_string(), message]);
         self.perform_microtask_checkpoint();
+        result?;
+        self.agent.borrow_mut().fetch_realms.remove(&id);
         Ok(())
     }
 
@@ -2194,7 +2601,42 @@ impl<E: ScriptEngine> Runtime<E> {
         // `globalThis.location` is a live view of `base_url` (the `platform`
         // surface's getters re-read it), so updating the host base URL is enough;
         // no need to rebuild a location snapshot here.
+        let current = self.host.borrow().secure_context;
+        let derived = secure_context::for_document(url, None, current);
+        if derived != current {
+            self.set_secure_context(derived.0)?;
+        }
         Ok(())
+    }
+
+    /// Whether the top document (or this worker) is a secure context, adding or
+    /// removing its `[SecureContext]` members (today Web Crypto's). The URL
+    /// decides by default ([`Self::set_base_url`]); a host that knows better
+    /// calls this before author script runs - WPT's runner, for one, mirrors
+    /// the rule that only `.https.` tests are served over HTTPS.
+    pub fn set_secure_context(&mut self, secure: bool) -> Result<(), E::Error> {
+        self.host.borrow_mut().secure_context = secure_context::SecureContext(secure);
+        self.call_task_top("__subtleExposure", &[if secure { "1" } else { "0" }])?;
+        Ok(())
+    }
+
+    /// Hand the runtime the initial document's response headers. Only the host
+    /// that fetched the document saw them; the runtime reads `Referrer-Policy`
+    /// from them for the document policy container. Call it before the document's
+    /// scripts run; a later call replaces the earlier headers.
+    pub fn set_document_response_headers(&mut self, headers: Vec<(String, String)>) {
+        self.host.borrow_mut().document_response_headers = headers;
+    }
+
+    /// Install byte-input metadata before parsing authored source.
+    pub fn set_document_encoding(&mut self, encoding: DocumentEncoding) {
+        let mut host = self.host.borrow_mut();
+        let document = host.dom.document();
+        host.dom.set_document_encoding(document, encoding);
+    }
+    /// Configure HTML decoding for subsequent frame loads and navigation.
+    pub fn set_html_decode_options(&mut self, options: HtmlDecodeOptions) {
+        self.host.borrow_mut().dom.set_html_decode_options(options);
     }
 
     /// The shared host state (e.g. to read `console` output after a run).
@@ -2256,8 +2698,8 @@ impl<E: ScriptEngine> Runtime<E> {
 }
 
 impl<E: ScriptEngine> Drop for Runtime<E> {
-    /// No worker thread outlives the agent that owns it, and no realm's host
-    /// state outlives the thread.
+    /// Native helper processes are reaped. Trusted workers that do not yield
+    /// can detach; callers needing counts can use `shutdown_workers`.
     fn drop(&mut self) {
         let hosts: Vec<SharedHost> = self
             .agent
@@ -2266,9 +2708,7 @@ impl<E: ScriptEngine> Drop for Runtime<E> {
             .iter()
             .filter_map(|host| host.upgrade())
             .collect();
-        for host in &hosts {
-            worker::shutdown(host);
-        }
+        for host in &hosts { let _ = worker::shutdown(host); }
         // Then empty them. See the note on the `Runtime` type: a realm's
         // `HostState` is reachable from that realm's `[[HostDefined]]` slot,
         // which lives in the engine's heap - and Boa's heap is a thread-local,
@@ -2315,9 +2755,34 @@ impl<E: ScriptEngineSnapshot> Runtime<E> {
         // of its own, and leave the donor's frame tree behind: a clone is a
         // fresh top-level browsing context, not a copy of the donor's.
         let top = self.top_realm();
+        let worker_policy = self.host.borrow().worker_policy;
+        #[cfg(not(target_arch = "wasm32"))]
+        let worker_process_launcher = self.host.borrow().worker_process_launcher.clone();
         let boot_host: SharedHost = Rc::new(RefCell::new(HostState::default()));
         let agent = Rc::new(RefCell::new(AgentState::default()));
-        boot_host.borrow_mut().agent = Rc::downgrade(&agent);
+        {
+            let donor = self.agent.borrow();
+            let mut fresh = agent.borrow_mut();
+            fresh.clock = donor.clock.clone();
+            fresh.clock_base = donor.clock_base;
+            install_date_source(&mut engine, &donor.clock);
+        }
+        {
+            // The heap keeps its windows' and plain targets' listeners and
+            // callbacks, and the ids they were keyed by.
+            let donor = self.agent.borrow();
+            let mut fresh = agent.borrow_mut();
+            fresh.events = Rc::new(RefCell::new(donor.events.borrow().without_nodes()));
+            fresh.next_event_target = donor.next_event_target;
+        }
+        {
+            let mut boot = boot_host.borrow_mut();
+            boot.agent = Rc::downgrade(&agent);
+            boot.worker_policy = worker_policy;
+            #[cfg(not(target_arch = "wasm32"))]
+            { boot.worker_process_launcher = worker_process_launcher.clone(); }
+            boot.worker_spawn = Some(worker::worker_main::<E> as fn(_));
+        }
         agent.borrow_mut().register(MAIN_REALM, boot_host.clone());
         // The cloned heap's global `this` is the donor's WindowProxy, which
         // resolves its `[[Window]]` through *this* agent. Bind each context
@@ -2333,6 +2798,10 @@ impl<E: ScriptEngineSnapshot> Runtime<E> {
         } else {
             let host: SharedHost = Rc::new(RefCell::new(HostState {
                 viewport_size: self.host.borrow().viewport_size,
+                worker_policy,
+                #[cfg(not(target_arch = "wasm32"))]
+                worker_process_launcher,
+                worker_spawn: Some(worker::worker_main::<E> as fn(_)),
                 agent: Rc::downgrade(&agent),
                 ..HostState::default()
             }));
@@ -2350,9 +2819,18 @@ impl<E: ScriptEngineSnapshot> Runtime<E> {
         };
         let timer_state = engine.eval("globalThis.__agentTimers")?;
         let cancel_realm_tasks = engine.eval("globalThis.__agentTimers.cancelRealm")?;
+        let mut task_hooks = restored_task_hooks(&mut engine, MAIN_REALM, REALM_TASK_HOOKS)?;
+        task_hooks.extend(restored_task_hooks(&mut engine, MAIN_REALM, AGENT_TASK_HOOKS)?);
+        if top != MAIN_REALM {
+            task_hooks.extend(restored_task_hooks(&mut engine, top, REALM_TASK_HOOKS)?);
+        }
+        engine.eval(&format!("(function(){{var lives=globalThis.__agentTimers.webglRealmLifetimes;if(!lives)return;for(var id in lives)lives[id].current.live=false;if(lives[{MAIN_REALM}])lives[{MAIN_REALM}].current={{live:true}};if(lives[{top}])lives[{top}].current={{live:true}};}})()"))?;
         engine.eval("delete globalThis.__agentTimers")?;
         agent.borrow_mut().timer_state = Some(Rc::new(timer_state));
         agent.borrow_mut().cancel_realm_tasks = Some(Rc::new(cancel_realm_tasks));
+        agent.borrow_mut().task_hooks.extend(task_hooks.into_iter().map(|(key, value)| {
+            (key, value as Rc<dyn std::any::Any>)
+        }));
         let mut clone = Self {
             engine,
             host,
@@ -2471,6 +2949,7 @@ pub(crate) fn install_host_surface<E: ScriptEngine>(
     // ES5-style (function constructors, no arrows/classes) for the widest backend
     // coverage.
     engine.eval(EVENT_LOOP_BOOTSTRAP)?;
+    events::install(engine)?;
     engine.eval(EVENT_TARGET_BOOTSTRAP)?;
 
     // postMessage (async 'message' delivery to the global) + minimal location /
@@ -2493,16 +2972,22 @@ pub(crate) fn install_host_surface<E: ScriptEngine>(
     // message is delivered as.
     websocket::install_websocket_surface(engine)?;
     // `WebGLRenderingContext` (Triangle-class subset) over the host webgl seam.
-    // Until step 2 wires `HTMLCanvasElement.getContext('webgl')`, JS reaches it
-    // through the `__createWebGLContext()` helper.
+    // Canvas `getContext('webgl')` and the bare `__createWebGLContext()` helper
+    // return null when the host has no context to provide.
     webgl::install_webgl_surface(engine)?;
 
     // `structuredClone` + the serialize/deserialize algorithm. After `fetch` so
     // `Blob` / `File` exist for the platform-object cases.
     structured_clone::install_structured_clone_surface(engine)?;
+    engine.eval("delete globalThis.__formsPrivate")?;
     streams::finish_streams_install(engine)?;
     // `performance` (hr-time, user timing) + `PerformanceObserver`.
     timing::install_timing_surface(engine)?;
+    // `IntersectionObserver`: after `dom` (Element, Document, the geometry
+    // natives) and after timing (the clock its entries are stamped from).
+    if scope == GlobalScopeKind::Window {
+        engine.eval(include_str!("intersection_observer.js"))?;
+    }
     // `MessageChannel` / `MessagePort` / `BroadcastChannel` / `MessageEvent`.
     // After `structured_clone` so `postMessage` can clone its argument.
     messaging::install_messaging_surface(engine)?;
@@ -2532,6 +3017,7 @@ const EVENT_LOOP_BOOTSTRAP: &str = r#"
 (function() {
   'use strict';
   var apply = Reflect.apply;
+  var timerNumber = Number;
   var push = Array.prototype.push;
   var splice = Array.prototype.splice;
   // The `this` a timer callback is invoked with is HTML's "relevant global
@@ -2546,7 +3032,13 @@ const EVENT_LOOP_BOOTSTRAP: &str = r#"
     state = globalThis.__agentTimers = {
       timers: queue, nextId: 1, now: 0, domNodes: new WeakSet(),
       domWrappers: new WeakMap(), domWrapperGroups: new WeakMap(), domOwners: new WeakMap(),
-      domTemplateContents: new WeakMap()
+      domDocumentModes: new WeakMap(), domAttrViews: new WeakMap(), domAttrNodes: new WeakSet(),
+      domAttrSlots: new WeakMap(),
+      domXPathResults: new WeakMap(),
+      domTemplateContents: new WeakMap(), domEventTrust: new WeakMap(),
+      domMouseEvents: new WeakMap(), domNodeDispatch: new WeakMap(), domFormRefs: new WeakMap(),
+      domValidityObjects: new WeakMap(), domValidityOwners: new WeakMap(),
+      domValidityCreators: new WeakMap(), domInvalidEventCreators: new WeakMap()
     };
   }
   var timers = state.timers;
@@ -2631,7 +3123,9 @@ const EVENT_LOOP_BOOTSTRAP: &str = r#"
   // `at` has elapsed, in (at, seq) order — so a short abort timer fires at its real
   // delay while the far-future testharness timeout stays pending.
   globalThis.__runTimers = function(budget, nowMs) {
+    budget = timerNumber(budget);
     var realtime = (nowMs !== undefined);
+    if (realtime) nowMs = timerNumber(nowMs);
     if (realtime && nowMs > state.now) state.now = nowMs;
     var fired = 0;
     while (fired < budget) {
@@ -2657,7 +3151,9 @@ const EVENT_LOOP_BOOTSTRAP: &str = r#"
       fired++;
       if (due.repeat) { due.at = state.now + due.delay; due.seq = state.nextId++; apply(push, timers, [due]); }
       if (typeof globalThis.__traceProtocol === 'function') globalThis.__traceProtocol('timer_realm', 'performed', 'realm=' + due.realm + ';sequence=' + due.seq);
-      apply(due.cb, due.global, []);
+      var reportTimerException = state.taskHooks[due.realm].__reportListenerException;
+      try { apply(due.cb, due.global, []); }
+      catch (ex) { reportTimerException(ex); }
       // If a timer callback issued a deferred fetch (left a pending entry), stop so
       // the host drive loop can settle it before later timers (e.g. the harness
       // timeout) fire. No-op when nothing is pending (the disk path).
@@ -2675,9 +3171,10 @@ const EVENT_LOOP_BOOTSTRAP: &str = r#"
     if (typeof callback !== 'function') {
       throw new TypeError('queueMicrotask: callback is not callable');
     }
+    var reportMicrotaskException = state.taskHooks[realm].__reportListenerException;
     Promise.resolve().then(function() {
       // "Report the exception" rather than rejecting an invisible promise.
-      try { callback(); } catch (ex) { globalThis.__reportListenerException(ex); }
+      try { callback(); } catch (ex) { reportMicrotaskException(ex); }
     });
   };
   // Milliseconds until the next timer is due (real-time), or -1 if none. The drive
@@ -2697,80 +3194,197 @@ const EVENT_LOOP_BOOTSTRAP: &str = r#"
 /// per target keyed by type; `dispatchEvent` calls them synchronously over a copy.
 const EVENT_TARGET_BOOTSTRAP: &str = r#"
 (function() {
-  // Shared EventTarget. Listeners are stored as `{cb, once, passive}` records,
-  // keyed by phase ('c:'/'b:' + type) — the same model Node uses in dom.rs, so
-  // window and DOM nodes share one listener shape and one firing helper
-  // (`__fire`). window has no DOM children, so its own `dispatchEvent` is a
-  // target-only dispatch; Node (dom.rs) overrides dispatchEvent with the full
-  // capture → target → bubble walk and reuses `__fire` per node (including
-  // window at the top of the propagation path). See
-  // docs/2026-06-01_event_model_convergence_plan.md.
+  // Shared across the agent's realms, then hidden with __agentTimers. Public
+  // redispatch must clear trust even when a UA event came from another realm.
+  var uaEventTrust = globalThis.__agentTimers.domEventTrust;
+  var trustGet = WeakMap.prototype.get, trustSet = WeakMap.prototype.set;
+  var trustApply = Reflect.apply;
+  var nodeDispatch = globalThis.__agentTimers.domNodeDispatch;
+  var mouseEvents = globalThis.__agentTimers.domMouseEvents;
+  function clearUAEventTrust(event) {
+    if (trustApply(trustGet, uaEventTrust, [event]) !== undefined) {
+      trustApply(trustSet, uaEventTrust, [event, false]);
+    }
+  }
+  // Shared EventTarget over the Rust listener registry (genet-events). The
+  // registry owns listener order, phases, once/passive and the dispatch walk; a
+  // callback itself stays here, on its target (a WeakMap entry keyed by the
+  // wrapper), so a detached node and its listeners are collected together. The
+  // realm's `evHook`, handed to every native dispatch, is how Rust runs one.
   function eventOpts(arg) {
     if (arg && typeof arg === 'object') {
       return { capture: !!arg.capture, once: !!arg.once, passive: !!arg.passive };
     }
     return { capture: !!arg, once: false, passive: false };
   }
-  function EventTarget() { this.__listeners = {}; }
+  var evAdd = globalThis.__evAdd, evRemove = globalThis.__evRemove, evDispatch = globalThis.__evDispatch;
+  var evComposed = globalThis.__evComposedPath, evNonPassive = globalThis.__evHasNonPassive;
+  var evHasListeners = globalThis.__evHasListeners, evNewId = globalThis.__evNewId, evDrop = globalThis.__evDropObject;
+  delete globalThis.__evAdd; delete globalThis.__evRemove; delete globalThis.__evDispatch;
+  delete globalThis.__evComposedPath; delete globalThis.__evHasNonPassive;
+  delete globalThis.__evHasListeners; delete globalThis.__evNewId; delete globalThis.__evDropObject;
+  var evApply = Reflect.apply, evString = String, evCreate = Object.create, evSplit = String.prototype.split;
+  var evTypeError = TypeError;
+  var evGet = WeakMap.prototype.get, evSet = WeakMap.prototype.set;
+  // Agent-wide, so every realm names one window or EventTarget object by one key.
+  var targetKeys = globalThis.__agentTimers.eventTargetKeys;
+  if (!targetKeys) targetKeys = globalThis.__agentTimers.eventTargetKeys = new WeakMap();
+  var windows = globalThis.__agentTimers.eventWindows;
+  if (!windows) windows = globalThis.__agentTimers.eventWindows = evCreate(null);
+  // Agent-wide too: a node keeps its listeners when it is adopted into another
+  // realm or its creation realm is discarded, and any realm's hook can run them.
+  var callbackState = globalThis.__agentTimers.eventCallbacks;
+  if (!callbackState) {
+    callbackState = globalThis.__agentTimers.eventCallbacks =
+      { stores: new WeakMap(), ids: new WeakMap(), next: 1 };   // target -> {id: cb}; cb -> id
+  }
+  var callbackStores = callbackState.stores, callbackIds = callbackState.ids;
+  var dropRegistry = typeof FinalizationRegistry === 'function'
+    ? new FinalizationRegistry(function(id) { evDrop(id); }) : null;
+  // A window is named per realm, not per object: the WindowProxy outlives a
+  // navigation, but its listeners belong to the page, so they must not.
+  var ownWindowKey = null;
+  function windowKey() {
+    if (ownWindowKey === null) {
+      var id = evNewId();
+      ownWindowKey = 'w' + id; windows[id] = globalThis;
+    }
+    return ownWindowKey;
+  }
+  function keyOf(target) {
+    if (target === globalThis) return windowKey();
+    var key = evApply(evGet, targetKeys, [target]);
+    if (key !== undefined) return key;
+    var id = evNewId();
+    key = 'o' + id;
+    if (dropRegistry) dropRegistry.register(target, id);
+    evApply(evSet, targetKeys, [target, key]);
+    return key;
+  }
+  function callbackId(callback) {
+    var id = evApply(evGet, callbackIds, [callback]);
+    if (id === undefined) { id = callbackState.next++; evApply(evSet, callbackIds, [callback, id]); }
+    return id;
+  }
+  // `ref` is a node wrapper's reflector (the registry keys nodes by it); other
+  // targets are keyed through `keyOf`.
+  function addListener(target, ref, type, callback, options) {
+    type = evString(type);
+    if (callback === null || callback === undefined) return;
+    if (typeof callback !== 'function' && typeof callback !== 'object') {
+      throw new evTypeError("Failed to execute 'addEventListener': parameter 2 is not of type 'EventListener'.");
+    }
+    var o = eventOpts(options);
+    var id = callbackId(callback);
+    var flags = (o.capture ? 'c' : '') + (o.once ? 'o' : '') + (o.passive ? 'p' : '');
+    if (evAdd(ref !== undefined ? ref : keyOf(target), type, evString(id), flags) === '1') {
+      var store = evApply(evGet, callbackStores, [target]);
+      if (!store) { store = evCreate(null); evApply(evSet, callbackStores, [target, store]); }
+      store[id] = callback;
+    }
+  }
+  function removeListener(target, ref, type, callback, options) {
+    type = evString(type);
+    if (callback === null || callback === undefined) return;
+    var id = evApply(evGet, callbackIds, [callback]);
+    if (id === undefined) return;
+    var o = eventOpts(options);
+    var removed = evRemove(ref !== undefined ? ref : keyOf(target), type, evString(id), o.capture ? '1' : '0');
+    if (removed === '2') {
+      var store = evApply(evGet, callbackStores, [target]);
+      if (store) delete store[id];
+    }
+  }
+  // The DOM bootstrap supplies what only it can: wrapping a node key and the
+  // form activation behaviours.
+  var nodeOps = null;
+  function resolveKey(key, objectTarget) {
+    var kind = key.charAt(0), rest = key.slice(1);
+    if (kind === 'n') return nodeOps ? nodeOps.resolve(rest) : null;
+    if (kind === 'w') return windows[rest] || null;
+    return objectTarget;
+  }
+  // Rust-initiated callbacks. `invoke` runs one listener and reports the event's
+  // flags back as a bitmask (1 stop, 2 stop-immediate, 4 canceled).
+  // Passed to every native dispatch: Rust calls back through the realm's own code.
+  function evHook(op, a, b, c, d, e, f, g) {
+    if (op === 'invoke') {
+      var current = resolveKey(a, g);
+      var store = current && evApply(evGet, callbackStores, [current]);
+      var callback = store && store[b];
+            if (callback === undefined || callback === null) return '0';
+      var target = d ? resolveKey(d, g) : null;
+      c.target = target; c.srcElement = target; c.currentTarget = current;
+      c.eventPhase = +e.charAt(0); c.__inPassive = e.length > 1; c.__eid = +f;
+      try {
+        if (typeof callback === 'function') {
+          evApply(callback, current, [c]);
+        } else {
+          var handler = callback.handleEvent;
+          if (typeof handler !== 'function') throw new evTypeError('EventListener.handleEvent is not callable');
+          evApply(handler, callback, [c]);
+        }
+      } catch (ex) { reportException(ex, '', 'Uncaught (in listener): '); }
+      c.__inPassive = false;
+      return evString((c.__stop ? 1 : 0) + (c.__stopImmediate ? 2 : 0) + (c.__canceled ? 4 : 0));
+    }
+    if (op === 'activationTarget') return nodeOps && nodeOps.activationTarget(resolveKey(a)) ? '1' : '0';
+    if (op === 'activate') { if (nodeOps) nodeOps.activate(resolveKey(a), b); return ''; }
+    return '';
+  }
+  function dispatchTo(target, ref, event, windowKey, activation) {
+    event.__dispatch = true;
+    var flags = (event.bubbles ? 'b' : '') + (event.composed ? 'c' : '') + (event.__stop ? 's' : '') +
+      (event.__stopImmediate ? 'i' : '') + (event.__canceled ? 'x' : '') + (activation ? 'a' : '');
+    var out = '00';
+    try {
+      out = evDispatch(ref !== undefined ? ref : keyOf(target), event, target, windowKey || '', evString(event.type), flags, evHook);
+    } finally {
+      // DOM clears the transient state after dispatch; `clearTargets` also
+      // nulls the target of an event that ended inside a shadow tree.
+      event.__dispatch = false; event.currentTarget = null; event.eventPhase = 0;
+      event.__stop = false; event.__stopImmediate = false; event.__eid = 0;
+      event.target = out.charAt(1) === '1' ? null : target;
+      event.srcElement = event.target;
+    }
+    return out.charAt(0) !== '1';
+  }
+  function composedPathOf(event) {
+    var id = event.__eid;
+    if (!id) return [];
+    var list = evComposed(evString(id));
+    if (!list) return [];
+    var keys = evApply(evSplit, list, [',']), out = [];
+    for (var i = 0; i < keys.length; i++) {
+      var entry = resolveKey(keys[i], event.currentTarget);
+      if (entry) out[out.length] = entry;
+    }
+    return out;
+  }
+  globalThis.__agentTimers.eventHasListeners = function(target) {
+    return evHasListeners(keyOf(target)) === '1';
+  };
+  Object.defineProperty(globalThis, '__eventCore', { configurable: true, writable: true, value: {
+    add: addListener, remove: removeListener, dispatch: dispatchTo, composedPath: composedPathOf,
+    windowKey: function() { return windowKey().slice(1); },
+    hasNonPassive: function(ref, type, windowKey) { return evNonPassive(ref, evString(type), windowKey || '') === '1'; },
+    setNodeOps: function(ops) { nodeOps = ops; }
+  } });
+  function EventTarget() {}
   EventTarget.prototype.addEventListener = function(type, cb, opts) {
-    if (typeof cb !== 'function') return;
-    if (!this.__listeners) this.__listeners = {};
-    var o = eventOpts(opts);
-    var key = (o.capture ? 'c:' : 'b:') + type;
-    var l = this.__listeners[key] || (this.__listeners[key] = []);
-    for (var i = 0; i < l.length; i++) { if (l[i].cb === cb) return; }
-    l.push({ cb: cb, once: o.once, passive: o.passive });
+    addListener(this, undefined, type, cb, opts);
   };
   EventTarget.prototype.removeEventListener = function(type, cb, opts) {
-    if (!this.__listeners) return;
-    var o = eventOpts(opts);
-    var l = this.__listeners[(o.capture ? 'c:' : 'b:') + type];
-    if (!l) return;
-    for (var i = 0; i < l.length; i++) {
-      if (l[i].cb === cb) { l.splice(i, 1); return; }
-    }
-  };
-  // Fire one node's listeners for `key` ('c:'/'b:' + type). Honors once (remove
-  // before call), passive (preventDefault no-op via __inPassive), and
-  // stopImmediatePropagation (halts the rest of this node's listeners). Shared
-  // by window's dispatchEvent here and Node's propagation walk in dom.rs.
-  EventTarget.prototype.__fire = function(event, key) {
-    if (!this.__listeners) return;
-    var l = this.__listeners[key];
-    if (!l) return;
-    event.currentTarget = this;
-    var copy = l.slice();
-    for (var i = 0; i < copy.length && !event.__stopImmediate; i++) {
-      var rec = copy[i];
-      if (rec.once) { var j = l.indexOf(rec); if (j !== -1) l.splice(j, 1); }
-      event.__inPassive = rec.passive;
-      // Listener exceptions are reported, not propagated (DOM §dispatch); see
-      // the same guard in dom/bootstrap.js's node `fire`.
-      try { rec.cb.call(this, event); }
-      catch (ex) { globalThis.__reportListenerException(ex); }
-      event.__inPassive = false;
-    }
+    removeListener(this, undefined, type, cb, opts);
   };
   EventTarget.prototype.dispatchEvent = function(event) {
     if (event.__initialized === false || event.__dispatch) {
       throw new DOMException("The event is not initialized or is being dispatched.", "InvalidStateError");
     }
-    // window is a leaf target (no DOM tree): target phase only — capture- then
-    // bubble-registered listeners on this target, with the dispatch flags set.
-    // The stop flags are cleared *after* dispatch, not before (DOM §dispatch):
-    // an event already stopped (`cancelBubble` set pre-dispatch) fires nothing.
-    event.__dispatch = true;
-    event.target = this;
-    event.srcElement = this;
-    event.eventPhase = 2; // AT_TARGET
-    if (!event.__stop) { this.__fire(event, 'c:' + event.type); }
-    if (!event.__stop) { this.__fire(event, 'b:' + event.type); }
-    event.__dispatch = false;
-    event.currentTarget = null;
-    event.eventPhase = 0;
-    event.__stop = false;
-    event.__stopImmediate = false;
-    return !event.__canceled;
+    clearUAEventTrust(event);
+    var dispatcher = trustApply(trustGet, nodeDispatch, [this]);
+    if (dispatcher) return trustApply(dispatcher, this, [event]);
+    return dispatchTo(this, undefined, event, '', false);
   };
   globalThis.EventTarget = EventTarget;
 
@@ -2785,6 +3399,7 @@ const EVENT_TARGET_BOOTSTRAP: &str = r#"
     this.composed = !!init.composed;
     this.defaultPrevented = false;
     this.__canceled = false;
+    this.__eid = 0;
     this.eventPhase = 0; // NONE until dispatch sets the phase
     this.target = null;
     this.currentTarget = null;
@@ -2821,7 +3436,7 @@ const EVENT_TARGET_BOOTSTRAP: &str = r#"
   UIEvent.prototype.constructor = UIEvent;
   globalThis.UIEvent = UIEvent;
 
-  function MouseEvent(type, init) {
+  function initializeMouseEvent(type, init) {
     UIEvent.call(this, type, init);
     init = init || {};
     this.screenX = Number(init.screenX || 0);
@@ -2836,13 +3451,20 @@ const EVENT_TARGET_BOOTSTRAP: &str = r#"
     this.buttons = Number(init.buttons || 0);
     this.relatedTarget = init.relatedTarget || null;
   }
+  function MouseEvent(type, init) {
+    if (!new.target) throw new TypeError('MouseEvent requires new');
+    trustApply(initializeMouseEvent, this, [type, init]);
+    trustApply(trustSet, mouseEvents, [this, true]);
+  }
   MouseEvent.prototype = Object.create(UIEvent.prototype);
   MouseEvent.prototype.constructor = MouseEvent;
   globalThis.MouseEvent = MouseEvent;
 
   // PointerEvent extends MouseEvent (Pointer Events): pointer identity + geometry.
   function PointerEvent(type, init) {
-    MouseEvent.call(this, type, init);
+    if (!new.target) throw new TypeError("PointerEvent requires new");
+    trustApply(initializeMouseEvent, this, [type, init]);
+    trustApply(trustSet, mouseEvents, [this, true]);
     init = init || {};
     this.pointerId = Number(init.pointerId || 0);
     this.width = Number(init.width || 1);
@@ -2862,7 +3484,9 @@ const EVENT_TARGET_BOOTSTRAP: &str = r#"
   // WheelEvent extends MouseEvent (CSSOM View / UI Events): scroll deltas.
   var WHEEL_MODE = { PIXEL: 0, LINE: 1, PAGE: 2 };
   function WheelEvent(type, init) {
-    MouseEvent.call(this, type, init);
+    if (!new.target) throw new TypeError("WheelEvent requires new");
+    trustApply(initializeMouseEvent, this, [type, init]);
+    trustApply(trustSet, mouseEvents, [this, true]);
     init = init || {};
     this.deltaX = Number(init.deltaX || 0);
     this.deltaY = Number(init.deltaY || 0);
@@ -2944,12 +3568,9 @@ const EVENT_TARGET_BOOTSTRAP: &str = r#"
   TouchEvent.prototype.constructor = TouchEvent;
   globalThis.TouchEvent = TouchEvent;
 
-  // The Window's listeners live on `globalThis` **itself**, not on a private
-  // EventTarget instance. This is load-bearing: `Node.prototype.dispatchEvent`
-  // (dom/bootstrap.js) walks the tree and, at the top of the path, fires the
-  // window by reading `globalThis.__listeners` directly. If the listeners lived
-  // anywhere else, `window.addEventListener('click', …)` would never fire for a
-  // click on the page — it would only see events dispatched *at* the window.
+  // The Window's listeners are registered against `globalThis` **itself**, not a
+  // private EventTarget instance, so the window the registry puts at the top of
+  // a connected node's path is the object `window.addEventListener` registers.
   //
   // The options argument is forwarded, so `{capture, once, passive}` reaches the
   // window too (dropping it silently made every window listener non-passive).
@@ -2962,14 +3583,6 @@ const EVENT_TARGET_BOOTSTRAP: &str = r#"
   globalThis.dispatchEvent = function(event) {
     return EventTarget.prototype.dispatchEvent.call(globalThis, event);
   };
-  // `dispatchEvent` fires through `this.__fire`, and globalThis does not inherit
-  // from EventTarget.prototype — it only borrows its methods — so it needs its
-  // own. (Node's tree walk calls the standalone `fire` in dom/bootstrap.js, which
-  // reads `__listeners` off the node directly, so it needs nothing here.)
-  globalThis.__fire = function(event, key) {
-    return EventTarget.prototype.__fire.call(globalThis, event, key);
-  };
-
   // "Report the exception" (HTML): fire an ErrorEvent-shaped `error` event at
   // the global, then fall back to the console. This is what a listener's
   // exception does instead of propagating out of dispatchEvent — and it is how
@@ -2977,27 +3590,38 @@ const EVENT_TARGET_BOOTSTRAP: &str = r#"
   // `message` / `error` / `filename` / `lineno` / `colno` to fail the running
   // test. Guard against recursion: a throwing error-listener must not re-enter.
   var reporting = false;
-  globalThis.__reportListenerException = function(ex) {
-    var msg = (ex && ex.message !== undefined) ? String(ex.message) : String(ex);
+  var reportString = String, reportError = Error;
+  var reportConsole = globalThis.console && globalThis.console.error;
+  function reportException(ex, filename, label) {
+    var msg = (ex && ex.message !== undefined) ? reportString(ex.message) : reportString(ex);
     if (!reporting) {
       reporting = true;
       try {
         var ev = new Event('error', { cancelable: true });
         ev.message = msg;
         ev.error = ex;
-        ev.filename = '';
+        ev.filename = filename || '';
         ev.lineno = 0;
         ev.colno = 0;
-        globalThis.dispatchEvent(ev);
+        trustApply(EventTarget.prototype.dispatchEvent, globalThis, [ev]);
       } catch (ignored) {
         // An error handler that itself threw: fall through to the console.
       }
       reporting = false;
     }
-    if (globalThis.console && globalThis.console.error) {
-      globalThis.console.error('Uncaught (in listener): ' + msg);
+    if (reportConsole) {
+      trustApply(reportConsole, undefined, [label + msg]);
     }
+  }
+  globalThis.__reportListenerException = function(ex) {
+    reportException(ex, '', 'Uncaught (in listener): ');
   };
+  globalThis.__reportScriptException = function(message, filename) {
+    reportException(new reportError(reportString(message)), reportString(filename || ''), 'Uncaught: ');
+  };
+  // The agent queue can report callback exceptions without consulting a public
+  // global that an authored page may replace.
+  globalThis.__agentTimers.reportException = globalThis.__reportListenerException;
 })();
 "#;
 
@@ -3100,8 +3724,13 @@ fn scroll_arg<E: ScriptEngine>(cx: &mut E::CallCx<'_>, i: usize) -> Result<f64, 
 fn read_scroll<E: ScriptEngine>(cx: &mut E::CallCx<'_>) -> (f32, f32) {
     cx.host_data()
         .and_then(|d| {
-            d.downcast_ref::<RefCell<HostState>>()
-                .map(|h| h.borrow().viewport_scroll)
+            d.downcast_ref::<RefCell<HostState>>().map(|h| {
+                let (geometry, deferred) = {
+                    let h = h.borrow();
+                    (h.geometry.clone(), h.viewport_scroll)
+                };
+                geometry.map_or(deferred, |g| g.viewport_scroll())
+            })
         })
         .unwrap_or((0.0, 0.0))
 }
@@ -3111,6 +3740,9 @@ fn read_scroll<E: ScriptEngine>(cx: &mut E::CallCx<'_>) -> (f32, f32) {
 fn write_scroll<E: ScriptEngine>(cx: &mut E::CallCx<'_>, scroll: (f32, f32)) {
     if let Some(data) = cx.host_data() {
         if let Some(host) = data.downcast_ref::<RefCell<HostState>>() {
+            // A host with geometry scrolls now and answers with the clamped offset.
+            let geometry = host.borrow().geometry.clone();
+            let scroll = geometry.map_or(scroll, |g| g.set_viewport_scroll(scroll.0, scroll.1));
             let mut host = host.borrow_mut();
             host.viewport_scroll = scroll;
             host.scroll_into_view = None;
@@ -3274,16 +3906,72 @@ const SHELL_GLOBALS_BOOTSTRAP: &str = r#"
   // and its titlebar area is the empty DOMRect. Keep this object stable: the
   // WebIDL attribute is [SameObject], and consumers retain it for
   // `geometrychange` listeners even while it is hidden.
-  function DOMRect(x, y, width, height) {
-    this.x = Number(x || 0);
-    this.y = Number(y || 0);
-    this.width = Number(width || 0);
-    this.height = Number(height || 0);
-    this.left = Math.min(this.x, this.x + this.width);
-    this.right = Math.max(this.x, this.x + this.width);
-    this.top = Math.min(this.y, this.y + this.height);
-    this.bottom = Math.max(this.y, this.y + this.height);
+  // DOMRectReadOnly / DOMRect (Geometry Interfaces): four doubles in a private
+  // slot, the edges derived from them.
+  var rectSlots = new WeakMap();
+  function rectSlot(object) {
+    var slot = rectSlots.get(object);
+    if (!slot) throw new TypeError('Illegal invocation');
+    return slot;
   }
+  function rectNumber(value) { return value === undefined ? 0 : Number(value); }
+  function DOMRectReadOnly(x, y, width, height) {
+    if (!(this instanceof DOMRectReadOnly)) {
+      throw new TypeError("Failed to construct 'DOMRectReadOnly': Please use the 'new' operator");
+    }
+    rectSlots.set(this, [rectNumber(x), rectNumber(y), rectNumber(width), rectNumber(height)]);
+  }
+  function DOMRect(x, y, width, height) {
+    if (!(this instanceof DOMRect)) {
+      throw new TypeError("Failed to construct 'DOMRect': Please use the 'new' operator");
+    }
+    rectSlots.set(this, [rectNumber(x), rectNumber(y), rectNumber(width), rectNumber(height)]);
+  }
+  DOMRect.prototype = Object.create(DOMRectReadOnly.prototype);
+  Object.defineProperty(DOMRect.prototype, 'constructor', { configurable: true, writable: true, value: DOMRect });
+  Object.setPrototypeOf(DOMRect, DOMRectReadOnly);
+  ['x', 'y', 'width', 'height'].forEach(function(name, index) {
+    Object.defineProperty(DOMRectReadOnly.prototype, name, {
+      configurable: true, enumerable: true,
+      get: function() { return rectSlot(this)[index]; }
+    });
+    Object.defineProperty(DOMRect.prototype, name, {
+      configurable: true, enumerable: true,
+      get: function() { return rectSlot(this)[index]; },
+      set: function(value) { rectSlot(this)[index] = Number(value); }
+    });
+  });
+  var rectEdges = {
+    top: function(s) { return Math.min(s[1], s[1] + s[3]); },
+    right: function(s) { return Math.max(s[0], s[0] + s[2]); },
+    bottom: function(s) { return Math.max(s[1], s[1] + s[3]); },
+    left: function(s) { return Math.min(s[0], s[0] + s[2]); }
+  };
+  Object.keys(rectEdges).forEach(function(name) {
+    Object.defineProperty(DOMRectReadOnly.prototype, name, {
+      configurable: true, enumerable: true,
+      get: function() { return rectEdges[name](rectSlot(this)); }
+    });
+  });
+  Object.defineProperty(DOMRectReadOnly.prototype, 'toJSON', {
+    configurable: true, writable: true, enumerable: true,
+    value: function toJSON() {
+      var s = rectSlot(this);
+      return { x: s[0], y: s[1], width: s[2], height: s[3], top: rectEdges.top(s),
+               right: rectEdges.right(s), bottom: rectEdges.bottom(s), left: rectEdges.left(s) };
+    }
+  });
+  function rectFrom(Ctor) {
+    return function fromRect(other) {
+      other = other === undefined || other === null ? {} : other;
+      return new Ctor(other.x, other.y, other.width, other.height);
+    };
+  }
+  Object.defineProperty(DOMRectReadOnly, 'fromRect', { configurable: true, writable: true, enumerable: true, value: rectFrom(DOMRectReadOnly) });
+  Object.defineProperty(DOMRect, 'fromRect', { configurable: true, writable: true, enumerable: true, value: rectFrom(DOMRect) });
+  Object.defineProperty(DOMRectReadOnly.prototype, Symbol.toStringTag, { configurable: true, value: 'DOMRectReadOnly' });
+  Object.defineProperty(DOMRect.prototype, Symbol.toStringTag, { configurable: true, value: 'DOMRect' });
+  globalThis.DOMRectReadOnly = DOMRectReadOnly;
   globalThis.DOMRect = DOMRect;
 
   function WindowControlsOverlay() {
@@ -3313,6 +4001,7 @@ const SHELL_GLOBALS_BOOTSTRAP: &str = r#"
   // authored Array/Object/Function prototype method sees foreign callbacks.
   var rafCreate = Object.create;
   var rafApply = Reflect.apply;
+  var rafNumber = Number;
   var rafTrace = globalThis.__traceProtocol;
   var rafState = globalThis.__agentTimers;
   if (!rafState.animationContexts) {
@@ -3337,10 +4026,16 @@ const SHELL_GLOBALS_BOOTSTRAP: &str = r#"
     var cancelTimers = rafState.timers;
     var cancelSplice = Array.prototype.splice;
     rafState.cancelRealm = function(id) {
-      var target = Number(id);
+      var target = rafNumber(id);
+      var webglLives = rafState.webglRealmLifetimes;
+      if (webglLives && webglLives[target]) {
+        webglLives[target].current.live = false;
+        webglLives[target].closed = true;
+      }
       for (var t = cancelTimers.length - 1; t >= 0; t--) {
         if (cancelTimers[t].realm === target) rafApply(cancelSplice, cancelTimers, [t, 1]);
       }
+      if (rafState.taskHooks) delete rafState.taskHooks[target];
       var contexts = rafState.animationContexts;
       for (var c = contexts.length - 1; c >= 0; c--) {
         if (contexts[c].realm !== target) continue;
@@ -3367,6 +4062,7 @@ const SHELL_GLOBALS_BOOTSTRAP: &str = r#"
   // Run one callback per engine boundary, so the Rust driver checkpoints
   // microtasks between callbacks, including callbacks in different realms.
   globalThis.__runOneAnimationFrameCallback = function(now) {
+    now = rafNumber(now);
     if (rafState.animationPass === null) {
       var pass = rafCreate(null);
       pass.length = rafState.animationContexts.length;
@@ -3397,7 +4093,9 @@ const SHELL_GLOBALS_BOOTSTRAP: &str = r#"
         var callback = context.callbacks[handle];
         delete context.callbacks[handle];
         rafTrace('animation_frame_realm', 'performed', 'realm=' + context.realm + ';handle=' + handle);
-        rafApply(callback, context.global, [now]);
+        var reportFrameException = rafState.taskHooks[context.realm].__reportListenerException;
+        try { rafApply(callback, context.global, [now]); }
+        catch (ex) { reportFrameException(ex); }
         return 1;
       }
       pass.index++;
@@ -3452,6 +4150,26 @@ const SHELL_GLOBALS_BOOTSTRAP: &str = r#"
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn malformed_task_boolean_is_error<E: ScriptEngine>() {
+        let mut rt = Runtime::<E>::new().expect("runtime");
+        let malformed = rt.eval("({toString(){throw new Error('bad conversion')}})")
+            .expect("object");
+        assert!(rt.task_boolean(&malformed).is_err());
+        let unexpected = rt.eval("'unexpected'").expect("string");
+        assert!(rt.task_boolean(&unexpected).is_err());
+    }
+
+    #[test]
+    fn malformed_task_boolean_on_boa() {
+        malformed_task_boolean_is_error::<script_engine_boa::BoaEngine>();
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn malformed_task_boolean_on_nova() {
+        malformed_task_boolean_is_error::<script_engine_nova::NovaEngine>();
+    }
 
     /// The host surface, exercised against any backend: global aliases resolve and
     /// `console.log` reaches host state through real JS execution.
@@ -3592,7 +4310,7 @@ mod tests {
 
         let mut rt = Runtime::<E>::new().expect("runtime");
         rt.eval(script).expect("schedule");
-        assert_eq!(rt.run_timers(10, 0.0), 2);
+        assert_eq!(rt.run_timers(10, 0.0).unwrap(), 2);
         assert_eq!(rt.host().borrow().console, vec!["first", "micro", "second"]);
     }
 
@@ -3672,14 +4390,14 @@ mod tests {
 
         let mut rt = Runtime::<E>::new().expect("runtime");
         rt.eval(script).expect("schedule");
-        assert!(rt.has_animation_frame_callbacks());
+        assert!(rt.has_animation_frame_callbacks().unwrap());
 
         // Pass 1: snapshot is the three registered handles; the mid-pass
         // registration ('next') must not run, the canceled one must be skipped,
         // and 'micro' must land between the two callbacks that do run.
         assert_eq!(rt.run_animation_frame_callbacks(16.0).expect("frame 1"), 2);
         assert_eq!(rt.host().borrow().console, vec!["one@16", "micro", "two"]);
-        assert!(rt.has_animation_frame_callbacks());
+        assert!(rt.has_animation_frame_callbacks().unwrap());
 
         // Pass 2: only the mid-pass registration remains.
         assert_eq!(rt.run_animation_frame_callbacks(32.0).expect("frame 2"), 1);
@@ -3689,7 +4407,7 @@ mod tests {
         );
 
         // Idle: nothing registered, nothing runs.
-        assert!(!rt.has_animation_frame_callbacks());
+        assert!(!rt.has_animation_frame_callbacks().unwrap());
         assert_eq!(rt.run_animation_frame_callbacks(48.0).expect("frame 3"), 0);
     }
 
@@ -3708,7 +4426,7 @@ mod tests {
         let _ = rt.dispatch_event(document, "click").expect("dispatch");
 
         rt.eval(script).expect("reschedule");
-        assert_eq!(rt.run_timers(10, 0.0), 1);
+        assert_eq!(rt.run_timers(10, 0.0).unwrap(), 1);
 
         let trace = rt.scheduler_trace();
         assert!(
@@ -4066,8 +4784,8 @@ mod tests {
     ///
     /// Both halves were broken: `globalThis.addEventListener` delegated to a
     /// private `EventTarget` instance, so the window's listeners lived somewhere
-    /// `Node.prototype.dispatchEvent` never looked (it fires the top of the
-    /// propagation path by reading `globalThis.__listeners`) — meaning
+    /// path walk never looked (it fired the top of the propagation path by
+    /// reading the window's own listener list) — meaning
     /// `window.addEventListener('click', …)` never saw a click on the page. And
     /// the wrapper dropped its third argument, so `{passive}` / `{capture}` /
     /// `{once}` silently never applied to a window listener.
@@ -4270,6 +4988,23 @@ mod tests {
 
         assert_eq!(clone.host().borrow().console, vec!["2"]);
         assert_eq!(template.host().borrow().console, vec!["template", "1"]);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn runtime_snapshot_clone_preserves_explicit_worker_policy() {
+        let mut template = Runtime::<script_engine_nova::NovaEngine>::new().expect("runtime");
+        let policy = WorkerPolicy::TrustedCooperative {
+            resource_timeout: std::time::Duration::from_millis(100),
+            shutdown_grace: std::time::Duration::from_secs(2),
+        };
+        template.set_worker_policy(policy);
+        let mut clone = template.snapshot_clone().expect("snapshot clone");
+        assert_eq!(clone.host().borrow().worker_policy, policy);
+        let value = clone.eval("(function() { try { new Worker('missing.js'); return 'started'; } catch (e) { return e.name; } })()")
+            .expect("worker construction check");
+        assert_eq!(clone.value_to_string(&value).unwrap(), "started");
+        let _ = clone.shutdown_workers();
     }
 
     #[cfg(not(target_arch = "wasm32"))]

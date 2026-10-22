@@ -1,0 +1,14 @@
+    Blocking waiting for file lock on package cache
+error: failed to get `netrender_device` as a dependency of package `genet-compositor v0.2.0 (C:\Users\mark_\Code\repos\genet\components\genet-compositor)`
+
+Caused by:
+  failed to load source for dependency `netrender_device`
+
+Caused by:
+  unable to update https://github.com/merely-made/netrender.git?rev=f4f9c0d87e6a6030b61075a45118055dfe6a12df
+
+Caused by:
+  failed to lookup reference in preexisting repository, and can't check for updates in offline mode (--offline)
+
+Caused by:
+  revspec 'f4f9c0d87e6a6030b61075a45118055dfe6a12df' not found; class=Reference (4); code=NotFound (-3)

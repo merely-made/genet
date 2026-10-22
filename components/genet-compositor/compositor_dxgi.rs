@@ -42,7 +42,6 @@
 //! composition swapchain, and `present` copies the keyed destination
 //! into that swapchain before updating transform / clip / opacity.
 
-
 use rustc_hash::FxHashMap;
 use wgpu::Texture;
 use windows::Win32::{
@@ -425,7 +424,9 @@ impl WindowsDxgiBackend {
         opacity: f32,
     ) -> Result<(), BackendError> {
         let Some(surface) = self.surfaces.get(&key) else {
-            return Ok(());
+            return Err(BackendError::DComp(format!(
+                "present_surface({key:?}): surface not declared"
+            )));
         };
 
         Self::apply_surface_state(surface, transform, clip, opacity)?;
@@ -660,10 +661,12 @@ impl OsCompositorBackend for WindowsDxgiBackend {
         SyncMechanism::ExplicitFence
     }
 
-    fn present_master(&mut self, master: &Texture) {
-        if let Err(err) = WindowsDxgiBackend::present_master(self, master) {
-            log::warn!("[WindowsDxgiBackend] present_master failed: {err}");
-        }
+    fn present_master(
+        &mut self,
+        master: &Texture,
+    ) -> Result<(), crate::compositor::BoxedBackendError> {
+        WindowsDxgiBackend::present_master(self, master)
+            .map_err(|err| Box::new(err) as crate::compositor::BoxedBackendError)
     }
 
     fn declare(
@@ -807,10 +810,9 @@ impl OsCompositorBackend for WindowsDxgiBackend {
         transform: [f32; 6],
         clip: Option<[f32; 4]>,
         opacity: f32,
-    ) {
-        if let Err(err) = self.present_surface(key, transform, clip, opacity) {
-            log::warn!("[WindowsDxgiBackend] present({key:?}) failed: {err}");
-        }
+    ) -> Result<(), crate::compositor::BoxedBackendError> {
+        self.present_surface(key, transform, clip, opacity)
+            .map_err(|err| Box::new(err) as crate::compositor::BoxedBackendError)
     }
 }
 

@@ -6,7 +6,8 @@ publish = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
-rust-version.workspace = true
+
+rust-version = "1.97.1"
 description = "Raw engine host contracts for Genet: engine profiles, capabilities, resource fetching, and href resolution."
 keywords = ["genet", "host", "engine", "contract"]
 categories = ["gui", "api-bindings"]
@@ -15,6 +16,9 @@ categories = ["gui", "api-bindings"]
 name = "genet_host_api"
 path = "lib.rs"
 bench = false
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)', 'cfg(llvm_pgo)'] }

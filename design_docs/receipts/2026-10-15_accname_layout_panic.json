@@ -1,0 +1,1642 @@
+{
+  "schema_version": 1,
+  "scope": "AccName family K: normal-flow containing-block ancestry; unblock name-from-content WPT reporting",
+  "base": {
+    "head": "27ec5cd5a920a194cadff062a95ad552a7a58f4a",
+    "status": "",
+    "lock_sha256": "75a0a55e3241f794661e2c5d390005e1d56229700d6cbd54f9e05b7034b50381",
+    "shared_owned_target": "/home/markik/Code/testing/genet/wpt-ledger/2026-10-15_accname_whitespace/target"
+  },
+  "baseline_runner_sha256": "dbf5282a902e489836bad5a757cdaf688dc82f29e42e987f2fda4eabc11f0399",
+  "baseline_accname_reuse": {
+    "reason": "Fresh unmodified current-main build is byte-identical to the already-qualified family E runner; lock and corpus also match exactly. Reuse actual accepted maps rather than repeat an identical runtime.",
+    "origins": {
+      "boa": {
+        "map": "/home/markik/Code/testing/genet/wpt-ledger/2026-10-15_accname_whitespace/candidate-boa.json",
+        "sha256": "31325ab72e6ad4929c1766da96deeb2413cd57f7b83cd6b87aa4b53ca80f3381",
+        "reused_runner_sha256": "dbf5282a902e489836bad5a757cdaf688dc82f29e42e987f2fda4eabc11f0399"
+      },
+      "nova": {
+        "map": "/home/markik/Code/testing/genet/wpt-ledger/2026-10-15_accname_whitespace/candidate-nova-long.json",
+        "sha256": "08cd51b24e6af9ab1ab8cc90c21f3c63eaad3d4e69c8178995eb3e9c4560e41b",
+        "reused_runner_sha256": "dbf5282a902e489836bad5a757cdaf688dc82f29e42e987f2fda4eabc11f0399"
+      }
+    }
+  },
+  "candidate": {
+    "head": "27ec5cd5a920a194cadff062a95ad552a7a58f4a",
+    "files": {
+      "components/buckram/src/box_tree.rs": "06a27319f9aa44c1d089002612d88d95a399422d57f472149cc01a265f2fa012",
+      "components/genet-livery/src/document/tests.rs": "9e0284f44ddf9b87a3bed2b0a3fe005c438f9ce91beab389ac52c86c7396016e"
+    },
+    "patch_sha256": "3be06a2c4d52b61740d18c4fb7b657fc96ac57988e890c7cdce89b94d7f55984",
+    "lock_sha256": "75a0a55e3241f794661e2c5d390005e1d56229700d6cbd54f9e05b7034b50381",
+    "runner_sha256": "15da86104fc19e448f6f6f7665b3e86cd96843435eb8b39b377b805662d6231d"
+  },
+  "toolchain": "rustc 1.99.0 (b940084d7 2026-09-28), x86_64-unknown-linux-gnu; dev debug=0",
+  "raw_evidence_directory": "/home/markik/Code/testing/genet/wpt-ledger/2026-10-15_accname_layout_panic",
+  "raw_artifact_sha256": {
+    "baseline-source.json": "7a26b68226c734463635221335a6e23c212ab7ecab1df510fb9a697ab5657fb6",
+    "candidate-source.json": "3116589f5d38c6229cdfaa7c4c1bdd4b864489cc29bf3c277b6e82af9f490e14",
+    "candidate.patch": "3be06a2c4d52b61740d18c4fb7b657fc96ac57988e890c7cdce89b94d7f55984",
+    "resolved-Cargo.lock": "75a0a55e3241f794661e2c5d390005e1d56229700d6cbd54f9e05b7034b50381",
+    "accname-baseline-reuse.json": "51caa878755f0c5a05a8d4e31c321bb242b5f0d733c97fa374aa10775eb6dbd0",
+    "css-corpus-files.json": "9f8649b5bfbdafe62a8eab71f2ebf2cab2e81c6a34dc13deaabd6cbca0b057a6",
+    "comparison.json": "71d521732625d37d8f9610d1ac2a7cff7af289ff2db5f7fc940046bd07fcd4c8",
+    "green-unit-summary.json": "b0e00adfe3b2544bef13aa6b915cae9cb3066b285b5f1f6eabdf8e50abe04533",
+    "review.txt": "9e4a81ccb3384656a954ee35f25f281552cc1b02a0c5f0227e111701909dac31",
+    "run.py": "6b2afff65dfe7315b3fbba563cc8a7de45b4590e12acd61d593d74c84bd4fbf1",
+    "capture_accname.py": "5d7d9d506623003519a3ca209e59d98e4b9d1a77b2b80c7de0b89cd935615b54",
+    "capture_css.py": "7b130c713bc304024516dba4c033074587e6dc4e3755b0b4771cf4faaa04224f",
+    "compare.py": "efd823e0dd719bfbaaaa2d4104e4b5da0a1698a79cb6c16fb5dbff827dd058ff",
+    "make_receipt.py": "475a7654db308c84f3eebcbe9fba6408ec33e2b489cc5aeddffc21e39678e101",
+    "finish_docs.py": "a8ad785a73970b5e81525500b50eda0ac83edc860a9d082a277e0228910f9ccb",
+    "css-groups.json": "743cd8b052fcfcf4321a3b3cdd1d19a435df2f5dd0442a9594f518ad7845088e",
+    "baseline-accname-boa.command.json": "5d08c05c33febd5ad007af04a07d59ef5fafd1b72a924ffe431221630eb743f3",
+    "baseline-accname-boa.json": "31325ab72e6ad4929c1766da96deeb2413cd57f7b83cd6b87aa4b53ca80f3381",
+    "baseline-accname-nova.command.json": "3d083516ac2897b824f327cc252dc9299738e3e264752b6434b1ad015610a917",
+    "baseline-accname-nova.json": "08cd51b24e6af9ab1ab8cc90c21f3c63eaad3d4e69c8178995eb3e9c4560e41b",
+    "candidate-accname-boa.command.json": "e87f98a188ebe6116428e6a3acebadf720646e65a4774988096a293d1e52ff98",
+    "candidate-accname-boa.json": "6988b31ac9ce6c401a5df61995fd55c210383503d05b2e7a449be0efa8f8050f",
+    "candidate-accname-nova.command.json": "1f5ae863da84e32b54070e8c8fb764808968503c4ec272f9ffd9627d02b88883",
+    "candidate-accname-nova.json": "b8d935bd33d9164ec3dbd9631b9b56fca17e663ca9e945e1cac9b77d2b282dc5",
+    "baseline-css-00.command.json": "c7375fca7e6a239bd85336a90f7b235a7dd304b64f810e1c99708c57909c4574",
+    "baseline-css-00.json": "b76d2eac048c4f227e6dbd53c8f574b6698d1b391aba3c3f03536c4a18ff7455",
+    "baseline-css-01.command.json": "5add84d64b80023ea685c3f9437524e7eb0140a54fdc73b283438ce1734a651e",
+    "baseline-css-01.json": "2dc5c47567261934955f2df382bdb0c6ff54109233c2c4218ede66efe2ddd085",
+    "baseline-css-02.command.json": "41853e45e35439865314e1f1f42e9e72e967243e74b1300b2c2069dd418ca87b",
+    "baseline-css-02.json": "28facf70fbab7f990ff1f26a9b67b188af7a0720025e20018074fd26859ceab2",
+    "baseline-css-03.command.json": "2e101bf27828ba2e8344df4ea4eb2685a7cffcfd8c6c856ec5b3e10014287183",
+    "baseline-css-03.json": "4fbf2efac8daa29ac95e95c8bfd248cf213cd4cab97ec31b5af16c1e891cc6b8",
+    "baseline-css-04.command.json": "beae08e5a1ced7cb38866228c5786754730ee802280feea63fc6440628238d37",
+    "baseline-css-04.json": "98b5be1bae77a7898e51251bd86cffbe42f17b7037b59dd03128d4b2866b9ea5",
+    "baseline-css-05.command.json": "427fe681de79a38d9d3acc83e2191716da4b23cc875b58ce15c8900bea053e26",
+    "baseline-css-05.json": "329bbc0372c5c8e4243a33ca6929636ecb1e7a82b16e7630838a79ad55836786",
+    "baseline-css-06.command.json": "0b0e2b292adae368b3d9abfab3cd44214996ae607ca8310af971df03af5a2e4d",
+    "baseline-css-06.json": "469a6846e5ac289bf439187244d1ce9b2cf1446e0be7fcf7f393e3896ac665d4",
+    "baseline-css-07.command.json": "686b353084dcf64eb2b7bf75ff95be9a412d31bc73cd52b9d84bfa78aab4338f",
+    "baseline-css-07.json": "77327b430cd7f607da51098349b849f62c8fcc59827adf3ee11e1518b251137b",
+    "baseline-css-08.command.json": "9dc3ef92a4de5c6ebf8844258052efb165fcdd0883481f3b0bd8c1a8e25bfe60",
+    "baseline-css-08.json": "3e36e0df72b1d696d5f9f4df6713f5ddf53433db6beb9f304ea90000a211fc1e",
+    "baseline-css-09.command.json": "a316e9c56b70d25ca2b58d87c56991318c80b6e1f42a0cd5bd85c3b7eeff64c4",
+    "baseline-css-09.json": "39369b753d108c4aefc40e15568a3be9831213c984c25d8b164e96b9d2b7c128",
+    "candidate-css-00.command.json": "dbd8741c4c5e4ffcf22656a0213c8efd2764c9e8f3fb0b10d02f3b9f2b84be0b",
+    "candidate-css-00.json": "074238dc9d75fc5ca7ff489a704f723f34013939b22d3c87bd1d9467c0e482e9",
+    "candidate-css-01.command.json": "f05d626e5fcc4304dc3ad189dfaf4aee5d14686bb612e6025d9ffeb7dcab12f3",
+    "candidate-css-01.json": "07619dc173d05b82da7d73851fb20d241d5966ec1a3ac3b143bd96a3beb40902",
+    "candidate-css-02.command.json": "5b8a2f7fd2321197f87a62e8676f81b5789164be85171ea0de1da3283c43c1a8",
+    "candidate-css-02.json": "8dade96a6d8456090a98e3fe14e6223b61f843e8e81015a92ede7310c254c858",
+    "candidate-css-03.command.json": "a120951983aa5343f81f12c59cf5e8cd1b2fefef86e4cd71d73db16bff28ffff",
+    "candidate-css-03.json": "28573f03f2e0581821a947ab5731f05163f8df5c2dfe08538b6ae45e000e1131",
+    "candidate-css-04.command.json": "1f6cd4cda8e87bf837af53fee04b6cf8b68ab3fc5c5b0bf4e15565ea8c9342e5",
+    "candidate-css-04.json": "d879e2465cb7a6312f691a79417fcf01e2e302f73a2ac872f5b9252fcb7f0936",
+    "candidate-css-05.command.json": "88dbcbe06064a83b1ca405d68d0b3ec47f86d3103e94415e5243fb154413ba32",
+    "candidate-css-05.json": "f0efb097e3d2d8abf2d1cf7c6feff229478fa0109ab013a2dfba694f2d5352af",
+    "candidate-css-06.command.json": "82f38c65c494fc9a9d516a4d7af14aba643bce6ac368f86e62438f3238e71396",
+    "candidate-css-06.json": "10d6d9ed14d8a204708a4a83305671c3005b877a1ba1998b60a158a87e33ad90",
+    "candidate-css-07.command.json": "4e81fc0ae6a0a8f79aeda48954880001c263e4b73baafee6ff27ad775453f00e",
+    "candidate-css-07.json": "3c430ad230c5767c5a0dc4d200c2fcbc2e356e0662782c75d2f0c11f3480f144",
+    "candidate-css-08.command.json": "9cf887a89bddf2fd491899c5ef146a44fbe5eab10e35dcfda49da41242485fe1",
+    "candidate-css-08.json": "1fda6079351100339c8885e7fcf88ba166c406bfa3e2c6a3557c477e84dcf59b",
+    "candidate-css-09.command.json": "e9a888852ed28a1b2458935ae1d103fd6e7667ebc883100283ae346c4cb4b70b",
+    "candidate-css-09.json": "1fe23361568c796ac5da87977e135913e405ac9c601b83a24ade57684f14fadd",
+    "candidate-accname-boa.stdout": "b14bf8c1de3256ff489e1bd0bc42e8415174c04d796533ee869365a7663a78c3",
+    "candidate-accname-nova.stdout": "bea9c2f10ba1e33e035e4117078dba1ad896be52132d323ca2e66c2c306d824d",
+    "candidate-accname-boa.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "candidate-accname-nova.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "baseline-css-00.stdout": "62626b3d53917d0a5325a5d404b34fa889faad609302d00c814ee90ff84a17e8",
+    "baseline-css-01.stdout": "6c0d218c49c8f0a99e06f1d9f89597a9e2cea6d438ff3582bed14cae96a08ad9",
+    "baseline-css-02.stdout": "f808ec1af9b67ecd38509efa506e04aa49dcde7fe00b7d6458d62ad61c86800c",
+    "baseline-css-03.stdout": "367c4a1ab243f13f30b3778d983e932217d61b3ad5a881930a757149629a1d68",
+    "baseline-css-04.stdout": "f5d4b4ad97af65f8b09983703e53a126b466f737888650ad2365086d3748719e",
+    "baseline-css-05.stdout": "9a1e43796d61f8ba80b3ae7993bc2b4f243157a565953ec7977b958f9fba447e",
+    "baseline-css-06.stdout": "34317cbad958561f2e32cbe121da80a90c0e64e8a8103e81f3b8b976b23715d4",
+    "baseline-css-07.stdout": "ce6198e1357fa2bc67d7acbdc0b1a34e4da507b41692a53bd1660054a1692f7f",
+    "baseline-css-08.stdout": "609de58361087f8f4e9de02af6413fba1ebb3ffa665254c1195ca35511687bae",
+    "baseline-css-09.stdout": "449297385d9e237d23963a999b788beb6ad98a249b848545c293dab88dc520b1",
+    "candidate-css-00.stdout": "b896d55f6caf34a47c346369d945b0c29dee22478ce17da35dd2cd3e3b8ada11",
+    "candidate-css-01.stdout": "124c02f97c4605f561d7cd5cb36509d72c81d3784ca608f2d4a7bfcf3d98ffe9",
+    "candidate-css-02.stdout": "b07e176f58cfdc2fff6141a28a913df0b7c524257bf3a1500e406741358de3b4",
+    "candidate-css-03.stdout": "066318c32479cbb42ab6485a68a495d6b39ca61e5688f92c795a469049cbb7e1",
+    "candidate-css-04.stdout": "b59b0201d235fdd5e7583f82669ec5f505f0319393788c3afd769a36b7a418c2",
+    "candidate-css-05.stdout": "6f890aa2a6e611b456caeb5ee4ef5adac4fba500ecd16508b11252b3a6f86005",
+    "candidate-css-06.stdout": "b0d95a7deb9717b65b80a82d0217512db30fe8075452bc1e1ce574b32c04c5f9",
+    "candidate-css-07.stdout": "89723f6d5ff01f80fd7ddd832f32d41e9a04695d3d265ff7c23b9f2257ff49bd",
+    "candidate-css-08.stdout": "8000903b8590bc6a3d04d9c3b60d09d275c03c91813f6f4a79eb5cc72a9760dc",
+    "candidate-css-09.stdout": "c7f91a9ffa96744540aad125c542eb557c8403bb807c0fc07f108c02576d5f3c",
+    "baseline-css-00.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "baseline-css-01.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "baseline-css-02.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "baseline-css-03.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "baseline-css-04.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "baseline-css-05.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "baseline-css-06.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "baseline-css-07.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "baseline-css-08.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "baseline-css-09.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "candidate-css-00.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "candidate-css-01.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "candidate-css-02.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "candidate-css-03.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "candidate-css-04.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "candidate-css-05.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "candidate-css-06.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "candidate-css-07.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "candidate-css-08.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "candidate-css-09.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "root_cause": "Ordinary non-atomic inline parents incorrectly replaced the normal-flow containing block. Atomic children sized against an inline text fragment; the existing second-pass stability assertion detected the changing basis.",
+  "change": "Skip ordinary inline boxes only in the normal-flow chain. Preserve parent links, atomic/table/replaced containers and independent absolute/fixed establishment. Keep two-pass sizing and its assertion.",
+  "reference": "https://www.w3.org/TR/CSS22/visudet.html#containing-block-details",
+  "tests": {
+    "red": {
+      "buckram_passed": 271,
+      "buckram_failed": 2,
+      "numeric_livery_regressions_failed_with_original_panic": 2
+    },
+    "green": {
+      "passed": 1072,
+      "failed": 0,
+      "ignored": 11,
+      "suite_counts": [
+        [
+          274,
+          0,
+          0
+        ],
+        [
+          334,
+          0,
+          2
+        ],
+        [
+          12,
+          0,
+          0
+        ],
+        [
+          4,
+          0,
+          0
+        ],
+        [
+          4,
+          0,
+          0
+        ],
+        [
+          15,
+          0,
+          0
+        ],
+        [
+          2,
+          0,
+          0
+        ],
+        [
+          1,
+          0,
+          0
+        ],
+        [
+          6,
+          0,
+          0
+        ],
+        [
+          17,
+          0,
+          0
+        ],
+        [
+          12,
+          0,
+          0
+        ],
+        [
+          2,
+          0,
+          0
+        ],
+        [
+          1,
+          0,
+          0
+        ],
+        [
+          2,
+          0,
+          0
+        ],
+        [
+          6,
+          0,
+          0
+        ],
+        [
+          6,
+          0,
+          0
+        ],
+        [
+          6,
+          0,
+          0
+        ],
+        [
+          13,
+          0,
+          0
+        ],
+        [
+          8,
+          0,
+          0
+        ],
+        [
+          6,
+          0,
+          0
+        ],
+        [
+          2,
+          0,
+          0
+        ],
+        [
+          2,
+          0,
+          0
+        ],
+        [
+          10,
+          0,
+          0
+        ],
+        [
+          25,
+          0,
+          0
+        ],
+        [
+          5,
+          0,
+          0
+        ],
+        [
+          4,
+          0,
+          0
+        ],
+        [
+          3,
+          0,
+          0
+        ],
+        [
+          2,
+          0,
+          0
+        ],
+        [
+          1,
+          0,
+          0
+        ],
+        [
+          1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          6
+        ],
+        [
+          3,
+          0,
+          0
+        ],
+        [
+          3,
+          0,
+          0
+        ],
+        [
+          9,
+          0,
+          0
+        ],
+        [
+          4,
+          0,
+          0
+        ],
+        [
+          78,
+          0,
+          0
+        ],
+        [
+          12,
+          0,
+          0
+        ],
+        [
+          1,
+          0,
+          0
+        ],
+        [
+          2,
+          0,
+          0
+        ],
+        [
+          5,
+          0,
+          0
+        ],
+        [
+          8,
+          0,
+          0
+        ],
+        [
+          6,
+          0,
+          0
+        ],
+        [
+          5,
+          0,
+          1
+        ],
+        [
+          1,
+          0,
+          0
+        ],
+        [
+          5,
+          0,
+          0
+        ],
+        [
+          8,
+          0,
+          0
+        ],
+        [
+          4,
+          0,
+          0
+        ],
+        [
+          59,
+          0,
+          0
+        ],
+        [
+          72,
+          0,
+          2
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ]
+      ],
+      "ignored_tests": [
+        "test layout::tests::inline_block_min_content_excludes_hanging_trailing_space ... ignored, known defect: an inline-block's min-content width counts the line's hanging trailing space",
+        "test text::tests::boundary_index_timing_matches_reference_semantics ... ignored, manual bounded timing observation; comparison-count scaling is the enforced gate",
+        "test continued_block_root_resumes_across_two_columns ... ignored, K6: block continuation kernel not implemented",
+        "test continued_inline_root_resumes_its_lines_in_the_next_column ... ignored, K6: inline continuation kernel not implemented",
+        "test continued_table_root_repeats_its_header_and_footer_in_each_column ... ignored, K6: table continuation kernel not implemented",
+        "test document_session_hosts_a_continued_block_root ... ignored, K6: fragmented block session consumers not implemented",
+        "test document_session_hosts_a_continued_inline_root ... ignored, K6: fragmented inline session consumers not implemented",
+        "test document_session_hosts_a_continued_table_root ... ignored, K6: fragmented table session consumers not implemented",
+        "test nested_table_cell_does_not_change_constrained_column_distribution ... ignored, known defect: constrained outer-table column distribution changes when a cell holds a nested display:table",
+        "test manifest::tests::real_manifest_enumerates_sanely ... ignored, loads the real ~39MB MANIFEST.json",
+        "test test262::tests::real_test262_parses ... ignored, reads a real test262 file"
+      ]
+    },
+    "changed_file_rustfmt": "pass",
+    "diff_check": "pass",
+    "workspace_rustfmt": "Existing unrelated formatting drift and missing compositor_calayer/errors.rs; changed files pass independently."
+  },
+  "accname": {
+    "boa": {
+      "before": {
+        "files": {
+          "fail": 9,
+          "pass": 9,
+          "skip": 159,
+          "error": 1
+        },
+        "assertions": {
+          "fail": 35,
+          "pass": 370
+        },
+        "assertion_total": 405,
+        "errors": {
+          "accname/name/comp_name_from_content.html": {
+            "reason": "panic",
+            "status": "error"
+          }
+        }
+      },
+      "after": {
+        "files": {
+          "fail": 10,
+          "pass": 9,
+          "skip": 159
+        },
+        "assertions": {
+          "fail": 60,
+          "pass": 424
+        },
+        "assertion_total": 484,
+        "errors": {}
+      },
+      "before_sha256": "31325ab72e6ad4929c1766da96deeb2413cd57f7b83cd6b87aa4b53ca80f3381",
+      "after_sha256": "6988b31ac9ce6c401a5df61995fd55c210383503d05b2e7a449be0efa8f8050f",
+      "prior_pass_loss": 0,
+      "missing_prior_assertions": 0,
+      "changed_prior_assertions": 0,
+      "new_assertions": 79,
+      "new_passes": 54,
+      "new_failures": 25
+    },
+    "nova": {
+      "before": {
+        "files": {
+          "fail": 9,
+          "pass": 9,
+          "skip": 159,
+          "error": 1
+        },
+        "assertions": {
+          "fail": 35,
+          "pass": 370
+        },
+        "assertion_total": 405,
+        "errors": {
+          "accname/name/comp_name_from_content.html": {
+            "reason": "panic",
+            "status": "error"
+          }
+        }
+      },
+      "after": {
+        "files": {
+          "fail": 10,
+          "pass": 9,
+          "skip": 159
+        },
+        "assertions": {
+          "fail": 60,
+          "pass": 424
+        },
+        "assertion_total": 484,
+        "errors": {}
+      },
+      "before_sha256": "08cd51b24e6af9ab1ab8cc90c21f3c63eaad3d4e69c8178995eb3e9c4560e41b",
+      "after_sha256": "b8d935bd33d9164ec3dbd9631b9b56fca17e663ca9e945e1cac9b77d2b282dc5",
+      "prior_pass_loss": 0,
+      "missing_prior_assertions": 0,
+      "changed_prior_assertions": 0,
+      "new_assertions": 79,
+      "new_passes": 54,
+      "new_failures": 25
+    }
+  },
+  "newly_reported_failures": [
+    "button with alt counter on ::before",
+    "heading with alt counter on ::before",
+    "link with alt counter on ::before",
+    "button with multiple alt counters and counter increments",
+    "heading with multiple alt counters and counter increments",
+    "link with multiple alt counters and counter increments",
+    "button name from content with ::before and ::after in rtl",
+    "heading name from content with ::before and ::after in rtl",
+    "link name from content with ::before and ::after in rtl",
+    "button name from fallback content with ::before and ::after",
+    "heading name from fallback content with ::before and ::after",
+    "link name from fallback content with ::before and ::after",
+    "button name from fallback content mixing attr() and strings with ::before and ::after",
+    "heading name from fallback content mixing attr() and strings with ::before and ::after",
+    "link name from fallback content mixing attr() and strings with ::before and ::after",
+    "heading name from content for each child including two nested links using aria-labelledby with nested image",
+    "button name from content for each child (no space, display:block)",
+    "heading name from content for each child (no space, display:block)",
+    "link name from content for each child (no space, display:block)",
+    "button name from content for each child (no space, display:inline-block)",
+    "heading name from content for each child (no space, display:inline-block)",
+    "link name from content for each child (no space, display:inline-block)",
+    "heading name from content with text-transform:uppercase",
+    "heading name from content with text-transform:capitalize",
+    "heading name from content with text-transform:lowercase"
+  ],
+  "css_guards": {
+    "0": {
+      "subset": "css/CSS2/normal-flow",
+      "before": {
+        "files": {
+          "fail": 18,
+          "error": 5,
+          "skip": 869
+        },
+        "assertions": {
+          "fail": 95
+        },
+        "assertion_total": 95,
+        "errors": {
+          "css/CSS2/normal-flow/auto-margins-used-values-with-floats.tentative.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "css/CSS2/normal-flow/auto-margins-used-values.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "css/CSS2/normal-flow/block-in-inline-hittest-002.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "css/CSS2/normal-flow/block-in-inline-hittest-margin.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "css/CSS2/normal-flow/block-in-inline-hittest-relpos-zindex.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          }
+        }
+      },
+      "after": {
+        "files": {
+          "fail": 18,
+          "error": 5,
+          "skip": 869
+        },
+        "assertions": {
+          "fail": 95
+        },
+        "assertion_total": 95,
+        "errors": {
+          "css/CSS2/normal-flow/auto-margins-used-values-with-floats.tentative.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "css/CSS2/normal-flow/auto-margins-used-values.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "css/CSS2/normal-flow/block-in-inline-hittest-002.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "css/CSS2/normal-flow/block-in-inline-hittest-margin.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "css/CSS2/normal-flow/block-in-inline-hittest-relpos-zindex.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          }
+        }
+      },
+      "before_sha256": "b76d2eac048c4f227e6dbd53c8f574b6698d1b391aba3c3f03536c4a18ff7455",
+      "after_sha256": "074238dc9d75fc5ca7ff489a704f723f34013939b22d3c87bd1d9467c0e482e9",
+      "lost_passes": [],
+      "missing": [],
+      "changed": [],
+      "added": [],
+      "file_status_changes": []
+    },
+    "1": {
+      "subset": "css/CSS2/linebox",
+      "before": {
+        "files": {
+          "error": 2,
+          "skip": 243,
+          "pass": 3,
+          "fail": 1
+        },
+        "assertions": {
+          "pass": 3,
+          "fail": 13
+        },
+        "assertion_total": 16,
+        "errors": {
+          "css/CSS2/linebox/animations/line-height-interpolation.html": {
+            "reason": "hang-killed",
+            "status": "error"
+          },
+          "css/CSS2/linebox/vertical-align-top-bottom-001.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          }
+        }
+      },
+      "after": {
+        "files": {
+          "error": 2,
+          "skip": 243,
+          "pass": 3,
+          "fail": 1
+        },
+        "assertions": {
+          "pass": 3,
+          "fail": 13
+        },
+        "assertion_total": 16,
+        "errors": {
+          "css/CSS2/linebox/animations/line-height-interpolation.html": {
+            "reason": "hang-killed",
+            "status": "error"
+          },
+          "css/CSS2/linebox/vertical-align-top-bottom-001.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          }
+        }
+      },
+      "before_sha256": "2dc5c47567261934955f2df382bdb0c6ff54109233c2c4218ede66efe2ddd085",
+      "after_sha256": "07619dc173d05b82da7d73851fb20d241d5966ec1a3ac3b143bd96a3beb40902",
+      "lost_passes": [],
+      "missing": [],
+      "changed": [],
+      "added": [],
+      "file_status_changes": []
+    },
+    "2": {
+      "subset": "html/rendering/widgets",
+      "before": {
+        "files": {
+          "skip": 51,
+          "fail": 19,
+          "error": 2,
+          "pass": 1
+        },
+        "assertions": {
+          "fail": 211,
+          "pass": 151
+        },
+        "assertion_total": 362,
+        "errors": {
+          "html/rendering/widgets/baseline-alignment-and-overflow.tentative.html": {
+            "reason": "harness-error",
+            "status": "error"
+          },
+          "html/rendering/widgets/the-select-element/select-as-listbox-default-styles.tentative.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          }
+        }
+      },
+      "after": {
+        "files": {
+          "skip": 51,
+          "fail": 19,
+          "error": 2,
+          "pass": 1
+        },
+        "assertions": {
+          "fail": 211,
+          "pass": 151
+        },
+        "assertion_total": 362,
+        "errors": {
+          "html/rendering/widgets/baseline-alignment-and-overflow.tentative.html": {
+            "reason": "harness-error",
+            "status": "error"
+          },
+          "html/rendering/widgets/the-select-element/select-as-listbox-default-styles.tentative.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          }
+        }
+      },
+      "before_sha256": "28facf70fbab7f990ff1f26a9b67b188af7a0720025e20018074fd26859ceab2",
+      "after_sha256": "8dade96a6d8456090a98e3fe14e6223b61f843e8e81015a92ede7310c254c858",
+      "lost_passes": [],
+      "missing": [],
+      "changed": [],
+      "added": [],
+      "file_status_changes": []
+    },
+    "3": {
+      "subset": "html/rendering/replaced-elements",
+      "before": {
+        "files": {
+          "fail": 13,
+          "pass": 6,
+          "skip": 65,
+          "error": 16
+        },
+        "assertions": {
+          "pass": 93,
+          "fail": 32,
+          "timeout": 3,
+          "not-run": 2
+        },
+        "assertion_total": 130,
+        "errors": {
+          "html/rendering/replaced-elements/attributes-for-embedded-content-and-images/video-aspect-ratio.html": {
+            "reason": "harness-timeout",
+            "status": "error",
+            "subtests": [
+              {
+                "name": "Aspect ratio for video with contain:size",
+                "status": "pass"
+              },
+              {
+                "name": "Aspect ratio for regular video",
+                "status": "timeout"
+              },
+              {
+                "name": "Aspect ratio for regular video with width:auto",
+                "status": "not-run"
+              },
+              {
+                "name": "Aspect ratio for regular video with aspect-ratio:auto",
+                "status": "not-run"
+              },
+              {
+                "name": "Computed style test: video with {\"width\":\"10\",\"height\":\"20\"}",
+                "status": "pass"
+              },
+              {
+                "name": "Computed style test: video with {\"width\":\"0.5\",\"height\":\"1.5\"}",
+                "status": "pass"
+              },
+              {
+                "name": "Computed style test: video with {\"width\":\"0\",\"height\":\"1\"}",
+                "status": "pass"
+              },
+              {
+                "name": "Computed style test: video with {\"width\":\"1\",\"height\":\"0\"}",
+                "status": "pass"
+              },
+              {
+                "name": "Computed style test: video with {\"width\":\"0\",\"height\":\"0\"}",
+                "status": "pass"
+              },
+              {
+                "name": "Computed style test: video with {\"width\":null,\"height\":null}",
+                "status": "pass"
+              },
+              {
+                "name": "Computed style test: video with {\"width\":\"10\",\"height\":null}",
+                "status": "pass"
+              },
+              {
+                "name": "Computed style test: video with {\"width\":null,\"height\":\"20\"}",
+                "status": "pass"
+              },
+              {
+                "name": "Computed style test: video with {\"width\":\"xx\",\"height\":\"20\"}",
+                "status": "pass"
+              },
+              {
+                "name": "Computed style test: video with {\"width\":\"10%\",\"height\":\"20\"}",
+                "status": "pass"
+              }
+            ],
+            "subtests_passed": 11,
+            "subtests_total": 14
+          },
+          "html/rendering/replaced-elements/embedded-content/audio-controls-intrinsic-size.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "html/rendering/replaced-elements/embedded-content/iframe-frameborder.html": {
+            "reason": "hang-killed",
+            "status": "error"
+          },
+          "html/rendering/replaced-elements/images/img-fallback-baseline-alignment.html": {
+            "reason": "harness-timeout",
+            "status": "error",
+            "subtests": [
+              {
+                "name": "Image fallback baseline alignment",
+                "status": "timeout"
+              }
+            ],
+            "subtests_passed": 0,
+            "subtests_total": 1
+          },
+          "html/rendering/replaced-elements/images/img-represents-image-size-before-partially-available.html": {
+            "reason": "harness-timeout",
+            "status": "error",
+            "subtests": [
+              {
+                "name": "<img> representing image: Natural size before partially available",
+                "status": "timeout"
+              }
+            ],
+            "subtests_passed": 0,
+            "subtests_total": 1
+          },
+          "html/rendering/replaced-elements/images/img-sizes-auto.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "html/rendering/replaced-elements/svg-embedded-sizing/svg-in-iframe-auto.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "html/rendering/replaced-elements/svg-embedded-sizing/svg-in-iframe-fixed.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "html/rendering/replaced-elements/svg-embedded-sizing/svg-in-iframe-percentage.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "html/rendering/replaced-elements/svg-embedded-sizing/svg-in-img-auto.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "html/rendering/replaced-elements/svg-embedded-sizing/svg-in-img-fixed.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "html/rendering/replaced-elements/svg-embedded-sizing/svg-in-img-percentage.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "html/rendering/replaced-elements/svg-embedded-sizing/svg-in-object-auto.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "html/rendering/replaced-elements/svg-embedded-sizing/svg-in-object-fixed.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "html/rendering/replaced-elements/svg-embedded-sizing/svg-in-object-percentage.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "html/rendering/replaced-elements/svg-inline-sizing/svg-inline.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          }
+        }
+      },
+      "after": {
+        "files": {
+          "fail": 13,
+          "pass": 6,
+          "skip": 65,
+          "error": 16
+        },
+        "assertions": {
+          "pass": 93,
+          "fail": 32,
+          "timeout": 3,
+          "not-run": 2
+        },
+        "assertion_total": 130,
+        "errors": {
+          "html/rendering/replaced-elements/attributes-for-embedded-content-and-images/video-aspect-ratio.html": {
+            "reason": "harness-timeout",
+            "status": "error",
+            "subtests": [
+              {
+                "name": "Aspect ratio for video with contain:size",
+                "status": "pass"
+              },
+              {
+                "name": "Aspect ratio for regular video",
+                "status": "timeout"
+              },
+              {
+                "name": "Aspect ratio for regular video with width:auto",
+                "status": "not-run"
+              },
+              {
+                "name": "Aspect ratio for regular video with aspect-ratio:auto",
+                "status": "not-run"
+              },
+              {
+                "name": "Computed style test: video with {\"width\":\"10\",\"height\":\"20\"}",
+                "status": "pass"
+              },
+              {
+                "name": "Computed style test: video with {\"width\":\"0.5\",\"height\":\"1.5\"}",
+                "status": "pass"
+              },
+              {
+                "name": "Computed style test: video with {\"width\":\"0\",\"height\":\"1\"}",
+                "status": "pass"
+              },
+              {
+                "name": "Computed style test: video with {\"width\":\"1\",\"height\":\"0\"}",
+                "status": "pass"
+              },
+              {
+                "name": "Computed style test: video with {\"width\":\"0\",\"height\":\"0\"}",
+                "status": "pass"
+              },
+              {
+                "name": "Computed style test: video with {\"width\":null,\"height\":null}",
+                "status": "pass"
+              },
+              {
+                "name": "Computed style test: video with {\"width\":\"10\",\"height\":null}",
+                "status": "pass"
+              },
+              {
+                "name": "Computed style test: video with {\"width\":null,\"height\":\"20\"}",
+                "status": "pass"
+              },
+              {
+                "name": "Computed style test: video with {\"width\":\"xx\",\"height\":\"20\"}",
+                "status": "pass"
+              },
+              {
+                "name": "Computed style test: video with {\"width\":\"10%\",\"height\":\"20\"}",
+                "status": "pass"
+              }
+            ],
+            "subtests_passed": 11,
+            "subtests_total": 14
+          },
+          "html/rendering/replaced-elements/embedded-content/audio-controls-intrinsic-size.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "html/rendering/replaced-elements/embedded-content/iframe-frameborder.html": {
+            "reason": "hang-killed",
+            "status": "error"
+          },
+          "html/rendering/replaced-elements/images/img-fallback-baseline-alignment.html": {
+            "reason": "harness-timeout",
+            "status": "error",
+            "subtests": [
+              {
+                "name": "Image fallback baseline alignment",
+                "status": "timeout"
+              }
+            ],
+            "subtests_passed": 0,
+            "subtests_total": 1
+          },
+          "html/rendering/replaced-elements/images/img-represents-image-size-before-partially-available.html": {
+            "reason": "harness-timeout",
+            "status": "error",
+            "subtests": [
+              {
+                "name": "<img> representing image: Natural size before partially available",
+                "status": "timeout"
+              }
+            ],
+            "subtests_passed": 0,
+            "subtests_total": 1
+          },
+          "html/rendering/replaced-elements/images/img-sizes-auto.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "html/rendering/replaced-elements/svg-embedded-sizing/svg-in-iframe-auto.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "html/rendering/replaced-elements/svg-embedded-sizing/svg-in-iframe-fixed.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "html/rendering/replaced-elements/svg-embedded-sizing/svg-in-iframe-percentage.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "html/rendering/replaced-elements/svg-embedded-sizing/svg-in-img-auto.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "html/rendering/replaced-elements/svg-embedded-sizing/svg-in-img-fixed.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "html/rendering/replaced-elements/svg-embedded-sizing/svg-in-img-percentage.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "html/rendering/replaced-elements/svg-embedded-sizing/svg-in-object-auto.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "html/rendering/replaced-elements/svg-embedded-sizing/svg-in-object-fixed.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "html/rendering/replaced-elements/svg-embedded-sizing/svg-in-object-percentage.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          },
+          "html/rendering/replaced-elements/svg-inline-sizing/svg-inline.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          }
+        }
+      },
+      "before_sha256": "4fbf2efac8daa29ac95e95c8bfd248cf213cd4cab97ec31b5af16c1e891cc6b8",
+      "after_sha256": "28573f03f2e0581821a947ab5731f05163f8df5c2dfe08538b6ae45e000e1131",
+      "lost_passes": [],
+      "missing": [],
+      "changed": [],
+      "added": [],
+      "file_status_changes": []
+    },
+    "4": {
+      "subset": "css/css-sizing/fit-content-percentage-padding.html",
+      "before": {
+        "files": {
+          "fail": 1
+        },
+        "assertions": {
+          "fail": 3
+        },
+        "assertion_total": 3,
+        "errors": {}
+      },
+      "after": {
+        "files": {
+          "fail": 1
+        },
+        "assertions": {
+          "fail": 3
+        },
+        "assertion_total": 3,
+        "errors": {}
+      },
+      "before_sha256": "98b5be1bae77a7898e51251bd86cffbe42f17b7037b59dd03128d4b2866b9ea5",
+      "after_sha256": "d879e2465cb7a6312f691a79417fcf01e2e302f73a2ac872f5b9252fcb7f0936",
+      "lost_passes": [],
+      "missing": [],
+      "changed": [],
+      "added": [],
+      "file_status_changes": []
+    },
+    "5": {
+      "subset": "css/css-sizing/intrinsic-percent-non-replaced-006.html",
+      "before": {
+        "files": {
+          "fail": 1
+        },
+        "assertions": {
+          "pass": 1,
+          "fail": 4
+        },
+        "assertion_total": 5,
+        "errors": {}
+      },
+      "after": {
+        "files": {
+          "fail": 1
+        },
+        "assertions": {
+          "pass": 1,
+          "fail": 4
+        },
+        "assertion_total": 5,
+        "errors": {}
+      },
+      "before_sha256": "329bbc0372c5c8e4243a33ca6929636ecb1e7a82b16e7630838a79ad55836786",
+      "after_sha256": "f0efb097e3d2d8abf2d1cf7c6feff229478fa0109ab013a2dfba694f2d5352af",
+      "lost_passes": [],
+      "missing": [],
+      "changed": [],
+      "added": [],
+      "file_status_changes": []
+    },
+    "6": {
+      "subset": "css/css-sizing/intrinsic-percent-replaced-028.html",
+      "before": {
+        "files": {
+          "fail": 1
+        },
+        "assertions": {
+          "fail": 8
+        },
+        "assertion_total": 8,
+        "errors": {}
+      },
+      "after": {
+        "files": {
+          "fail": 1
+        },
+        "assertions": {
+          "fail": 8
+        },
+        "assertion_total": 8,
+        "errors": {}
+      },
+      "before_sha256": "469a6846e5ac289bf439187244d1ce9b2cf1446e0be7fcf7f393e3896ac665d4",
+      "after_sha256": "10d6d9ed14d8a204708a4a83305671c3005b877a1ba1998b60a158a87e33ad90",
+      "lost_passes": [],
+      "missing": [],
+      "changed": [],
+      "added": [],
+      "file_status_changes": []
+    },
+    "7": {
+      "subset": "css/css-sizing/keyword-sizes-on-inline-block.html",
+      "before": {
+        "files": {
+          "error": 1
+        },
+        "assertions": {},
+        "assertion_total": 0,
+        "errors": {
+          "css/css-sizing/keyword-sizes-on-inline-block.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          }
+        }
+      },
+      "after": {
+        "files": {
+          "error": 1
+        },
+        "assertions": {},
+        "assertion_total": 0,
+        "errors": {
+          "css/css-sizing/keyword-sizes-on-inline-block.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          }
+        }
+      },
+      "before_sha256": "77327b430cd7f607da51098349b849f62c8fcc59827adf3ee11e1518b251137b",
+      "after_sha256": "3c430ad230c5767c5a0dc4d200c2fcbc2e356e0662782c75d2f0c11f3480f144",
+      "lost_passes": [],
+      "missing": [],
+      "changed": [],
+      "added": [],
+      "file_status_changes": []
+    },
+    "8": {
+      "subset": "css/css-sizing/percentage-min-width.html",
+      "before": {
+        "files": {
+          "fail": 1
+        },
+        "assertions": {
+          "fail": 1
+        },
+        "assertion_total": 1,
+        "errors": {}
+      },
+      "after": {
+        "files": {
+          "fail": 1
+        },
+        "assertions": {
+          "fail": 1
+        },
+        "assertion_total": 1,
+        "errors": {}
+      },
+      "before_sha256": "3e36e0df72b1d696d5f9f4df6713f5ddf53433db6beb9f304ea90000a211fc1e",
+      "after_sha256": "1fda6079351100339c8885e7fcf88ba166c406bfa3e2c6a3557c477e84dcf59b",
+      "lost_passes": [],
+      "missing": [],
+      "changed": [],
+      "added": [],
+      "file_status_changes": []
+    },
+    "9": {
+      "subset": "css/css-sizing/percentage-height-replaced-content-in-auto-cb.html",
+      "before": {
+        "files": {
+          "error": 1
+        },
+        "assertions": {},
+        "assertion_total": 0,
+        "errors": {
+          "css/css-sizing/percentage-height-replaced-content-in-auto-cb.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          }
+        }
+      },
+      "after": {
+        "files": {
+          "error": 1
+        },
+        "assertions": {},
+        "assertion_total": 0,
+        "errors": {
+          "css/css-sizing/percentage-height-replaced-content-in-auto-cb.html": {
+            "reason": "harness-timeout",
+            "status": "error"
+          }
+        }
+      },
+      "before_sha256": "39369b753d108c4aefc40e15568a3be9831213c984c25d8b164e96b9d2b7c128",
+      "after_sha256": "1fe23361568c796ac5da87977e135913e405ac9c601b83a24ade57684f14fadd",
+      "lost_passes": [],
+      "missing": [],
+      "changed": [],
+      "added": [],
+      "file_status_changes": []
+    }
+  },
+  "resources": {
+    "baseline-build": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "+1.99.0",
+        "build",
+        "--locked",
+        "-p",
+        "genet-wpt",
+        "-j1"
+      ],
+      "status": "complete",
+      "exit_code": 0,
+      "memory_peak_bytes": 195584000,
+      "memory_max_bytes": 5368709120,
+      "minimum_available_ram_bytes": 9615298560,
+      "memory_events": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "0",
+        "oom_group_kill": "0",
+        "sock_throttled": "0"
+      },
+      "resource_sha256": "22a7be8fda0bf273c4e55f195608f5a67598f4ae1298a839a6f2dcd9581c48d9",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "7df84e7e89894f7cd82a7c0e4a7afe1043585b135b0da324117debb629add90f"
+    },
+    "baseline-repro": {
+      "command": [
+        "/home/markik/Code/testing/genet/wpt-ledger/2026-10-15_accname_layout_panic/baseline-genet-wpt",
+        "run",
+        "accname/name/comp_name_from_content.html",
+        "--verbose"
+      ],
+      "status": "complete",
+      "exit_code": 1,
+      "memory_peak_bytes": 250171392,
+      "memory_max_bytes": 5100273664,
+      "minimum_available_ram_bytes": 9274294272,
+      "memory_events": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "0",
+        "oom_group_kill": "0",
+        "sock_throttled": "0"
+      },
+      "resource_sha256": "7b79888faf2857441f1d2159eacc5e1edbb1b402d1ab47dd930acddee6796911",
+      "stdout_sha256": "60d8199b661666c814f0bea6cd2dd6e88544e60e68c2c554873e45899e888154",
+      "stderr_sha256": "27628facc2721cec892b8070f7a440a853689e5bfd4e7fe2b70bc5a5461b9e5a"
+    },
+    "section-reduction": {
+      "command": [
+        "/home/markik/Code/testing/genet/wpt-ledger/2026-10-15_accname_layout_panic/baseline-genet-wpt",
+        "run",
+        "",
+        "--walk-discovery",
+        "--tests-root",
+        "/home/markik/Code/testing/genet/wpt-ledger/2026-10-15_accname_layout_panic/sections",
+        "--verbose"
+      ],
+      "status": "complete",
+      "exit_code": 1,
+      "memory_peak_bytes": 22614016,
+      "memory_max_bytes": 5100273664,
+      "minimum_available_ram_bytes": 9530597376,
+      "memory_events": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "0",
+        "oom_group_kill": "0",
+        "sock_throttled": "0"
+      },
+      "resource_sha256": "8d2ea0873c1969cdce7fa7eca66ea93693a6661cb7351ed77efc5beee446e912",
+      "stdout_sha256": "59f88e96a619dc78437ea861edb3e22cefa5ac8317c41d97a85540911d88b1f9",
+      "stderr_sha256": "e529bbdcd7b0872bdb923ed90139bce612070ab20d6e2eaa299f532f3e6d6a60"
+    },
+    "variant-reduction": {
+      "command": [
+        "/home/markik/Code/testing/genet/wpt-ledger/2026-10-15_accname_layout_panic/baseline-genet-wpt",
+        "run",
+        "",
+        "--walk-discovery",
+        "--tests-root",
+        "/home/markik/Code/testing/genet/wpt-ledger/2026-10-15_accname_layout_panic/variants",
+        "--verbose"
+      ],
+      "status": "complete",
+      "exit_code": 1,
+      "memory_peak_bytes": 17575936,
+      "memory_max_bytes": 5100273664,
+      "minimum_available_ram_bytes": 9587425280,
+      "memory_events": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "0",
+        "oom_group_kill": "0",
+        "sock_throttled": "0"
+      },
+      "resource_sha256": "860cf73977e59500444cfa21732a886ab1bfa0786c8f9b74573c81948e30ae76",
+      "stdout_sha256": "524c8ccaf998816d785bdbf518ebe798901ec44fc2c6a7bca99b5dbe4554b557",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "red-buckram-suite": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--locked",
+        "-p",
+        "buckram",
+        "--lib",
+        "-j1",
+        "--",
+        "--test-threads=1"
+      ],
+      "status": "complete",
+      "exit_code": 101,
+      "memory_peak_bytes": 94736384,
+      "memory_max_bytes": 5368709120,
+      "minimum_available_ram_bytes": 9640771584,
+      "memory_events": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "0",
+        "oom_group_kill": "0",
+        "sock_throttled": "0"
+      },
+      "resource_sha256": "7d8294b7e859883d0be837a662f2c19a8a65868cca526b4b03da60cf7498f4de",
+      "stdout_sha256": "3e86b3014528d5dcb2e4abb4c94db79c3f826c6cdeb5b370971219d4b31fb37d",
+      "stderr_sha256": "ccf117fa367a83cc30a55e9d9dd069638c3a1b5ab554cf5da0ec03bb8cf62440"
+    },
+    "red-livery-tests": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--locked",
+        "-p",
+        "genet-livery",
+        "--lib",
+        "-j1",
+        "--",
+        "plain_inline",
+        "--test-threads=1"
+      ],
+      "status": "complete",
+      "exit_code": 101,
+      "memory_peak_bytes": 1545166848,
+      "memory_max_bytes": 5368709120,
+      "minimum_available_ram_bytes": 8792850432,
+      "memory_events": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "0",
+        "oom_group_kill": "0",
+        "sock_throttled": "0"
+      },
+      "resource_sha256": "4108073e0ba2a9ff74a544a1be0bf08b026bb7b674872106fc330719953a7f08",
+      "stdout_sha256": "f5c78fbd8dd152f6b45ec668c082ef6fd841244d3e80f6c4455f52da8d49c92f",
+      "stderr_sha256": "d8653a67a172acf5f3bfd02cdaec3c8460307cbef29c95ac54a875701a53fb90"
+    },
+    "red-percentage-test": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--locked",
+        "-p",
+        "genet-livery",
+        "--lib",
+        "-j1",
+        "--",
+        "percentage_atom_looks_through",
+        "--test-threads=1"
+      ],
+      "status": "complete",
+      "exit_code": 101,
+      "memory_peak_bytes": 104742912,
+      "memory_max_bytes": 5368709120,
+      "minimum_available_ram_bytes": 9645371392,
+      "memory_events": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "0",
+        "oom_group_kill": "0",
+        "sock_throttled": "0"
+      },
+      "resource_sha256": "c39a752c49d116bcc3a68122ffead2914b3c98d4993f546d2a3b812e08ba3b71",
+      "stdout_sha256": "86f48b61ab880e4cf818283e22c63013306730309ad98788abf6c18824d3ccfb",
+      "stderr_sha256": "ef81177b1468cdd09b8d1ff5f9f99f9f69337794e00bac0b63349bb738d13e25"
+    },
+    "baseline-css-capture": {
+      "command": [
+        "python3",
+        "-B",
+        "/home/markik/Code/testing/genet/wpt-ledger/2026-10-15_accname_layout_panic/capture_css.py",
+        "baseline"
+      ],
+      "status": "complete",
+      "exit_code": 0,
+      "memory_peak_bytes": 605200384,
+      "memory_max_bytes": 5368709120,
+      "minimum_available_ram_bytes": 8836501504,
+      "memory_events": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "0",
+        "oom_group_kill": "0",
+        "sock_throttled": "0"
+      },
+      "resource_sha256": "16f5bff456c9561f45d263a240c689a8f00d0a8f1fbd88aefe339be03152038f",
+      "stdout_sha256": "a2d9d2e101a2eb0645e93e5ea203ad2f317c07f224111aeb513e0f186fe15039",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "green-unit-tests": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--locked",
+        "-p",
+        "buckram",
+        "-p",
+        "genet-livery",
+        "-p",
+        "genet-render",
+        "-p",
+        "genet-wpt",
+        "-j1",
+        "--",
+        "--test-threads=1"
+      ],
+      "status": "complete",
+      "exit_code": 0,
+      "memory_peak_bytes": 4244140032,
+      "memory_max_bytes": 5100273664,
+      "minimum_available_ram_bytes": 8886145024,
+      "memory_events": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "0",
+        "oom_group_kill": "0",
+        "sock_throttled": "0"
+      },
+      "resource_sha256": "9caf603875ade32867bdfefae5f2d168e5deb132101fc12d428a603b608e0e44",
+      "stdout_sha256": "6ed3e13485096cb4f3c83478a9e13a9e48013af678aee45aba290964ee2e2b93",
+      "stderr_sha256": "1e667d2b1f04170ecd04dd61551db93b41d870613a50cedc23fb3bac9551aaec"
+    },
+    "candidate-build": {
+      "command": [
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "+1.99.0",
+        "build",
+        "--locked",
+        "-p",
+        "genet-wpt",
+        "-j1"
+      ],
+      "status": "complete",
+      "exit_code": 0,
+      "memory_peak_bytes": 1791705088,
+      "memory_max_bytes": 6174015488,
+      "minimum_available_ram_bytes": 9659916288,
+      "memory_events": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "0",
+        "oom_group_kill": "0",
+        "sock_throttled": "0"
+      },
+      "resource_sha256": "f1386259eb9c585a3667a6bc4f694933410a8b318044121442e6aab0e8537fed",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "65cd98b289cfbc73aafeac8caae47a46694807600a1b3dd3e47c92bb0625055e"
+    },
+    "candidate-accname-capture": {
+      "command": [
+        "python3",
+        "-B",
+        "/home/markik/Code/testing/genet/wpt-ledger/2026-10-15_accname_layout_panic/capture_accname.py"
+      ],
+      "status": "complete",
+      "exit_code": 0,
+      "memory_peak_bytes": 454103040,
+      "memory_max_bytes": 6442450944,
+      "minimum_available_ram_bytes": 10290470912,
+      "memory_events": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "0",
+        "oom_group_kill": "0",
+        "sock_throttled": "0"
+      },
+      "resource_sha256": "18d7fa9bb8c43ed4368ae6f035d09da9e701aebb0041c902f7e5fca3aa4e41d5",
+      "stdout_sha256": "02dcbd5ef9b8d24cf844c5f2b5af040eb83632fa372c719bbd1c581e8369c9fe",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "candidate-css-capture": {
+      "command": [
+        "python3",
+        "-B",
+        "/home/markik/Code/testing/genet/wpt-ledger/2026-10-15_accname_layout_panic/capture_css.py",
+        "candidate"
+      ],
+      "status": "complete",
+      "exit_code": 0,
+      "memory_peak_bytes": 454946816,
+      "memory_max_bytes": 6442450944,
+      "minimum_available_ram_bytes": 9814552576,
+      "memory_events": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "0",
+        "oom_group_kill": "0",
+        "sock_throttled": "0"
+      },
+      "resource_sha256": "0ddc8330bf6841e505af7f7fa77dbf838242776184e9aa223fccd2ed9c32e40b",
+      "stdout_sha256": "46399c667f2366454f8b383150847b1885cef47891d2e16559a1f7531586be6c",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "review": "Final fresh-context read-only review: no actionable findings. Verified graph predicate and scope, baseline runner/lock identity, reused map digests, matching commands and corpus, 1,072 passed / 11 ignored unit totals, and preservation of all 405 prior assertions with exactly 79 added cases (54 pass / 25 fail). CSS comparison was pending at review time.",
+  "limits": [
+    "25 newly exposed name-computation failures remain alongside 35 previously reported failures.",
+    "159 manual AccName skips remain on each engine.",
+    "CSS guards use Boa testharness only; existing failures/errors/timeouts/skips remain explicit. This is not reftest, GPU, visual or whole-CSS qualification.",
+    "Forms C remains separate and paused. Full AccName/HTML-AAM and human assistive-technology acceptance remain open.",
+    "Implementation is committed locally only; pushing requires a separate user approval."
+  ]
+}

@@ -4,8 +4,7 @@
 
 use crate::shader::{
     ProgramCacheKey, ProgramReflection, TranslatedProgram, UniformKind, VertexAttributeKind,
-    canonical_essl_cache_key, translate_canonical_essl_pair, validate_canonical_fragment_source,
-    validate_canonical_vertex_source,
+    canonical_essl_cache_key, compile_canonical_source, translate_compiled_essl_pair,
 };
 use crate::{WebGlCanvas, WebGlCanvasDescriptor, WebGlCanvasError};
 use std::collections::HashMap;
@@ -229,6 +228,9 @@ struct FramebufferObject {
 struct ShaderObject {
     stage: ShaderStage,
     source: String,
+    source_revision: u64,
+    compiled: Option<webgl_essl::CompiledShader>,
+    compiled_revision: Option<u64>,
     compile_status: bool,
     info_log: String,
 }

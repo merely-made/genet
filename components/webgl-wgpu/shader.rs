@@ -39,10 +39,7 @@ pub(crate) struct ProgramCacheKey {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct ProgramReflection {
-    /// Every vertex attribute the shader declared, in source
-    /// order. `attributes[0]` is the position attribute under
-    /// the WebGL convention; the narrow `position_attribute`
-    /// view below points to it.
+    /// Every vertex attribute the shader declared, in source order.
     pub(crate) attributes: Vec<VertexAttributeReflection>,
     /// Every uniform that lives inside the per-shader `Block`
     /// struct (vec_n / float / int / mat_n), in source order.
@@ -57,17 +54,6 @@ pub(crate) struct ProgramReflection {
     /// Total byte size of the uniform `Block` buffer. `0` when
     /// the program has no non-sampler uniforms.
     pub(crate) uniform_block_size: u32,
-    /// Narrow-shape convenience: the first vertex attribute.
-    /// Always populated.
-    pub(crate) position_attribute: VertexAttributeReflection,
-    /// Narrow-shape convenience: `attributes[1]` if it's vec4.
-    pub(crate) color_attribute: Option<VertexAttributeReflection>,
-    /// Narrow-shape convenience: `attributes[1]` if it's vec2.
-    pub(crate) texcoord_attribute: Option<VertexAttributeReflection>,
-    /// Narrow-shape convenience: the first vec4 uniform.
-    pub(crate) fragment_color_uniform: Option<UniformReflection>,
-    /// Narrow-shape convenience: the first sampler2D.
-    pub(crate) fragment_texture_uniform: Option<UniformReflection>,
     pub(crate) fragment_float_precision: WebGlPrecision,
 }
 
@@ -98,13 +84,13 @@ pub(crate) struct UniformReflection {
     /// sampler uniform, 1 for the second, ...). Samplers live
     /// outside the Block and carry index `0`.
     pub(crate) member_index: u32,
-    /// Byte offset inside the Block buffer where this member
-    /// starts (std140-style). Samplers carry `0`.
+    /// Byte offset inside the emitted WGSL Block struct. Samplers carry `0`.
     pub(crate) block_offset: u32,
     /// Byte size of this member's contribution inside the
-    /// Block (includes std140 padding for mat3 columns). `0`
-    /// for samplers.
+    /// Naga's emitted WGSL member type size. `0` for samplers.
     pub(crate) block_size: u32,
+    /// Matrix column stride in bytes as emitted by WGSL/Naga.
+    pub(crate) matrix_stride: Option<u32>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -127,36 +113,6 @@ pub(crate) enum UniformKind {
     Int,
     Sampler2D,
     SamplerCube,
-}
-
-impl UniformKind {
-    /// std140-style alignment (matches WGSL's uniform-storage
-    /// rules for the kinds webgl-essl admits). Scalars: 4,
-    /// vec2: 8, vec3 / vec4 / matrices: 16.
-    pub(crate) fn block_alignment(self) -> u32 {
-        match self {
-            Self::Float32 | Self::Int => 4,
-            Self::Float32x2 => 8,
-            Self::Float32x3 | Self::Float32x4 | Self::Matrix2 | Self::Matrix3 | Self::Matrix4 => 16,
-            Self::Sampler2D | Self::SamplerCube => 0,
-        }
-    }
-
-    /// std140-style size: vec3 is 12 (the next member aligns
-    /// up if its alignment exceeds 12). Matrices are stored as
-    /// column-major arrays of vec4-padded columns.
-    pub(crate) fn block_size(self) -> u32 {
-        match self {
-            Self::Float32 | Self::Int => 4,
-            Self::Float32x2 => 8,
-            Self::Float32x3 => 12,
-            Self::Float32x4 => 16,
-            Self::Matrix2 => 32,
-            Self::Matrix3 => 48,
-            Self::Matrix4 => 64,
-            Self::Sampler2D | Self::SamplerCube => 0,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -185,23 +141,13 @@ pub(crate) enum WebGlPrecision {
     High,
 }
 
-impl WebGlPrecision {
-    fn parse(token: &str) -> Option<Self> {
-        match token {
-            "lowp" => Some(Self::Low),
-            "mediump" => Some(Self::Medium),
-            "highp" => Some(Self::High),
-            _ => None,
-        }
-    }
-}
-
 mod lowering;
 
 #[cfg(test)]
 mod tests;
 
 pub(crate) use lowering::{
-    canonical_essl_cache_key, translate_canonical_essl_pair, validate_canonical_fragment_source,
+    canonical_essl_cache_key, compile_canonical_source, translate_canonical_essl_pair,
+    translate_compiled_essl_pair, validate_canonical_fragment_source,
     validate_canonical_vertex_source,
 };

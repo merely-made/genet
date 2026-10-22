@@ -421,10 +421,12 @@ impl OsCompositorBackend for MacosCALayerBackend {
         SyncMechanism::None
     }
 
-    fn present_master(&mut self, master: &Texture) {
-        if let Err(err) = MacosCALayerBackend::present_master(self, master) {
-            log::warn!("[MacosCALayerBackend] present_master: {err}");
-        }
+    fn present_master(
+        &mut self,
+        master: &Texture,
+    ) -> Result<(), crate::compositor::BoxedBackendError> {
+        MacosCALayerBackend::present_master(self, master)
+            .map_err(|err| Box::new(err) as crate::compositor::BoxedBackendError)
     }
 
     fn declare(
@@ -522,10 +524,9 @@ impl OsCompositorBackend for MacosCALayerBackend {
         transform: [f32; 6],
         clip: Option<[f32; 4]>,
         opacity: f32,
-    ) {
+    ) -> Result<(), crate::compositor::BoxedBackendError> {
         let Some(surface) = self.surfaces.get(&key) else {
-            log::warn!("[MacosCALayerBackend] present({key:?}) called before declare; skipping");
-            return;
+            return Err(format!("present({key:?}) called before declare").into());
         };
 
         // World coordinates are pixels; CALayer's coordinate space
@@ -573,5 +574,6 @@ impl OsCompositorBackend for MacosCALayerBackend {
         }
 
         surface.layer.setOpacity(opacity);
+        Ok(())
     }
 }

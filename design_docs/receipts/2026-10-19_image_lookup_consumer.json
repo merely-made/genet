@@ -1,0 +1,58 @@
+{
+  "date": "2026-10-19",
+  "base_commit": "7b9c8c2f3de46a55858f6549e182e8e0323838d3",
+  "resources": {
+    "memory_max": "5G",
+    "swap_max": 0,
+    "cpu_quota": "150%",
+    "jobs": 1,
+    "test_threads": 1,
+    "timeout_seconds": 600,
+    "lock": "/home/markik/Code/testing/machine-heavy.lock"
+  },
+  "source_sha256": {
+    "Cargo.toml": "762b19bcf2b5d1f42fa7bb3cbe405c4e6a67d340e9f123e0f66161afbd0da384",
+    "design_docs/2026-10-17_architecture_qualification.md": "c2f776656646140e601f3cbe3be57be9f6c7b655b9c466a2ef1640d6d3b3675f",
+    "Cargo.lock": "d6fae3cd46074eab815aaf1ca5cec319929ba15f0b910271c579601122f89ca1"
+  },
+  "gates": [
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261019/image-lookup/genet-resolve.log",
+      "sha256": "a6f712d68eab16080852096566d4bf7f1833076c7499c880dad104efbcf0f26e",
+      "commands": [
+        "timeout --signal=TERM --kill-after=10s 600s cargo update -p netrender"
+      ],
+      "summaries": [],
+      "exit_status": [
+        "0"
+      ],
+      "peak_rss_kib": [
+        "275208"
+      ],
+      "swaps": [
+        "0"
+      ]
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261019/image-lookup/genet-retained.log",
+      "sha256": "8dc47bfe9f686c4c8cac90c8115856b9c7cd7aff1a30726232ea770b78f6c7a1",
+      "commands": [
+        "timeout --signal=TERM --kill-after=10s 600s cargo test --offline --locked -j1 -p genet-render -p genet-livery --lib --test retained_cpu_raster --no-fail-fast -- --test-threads=1"
+      ],
+      "summaries": [
+        "test result: ok. 357 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 30.20s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+        "test result: ok. 67 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.09s"
+      ],
+      "exit_status": [
+        "0"
+      ],
+      "peak_rss_kib": [
+        "765760"
+      ],
+      "swaps": [
+        "0"
+      ]
+    }
+  ]
+}

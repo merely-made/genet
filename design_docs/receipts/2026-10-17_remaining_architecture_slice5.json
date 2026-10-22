@@ -1,0 +1,195 @@
+{
+  "findings": [
+    "L9",
+    "H2",
+    "H9",
+    "H10"
+  ],
+  "status": "addressed locally within stated boundaries",
+  "passed_unit_and_regression_cases": 294,
+  "sources": {
+    "genet": {
+      "base": "cb6161cc6cbdad2f80d0e0433add3120e05e47ae",
+      "sha256": {
+        "components/buckram/src/lib.rs": "d328914330d1923a502a435631a9500651fb83fa52751e3ea831e8487ee7aaa3",
+        "components/buckram/src/taffy_adapter.rs": "af0fa111d7c4a5c2702856f5e844310fccfe9893a49059e25c5dd0137fdfcf48",
+        "components/buckram/src/taffy_adapter/run.rs": "4f1b277289a33ca4792e97c74e61b51a73a570e0129b2fdca80a78cc464e6106",
+        "components/buckram/src/taffy_adapter/tests.rs": "adecab89dd46005b34dc5ec31a08dadb14d955ac1fa9cd9b03a3e758cb12a439",
+        "components/genet-compositor/Cargo.toml": "75aab554a5a6a9a95a4e00eb5a392637fcaf27ff0db223632f64f79e31931ac9",
+        "components/genet-compositor/compositor.rs": "8d6f1d637f7ee5dd00f209959157e3807c39c0c70b9ddc4af49cf25b91ed8379",
+        "components/genet-compositor/compositor_calayer.rs": "29a3d7203c410263b1fecff8d88e72ae40b29e07d92c3a925cd9f153f0854b5f",
+        "components/genet-compositor/compositor_dxgi.rs": "0ec54e715648137c18abcbee395acc4725abc4a3e5eccc0fd6ac337526f28bf0",
+        "components/genet-compositor/compositor_factory.rs": "90dfe26df752b52592be59e96430712153ea7edbce309373818f040a8840f803",
+        "components/genet-compositor/compositor_wayland/errors.rs": "04c29cd26b6be294c368242dc0accc57273ecaf17c8ee2cef42cbf7bdbdbc9aa",
+        "components/genet-compositor/compositor_wayland/mod.rs": "5db5c7ae3e854a69345f40526c8e59ac4fe603883b4a05b9e67dfe4874c4343e",
+        "components/genet-compositor/lib.rs": "2a67ac5fa29867bf1c4e8bb495c1c7bae6ad1682294102ce1db5683b670aea3d",
+        "components/genet-livery/src/layout.rs": "980a35fca6e4d9ba79c403eee77571f7c36c2dacd118f4861fb2149e29c20396",
+        "components/genet-livery/src/layout/build_block.rs": "fe780aa774e4a6bf57f35a546ad3bf9d3fd479d5003e8c79a224bfb97d940255",
+        "components/genet-livery/src/layout/build_inline.rs": "e0512b082dbc637186f790bb67019267ea06a87c8cf195d61d6e1f6783e9aad3",
+        "components/genet-livery/src/layout/positioned.rs": "1fd4dfda5030b3d3343b4be6938b6839bab6e9472e03811c8f154594f4dae2fc",
+        "components/genet-livery/src/layout/taffy_style.rs": "d4fa54d61c3b5bd939c9c8c6e62380453482eab905d0f8829b7f4ae3d0facef5",
+        "components/genet-livery/src/layout/tests.rs": "e470d6c7a048ae6c3ea85fc63135fd2d567e83f02cf78ebd8a702228526f4e2d",
+        "components/genet-livery/src/layout/transaction.rs": "12d6596dc4a8335494d89e7cd1d9b0731f0a693a10a392d1142be3f6ff149ced",
+        "components/genet-livery/src/table_block.rs": "6e2734d855b4d92fbca5a6bbafb9bff1046902881a2347d399976e236520557e",
+        "components/genet-render-host/src/browser_frame.rs": "4a06267d4c9c4dded158acfe7c72c5dec84155200a4d6fbc40fdb65d0999ace4",
+        "components/genet-render-host/src/lib.rs": "a9236584502a170249095681efcd5c919314ab2936d051e259d4c17aba75f754",
+        "ports/ortet/Cargo.toml": "d593aced6b8789eaa1c4ef9e643483523e6417fae7753340a79bb1c25c80f59b",
+        "ports/ortet/src/web.rs": "70105d2c25f399e64e7fe2c3bde760c11dcdf22cec8e2a316f246a0dd7da9290",
+        "ports/ortet/tests/web/checked_frame.html": "8734d48788a5db6650b4260081ffad5bc21c21b878bb81024519663e02bbea49"
+      }
+    },
+    "mere": {
+      "base": "4490ae1651f88b4f22f7e7fdd1ef12b81c6b3008",
+      "sha256": {
+        "crates/cambium/cambium-rootstock/src/lib.rs": "5ee8ca73a889f52d76040c4be0cc944aad9503c90350999dbc434265e41aa2a6",
+        "crates/cambium/cambium-rootstock/src/presentation/wgpu.rs": "871f15f95b0a939267884dbac3f769ab7e9158a5f3615f7817ec738c279aae7b",
+        "ports/pelt/desktop/smoke_macos.rs": "ca7a26c994d1bce4d28af0d5548f3844d4e109011310445cad93d6d94f4f6ab0",
+        "ports/pelt/desktop/smoke_wayland.rs": "f66c4dc390c1761427b4b0361db1715e358d81741e27630ce8620ab34cbe34fa",
+        "ports/pelt/desktop/smoke_windows.rs": "58041f76b83d8680008e7682bb0c885c8518d9e7ca9dccc1737210eaec8d1c25"
+      }
+    },
+    "turnstone": {
+      "base": "65ccf70f0e0e8be7ae40c6f4d2ae06124024d6ac",
+      "sha256": {
+        "src/shell/lens.rs": "427fa523300746e7f3bab8209742f90513d902f9fa42279d91e2aa7a6353aaa6",
+        "src/shell/render.rs": "c7bcf85933f53204afe61bad22fb829c1a4edde12d07fa226562f2ea199d2a73"
+      }
+    }
+  },
+  "gates": [
+    {
+      "log": "s5-buckram-verified.log",
+      "sha256": "2b3bb7cfc666af34e5fce42829b888c0ed3ab2599033c782da6c284e7d2eb2ae",
+      "passed": 273
+    },
+    {
+      "log": "s5-livery-retained.log",
+      "sha256": "c62cf044bd33d7c8272768b810e13f6947ddf05839689a973949a34bcd719c30",
+      "passed": 1
+    },
+    {
+      "log": "s5-livery-table.log",
+      "sha256": "08d555005c9f3fcd2400c7c3a20806526152ac1eeb8c26f64c3c0020be8b1805",
+      "passed": 1
+    },
+    {
+      "log": "s5-compositor-final.log",
+      "sha256": "464c44757e3fd6b265d1217067065ff769501fe072acda44ac42bf7725367772",
+      "passed": 11
+    },
+    {
+      "log": "s5-turnstone-retained.log",
+      "sha256": "33b7647ab915644d48687fe7036b3b3387e178ba66f6b69f8f80b54e25db4d79",
+      "passed": 8
+    },
+    {
+      "log": "s5-ortet-browser-verified.log",
+      "sha256": "828fe907b2f5f81ca71070970805bc102d8f9cc20f8f996a4728d895c76378c9",
+      "result": "passed"
+    },
+    {
+      "log": "s5-graphshell-final.log",
+      "sha256": "1c4a42b27171f0734367ccf18afcb631ac2593634a806a132cbf5bccb844dd63",
+      "result": "passed"
+    },
+    {
+      "log": "s5-wayland-baseline-default.log",
+      "sha256": "b8c6471159c09ac566b40244de0d40bbf3fffd7ddc99e32a6eb2b3fb6680f23f",
+      "result": "passed"
+    },
+    {
+      "log": "s5-wayland-post-cut.log",
+      "sha256": "61e0e342cdf67781293376650d055325f2d3b80f8945aa34187518efda9e61f3",
+      "result": "passed"
+    }
+  ],
+  "browser": {
+    "receipt": "ORTET_CHECKED_FRAME retained_pixels=28800 resized_pixels=28800 stale_skipped=1 fresh_presented=1 stale_redraw_pixels=28800 probe_red=4096 probe_blue=4096 unsubmitted=reusable busy=refused drop=retired_after_completion presented_a=1 presented_b=1 timeout=refused loss=priority refusal_presents=0",
+    "adapter": {
+      "info": {
+        "vendor": "amd",
+        "architecture": "gcn-5",
+        "device": "",
+        "description": "",
+        "isFallbackAdapter": false
+      },
+      "features": [
+        "depth32float-stencil8",
+        "rg11b10ufloat-renderable",
+        "bgra8unorm-storage",
+        "texture-formats-tier1",
+        "chromium-experimental-multi-draw-indirect",
+        "texture-compression-bc",
+        "dual-source-blending",
+        "core-features-and-limits",
+        "chromium-experimental-timestamp-query-inside-passes",
+        "float32-filterable",
+        "indirect-first-instance",
+        "float32-blendable",
+        "subgroup-size-control",
+        "depth-clip-control",
+        "texture-compression-bc-sliced-3d",
+        "texture-formats-tier2",
+        "clip-distances",
+        "shader-f16",
+        "timestamp-query",
+        "primitive-index",
+        "texture-component-swizzle",
+        "subgroups"
+      ]
+    },
+    "messages": [
+      {
+        "kind": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+      },
+      {
+        "kind": "warning",
+        "text": "Compilation log for [ShaderModule \"vello.flatten\"]:\n\n1 warning(s) generated while compiling the shader:\n:385:5 warning: code is unreachable\n    return 0xffffffffu;\n    ^^^^^^\n"
+      },
+      {
+        "kind": "warning",
+        "text": "Compilation log for [ShaderModule \"vello.flatten\"]:\n\n1 warning(s) generated while compiling the shader:\n:385:5 warning: code is unreachable\n    return 0xffffffffu;\n    ^^^^^^\n"
+      }
+    ],
+    "error": null
+  },
+  "browser_artifacts_sha256": {
+    "s5-h2-browser.png": "4291e673e63c55e8cf4b62c476dff49853fd852374957e9ea6c57b2e633c7ce4",
+    "s5-h2-browser.json": "5d3931064c9e3fd3d7f51d79a1d0943dfc92c6159c30941650bbc43c0d617cfd",
+    "h2-browser/ortet_bg.wasm": "527f94cf5ccbd98238d989c5809d5550d8b46d4266b052ee31821948cf588c1e",
+    "h2-browser/checked_frame.html": "8734d48788a5db6650b4260081ffad5bc21c21b878bb81024519663e02bbea49"
+  },
+  "wayland_sync_review": "# H9 Wayland sync and release audit\n\n## Hardware prerequisite\n\n`s5-wayland-baseline-default.log` records a successful GNOME Wayland run of the Pelt `--wayland-present-smoke` route: 800\u00d7600, 60 frames, `created_window=true`, `declared_subsurface=false`, exit status 0. The smoke clears the prior `PresentationOutcome` before each render and accepts a frame only after a fresh `DisplayHandoff` (`mere/ports/pelt/desktop/smoke_wayland.rs:339-356`). The pre-cut compositor source hashes are in `s5-wayland-baseline-compositor-sha256.json`. This run exercises repeated master-buffer presentation and slot reuse; it does not exercise the declared-subsurface or baked paths, nor establish pixel correctness.\n\n## Queue custody\n\nThe smoke creates one Vulkan `wgpu::Device` and `wgpu::Queue` pair, puts them in `WgpuHandles`, clones that same pair for `HostWgpuContext`, and moves the original handles into netrender (`mere/ports/pelt/desktop/smoke_wayland.rs:190-209,240-262`). At the pinned netrender revision `e8cda06efc11c11595f2fa1bb30bce7e72979537`, `create_netrender_instance` consumes `WgpuHandles` into `WgpuDevice::with_external` (`netrender/src/renderer/init.rs:105-130`). The compositor render path calls the rasterizer and passes its handles to `present_frame` (`netrender/src/renderer/mod.rs:1243-1256,1342-1355`); the Vello rasterizer renders on `&self.handles.queue` (`netrender/src/vello_tile_rasterizer/mod.rs:598-613`). The Wayland backend clones the supplied host context (`genet/components/genet-compositor/compositor_wayland/mod.rs:159-174`) and submits master and child copies through `self.host.queue` (`:277-303`, `:441-467`), with the bake path also taking `&self.host.queue` (`:618-625`). Thus this supported Pelt route uses one queue for producer and consumer submissions. `SyncMechanism::None` reflects that caller contract (`:691-694`); the constructor does not prove queue identity for arbitrary embedders and no cross-queue handshake is offered.\n\n## Slot custody and release\n\n`allocate_pool` constructs two slots per pool (`genet/components/genet-compositor/compositor_wayland/mod.rs:182-191`). Each `wl_buffer` carries `BufferSlotUserData` with an `Arc<Mutex<bool>>` shared with its slot (`:194-245`; `dmabuf.rs:428-450`). `SurfaceBufferPool::acquire` marks an available slot in flight and refuses both busy slots (`dmabuf.rs:452-465`). The master path dispatches pending Wayland events before acquisition, then roundtrips while both slots are busy (`mod.rs:249-275`). The Wayland `wl_buffer.release` dispatcher clears that exact slot's flag (`wayland.rs:317-333`). Child fast and baked paths use the same acquire/roundtrip pattern (`mod.rs:405-433,590-601`). Their native submit, attach, commit, and flush paths remain unchanged. The 60-frame hardware pass is practical evidence that the master pool released and reused slots; child reuse remains source-supported but not hardware-qualified by this baseline.\n\n## Cut and validation boundary\n\nThe only `WaylandSubsurfaceBackend` timeline use was a stored `VulkanTimelineSemaphoreSynchronizer` initialized in `new`, never signaled, waited on, or read. Removed its import, field, construction, and now-unused `BackendError::SyncInit` case in `compositor_wayland/mod.rs` and `compositor_wayland/errors.rs`. The reusable `interop/vulkan_timeline.rs` primitive and export remain for a future multi-queue consumer. No queue, pool, release, or native backend behavior was changed. Static search finds no remaining Wayland timeline or `SyncInit` references; `git diff --check` passes. The controller owns post-cut compile, unit, and hardware rerun.\n",
+  "review_repairs": [
+    "Content revision suppresses stale accepted frames; typed Reconfigured outcome permits one bounded retry.",
+    "Fixture triggers real same-size redraw after submission and observes stale rejection plus fresh pixels.",
+    "Master failure stops child work; absent DXGI surface returns error; capture fallback retains construction cause.",
+    "Fresh consumed presentation outcomes prevent stale success counting."
+  ],
+  "excluded_or_superseded_attempts": {
+    "s5-buckram": "50980c5c1e65af87afa929b2feaee1cebf5470b9355d5c689a4c6444a6aed774",
+    "s5-compositor-outcomes": "38de1b40ad8b78960a47eb18c7f67a79e2781669ef5c12c19e861822029b2cb2",
+    "s5-compositor-review-fixed": "72e52a0544dec79cadcf424605e3c0fdae4075f2ccd434f2e80f9a42b673fe61",
+    "s5-wayland-baseline": "88b84f3d9697cc43a2860508bb72a8956e92265b107bd16364e3f7fcc9e36a96",
+    "s5-ortet-browser-build": "5cc6ccdc1b3f419a3ab4c8ca4bf7ce86b5508fb4640c25440fac4ec66e7dcd19",
+    "s5-ortet-browser-final": "eb44c6d5ec2158a990b64af6192a6576b0ef1acb3836d76dd2b3ce7b8b4a3436"
+  },
+  "attempt_notes": [
+    "Initial Buckram gate required lock refresh for compositor test dependency.",
+    "Minimal Pelt feature command hit existing viewer feature-gating errors; supported defaults plus linux-present passed.",
+    "Initial browser build was stopped during dependencies to apply reviewed races.",
+    "Next browser build found fixture Debug formatting of successful submission; error-only branch fixed and final build passed.",
+    "Intermediate compositor passes superseded by definitive frozen-source 11-test gate."
+  ],
+  "limits": [
+    "One Cargo job, one test thread, shared machine-heavy.lock, nice 10, MemoryMax=5G, MemorySwapMax=0, CPUQuota=150%.",
+    "Individual build bounds 240 or 600 seconds; browser bound 90 seconds.",
+    "Wayland evidence covers actual master handoff and two-slot reuse, not scanout or child/baked pixel correctness.",
+    "Apple/Windows backends not hardware-qualified; pre-existing missing CALayer modules prevent claiming an Apple build.",
+    "Second consecutive Outdated waits for another external redraw event; browser defaults and legacy fallible access remain bounded as documented.",
+    "Buckram real backend fallbacks and experimental fragmentation limits remain.",
+    "Browser fixture had favicon 404 and existing shader unreachable-code warnings; no page error or failed frame receipt."
+  ],
+  "evidence_directory": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices"
+}

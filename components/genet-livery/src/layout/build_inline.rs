@@ -14,8 +14,8 @@ pub(in crate::layout) struct InlineBuildState<'a, D: LayoutDom> {
     pub(in crate::layout) styles: &'a StylePlane<D::NodeId>,
     pub(in crate::layout) boxes: &'a GeneratedBoxTree<D::NodeId>,
     pub(in crate::layout) atomic: &'a AtomicLayoutPlane,
-    pub(in crate::layout) tree: AlgorithmTree<Style, InlineMeasure, Vec<BoxId>>,
-    pub(in crate::layout) image_sources: &'a ImageSources,
+    pub(in crate::layout) tree: AlgorithmTree<InlineMeasure, Vec<BoxId>>,
+    pub(in crate::layout) image_sources: &'a dyn crate::ImageSourceLookup,
     pub(in crate::layout) table_shadow: TableShadowLedger,
     pub(in crate::layout) pending_tables: Vec<PendingTable<D::NodeId>>,
     /// The grid, in-flow cell nodes, and detached table-part nodes for the
@@ -377,7 +377,9 @@ where
         &mut self,
         text: &mut TextSystem,
         cell_node: AlgorithmNodeId,
+        nested_tables: &HashMap<AlgorithmNodeId, IntrinsicTableWrapper>,
     ) -> Option<IntrinsicSizes> {
+        let nested_tables = nested_table_wrappers_in_cell(&self.tree, cell_node, nested_tables);
         let (dom, styles, boxes, atomic) = (self.dom, self.styles, self.boxes, self.atomic);
         let style = self.tree.style_mut(cell_node);
         let saved = (style.size.width, style.min_size.width, style.max_size.width);
@@ -385,6 +387,14 @@ where
         style.min_size.width = Dimension::auto();
         style.max_size.width = Dimension::auto();
         let mut measure = |available| {
+            for table in &nested_tables {
+                let width = match available {
+                    AlgorithmAvailableSpace::MinContent => table.sizes.min_content,
+                    AlgorithmAvailableSpace::MaxContent => table.sizes.max_content,
+                    AlgorithmAvailableSpace::Definite(_) => table.used,
+                };
+                set_query_table_wrapper_width(&mut self.tree, table.node, width);
+            }
             self.tree
                 .compute_layout_with_measure_excluding_out_of_flow_children(
                     cell_node,
@@ -440,6 +450,9 @@ where
         };
         let min = measure(AlgorithmAvailableSpace::MinContent);
         let max = measure(AlgorithmAvailableSpace::MaxContent);
+        for table in &nested_tables {
+            set_query_table_wrapper_width(&mut self.tree, table.node, table.used);
+        }
         let style = self.tree.style_mut(cell_node);
         (style.size.width, style.min_size.width, style.max_size.width) = saved;
         IntrinsicSizes::new(min, max.max(min))
@@ -514,6 +527,7 @@ where
     pub(in crate::layout) fn apply_buckram_table_layout(&mut self, text: &mut TextSystem) {
         let mut pendings = std::mem::take(&mut self.pending_tables);
         let mut aggregate = std::mem::take(&mut self.table_shadow);
+        let mut intrinsic_wrappers = HashMap::new();
         for pending in &mut pendings {
             self.table_shadow = TableShadowLedger::default();
             {
@@ -550,7 +564,9 @@ where
                     .clone()
                     .into_iter()
                     .map(|cell_node| {
-                        cell_node.and_then(|node| self.measure_cell_intrinsics(text, node))
+                        cell_node.and_then(|node| {
+                            self.measure_cell_intrinsics(text, node, &intrinsic_wrappers)
+                        })
                     })
                     .collect::<Vec<_>>();
                 let caption_min = self.measure_caption_min(text, &pending.captions.clone());
@@ -569,6 +585,20 @@ where
                 );
                 pending.assigned = columns;
                 self.size_wrapper_from_grid(pending);
+                if matches!(pending.table_style.width, CssSize::Auto)
+                    && let (Some(wrapper), Some(inline)) =
+                        (pending.wrapper, pending.assigned.as_ref())
+                    && let Some(sizes) = inline.wrapper_intrinsic_sizes
+                {
+                    intrinsic_wrappers.insert(
+                        wrapper,
+                        IntrinsicTableWrapper {
+                            node: wrapper,
+                            sizes,
+                            used: inline.used_grid_inline_size,
+                        },
+                    );
+                }
             }
             self.apply_buckram_table_rows(text, std::slice::from_mut(pending));
             aggregate.record_table(pending.table, std::mem::take(&mut self.table_shadow));

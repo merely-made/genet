@@ -70,48 +70,11 @@ pub trait RenderingContextCore {
     // --- Capability objects ---
 
     /// wgpu capability — required for any context driving the wgpu
-    /// compositor path. `None` for legacy / stub contexts.
+    /// compositor path. `None` when this context cannot drive that path.
     fn wgpu(&self) -> Option<&dyn WgpuCapability> {
         None
     }
 }
-
-/// **C4 stub.** Pre-cut, `GlCapability` was a trait exposing a GL
-/// context (`make_current` / swap buffers). The C1 cut deleted the
-/// GL/surfman corpus; this name is reinstated only as a stub so that
-/// the post-cut servo facade and integration tests still type-check
-/// at their import-points. The trait has no methods worth calling
-/// post-cut; consumers should migrate to [`WgpuCapability`].
-pub trait GlCapability {
-    /// No-op. Pre-cut this made the GL context current on the
-    /// calling thread; post-cut there is no GL context.
-    fn make_current(&self) -> Result<(), &'static str> {
-        Ok(())
-    }
-}
-
-/// Concrete-type companion to the [`GlCapability`] stub trait so the
-/// `&dyn GlCapability`-shaped pre-cut return position can be honored
-/// without a heap-allocated trait object.
-pub struct GlCapabilityHandle<'a> {
-    _phantom: std::marker::PhantomData<&'a ()>,
-}
-
-impl<'a> GlCapabilityHandle<'a> {
-    pub fn new() -> Self {
-        Self {
-            _phantom: std::marker::PhantomData,
-        }
-    }
-}
-
-impl<'a> Default for GlCapabilityHandle<'a> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<'a> GlCapability for GlCapabilityHandle<'a> {}
 
 /// Capability surface for wgpu-backed rendering contexts. Accessed via
 /// [`RenderingContextCore::wgpu`]. Holding an `&dyn WgpuCapability`

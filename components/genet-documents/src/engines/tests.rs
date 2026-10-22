@@ -38,6 +38,13 @@ use std::sync::{Arc, Mutex};
 #[derive(Clone)]
 struct NoFetch;
 impl ResourceFetcher for NoFetch {
+    fn fetch_request(
+        &self,
+        _request: &genet_host_api::ResourceRequest,
+    ) -> Option<genet_host_api::ResourceFetchResponse> {
+        None
+    }
+
     fn fetch(&self, _url: &str) -> Option<Vec<u8>> {
         None
     }
@@ -50,6 +57,13 @@ struct ImageFetch {
 
 #[cfg(feature = "livery")]
 impl ResourceFetcher for ImageFetch {
+    fn fetch_request(
+        &self,
+        _request: &genet_host_api::ResourceRequest,
+    ) -> Option<genet_host_api::ResourceFetchResponse> {
+        None
+    }
+
     fn fetch(&self, url: &str) -> Option<Vec<u8>> {
         self.requests.lock().unwrap().push(url.to_owned());
         Some(self.bytes.clone())
@@ -87,6 +101,13 @@ struct LinkedResourceFetch {
 
 #[cfg(feature = "livery")]
 impl ResourceFetcher for LinkedResourceFetch {
+    fn fetch_request(
+        &self,
+        _request: &genet_host_api::ResourceRequest,
+    ) -> Option<genet_host_api::ResourceFetchResponse> {
+        None
+    }
+
     fn fetch(&self, url: &str) -> Option<Vec<u8>> {
         self.requests.lock().unwrap().push(url.to_owned());
         match url {
@@ -107,6 +128,13 @@ struct ImportedSheetFetch;
 
 #[cfg(feature = "livery")]
 impl ResourceFetcher for ImportedSheetFetch {
+    fn fetch_request(
+        &self,
+        _request: &genet_host_api::ResourceRequest,
+    ) -> Option<genet_host_api::ResourceFetchResponse> {
+        None
+    }
+
     fn fetch(&self, _url: &str) -> Option<Vec<u8>> {
         None
     }
@@ -137,6 +165,13 @@ struct RedirectedDocumentFetch;
 
 #[cfg(feature = "livery")]
 impl ResourceFetcher for RedirectedDocumentFetch {
+    fn fetch_request(
+        &self,
+        _request: &genet_host_api::ResourceRequest,
+    ) -> Option<genet_host_api::ResourceFetchResponse> {
+        None
+    }
+
     fn fetch(&self, _url: &str) -> Option<Vec<u8>> {
         None
     }
@@ -290,7 +325,7 @@ fn scripted_session_returns_only_uncancelled_external_navigation() {
     assert_eq!(
         session.pointer_up(500.0, 190.0),
         SessionClick::Handled,
-        "release outside becomes a selection instead of navigation"
+        "release outside consumes the captured gesture without navigating"
     );
     assert_eq!(
         session.pointer_up(next_padding.0, next_padding.1),
@@ -416,6 +451,94 @@ fn livery_session_routes_retained_structural_and_text_paint() {
     assert_eq!(concrete.document().text_system().shape_count(), shape_count);
     assert!(!session.scroll_by(0.0, 100.0));
     assert_eq!(session.click_at(20.0, 20.0), SessionClick::Miss);
+}
+
+#[cfg(feature = "livery")]
+#[test]
+fn livery_session_reports_rejected_border_and_recovers_after_style_correction() {
+    let engine = LiverySessionEngine::new(NoFetch);
+    let request = SessionSpawnRequest::new("https://example.test/")
+        .with_body("<html><body><div id='target' style='width: 32px; height: 32px; border: 4px solid red'></div></body></html>")
+        .with_viewport(64, 64);
+    let mut session = engine.spawn(&request).expect("retained Livery session");
+    assert!(!session.try_frame(64, 64).expect("valid frame").ops.is_empty());
+
+    let concrete = session.as_any().downcast_mut::<LiveryDocumentSession>().unwrap();
+    let target = livery_node_with_id(concrete, "target");
+    concrete.doc.mutate_dom(|dom| {
+        dom.set_attribute(
+            target,
+            QualName::new(None, Namespace::default(), LocalName::from("style")),
+            "width: 32px; height: 32px; border: 4px groove red",
+        );
+    });
+    let error = session.try_frame(64, 64).expect_err("groove border must refuse");
+    assert!(error.contains("paint translation: paint command"));
+    let concrete = session.as_any().downcast_mut::<LiveryDocumentSession>().unwrap();
+    assert!(
+        concrete.last_error().is_some_and(|error|
+            error.contains("paint translation: paint command")
+                && error.contains("border style or geometry is not lowered")),
+        "translation failure must remain visible through the session"
+    );
+
+    concrete.doc.mutate_dom(|dom| {
+        dom.set_attribute(
+            target,
+            QualName::new(None, Namespace::default(), LocalName::from("style")),
+            "width: 32px; height: 32px; border: 4px solid red",
+        );
+    });
+    assert!(!session.try_frame(64, 64).expect("corrected frame").ops.is_empty());
+    let concrete = session.as_any().downcast_mut::<LiveryDocumentSession>().unwrap();
+    assert_eq!(concrete.last_error(), None);
+}
+
+#[cfg(feature = "livery")]
+#[test]
+fn default_iframe_border_refuses_checked_frame() {
+    let engine = LiverySessionEngine::new(NoFetch);
+    let request = SessionSpawnRequest::new("https://example.test/")
+        .with_body("<iframe></iframe>")
+        .with_viewport(400, 300);
+    let mut session = engine.spawn(&request).expect("iframe session");
+    let error = session.try_frame(400, 300).expect_err("UA inset border is not lowered");
+    assert!(error.contains("border style or geometry is not lowered"));
+}
+
+#[cfg(feature = "scripted")]
+#[test]
+fn scripted_session_checked_frame_reports_rejected_border_and_recovers() {
+    let engine =
+        ScriptedSessionEngine::<script_engine_boa::BoaEngine, _>::new("genet.scripted", NoFetch);
+    let request = SessionSpawnRequest::new("https://example.test/")
+        .with_body("<body><div id='target' style='width: 32px; height: 32px; border: 4px solid red'></div></body>")
+        .with_viewport(64, 64);
+    let mut session = engine.spawn(&request).expect("scripted session");
+    assert!(!session.try_frame(64, 64).expect("valid frame").ops.is_empty());
+
+    let concrete = session
+        .as_any()
+        .downcast_mut::<ScriptedDocumentSession<script_engine_boa::BoaEngine>>()
+        .unwrap();
+    concrete.document_mut().evaluate("document.getElementById('target').setAttribute('style', 'width: 32px; height: 32px; border: 4px groove red')")
+        .expect("change border style");
+    let error = session.try_frame(64, 64).expect_err("groove border must refuse");
+    assert!(error.contains("paint translation: paint command"));
+
+    let concrete = session
+        .as_any()
+        .downcast_mut::<ScriptedDocumentSession<script_engine_boa::BoaEngine>>()
+        .unwrap();
+    assert_eq!(concrete.last_error(), Some(error.as_str()));
+    concrete.document_mut().evaluate("document.getElementById('target').setAttribute('style', 'width: 32px; height: 32px; border: 4px solid red')")
+        .expect("restore supported border");
+    assert!(!session.try_frame(64, 64).expect("corrected frame").ops.is_empty());
+    let concrete = session
+        .as_any()
+        .downcast_mut::<ScriptedDocumentSession<script_engine_boa::BoaEngine>>()
+        .unwrap();
+    assert_eq!(concrete.last_error(), None);
 }
 
 #[cfg(feature = "livery")]
@@ -1468,7 +1591,25 @@ fn livery_session_drag_selects_a_textarea_without_creating_a_page_clip() {
                 .iter()
                 .filter(|operation| matches!(operation, netrender::SceneOp::Rect(_)))
                 .count(),
-        "the local range produces retained selection overlay geometry"
+        "the local range produces retained selection overlay geometry; initial rectangles: {:?}; selected rectangles: {:?}; retained range: {:?}",
+        initial
+            .ops
+            .iter()
+            .filter_map(|operation| scene_rect_color_and_bounds(&initial, operation))
+            .collect::<Vec<_>>(),
+        selected
+            .ops
+            .iter()
+            .filter_map(|operation| scene_rect_color_and_bounds(&selected, operation))
+            .collect::<Vec<_>>(),
+        session
+            .document()
+            .selection_for_range(genet_livery::TextRange {
+                anchor_node: note,
+                anchor_offset: 0,
+                focus_node: note,
+                focus_offset: 5,
+            })
     );
 
     assert!(session.ime_input(SessionIme::Commit("oak".to_owned())));
@@ -1963,6 +2104,13 @@ struct SiteFetch;
 
 #[cfg(feature = "livery")]
 impl ResourceFetcher for SiteFetch {
+    fn fetch_request(
+        &self,
+        _request: &genet_host_api::ResourceRequest,
+    ) -> Option<genet_host_api::ResourceFetchResponse> {
+        None
+    }
+
     fn fetch(&self, url: &str) -> Option<Vec<u8>> {
         match url {
             "https://example.test/child.html" => Some(
@@ -2092,7 +2240,7 @@ fn a_srcdoc_frame_loads_without_a_fetch_and_keeps_the_parents_base_url() {
     let mut session = spawn_site(
         "https://example.test/index.html",
         Some(
-            r#"<iframe srcdoc="<link rel=stylesheet href=child.css><div style='width:20px;height:20px'></div>"></iframe>"#,
+            r#"<iframe style="border:2px solid" srcdoc="<link rel=stylesheet href=child.css><div style='width:20px;height:20px'></div>"></iframe>"#,
         ),
     );
     let session = livery(&mut session);
@@ -2122,7 +2270,7 @@ fn a_srcdoc_frame_loads_without_a_fetch_and_keeps_the_parents_base_url() {
 fn an_unfetchable_frame_reports_error_and_leaves_an_empty_box() {
     let mut session = spawn_site(
         "https://example.test/index.html",
-        Some(r#"<iframe src="missing.html"></iframe>"#),
+        Some(r#"<iframe style="border:2px solid" src="missing.html"></iframe>"#),
     );
     let session = livery(&mut session);
     let reports = session.frame_load_reports();
@@ -2648,6 +2796,93 @@ fn email_and_number_editing_keep_a_native_cursor_without_selection_idl() {
     );
 }
 
+#[cfg(feature = "livery")]
+#[test]
+fn incomplete_number_edit_retains_raw_draft_through_blur() {
+    let engine = LiverySessionEngine::new(NoFetch);
+    let request = SessionSpawnRequest::new("fixtures/form/raw-number-draft.html")
+        .with_body("<html><head><style>input{display:block;width:180px;height:24px}</style></head><body style='margin:0'><input id=number type=number></body></html>")
+        .with_viewport(320, 100);
+    let mut boxed = engine.spawn(&request).expect("form session spawns");
+    let session = boxed
+        .as_any()
+        .downcast_mut::<LiveryDocumentSession>()
+        .unwrap();
+    let number = livery_node_with_id(session, "number");
+    let _ = session.frame(320, 100);
+    assert_eq!(session.click_at(80.0, 12.0), SessionClick::Handled);
+    assert!(session.text_input("1e"));
+    let state = session.document().dom().form_control_state(number).unwrap();
+    assert_eq!(
+        state.value, "",
+        "script-facing number value stays sanitized"
+    );
+    let editing = session
+        .document()
+        .dom()
+        .form_control_editing_value(number)
+        .unwrap();
+    assert_eq!(
+        editing.value, "1e",
+        "the editor keeps the raw incomplete draft"
+    );
+    assert_eq!(editing.selection_start, Some(2));
+    assert_eq!(
+        session.key_input(
+            SessionKey::ArrowLeft,
+            SessionButtonState::Pressed,
+            SessionModifiers::default(),
+            false,
+        ),
+        SessionEffect::Handled,
+        "caret movement uses the displayed draft rather than sanitized .value"
+    );
+    assert_eq!(
+        session.key_input(
+            SessionKey::Backspace,
+            SessionButtonState::Pressed,
+            SessionModifiers::default(),
+            false,
+        ),
+        SessionEffect::Handled
+    );
+    assert!(session.text_input("2"));
+    let editing = session
+        .document()
+        .dom()
+        .form_control_editing_value(number)
+        .unwrap();
+    assert_eq!(editing.value, "2e");
+    assert_eq!(editing.selection_start, Some(1));
+    assert_eq!(
+        session
+            .document()
+            .dom()
+            .form_control_state(number)
+            .unwrap()
+            .value,
+        "",
+        "script-facing number value stays sanitized during raw-draft edits"
+    );
+
+    let blurred = session.input(document_session_api::SessionInput::Focus(false));
+    assert_eq!(blurred.effect, SessionEffect::Handled);
+    let interaction = session
+        .document()
+        .dom()
+        .form_control_interaction_state(number)
+        .unwrap();
+    assert!(
+        interaction.user_validity,
+        "a changed value becomes user-validity true on blur"
+    );
+    assert!(
+        interaction.bad_input,
+        "blur does not discard the parse failure"
+    );
+    assert_eq!(interaction.draft_value.as_deref(), Some("2e"));
+}
+
 #[cfg(feature = "scripted")]
 fn check_scripted_generated_names<E: script_engine_api::ScriptEngine + 'static>() {
     let document = genet_scripted::LiveryScriptedDocument::<E>::parse(
@@ -2720,4 +2955,1129 @@ fn scripted_generated_names_follow_retained_styles_on_boa() {
 #[test]
 fn scripted_generated_names_follow_retained_styles_on_vano() {
     check_scripted_generated_names::<script_engine_nova::NovaEngine>();
+}
+
+#[cfg(feature = "scripted")]
+fn check_scripted_validation_alert<E: script_engine_api::ScriptEngine + 'static>() {
+    use document_session_api::{DocumentA11yLive, DocumentA11yRole};
+
+    let document = genet_scripted::LiveryScriptedDocument::<E>::parse(
+        r#"<body><input id="field" required><script>
+        globalThis.field = document.getElementById('field');
+        field.setCustomValidity('Exact <native> message');
+        </script></body>"#,
+    )
+    .expect("validation document");
+    let mut session = ScriptedDocumentSession::new(document);
+    session.frame(320, 160);
+    let before = session.document_mut().dom_snapshot();
+    let before_projection = session.accessibility_projection().unwrap();
+    assert!(
+        before_projection
+            .nodes()
+            .iter()
+            .all(|node| node.role != DocumentA11yRole::Alert)
+    );
+
+    session
+        .document_mut()
+        .evaluate("field.reportValidity()")
+        .unwrap();
+    session.pump(0.0);
+    session.frame(320, 160);
+    let first = session.accessibility_projection().unwrap();
+    let first_alert = first
+        .nodes()
+        .iter()
+        .find(|node| node.role == DocumentA11yRole::Alert)
+        .unwrap();
+    assert_eq!(first_alert.name.as_deref(), Some("Exact <native> message"));
+    assert_eq!(first_alert.state.live, Some(DocumentA11yLive::Assertive));
+    assert_eq!(first_alert.parent, Some(first.root()));
+    assert!(
+        first
+            .node(first.root())
+            .unwrap()
+            .children
+            .contains(&first_alert.id)
+    );
+    let bounds = first_alert.bounds.unwrap();
+    assert!(bounds.width > 0.0 && bounds.height > 0.0);
+    assert_eq!(
+        session.document_mut().dom_snapshot(),
+        before,
+        "native notice leaves author DOM unchanged"
+    );
+    assert_eq!(
+        session.accessibility_projection().unwrap().revision(),
+        first.revision(),
+        "unchanged alert retains semantic revision"
+    );
+
+    session
+        .document_mut()
+        .evaluate("field.reportValidity()")
+        .unwrap();
+    session.pump(1.0);
+    session.frame(320, 160);
+    let repeated = session.accessibility_projection().unwrap();
+    let repeated_alert = repeated
+        .nodes()
+        .iter()
+        .find(|node| node.role == DocumentA11yRole::Alert)
+        .unwrap();
+    assert_ne!(
+        repeated_alert.id, first_alert.id,
+        "repeated report can announce the same message again"
+    );
+    assert!(repeated.revision() > first.revision());
+    assert_eq!(
+        session.key_input(
+            SessionKey::Escape,
+            SessionButtonState::Pressed,
+            SessionModifiers::default(),
+            false
+        ),
+        SessionEffect::Cancelled
+    );
+    assert!(
+        session
+            .accessibility_projection()
+            .unwrap()
+            .nodes()
+            .iter()
+            .all(|node| node.role != DocumentA11yRole::Alert)
+    );
+
+    session.document_mut().evaluate("field.addEventListener('invalid', event => event.preventDefault()); field.reportValidity()").unwrap();
+    session.pump(2.0);
+    session.frame(320, 160);
+    assert!(
+        session
+            .accessibility_projection()
+            .unwrap()
+            .nodes()
+            .iter()
+            .all(|node| node.role != DocumentA11yRole::Alert),
+        "canceled invalid has no native alert"
+    );
+}
+
+#[cfg(feature = "scripted")]
+#[test]
+fn scripted_validation_notice_and_alert_on_boa() {
+    check_scripted_validation_alert::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(feature = "scripted-nova")]
+#[test]
+fn scripted_validation_notice_and_alert_on_vano() {
+    check_scripted_validation_alert::<script_engine_nova::NovaEngine>();
+}
+
+#[cfg(feature = "scripted")]
+fn check_scripted_child_validation_alert<E: script_engine_api::ScriptEngine + 'static>() {
+    use document_session_api::DocumentA11yRole;
+    let document = genet_scripted::LiveryScriptedDocument::<E>::parse(
+        r#"<body><iframe id="child" srcdoc='<body><input id="field" required></body>'></iframe></body>"#,
+    ).expect("frame validation document");
+    let mut session = ScriptedDocumentSession::new(document);
+    session.frame(320, 160);
+    session.pump(0.0);
+    session.document_mut().evaluate(
+        "const child = document.getElementById('child').contentWindow; const field = child.document.getElementById('field'); field.setCustomValidity('Child field message'); child.setTimeout(() => field.reportValidity(), 0);"
+    ).unwrap();
+    session.pump(1.0);
+    session.frame(320, 160);
+    let projection = session.accessibility_projection().unwrap();
+    let alert = projection
+        .nodes()
+        .iter()
+        .find(|node| node.role == DocumentA11yRole::Alert)
+        .expect("child notice reaches host alert");
+    assert_eq!(alert.name.as_deref(), Some("Child field message"));
+    assert!(alert.bounds.is_some());
+    session
+        .document_mut()
+        .evaluate("document.getElementById('child').remove()")
+        .unwrap();
+    session.pump(2.0);
+    session.frame(320, 160);
+    assert!(
+        session
+            .accessibility_projection()
+            .unwrap()
+            .nodes()
+            .iter()
+            .all(|node| node.role != DocumentA11yRole::Alert),
+        "destroyed child cannot retain host feedback"
+    );
+}
+
+#[cfg(feature = "scripted")]
+#[test]
+fn scripted_child_validation_alert_on_boa() {
+    check_scripted_child_validation_alert::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(feature = "scripted-nova")]
+#[test]
+fn scripted_child_validation_alert_on_vano() {
+    check_scripted_child_validation_alert::<script_engine_nova::NovaEngine>();
+}
+
+// TASK5 DRAFT NATIVE FIXTURES BEGIN. Missing seams have absence-only adapters.
+#[cfg(feature = "livery")]
+#[derive(Clone, Debug)]
+struct T5NativeEncoded { request: genet_host_api::ResourceRequest, target: String }
+#[cfg(feature = "livery")]
+fn t5_native_take_absent(_s: &mut dyn DocumentSession<Scene>) -> Option<T5NativeEncoded> {
+    _s.take_encoded_form_submission().map(|e| T5NativeEncoded { target:e.target,
+        request:genet_host_api::ResourceRequest {url:e.request.url,method:e.request.method,headers:e.request.headers,
+            body:e.request.body,cache:e.request.cache,redirect:e.request.redirect,mode:e.request.mode,
+            referrer:e.request.referrer,referrer_policy:e.request.referrer_policy,credentials:e.request.credentials,integrity:e.request.integrity,
+            upgrade_insecure_requests:false,block_all_mixed_content:false} })
+}
+#[cfg(any(feature = "livery", feature = "scripted"))]
+fn t5_address_absent(_s: &dyn DocumentSession<Scene>) -> Option<String> { _s.current_address() }
+#[cfg(feature = "livery")]
+fn t5_native_rich_spawn_absent<Fetch: ResourceFetcher>(
+    _engine: &LiverySessionEngine<Fetch>, _spawn: &SessionSpawnRequest,
+    _request: &genet_host_api::ResourceRequest,
+) -> Result<Box<dyn DocumentSession<Scene>>, SessionError> {
+    _engine.spawn_document_request(_spawn, &document_session_api::SessionDocumentRequest {
+        url:_request.url.clone(),method:_request.method.clone(),headers:_request.headers.clone(),body:_request.body.clone(),
+        cache:_request.cache.clone(),redirect:_request.redirect.clone(),mode:_request.mode.clone(),referrer:_request.referrer.clone(),
+        referrer_policy:_request.referrer_policy.clone(),credentials:_request.credentials.clone(),integrity:_request.integrity.clone(),
+    }).map(|loaded|loaded.session)
+}
+#[cfg(feature = "livery")]
+fn t5_native(html: &str) -> Box<dyn DocumentSession<Scene>> {
+    LiverySessionEngine::new(NoFetch).spawn(&SessionSpawnRequest::new("https://forms.test/source#initiator")
+        .with_body(format!("<style>body{{margin:0}}input,button,textarea{{display:block;width:180px;height:32px;margin:6px}}</style>{html}"))
+        .with_viewport(480,480)).unwrap()
+}
+#[cfg(feature = "livery")]
+fn t5_native_point(s: &mut Box<dyn DocumentSession<Scene>>, id: &str, local: [f32;2]) -> [f32;2] {
+    s.frame(480,480);
+    let concrete=livery(s); let node=livery_node_with_id(concrete,id);
+    let [x,y,w,h]=concrete.document().fragment_rect(node).expect("real retained control geometry");
+    assert!(w>0.0 && h>0.0,"fixture control is visible");
+    let z=concrete.page_zoom(); [(x+local[0])*z,(y+local[1])*z]
+}
+#[cfg(feature = "livery")]
+fn t5_pointer(s: &mut dyn DocumentSession<Scene>, p:[f32;2],state:SessionButtonState)->SessionEffect {
+    s.input(document_session_api::SessionInput::PointerButton{x:p[0],y:p[1],
+        button:document_session_api::SessionPointerButton::Primary,state,modifiers:SessionModifiers::default()}).effect
+}
+#[cfg(feature = "livery")]
+fn t5_native_click(s: &mut Box<dyn DocumentSession<Scene>>, id:&str)->SessionEffect {
+    let p=t5_native_point(s,id,[5.0,5.0]); t5_pointer(&mut **s,p,SessionButtonState::Pressed);
+    t5_pointer(&mut **s,p,SessionButtonState::Released)
+}
+#[cfg(feature = "livery")]
+fn t5_key(s:&mut dyn DocumentSession<Scene>,key:SessionKey,state:SessionButtonState,modifiers:SessionModifiers,repeat:bool)->SessionEffect {
+    s.input(document_session_api::SessionInput::Key{key,state,modifiers,repeat}).effect
+}
+#[cfg(feature = "livery")]
+fn t5_native_enter(s:&mut Box<dyn DocumentSession<Scene>>,id:&str)->SessionEffect {
+    t5_native_click(s,id); t5_key(&mut **s,SessionKey::Enter,SessionButtonState::Pressed,SessionModifiers::default(),false)
+}
+#[cfg(feature = "livery")]
+fn t5_submitted(effect:SessionEffect)->SessionFormSubmission {
+    match effect { SessionEffect::Submit(s)=>s,other=>panic!("real host input must submit: {other:?}") }
+}
+#[cfg(feature = "livery")]
+fn t5_set_native(s:&mut Box<dyn DocumentSession<Scene>>,id:&str,value:&str) {
+    let concrete=livery(s); let node=livery_node_with_id(concrete,id);
+    concrete.doc.mutate_dom(|dom|dom.set_form_control_value(node,value).unwrap());
+}
+#[cfg(feature = "livery")]
+fn t5_native_attr(s:&mut Box<dyn DocumentSession<Scene>>,id:&str,name:&str,value:Option<&str>) {
+    let concrete=livery(s);let node=livery_node_with_id(concrete,id);
+    concrete.doc.mutate_dom(|dom| {let name=QualName::new(None,Namespace::default(),LocalName::from(name));
+        match value {Some(v)=>dom.set_attribute(node,name,v),None=>dom.remove_attribute(node,name)};});
+}
+#[cfg(feature = "livery")]
+fn t5_encoded(s:&mut Box<dyn DocumentSession<Scene>>)->T5NativeEncoded {
+    t5_native_take_absent(&mut **s).expect("missing capability: consuming native encoded request accessor")
+}
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_t5_native_enter_first_external_default() {
+    let mut s=t5_native("<button id='first' form='f' name='go' value='external'>first</button><form id='f' action='/send'><input id='q' name='q' value='a'><button name='go' value='later'>later</button></form>");
+    let f=t5_submitted(t5_native_enter(&mut s,"q"));
+    assert_eq!(f.fields,vec![("go".into(),"external".into()),("q".into(),"a".into())]);
+    assert_eq!(t5_encoded(&mut s).request.url,"https://forms.test/send?go=external&q=a");
+}
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_t5_native_enter_disabled_first_blocks() {
+    let mut s=t5_native("<form action='/send'><input id='q' name='q'><button id='b' disabled>first</button><button>later</button></form>");
+    assert!(!matches!(t5_native_enter(&mut s,"q"),SessionEffect::Submit(_)));
+    assert!(t5_native_take_absent(&mut *s).is_none());
+    t5_native_attr(&mut s,"b","disabled",None);
+    assert!(matches!(t5_native_enter(&mut s,"q"),SessionEffect::Submit(_)),"live enabled default must activate");
+}
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_t5_native_enter_two_blockers_block() {
+    let mut s=t5_native("<form action='/send'><input id='q' name='q'><input name='second' type='number'></form>");
+    assert!(!matches!(t5_native_enter(&mut s,"q"),SessionEffect::Submit(_)));
+    assert!(t5_native_take_absent(&mut *s).is_none());
+}
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_t5_native_enter_single_text_form() {
+    let mut s=t5_native("<form action='/send'><input id='q' name='q' value='solo'></form>");
+    assert_eq!(t5_submitted(t5_native_enter(&mut s,"q")).fields,[("q".into(),"solo".into())]);
+    assert_eq!(t5_encoded(&mut s).request.url,"https://forms.test/send?q=solo");
+}
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_t5_native_textarea_enter_is_newline() {
+    let mut s=t5_native("<form action='/send' method='post'><textarea id='q' name='q'>a</textarea><button id='b'>send</button></form>");
+    t5_native_click(&mut s,"q");t5_key(&mut *s,SessionKey::End,SessionButtonState::Pressed,SessionModifiers::default(),false);
+    assert_eq!(t5_key(&mut *s,SessionKey::Enter,SessionButtonState::Pressed,SessionModifiers::default(),false),SessionEffect::Handled);
+    assert!(t5_native_take_absent(&mut *s).is_none());
+    s.input(document_session_api::SessionInput::Text("b".into()));
+    assert_eq!(t5_submitted(t5_native_click(&mut s,"b")).fields,[("q".into(),"a\nb".into())]);
+    assert_eq!(t5_encoded(&mut s).request.body,Some(b"q=a%0D%0Ab".to_vec()));
+}
+#[cfg(feature = "livery")]
+#[test]
+fn i1_native_readonly_focus_becomes_editable() {
+    let mut s=t5_native("<input id='q' value='old' readonly><button id='next'>next</button>");
+    t5_native_click(&mut s,"q");
+    t5_native_attr(&mut s,"q","readonly",None);
+    assert_eq!(t5_key(&mut *s,SessionKey::Character("x".into()),SessionButtonState::Pressed,Default::default(),false),SessionEffect::Ignored);
+    assert_eq!(s.input(document_session_api::SessionInput::KeyboardText("x".into())).effect,SessionEffect::Handled);
+    let node=livery_node_with_id(livery(&mut s),"q");
+    assert_eq!(livery(&mut s).document().dom().form_control_editing_value(node).unwrap().value,"xold");
+}
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_t5_native_click_external_submitter_owner() {
+    let mut s=t5_native("<form id='f' action='/correct'><input name='q' value='owned'></form><form action='/wrong'><button id='b' form='f' name='go' value='yes'>send</button></form>");
+    assert_eq!(t5_submitted(t5_native_click(&mut s,"b")).fields,[("q".into(),"owned".into()),("go".into(),"yes".into())]);
+    assert_eq!(t5_encoded(&mut s).request.url,"https://forms.test/correct?q=owned&go=yes");
+}
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_t5_native_live_disabled_fieldset_legend() {
+    let mut s=t5_native("<form action='/send'><fieldset id='fs' disabled><legend><button id='legend' name='go' value='legend'>legend</button></legend><button id='b' name='go' value='ordinary'>ordinary</button></fieldset></form>");
+    assert!(!matches!(t5_native_click(&mut s,"b"),SessionEffect::Submit(_)));
+    assert_eq!(t5_submitted(t5_native_click(&mut s,"legend")).fields,[("go".into(),"legend".into())]);
+    t5_native_attr(&mut s,"fs","disabled",None);
+    assert_eq!(t5_submitted(t5_native_click(&mut s,"b")).fields,[("go".into(),"ordinary".into())]);
+}
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_t5_native_pointer_matching_release_only() {
+    let mut s=t5_native("<form action='/send'><button id='a'>a</button><button id='b'>b</button></form>");
+    let a=t5_native_point(&mut s,"a",[4.0,4.0]);let b=t5_native_point(&mut s,"b",[4.0,4.0]);
+    assert!(!matches!(t5_pointer(&mut *s,a,SessionButtonState::Released),SessionEffect::Submit(_)));
+    t5_pointer(&mut *s,a,SessionButtonState::Pressed);
+    assert!(!matches!(t5_pointer(&mut *s,b,SessionButtonState::Released),SessionEffect::Submit(_)));
+    assert!(matches!(t5_native_click(&mut s,"a"),SessionEffect::Submit(_)));
+}
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_t5_native_image_local_position_zoom() {
+    let mut s=t5_native("<form action='/send'><input id='img' type='image' name='map' style='width:100px;height:60px'></form>");
+    s.set_page_zoom(1.5).unwrap();let p=t5_native_point(&mut s,"img",[7.8,9.2]);
+    t5_pointer(&mut *s,p,SessionButtonState::Pressed);
+    assert_eq!(t5_submitted(t5_pointer(&mut *s,p,SessionButtonState::Released)).fields,[("map.x".into(),"7".into()),("map.y".into(),"9".into())]);
+    assert_eq!(t5_encoded(&mut s).request.url,"https://forms.test/send?map.x=7&map.y=9");
+}
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_t5_native_native_validity_and_novalidate() {
+    let mut s=t5_native("<form id='f' action='/send'><input id='q' name='q' required><button id='b'>send</button></form>");
+    assert!(!matches!(t5_native_click(&mut s,"b"),SessionEffect::Submit(_)));
+    assert!(t5_native_take_absent(&mut *s).is_none());t5_native_attr(&mut s,"f","novalidate",Some(""));
+    assert_eq!(t5_submitted(t5_native_click(&mut s,"b")).fields,[("q".into(),"".into())]);
+}
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_t5_native_get_legacy_charset_query_replace() {
+    let bytes=b"<form id='f' action='/send?old=1#f'><input name='q' value='\xe9'><input type='hidden' name='_charset_'><button id='b'>send</button></form>".to_vec();
+    let fetch=T5DocumentFetch::new(Some(t5_reply("https://forms.test/source",200,"basic",bytes,"text/html; charset=windows-1252")));
+    let mut s=LiverySessionEngine::new(fetch).spawn(&SessionSpawnRequest::new("https://forms.test/source").with_viewport(480,480)).unwrap();
+    assert_eq!(t5_submitted(t5_native_click(&mut s,"b")).fields,[("q".into(),"é".into()),("_charset_".into(),"windows-1252".into())]);
+    assert_eq!(t5_encoded(&mut s).request.url,"https://forms.test/send?q=%E9&_charset_=windows-1252#f");
+    t5_native_attr(&mut s,"f","accept-charset",Some("made-up-encoding"));
+    assert_eq!(t5_submitted(t5_native_click(&mut s,"b")).fields,[("q".into(),"é".into()),("_charset_".into(),"UTF-8".into())]);
+    assert_eq!(t5_encoded(&mut s).request.url,"https://forms.test/send?q=%C3%A9&_charset_=UTF-8#f");
+}
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_t5_native_post_urlencoded_current_value() {
+    let mut s=t5_native("<form action='/send?kept=1' method='post'><input id='q' name='q' value=''><button id='b' name='go' value='yes'>send</button></form>");
+    t5_native_click(&mut s,"q");
+    assert_eq!(s.input(document_session_api::SessionInput::Text("a b+é".into())).effect,SessionEffect::Handled);
+    assert_eq!(t5_submitted(t5_native_click(&mut s,"b")).fields,[("q".into(),"a b+é".into()),("go".into(),"yes".into())]);
+    let e=t5_encoded(&mut s);assert_eq!(e.request.url,"https://forms.test/send?kept=1");
+    assert_eq!(e.request.method,"POST");assert_eq!(e.request.body,Some(b"q=a+b%2B%C3%A9&go=yes".to_vec()));
+    assert_eq!(e.request.headers,[("Content-Type".into(),"application/x-www-form-urlencoded".into())]);
+}
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_t5_native_post_plain_exact_bytes() {
+    let fetch=T5DocumentFetch::new(Some(t5_reply("https://forms.test/source",200,"basic",b"<form action='/send' method='post' enctype='text/plain'><input id='q' name='q'><button id='b'>send</button></form>".to_vec(),"text/html; charset=windows-1252")));
+    let mut s=LiverySessionEngine::new(fetch).spawn(&SessionSpawnRequest::new("https://forms.test/source").with_viewport(480,480)).unwrap();
+    t5_set_native(&mut s,"q","\0€ÿ");t5_submitted(t5_native_click(&mut s,"b"));let e=t5_encoded(&mut s);
+    assert_eq!(e.request.body,Some(b"q=\x00\x80\xff\r\n".to_vec()));
+    assert_eq!(e.request.headers,[("Content-Type".into(),"text/plain".into())]);
+}
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_t5_native_post_multipart_selected_binary() {
+    let mut s=t5_native("<form action='/send' method='post' enctype='multipart/form-data'><input id='file' type='file' name='upload'><button id='b'>send</button></form>");
+    let file=genet_scripted_dom::FormFile::new("f.bin".into(),"application/octet-stream".into(),Arc::from([0u8,128,255])).unwrap();
+    let concrete=livery(&mut s);let node=livery_node_with_id(concrete,"file");
+    assert!(concrete.doc.mutate_dom(|dom|dom.set_selected_files(node,vec![file])).0);
+    t5_submitted(t5_native_click(&mut s,"b"));let e=t5_encoded(&mut s);let body=e.request.body.unwrap();
+    let ct=&e.request.headers[0].1;let boundary=ct.strip_prefix("multipart/form-data; boundary=").expect("wire content type boundary");
+    let mut literal=format!("--{boundary}\r\nContent-Disposition: form-data; name=\"upload\"; filename=\"f.bin\"\r\nContent-Type: application/octet-stream\r\n\r\n").into_bytes();
+    literal.extend_from_slice(&[0,128,255]);literal.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());assert_eq!(body,literal);
+}
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_t5_native_overrides_base_and_top_policy() {
+    for target in ["","_self","_parent","_top"] {
+        let mut s=t5_native(&format!("<base href='https://assets.test/root/'><form action='wrong' method='get' rel='noreferrer'><input name='q' value='v'><button id='b' formaction='send' formmethod='post' formenctype='text/plain' formtarget='{target}'>send</button></form>"));
+        t5_submitted(t5_native_click(&mut s,"b"));let e=t5_encoded(&mut s);
+        assert_eq!(e.request.url,"https://assets.test/root/send");assert_eq!(e.request.method,"POST");assert_eq!(e.request.body,Some(b"q=v\r\n".to_vec()));
+        assert_eq!(e.request.referrer,"https://forms.test/source#initiator");assert_eq!(e.request.referrer_policy,"no-referrer");assert_eq!(e.target,target);
+    }
+    for target in ["child","_blank"] {let mut s=t5_native(&format!("<form action='/send' target='{target}'><button id='b'>send</button></form>"));
+        t5_native_click(&mut s,"b");assert!(t5_native_take_absent(&mut *s).is_none(),"unsupported native target must not fabricate replacement");}
+}
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_t5_native_consumed_then_observation() {
+    let mut s=t5_native("<form action='/send' method='post'><input name='q' value='live'><button id='b'>send</button></form>");
+    let legacy=t5_submitted(t5_native_click(&mut s,"b"));assert_eq!(legacy.fields,[("q".into(),"live".into())]);
+    assert_eq!(t5_encoded(&mut s).request.body,Some(b"q=live".to_vec()));
+    s.frame(480,480);s.links();s.clip();s.inspect();s.form_submission(&legacy.action);
+    assert!(t5_native_take_absent(&mut *s).is_none(),"observations do not resurrect consumed request");
+}
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_t5_native_next_input_clears_same_action() {
+    let mut s=t5_native("<form action='/send' method='post' enctype='multipart/form-data'><input id='file' type='file' name='upload'><button id='b'>send</button></form>");
+    let mut bodies=vec![];let mut shapes=vec![];
+    for bytes in [vec![0,128,255],vec![0,128,254]] {
+        let file=genet_scripted_dom::FormFile::new("same.bin".into(),"application/octet-stream".into(),Arc::from(bytes.clone())).unwrap();
+        let concrete=livery(&mut s);let id=livery_node_with_id(concrete,"file");concrete.doc.mutate_dom(|dom|assert!(dom.set_selected_files(id,vec![file])));
+        shapes.push(t5_submitted(t5_native_click(&mut s,"b")));let body=t5_encoded(&mut s).request.body.unwrap();
+        assert!(body.windows(3).any(|w|w==bytes.as_slice()),"actual selected entity bytes reach native encoder");bodies.push(body);
+    }
+    assert_eq!(shapes[0],shapes[1]);assert_ne!(bodies[0],bodies[1]);
+    for next in [
+        document_session_api::SessionInput::PointerMoved{x:470.0,y:470.0,modifiers:Default::default()},
+        document_session_api::SessionInput::PointerButton{x:470.0,y:470.0,button:document_session_api::SessionPointerButton::Secondary,state:SessionButtonState::Pressed,modifiers:Default::default()},
+        document_session_api::SessionInput::Key{key:SessionKey::Escape,state:SessionButtonState::Released,modifiers:Default::default(),repeat:false},
+        document_session_api::SessionInput::Text("ignored".into()),
+        document_session_api::SessionInput::Ime(SessionIme::Enabled),
+        document_session_api::SessionInput::Focus(false),
+        document_session_api::SessionInput::FocusMove(SessionFocusDirection::Backward),
+        document_session_api::SessionInput::Cancel,
+    ] {
+        t5_submitted(t5_native_click(&mut s,"b"));s.input(next);
+        assert!(t5_native_take_absent(&mut *s).is_none(),"every next actual input invalidates unconsumed request before dispatch");
+    }
+}
+#[cfg(any(feature = "livery",feature = "scripted"))]
+#[derive(Clone)]
+struct T5DocumentFetch { reply:Option<genet_host_api::ResourceFetchResponse>, requests:std::sync::Arc<std::sync::Mutex<Vec<genet_host_api::ResourceRequest>>> }
+#[cfg(any(feature = "livery",feature = "scripted"))]
+impl T5DocumentFetch {fn new(reply:Option<genet_host_api::ResourceFetchResponse>)->Self {Self{reply,requests:Default::default()}}}
+#[cfg(any(feature = "livery",feature = "scripted"))]
+impl ResourceFetcher for T5DocumentFetch {
+    fn fetch(&self,_url:&str)->Option<Vec<u8>> {None}
+    fn fetch_response(&self,url:&str)->Option<genet_host_api::ResourceResponse> {
+        if url.contains(".css")||url.contains(".png") {return None;}self.reply.clone().map(genet_host_api::ResourceFetchResponse::into_legacy_response)
+    }
+    fn fetch_request(&self,r:&genet_host_api::ResourceRequest)->Option<genet_host_api::ResourceFetchResponse> {
+        self.requests.lock().unwrap().push(r.clone());self.reply.clone()
+    }
+}
+#[cfg(any(feature = "livery",feature = "scripted"))]
+fn t5_reply(url:&str,status:u16,kind:&str,bytes:Vec<u8>,content_type:&str)->genet_host_api::ResourceFetchResponse {
+    genet_host_api::ResourceFetchResponse{final_url:url.into(),status,status_text:"fixture".into(),response_type:kind.into(),bytes,
+        content_type:Some(content_type.into()),headers:vec![("content-type".into(),content_type.into())],redirected:true}
+}
+#[cfg(feature = "livery")]
+fn t5_rich_request()->genet_host_api::ResourceRequest {
+    genet_host_api::ResourceRequest{url:"https://forms.test/send#done".into(),method:"POST".into(),
+        headers:vec![("Content-Type".into(),"text/plain".into())],body:Some(vec![0,128,255]),cache:"no-store".into(),redirect:"follow".into(),
+        mode:"navigate".into(),referrer:"https://foreign.test/source#initiator".into(),referrer_policy:"no-referrer".into(),credentials:"include".into(),integrity:"".into(),
+        upgrade_insecure_requests:false,block_all_mixed_content:false}
+}
+#[cfg(feature = "livery")]
+fn t5_rich_outcome(reply:Option<genet_host_api::ResourceFetchResponse>)->(Result<Box<dyn DocumentSession<Scene>>,SessionError>,Vec<genet_host_api::ResourceRequest>) {
+    let fetch=T5DocumentFetch::new(reply);let seen=fetch.requests.clone();
+    let engine=LiverySessionEngine::with_author_css(fetch,["p{color:rgb(11,22,33)}"]);
+    let request=t5_rich_request();let result=t5_native_rich_spawn_absent(&engine,&SessionSpawnRequest::new(&request.url).with_viewport(480,480),&request);
+    let captured=seen.lock().unwrap().clone();(result,captured)
+}
+#[cfg(feature = "livery")]
+fn t5_require_rich_request(seen:&[genet_host_api::ResourceRequest]) {assert_eq!(seen,&[t5_rich_request()],"missing capability: chosen native factory must forward exact rich request before outcome classification");}
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_t5_native_rich_spawn_policy_exact() {
+    let (result,seen)=t5_rich_outcome(Some(t5_reply("https://forms.test/final",200,"basic",b"<p>FINAL</p>".to_vec(),"text/html")));
+    t5_require_rich_request(&seen);assert!(result.is_ok());assert_eq!(seen[0].referrer,"https://foreign.test/source#initiator");assert_eq!(seen[0].referrer_policy,"no-referrer");
+}
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_t5_native_rich_spawn_final1252_factory() {
+    let (result,seen)=t5_rich_outcome(Some(t5_reply("https://forms.test/final#other",200,"basic",b"<p>\x80\xff FINAL</p><a href='next'>next</a>".to_vec(),"text/html; charset=windows-1252")));
+    t5_require_rich_request(&seen);let mut s=result.unwrap();assert_eq!(t5_address_absent(&*s),Some("https://forms.test/final#other".into()));
+    let scene=s.frame(480,480);
+    assert!(scene.ops.iter().any(|op|matches!(op,netrender::SceneOp::GlyphRun(run) if run.color==[11.0/255.0,22.0/255.0,33.0/255.0,1.0])),"request spawn retains this chosen factory author CSS");
+    let clip=s.clip().unwrap();assert!(clip.text.contains("€ÿ FINAL"));assert_eq!(s.links()[0].url,"https://forms.test/next");
+    assert_eq!(clip.artifacts[0].bytes,b"<p>\x80\xff FINAL</p><a href='next'>next</a>");
+}
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_t5_native_rich_spawn_http404_document() {
+    let (result,seen)=t5_rich_outcome(Some(t5_reply("https://forms.test/missing",404,"basic",b"<p>404 DOCUMENT</p>".to_vec(),"text/html")));
+    t5_require_rich_request(&seen);assert!(result.unwrap().clip().unwrap().text.contains("404 DOCUMENT"));
+}
+#[cfg(feature = "livery")]
+fn t5_preserve(reply:Option<genet_host_api::ResourceFetchResponse>) {
+    let old=t5_native("<p>OLD</p>");let before=old.clip().unwrap();let (result,seen)=t5_rich_outcome(reply);
+    t5_require_rich_request(&seen);assert!(result.is_err());assert_eq!(old.clip().unwrap(),before);
+}
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_t5_native_rich_spawn204_preserves() {t5_preserve(Some(t5_reply("https://forms.test/final",204,"basic",vec![],"text/html")));}
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_t5_native_rich_spawn205_preserves() {t5_preserve(Some(t5_reply("https://forms.test/final",205,"basic",vec![],"text/html")));}
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_t5_native_rich_spawn_network_preserves() {t5_preserve(None);}
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_t5_native_rich_spawn_unreadable_vs_empty200() {
+    for kind in ["opaque","opaqueredirect","error"] {t5_preserve(Some(t5_reply("https://forms.test/final",200,kind,vec![],"text/html")));}
+    let (result,seen)=t5_rich_outcome(Some(t5_reply("https://forms.test/final",200,"basic",vec![],"text/html")));
+    t5_require_rich_request(&seen);assert!(result.is_ok(),"readable empty 200 is a real empty document");
+}
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_t5_native_initial_redirect_current_address() {
+    let fetch=T5DocumentFetch::new(Some(t5_reply("https://forms.test/final/index.html",200,"basic",b"<p>FINAL</p><a href='next'>next</a>".to_vec(),"text/html")));
+    let mut s=LiverySessionEngine::new(fetch).spawn(&SessionSpawnRequest::new("https://forms.test/start#done").with_viewport(480,480)).unwrap();
+    s.frame(480,480);assert_eq!(s.links()[0].url,"https://forms.test/final/next");
+    assert_eq!(s.clip().unwrap().artifacts[0].canonical_uri,"https://forms.test/final/index.html");
+    assert_eq!(livery(&mut s).address(),"https://forms.test/final/index.html#done");
+    assert_eq!(t5_address_absent(&*s),Some("https://forms.test/final/index.html#done".into()));
+}
+// TASK5 DRAFT NATIVE FIXTURES END.
+
+
+// TASK5 DRAFT SCRIPTED FIXTURES BEGIN. All key/pointer effects use actual session input.
+#[cfg(feature="scripted")]
+#[derive(Clone)]
+struct T5ScriptFetch {
+    initial:String,final_url:String,final_body:String,
+    requests:std::sync::Arc<std::sync::Mutex<Vec<genet_host_api::ResourceRequest>>>,
+}
+#[cfg(feature="scripted")]
+impl ResourceFetcher for T5ScriptFetch {
+    fn fetch(&self,_url:&str)->Option<Vec<u8>> {None}
+    fn fetch_response(&self,url:&str)->Option<genet_host_api::ResourceResponse> {
+        if url=="https://forms.test/source#initiator"||url=="https://forms.test/source" {
+            Some(genet_host_api::ResourceResponse::new(url,self.initial.as_bytes().to_vec()).with_content_type("text/html; charset=utf-8"))
+        } else {None}
+    }
+    fn fetch_request(&self,r:&genet_host_api::ResourceRequest)->Option<genet_host_api::ResourceFetchResponse> {
+        self.requests.lock().unwrap().push(r.clone());
+        Some(t5_reply(&self.final_url,200,"basic",self.final_body.as_bytes().to_vec(),"text/html; charset=utf-8"))
+    }
+}
+#[cfg(feature="scripted")]
+fn t5_script_session<E:script_engine_api::ScriptEngine+'static>(html:&str)->(Box<dyn DocumentSession<Scene>>,T5ScriptFetch) {
+    let fetch=T5ScriptFetch{initial:format!("<style>body{{margin:0}}input,button,textarea{{display:block;width:180px;height:32px;margin:6px}}</style>{html}"),
+        final_url:"https://forms.test/final/index.html".into(),final_body:"<p>FINAL</p><a href='next'>next</a>".into(),requests:Default::default()};
+    let engine=ScriptedSessionEngine::<E,_>::new("chosen.scripted.fixture",fetch.clone());
+    let mut s=engine.spawn(&SessionSpawnRequest::new("https://forms.test/source#initiator").with_body(&fetch.initial).with_viewport(480,480)).unwrap();
+    t5_script_drain(&mut *s);fetch.requests.lock().unwrap().clear();(s,fetch)
+}
+#[cfg(feature="scripted")]
+fn t5_script<E:script_engine_api::ScriptEngine+'static>(s:&mut Box<dyn DocumentSession<Scene>>)->&mut ScriptedDocumentSession<E> {
+    s.as_any().downcast_mut::<ScriptedDocumentSession<E>>().expect("chosen engine concrete session retained")
+}
+#[cfg(feature="scripted")]
+fn t5_script_eval<E:script_engine_api::ScriptEngine+'static>(s:&mut Box<dyn DocumentSession<Scene>>,js:&str) {
+    t5_script::<E>(s).document_mut().evaluate(js).expect("authored fixture setup/assertion through actual realm");
+}
+#[cfg(feature="scripted")]
+fn t5_script_drain(s:&mut dyn DocumentSession<Scene>) {
+    // Bounded real pumps, not synthetic queued navigation or state installation.
+    for n in 0..8 {s.pump(n as f64);s.frame(480,480);}
+}
+#[cfg(feature="scripted")]
+fn t5_script_point<E:script_engine_api::ScriptEngine+'static>(s:&mut Box<dyn DocumentSession<Scene>>,id:&str,local:[f32;2])->[f32;2] {
+    s.frame(480,480);
+    let raw=t5_script::<E>(s).document_mut().with_dom(|dom| {
+        fn find(dom:&genet_scripted_dom::ScriptedDom,n:genet_scripted_dom::NodeId,id:&str)->Option<genet_scripted_dom::NodeId> {
+            if dom.attribute(n,&Namespace::default(),&LocalName::from("id"))==Some(id){return Some(n);}
+            dom.dom_children(n).find_map(|child|find(dom,child,id))
+        }
+        dom.opaque_id(find(dom,dom.document(),id).expect("real top retained control"))
+    });
+    let projection=s.accessibility_projection().unwrap();let node=projection.node(document_session_api::DocumentA11yNodeId::new(raw)).unwrap();
+    let bounds=node.bounds.as_ref().expect("actual presented top geometry");assert!(bounds.width>0.0&&bounds.height>0.0);
+    [bounds.x+local[0],bounds.y+local[1]]
+}
+#[cfg(feature="scripted")]
+fn t5_script_click<E:script_engine_api::ScriptEngine+'static>(s:&mut Box<dyn DocumentSession<Scene>>,id:&str,local:[f32;2]) {
+    let p=t5_script_point::<E>(s,id,local);
+    for state in [SessionButtonState::Pressed,SessionButtonState::Released] {
+        s.input(document_session_api::SessionInput::PointerButton{x:p[0],y:p[1],button:document_session_api::SessionPointerButton::Primary,state,modifiers:Default::default()});
+    }
+}
+#[cfg(feature="scripted")]
+fn t5_script_key(s:&mut dyn DocumentSession<Scene>,state:SessionButtonState,modifiers:SessionModifiers,repeat:bool) {
+    s.input(document_session_api::SessionInput::Key{key:SessionKey::Enter,state,modifiers,repeat});
+}
+#[cfg(feature="scripted")]
+fn t5_script_focus<E:script_engine_api::ScriptEngine+'static>(s:&mut Box<dyn DocumentSession<Scene>>) {
+    // Host focus path, not authored input.focus() substituting for native integration.
+    s.input(document_session_api::SessionInput::Focus(true));
+    s.input(document_session_api::SessionInput::FocusMove(SessionFocusDirection::Forward));
+    t5_script_eval::<E>(s,"if(document.activeElement!==document.getElementById('q'))throw Error('host focus route missing');");
+}
+#[cfg(feature="scripted")]
+fn t5_script_post(fetch:&T5ScriptFetch,body:&[u8]) {
+    let requests=fetch.requests.lock().unwrap();assert_eq!(requests.len(),1,"one actual queued document transport");let r=&requests[0];
+    assert_eq!(r.method,"POST");assert_eq!(r.body.as_deref(),Some(body));assert_eq!(r.url,"https://forms.test/send");
+    assert_eq!(r.referrer,"https://forms.test/source#initiator");
+    assert_eq!((r.mode.as_str(),r.credentials.as_str(),r.redirect.as_str()),("navigate","include","follow"));
+    assert!(r.headers.iter().any(|(k,v)|k.eq_ignore_ascii_case("content-type")&&v=="application/x-www-form-urlencoded"));
+}
+#[cfg(feature="scripted")]
+const T5_SCRIPT_FORM:&str="<form id='f' action='/send' method='post'><input id='q' name='q' value='a b'><button id='b' name='go' value='first'>first</button><button name='go' value='later'>later</button></form><script>var events=[];var f=document.getElementById('f');var q=document.getElementById('q');var b=document.getElementById('b');f.addEventListener('submit',function(e){events.push('submit:'+e.isTrusted+':'+e.submitter.value)});f.addEventListener('formdata',function(){events.push('formdata')});q.addEventListener('keydown',function(e){events.push('key:'+e.isTrusted)});</script>";
+#[cfg(feature="scripted")]
+fn t5_scripted_focused_enter_first_submitter<E:script_engine_api::ScriptEngine+'static>() {
+    let (mut s,fetch)=t5_script_session::<E>(T5_SCRIPT_FORM);t5_script_focus::<E>(&mut s);
+    t5_script_key(&mut *s,SessionButtonState::Pressed,Default::default(),false);
+    t5_script_eval::<E>(&mut s,"if(events.join(',')!=='key:true,submit:true:first,formdata')throw Error('native key/default event order');");
+    assert!(fetch.requests.lock().unwrap().is_empty(),"document navigation remains queued");t5_script_drain(&mut *s);t5_script_post(&fetch,b"q=a+b&go=first");
+}
+#[cfg(feature="scripted")]
+fn t5_scripted_focused_enter_disabled_default<E:script_engine_api::ScriptEngine+'static>() {
+    let (mut s,fetch)=t5_script_session::<E>(T5_SCRIPT_FORM);t5_script_eval::<E>(&mut s,"b.disabled=true");t5_script_focus::<E>(&mut s);
+    t5_script_key(&mut *s,SessionButtonState::Pressed,Default::default(),false);t5_script_drain(&mut *s);
+    assert!(fetch.requests.lock().unwrap().is_empty());t5_script_eval::<E>(&mut s,"if(events.join(',')!=='key:true')throw Error('disabled first default must block');b.disabled=false;events=[]");
+    t5_script_key(&mut *s,SessionButtonState::Pressed,Default::default(),false);t5_script_drain(&mut *s);t5_script_post(&fetch,b"q=a+b&go=first");
+}
+#[cfg(feature="scripted")]
+fn t5_scripted_focused_enter_blocker_decision<E:script_engine_api::ScriptEngine+'static>() {
+    for (second,expected) in [("<input name='other' type='number'>",false),("",true)] {
+        let (mut s,fetch)=t5_script_session::<E>(&format!("<form action='/send' method='post'><input id='q' name='q' value='solo'>{second}</form>"));
+        t5_script_focus::<E>(&mut s);t5_script_key(&mut *s,SessionButtonState::Pressed,Default::default(),false);t5_script_drain(&mut *s);
+        if expected {t5_script_post(&fetch,b"q=solo");}else {assert!(fetch.requests.lock().unwrap().is_empty());}
+    }
+}
+#[cfg(feature="scripted")]
+fn t5_scripted_enter_modifiers_exact<E:script_engine_api::ScriptEngine+'static>() {
+    let (mut s,fetch)=t5_script_session::<E>(T5_SCRIPT_FORM);t5_script_focus::<E>(&mut s);
+    t5_script_eval::<E>(&mut s,"q.addEventListener('keydown',function(e){events.push([e.altKey,e.ctrlKey,e.metaKey,e.shiftKey].join(':'))})");
+    for modifiers in [SessionModifiers{alt:true,..Default::default()},SessionModifiers{control:true,..Default::default()},SessionModifiers{meta:true,..Default::default()},SessionModifiers{shift:true,..Default::default()}] {
+        t5_script_key(&mut *s,SessionButtonState::Pressed,modifiers,false);
+    }
+    t5_script_eval::<E>(&mut s,"if(events.join(',')!=='key:true,true:false:false:false,key:true,false:true:false:false,key:true,false:false:true:false,key:true,false:false:false:true')throw Error('native modifiers exact, no implicit activation');");
+    t5_script_drain(&mut *s);assert!(fetch.requests.lock().unwrap().is_empty());
+}
+#[cfg(feature="scripted")]
+fn t5_scripted_key_release_and_no_repeat_fabrication<E:script_engine_api::ScriptEngine+'static>() {
+    let (mut s,fetch)=t5_script_session::<E>(T5_SCRIPT_FORM);t5_script_focus::<E>(&mut s);
+    t5_script_key(&mut *s,SessionButtonState::Released,Default::default(),false);
+    t5_script_eval::<E>(&mut s,"if(events.length)throw Error('release cannot synthesize keydown');");
+    t5_script_key(&mut *s,SessionButtonState::Pressed,Default::default(),true);
+    t5_script_eval::<E>(&mut s,"if(events.join(',')!=='key:true,submit:true:first,formdata')throw Error('one actual repeat input produces one key activation');");
+    t5_script_drain(&mut *s);t5_script_post(&fetch,b"q=a+b&go=first");
+}
+#[cfg(feature="scripted")]
+fn t5_scripted_key_cancel_suppresses_default<E:script_engine_api::ScriptEngine+'static>() {
+    let (mut s,fetch)=t5_script_session::<E>(T5_SCRIPT_FORM);t5_script_eval::<E>(&mut s,"q.addEventListener('keydown',function(e){e.preventDefault()})");t5_script_focus::<E>(&mut s);
+    t5_script_key(&mut *s,SessionButtonState::Pressed,Default::default(),false);t5_script_eval::<E>(&mut s,"if(events.join(',')!=='key:true')throw Error('canceled native key default');");
+    t5_script_drain(&mut *s);assert!(fetch.requests.lock().unwrap().is_empty());
+}
+#[cfg(feature="scripted")]
+fn t5_scripted_click_cancel_and_order<E:script_engine_api::ScriptEngine+'static>() {
+    let (mut s,fetch)=t5_script_session::<E>(T5_SCRIPT_FORM);
+    t5_script_eval::<E>(&mut s,"var cancel=function(e){events.push('click:'+e.isTrusted);e.preventDefault()};b.addEventListener('click',cancel)");
+    t5_script_click::<E>(&mut s,"b",[6.0,6.0]);t5_script_eval::<E>(&mut s,"if(events.join(',')!=='click:true')throw Error('canceled host click');b.removeEventListener('click',cancel);events=[];b.addEventListener('click',function(e){events.push('click:'+e.isTrusted)})");
+    t5_script_drain(&mut *s);assert!(fetch.requests.lock().unwrap().is_empty());
+    t5_script_click::<E>(&mut s,"b",[6.0,6.0]);t5_script_eval::<E>(&mut s,"if(events.join(',')!=='click:true,submit:true:first,formdata')throw Error('actual click/default order');");
+    t5_script_drain(&mut *s);t5_script_post(&fetch,b"q=a+b&go=first");
+}
+#[cfg(feature="scripted")]
+fn t5_scripted_private_click_tamper_and_error<E:script_engine_api::ScriptEngine+'static>() {
+    let (mut s,fetch)=t5_script_session::<E>(T5_SCRIPT_FORM);
+    t5_script_eval::<E>(&mut s,"b.dispatchEvent=function(){throw Error('public dispatch used')};HTMLButtonElement.prototype.click=function(){throw Error('public click used')};Event=function(){throw Error('public Event used')};MouseEvent=function(){throw Error('public MouseEvent used')};b.addEventListener('click',function(){throw Error('authored listener failure')})");
+    t5_script_click::<E>(&mut s,"b",[6.0,6.0]);t5_script_eval::<E>(&mut s,"if(events.join(',')!=='submit:true:first,formdata')throw Error('private activation survives authored hooks/listener errors');");
+    t5_script_drain(&mut *s);t5_script_post(&fetch,b"q=a+b&go=first");
+}
+#[cfg(feature="scripted")]
+fn t5_scripted_image_position<E:script_engine_api::ScriptEngine+'static>() {
+    let (mut s,fetch)=t5_script_session::<E>("<form action='/send' method='post'><input id='img' type='image' name='map' style='width:100px;height:60px'></form>");
+    t5_script_click::<E>(&mut s,"img",[7.8,9.2]);t5_script_drain(&mut *s);t5_script_post(&fetch,b"map.x=7&map.y=9");
+}
+#[cfg(feature="scripted")]
+const T5_CHILD_FORM:&str="<iframe id='child' name='receiver' srcdoc='<p>CHILD OLD</p>'></iframe><form id='f' action='/send' method='post' target='receiver'><input name='q' value='parent'><button id='b'>send</button></form><p>TOP OLD</p><script>var held=document.getElementById('child').contentWindow;</script>";
+#[cfg(feature="scripted")]
+fn t5_scripted_top_form_named_child_post<E:script_engine_api::ScriptEngine+'static>() {
+    let (mut s,fetch)=t5_script_session::<E>(T5_CHILD_FORM);t5_script_click::<E>(&mut s,"b",[6.0,6.0]);t5_script_drain(&mut *s);
+    t5_script_post(&fetch,b"q=parent");t5_script_eval::<E>(&mut s,"if(held!==document.getElementById('child').contentWindow||held.document.body.textContent.indexOf('FINAL')<0||document.body.textContent.indexOf('TOP OLD')<0)throw Error('actual child replacement and parent preservation');");
+    assert_eq!(t5_address_absent(&*s),Some("https://forms.test/source#initiator".into()));
+    // The click was in the top form. This makes no claim of child-frame physical hit mapping.
+}
+#[cfg(feature="scripted")]
+fn t5_scripted_child_target_removed_before_task<E:script_engine_api::ScriptEngine+'static>() {
+    let (mut s,fetch)=t5_script_session::<E>(T5_CHILD_FORM);t5_script_click::<E>(&mut s,"b",[6.0,6.0]);
+    t5_script_eval::<E>(&mut s,"document.getElementById('child').remove()");t5_script_drain(&mut *s);
+    assert!(fetch.requests.lock().unwrap().is_empty(),"queued destination is revalidated before transport");assert!(s.clip().unwrap().text.contains("TOP OLD"));
+}
+#[cfg(feature="scripted")]
+fn t5_scripted_existing_target_and_missing_decline<E:script_engine_api::ScriptEngine+'static>() {
+    for target in ["missing","_blank"] {
+        let (mut s,fetch)=t5_script_session::<E>(&format!("<form action='/send' method='post' target='{target}'><button id='b'>send</button></form><p>OLD</p>"));
+        t5_script_click::<E>(&mut s,"b",[6.0,6.0]);t5_script_drain(&mut *s);assert!(fetch.requests.lock().unwrap().is_empty());assert!(s.clip().unwrap().text.contains("OLD"));
+    }
+    t5_scripted_top_form_named_child_post::<E>();
+}
+#[cfg(feature="scripted")]
+fn t5_scripted_focus_blur_detach_revalidation<E:script_engine_api::ScriptEngine+'static>() {
+    let (mut s,fetch)=t5_script_session::<E>(T5_SCRIPT_FORM);t5_script_focus::<E>(&mut s);
+    s.input(document_session_api::SessionInput::Focus(false));t5_script_key(&mut *s,SessionButtonState::Pressed,Default::default(),false);
+    t5_script_eval::<E>(&mut s,"if(events.length)throw Error('host blur clears key target');");
+    t5_script_focus::<E>(&mut s);t5_script_eval::<E>(&mut s,"q.remove()");
+    t5_script_key(&mut *s,SessionButtonState::Pressed,Default::default(),false);t5_script_drain(&mut *s);assert!(fetch.requests.lock().unwrap().is_empty());
+}
+#[cfg(feature="scripted")]
+fn t5_scripted_textarea_live_edit<E:script_engine_api::ScriptEngine+'static>() {
+    let (mut s,fetch)=t5_script_session::<E>("<form action='/send' method='post'><textarea id='q' name='q'>original</textarea><button id='b'>send</button></form><script>var events=[];var q=document.getElementById('q');['keydown','keyup','beforeinput','input','change','compositionstart','compositionupdate','compositionend'].forEach(function(type){q.addEventListener(type,function(e){events.push(type+':'+e.isTrusted+(e.inputType?':'+e.inputType:''))})})</script>");
+    t5_script_focus::<E>(&mut s);
+    assert_eq!(t5_key(&mut *s,SessionKey::End,SessionButtonState::Pressed,Default::default(),false),SessionEffect::Handled);
+    assert_eq!(t5_key(&mut *s,SessionKey::Enter,SessionButtonState::Pressed,Default::default(),false),SessionEffect::Handled);
+    assert_eq!(s.input(document_session_api::SessionInput::Text("new".into())).effect,SessionEffect::Handled);
+    assert_eq!(s.input(document_session_api::SessionInput::Ime(document_session_api::SessionIme::Enabled)).effect,SessionEffect::Handled);
+    assert_eq!(s.input(document_session_api::SessionInput::Ime(document_session_api::SessionIme::Preedit{text:"仮".into(),selection:None})).effect,SessionEffect::Handled);
+    t5_script_eval::<E>(&mut s,"if(q.value!=='original\\nnew')throw Error('preedit must not commit DOM value');");
+    assert_eq!(s.input(document_session_api::SessionInput::Ime(document_session_api::SessionIme::Commit("界".into()))).effect,SessionEffect::Handled);
+    t5_script_eval::<E>(&mut s,"if(q.value!=='original\\nnew界')throw Error('host edit did not reach live textarea');if(events.join(',').indexOf('beforeinput:true:insertLineBreak,input:true:insertLineBreak')<0||events.join(',').indexOf('compositionstart:true')<0||events.join(',').indexOf('compositionend:true')<0)throw Error('trusted input/composition order');");
+    s.input(document_session_api::SessionInput::FocusMove(SessionFocusDirection::Forward));
+    t5_script_eval::<E>(&mut s,"if(events[events.length-1]!=='change:true')throw Error('change on edit commit');");
+    t5_script_drain(&mut *s);assert!(fetch.requests.lock().unwrap().is_empty(),"textarea Enter does not submit");
+}
+#[cfg(feature="scripted")]
+const T5_SHARED_INPUT_FIXTURE:&str="<label for='q'>Edit</label><input id='q' value='A😀B'><button id='next'>next</button><script>var q=document.getElementById('q');var edits=[];['beforeinput','input','change'].forEach(function(kind){q.addEventListener(kind,function(e){edits.push(kind+':'+e.isTrusted)})})</script>";
+#[cfg(feature="scripted")]
+fn t5_shared_input_actions(s:&mut dyn DocumentSession<Scene>) {
+    assert_eq!(t5_key(s,SessionKey::End,SessionButtonState::Pressed,Default::default(),false),SessionEffect::Handled);
+    assert_eq!(t5_key(s,SessionKey::ArrowLeft,SessionButtonState::Pressed,Default::default(),false),SessionEffect::Handled);
+    assert_eq!(t5_key(s,SessionKey::Character("界".into()),SessionButtonState::Pressed,Default::default(),false),SessionEffect::Ignored);
+    assert_eq!(s.input(document_session_api::SessionInput::KeyboardText("界".into())).effect,SessionEffect::Handled);
+    assert_eq!(s.input(document_session_api::SessionInput::Ime(document_session_api::SessionIme::Enabled)).effect,SessionEffect::Handled);
+    assert_eq!(s.input(document_session_api::SessionInput::Ime(document_session_api::SessionIme::Preedit{text:"仮".into(),selection:None})).effect,SessionEffect::Handled);
+    // Winit can deliver a character key and an IME commit for one gesture.
+    t5_key(s,SessionKey::Character("字".into()),SessionButtonState::Pressed,Default::default(),false);
+    assert_eq!(s.input(document_session_api::SessionInput::Ime(document_session_api::SessionIme::Commit("字".into()))).effect,SessionEffect::Handled);
+}
+#[cfg(feature="scripted")]
+fn t5_shared_native_scripted_input_fixture<E:script_engine_api::ScriptEngine+'static>() {
+    let mut native=t5_native(T5_SHARED_INPUT_FIXTURE);
+    t5_native_click(&mut native,"q");
+    t5_shared_input_actions(&mut *native);
+    let node=livery_node_with_id(livery(&mut native),"q");
+    let editing=livery(&mut native).document().dom().form_control_editing_value(node).unwrap();
+    assert_eq!(editing.value,"A😀界字B");
+    assert_eq!(editing.selection_start,Some(5),"native caret is in UTF-16 units");
+    native.frame(480,480);
+    assert!(native.accessibility_projection().unwrap().nodes().iter().any(|n|n.value.as_deref()==Some("A😀界字B") && n.bounds.is_some()),"native retained layout projects the edited value");
+
+    let (mut scripted,_fetch)=t5_script_session::<E>(T5_SHARED_INPUT_FIXTURE);
+    t5_script_focus::<E>(&mut scripted);
+    t5_shared_input_actions(&mut *scripted);
+    t5_script_eval::<E>(&mut scripted,"if(q.value!=='A😀界字B'||q.selectionStart!==5||q.selectionEnd!==5)throw Error('scripted shared DOM edit/UTF16 selection');if(edits.join(',')!=='beforeinput:true,input:true,beforeinput:true,input:true')throw Error('scripted trusted input ordering');");
+    scripted.frame(480,480);
+    assert!(scripted.accessibility_projection().unwrap().nodes().iter().any(|n|n.value.as_deref()==Some("A😀界字B") && n.bounds.is_some()),"scripted retained layout projects the edited value");
+    scripted.input(document_session_api::SessionInput::FocusMove(SessionFocusDirection::Forward));
+    t5_script_eval::<E>(&mut scripted,"if(edits[edits.length-1]!=='change:true')throw Error('scripted change on blur');");
+}
+#[cfg(feature="scripted")]
+fn t5_scripted_input_mutation_and_cancel<E:script_engine_api::ScriptEngine+'static>() {
+    let (mut s,_)=t5_script_session::<E>("<input id='q' value='old'><input id='other'><script>var q=document.getElementById('q');var seen=[];q.addEventListener('keydown',function(e){seen.push('key:'+e.type+':'+e.repeat);if(e.key==='Tab'||e.key==='z')e.preventDefault()});q.addEventListener('keyup',function(e){seen.push('key:'+e.type+':'+e.repeat)});q.addEventListener('beforeinput',function(e){seen.push('before:'+e.isTrusted);q.disabled=true});q.addEventListener('input',function(){seen.push('input')})</script>");
+    t5_script_focus::<E>(&mut s);
+    assert_eq!(t5_key(&mut *s,SessionKey::Tab,SessionButtonState::Pressed,Default::default(),false),SessionEffect::Cancelled);
+    t5_script_eval::<E>(&mut s,"if(document.activeElement!==q)throw Error('canceled Tab moved focus');");
+    assert_eq!(t5_key(&mut *s,SessionKey::Character("z".into()),SessionButtonState::Pressed,Default::default(),false),SessionEffect::Cancelled);
+    assert_eq!(s.input(document_session_api::SessionInput::KeyboardText("z".into())).effect,SessionEffect::Ignored);
+    t5_script_eval::<E>(&mut s,"if(q.value!=='old'||seen.indexOf('before:true')!==-1)throw Error('canceled key admitted paired text');");
+    t5_key(&mut *s,SessionKey::Character("x".into()),SessionButtonState::Released,Default::default(),true);
+    t5_key(&mut *s,SessionKey::Character("x".into()),SessionButtonState::Pressed,Default::default(),true);
+    s.input(document_session_api::SessionInput::KeyboardText("x".into()));
+    t5_script_eval::<E>(&mut s,"if(q.value!=='old'||seen.indexOf('input')!==-1||seen.indexOf('before:true')===-1||seen.indexOf('key:keyup:true')===-1||seen.indexOf('key:keydown:true')===-1)throw Error('key release/repeat or disabled-after-beforeinput revalidation');");
+    for mutation in ["q.type='checkbox'", "q.remove()"] {
+        let (mut s,_)=t5_script_session::<E>("<input id='q' value='old'><input id='other'><script>var q=document.getElementById('q');var inputs=0;q.addEventListener('input',function(){inputs++})</script>");
+        t5_script_focus::<E>(&mut s);
+        t5_script_eval::<E>(&mut s,&format!("q.addEventListener('beforeinput',function(){{{mutation}}})"));
+        assert_eq!(s.input(document_session_api::SessionInput::Text("X".into())).effect,SessionEffect::Ignored);
+        t5_script_eval::<E>(&mut s,"if(inputs!==0||q.value==='oldX')throw Error('stale target accepted after author mutation');");
+    }
+    let (mut s,_)=t5_script_session::<E>("<input id='q'><script>var q=document.getElementById('q');var order=[];q.addEventListener('keydown',function(e){if(e.key==='z')e.preventDefault();if(e.key==='a'){order.push('key');Promise.resolve().then(function(){order.push('micro')})}});q.addEventListener('beforeinput',function(){order.push('before')});q.addEventListener('input',function(){order.push('input')})</script>");
+    t5_script_focus::<E>(&mut s);
+    assert_eq!(t5_key(&mut *s,SessionKey::Character("z".into()),SessionButtonState::Pressed,Default::default(),false),SessionEffect::Cancelled);
+    assert_eq!(s.input(document_session_api::SessionInput::Text("paste".into())).effect,SessionEffect::Handled);
+    t5_script_eval::<E>(&mut s,"if(q.value!=='paste')throw Error('canceled key suppressed independent text');order=[]");
+    assert_eq!(t5_key(&mut *s,SessionKey::Character("a".into()),SessionButtonState::Pressed,Default::default(),false),SessionEffect::Ignored);
+    assert_eq!(s.input(document_session_api::SessionInput::KeyboardText("a".into())).effect,SessionEffect::Handled);
+    t5_script_eval::<E>(&mut s,"if(order.join(',')!=='key,micro,before,input')throw Error('keydown microtask must precede paired text events');");
+
+    let (mut s,_)=t5_script_session::<E>("<input id='q' value='old'><button id='other'>other</button><script>var q=document.getElementById('q');var changes=0;q.addEventListener('change',function(){changes++})</script>");
+    t5_script_focus::<E>(&mut s);
+    t5_script_eval::<E>(&mut s,"q.value='scripted'");
+    s.input(document_session_api::SessionInput::FocusMove(SessionFocusDirection::Forward));
+    t5_script_eval::<E>(&mut s,"if(changes!==0)throw Error('script setter forged trusted change');");
+
+    let (mut s,_)=t5_script_session::<E>("<input id='q' value='old' readonly><button id='other'>other</button><script>var q=document.getElementById('q');var changes=0;q.addEventListener('change',function(){changes++})</script>");
+    t5_script_focus::<E>(&mut s);
+    t5_script_eval::<E>(&mut s,"q.removeAttribute('readonly')");
+    assert_eq!(t5_key(&mut *s,SessionKey::Character("r".into()),SessionButtonState::Pressed,Default::default(),false),SessionEffect::Ignored);
+    assert_eq!(s.input(document_session_api::SessionInput::KeyboardText("r".into())).effect,SessionEffect::Handled);
+    assert_eq!(t5_key(&mut *s,SessionKey::Character("r".into()),SessionButtonState::Pressed,Default::default(),true),SessionEffect::Ignored);
+    assert_eq!(s.input(document_session_api::SessionInput::KeyboardText("r".into())).effect,SessionEffect::Handled);
+    t5_script_eval::<E>(&mut s,"if(q.value!=='rrold')throw Error('identical repeated key and Text pair inserted incorrectly');");
+    s.input(document_session_api::SessionInput::FocusMove(SessionFocusDirection::Forward));
+    t5_script_eval::<E>(&mut s,"if(changes!==1)throw Error('readonly-then-edit change missing on blur');");
+}
+#[cfg(feature="scripted")]
+fn t5_scripted_initial_redirect_current_address<E:script_engine_api::ScriptEngine+'static>() {
+    let fetch=T5DocumentFetch::new(Some(t5_reply("https://forms.test/final/index.html",200,"basic",b"<p>FINAL</p><a href='next'>next</a>".to_vec(),"text/html")));
+    let mut s=ScriptedSessionEngine::<E,_>::new("chosen.scripted.fixture",fetch).spawn(&SessionSpawnRequest::new("https://forms.test/start#done").with_viewport(480,480)).unwrap();
+    t5_script_drain(&mut *s);assert_eq!(s.links()[0].url,"https://forms.test/final/next");
+    assert_eq!(t5_address_absent(&*s),Some("https://forms.test/final/index.html#done".into()));
+    assert_eq!(s.clip().unwrap().source_url,"https://forms.test/final/index.html#done");
+}
+#[cfg(feature="scripted")]
+fn t5_scripted_top_form_current_address_clip_links<E:script_engine_api::ScriptEngine+'static>() {
+    let (mut s,mut fetch)=t5_script_session::<E>("<form action='/send' method='post'><button id='b'>send</button></form><p>OLD</p>");
+    // A response base differs from its visible URL. Engine retains this fetcher clone.
+    // Set through a fresh actual factory rather than mutate an unused clone.
+    fetch.final_body="<base href='https://assets.test/root/'><p>FINAL</p><a href='next'>next</a>".into();
+    let engine=ScriptedSessionEngine::<E,_>::new("chosen.scripted.fixture",fetch.clone());
+    s=engine.spawn(&SessionSpawnRequest::new("https://forms.test/source#initiator").with_body(&fetch.initial).with_viewport(480,480)).unwrap();
+    t5_script_drain(&mut *s);t5_script_click::<E>(&mut s,"b",[6.0,6.0]);t5_script_drain(&mut *s);
+    t5_script_post(&fetch,b"");assert!(s.clip().unwrap().text.contains("FINAL"));
+    assert_eq!(t5_address_absent(&*s),Some("https://forms.test/final/index.html".into()));
+    let clip=s.clip().unwrap();assert_eq!(clip.source_url,"https://forms.test/final/index.html");assert_eq!(clip.links,["https://assets.test/root/next"]);
+    assert_eq!(s.links()[0].url,"https://assets.test/root/next");
+}
+#[cfg(feature="scripted")]
+fn t5_scripted_form_fragment_current_address<E:script_engine_api::ScriptEngine+'static>() {
+    let (mut s,fetch)=t5_script_session::<E>("<form id='f' action='#done'><button id='b'>send</button></form><p id='done'>SAME DOCUMENT</p>");
+    // GET serialization gives ? before #. Use a real POST target to keep the exact fragment address.
+    t5_script_eval::<E>(&mut s,"document.getElementById('f').method='post'");
+    t5_script_click::<E>(&mut s,"b",[6.0,6.0]);t5_script_drain(&mut *s);
+    let requests=fetch.requests.lock().unwrap();assert_eq!(requests.len(),1);assert_eq!(requests[0].url,"https://forms.test/source#done");assert_eq!(requests[0].method,"POST");drop(requests);
+    // Supplied final URL has no fragment; native response contract inherits #done.
+    assert_eq!(t5_address_absent(&*s),Some("https://forms.test/final/index.html#done".into()));
+    assert_eq!(s.clip().unwrap().source_url,"https://forms.test/final/index.html#done");
+}
+#[cfg(feature="scripted")]
+fn t5_scripted_about_visible_address_not_fallback<E:script_engine_api::ScriptEngine+'static>() {
+    let (mut s,fetch)=t5_script_session::<E>("<base href='https://assets.test/root/'><p>ORIGINAL</p>");
+    t5_script_eval::<E>(&mut s,"location.href='about:blank'");t5_script_drain(&mut *s);
+    assert!(fetch.requests.lock().unwrap().is_empty(),"real about lifecycle does not fabricate network response");
+    t5_script_eval::<E>(&mut s,"document.body.innerHTML='<p>ABOUT</p><a href=next>next</a>'");t5_script_drain(&mut *s);
+    assert_eq!(s.links()[0].url,"https://assets.test/root/next");assert_eq!(t5_address_absent(&*s),Some("about:blank".into()));
+    let clip=s.clip().unwrap();assert_eq!(clip.source_url,"about:blank");assert_eq!(clip.links,["https://assets.test/root/next"]);
+}
+// F12: subresources of a document installed by a top-level submission resolve
+// against that document's own URL, not the initiating document's.
+#[cfg(feature="scripted")]
+#[derive(Clone)]
+struct T5SubresourceFetch { inner:T5ScriptFetch, seen:std::sync::Arc<std::sync::Mutex<Vec<String>>> }
+#[cfg(feature="scripted")]
+impl ResourceFetcher for T5SubresourceFetch {
+    fn fetch(&self,url:&str)->Option<Vec<u8>> {self.fetch_response(url).map(|r|r.bytes)}
+    fn fetch_response(&self,url:&str)->Option<genet_host_api::ResourceResponse> {
+        self.seen.lock().unwrap().push(url.to_owned());
+        match url {
+            "https://forms.test/final/proof.css"=>Some(genet_host_api::ResourceResponse::new(url,b"p{color:rgb(11,22,33)}".to_vec()).with_content_type("text/css")),
+            _=>self.inner.fetch_response(url),
+        }
+    }
+    fn fetch_request(&self,r:&genet_host_api::ResourceRequest)->Option<genet_host_api::ResourceFetchResponse> {self.inner.fetch_request(r)}
+}
+#[cfg(feature="scripted")]
+fn t5_scripted_redirected_subresource_base<E:script_engine_api::ScriptEngine+'static>() {
+    let inner=T5ScriptFetch{initial:"<form action='/send' method='post'><button id='b' style='display:block;width:180px;height:32px'>send</button></form><p>OLD</p>".into(),
+        final_url:"https://forms.test/final/index.html".into(),
+        final_body:"<link rel=stylesheet href='proof.css'><p>FINAL</p><img src='proof.png' style='width:24px;height:24px'>".into(),requests:Default::default()};
+    let fetch=T5SubresourceFetch{inner,seen:Default::default()};
+    let engine=ScriptedSessionEngine::<E,_>::new("chosen.scripted.fixture",fetch.clone());
+    let mut s=engine.spawn(&SessionSpawnRequest::new("https://forms.test/source").with_body(&fetch.inner.initial).with_viewport(480,480)).unwrap();
+    t5_script_drain(&mut *s);fetch.seen.lock().unwrap().clear();
+    t5_script_click::<E>(&mut s,"b",[6.0,6.0]);t5_script_drain(&mut *s);
+    assert_eq!(fetch.inner.requests.lock().unwrap().len(),1,"one submission transport");
+    assert!(s.clip().unwrap().text.contains("FINAL"));
+    assert_eq!(t5_address_absent(&*s),Some("https://forms.test/final/index.html".into()));
+    let seen=fetch.seen.lock().unwrap().clone();
+    for wrong in ["https://forms.test/proof.png","https://forms.test/proof.css"] {
+        assert!(!seen.iter().any(|u|u==wrong),"subresource resolved against the initiating document: {seen:?}");
+    }
+    for right in ["https://forms.test/final/proof.png","https://forms.test/final/proof.css"] {
+        assert!(seen.iter().any(|u|u==right),"subresource not requested from the installed document's URL: {seen:?}");
+    }
+    let scene=s.frame(480,480);
+    assert!(scene.ops.iter().any(|op|matches!(op,netrender::SceneOp::GlyphRun(run) if run.color==[11.0/255.0,22.0/255.0,33.0/255.0,1.0])),
+        "the installed document's own stylesheet styles its text");
+}
+// Both-engine wrappers are generated as literal Rust test functions below.
+
+#[cfg(feature="scripted")]
+#[test]
+fn boa_phase_c_t5_scripted_redirected_subresource_base() {t5_scripted_redirected_subresource_base::<script_engine_boa::BoaEngine>();}
+
+#[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
+#[test]
+fn nova_phase_c_t5_scripted_redirected_subresource_base() {t5_scripted_redirected_subresource_base::<script_engine_nova::NovaEngine>();}
+
+#[cfg(feature="scripted")]
+#[test]
+fn boa_phase_c_t5_scripted_focused_enter_first_submitter() {t5_scripted_focused_enter_first_submitter::<script_engine_boa::BoaEngine>();}
+
+#[cfg(feature="scripted")]
+#[test]
+fn boa_phase_c_t5_scripted_focused_enter_disabled_default() {t5_scripted_focused_enter_disabled_default::<script_engine_boa::BoaEngine>();}
+
+#[cfg(feature="scripted")]
+#[test]
+fn boa_phase_c_t5_scripted_focused_enter_blocker_decision() {t5_scripted_focused_enter_blocker_decision::<script_engine_boa::BoaEngine>();}
+
+#[cfg(feature="scripted")]
+#[test]
+fn boa_phase_c_t5_scripted_enter_modifiers_exact() {t5_scripted_enter_modifiers_exact::<script_engine_boa::BoaEngine>();}
+
+#[cfg(feature="scripted")]
+#[test]
+fn boa_phase_c_t5_scripted_key_release_and_no_repeat_fabrication() {t5_scripted_key_release_and_no_repeat_fabrication::<script_engine_boa::BoaEngine>();}
+
+#[cfg(feature="scripted")]
+#[test]
+fn boa_phase_c_t5_scripted_key_cancel_suppresses_default() {t5_scripted_key_cancel_suppresses_default::<script_engine_boa::BoaEngine>();}
+
+#[cfg(feature="scripted")]
+#[test]
+fn boa_phase_c_t5_scripted_click_cancel_and_order() {t5_scripted_click_cancel_and_order::<script_engine_boa::BoaEngine>();}
+
+#[cfg(feature="scripted")]
+#[test]
+fn boa_phase_c_t5_scripted_private_click_tamper_and_error() {t5_scripted_private_click_tamper_and_error::<script_engine_boa::BoaEngine>();}
+
+#[cfg(feature="scripted")]
+#[test]
+fn boa_phase_c_t5_scripted_image_position() {t5_scripted_image_position::<script_engine_boa::BoaEngine>();}
+
+#[cfg(feature="scripted")]
+#[test]
+fn boa_phase_c_t5_scripted_top_form_named_child_post() {t5_scripted_top_form_named_child_post::<script_engine_boa::BoaEngine>();}
+
+#[cfg(feature="scripted")]
+#[test]
+fn boa_phase_c_t5_scripted_child_target_removed_before_task() {t5_scripted_child_target_removed_before_task::<script_engine_boa::BoaEngine>();}
+
+#[cfg(feature="scripted")]
+#[test]
+fn boa_phase_c_t5_scripted_existing_target_and_missing_decline() {t5_scripted_existing_target_and_missing_decline::<script_engine_boa::BoaEngine>();}
+
+#[cfg(feature="scripted")]
+#[test]
+fn boa_phase_c_t5_scripted_focus_blur_detach_revalidation() {t5_scripted_focus_blur_detach_revalidation::<script_engine_boa::BoaEngine>();}
+
+#[cfg(feature="scripted")]
+#[test]
+fn boa_phase_c_t5_scripted_textarea_live_edit() {t5_scripted_textarea_live_edit::<script_engine_boa::BoaEngine>();}
+#[cfg(feature="scripted")]
+#[test]
+fn boa_i1_shared_native_scripted_input_fixture() {t5_shared_native_scripted_input_fixture::<script_engine_boa::BoaEngine>();}
+#[cfg(feature="scripted")]
+#[test]
+fn boa_i1_input_mutation_and_cancel() {t5_scripted_input_mutation_and_cancel::<script_engine_boa::BoaEngine>();}
+
+#[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
+#[test]
+fn nova_phase_c_t5_scripted_focused_enter_first_submitter() {t5_scripted_focused_enter_first_submitter::<script_engine_nova::NovaEngine>();}
+
+#[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
+#[test]
+fn nova_phase_c_t5_scripted_focused_enter_disabled_default() {t5_scripted_focused_enter_disabled_default::<script_engine_nova::NovaEngine>();}
+
+#[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
+#[test]
+fn nova_phase_c_t5_scripted_focused_enter_blocker_decision() {t5_scripted_focused_enter_blocker_decision::<script_engine_nova::NovaEngine>();}
+
+#[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
+#[test]
+fn nova_phase_c_t5_scripted_enter_modifiers_exact() {t5_scripted_enter_modifiers_exact::<script_engine_nova::NovaEngine>();}
+
+#[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
+#[test]
+fn nova_phase_c_t5_scripted_key_release_and_no_repeat_fabrication() {t5_scripted_key_release_and_no_repeat_fabrication::<script_engine_nova::NovaEngine>();}
+
+#[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
+#[test]
+fn nova_phase_c_t5_scripted_key_cancel_suppresses_default() {t5_scripted_key_cancel_suppresses_default::<script_engine_nova::NovaEngine>();}
+
+#[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
+#[test]
+fn nova_phase_c_t5_scripted_click_cancel_and_order() {t5_scripted_click_cancel_and_order::<script_engine_nova::NovaEngine>();}
+
+#[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
+#[test]
+fn nova_phase_c_t5_scripted_private_click_tamper_and_error() {t5_scripted_private_click_tamper_and_error::<script_engine_nova::NovaEngine>();}
+
+#[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
+#[test]
+fn nova_phase_c_t5_scripted_image_position() {t5_scripted_image_position::<script_engine_nova::NovaEngine>();}
+
+#[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
+#[test]
+fn nova_phase_c_t5_scripted_top_form_named_child_post() {t5_scripted_top_form_named_child_post::<script_engine_nova::NovaEngine>();}
+
+#[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
+#[test]
+fn nova_phase_c_t5_scripted_child_target_removed_before_task() {t5_scripted_child_target_removed_before_task::<script_engine_nova::NovaEngine>();}
+
+#[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
+#[test]
+fn nova_phase_c_t5_scripted_existing_target_and_missing_decline() {t5_scripted_existing_target_and_missing_decline::<script_engine_nova::NovaEngine>();}
+
+#[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
+#[test]
+fn nova_phase_c_t5_scripted_focus_blur_detach_revalidation() {t5_scripted_focus_blur_detach_revalidation::<script_engine_nova::NovaEngine>();}
+
+#[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
+#[test]
+fn nova_phase_c_t5_scripted_textarea_live_edit() {t5_scripted_textarea_live_edit::<script_engine_nova::NovaEngine>();}
+#[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
+#[test]
+fn nova_i1_shared_native_scripted_input_fixture() {t5_shared_native_scripted_input_fixture::<script_engine_nova::NovaEngine>();}
+#[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
+#[test]
+fn nova_i1_input_mutation_and_cancel() {t5_scripted_input_mutation_and_cancel::<script_engine_nova::NovaEngine>();}
+
+#[cfg(feature="scripted")]
+#[test]
+fn boa_phase_c_t5_scripted_initial_redirect_current_address() {t5_scripted_initial_redirect_current_address::<script_engine_boa::BoaEngine>();}
+
+#[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
+#[test]
+fn nova_phase_c_t5_scripted_initial_redirect_current_address() {t5_scripted_initial_redirect_current_address::<script_engine_nova::NovaEngine>();}
+
+#[cfg(feature="scripted")]
+#[test]
+fn boa_phase_c_t5_scripted_top_form_current_address_clip_links() {t5_scripted_top_form_current_address_clip_links::<script_engine_boa::BoaEngine>();}
+
+#[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
+#[test]
+fn nova_phase_c_t5_scripted_top_form_current_address_clip_links() {t5_scripted_top_form_current_address_clip_links::<script_engine_nova::NovaEngine>();}
+
+#[cfg(feature="scripted")]
+#[test]
+fn boa_phase_c_t5_scripted_form_fragment_current_address() {t5_scripted_form_fragment_current_address::<script_engine_boa::BoaEngine>();}
+
+#[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
+#[test]
+fn nova_phase_c_t5_scripted_form_fragment_current_address() {t5_scripted_form_fragment_current_address::<script_engine_nova::NovaEngine>();}
+
+#[cfg(feature="scripted")]
+#[test]
+fn boa_phase_c_t5_scripted_about_visible_address_not_fallback() {t5_scripted_about_visible_address_not_fallback::<script_engine_boa::BoaEngine>();}
+
+#[cfg(all(feature="scripted-nova",target_pointer_width="64"))]
+#[test]
+fn nova_phase_c_t5_scripted_about_visible_address_not_fallback() {t5_scripted_about_visible_address_not_fallback::<script_engine_nova::NovaEngine>();}
+
+// TASK5 DRAFT SCRIPTED FIXTURES END.
+
+// TASK5 F2 INDEPENDENT NATIVE DECLINE FIXTURES BEGIN.
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_f2_native_child_target_explicit_decline_intent() {
+    let mut s = t5_native("<form action='/send' method='post'><input name='q' value='ok'><button id='b' formtarget='child' name='go' value='yes'>send</button></form>");
+    let effect = t5_native_click(&mut s, "b");
+    assert!(t5_native_take_absent(&mut *s).is_none(), "unsupported child must not fabricate an encoded request");
+    let legacy = t5_submitted(effect);
+    assert_eq!(legacy.action, "/send");
+    assert_eq!(legacy.method, SessionFormMethod::Post);
+    assert_eq!(legacy.fields, [("q".into(), "ok".into()), ("go".into(), "yes".into())]);
+}
+
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_f2_native_blank_target_explicit_decline_intent() {
+    let mut s = t5_native("<form action='/send' method='post'><input name='q' value='ok'><button id='b' formtarget='_blank' name='go' value='yes'>send</button></form>");
+    let effect = t5_native_click(&mut s, "b");
+    assert!(t5_native_take_absent(&mut *s).is_none(), "unsupported _blank must not fabricate an encoded request");
+    let legacy = t5_submitted(effect);
+    assert_eq!(legacy.action, "/send");
+    assert_eq!(legacy.method, SessionFormMethod::Post);
+    assert_eq!(legacy.fields, [("q".into(), "ok".into()), ("go".into(), "yes".into())]);
+}
+// TASK5 F2 INDEPENDENT NATIVE DECLINE FIXTURES END.
+
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_review_native_submission_user_validity() {
+    for novalidate in [false,true] {
+        let html=if novalidate {"<form id=f novalidate action='/send'><input id=q name=q required><button id=s>go</button></form>"} else {"<form id=f action='/send'><input id=q name=q required><button id=s>go</button></form>"};
+        let mut s=t5_native(html);
+        let before={let c=livery(&mut s);let q=livery_node_with_id(c,"q");c.document().dom().form_control_interaction_state(q).unwrap().user_validity};
+        assert!(!before,"untouched control begins neutral");
+        let effect=t5_native_click(&mut s,"s");
+        let marked={let c=livery(&mut s);let q=livery_node_with_id(c,"q");c.document().dom().form_control_interaction_state(q).unwrap().user_validity};
+        assert!(marked,"attempted native submission marks user validity, novalidate={novalidate}");
+        assert_eq!(matches!(effect,SessionEffect::Submit(_)),novalidate);
+    }
+}
+
+#[cfg(feature = "livery")]
+#[test]
+fn phase_c_review_native_invalid_submission_feedback() {
+    use document_session_api::{DocumentA11yLive,DocumentA11yRole};
+    for enter in [false,true] {
+        let mut s=t5_native("<form id=f action='/send'><input id=q name=q required><button id=s>go</button></form>");
+        s.frame(480,480);
+        assert!(s.accessibility_projection().unwrap().nodes().iter().all(|n|n.role!=DocumentA11yRole::Alert));
+        let effect=if enter {t5_native_enter(&mut s,"q")} else {t5_native_click(&mut s,"s")};
+        assert!(!matches!(effect,SessionEffect::Submit(_)),"invalid submission stays on page");
+        assert!(s.take_encoded_form_submission().is_none());
+        s.frame(480,480);
+        let first=s.accessibility_projection().unwrap();
+        let alert=first.nodes().iter().find(|n|n.role==DocumentA11yRole::Alert).expect("native interactive validation exposes visible accessible feedback");
+        assert_eq!(alert.name.as_deref(),Some("Please fill out this field."));
+        assert_eq!(alert.state.live,Some(DocumentA11yLive::Assertive));
+        let bounds=alert.bounds.unwrap();assert!(bounds.width>0.0 && bounds.height>0.0);
+        let first_id=alert.id;
+        t5_native_click(&mut s,"s");s.frame(480,480);
+        let repeated=s.accessibility_projection().unwrap();
+        let repeated_alert=repeated.nodes().iter().find(|n|n.role==DocumentA11yRole::Alert).unwrap();
+        assert_ne!(repeated_alert.id,first_id,"repeated submission can announce the same message");
+        assert_eq!(t5_key(&mut *s,SessionKey::Escape,SessionButtonState::Pressed,SessionModifiers::default(),false),SessionEffect::Cancelled);
+        assert!(s.accessibility_projection().unwrap().nodes().iter().all(|n|n.role!=DocumentA11yRole::Alert));
+        t5_native_click(&mut s,"s");s.frame(480,480);
+        t5_set_native(&mut s,"q","valid");s.frame(480,480);
+        assert!(s.accessibility_projection().unwrap().nodes().iter().all(|n|n.role!=DocumentA11yRole::Alert),"valid control retires old feedback");
+    }
 }

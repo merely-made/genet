@@ -412,7 +412,7 @@ mod tests {
     }
 
     fn webgl_factory() -> script_runtime_api::WebGlFactory {
-        Box::new(|w, h| Box::new(WgpuWebGl::new(w, h)))
+        Box::new(|w, h| Some(Box::new(WgpuWebGl::new(w, h))))
     }
 
     /// Run one conformance HTML (path relative to `tests/wpt/webgl/tests`)

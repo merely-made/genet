@@ -3,6 +3,7 @@
 # see Appendix B in
 # docs/2026-05-20_genet_script_engine_plan.md) and the native conformance oracle.
 [package]
+rust-version = "1.97.1"
 name = "script-engine-boa"
 version = "0.0.0"
 edition = "2021"
@@ -15,8 +16,8 @@ path = "lib.rs"
 
 [dependencies]
 script-engine-api = { path = "../script-engine-api" }
-boa_engine = { version = "=1.0.0-dev", git = "https://github.com/mark-ik/boa.git", rev = "494ae680a10704722df3c98335073245b7088a24", features = ["array-buffer-transfer"] }
-boa_gc = { version = "=1.0.0-dev", git = "https://github.com/mark-ik/boa.git", rev = "494ae680a10704722df3c98335073245b7088a24" }
+boa_engine = { version = "=1.0.0-dev", git = "https://github.com/merely-made/bole.git", rev = "847280f2a5246aa098236c762b10363188dd6005", features = ["array-buffer-transfer"] }
+boa_gc = { version = "=1.0.0-dev", git = "https://github.com/merely-made/bole.git", rev = "847280f2a5246aa098236c762b10363188dd6005" }
 # Pin caller provenance and standard buffer transfer so fresh clones share the
 # same realm and detachment rules. Transfer support does not enable Boa's broad
 # experimental feature. The gitignored local config may
@@ -26,4 +27,4 @@ boa_gc = { version = "=1.0.0-dev", git = "https://github.com/mark-ik/boa.git", r
 
 [target.'cfg(all(target_family = "wasm", not(any(target_os = "emscripten", target_os = "wasi"))))'.dependencies]
 # Browser host glue provides randomness and time on wasm32-unknown-unknown.
-boa_engine = { version = "=1.0.0-dev", git = "https://github.com/mark-ik/boa.git", rev = "494ae680a10704722df3c98335073245b7088a24", features = ["js"] }
+boa_engine = { version = "=1.0.0-dev", git = "https://github.com/merely-made/bole.git", rev = "847280f2a5246aa098236c762b10363188dd6005", features = ["js"] }

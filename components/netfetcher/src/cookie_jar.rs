@@ -11,18 +11,15 @@
 //! same (name, domain, path); `cookies_for` returns matches sorted longest-path
 //! first, then oldest-first (the spec's serialization order).
 //!
-//! **Increment-2 boundaries (deliberate):** `SameSite` is *stored* but not
-//! *enforced* — cross-site enforcement needs the site-for-cookies / initiator
-//! context that arrives with CORS in increment 3. The public-suffix guard
-//! (rejecting `Domain=com`-style super-cookies) and the `__Secure-`/`__Host-`
-//! prefix rules are also deferred.
+//! The default jar enforces public-suffix, `__Secure-`, and `__Host-` storage
+//! restrictions. Fetch supplies the request's SameSite context at retrieval.
 
 use std::net::IpAddr;
 use std::sync::Mutex;
 
 use cookie::{Cookie, SameSite};
 use time::OffsetDateTime;
-use url::Url;
+use url::{Host, Url};
 
 use crate::context::{CookieRecord, CookieStore, SameSiteContext};
 
@@ -145,7 +142,7 @@ impl InMemoryCookieJar {
                 let domain_ok = if c.host_only {
                     host == c.domain
                 } else {
-                    domain_matches(&host, &c.domain)
+                    !is_public_suffix(&c.domain) && domain_matches(&host, &c.domain)
                 };
                 // SameSite gating. Unset defaults to Lax (modern browser default).
                 let samesite_ok = match c.same_site.unwrap_or(SameSite::Lax) {
@@ -154,6 +151,7 @@ impl InMemoryCookieJar {
                     SameSite::None => true,
                 };
                 domain_ok
+                    && valid_stored_prefix(c)
                     && path_matches(req_path, &c.path)
                     && (!c.secure || secure_ctx)
                     && samesite_ok
@@ -201,16 +199,43 @@ impl CookieStore for InMemoryCookieJar {
         let Ok(parsed) = Cookie::parse(set_cookie_header.to_owned()) else {
             return;
         };
-        let host = url.host_str().unwrap_or_default().to_ascii_lowercase();
+        let Some(host) = url.host_str() else {
+            return;
+        };
+        let host = host.to_ascii_lowercase();
+
+        let secure = parsed.secure().unwrap_or(false);
+        if secure && url.scheme() != "https" {
+            return;
+        }
 
         let (domain, host_only) = match parsed.domain() {
             Some(d) => {
-                let d = d.trim_start_matches('.').to_ascii_lowercase();
+                // Cookie Domain is lowercased literal text, not a URL host to
+                // percent-decode or IDNA-convert. `cookie` removes one leading
+                // dot; reject any further host-parser normalization.
+                if !d.is_ascii() {
+                    return;
+                }
+                let d = d.to_ascii_lowercase();
+                let Ok(canonical) = Host::parse(&d) else {
+                    return;
+                };
+                if canonical.to_string() != d {
+                    return;
+                }
                 // Reject a Domain the request host doesn't domain-match.
                 if !domain_matches(&host, &d) {
                     return;
                 }
-                (d, false)
+                if is_public_suffix(&d) {
+                    if d != host {
+                        return;
+                    }
+                    (host.clone(), true)
+                } else {
+                    (d, false)
+                }
             },
             None => (host, true),
         };
@@ -218,6 +243,21 @@ impl CookieStore for InMemoryCookieJar {
             .path()
             .map(str::to_owned)
             .unwrap_or_else(|| default_path(url));
+        let name = parsed.name();
+        if has_cookie_prefix(name, "__Secure-") && !secure {
+            return;
+        }
+        if has_cookie_prefix(name, "__Host-")
+            && (!secure || !host_only || parsed.domain().is_some() || parsed.path() != Some("/"))
+        {
+            return;
+        }
+        if name.is_empty()
+            && (has_cookie_prefix(parsed.value(), "__Secure-")
+                || has_cookie_prefix(parsed.value(), "__Host-"))
+        {
+            return;
+        }
         let now = OffsetDateTime::now_utc();
         let expiry = compute_expiry(&parsed, now);
 
@@ -227,7 +267,7 @@ impl CookieStore for InMemoryCookieJar {
             domain,
             host_only,
             path,
-            secure: parsed.secure().unwrap_or(false),
+            secure,
             http_only: parsed.http_only().unwrap_or(false),
             same_site: parsed.same_site(),
             expiry,
@@ -251,6 +291,31 @@ impl CookieStore for InMemoryCookieJar {
 
 fn expired(c: &StoredCookie, now: OffsetDateTime) -> bool {
     c.expiry.is_some_and(|e| e <= now)
+}
+
+fn is_public_suffix(domain: &str) -> bool {
+    psl::suffix_str(domain)
+        .is_some_and(|suffix| domain.trim_end_matches('.').eq_ignore_ascii_case(suffix))
+}
+
+fn has_cookie_prefix(name: &str, prefix: &str) -> bool {
+    name.get(..prefix.len())
+        .is_some_and(|start| start.eq_ignore_ascii_case(prefix))
+}
+
+fn valid_stored_prefix(c: &StoredCookie) -> bool {
+    if c.name.is_empty()
+        && (has_cookie_prefix(&c.value, "__Secure-") || has_cookie_prefix(&c.value, "__Host-"))
+    {
+        return false;
+    }
+    if has_cookie_prefix(&c.name, "__Secure-") && !c.secure {
+        return false;
+    }
+    if has_cookie_prefix(&c.name, "__Host-") && (!c.secure || !c.host_only || c.path != "/") {
+        return false;
+    }
+    true
 }
 
 /// Max-Age takes precedence over Expires (RFC 6265bis §5.3).
@@ -334,6 +399,169 @@ mod tests {
             jar.cookies_for(&url("https://api.example.org/"), ss()),
             vec!["id=abc"]
         );
+    }
+
+    #[test]
+    fn public_suffix_domain_cannot_reach_other_registrants() {
+        let jar = InMemoryCookieJar::new();
+        let alice = url("https://alice.github.io/");
+        jar.set_cookie(&alice, "shared=1; Domain=github.io");
+        jar.set_cookie(
+            &url("https://alice.github.io./"),
+            "dotted=1; Domain=github.io.",
+        );
+        jar.set_cookie(&url("https://a.example.co.uk/"), "uk=1; Domain=co.uk");
+        jar.set_cookie(&url("https://example.org/"), "tld=1; Domain=org");
+        assert!(jar.is_empty());
+
+        // A public-suffix host can still set a cookie for itself, but only
+        // with host-only scope, even when it supplied a Domain attribute.
+        jar.set_cookie(&url("https://github.io/"), "own=1; Domain=github.io");
+        assert_eq!(
+            jar.cookies_for(&url("https://github.io/"), ss()),
+            vec!["own=1"]
+        );
+        assert!(jar.cookies_for(&alice, ss()).is_empty());
+        assert!(jar.all_records()[0].host_only);
+
+        jar.set_cookie(&alice, "local=1; Domain=alice.github.io");
+        assert_eq!(
+            jar.cookies_for(&url("https://sub.alice.github.io/"), ss()),
+            vec!["local=1"]
+        );
+    }
+
+    #[test]
+    fn canonical_domain_and_loaded_public_suffix_records() {
+        let jar = InMemoryCookieJar::new();
+        let source = url("https://%65xample.org/");
+        jar.set_cookie(&source, "id=1; Domain=EXAMPLE.ORG");
+        assert_eq!(
+            jar.cookies_for(&url("https://sub.example.org/"), ss()),
+            vec!["id=1"]
+        );
+        jar.set_cookie(&source, "dot=1; Domain=.example.org");
+        assert_eq!(
+            jar.cookies_for(&url("https://sub.example.org/"), ss())
+                .len(),
+            2
+        );
+
+        let mut old = jar
+            .all_records()
+            .into_iter()
+            .find(|c| c.name == "id")
+            .unwrap();
+        old.domain = "github.io".into();
+        old.host_only = false;
+        let restored = InMemoryCookieJar::new();
+        restored.load_records([old]);
+        assert_eq!(
+            restored.all_records().len(),
+            1,
+            "keep raw persisted records"
+        );
+        assert!(
+            restored
+                .cookies_for(&url("https://alice.github.io/"), ss())
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn domain_attribute_is_not_url_decoded_or_idna_converted() {
+        let jar = InMemoryCookieJar::new();
+        let source = url("https://sub.example.org/");
+        jar.set_cookie(&source, "dot=1; Domain=example%2eorg");
+        jar.set_cookie(&source, "letter=1; Domain=%65xample.org");
+        jar.set_cookie(&source, "invalid=1; Domain=exa/mple.org");
+        jar.set_cookie(
+            &url("https://sub.xn--bcher-kva.example/"),
+            "unicode=1; Domain=bücher.example",
+        );
+        assert!(jar.is_empty());
+    }
+
+    #[test]
+    fn explicit_ip_domain_remains_limited_to_that_host() {
+        let jar = InMemoryCookieJar::new();
+        jar.set_cookie(&url("https://127.0.0.1/"), "v4=1; Domain=127.0.0.1");
+        jar.set_cookie(&url("https://[::1]/"), "v6=1; Domain=[::1]");
+        assert_eq!(
+            jar.cookies_for(&url("https://127.0.0.1/"), ss()),
+            vec!["v4=1"]
+        );
+        assert_eq!(jar.cookies_for(&url("https://[::1]/"), ss()), vec!["v6=1"]);
+        assert!(jar.cookies_for(&url("https://127.0.0.2/"), ss()).is_empty());
+    }
+
+    #[test]
+    fn secure_and_host_prefixes_restrict_admission() {
+        let jar = InMemoryCookieJar::new();
+        let https = url("https://example.org/sub/page");
+        let http = url("http://example.org/sub/page");
+        jar.set_cookie(&https, "__Secure-missing=1");
+        jar.set_cookie(&http, "__Secure-insecure=1; Secure");
+        jar.set_cookie(&https, "__secure-valid=1; Secure");
+
+        jar.set_cookie(&https, "__Host-missing-secure=1; Path=/");
+        jar.set_cookie(&https, "__Host-default-path=1; Secure");
+        jar.set_cookie(&https, "__Host-wrong-path=1; Secure; Path=/sub");
+        jar.set_cookie(
+            &https,
+            "__Host-domain=1; Secure; Path=/; Domain=example.org",
+        );
+        jar.set_cookie(&https, "__HOST-valid=1; Secure; Path=/");
+        jar.set_cookie(&https, "=__Host-spoof; Secure; Path=/");
+        jar.set_cookie(&https, "=__secure-spoof; Secure; Path=/");
+
+        let cookies = jar.cookies_for(&https, ss());
+        assert_eq!(cookies.len(), 2);
+        assert!(cookies.contains(&"__secure-valid=1".to_owned()));
+        assert!(cookies.contains(&"__HOST-valid=1".to_owned()));
+        assert!(jar.cookies_for(&http, ss()).is_empty());
+        assert!(
+            jar.all_records()
+                .iter()
+                .find(|c| c.name == "__HOST-valid")
+                .unwrap()
+                .host_only
+        );
+    }
+
+    #[test]
+    fn loaded_prefix_records_keep_raw_data_but_only_valid_ones_are_sent() {
+        let source = InMemoryCookieJar::new();
+        let u = url("https://example.org/sub/page");
+        source.set_cookie(&u, "__Host-valid=1; Secure; Path=/");
+        source.set_cookie(&u, "__Secure-valid=1; Secure; Path=/");
+        let valid = source.all_records();
+        let mut bad_secure = valid
+            .iter()
+            .find(|c| c.name == "__Secure-valid")
+            .unwrap()
+            .clone();
+        bad_secure.name = "__Secure-bad".into();
+        bad_secure.secure = false;
+        let mut bad_domain = valid
+            .iter()
+            .find(|c| c.name == "__Host-valid")
+            .unwrap()
+            .clone();
+        bad_domain.name = "__Host-domain".into();
+        bad_domain.host_only = false;
+        let mut bad_path = bad_domain.clone();
+        bad_path.name = "__Host-path".into();
+        bad_path.host_only = true;
+        bad_path.path = "/sub".into();
+
+        let restored = InMemoryCookieJar::new();
+        restored.load_records(valid.into_iter().chain([bad_secure, bad_domain, bad_path]));
+        assert_eq!(restored.all_records().len(), 5);
+        let sent = restored.cookies_for(&u, ss());
+        assert_eq!(sent.len(), 2);
+        assert!(sent.contains(&"__Host-valid=1".to_owned()));
+        assert!(sent.contains(&"__Secure-valid=1".to_owned()));
     }
 
     #[test]

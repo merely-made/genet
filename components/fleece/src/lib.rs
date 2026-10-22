@@ -179,15 +179,6 @@ pub struct CanonicalTextResource {
     pub media_type: &'static str,
 }
 
-/// Lowercase hex SHA-256. sha2 0.11 digests have no `LowerHex`, so the hex
-/// is written out byte by byte; the text is the same as before.
-pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
-    Sha256::digest(bytes)
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
-}
-
 impl CanonicalTextResource {
     pub(crate) fn for_text(text: &str) -> Self {
         Self {
@@ -552,6 +543,11 @@ fn walk_headings<D: LayoutDom>(dom: &D, id: D::NodeId, out: &mut Vec<Heading>) {
 }
 
 /// `1`–`6` for `h1`–`h6`, else `None`.
+/// Lowercase hex SHA-256, the form fleece's identities and wire records carry.
+pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
+    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
+}
+
 fn heading_level(name: &str) -> Option<u8> {
     match name.as_bytes() {
         [b'h', d @ b'1'..=b'6'] => Some(d - b'0'),

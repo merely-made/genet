@@ -70,6 +70,11 @@ fn worker_loop(rx: std::sync::mpsc::Receiver<Job>) {
                         let _ = reply.send(do_get(&url).await);
                     });
                 },
+                Ok(Job::GetDocument(url, options, reply)) => {
+                    tokio::spawn(async move {
+                        let _ = reply.send(do_get_document(&url, options).await);
+                    });
+                },
                 Ok(Job::Fetch(key, id, req, reply)) => {
                     let (pull_tx, pull_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
                     pulls.insert(id, pull_tx);
@@ -159,17 +164,19 @@ fn fetch_context() -> netfetcher::FetchContext {
 /// origin. Drives cross-origin detection (CORS / response tainting): a request
 /// whose target origin differs is cross-origin. Set once when server mode is
 /// established; `None` in disk mode (every fetch treated as same-origin).
-static PAGE_ORIGIN: std::sync::OnceLock<url::Origin> = std::sync::OnceLock::new();
+static PAGE_ORIGIN: std::sync::RwLock<Option<url::Origin>> = std::sync::RwLock::new(None);
 
-/// Record the page origin from the server base (idempotent; first wins).
+/// Record the page origin (the last call wins). A test runs on the origin that
+/// serves it, which is the https origin for a `.https.` file, so each test sets
+/// it before its document loads.
 pub fn set_page_origin(origin_str: &str) {
     if let Ok(u) = url::Url::parse(origin_str) {
-        let _ = PAGE_ORIGIN.set(u.origin());
+        *PAGE_ORIGIN.write().expect("page origin") = Some(u.origin());
     }
 }
 
 fn page_origin() -> Option<url::Origin> {
-    PAGE_ORIGIN.get().cloned()
+    PAGE_ORIGIN.read().expect("page origin").clone()
 }
 
 /// A globally-unique abort key (the JS `id` is per-test, so it cannot key the
@@ -192,6 +199,59 @@ pub fn http_get(url: &str) -> Option<String> {
     rx.recv().ok().flatten()
 }
 
+#[derive(Clone, Debug)]
+pub struct LoadedHtmlDocument {
+    pub document: genet_scripted_dom::html_encoding::DecodedHtmlDocument,
+    pub final_url: String,
+    /// The final response's headers, as received.
+    pub headers: Vec<(String, String)>,
+}
+pub fn http_get_document(
+    url: &str,
+    options: script_runtime_api::HtmlDecodeOptions,
+) -> Option<LoadedHtmlDocument> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    worker_jobs()
+        .send(Job::GetDocument(url.to_owned(), options, tx))
+        .ok()?;
+    rx.recv().ok().flatten()
+}
+async fn do_get_document(
+    url: &str,
+    options: script_runtime_api::HtmlDecodeOptions,
+) -> Option<LoadedHtmlDocument> {
+    let req = netfetcher::Request::get(url::Url::parse(url).ok()?);
+    let cx = netfetcher::FetchContext::permissive();
+    let response = netfetcher::fetch(req, &cx).await;
+    if response.is_network_error()
+        || response.status < 200
+        || response.status >= 300
+        || matches!(response.status, 204 | 205)
+    {
+        return None;
+    }
+    let final_url = response
+        .url_list
+        .last()
+        .map(ToString::to_string)
+        .unwrap_or_else(|| url.to_owned());
+    let content_type = response
+        .headers
+        .iter()
+        .find(|(n, _)| n.eq_ignore_ascii_case("content-type"))
+        .map(|(_, v)| v.clone());
+    let headers = response.headers.clone();
+    let bytes = response.bytes().await.ok()?;
+    Some(LoadedHtmlDocument {
+        headers,
+        document: genet_scripted_dom::html_encoding::decode_html_document(
+            &bytes,
+            content_type.as_deref(),
+            options,
+        ),
+        final_url,
+    })
+}
 async fn do_get(url: &str) -> Option<String> {
     let u = url::Url::parse(url).ok()?;
     let req = netfetcher::Request::get(u);
@@ -348,6 +408,8 @@ async fn run_fetch_streaming(
         _ => netfetcher::Credentials::SameOrigin,
     };
     request.integrity = req.integrity.clone();
+    request.upgrade_insecure_requests = req.upgrade_insecure_requests;
+    request.block_all_mixed_content = req.block_all_mixed_content;
 
     let cx = fetch_context();
     let mut resp = netfetcher::fetch(request, &cx).await;
@@ -521,6 +583,11 @@ async fn run_websocket(
 /// test's channel); `Cancel` aborts an in-flight fetch by its global key.
 pub enum Job {
     Get(String, std::sync::mpsc::Sender<Option<String>>),
+    GetDocument(
+        String,
+        script_runtime_api::HtmlDecodeOptions,
+        std::sync::mpsc::Sender<Option<LoadedHtmlDocument>>,
+    ),
     Fetch(u64, u64, FetchRequest, std::sync::mpsc::Sender<FetchEvent>),
     /// Demand the next body chunk for a streaming fetch, by its JS id.
     Pull(u64),
@@ -765,9 +832,15 @@ fn to_completion(ev: FetchEvent) -> crate::harness::FetchCompletion {
 /// substituted). One per test (cheap: it owns only the doc URL string).
 pub struct ServerLoader {
     pub doc_url: String,
+    /// The document's own response headers.
+    pub headers: Vec<(String, String)>,
 }
 
 impl ScriptSrcLoader for ServerLoader {
+    fn document_response_headers(&self) -> Vec<(String, String)> {
+        self.headers.clone()
+    }
+
     fn load_script(&self, src: &str) -> Option<String> {
         let base = url::Url::parse(&self.doc_url).ok()?;
         let abs = base.join(src).ok()?;
@@ -779,7 +852,48 @@ impl ScriptSrcLoader for ServerLoader {
 /// runner drives. A spawned server is torn down on drop.
 pub struct ServerCtx {
     pub origin: String,
+    /// Origin serving `.https.` tests; `h2_origin` serves `.h2.` tests when set.
+    /// Murm's request body is buffered, so a full-duplex h2 upload cannot be
+    /// driven yet: `.h2.` files stay on the plain origin unless asked
+    /// (`request-upload.h2.any.html` falls from 8 passes to 1 on port 9000).
+    https_origin: String,
+    h2_origin: Option<String>,
     _spawned: Option<ServerHandle>,
+}
+
+/// `wpt serve`'s default https port.
+const WPT_HTTPS_PORT: u16 = 8443;
+
+/// The same host as `origin` on `port`, over https.
+fn https_origin_on(origin: &str, port: u16) -> String {
+    let host = url::Url::parse(origin)
+        .ok()
+        .and_then(|u| u.host_str().map(str::to_owned))
+        .unwrap_or_else(|| "web-platform.test".to_owned());
+    format!("https://{host}:{port}")
+}
+
+/// Which `wpt serve` scheme a test is served on: WPT picks it from the dotted
+/// flags in the file name (`x.https.any.html`, `y.h2.html`), not the directory.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ServeFlag {
+    Plain,
+    Https,
+    H2,
+}
+
+fn serve_flag(test_rel: &str) -> ServeFlag {
+    let path = test_rel.split(['?', '#']).next().unwrap_or(test_rel);
+    let file = path.rsplit('/').next().unwrap_or(path);
+    let mut flag = ServeFlag::Plain;
+    for part in file.split('.').skip(1) {
+        match part {
+            "h2" => return ServeFlag::H2,
+            "https" => flag = ServeFlag::Https,
+            _ => {},
+        }
+    }
+    flag
 }
 
 impl ServerCtx {
@@ -793,9 +907,23 @@ impl ServerCtx {
             ));
         }
         Ok(Self {
+            https_origin: https_origin_on(&origin, WPT_HTTPS_PORT),
+            h2_origin: None,
             origin,
             _spawned: None,
         })
+    }
+
+    /// Override the derived https and h2 origins (`--server-https-base`,
+    /// `--server-h2-base`).
+    pub fn with_secure_origins(mut self, https: Option<String>, h2: Option<String>) -> Self {
+        if let Some(https) = https {
+            self.https_origin = https.trim_end_matches('/').to_owned();
+        }
+        if let Some(h2) = h2 {
+            self.h2_origin = Some(h2.trim_end_matches('/').to_owned());
+        }
+        self
     }
 
     /// Spawn `python wpt serve` under `tests_root`, discover its plain-http
@@ -804,19 +932,35 @@ impl ServerCtx {
         let handle = ServerHandle::spawn(tests_root)?;
         let origin = handle.origin.clone();
         Ok(Self {
+            https_origin: https_origin_on(&origin, WPT_HTTPS_PORT),
+            h2_origin: None,
             origin,
             _spawned: Some(handle),
         })
     }
 
-    /// The document URL for a test, given its path relative to the tests root.
-    pub fn doc_url(&self, test_rel: &str) -> String {
-        format!("{}/{}", self.origin, test_rel.trim_start_matches('/'))
+    /// The origin that serves a test, given its path relative to the tests root.
+    pub fn origin_for(&self, test_rel: &str) -> &str {
+        match serve_flag(test_rel) {
+            ServeFlag::Plain => &self.origin,
+            ServeFlag::Https => &self.https_origin,
+            ServeFlag::H2 => self.h2_origin.as_deref().unwrap_or(&self.origin),
+        }
     }
 
-    pub fn loader(&self, doc_url: &str) -> ServerLoader {
+    /// The document URL for a test, given its path relative to the tests root.
+    pub fn doc_url(&self, test_rel: &str) -> String {
+        format!(
+            "{}/{}",
+            self.origin_for(test_rel),
+            test_rel.trim_start_matches('/')
+        )
+    }
+
+    pub fn loader(&self, doc_url: &str, headers: Vec<(String, String)>) -> ServerLoader {
         ServerLoader {
             doc_url: doc_url.to_owned(),
+            headers,
         }
     }
 }
@@ -942,6 +1086,8 @@ mod tests {
     fn doc_url_joins_origin_and_test_path() {
         let ctx = ServerCtx {
             origin: "http://web-platform.test:8000".into(),
+            https_origin: "https://web-platform.test:8443".into(),
+            h2_origin: None,
             _spawned: None,
         };
         assert_eq!(
@@ -953,5 +1099,155 @@ mod tests {
             ctx.doc_url("/fetch/api/basic/x.any.js"),
             "http://web-platform.test:8000/fetch/api/basic/x.any.js"
         );
+    }
+
+    fn ctx() -> ServerCtx {
+        ServerCtx {
+            origin: "http://web-platform.test:8000".into(),
+            https_origin: https_origin_on("http://web-platform.test:8000", WPT_HTTPS_PORT),
+            h2_origin: None,
+            _spawned: None,
+        }
+    }
+
+    #[test]
+    fn the_serving_scheme_follows_the_dotted_flags_in_the_file_name() {
+        assert_eq!(serve_flag("fetch/api/basic/x.any.html"), ServeFlag::Plain);
+        assert_eq!(
+            serve_flag("fetch/api/basic/x.https.any.html"),
+            ServeFlag::Https
+        );
+        assert_eq!(
+            serve_flag("mixed-content/gen/top.meta/opt-in/fetch.https.html"),
+            ServeFlag::Https
+        );
+        assert_eq!(
+            serve_flag("fetch/api/basic/status.h2.any.html?x"),
+            ServeFlag::H2
+        );
+        // A directory named like a flag, or a query that carries one, is not a flag.
+        assert_eq!(serve_flag("https/a/x.html"), ServeFlag::Plain);
+        assert_eq!(serve_flag("a/x.html?y=.https."), ServeFlag::Plain);
+        assert_eq!(serve_flag("a/https.html"), ServeFlag::Plain);
+    }
+
+    #[test]
+    fn a_secure_test_is_served_from_the_https_origin_on_the_same_host() {
+        let ctx = ctx();
+        assert_eq!(ctx.origin_for("a/b.html"), "http://web-platform.test:8000");
+        assert_eq!(
+            ctx.doc_url("upgrade-insecure-requests/x.https.sub.html"),
+            "https://web-platform.test:8443/upgrade-insecure-requests/x.https.sub.html"
+        );
+        // `.h2.` tests stay on the plain origin unless an h2 origin is given.
+        assert_eq!(
+            ctx.doc_url("fetch/api/basic/status.h2.any.html"),
+            "http://web-platform.test:8000/fetch/api/basic/status.h2.any.html"
+        );
+        let ctx = ctx.with_secure_origins(
+            Some("https://example.test:1/".into()),
+            Some("https://example.test:2".into()),
+        );
+        assert_eq!(ctx.origin_for("a/b.https.html"), "https://example.test:1");
+        assert_eq!(ctx.origin_for("a/b.h2.html"), "https://example.test:2");
+    }
+}
+
+#[cfg(test)]
+mod phase_c_document_encoding_fixtures {
+    use super::*;
+    // Test-local adapter exercises the actual rich initial netfetch worker loader.
+    fn initial_document_adapter(url: &str) -> (String, Option<&'static str>, String) {
+        let loaded = http_get_document(url, Default::default()).expect("actual initial HTTP GET");
+        (
+            loaded.document.source,
+            Some(loaded.document.encoding.encoding.name()),
+            loaded.final_url,
+        )
+    }
+    #[test]
+    fn phase_c_document_encoding_actual_net_initial_header_bytes() {
+        let mut server = mockito::Server::new();
+        let page = server
+            .mock("GET", "/page")
+            .with_status(200)
+            .with_header("Content-Type", "text/html;charset=euc-kr")
+            .with_body(b"<input value='\xB0\xA1'>")
+            .expect(1)
+            .create();
+        let (source, name, _) = initial_document_adapter(&format!("{}/page", server.url()));
+        assert_eq!(
+            source, "<input value='가'>",
+            "actual netfetch initial byte decoding"
+        );
+        assert_eq!(name, Some("EUC-KR"));
+        page.assert();
+    }
+    #[test]
+    fn phase_c_document_encoding_actual_net_initial_redirect_bom_metadata() {
+        let mut server = mockito::Server::new();
+        let final_url = format!("{}/final", server.url());
+        let first = server
+            .mock("GET", "/requested")
+            .with_status(302)
+            .with_header("Location", &final_url)
+            .expect(1)
+            .create();
+        let last = server
+            .mock("GET", "/final")
+            .with_status(200)
+            .with_header("Content-Type", "text/html;charset=windows-1252")
+            .with_body(b"\xEF\xBB\xBF<p>\xC3\xA9</p>")
+            .expect(1)
+            .create();
+        let (source, name, actual_url) =
+            initial_document_adapter(&format!("{}/requested", server.url()));
+        assert_eq!(source, "<p>é</p>", "leading BOM is consumed");
+        assert_eq!(name, Some("UTF-8"));
+        assert_eq!(
+            actual_url, final_url,
+            "redirect identity retained by initial loader"
+        );
+        first.assert();
+        last.assert();
+    }
+    #[test]
+    fn the_initial_document_keeps_the_final_responses_headers() {
+        let mut server = mockito::Server::new();
+        let first = server
+            .mock("GET", "/requested")
+            .with_status(302)
+            .with_header("Location", "/final")
+            .with_header("Referrer-Policy", "no-referrer")
+            .expect(1)
+            .create();
+        let last = server
+            .mock("GET", "/final")
+            .with_status(200)
+            .with_header("Content-Type", "text/html")
+            .with_header("Referrer-Policy", "origin")
+            .with_body("<p>x</p>")
+            .expect(1)
+            .create();
+        let loaded = http_get_document(&format!("{}/requested", server.url()), Default::default())
+            .expect("actual initial HTTP GET");
+        let policies: Vec<&str> = loaded
+            .headers
+            .iter()
+            .filter(|(name, _)| name.eq_ignore_ascii_case("referrer-policy"))
+            .map(|(_, value)| value.as_str())
+            .collect();
+        assert_eq!(
+            policies,
+            ["origin"],
+            "the final response's header, not the redirect's"
+        );
+        let loader = ServerLoader {
+            doc_url: "http://x/".into(),
+            headers: loaded.headers.clone(),
+        };
+        assert_eq!(loader.document_response_headers(), loaded.headers);
+        first.assert();
+        last.assert();
     }
 }

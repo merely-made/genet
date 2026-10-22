@@ -31,12 +31,13 @@ mod livery;
 mod resource_bridge;
 
 #[cfg(feature = "livery")]
-pub use document::LiveryScriptedDocument;
+pub use document::{LiveryScriptedDocument, ScriptedValidationNotice};
 pub use document::{ScriptedDocument, ScriptedEngine, ScrollKey};
 pub use host::ScriptedDocumentOptions;
 #[cfg(feature = "livery")]
 pub use livery::{LiveryCssom, ScriptedClick};
 pub use resource_bridge::{ScriptResourceBridge, ScriptWake, ScriptWakeEvent};
+pub use script_runtime_api::{ValidationMessageCatalog, ValidationMessageKind};
 
 /// Byte-loading seam supplied by a shell or worker host. Networking and filesystem
 /// policy stay above the scripted document owner. This is the shared host contract;

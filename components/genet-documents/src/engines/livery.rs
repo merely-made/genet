@@ -16,12 +16,14 @@ use document_session_api::session_engine::{
     DocumentZoomState, SessionButtonState, SessionClick, SessionCursor, SessionEffect,
     SessionEngine, SessionError, SessionFocusDirection, SessionFormMethod, SessionFormSubmission,
     SessionIme, SessionKey, SessionLink, SessionModifiers, SessionScrollKey, SessionSpawnRequest,
-    SessionTextTarget,
+    SessionTextTarget, SessionDocumentRequest, SessionEncodedFormSubmission, SessionRequestSpawnResult,
+    SessionInput, SessionInputResult, dispatch_session_input,
 };
 use document_session_api::{
     DocumentA11yAction, DocumentA11yActionRequest, DocumentA11yClickTarget, DocumentA11yNodeId,
     DocumentA11yProjection, DocumentCapabilities, DocumentCapabilityStatus,
 };
+use genet_document_resources::ResourceResponseSnapshot;
 use genet_document_resources::{
     PendingResourceRequest, ResolvedDocumentResources, ResolvedStylesheet, ResourceDelta,
     ResourceKind, ResourceLimits, ResourceProvisionError, StagedResourceResolution,
@@ -29,7 +31,12 @@ use genet_document_resources::{
 };
 use genet_host_api::ResourceFetcher;
 use genet_host_api::ResourceResponse;
-use genet_text::{next_grapheme_boundary, previous_grapheme_boundary};
+use genet_scripted_dom::html_encoding::{
+    DocumentEncoding, HtmlDecodeOptions, decode_html_document,
+};
+use genet_scripted_dom::{
+    FormEditCommand, form_edit_byte_offset_from_utf16, form_edit_utf16_offset_from_byte,
+};
 use layout_dom_api::{
     FormControlState, LayoutDom, LayoutDomMut, LocalName, Namespace, NodeKind, QualName,
     SelectionDirection,
@@ -44,6 +51,8 @@ pub struct LiverySessionEngine<Fetch> {
     fetcher: Fetch,
     author_css: Vec<String>,
     resource_limits: ResourceLimits,
+    decode_options: HtmlDecodeOptions,
+    validation_message_catalog: genet_scripted_dom::ValidationMessageCatalog,
 }
 
 /// One browser-host preparation for a Livery session.  It owns the exact DOM
@@ -63,16 +72,37 @@ impl LiveryResourcePreparation {
         source_response: ResourceResponse,
         limits: ResourceLimits,
     ) -> Self {
+        Self::new_with_decode_options(request, source_response, limits, Default::default())
+    }
+    pub fn new_with_decode_options(
+        request: &SessionSpawnRequest,
+        source_response: ResourceResponse,
+        limits: ResourceLimits,
+        decode_options: HtmlDecodeOptions,
+    ) -> Self {
         let base_resource = source_response
             .final_url
             .split_once('#')
             .map_or(source_response.final_url.as_str(), |(resource, _)| resource)
             .to_owned();
-        let source = String::from_utf8_lossy(&source_response.bytes).into_owned();
-        let dom = {
-            let _parse = genet_livery::phase::span(genet_livery::phase::Phase::Parse);
-            genet_scripted_dom::ScriptedDom::from_serialized_document(&source)
+        let decoded = match &request.body {
+            Some(source) => genet_scripted_dom::html_encoding::DecodedHtmlDocument {
+                source: source.clone(),
+                encoding: DocumentEncoding::default(),
+            },
+            None => decode_html_document(
+                &source_response.bytes,
+                source_response.content_type.as_deref(),
+                decode_options,
+            ),
         };
+        let mut dom = {
+            let _parse = genet_livery::phase::span(genet_livery::phase::Phase::Parse);
+            genet_scripted_dom::ScriptedDom::from_serialized_document(&decoded.source)
+        };
+        let document = dom.document();
+        dom.set_document_encoding(document, decoded.encoding);
+        dom.set_html_decode_options(decode_options);
         Self {
             requested_address: request.address.clone(),
             source_response,
@@ -106,11 +136,18 @@ impl LiveryResourcePreparation {
             genet_scripted_dom::ScriptedDom,
             ResourceResponse,
             ResolvedDocumentResources,
+            ResourceResponseSnapshot,
         ),
         Vec<PendingResourceRequest>,
     > {
         let resources = self.staged.finish()?;
-        Ok((self.staged.into_document(), self.source_response, resources))
+        let snapshot = self.staged.response_snapshot();
+        Ok((
+            self.staged.into_document(),
+            self.source_response,
+            resources,
+            snapshot,
+        ))
     }
 }
 
@@ -121,6 +158,8 @@ impl<Fetch> LiverySessionEngine<Fetch> {
             fetcher,
             author_css: Vec::new(),
             resource_limits: ResourceLimits::default(),
+            decode_options: HtmlDecodeOptions::default(),
+            validation_message_catalog: Default::default(),
         }
     }
 
@@ -134,9 +173,23 @@ impl<Fetch> LiverySessionEngine<Fetch> {
             fetcher,
             author_css: sheets.into_iter().map(Into::into).collect(),
             resource_limits: ResourceLimits::default(),
+            decode_options: HtmlDecodeOptions::default(),
+            validation_message_catalog: Default::default(),
         }
     }
 
+    pub fn with_html_decode_options(mut self, options: HtmlDecodeOptions) -> Self {
+        self.decode_options = options;
+        self
+    }
+    /// Replace the built-in wording used for interactive validation feedback.
+    pub fn with_validation_message_catalog(
+        mut self,
+        catalog: genet_scripted_dom::ValidationMessageCatalog,
+    ) -> Self {
+        self.validation_message_catalog = catalog;
+        self
+    }
     /// Select bounded recursive stylesheet resolution for sessions made by
     /// this host engine.
     pub fn with_resource_limits(mut self, resource_limits: ResourceLimits) -> Self {
@@ -178,16 +231,36 @@ impl<Fetch: ResourceFetcher + Send + Sync> SessionEngine<Scene> for LiverySessio
             .split_once('#')
             .map_or(source_response.final_url.as_str(), |(resource, _)| resource)
             .to_owned();
-        let source = String::from_utf8_lossy(&source_response.bytes).into_owned();
+        let decoded = match &request.body {
+            Some(source) => genet_scripted_dom::html_encoding::DecodedHtmlDocument {
+                source: source.clone(),
+                encoding: DocumentEncoding::default(),
+            },
+            None => decode_html_document(
+                &source_response.bytes,
+                source_response.content_type.as_deref(),
+                self.decode_options,
+            ),
+        };
         // Script-free HTML still uses the mutable DOM backing. Form controls
         // need one retained value plane even when JavaScript is disabled;
         // ScriptedDom supplies LayoutDomMut without constructing a JS runtime.
-        let dom = {
+        let mut dom = {
             let _parse = genet_livery::phase::span(genet_livery::phase::Phase::Parse);
-            genet_scripted_dom::ScriptedDom::from_serialized_document(&source)
+            genet_scripted_dom::ScriptedDom::from_serialized_document(&decoded.source)
         };
+        let document = dom.document();
+        dom.set_document_encoding(document, decoded.encoding);
+        dom.set_html_decode_options(self.decode_options);
+        let navigation = genet_livery::NavigationFragment::parse(&redirected_navigation_address(
+            &request.address, &source_response.final_url));
         self.spawn_livery_document(request, dom, base_resource, source_response, navigation)
     }
+    fn spawn_request(&self, spawn: &SessionSpawnRequest, request: &SessionDocumentRequest)
+        -> Result<SessionRequestSpawnResult<Scene>, SessionError> {
+        self.spawn_document_request(spawn, request)
+    }
+
 }
 
 /// The first element whose `id` attribute is exactly `id`, in document order.
@@ -237,7 +310,41 @@ fn as_dyn_fetcher<F: ResourceFetcher>(fetcher: &F) -> &dyn ResourceFetcher {
 }
 
 #[cfg(feature = "livery")]
-impl<Fetch: ResourceFetcher + Send + Sync> LiverySessionEngine<Fetch> {
+impl<Fetch: ResourceFetcher> LiverySessionEngine<Fetch> {
+    pub fn spawn_document_request(&self, spawn: &SessionSpawnRequest, request: &SessionDocumentRequest)
+        -> Result<SessionRequestSpawnResult<Scene>, SessionError>
+    {
+        if spawn.body.is_some() || spawn.address != request.url {
+            return Err(SessionError::Unsupported("request spawn address or Unicode source mismatch".into()));
+        }
+        let transport = genet_host_api::ResourceRequest {
+            url: request.url.clone(), method: request.method.clone(), headers: request.headers.clone(),
+            body: request.body.clone(), cache: request.cache.clone(), redirect: request.redirect.clone(),
+            mode: request.mode.clone(), referrer: request.referrer.clone(),
+            referrer_policy: request.referrer_policy.clone(), credentials: request.credentials.clone(),
+            integrity: request.integrity.clone(),
+            upgrade_insecure_requests: false, block_all_mixed_content: false,
+        };
+        let response = self.fetcher.fetch_request(&transport)
+            .ok_or_else(|| SessionError::SpawnFailed(format!("could not load {}", request.url)))?;
+        if matches!(response.status, 0 | 204 | 205)
+            || !matches!(response.response_type.as_str(), "basic" | "cors" | "default") {
+            return Err(SessionError::Unsupported("response cannot install a document".into()));
+        }
+        let navigation_address = redirected_navigation_address(&request.url, &response.final_url);
+        let navigation = genet_livery::NavigationFragment::parse(&navigation_address);
+        let source_response: ResourceResponse = response.into_legacy_response();
+        let base_resource = source_response.final_url.split('#').next().unwrap_or("").to_owned();
+        let decoded = decode_html_document(&source_response.bytes,
+            source_response.content_type.as_deref(), self.decode_options);
+        let mut dom = genet_scripted_dom::ScriptedDom::from_serialized_document(&decoded.source);
+        let document = dom.document();
+        dom.set_document_encoding(document, decoded.encoding);
+        dom.set_html_decode_options(self.decode_options);
+        let session = self.spawn_livery_document(spawn, dom, base_resource, source_response, navigation)?;
+        Ok(SessionRequestSpawnResult { session, navigation_address })
+    }
+
     fn spawn_livery_document(
         &self,
         request: &SessionSpawnRequest,
@@ -246,7 +353,7 @@ impl<Fetch: ResourceFetcher + Send + Sync> LiverySessionEngine<Fetch> {
         source_response: ResourceResponse,
         navigation: genet_livery::NavigationFragment,
     ) -> Result<Box<dyn DocumentSession<Scene>>, SessionError> {
-        let resources = ResolvedDocumentResources::resolve_with_limits(
+        let (resources, snapshot) = ResolvedDocumentResources::resolve_with_limits_and_snapshot(
             &dom,
             Some(&base_resource),
             &self.fetcher,
@@ -258,6 +365,7 @@ impl<Fetch: ResourceFetcher + Send + Sync> LiverySessionEngine<Fetch> {
             source_response,
             navigation,
             resources,
+            snapshot,
             Some(as_dyn_fetcher(&self.fetcher)),
         )
     }
@@ -278,11 +386,12 @@ impl<Fetch> LiverySessionEngine<Fetch> {
                 "prepared Livery resources belong to a different navigation".to_owned(),
             ));
         }
-        let (dom, source_response, resources) = preparation.finish().map_err(|pending| {
-            SessionError::SpawnFailed(format!(
-                "prepared Livery resources still pending: {pending:?}"
-            ))
-        })?;
+        let (dom, source_response, resources, snapshot) =
+            preparation.finish().map_err(|pending| {
+                SessionError::SpawnFailed(format!(
+                    "prepared Livery resources still pending: {pending:?}"
+                ))
+            })?;
         let navigation = genet_livery::NavigationFragment::parse(&redirected_navigation_address(
             &request.address,
             &source_response.final_url,
@@ -297,6 +406,7 @@ impl<Fetch> LiverySessionEngine<Fetch> {
             source_response,
             navigation,
             resources,
+            snapshot,
             None,
         )
     }
@@ -308,8 +418,11 @@ impl<Fetch> LiverySessionEngine<Fetch> {
         source_response: ResourceResponse,
         navigation: genet_livery::NavigationFragment,
         resources: ResolvedDocumentResources,
+        snapshot: ResourceResponseSnapshot,
         fetcher: Option<&dyn ResourceFetcher>,
     ) -> Result<Box<dyn DocumentSession<Scene>>, SessionError> {
+        let encoding = dom.document_encoding(dom.document()).unwrap_or_default();
+        let decode_options = dom.html_decode_options();
         let mut sheets = self
             .author_css
             .iter()
@@ -332,21 +445,17 @@ impl<Fetch> LiverySessionEngine<Fetch> {
             .collect::<Vec<_>>();
         sheets.extend(resources.stylesheets.iter().cloned());
         let (width, height) = request.viewport;
+        let mut styles = genet_livery::StyleSet::cambium_resources(&sheets);
+        styles.set_document_base_url(resources.document_url.as_deref());
         let mut doc = genet_livery::LiveryDocument::new(
             dom,
-            genet_livery::StyleSet::cambium_resources(&sheets),
+            styles,
             genet_livery::Device::screen(width as f32, height as f32),
         );
         for resource in &resources.resources {
             match resource.kind {
                 ResourceKind::Image => {
-                    doc.set_image_resource(resource.authored_url.clone(), resource.bytes.clone());
-                    if resource.resolved_url != resource.authored_url {
-                        doc.set_image_resource(
-                            resource.resolved_url.clone(),
-                            resource.bytes.clone(),
-                        );
-                    }
+                    doc.set_image_resource(resource.resolved_url.clone(), resource.bytes.clone());
                 },
                 ResourceKind::Font => {
                     doc.set_font_resource(resource.resolved_url.clone(), resource.bytes.clone());
@@ -365,6 +474,9 @@ impl<Fetch> LiverySessionEngine<Fetch> {
             base_url.as_deref(),
             &resources.frames,
             &super::frames::FrameBuild {
+                snapshot: &snapshot,
+                parent_encoding: encoding,
+                decode_options,
                 fetcher,
                 limits: self.resource_limits,
                 author_css: &self.author_css,
@@ -377,9 +489,17 @@ impl<Fetch> LiverySessionEngine<Fetch> {
             address: navigation.script_visible_url.clone(),
             focused_node: None,
             editor: None,
+            pending_key_text: None,
             editor_drag: None,
             active_form: None,
             pressed_submit: None,
+            pressed_target: None,
+            pending_submission: None,
+            latest_submission: None,
+            validation_message_catalog: self.validation_message_catalog.clone(),
+            validation_notice: RefCell::new(None),
+            next_validation_notice_sequence: 0,
+            validation_alert_id: Cell::new(None),
             last_error: None,
             resources,
             source_response,
@@ -399,13 +519,9 @@ impl<Fetch> LiverySessionEngine<Fetch> {
 
 #[cfg(feature = "livery")]
 fn redirected_navigation_address(requested: &str, final_url: &str) -> String {
-    let final_base = final_url
-        .split_once('#')
-        .map_or(final_url, |(base, _)| base);
-    requested.split_once('#').map_or_else(
-        || final_base.to_owned(),
-        |(_, fragment)| format!("{final_base}#{fragment}"),
-    )
+    if final_url.contains('#') { return final_url.to_owned(); }
+    requested.split_once('#').map_or_else(|| final_url.to_owned(),
+        |(_, fragment)| format!("{final_url}#{fragment}"))
 }
 
 /// Render each child browsing context at its used content size and splice its
@@ -498,9 +614,17 @@ pub struct LiveryDocumentSession {
     address: String,
     pub(crate) focused_node: Option<genet_scripted_dom::NodeId>,
     pub(crate) editor: Option<EditableControl>,
+    pending_key_text: Option<bool>,
     editor_drag: Option<EditableDrag>,
     pub(crate) active_form: Option<genet_scripted_dom::NodeId>,
     pressed_submit: Option<genet_scripted_dom::NodeId>,
+    pressed_target: Option<genet_scripted_dom::NodeId>,
+    pending_submission: Option<SessionEncodedFormSubmission>,
+    latest_submission: Option<SessionFormSubmission>,
+    validation_message_catalog: genet_scripted_dom::ValidationMessageCatalog,
+    validation_notice: RefCell<Option<NativeValidationNotice>>,
+    next_validation_notice_sequence: u64,
+    validation_alert_id: Cell<Option<(u64, DocumentA11yNodeId)>>,
     last_error: Option<String>,
     pub(crate) resources: ResolvedDocumentResources,
     source_response: ResourceResponse,
@@ -517,6 +641,14 @@ pub struct LiveryDocumentSession {
     /// children. The tree above is the identity and policy plane; this is the
     /// retained-document plane, joined by container `opaque_id`.
     frames: Vec<super::frames::ChildFrame>,
+}
+
+#[cfg(feature = "livery")]
+struct NativeValidationNotice {
+    node: genet_scripted_dom::NodeId,
+    sequence: u64,
+    message: String,
+    bounds: Option<[f32; 4]>,
 }
 
 /// Livery's page-zoom bounds — engine policy, matching the range a Chromium
@@ -546,35 +678,6 @@ pub(crate) struct EditableControl {
 struct EditableDrag {
     source: genet_scripted_dom::NodeId,
     anchor: usize,
-}
-
-#[cfg(feature = "livery")]
-fn byte_offset_from_utf16(value: &str, offset: u32) -> usize {
-    let mut units = 0u32;
-    for (byte, ch) in value.char_indices() {
-        let next = units + ch.len_utf16() as u32;
-        if offset < next {
-            // Native editing can only place a caret on a UTF-8 scalar
-            // boundary. Preserve the exact WebIDL offset in the arena and
-            // map an offset inside a surrogate pair to the scalar's start for
-            // this native-only operation.
-            return byte;
-        }
-        units = next;
-        if offset == units {
-            return byte + ch.len_utf8();
-        }
-    }
-    value.len()
-}
-
-#[cfg(feature = "livery")]
-fn utf16_offset_from_byte(value: &str, byte_offset: usize) -> u32 {
-    value
-        .char_indices()
-        .take_while(|(byte, _)| *byte < byte_offset)
-        .map(|(_, ch)| ch.len_utf16() as u32)
-        .sum()
 }
 
 #[cfg(feature = "livery")]
@@ -812,12 +915,33 @@ impl LiveryDocumentSession {
                 node
             })
             .collect();
-        Some(DocumentA11yProjection::new(
+        let projection = DocumentA11yProjection::new(
             0,
             projection.support().clone(),
             projection.root(),
             nodes,
+        );
+        self.retire_validation_notice();
+        let notice = self.validation_notice.borrow();
+        Some(super::with_validation_alert(
+            projection,
+            notice.as_ref().map(|notice|
+                (notice.sequence, notice.message.as_str(), notice.bounds)),
+            &self.validation_alert_id,
         ))
+    }
+
+    fn retire_validation_notice(&self) {
+        let dom = self.doc.dom();
+        let retired = self.validation_notice.borrow().as_ref().is_some_and(|notice| {
+            !dom.is_live(notice.node)
+                || dom.tree_root(notice.node) != Some(dom.document())
+                || !dom.form_control_validity(notice.node)
+                    .is_some_and(|v| v.will_validate && !v.flags.valid())
+        });
+        if retired {
+            self.validation_notice.borrow_mut().take();
+        }
     }
 
     fn current_accessibility_projection(&self) -> Option<DocumentA11yProjection> {
@@ -879,7 +1003,7 @@ impl LiveryDocumentSession {
         &self,
         node: genet_scripted_dom::NodeId,
     ) -> Option<genet_scripted_dom::NodeId> {
-        self.ancestor_matching(node, |_node, tag| tag.eq_ignore_ascii_case("form"))
+        self.doc.dom().form_control_form_owner(node)
     }
 
     fn editable_kind(&self, node: genet_scripted_dom::NodeId) -> Option<EditableKind> {
@@ -939,32 +1063,19 @@ impl LiveryDocumentSession {
     }
 
     fn editable_is_writable(&self, node: genet_scripted_dom::NodeId) -> bool {
-        !self.is_disabled_control(node)
-            && self.attribute(node, "readonly").is_none()
-            && !self.aria_true(node, "aria-readonly")
+        self.doc.dom().can_user_edit_text_control(node)
     }
 
     fn is_disabled_control(&self, node: genet_scripted_dom::NodeId) -> bool {
-        self.attribute(node, "disabled").is_some() || self.aria_true(node, "aria-disabled")
+        self.doc.dom().form_control_is_disabled(node).unwrap_or(false)
+            || self.aria_true(node, "aria-disabled")
     }
 
     fn is_submit_control(&self, node: genet_scripted_dom::NodeId) -> bool {
         if self.is_disabled_control(node) {
             return false;
         }
-        match self.tag(node) {
-            Some(tag) if tag.eq_ignore_ascii_case("button") => {
-                !self.attribute(node, "type").is_some_and(|kind| {
-                    matches!(kind.to_ascii_lowercase().as_str(), "button" | "reset")
-                })
-            },
-            Some(tag) if tag.eq_ignore_ascii_case("input") => {
-                self.attribute(node, "type").is_some_and(|kind| {
-                    matches!(kind.to_ascii_lowercase().as_str(), "submit" | "image")
-                })
-            },
-            _ => false,
-        }
+        self.doc.dom().is_form_submit_button(node)
     }
 
     fn submit_ancestor(
@@ -999,16 +1110,6 @@ impl LiveryDocumentSession {
         self.doc.dom().form_control_state(node)
     }
 
-    fn write_control_state(
-        &mut self,
-        node: genet_scripted_dom::NodeId,
-        state: FormControlState,
-    ) -> bool {
-        self.doc
-            .mutate_dom(|dom| dom.set_form_control_state(node, state))
-            .0
-    }
-
     fn write_control_selection(
         &mut self,
         node: genet_scripted_dom::NodeId,
@@ -1016,14 +1117,11 @@ impl LiveryDocumentSession {
         end: u32,
         direction: SelectionDirection,
     ) -> bool {
-        let Some(mut state) = self.control_state(node) else {
-            return false;
-        };
-        let max = state.value.encode_utf16().count().min(u32::MAX as usize) as u32;
-        state.selection_start = Some(start.min(max));
-        state.selection_end = Some(end.min(max));
-        state.selection_direction = direction;
-        self.write_control_state(node, state)
+        self.doc
+            .mutate_dom(|dom| {
+                dom.set_form_control_editing_selection(node, Some(start), Some(end), direction)
+            })
+            .0
     }
 
     fn replace_control_value(&mut self, node: genet_scripted_dom::NodeId, value: &str) -> bool {
@@ -1038,20 +1136,33 @@ impl LiveryDocumentSession {
         start: u32,
         end: u32,
     ) -> bool {
-        let Some(mut state) = self.control_state(node) else {
-            return false;
-        };
-        state.value.clear();
-        state.value.push_str(value);
-        state.dirty_value = true;
-        let max = state.value.encode_utf16().count().min(u32::MAX as usize) as u32;
-        state.selection_start = Some(start.min(max));
-        state.selection_end = Some(end.min(max));
-        state.selection_direction = SelectionDirection::None;
-        self.write_control_state(node, state)
+        self.doc
+            .mutate_dom(|dom| dom.set_form_control_user_value(node, value, Some(start), Some(end)))
+            .0
+    }
+
+    fn commit_active_edit(&mut self) {
+        if let Some(node) = self.editor.as_ref().map(|editor| editor.node).or(self.focused_node) {
+            self.doc
+                .mutate_dom(|dom| dom.commit_form_control_user_edit(node));
+        }
+    }
+
+    fn restore_live_editor(&mut self) {
+        if self.editor.is_none()
+            && let Some(node) = self.focused_node
+            && let Some(kind) = self.editable_kind(node)
+            && self.editable_is_writable(node)
+        {
+            self.activate_editable(node, kind);
+        }
     }
 
     fn activate_editable(&mut self, node: genet_scripted_dom::NodeId, kind: EditableKind) {
+        let new_focus = self.focused_node != Some(node);
+        if new_focus && self.editor.is_some() {
+            self.commit_active_edit();
+        }
         self.editor_drag = None;
         if self.is_disabled_control(node) {
             self.focused_node = None;
@@ -1059,23 +1170,26 @@ impl LiveryDocumentSession {
             self.editor = None;
             return;
         }
+        if new_focus {
+            self.doc
+                .mutate_dom(|dom| dom.begin_form_control_user_edit(node));
+        }
         self.focused_node = Some(node);
         if !self.editable_is_writable(node) {
             self.active_form = None;
             self.editor = None;
             return;
         }
-        let Some(mut state) = self.control_state(node) else {
+        let Some(state) = self.control_state(node) else {
             self.active_form = None;
             self.editor = None;
             return;
         };
-        if state.selection_start.is_none() || state.selection_end.is_none() {
-            let end = state.value.encode_utf16().count().min(u32::MAX as usize) as u32;
-            state.selection_start = Some(end);
-            state.selection_end = Some(end);
-            state.selection_direction = SelectionDirection::None;
-            let _ = self.write_control_state(node, state);
+        if let Some(editing) = self.doc.dom().form_control_editing_value(node)
+            && (editing.selection_start.is_none() || editing.selection_end.is_none())
+        {
+            let end = editing.value.encode_utf16().count().min(u32::MAX as usize) as u32;
+            let _ = self.write_control_selection(node, end, end, SelectionDirection::None);
         }
         self.active_form = self.form_ancestor(node);
         self.editor = Some(EditableControl {
@@ -1113,10 +1227,15 @@ impl LiveryDocumentSession {
         let Some(editor_node) = self.editor.as_ref().map(|editor| editor.node) else {
             return false;
         };
-        let Some(value) = self.control_state(editor_node).map(|state| state.value) else {
+        let Some(value) = self
+            .doc
+            .dom()
+            .form_control_editing_value(editor_node)
+            .map(|state| state.value)
+        else {
             return false;
         };
-        let caret = utf16_offset_from_byte(&value, anchor);
+        let caret = form_edit_utf16_offset_from_byte(&value, anchor);
         let written =
             self.write_control_selection(editor_node, caret, caret, SelectionDirection::None);
         if written {
@@ -1138,11 +1257,16 @@ impl LiveryDocumentSession {
         if source != drag.source || !self.editor_owns_text_source(editor_node, source) {
             return false;
         }
-        let Some(value) = self.control_state(editor_node).map(|state| state.value) else {
+        let Some(value) = self
+            .doc
+            .dom()
+            .form_control_editing_value(editor_node)
+            .map(|state| state.value)
+        else {
             return false;
         };
-        let anchor_utf16 = utf16_offset_from_byte(&value, drag.anchor);
-        let focus_utf16 = utf16_offset_from_byte(&value, focus);
+        let anchor_utf16 = form_edit_utf16_offset_from_byte(&value, drag.anchor);
+        let focus_utf16 = form_edit_utf16_offset_from_byte(&value, focus);
         let direction = if drag.anchor <= focus {
             SelectionDirection::Forward
         } else {
@@ -1164,12 +1288,13 @@ impl LiveryDocumentSession {
     /// collapsed-gesture tail of `pointer_up`, which has already converted.
     fn click_at_css(&mut self, x: f32, y: f32) -> SessionClick {
         let hit = self.doc.hit_test(x, y);
-        let submit = hit.and_then(|node| self.submit_ancestor(node));
+        let submit = hit.and_then(|node| self.submit_ancestor(node))
+            .map(|node| (node, self.submit_position(node, x, y)));
         self.activate_hit(x, y);
         match self.doc.click_at(x, y) {
             genet_livery::ClickOutcome::None => SessionClick::Miss,
             genet_livery::ClickOutcome::Focused | genet_livery::ClickOutcome::Scrolled => {
-                submit.map_or(SessionClick::Handled, |submit| self.submit_click(submit))
+                submit.map_or(SessionClick::Handled, |(submit, position)| self.submit_click(submit, position))
             },
             genet_livery::ClickOutcome::Navigate(href) => SessionClick::Navigate(href),
         }
@@ -1177,6 +1302,7 @@ impl LiveryDocumentSession {
 
     fn activate_hit(&mut self, x: f32, y: f32) {
         let Some(hit) = self.doc.hit_test(x, y) else {
+            self.commit_active_edit();
             self.focused_node = None;
             self.editor = None;
             self.active_form = None;
@@ -1186,6 +1312,7 @@ impl LiveryDocumentSession {
             self.activate_editable(node, kind);
             return;
         }
+        self.commit_active_edit();
         self.focused_node = self.ancestor_matching(hit, |node, tag| {
             !self.is_disabled_control(node)
                 && (tag.eq_ignore_ascii_case("button")
@@ -1197,169 +1324,174 @@ impl LiveryDocumentSession {
         self.active_form = self.focused_node.and_then(|node| self.form_ancestor(node));
     }
 
-    fn submission_for_form(
-        &self,
-        form: genet_scripted_dom::NodeId,
-        fallback_action: &str,
-    ) -> SessionFormSubmission {
-        let action = self
-            .attribute(form, "action")
-            .filter(|action| !action.is_empty())
-            .unwrap_or(fallback_action)
-            .to_owned();
-        let method = if self
-            .attribute(form, "method")
-            .is_some_and(|method| method.eq_ignore_ascii_case("post"))
-        {
-            SessionFormMethod::Post
-        } else {
-            SessionFormMethod::Get
-        };
-        SessionFormSubmission {
-            action,
-            method,
-            fields: self.doc.dom().form_values(form),
+    fn resolution_base(&self) -> String {
+        let fallback = self.source_response.final_url.as_str();
+        let mut stack = vec![self.doc.dom().document()];
+        while let Some(node) = stack.pop() {
+            if self.tag(node) == Some("base") {
+                if let Some(href) = self.attribute(node, "href") {
+                    return url::Url::parse(fallback).and_then(|base| base.join(href))
+                        .map(|u| u.to_string()).unwrap_or_else(|_| fallback.to_owned());
+                }
+            }
+            stack.extend(self.doc.dom().dom_children(node).collect::<Vec<_>>().into_iter().rev());
         }
+        fallback.to_owned()
     }
 
-    fn submit_click(&mut self, submit: genet_scripted_dom::NodeId) -> SessionClick {
-        let Some(form) = self.form_ancestor(submit) else {
+    fn submit_form(&mut self, form: genet_scripted_dom::NodeId,
+        submitter: Option<genet_scripted_dom::NodeId>, position: (u32, u32)) -> SessionClick {
+        use genet_scripted_dom::form_encoding::{select_form_encoding, encode_urlencoded,
+            encode_text_plain, encode_multipart_auto, UTF_8};
+        use genet_scripted_dom::FormEntryValue;
+        let dom = self.doc.dom();
+        if dom.tree_root(form) != Some(dom.document()) || submitter.is_some_and(|id|
+            !dom.is_form_submit_button(id) || dom.form_control_form_owner(id) != Some(form)
+                || dom.form_control_is_disabled(id).unwrap_or(true)) {
+            return SessionClick::Handled;
+        }
+        self.doc.mutate_dom(|dom| dom.mark_form_submission_user_validity(form));
+        let dom = self.doc.dom();
+        let no_validate = self.attribute(form, "novalidate").is_some()
+            || submitter.is_some_and(|id| self.attribute(id, "formnovalidate").is_some());
+        if !no_validate {
+            let invalid = dom.associated_form_controls(form).into_iter().find(|id|
+                dom.form_control_validity(*id).is_some_and(|v| v.will_validate && !v.flags.valid()));
+            if let Some(node) = invalid {
+                let message = dom.form_control_validation_message(node, &self.validation_message_catalog)
+                    .unwrap_or_default();
+                self.next_validation_notice_sequence = self.next_validation_notice_sequence
+                    .checked_add(1)
+                    .expect("validation notice sequence exhausted");
+                *self.validation_notice.get_mut() = Some(NativeValidationNotice {
+                    node,
+                    sequence: self.next_validation_notice_sequence,
+                    message,
+                    bounds: None,
+                });
+                return SessionClick::Handled;
+            }
+        }
+        let choose = |name: &str, override_name: &str| submitter
+            .and_then(|id| self.attribute(id, override_name)).or_else(|| self.attribute(form, name));
+        let method = choose("method", "formmethod").unwrap_or("get");
+        if method.eq_ignore_ascii_case("dialog") { return SessionClick::Handled; }
+        let post = method.eq_ignore_ascii_case("post");
+        let mut target = choose("target", "formtarget").unwrap_or("").to_owned();
+        if target.is_empty() {
+            let mut stack = vec![dom.document()];
+            while let Some(node) = stack.pop() {
+                if self.tag(node) == Some("base") && self.attribute(node, "target").is_some() {
+                    target = self.attribute(node, "target").unwrap().to_owned(); break;
+                }
+                stack.extend(dom.dom_children(node).collect::<Vec<_>>().into_iter().rev());
+            }
+        }
+        let action = choose("action", "formaction").filter(|v| !v.is_empty()).unwrap_or(&self.address).to_owned();
+        let encoding = select_form_encoding(self.attribute(form, "accept-charset"),
+            dom.document_encoding(dom.document()).map(|e| e.encoding).unwrap_or(UTF_8));
+        let Ok(entries) = dom.form_submission_entries(form, submitter, encoding.name(), position) else {
             return SessionClick::Handled;
         };
+        let fields = entries.iter().map(|entry| (entry.name.clone(), match &entry.value {
+            FormEntryValue::Text(value) => value.clone(),
+            FormEntryValue::File { file, .. } => file.name.clone(),
+        })).collect();
+        let legacy = SessionFormSubmission { action: action.clone(),
+            method: if post { SessionFormMethod::Post } else { SessionFormMethod::Get }, fields };
+        if !target.is_empty() && !["_self", "_parent", "_top"].iter().any(|t| target.eq_ignore_ascii_case(t)) {
+            self.active_form = Some(form); self.latest_submission = Some(legacy);
+            return SessionClick::Submit(action);
+        }
+        let resolved = url::Url::parse(&self.resolution_base()).and_then(|base| base.join(&action));
+        let Ok(mut url) = resolved else {
+            self.active_form = Some(form); self.latest_submission = Some(legacy);
+            return SessionClick::Submit(action);
+        };
+        if !matches!(url.scheme(), "http" | "https") {
+            self.active_form = Some(form); self.latest_submission = Some(legacy);
+            return SessionClick::Submit(action);
+        }
+        let (body, headers) = if post {
+            let encoded = match choose("enctype", "formenctype").unwrap_or("").to_ascii_lowercase().as_str() {
+                "multipart/form-data" => match encode_multipart_auto(&entries, encoding) {
+                    Ok(body) => body, Err(_) => return SessionClick::Handled,
+                },
+                "text/plain" => genet_scripted_dom::form_encoding::EncodedFormBody {
+                    bytes: encode_text_plain(&entries, encoding), content_type: "text/plain".into(),
+                },
+                _ => genet_scripted_dom::form_encoding::EncodedFormBody {
+                    bytes: encode_urlencoded(&entries, encoding), content_type: "application/x-www-form-urlencoded".into(),
+                },
+            };
+            (Some(encoded.bytes), vec![("Content-Type".into(), encoded.content_type)])
+        } else {
+            let bytes = encode_urlencoded(&entries, encoding);
+            url.set_query(Some(std::str::from_utf8(&bytes).expect("ASCII form query")));
+            (None, Vec::new())
+        };
+        let referrer_policy = if self.attribute(form, "rel").is_some_and(|rel|
+            rel.split_ascii_whitespace().any(|v| v.eq_ignore_ascii_case("noreferrer"))) {
+            "no-referrer"
+        } else { "" };
+        let request = SessionDocumentRequest { url: url.to_string(), method: if post { "POST" } else { "GET" }.into(),
+            headers, body, cache: "default".into(), redirect: "follow".into(), mode: "navigate".into(),
+            referrer: self.address.clone(), referrer_policy: referrer_policy.into(),
+            credentials: "include".into(), integrity: String::new() };
         self.active_form = Some(form);
-        let action = self
-            .attribute(form, "action")
-            .unwrap_or(&self.address)
-            .to_owned();
+        self.latest_submission = Some(legacy);
+        self.pending_submission = Some(SessionEncodedFormSubmission { request, target });
         SessionClick::Submit(action)
+    }
+
+    // Capture CSS-local coordinates while the hit-test layout is retained;
+    // focusing the control can discard it before submission runs.
+    fn submit_position(&self, submit: genet_scripted_dom::NodeId, x: f32, y: f32) -> (u32, u32) {
+        self.doc.fragment_rect(submit).map_or((0, 0), |[left, top, _, _]|
+            ((x - left).max(0.0).floor() as u32, (y - top).max(0.0).floor() as u32))
+    }
+
+    fn submit_click(&mut self, submit: genet_scripted_dom::NodeId, position: (u32, u32)) -> SessionClick {
+        let Some(form) = self.form_ancestor(submit) else { return SessionClick::Handled; };
+        self.submit_form(form, Some(submit), position)
+    }
+
+    fn edit_control(&mut self, command: FormEditCommand<'_>) -> bool {
+        self.restore_live_editor();
+        let Some(node) = self.editor.as_ref().map(|editor| editor.node) else {
+            return false;
+        };
+        self.doc
+            .mutate_dom(|dom| dom.apply_form_control_user_edit(node, command))
+            .0
+            .accepted()
     }
 
     fn insert_text(&mut self, text: &str) -> bool {
         if text.is_empty() {
             return false;
         }
-        let Some(node) = self.editor.as_ref().map(|editor| editor.node) else {
-            return false;
-        };
-        let Some(state) = self.control_state(node) else {
-            return false;
-        };
-        let mut value = state.value;
-        let start = byte_offset_from_utf16(&value, state.selection_start.unwrap_or(0));
-        let end = byte_offset_from_utf16(
-            &value,
-            state
-                .selection_end
-                .unwrap_or(state.selection_start.unwrap_or(0)),
-        );
-        value.replace_range(start.min(end)..start.max(end), text);
-        let caret = start.min(end) + text.len();
-        let caret = utf16_offset_from_byte(&value, caret);
-        let result = self.write_control_value_selection(node, &value, caret, caret);
-        if let Some(editor) = self.editor.as_mut() {
+        let accepted = self.edit_control(FormEditCommand::Insert(text));
+        if accepted && let Some(editor) = self.editor.as_mut() {
             editor.composition = None;
         }
-        result
+        accepted
     }
 
     pub(crate) fn delete_backward(&mut self) -> bool {
-        let Some(node) = self.editor.as_ref().map(|editor| editor.node) else {
-            return false;
-        };
-        let Some(state) = self.control_state(node) else {
-            return false;
-        };
-        let mut value = state.value;
-        let start = byte_offset_from_utf16(&value, state.selection_start.unwrap_or(0));
-        let end = byte_offset_from_utf16(
-            &value,
-            state
-                .selection_end
-                .unwrap_or(state.selection_start.unwrap_or(0)),
-        );
-        if start != end {
-            value.replace_range(start.min(end)..start.max(end), "");
-            let caret = start.min(end);
-            let caret = utf16_offset_from_byte(&value, caret);
-            return self.write_control_value_selection(node, &value, caret, caret);
-        }
-        let caret = start;
-        if caret == 0 {
-            return true;
-        }
-        let Some(previous) = previous_grapheme_boundary(&value, caret) else {
-            return false;
-        };
-        value.replace_range(previous..caret, "");
-        let caret = utf16_offset_from_byte(&value, previous);
-        self.write_control_value_selection(node, &value, caret, caret)
+        self.edit_control(FormEditCommand::DeleteBackward)
     }
 
     fn delete_forward(&mut self) -> bool {
-        let Some(node) = self.editor.as_ref().map(|editor| editor.node) else {
-            return false;
-        };
-        let Some(state) = self.control_state(node) else {
-            return false;
-        };
-        let mut value = state.value;
-        let start = byte_offset_from_utf16(&value, state.selection_start.unwrap_or(0));
-        let end = byte_offset_from_utf16(
-            &value,
-            state
-                .selection_end
-                .unwrap_or(state.selection_start.unwrap_or(0)),
-        );
-        let caret = start.min(end);
-        if start != end {
-            value.replace_range(caret..start.max(end), "");
-            let caret = utf16_offset_from_byte(&value, caret);
-            return self.write_control_value_selection(node, &value, caret, caret);
-        }
-        if caret == value.len() {
-            return true;
-        }
-        let Some(next) = next_grapheme_boundary(&value, caret) else {
-            return false;
-        };
-        value.replace_range(caret..next, "");
-        let caret = utf16_offset_from_byte(&value, caret);
-        self.write_control_value_selection(node, &value, caret, caret)
+        self.edit_control(FormEditCommand::DeleteForward)
     }
 
     fn move_caret(&mut self, direction: i8) -> bool {
-        let Some(node) = self.editor.as_ref().map(|editor| editor.node) else {
-            return false;
-        };
-        let Some(state) = self.control_state(node) else {
-            return false;
-        };
-        let value = state.value;
-        let start = byte_offset_from_utf16(&value, state.selection_start.unwrap_or(0));
-        let end = byte_offset_from_utf16(
-            &value,
-            state
-                .selection_end
-                .unwrap_or(state.selection_start.unwrap_or(0)),
-        );
-        let current = if start != end {
-            if direction < 0 {
-                start.min(end)
-            } else {
-                start.max(end)
-            }
+        self.edit_control(if direction < 0 {
+            FormEditCommand::MoveLeft
         } else {
-            start
-        };
-        let caret = if direction < 0 {
-            previous_grapheme_boundary(&value, current).unwrap_or(current)
-        } else if current == value.len() {
-            current
-        } else {
-            next_grapheme_boundary(&value, current).unwrap_or(current)
-        };
-        let offset = utf16_offset_from_byte(&value, caret);
-        self.write_control_selection(node, offset, offset, SelectionDirection::None)
+            FormEditCommand::MoveRight
+        })
     }
 
     pub(crate) fn collect_focusable(
@@ -1413,13 +1545,7 @@ impl LiveryDocumentSession {
             .resources
             .iter()
             .filter(|resource| resource.kind == ResourceKind::Image)
-            .flat_map(|resource| {
-                let mut keys = vec![(resource.authored_url.clone(), resource.bytes.clone())];
-                if resource.resolved_url != resource.authored_url {
-                    keys.push((resource.resolved_url.clone(), resource.bytes.clone()));
-                }
-                keys
-            });
+            .map(|resource| (resource.resolved_url.clone(), resource.bytes.clone()));
         let fonts = next
             .resources
             .iter()
@@ -1591,6 +1717,16 @@ impl LiveryDocumentSession {
 
 #[cfg(feature = "livery")]
 impl DocumentSession<Scene> for LiveryDocumentSession {
+    fn input(&mut self, input: SessionInput) -> SessionInputResult {
+        self.pending_submission = None;
+        self.latest_submission = None;
+        dispatch_session_input(self, input)
+    }
+    fn take_encoded_form_submission(&mut self) -> Option<SessionEncodedFormSubmission> {
+        self.pending_submission.take()
+    }
+    fn current_address(&self) -> Option<String> { Some(self.address.clone()) }
+
     fn document_capabilities(&self) -> DocumentCapabilities {
         DocumentCapabilities {
             find_in_page: DocumentCapabilityStatus::Supported,
@@ -1607,10 +1743,7 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
     fn frame(&mut self, width: u32, height: u32) -> Scene {
         let (css_width, css_height) = self.css_viewport(width, height);
         let mut list = match self.doc.frame(css_width, css_height) {
-            Ok(list) => {
-                self.last_error = None;
-                list
-            },
+            Ok(list) => list,
             Err(error) => {
                 self.last_error = Some(error.to_string());
                 return Scene::new(width, height);
@@ -1635,7 +1768,13 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
         }
         composite_child_frames(&mut list, &mut self.frames);
         let list = list.scaled_to(self.zoom(), width, height);
-        let mut scene = paint_list_render::translate_paint_list(&list);
+        let mut scene = match paint_list_render::translate_paint_list(&list) {
+            Ok(scene) => scene,
+            Err(error) => {
+                self.last_error = Some(format!("paint translation: {error}"));
+                return Scene::new(width, height);
+            },
+        };
         if let Some(selection) = self.doc.text_selection() {
             for rect in selection.rects {
                 // The overlay is host-side paint, so it is placed in the
@@ -1654,24 +1793,24 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
             }
         }
         if let Some(editor) = self.editor.as_ref() {
-            let state = self.control_state(editor.node);
-            let value = state
+            let editing = self.doc.dom().form_control_editing_value(editor.node);
+            let value = editing
                 .as_ref()
-                .map(|state| state.value.as_str())
+                .map(|editing| editing.value.as_str())
                 .unwrap_or("");
-            let start = state
+            let start = editing
                 .as_ref()
                 .and_then(|state| state.selection_start)
                 .unwrap_or(0);
-            let end = state
+            let end = editing
                 .as_ref()
                 .and_then(|state| state.selection_end)
                 .unwrap_or(start);
-            let start_byte = byte_offset_from_utf16(value, start);
-            let end_byte = byte_offset_from_utf16(value, end);
+            let start_byte = form_edit_byte_offset_from_utf16(value, start);
+            let end_byte = form_edit_byte_offset_from_utf16(value, end);
             let selection = (start_byte != end_byte)
                 .then(|| {
-                    let (anchor, focus) = match state
+                    let (anchor, focus) = match editing
                         .as_ref()
                         .map_or(SelectionDirection::None, |state| state.selection_direction)
                     {
@@ -1732,7 +1871,35 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
                 }
             }
         }
+        self.retire_validation_notice();
+        let zoom = self.zoom();
+        if let Some(notice) = self.validation_notice.get_mut().as_mut() {
+            let mut overlay = genet_livery::LiveryPaintList::new(
+                paint_list_api::DeviceIntSize::new(css_width as i32, css_height as i32),
+                self.doc.generation(),
+            );
+            notice.bounds = self.doc.push_validation_notice(&mut overlay, &notice.message)
+                .map(|[x, y, w, h]| [x * zoom, y * zoom, w * zoom, h * zoom]);
+            let overlay = overlay.scaled_to(zoom, width, height);
+            let overlay = match paint_list_render::translate_paint_list(&overlay) {
+                Ok(scene) => scene,
+                Err(error) => {
+                    self.last_error = Some(format!("paint translation: {error}"));
+                    return Scene::new(width, height);
+                },
+            };
+            scene.append_fragment(netrender::SceneFragment::from_scene(overlay));
+        }
+        self.last_error = None;
         scene
+    }
+
+    fn try_frame(&mut self, width: u32, height: u32) -> Result<Scene, String> {
+        let scene = self.frame(width, height);
+        match &self.last_error {
+            Some(error) => Err(error.clone()),
+            None => Ok(scene),
+        }
     }
 
     fn scroll_by(&mut self, dx: f32, dy: f32) -> bool {
@@ -1776,8 +1943,10 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
     }
 
     fn pointer_down(&mut self, x: f32, y: f32) -> SessionClick {
+        self.pending_key_text = None;
         let (x, y) = self.to_css_point(x, y);
         self.editor_drag = None;
+        self.pressed_target = self.doc.hit_test(x, y);
         self.pressed_submit = self
             .doc
             .hit_test(x, y)
@@ -1816,6 +1985,8 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
 
     fn pointer_up(&mut self, x: f32, y: f32) -> SessionClick {
         let (x, y) = self.to_css_point(x, y);
+        let pressed_target = self.pressed_target.take();
+        if pressed_target.is_none() { self.pressed_submit = None; return SessionClick::Miss; }
         if self.editor_drag.is_some() {
             let _ = self.extend_editor_selection(x, y);
             self.editor_drag = None;
@@ -1834,9 +2005,14 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
             if let Some(submit) = released_submit
                 && Some(submit) == pressed_submit
             {
+                let position = self.submit_position(submit, x, y);
                 let _ = self.doc.click_at(x, y);
                 self.activate_hit(x, y);
-                self.submit_click(submit)
+                self.submit_click(submit, position)
+            } else if released_submit.is_some() || pressed_submit.is_some() {
+                SessionClick::Handled
+            } else if self.editor.is_some() {
+                SessionClick::Handled
             } else {
                 self.click_at_css(x, y)
             }
@@ -1851,44 +2027,22 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
         _repeat: bool,
     ) -> SessionEffect {
         if state == SessionButtonState::Released {
+            self.pending_key_text = None;
             return SessionEffect::Ignored;
         }
+        let unmodified = !modifiers.control && !modifiers.meta && !modifiers.alt;
+        self.pending_key_text = match &key {
+            SessionKey::Character(_) | SessionKey::Space => Some(!self.editor.as_ref().is_some_and(|editor| editor.composition.is_some())),
+            _ => None,
+        };
         match key {
-            SessionKey::Character(text)
-                if !modifiers.control && !modifiers.meta && !modifiers.alt =>
-            {
-                if self.insert_text(&text) {
-                    SessionEffect::Handled
-                } else {
-                    SessionEffect::Ignored
-                }
-            },
-            SessionKey::Space if self.insert_text(" ") => SessionEffect::Handled,
+            SessionKey::Character(_) | SessionKey::Space => SessionEffect::Ignored,
             SessionKey::Backspace if self.delete_backward() => SessionEffect::Handled,
             SessionKey::Delete if self.delete_forward() => SessionEffect::Handled,
             SessionKey::ArrowLeft if self.move_caret(-1) => SessionEffect::Handled,
             SessionKey::ArrowRight if self.move_caret(1) => SessionEffect::Handled,
-            SessionKey::Home if let Some(editor) = self.editor.as_ref() => {
-                let node = editor.node;
-                if self.write_control_selection(node, 0, 0, SelectionDirection::None) {
-                    SessionEffect::Handled
-                } else {
-                    SessionEffect::Ignored
-                }
-            },
-            SessionKey::End if let Some(editor) = self.editor.as_ref() => {
-                let node = editor.node;
-                let end = self
-                    .control_state(node)
-                    .map(|state| state.value.encode_utf16().count().min(u32::MAX as usize) as u32);
-                if end.is_some_and(|end| {
-                    self.write_control_selection(node, end, end, SelectionDirection::None)
-                }) {
-                    SessionEffect::Handled
-                } else {
-                    SessionEffect::Ignored
-                }
-            },
+            SessionKey::Home if self.edit_control(FormEditCommand::Home) => SessionEffect::Handled,
+            SessionKey::End if self.edit_control(FormEditCommand::End) => SessionEffect::Handled,
             SessionKey::Enter => {
                 if self
                     .editor
@@ -1900,8 +2054,22 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
                     } else {
                         SessionEffect::Ignored
                     }
-                } else if let Some(form) = self.active_form {
-                    SessionEffect::Submit(self.submission_for_form(form, &self.address))
+                } else if !modifiers.alt && !modifiers.control && !modifiers.meta && !modifiers.shift
+                    && let Some(node) = self.focused_node
+                    && self.is_submit_control(node) {
+                    let click = self.submit_click(node, (0, 0));
+                    self.effect_for_click(click)
+                } else if !modifiers.alt && !modifiers.control && !modifiers.meta && !modifiers.shift
+                    && let Some(node) = self.focused_node
+                    && self.doc.dom().form_control_implicit_submit_eligible(node)
+                    && !self.is_disabled_control(node)
+                    && let Some(form) = self.form_ancestor(node) {
+                    let click = match self.doc.dom().implicit_form_submission(form) {
+                        Ok(genet_scripted_dom::FormImplicitSubmission::SubmitButton(button)) => self.submit_form(form, Some(button), (0, 0)),
+                        Ok(genet_scripted_dom::FormImplicitSubmission::SubmitForm) => self.submit_form(form, None, (0, 0)),
+                        _ => SessionClick::Handled,
+                    };
+                    self.effect_for_click(click)
                 } else {
                     SessionEffect::Ignored
                 }
@@ -1929,11 +2097,18 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
         }
     }
 
+    fn keyboard_text_input(&mut self, text: &str) -> bool {
+        if self.pending_key_text.take() == Some(false) { return false; }
+        self.text_input(text)
+    }
+
     fn text_input(&mut self, text: &str) -> bool {
         self.insert_text(text)
     }
 
     fn ime_input(&mut self, ime: SessionIme) -> bool {
+        self.pending_key_text = None;
+        self.restore_live_editor();
         match ime {
             SessionIme::Enabled => self.editor.is_some(),
             SessionIme::Preedit { text, .. } => {
@@ -1956,7 +2131,11 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
 
     fn focus_input(&mut self, focused: bool) {
         if !focused {
+            self.pending_key_text = None;
+            self.commit_active_edit();
             self.editor_drag = None;
+            self.pressed_target = None;
+            self.pressed_submit = None;
             self.focused_node = None;
             self.editor = None;
             self.active_form = None;
@@ -1964,6 +2143,7 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
     }
 
     fn focus_move(&mut self, direction: SessionFocusDirection) -> bool {
+        self.pending_key_text = None;
         let mut focusable = Vec::new();
         self.collect_focusable(self.doc.dom().document(), &mut focusable);
         if focusable.is_empty() {
@@ -1981,6 +2161,9 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
             }),
         };
         let node = focusable[next];
+        if self.focused_node.is_some_and(|focused| focused != node) {
+            self.commit_active_edit();
+        }
         if self.is_disabled_control(node) {
             self.focused_node = None;
             self.editor = None;
@@ -2002,15 +2185,18 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
     }
 
     fn cancel_input(&mut self) -> bool {
+        self.pending_key_text = None;
+        self.pressed_target = None;
+        self.pressed_submit = None;
         self.editor_drag = None;
-        let Some(editor) = self.editor.as_mut() else {
-            return false;
-        };
-        editor.composition.take().is_some()
+        let dismissed = self.validation_notice.get_mut().take().is_some();
+        let cancelled = self.editor.as_mut()
+            .is_some_and(|editor| editor.composition.take().is_some());
+        dismissed || cancelled
     }
 
     fn editable_focus(&self) -> bool {
-        self.editor.is_some()
+        self.focused_node.is_some_and(|node| self.editable_is_writable(node))
     }
 
     fn cursor_at(&self, x: f32, y: f32) -> SessionCursor {
@@ -2034,13 +2220,23 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
     }
 
     fn form_submission(&mut self, action: &str) -> SessionFormSubmission {
-        self.active_form.map_or_else(
-            || SessionFormSubmission {
-                action: action.to_owned(),
-                ..Default::default()
-            },
-            |form| self.submission_for_form(form, action),
-        )
+        if let Some(submission) = &self.latest_submission { return submission.clone(); }
+        let Some(form) = self.active_form else { return SessionFormSubmission {
+            action: action.to_owned(), ..Default::default()
+        }; };
+        let dom = self.doc.dom();
+        let encoding = genet_scripted_dom::form_encoding::select_form_encoding(self.attribute(form, "accept-charset"),
+            dom.document_encoding(dom.document()).map(|e| e.encoding)
+                .unwrap_or(genet_scripted_dom::form_encoding::UTF_8));
+        let fields = dom.form_submission_entries(form, None, encoding.name(), (0, 0)).unwrap_or_default()
+            .into_iter().map(|entry| (entry.name, match entry.value {
+                genet_scripted_dom::FormEntryValue::Text(value) => value,
+                genet_scripted_dom::FormEntryValue::File { file, .. } => file.name,
+            })).collect();
+        SessionFormSubmission { action: self.attribute(form, "action").filter(|v| !v.is_empty()).unwrap_or(action).to_owned(),
+            method: if self.attribute(form, "method").is_some_and(|v| v.eq_ignore_ascii_case("post")) {
+                SessionFormMethod::Post
+            } else { SessionFormMethod::Get }, fields }
     }
 
     fn text_target(&self, text: &str) -> Option<SessionTextTarget> {
@@ -2112,7 +2308,7 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
             .links()
             .into_iter()
             .map(|link| SessionLink {
-                url: link.url,
+                url: genet_host_api::navigation::resolve_href(&self.resolution_base(), &link.url),
                 rect: link.rect.map(|value| self.to_presentation_length(value)),
             })
             .collect()
@@ -2314,6 +2510,23 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
                     links,
                 )
             },
+            None
+                if self.editor.as_ref().is_some_and(|editor| {
+                    self.focused_node == Some(editor.node)
+                        && self.doc.dom().is_live(editor.node)
+                        && self.editable_kind(editor.node) == Some(editor.kind)
+                        && self
+                            .doc
+                            .dom()
+                            .form_control_editing_value(editor.node)
+                            .is_some_and(|editing| {
+                                editing.selection_start.is_some()
+                                    && editing.selection_end.is_some()
+                            })
+                }) =>
+            {
+                None
+            },
             None => semantic_clip_from_dom(&self.address, self.doc.dom()),
         }?;
         clip.artifacts.push(DocumentClipArtifact {
@@ -2336,5 +2549,423 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
 
     fn as_any(&mut self) -> &mut dyn Any {
         self
+    }
+}
+
+#[cfg(all(test, feature = "livery"))]
+mod phase_c_document_encoding_fixtures {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Clone, Default)]
+    struct Pages {
+        requests: Arc<Mutex<Vec<String>>>,
+    }
+    impl ResourceFetcher for Pages {
+        fn fetch_request(
+            &self,
+            _request: &genet_host_api::ResourceRequest,
+        ) -> Option<genet_host_api::ResourceFetchResponse> {
+            None
+        }
+
+        fn fetch(&self, url: &str) -> Option<Vec<u8>> {
+            self.fetch_response(url).map(|response| response.bytes)
+        }
+        fn fetch_response(&self, url: &str) -> Option<ResourceResponse> {
+            self.requests.lock().unwrap().push(url.into());
+            let (header, bytes): (&str, &[u8]) = match url.rsplit('/').next()? {
+                "parent" => (
+                    "text/html;charset=shift_jis",
+                    b"<input id=v value='\x82\xA0'>",
+                ),
+                "frames" => (
+                    "text/html;charset=utf-8",
+                    b"<iframe src=one></iframe><iframe src=two></iframe>",
+                ),
+                "one" => (
+                    "text/html;charset=shift_jis",
+                    b"<input id=v value='\x82\xA0'>",
+                ),
+                "two" => ("text/html;charset=euc-kr", b"<input id=v value='\xB0\xA1'>"),
+                "fallback" => ("text/html", b"<input id=v value=\xE9>"),
+                _ => return None,
+            };
+            Some(ResourceResponse {
+                final_url: if url.ends_with("/one") || url.ends_with("/two") {
+                    "https://encoding.test/final".into()
+                } else {
+                    url.into()
+                },
+                content_type: Some(header.into()),
+                bytes: bytes.to_vec(),
+            })
+        }
+    }
+    // Test-local adapter reads metadata on the actual retained Document.
+    fn document_encoding_adapter(dom: &genet_scripted_dom::ScriptedDom) -> Option<&'static str> {
+        dom.document_encoding(dom.document())
+            .map(|e| e.encoding.name())
+    }
+    fn value(dom: &genet_scripted_dom::ScriptedDom) -> String {
+        let node = element_with_id(dom, "v").expect("native input");
+        dom.form_control_state(node)
+            .expect("native state")
+            .value
+            .clone()
+    }
+    // Test-local adapter configures the public additive engine policy.
+    fn configured_native_engine() -> LiverySessionEngine<Pages> {
+        LiverySessionEngine::new(Pages::default()).with_html_decode_options(HtmlDecodeOptions {
+            fallback: genet_scripted_dom::form_encoding::Encoding::for_label(b"windows-1252")
+                .unwrap(),
+            ..Default::default()
+        })
+    }
+    #[test]
+    fn phase_c_document_encoding_native_configured_fallback() {
+        let engine = configured_native_engine();
+        let session = engine
+            .spawn(
+                &SessionSpawnRequest::new("https://encoding.test/fallback").with_viewport(800, 600),
+            )
+            .expect("configured native spawn");
+        let document = session
+            .as_any_ref()
+            .downcast_ref::<LiveryDocumentSession>()
+            .unwrap();
+        assert_eq!(value(document.doc.dom()), "é");
+        assert_eq!(
+            document_encoding_adapter(document.doc.dom()),
+            Some("windows-1252")
+        );
+    }
+    #[test]
+    fn phase_c_document_encoding_native_direct_load() {
+        let pages = Pages::default();
+        let engine = LiverySessionEngine::new(pages);
+        let session = engine
+            .spawn(
+                &SessionSpawnRequest::new("https://encoding.test/parent").with_viewport(800, 600),
+            )
+            .expect("spawn");
+        let document = session
+            .as_any_ref()
+            .downcast_ref::<LiveryDocumentSession>()
+            .expect("native Livery session");
+        assert_eq!(value(document.doc.dom()), "あ", "native initial real bytes");
+        assert_eq!(
+            document_encoding_adapter(document.doc.dom()),
+            Some("Shift_JIS")
+        );
+    }
+    #[test]
+    fn phase_c_document_encoding_native_prepared_load() {
+        let pages = Pages::default();
+        let request =
+            SessionSpawnRequest::new("https://encoding.test/parent").with_viewport(800, 600);
+        let preparation = LiveryResourcePreparation::new(
+            &request,
+            pages.fetch_response(&request.address).unwrap(),
+            ResourceLimits::default(),
+        );
+        let engine = LiverySessionEngine::new(pages);
+        let session = engine
+            .spawn_prepared(&request, preparation)
+            .expect("prepared spawn");
+        let document = session
+            .as_any_ref()
+            .downcast_ref::<LiveryDocumentSession>()
+            .unwrap();
+        assert_eq!(
+            value(document.doc.dom()),
+            "あ",
+            "prepared native real bytes"
+        );
+        assert_eq!(
+            document_encoding_adapter(document.doc.dom()),
+            Some("Shift_JIS")
+        );
+    }
+    #[test]
+    fn phase_c_document_encoding_native_unicode_body_stays_unicode() {
+        let engine = LiverySessionEngine::new(Pages::default());
+        let request = SessionSpawnRequest::new("https://encoding.test/body")
+            .with_viewport(800, 600)
+            .with_body("<meta charset=shift_jis><input id=v value='é'>")
+            .with_content_type("text/html;charset=shift_jis");
+        let session = engine.spawn(&request).expect("Unicode body spawn");
+        let document = session
+            .as_any_ref()
+            .downcast_ref::<LiveryDocumentSession>()
+            .unwrap();
+        assert_eq!(value(document.doc.dom()), "é");
+        assert_eq!(document_encoding_adapter(document.doc.dom()), Some("UTF-8"));
+    }
+    #[test]
+    fn phase_c_document_encoding_native_frames_keep_requested_response_identity() {
+        let pages = Pages::default();
+        let requests = pages.requests.clone();
+        let engine = LiverySessionEngine::new(pages);
+        let session = engine
+            .spawn(
+                &SessionSpawnRequest::new("https://encoding.test/frames").with_viewport(800, 600),
+            )
+            .expect("frame spawn");
+        let document = session
+            .as_any_ref()
+            .downcast_ref::<LiveryDocumentSession>()
+            .unwrap();
+        assert_eq!(document.frames.len(), 2);
+        let one = document.frames[0]
+            .document
+            .as_ref()
+            .expect("first loaded frame");
+        let two = document.frames[1]
+            .document
+            .as_ref()
+            .expect("second loaded frame");
+        assert_eq!(
+            value(one.dom()),
+            "あ",
+            "first raw response despite shared final URL"
+        );
+        assert_eq!(
+            value(two.dom()),
+            "가",
+            "second raw response despite shared final URL"
+        );
+        assert_eq!(document_encoding_adapter(one.dom()), Some("Shift_JIS"));
+        assert_eq!(document_encoding_adapter(two.dom()), Some("EUC-KR"));
+        let requests = requests.lock().unwrap();
+        assert_eq!(
+            requests.iter().filter(|url| url.ends_with("/one")).count(),
+            1,
+            "no second frame GET"
+        );
+        assert_eq!(
+            requests.iter().filter(|url| url.ends_with("/two")).count(),
+            1,
+            "no second frame GET"
+        );
+    }
+    #[test]
+    fn phase_c_document_encoding_native_prepared_frames_keep_raw_response() {
+        let pages = Pages::default();
+        let request =
+            SessionSpawnRequest::new("https://encoding.test/frames").with_viewport(800, 600);
+        let mut preparation = LiveryResourcePreparation::new(
+            &request,
+            pages.fetch_response(&request.address).unwrap(),
+            ResourceLimits::default(),
+        );
+        for pending in preparation.pending_requests() {
+            let response = pages.fetch_response(&pending.url).unwrap();
+            preparation.provide_response(pending, response).unwrap();
+        }
+        let engine = LiverySessionEngine::new(pages);
+        let session = engine
+            .spawn_prepared(&request, preparation)
+            .expect("prepared frames");
+        let document = session
+            .as_any_ref()
+            .downcast_ref::<LiveryDocumentSession>()
+            .unwrap();
+        assert_eq!(
+            value(document.frames[0].document.as_ref().unwrap().dom()),
+            "あ"
+        );
+        assert_eq!(
+            value(document.frames[1].document.as_ref().unwrap().dom()),
+            "가"
+        );
+    }
+    #[derive(Clone, Default)]
+    struct EmptyFrames {
+        requests: Arc<Mutex<Vec<String>>>,
+    }
+    impl ResourceFetcher for EmptyFrames {
+        fn fetch_request(
+            &self,
+            _request: &genet_host_api::ResourceRequest,
+        ) -> Option<genet_host_api::ResourceFetchResponse> {
+            None
+        }
+
+        fn fetch(&self, url: &str) -> Option<Vec<u8>> {
+            self.fetch_response(url).map(|response| response.bytes)
+        }
+        fn fetch_response(&self, url: &str) -> Option<ResourceResponse> {
+            self.requests.lock().unwrap().push(url.to_owned());
+            match url {
+                "https://encoding.test/empty-parent" => Some(ResourceResponse {
+                    final_url: url.to_owned(),
+                    content_type: Some("text/html;charset=utf-8".into()),
+                    bytes: b"<iframe src=empty></iframe>".to_vec(),
+                }),
+                "https://encoding.test/empty" => Some(ResourceResponse {
+                    final_url: "https://encoding.test/final-empty".into(),
+                    content_type: Some("text/html;charset=shift_jis".into()),
+                    bytes: Vec::new(),
+                }),
+                _ => None,
+            }
+        }
+    }
+    fn assert_empty_frame_document(
+        session: &dyn DocumentSession<Scene>,
+        requests: &Arc<Mutex<Vec<String>>>,
+    ) {
+        let requests = requests.lock().unwrap();
+        assert_eq!(
+            requests
+                .iter()
+                .filter(|url| url.as_str() == "https://encoding.test/empty-parent")
+                .count(),
+            1,
+            "one parent fetch"
+        );
+        assert_eq!(
+            requests
+                .iter()
+                .filter(|url| url.as_str() == "https://encoding.test/empty")
+                .count(),
+            1,
+            "one requested empty-frame fetch/provision"
+        );
+        assert_eq!(
+            requests.len(),
+            2,
+            "no redirect destination or duplicate fetch"
+        );
+        drop(requests);
+        let session = session
+            .as_any_ref()
+            .downcast_ref::<LiveryDocumentSession>()
+            .unwrap();
+        assert_eq!(session.frames.len(), 1);
+        let frame = &session.frames[0];
+        let document = frame
+            .document
+            .as_ref()
+            .expect("successful empty byte response has a retained Document");
+        let encoding = document
+            .dom()
+            .document_encoding(document.dom().document())
+            .expect("actual loaded Document metadata");
+        assert_eq!(encoding.encoding.name(), "Shift_JIS");
+        assert_eq!(encoding.confidence.as_str(), "certain");
+        let context = session
+            .contexts
+            .get(frame.context)
+            .expect("loaded frame context");
+        assert_eq!(context.document().url, "https://encoding.test/final-empty");
+        assert!(!context.document().initial_about_blank);
+        assert_eq!(frame.outcome, super::super::frames::FrameOutcome::Load);
+    }
+    #[test]
+    fn phase_c_document_encoding_revision_native_direct_empty_frame() {
+        let pages = EmptyFrames::default();
+        let requests = pages.requests.clone();
+        let engine = LiverySessionEngine::new(pages);
+        let session = engine
+            .spawn(
+                &SessionSpawnRequest::new("https://encoding.test/empty-parent")
+                    .with_viewport(800, 600),
+            )
+            .expect("direct empty frame spawn");
+        assert_empty_frame_document(session.as_ref(), &requests);
+    }
+    #[test]
+    fn phase_c_document_encoding_revision_native_prepared_empty_frame() {
+        let pages = EmptyFrames::default();
+        let requests = pages.requests.clone();
+        let request =
+            SessionSpawnRequest::new("https://encoding.test/empty-parent").with_viewport(800, 600);
+        let mut preparation = LiveryResourcePreparation::new(
+            &request,
+            pages.fetch_response(&request.address).unwrap(),
+            ResourceLimits::default(),
+        );
+        let pending = preparation.pending_requests();
+        assert_eq!(pending.len(), 1, "one empty frame provision request");
+        assert_eq!(pending[0].url, "https://encoding.test/empty");
+        for pending in pending {
+            let response = pages.fetch_response(&pending.url).unwrap();
+            preparation.provide_response(pending, response).unwrap();
+        }
+        assert!(
+            preparation.pending_requests().is_empty(),
+            "successful empty response satisfies provision"
+        );
+        let engine = LiverySessionEngine::new(pages);
+        let session = engine
+            .spawn_prepared(&request, preparation)
+            .expect("prepared empty frame spawn");
+        assert_empty_frame_document(session.as_ref(), &requests);
+    }
+}
+
+#[cfg(all(test, feature = "livery"))]
+mod phase_c_t5_editor_clip_fix2_controls {
+    use super::*;
+
+    #[derive(Clone)]
+    struct NoFetch;
+    impl ResourceFetcher for NoFetch {
+        fn fetch_request(
+            &self,
+            _request: &genet_host_api::ResourceRequest,
+        ) -> Option<genet_host_api::ResourceFetchResponse> {
+            None
+        }
+
+        fn fetch(&self, _: &str) -> Option<Vec<u8>> { None }
+    }
+
+    fn editor_owns_clip_context(page: &str, expected_page_text: &str) {
+        let body = format!(r#"<html><head><style>
+            html, body {{ margin: 0; padding: 0; }}
+            textarea {{ display: block; width: 220px; min-height: 40px; }}
+            </style></head><body>{page}<textarea>cedar</textarea></body></html>"#);
+        let request = SessionSpawnRequest::new("https://clip.test/page")
+            .with_body(&body).with_viewport(400, 240);
+        let mut boxed = LiverySessionEngine::new(NoFetch).spawn(&request).unwrap();
+        let session = boxed.as_any().downcast_mut::<LiveryDocumentSession>().unwrap();
+        session.frame(400, 240);
+        let initial = session.clip().expect("whole page clip before editor focus");
+        assert!(initial.text.contains(expected_page_text), "initial page clip: {:?}", initial.text);
+        assert_eq!(initial.artifacts[0].bytes, body.as_bytes());
+        assert!(session.focus_move(SessionFocusDirection::Forward));
+        let node = session.focused_node.expect("focus reaches textarea");
+        let caret = session.doc.dom().form_control_editing_value(node).unwrap();
+        assert!(caret.selection_start.is_some());
+        assert_eq!(caret.selection_start, caret.selection_end);
+        assert!(session.doc.text_selection().is_none());
+        assert!(session.clip().is_none(), "collapsed editor caret remains control local");
+        session.frame(400, 240);
+        let target = session.text_target("cedar").expect("focused editor has refreshed retained text endpoints");
+        assert_eq!(session.pointer_down(target.focus[0], target.focus[1]), SessionClick::Handled);
+        assert!(session.pointer_move(target.anchor[0], target.anchor[1]));
+        assert_eq!(session.pointer_up(target.anchor[0], target.anchor[1]), SessionClick::Handled);
+        let selected = session.doc.dom().form_control_editing_value(node).unwrap();
+        assert!(selected.selection_start < selected.selection_end);
+        assert!(session.doc.text_selection().is_none());
+        assert!(session.clip().is_none(), "editor selection remains control local");
+        session.focus_input(false);
+        let after_blur = session.clip().expect("whole page clip returns after blur");
+        assert_eq!(after_blur.text, initial.text);
+        assert_eq!(after_blur.links, initial.links);
+        assert_eq!(after_blur.artifacts[0].bytes, body.as_bytes());
+    }
+
+    #[test]
+    fn phase_c_t5_editor_clip_fix2_short_page_and_blur() {
+        editor_owns_clip_context("<p>useful page</p>", "useful page");
+    }
+
+    #[test]
+    fn phase_c_t5_editor_clip_fix2_article_page_and_blur() {
+        editor_owns_clip_context("<article><h1>Finding</h1><p>useful page</p></article>", "Finding");
     }
 }

@@ -26,10 +26,26 @@ mod expr;
 mod stmt;
 
 pub fn parse(tokens: Vec<Token>, src_len: usize) -> Result<TranslationUnit, Error> {
+    parse_with_fragment_output_alias(tokens, src_len, false)
+}
+
+/// Parse a fragment shader with WebGL 1's primary draw-buffer alias enabled.
+/// The alias is recognized as an indexed expression, after lexing comments
+/// and whitespace, so the original source and spans remain available.
+pub(crate) fn parse_fragment(tokens: Vec<Token>, src_len: usize) -> Result<TranslationUnit, Error> {
+    parse_with_fragment_output_alias(tokens, src_len, true)
+}
+
+fn parse_with_fragment_output_alias(
+    tokens: Vec<Token>,
+    src_len: usize,
+    fragment_output_alias: bool,
+) -> Result<TranslationUnit, Error> {
     let mut p = Parser {
         tokens,
         idx: 0,
         src_len,
+        fragment_output_alias,
         struct_indices: std::collections::HashMap::new(),
     };
     let start = p.peek_span().start;
@@ -51,6 +67,7 @@ struct Parser {
     tokens: Vec<Token>,
     idx: usize,
     src_len: usize,
+    fragment_output_alias: bool,
     /// User-defined struct names seen so far at file scope,
     /// mapped to their index in the translation unit's struct
     /// registry (assigned in source order). `type_spec` accepts

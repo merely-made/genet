@@ -4,12 +4,13 @@
 
 //! `performance`: High Resolution Time, User Timing and the Performance Timeline.
 //!
-//! A pure JS bootstrap with no native sink. The clock is the **timers' virtual
-//! clock** (`__virtualNow`, from the event-loop bootstrap), not wall time, so a
-//! harness run under the drive loop's virtual clock stays deterministic; a
-//! per-read sub-tick keeps `now()` strictly increasing and positive, which
-//! hr-time requires. `timeOrigin` is the engine's `Date.now()` at install, which
-//! is what the hr-time tests compare against.
+//! Every runtime in a process reads one [`SharedClock`] (hr-time's "shared
+//! monotonic clock"): a system-wide monotonic source that pauses during system
+//! sleep, one estimate of where the Unix epoch falls on it, and an optional
+//! skip a test harness adds instead of sleeping to a timer's due time. Each
+//! realm's time origin is a reading of it; `performance.now()`, `timeOrigin`
+//! and entry times are coarsened to the clock's [`TimeResolution`], and the
+//! engine's `Date` reads the same clock (see `ScriptEngine::set_date_source`).
 //!
 //! `PerformanceObserver` records are delivered as a task on the drive loop (a
 //! zero-delay timer), so a callback never runs inside `mark()`.
@@ -19,25 +20,307 @@
 //! `performance.timing` / `performance.navigation` are present as the legacy
 //! zero-valued shapes `performance.toJSON()` is specified to carry.
 
-use script_engine_api::ScriptEngine;
+use std::cell::RefCell;
+use std::sync::{Arc, Mutex, OnceLock};
+
+use script_engine_api::{CallCx, NativeFn, ScriptEngine};
+
+use crate::HostState;
+
+/// hr-time's coarsening resolutions, in milliseconds. The spec allows "a
+/// higher implementation-defined value", so a host may coarsen further but
+/// never below the spec's 100 µs (5 µs when cross-origin isolated).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TimeResolution {
+    pub default_ms: f64,
+    pub isolated_ms: f64,
+}
+
+impl TimeResolution {
+    pub const SPEC: Self = Self {
+        default_ms: 0.1,
+        isolated_ms: 0.005,
+    };
+
+    fn clamped(self) -> Self {
+        Self {
+            default_ms: self.default_ms.max(Self::SPEC.default_ms),
+            isolated_ms: self.isolated_ms.max(Self::SPEC.isolated_ms),
+        }
+    }
+}
+
+impl Default for TimeResolution {
+    fn default() -> Self {
+        Self::SPEC
+    }
+}
+
+type Reader = Arc<dyn Fn() -> f64 + Send + Sync>;
+
+struct ClockState {
+    read: Reader,
+    /// Wall-clock epoch milliseconds minus the monotonic reading, both taken
+    /// once when the clock was anchored.
+    epoch_offset_ms: f64,
+    /// Waits a harness skipped instead of sleeping; zero for a product clock.
+    skipped_ms: Mutex<f64>,
+    skips: bool,
+    resolution: TimeResolution,
+}
+
+/// The process's shared monotonic clock. Cheap to clone and `Send`, so one
+/// clock reaches every runtime, worker thread and child realm.
+#[derive(Clone)]
+pub struct SharedClock(Arc<ClockState>);
+
+impl SharedClock {
+    /// The process-wide clock: the system monotonic source, anchored once.
+    pub fn process() -> Self {
+        static PROCESS: OnceLock<SharedClock> = OnceLock::new();
+        PROCESS
+            .get_or_init(|| Self::anchored(Arc::new(system_monotonic_ms), 0.0, false))
+            .clone()
+    }
+
+    /// A clock for a test harness: the system source plus the waits the
+    /// harness skips (see [`skip`](Self::skip)), so synchronous work still
+    /// takes real time while timers fire without sleeping.
+    pub fn skipping() -> Self {
+        Self::anchored(Arc::new(system_monotonic_ms), 0.0, true)
+    }
+
+    /// A clock over a controlled reader, for an embedder or a deterministic
+    /// test. `epoch_ms_at_zero` is the Unix time the reader's zero stands for.
+    pub fn from_reader(epoch_ms_at_zero: f64, reader: impl Fn() -> f64 + Send + Sync + 'static) -> Self {
+        Self(Arc::new(ClockState {
+            read: Arc::new(reader),
+            epoch_offset_ms: epoch_ms_at_zero,
+            skipped_ms: Mutex::new(0.0),
+            skips: true,
+            resolution: TimeResolution::SPEC,
+        }))
+    }
+
+    /// Rebuild a clock in another process from [`anchor`](Self::anchor). The
+    /// system source is system-wide, so readings line up with the parent's.
+    pub fn from_anchor(epoch_offset_ms: f64, skipped_ms: f64) -> Self {
+        Self(Arc::new(ClockState {
+            read: Arc::new(system_monotonic_ms),
+            epoch_offset_ms,
+            skipped_ms: Mutex::new(skipped_ms),
+            skips: false,
+            resolution: TimeResolution::SPEC,
+        }))
+    }
+
+    fn anchored(read: Reader, skipped_ms: f64, skips: bool) -> Self {
+        let mono = read();
+        let wall = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs_f64() * 1_000.0)
+            .unwrap_or(0.0);
+        Self(Arc::new(ClockState {
+            read,
+            epoch_offset_ms: wall - mono,
+            skipped_ms: Mutex::new(skipped_ms),
+            skips,
+            resolution: TimeResolution::SPEC,
+        }))
+    }
+
+    /// The same clock with a coarser resolution; values below the spec's are
+    /// raised to it.
+    pub fn with_resolution(&self, resolution: TimeResolution) -> Self {
+        let state = &self.0;
+        Self(Arc::new(ClockState {
+            read: state.read.clone(),
+            epoch_offset_ms: state.epoch_offset_ms,
+            skipped_ms: Mutex::new(self.skipped()),
+            skips: state.skips,
+            resolution: resolution.clamped(),
+        }))
+    }
+
+    /// The unsafe (uncoarsened) shared current time, in milliseconds.
+    pub fn now_ms(&self) -> f64 {
+        (self.0.read)() + self.skipped()
+    }
+
+    /// The Unix-epoch milliseconds `Date` reports for the current time.
+    pub fn epoch_now_ms(&self) -> f64 {
+        self.now_ms() + self.0.epoch_offset_ms
+    }
+
+    /// Add a skipped wait. A product clock ignores this.
+    pub fn skip(&self, ms: f64) {
+        if self.0.skips && ms > 0.0 {
+            *self.0.skipped_ms.lock().expect("clock skip") += ms;
+        }
+    }
+
+    /// Skip just far enough that [`now_ms`](Self::now_ms) reaches `moment_ms`.
+    pub fn skip_to(&self, moment_ms: f64) {
+        self.skip(moment_ms - self.now_ms());
+    }
+
+    pub fn skips(&self) -> bool {
+        self.0.skips
+    }
+
+    /// What another process needs to rebuild this clock.
+    pub fn anchor(&self) -> (f64, f64) {
+        (self.0.epoch_offset_ms, self.skipped())
+    }
+
+    pub fn resolution(&self) -> TimeResolution {
+        self.0.resolution
+    }
+
+    /// hr-time "coarsen time": floor to the resolution, no jitter.
+    pub fn coarsen(&self, moment_ms: f64, isolated: bool) -> f64 {
+        let step_us = if isolated {
+            self.0.resolution.isolated_ms
+        } else {
+            self.0.resolution.default_ms
+        } * 1_000.0;
+        // Work in microseconds so a value already on the grid stays on it.
+        let ticks = (moment_ms * 1_000.0 / step_us + 1e-9).floor();
+        ticks * step_us / 1_000.0
+    }
+
+    /// A moment as a coarsened Unix-epoch timestamp (`timeOrigin`).
+    pub fn coarsen_epoch(&self, moment_ms: f64, isolated: bool) -> f64 {
+        self.coarsen(moment_ms + self.0.epoch_offset_ms, isolated)
+    }
+
+    fn skipped(&self) -> f64 {
+        *self.0.skipped_ms.lock().expect("clock skip")
+    }
+}
+
+impl Default for SharedClock {
+    fn default() -> Self {
+        Self::process()
+    }
+}
+
+/// System-wide monotonic milliseconds that exclude time the system slept.
+#[cfg(windows)]
+fn system_monotonic_ms() -> f64 {
+    use windows_sys::Win32::System::WindowsProgramming::QueryUnbiasedInterruptTimePrecise;
+    let mut ticks = 0u64;
+    // SAFETY: writes one u64 through a valid pointer.
+    unsafe { QueryUnbiasedInterruptTimePrecise(&mut ticks) };
+    ticks as f64 / 10_000.0
+}
+
+#[cfg(all(unix, not(target_vendor = "apple")))]
+fn system_monotonic_ms() -> f64 {
+    clock_ms(libc::CLOCK_MONOTONIC)
+}
+
+#[cfg(target_vendor = "apple")]
+fn system_monotonic_ms() -> f64 {
+    clock_ms(libc::CLOCK_UPTIME_RAW)
+}
+
+#[cfg(unix)]
+fn clock_ms(id: libc::clockid_t) -> f64 {
+    let mut ts = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    // SAFETY: writes one timespec through a valid pointer.
+    unsafe { libc::clock_gettime(id, &mut ts) };
+    ts.tv_sec as f64 * 1_000.0 + ts.tv_nsec as f64 / 1_000_000.0
+}
+
+/// Elsewhere (wasm) the embedder supplies its clock through
+/// [`SharedClock::from_reader`]; this fallback only keeps reads monotonic.
+#[cfg(not(any(windows, unix)))]
+fn system_monotonic_ms() -> f64 {
+    static START: OnceLock<std::time::Instant> = OnceLock::new();
+    START.get_or_init(std::time::Instant::now).elapsed().as_secs_f64() * 1_000.0
+}
+
+fn clock_from_call<E: ScriptEngine>(cx: &E::CallCx<'_>) -> Option<SharedClock> {
+    let data = cx.host_data()?;
+    let host = data.downcast_ref::<RefCell<HostState>>()?;
+    let agent = host.borrow().agent.upgrade()?;
+    let clock = agent.borrow().clock.clone();
+    Some(clock)
+}
+
+fn isolated_arg<E: ScriptEngine>(cx: &mut E::CallCx<'_>) -> Result<bool, E::Error> {
+    let value = cx.arg(0);
+    Ok(cx.value_to_string(&value)? == "true")
+}
+
+/// `__hrNow(isolated)` → the coarsened shared current time.
+struct HrNow;
+impl<E: ScriptEngine> NativeFn<E> for HrNow {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let isolated = isolated_arg::<E>(cx)?;
+        let now = clock_from_call::<E>(cx).map_or(0.0, |c| c.coarsen(c.now_ms(), isolated));
+        cx.make_string(&now.to_string())
+    }
+}
+
+/// `__hrMoment()` → the uncoarsened shared current time: a realm's time origin.
+struct HrMoment;
+impl<E: ScriptEngine> NativeFn<E> for HrMoment {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let now = clock_from_call::<E>(cx).map_or(0.0, |c| c.now_ms());
+        cx.make_string(&now.to_string())
+    }
+}
+
+/// `__hrEpoch(isolated, moment)` → `moment` as a coarsened Unix-epoch timestamp.
+struct HrEpoch;
+impl<E: ScriptEngine> NativeFn<E> for HrEpoch {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let isolated = isolated_arg::<E>(cx)?;
+        let moment = cx.arg(1);
+        let moment = cx.value_to_number(&moment)?;
+        let epoch = clock_from_call::<E>(cx).map_or(0.0, |c| c.coarsen_epoch(moment, isolated));
+        cx.make_string(&epoch.to_string())
+    }
+}
 
 pub(crate) fn install_timing_surface<E: ScriptEngine>(
     engine: &mut crate::Surface<'_, '_, E>,
 ) -> Result<(), crate::SurfaceError<E::Error>> {
+    engine.set_function::<HrNow>("__hrNow", 1)?;
+    engine.set_function::<HrMoment>("__hrMoment", 0)?;
+    engine.set_function::<HrEpoch>("__hrEpoch", 2)?;
     engine.eval(TIMING_BOOTSTRAP)?;
     Ok(())
 }
 
 const TIMING_BOOTSTRAP: &str = r#"
 (function() {
-  var timeOrigin = Date.now();
-  // A strictly increasing sub-tick on top of the timers' clock: hr-time requires
-  // now() > 0 and a non-negative difference between consecutive reads, which a
-  // clock that only moves when a timer fires cannot give.
-  var subTick = 0;
+  // HTML's crossOriginIsolated: no realm here has the COOP/COEP-backed
+  // capability yet, so it is false until a host grants it.
+  if (!('crossOriginIsolated' in globalThis)) {
+    Object.defineProperty(globalThis, 'crossOriginIsolated', {
+      configurable: true, enumerable: true, get: function() { return false; }
+    });
+  }
+  var readHrNow = __hrNow;
+  var readHrEpoch = __hrEpoch;
+  // This realm's time origin: the shared clock when its global was created.
+  var origin = Number(__hrMoment());
+  function isolated() { return globalThis.crossOriginIsolated === true; }
+  var timeOrigin = Number(readHrEpoch(isolated(), origin));
+  var schedulePerformanceTask = globalThis.setTimeout;
+  var reportPerformanceException = globalThis.__reportListenerException;
+  var lastNow = 0;
   function now() {
-    subTick += 0.001;
-    return globalThis.__virtualNow() + subTick;
+    var elapsed = Number(readHrNow(isolated())) - origin;
+    // A configured reader may briefly regress; never report time going back.
+    if (isFinite(elapsed) && elapsed > lastNow) lastNow = elapsed;
+    return lastNow;
   }
 
   function defineTag(ctor, name) {
@@ -59,6 +342,10 @@ const TIMING_BOOTSTRAP: &str = r#"
   };
   defineTag(PerformanceEntry, 'PerformanceEntry');
   globalThis.PerformanceEntry = PerformanceEntry;
+  // Not [Serializable]: postMessage / structuredClone of an entry is a DataCloneError.
+  if (typeof globalThis.__sc_registerUncloneable === 'function') {
+    globalThis.__sc_registerUncloneable(PerformanceEntry, 'PerformanceEntry');
+  }
 
   function PerformanceMark(name, options) {
     var startTime = now();
@@ -116,7 +403,7 @@ const TIMING_BOOTSTRAP: &str = r#"
     deliveryScheduled = true;
     // The performance timeline task source: never run a callback synchronously
     // inside mark()/measure().
-    setTimeout(function() {
+    schedulePerformanceTask(function() {
       deliveryScheduled = false;
       var snapshot = observers.slice();
       for (var i = 0; i < snapshot.length; i++) {
@@ -126,7 +413,7 @@ const TIMING_BOOTSTRAP: &str = r#"
         o._buffer = [];
         var dropped = o._dropped; o._dropped = 0;
         try { o._callback.call(o, new PerformanceObserverEntryList(records), o, { droppedEntriesCount: dropped }); }
-        catch (ex) { globalThis.__reportListenerException(ex); }
+        catch (ex) { reportPerformanceException(ex); }
       }
     }, 0);
   }
@@ -232,9 +519,11 @@ const TIMING_BOOTSTRAP: &str = r#"
     this._buffer = [];
     return out;
   };
+  // [SameObject]: one frozen array per realm.
+  var SUPPORTED_FROZEN = Object.freeze(SUPPORTED.slice());
   Object.defineProperty(PerformanceObserver, 'supportedEntryTypes', {
     configurable: true,
-    get: function() { return Object.freeze(SUPPORTED.slice()); }
+    get: function() { return SUPPORTED_FROZEN; }
   });
   defineTag(PerformanceObserver, 'PerformanceObserver');
   globalThis.PerformanceObserver = PerformanceObserver;
@@ -383,3 +672,55 @@ const TIMING_BOOTSTRAP: &str = r#"
   globalThis.performance = new Performance();
 })();
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn coarsening_floors_to_the_spec_grid() {
+        let clock = SharedClock::from_reader(0.0, || 0.0);
+        assert_eq!(clock.coarsen(12.5, false), 12.5);
+        assert_eq!(clock.coarsen(12.5999, false), 12.5);
+        assert_eq!(clock.coarsen(12.5049, true), 12.5);
+        assert_eq!(clock.coarsen(12.5051, true), 12.505);
+    }
+
+    #[test]
+    fn host_resolution_never_goes_below_the_spec() {
+        let clock = SharedClock::from_reader(0.0, || 0.0).with_resolution(TimeResolution {
+            default_ms: 0.001,
+            isolated_ms: 0.0001,
+        });
+        assert_eq!(clock.resolution(), TimeResolution::SPEC);
+    }
+
+    #[test]
+    fn only_a_skipping_clock_skips() {
+        let harness = SharedClock::from_reader(0.0, || 10.0);
+        harness.skip_to(25.0);
+        assert_eq!(harness.now_ms(), 25.0);
+        let product = SharedClock::process();
+        let before = product.now_ms();
+        product.skip(60_000.0);
+        assert!(product.now_ms() - before < 60_000.0);
+    }
+
+    #[test]
+    fn the_system_source_is_monotonic_and_anchored_to_the_epoch() {
+        let clock = SharedClock::process();
+        let a = clock.now_ms();
+        let b = clock.now_ms();
+        assert!(b >= a);
+        let wall = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs_f64()
+            * 1_000.0;
+        assert!((clock.epoch_now_ms() - wall).abs() < 1_000.0);
+        // Another process rebuilds the same timeline from the anchor.
+        let (offset, skipped) = clock.anchor();
+        let child = SharedClock::from_anchor(offset, skipped);
+        assert!((child.epoch_now_ms() - clock.epoch_now_ms()).abs() < 50.0);
+    }
+}

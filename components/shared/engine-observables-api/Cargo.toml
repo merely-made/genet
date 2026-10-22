@@ -6,7 +6,8 @@ publish = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
-rust-version.workspace = true
+
+rust-version = "1.97.1"
 description = "Common-minimum observable query traits (Fragment / Interaction / Semantic / Loading) consumed by Hekate, mere-host, and Apparatus."
 
 [lib]

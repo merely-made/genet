@@ -24,11 +24,59 @@ use icu_segmenter::{
 };
 use parley_data::Properties;
 
-pub(crate) struct AnalysisDataSources;
+#[cfg(feature = "complex-scripts")]
+pub mod dictionaries;
+
+/// The ICU data analysis reads. With `complex-scripts` the word and line
+/// segmenters are owned so a host can load their dictionaries at runtime
+/// (see [`dictionaries`]); without it they are the compiled rules alone.
+pub(crate) struct AnalysisDataSources {
+    #[cfg(feature = "complex-scripts")]
+    segmenters: ComplexSegmenters,
+}
+
+/// One line segmenter per word-break option, and the word segmenter, with
+/// whatever dictionaries have been loaded into them.
+#[cfg(feature = "complex-scripts")]
+struct ComplexSegmenters {
+    line: [LineSegmenter; 3],
+    word: WordSegmenter,
+    provider: dictionaries::DictionaryProvider,
+    wanted: dictionaries::SegmenterDictionaries,
+}
+
+#[cfg(feature = "complex-scripts")]
+impl ComplexSegmenters {
+    fn new() -> Self {
+        Self {
+            line: [
+                LineBreakWordOption::Normal,
+                LineBreakWordOption::BreakAll,
+                LineBreakWordOption::KeepAll,
+            ]
+            .map(|word| {
+                LineSegmenter::new_for_non_complex_scripts(line_options(word)).static_to_owned()
+            }),
+            word: WordSegmenter::new_for_non_complex_scripts(WordBreakInvariantOptions::default())
+                .static_to_owned(),
+            provider: dictionaries::DictionaryProvider::default(),
+            wanted: dictionaries::SegmenterDictionaries::default(),
+        }
+    }
+}
+
+fn line_options(word: LineBreakWordOption) -> LineBreakOptions<'static> {
+    let mut options = LineBreakOptions::default();
+    options.word_option = Some(word);
+    options
+}
 
 impl AnalysisDataSources {
     pub(crate) fn new() -> Self {
-        Self
+        Self {
+            #[cfg(feature = "complex-scripts")]
+            segmenters: ComplexSegmenters::new(),
+        }
     }
 
     #[inline(always)]
@@ -41,37 +89,81 @@ impl AnalysisDataSources {
         const { GraphemeClusterSegmenter::new() }
     }
 
+    #[cfg(feature = "complex-scripts")]
     #[inline(always)]
-    fn word_segmenter(&self) -> WordSegmenterBorrowed<'static> {
-        #[cfg(feature = "complex-scripts")]
-        {
-            WordSegmenter::new_dictionary(WordBreakInvariantOptions::default())
-        }
-        #[cfg(not(feature = "complex-scripts"))]
-        {
-            const { WordSegmenter::new_for_non_complex_scripts(WordBreakInvariantOptions::default()) }
-        }
+    fn word_segmenter(&self) -> WordSegmenterBorrowed<'_> {
+        self.segmenters.word.as_borrowed()
     }
 
+    #[cfg(not(feature = "complex-scripts"))]
+    #[inline(always)]
+    fn word_segmenter(&self) -> WordSegmenterBorrowed<'static> {
+        const { WordSegmenter::new_for_non_complex_scripts(WordBreakInvariantOptions::default()) }
+    }
+
+    #[cfg(feature = "complex-scripts")]
+    #[inline(always)]
+    fn line_segmenter(&self, word_break_strength: WordBreak) -> LineSegmenterBorrowed<'_> {
+        let index = match word_break_strength {
+            WordBreak::Normal => 0,
+            WordBreak::BreakAll => 1,
+            WordBreak::KeepAll => 2,
+        };
+        self.segmenters.line[index].as_borrowed()
+    }
+
+    #[cfg(not(feature = "complex-scripts"))]
     #[inline(always)]
     fn line_segmenter(&self, word_break_strength: WordBreak) -> LineSegmenterBorrowed<'static> {
-        match word_break_strength {
-            WordBreak::Normal => {
-                let mut opt = LineBreakOptions::default();
-                opt.word_option = Some(LineBreakWordOption::Normal);
-                line_segmenter_impl(opt)
-            },
-            WordBreak::BreakAll => {
-                let mut opt = LineBreakOptions::default();
-                opt.word_option = Some(LineBreakWordOption::BreakAll);
-                line_segmenter_impl(opt)
-            },
-            WordBreak::KeepAll => {
-                let mut opt = LineBreakOptions::default();
-                opt.word_option = Some(LineBreakWordOption::KeepAll);
-                line_segmenter_impl(opt)
-            },
+        LineSegmenter::new_for_non_complex_scripts(line_options(match word_break_strength {
+            WordBreak::Normal => LineBreakWordOption::Normal,
+            WordBreak::BreakAll => LineBreakWordOption::BreakAll,
+            WordBreak::KeepAll => LineBreakWordOption::KeepAll,
+        }))
+    }
+
+    /// Note the dictionaries `text` would break better with.
+    #[cfg(feature = "complex-scripts")]
+    fn note_text(&mut self, text: &str) {
+        let segmenters = &mut self.segmenters;
+        let missing = dictionaries::SegmenterDictionaries::wanted_by(text)
+            .missing_from(segmenters.provider.held());
+        segmenters.wanted.southeast_asian |= missing.southeast_asian;
+        segmenters.wanted.chinese_japanese |= missing.chinese_japanese;
+    }
+
+    /// Dictionaries text has asked for that are not loaded.
+    #[cfg(feature = "complex-scripts")]
+    pub(crate) fn wanted_dictionaries(&self) -> dictionaries::SegmenterDictionaries {
+        self.segmenters
+            .wanted
+            .missing_from(self.segmenters.provider.held())
+    }
+
+    /// Dictionaries loaded so far.
+    #[cfg(feature = "complex-scripts")]
+    pub(crate) fn held_dictionaries(&self) -> dictionaries::SegmenterDictionaries {
+        self.segmenters.provider.held()
+    }
+
+    /// Load a dictionary blob into every segmenter; a blob already held is
+    /// not loaded again.
+    #[cfg(feature = "complex-scripts")]
+    pub(crate) fn load_dictionaries(&mut self, blob: &dictionaries::DictionaryBlob) {
+        let segmenters = &mut self.segmenters;
+        if !segmenters.provider.add(blob) {
+            return;
         }
+        // The provider answers only from checked blobs, and a dictionary it
+        // lacks is skipped, so loading cannot fail.
+        for line in &mut segmenters.line {
+            line.load_dictionary_unstable(&segmenters.provider)
+                .expect("checked dictionaries load");
+        }
+        segmenters
+            .word
+            .load_dictionary_unstable(&segmenters.provider)
+            .expect("checked dictionaries load");
     }
 
     #[inline(always)]
@@ -93,18 +185,6 @@ impl AnalysisDataSources {
     fn brackets(&self) -> CodePointMapDataBorrowed<'_, BidiMirroringGlyph> {
         const { CodePointMapData::new() }
     }
-}
-
-#[cfg(feature = "complex-scripts")]
-#[inline(always)]
-fn line_segmenter_impl(opt: LineBreakOptions<'_>) -> LineSegmenterBorrowed<'static> {
-    LineSegmenter::new_dictionary(opt)
-}
-
-#[cfg(not(feature = "complex-scripts"))]
-#[inline(always)]
-fn line_segmenter_impl(opt: LineBreakOptions<'_>) -> LineSegmenterBorrowed<'static> {
-    LineSegmenter::new_for_non_complex_scripts(opt)
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -232,6 +312,9 @@ pub(crate) fn analyze_text<B: Brush>(
     mut text: &str,
     base_level: Option<u8>,
 ) {
+    #[cfg(feature = "complex-scripts")]
+    lcx.analysis_data_sources.note_text(text);
+
     struct WordBreakSegmentIter<'a, I: Iterator, B: Brush> {
         text: &'a str,
         style_runs: I,

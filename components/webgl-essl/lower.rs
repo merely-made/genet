@@ -84,13 +84,33 @@ impl std::fmt::Display for LoweringError {
 
 /// Public entry: lower `tu` to WGSL.
 pub fn lower_to_wgsl(tu: &TranslationUnit, stage: ShaderStage) -> Result<String, LoweringError> {
+    lower_to_wgsl_with_plan(tu, stage, None)
+}
+
+/// Lower one linked stage using locations and uniform members assigned by the
+/// pair linker. The unlinked entry point above remains the single-shader API.
+pub(crate) fn lower_to_wgsl_with_plan(
+    tu: &TranslationUnit,
+    stage: ShaderStage,
+    plan: Option<&crate::reflect::LinkedProgramPlan>,
+) -> Result<String, LoweringError> {
     // Run the typecheck pass so the lowering can consult the per-span
     // type annotations when emitting SPIR-V opcodes that depend on
     // operand types (e.g. OpFMul vs OpVectorTimesScalar). Typecheck
     // diagnostics are not surfaced here; the caller is expected to
     // have run [`crate::check::check`] separately if they care.
     let types = crate::check::check(tu).types;
-    let spirv = build_spirv(tu, stage, &types)?;
+    lower_to_wgsl_with_types(tu, stage, &types, plan)
+}
+
+/// Lower with the compiler's checked types, without repeating the type pass.
+pub(crate) fn lower_to_wgsl_with_types(
+    tu: &TranslationUnit,
+    stage: ShaderStage,
+    types: &HashMap<Span, TypeKind>,
+    plan: Option<&crate::reflect::LinkedProgramPlan>,
+) -> Result<String, LoweringError> {
+    let spirv = build_spirv(tu, stage, types, plan)?;
     if std::env::var("WEBGL_ESSL_DUMP_SPIRV").is_ok() {
         use rspirv::binary::Disassemble;
         eprintln!("--- SPIR-V ---\n{}\n", spirv.disassemble());
@@ -121,6 +141,68 @@ fn naga_pipeline(bytes: Vec<u8>) -> Result<String, LoweringError> {
         Ok(r) => r,
         Err(payload) => Err(LoweringError::NagaPanic(panic_payload_msg(payload))),
     }
+}
+
+/// Read the actual emitted WGSL uniform block layout. Parsing runs in the same
+/// panic-isolated, 8 MiB worker used for shader translation.
+pub(crate) fn reflect_emitted_uniform_layout(
+    wgsl: &str,
+) -> Result<(Vec<(u32, u32, Option<u32>)>, u32), LoweringError> {
+    let source = wgsl.to_owned();
+    let result = std::thread::Builder::new()
+        .name("webgl-essl-wgsl-layout".into())
+        .stack_size(8 * 1024 * 1024)
+        .spawn(move || {
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let module = naga::front::wgsl::parse_str(&source)
+                    .map_err(|e| LoweringError::NagaParse(format!("WGSL layout parse: {e:?}")))?;
+                naga::valid::Validator::new(
+                    naga::valid::ValidationFlags::all(),
+                    naga::valid::Capabilities::all(),
+                )
+                .validate(&module)
+                .map_err(|e| {
+                    LoweringError::NagaValidate(format!("WGSL layout validation: {e:?}"))
+                })?;
+                let mut layouter = naga::proc::Layouter::default();
+                layouter
+                    .update(module.to_ctx())
+                    .map_err(|e| LoweringError::NagaValidate(format!("WGSL layout: {e:?}")))?;
+                for (_, global) in module.global_variables.iter() {
+                    if global.space != naga::AddressSpace::Uniform
+                        || !global
+                            .binding
+                            .as_ref()
+                            .is_some_and(|b| b.group == 0 && b.binding == 0)
+                    {
+                        continue;
+                    }
+                    let ty = &module.types[global.ty];
+                    if let naga::TypeInner::Struct { members, span } = &ty.inner {
+                        let mut layout = Vec::with_capacity(members.len());
+                        for member in members {
+                            let member_layout = layouter[member.ty];
+                            let matrix_stride = match &module.types[member.ty].inner {
+                                naga::TypeInner::Matrix { columns, .. } => {
+                                    Some(member_layout.size / u32::from(*columns))
+                                },
+                                _ => None,
+                            };
+                            layout.push((member.offset, member_layout.size, matrix_stride));
+                        }
+                        return Ok((layout, *span));
+                    }
+                    return Err(LoweringError::NagaParse(
+                        "uniform binding 0 is not a struct".into(),
+                    ));
+                }
+                Ok((Vec::new(), 0))
+            }))
+        })
+        .map_err(|e| LoweringError::ThreadSpawn(format!("{e}")))?
+        .join()
+        .map_err(|e| LoweringError::ThreadJoin(format!("{e:?}")))?;
+    result.map_err(|payload| LoweringError::NagaPanic(panic_payload_msg(payload)))?
 }
 
 fn run_naga(bytes: &[u8]) -> Result<String, LoweringError> {
@@ -418,6 +500,7 @@ fn build_spirv(
     tu: &TranslationUnit,
     stage: ShaderStage,
     types: &HashMap<Span, TypeKind>,
+    plan: Option<&crate::reflect::LinkedProgramPlan>,
 ) -> Result<Module, LoweringError> {
     let main = find_main(tu)?;
 
@@ -473,7 +556,7 @@ fn build_spirv(
     // Inputs: vertex attributes always; fragment varyings under
     // ShaderStage::Fragment.
     let inputs = register_inputs(
-        &mut b, tu, stage, type_float, type_vec2, type_vec3, type_vec4,
+        &mut b, tu, stage, type_float, type_vec2, type_vec3, type_vec4, plan,
     );
 
     // Outputs: under ShaderStage::Vertex, varyings become Output
@@ -481,13 +564,13 @@ fn build_spirv(
     // use the single gl_FragColor output and don't register varyings
     // here.
     let outputs = register_varying_outputs(
-        &mut b, tu, stage, type_float, type_vec2, type_vec3, type_vec4,
+        &mut b, tu, stage, type_float, type_vec2, type_vec3, type_vec4, plan,
     );
 
     // Uniforms wrapped in a single Block-decorated struct.
     let (uniforms, uniform_block_var) = register_uniforms(
         &mut b, tu, type_float, type_int, type_vec2, type_vec3, type_vec4, type_ivec2, type_ivec3,
-        type_ivec4, type_mat2, type_mat3, type_mat4,
+        type_ivec4, type_mat2, type_mat3, type_mat4, plan,
     );
 
     // Sampler uniforms live in their own `UniformConstant`
@@ -672,6 +755,7 @@ fn register_varying_outputs(
     type_vec2: Word,
     type_vec3: Word,
     type_vec4: Word,
+    plan: Option<&crate::reflect::LinkedProgramPlan>,
 ) -> HashMap<String, OutputBinding> {
     let mut outputs = HashMap::new();
     // Output storage qualifiers per stage:
@@ -701,14 +785,26 @@ fn register_varying_outputs(
             TypeKind::Mat4 => (type_vec4, 4, TypeKind::Mat4),
             _ => continue,
         };
+        let base_location = plan
+            .and_then(|p| {
+                p.varyings
+                    .iter()
+                    .find(|v| v.name == g.name)
+                    .map(|v| v.location)
+            })
+            .unwrap_or(location);
         let ptr_ty = b.type_pointer(None, StorageClass::Output, column_type);
         let mut vars = Vec::with_capacity(column_count as usize);
-        for _ in 0..column_count {
+        for column in 0..column_count {
             let var = b.variable(ptr_ty, None, StorageClass::Output, None);
-            b.decorate(var, Decoration::Location, [Operand::LiteralBit32(location)]);
-            location += 1;
+            b.decorate(
+                var,
+                Decoration::Location,
+                [Operand::LiteralBit32(base_location + column)],
+            );
             vars.push(var);
         }
+        location = location.max(base_location + column_count);
         outputs.insert(g.name.clone(), OutputBinding { vars, kind });
     }
     outputs
@@ -1534,10 +1630,7 @@ fn emit_user_function_body(
             .b
             .function_parameter(*pt)
             .map_err(|e| LoweringError::SpirvBuild(format!("{e:?}")))?;
-        fn_params.insert(
-            p.name.clone(),
-            FnParamBinding { value_id: pid },
-        );
+        fn_params.insert(p.name.clone(), FnParamBinding { value_id: pid });
     }
 
     ctx.b
@@ -1700,44 +1793,56 @@ fn register_uniforms(
     type_mat2: Word,
     type_mat3: Word,
     type_mat4: Word,
+    plan: Option<&crate::reflect::LinkedProgramPlan>,
 ) -> (HashMap<String, UniformBinding>, Option<Word>) {
     let mut uniforms: Vec<(String, TypeKind, Word, u32, Option<u32>)> = Vec::new();
     let mut offset: u32 = 0;
-    for d in &tu.decls {
-        let ExternalDecl::Global(g) = d else { continue };
-        if g.storage != StorageQualifier::Uniform {
-            continue;
-        }
-        // (pointee_type, kind, size, matrix_stride). matrix_stride
-        // is Some only for matrix types and matches the natural
-        // column-vector size (mat2 = 8, mat3 = 16, mat4 = 16). naga's
-        // spv-in validates the stride matches the column dimension;
-        // padding wider than that fails as UnsupportedMatrixStride.
-        let (pointee_type, kind, size, matrix_stride) = match g.ty.kind {
-            TypeKind::Float => (type_float, TypeKind::Float, 4u32, None),
-            TypeKind::Int => (type_int, TypeKind::Int, 4u32, None),
-            TypeKind::Vec2 => (type_vec2, TypeKind::Vec2, 8u32, None),
-            TypeKind::Vec3 => (type_vec3, TypeKind::Vec3, 16u32, None),
-            TypeKind::Vec4 => (type_vec4, TypeKind::Vec4, 16u32, None),
-            TypeKind::Ivec2 => (type_ivec2, TypeKind::Ivec2, 8u32, None),
-            TypeKind::Ivec3 => (type_ivec3, TypeKind::Ivec3, 16u32, None),
-            TypeKind::Ivec4 => (type_ivec4, TypeKind::Ivec4, 16u32, None),
-            TypeKind::Mat2 => (type_mat2, TypeKind::Mat2, 16u32, Some(8u32)),
-            TypeKind::Mat3 => (type_mat3, TypeKind::Mat3, 48u32, Some(16u32)),
-            TypeKind::Mat4 => (type_mat4, TypeKind::Mat4, 64u32, Some(16u32)),
-            // Bool uniforms aren't allowed by SPIR-V (no defined
-            // memory layout). Sampler uniforms have a different
-            // storage class (UniformConstant). Skip both.
+    let declarations: Vec<(String, TypeKind)> = if let Some(plan) = plan {
+        plan.uniforms
+            .iter()
+            .map(|u| (u.name.clone(), u.kind))
+            .collect()
+    } else {
+        tu.decls
+            .iter()
+            .filter_map(|d| {
+                let ExternalDecl::Global(g) = d else {
+                    return None;
+                };
+                (g.storage == StorageQualifier::Uniform).then(|| (g.name.clone(), g.ty.kind))
+            })
+            .collect()
+    };
+    for (name, kind) in declarations {
+        // This is the SPIR-V input layout contract. CPU reflection is read from
+        // final emitted WGSL below, never reconstructed from this cursor.
+        let (pointee, size, stride) = match kind {
+            TypeKind::Float => (type_float, 4u32, None),
+            TypeKind::Int => (type_int, 4, None),
+            TypeKind::Vec2 => (type_vec2, 8, None),
+            TypeKind::Vec3 => (type_vec3, 16, None),
+            TypeKind::Vec4 => (type_vec4, 16, None),
+            TypeKind::Ivec2 => (type_ivec2, 8, None),
+            TypeKind::Ivec3 => (type_ivec3, 16, None),
+            TypeKind::Ivec4 => (type_ivec4, 16, None),
+            TypeKind::Mat2 => (type_mat2, 16, Some(8)),
+            TypeKind::Mat3 => (type_mat3, 48, Some(16)),
+            TypeKind::Mat4 => (type_mat4, 64, Some(16)),
             _ => continue,
         };
-        let align = match (kind, matrix_stride) {
-            (_, Some(s)) => s,
-            (TypeKind::Vec3 | TypeKind::Vec4, _) => 16,
-            (TypeKind::Vec2, _) => 8,
+        let align = match kind {
+            TypeKind::Vec2 | TypeKind::Ivec2 => 8,
+            TypeKind::Vec3
+            | TypeKind::Vec4
+            | TypeKind::Ivec3
+            | TypeKind::Ivec4
+            | TypeKind::Mat2
+            | TypeKind::Mat3
+            | TypeKind::Mat4 => 16,
             _ => 4,
         };
         offset = (offset + align - 1) / align * align;
-        uniforms.push((g.name.clone(), kind, pointee_type, offset, matrix_stride));
+        uniforms.push((name, kind, pointee, offset, stride));
         offset += size;
     }
     if uniforms.is_empty() {
@@ -1793,6 +1898,7 @@ fn register_inputs(
     type_vec2: Word,
     type_vec3: Word,
     type_vec4: Word,
+    plan: Option<&crate::reflect::LinkedProgramPlan>,
 ) -> HashMap<String, InputBinding> {
     let mut inputs = HashMap::new();
     let mut location: u32 = 0;
@@ -1830,14 +1936,26 @@ fn register_inputs(
             // expression emitter will error if they are referenced.
             _ => continue,
         };
+        let base_location = plan
+            .and_then(|p| {
+                p.varyings
+                    .iter()
+                    .find(|v| v.name == g.name)
+                    .map(|v| v.location)
+            })
+            .unwrap_or(location);
         let ptr_ty = b.type_pointer(None, StorageClass::Input, column_type);
         let mut vars = Vec::with_capacity(column_count as usize);
-        for _ in 0..column_count {
+        for column in 0..column_count {
             let var = b.variable(ptr_ty, None, StorageClass::Input, None);
-            b.decorate(var, Decoration::Location, [Operand::LiteralBit32(location)]);
-            location += 1;
+            b.decorate(
+                var,
+                Decoration::Location,
+                [Operand::LiteralBit32(base_location + column)],
+            );
             vars.push(var);
         }
+        location = location.max(base_location + column_count);
         inputs.insert(
             g.name.clone(),
             InputBinding {

@@ -5,7 +5,8 @@ authors.workspace = true
 license.workspace = true
 edition.workspace = true
 publish.workspace = true
-rust-version.workspace = true
+
+rust-version = "1.97.1"
 repository.workspace = true
 description = "The raw Genet host: one window, one document, no chrome — the reference individual of the engine."
 
@@ -16,6 +17,9 @@ default = []
 # host integration remain separate work.
 scripted = ["genet-documents/scripted", "dep:genet-scripted", "dep:script-engine-boa", "dep:script-runtime-api", "dep:webgl_wgpu"]
 scripted-nova = ["scripted", "genet-documents/scripted-nova", "dep:script-engine-nova"]
+# Browser-only real-device lease probe; never exposed in ordinary artifacts.
+browser-frame-fixture = []
+browser-fetch-fixture = []
 
 [lib]
 name = "ortet"
@@ -53,7 +57,7 @@ genet-winit-host = { path = "../../components/genet-winit-host" }
 # http(s) for the fallback fetch lane, over netfetcher's default transport on a
 # background tokio runtime this host owns. Local addresses never reach it.
 netfetcher = { path = "../../components/netfetcher" }
-tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "time"] }
 url = { workspace = true }
 winit = { workspace = true }
 wgpu = { workspace = true }
@@ -64,12 +68,13 @@ genet-scripted = { path = "../../components/genet-scripted", optional = true }
 webgl_wgpu = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = "=0.2.127"
-wasm-bindgen-futures = "=0.4.77"
-js-sys = "=0.3.104"
+wasm-bindgen = "=0.2.129"
+wasm-bindgen-futures = "=0.4.79"
+js-sys = "=0.3.106"
+gloo-timers = { version = "0.3", features = ["futures"] }
 wgpu = { workspace = true, features = ["webgpu"] }
-web-sys = { version = "=0.3.104", features = [
-    "Document", "DomRect", "Element", "Event", "EventTarget", "Headers", "Response",
+web-sys = { version = "=0.3.106", features = [
+    "AbortController", "AbortSignal", "Document", "DomRect", "Element", "Event", "EventTarget", "Headers", "Response", "Request", "RequestInit", "Location", "Performance", "Url",
     "ReadableStream", "ReadableStreamDefaultReader",
     "FocusEvent", "HtmlCanvasElement", "HtmlElement", "KeyboardEvent", "MouseEvent",
     "PointerEvent", "WheelEvent", "Window", "console",

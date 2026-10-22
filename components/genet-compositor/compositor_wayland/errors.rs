@@ -26,8 +26,6 @@ pub enum BackendError {
     Dmabuf(String),
     /// A Wayland protocol call failed.
     Wayland(String),
-    /// The interop synchronizer could not be constructed.
-    SyncInit(String),
     /// A path that hasn't been wired yet — see the named area.
     Unwired(&'static str),
 }
@@ -49,7 +47,6 @@ impl std::fmt::Display for BackendError {
             ),
             Self::Dmabuf(m) => write!(f, "WaylandSubsurfaceBackend: dmabuf setup failed: {m}"),
             Self::Wayland(m) => write!(f, "WaylandSubsurfaceBackend: wayland call failed: {m}"),
-            Self::SyncInit(m) => write!(f, "WaylandSubsurfaceBackend: sync init failed: {m}"),
             Self::Unwired(area) => {
                 write!(f, "WaylandSubsurfaceBackend: not yet wired: {area}")
             },

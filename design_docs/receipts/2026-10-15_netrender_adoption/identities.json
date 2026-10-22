@@ -1,0 +1,82 @@
+{
+  "base": "8649c0c3200",
+  "preserved_forms_snapshot": "b5813e22291ba8530d323adacd4bdf70eae15bf0",
+  "archive_tag": "archive/local-forms-phase-b-b5813e22291",
+  "packages": [
+    {
+      "name": "genet-livery",
+      "version": "0.0.4",
+      "source": null,
+      "manifest_path": "C:\\Users\\mark_\\Code\\repos\\genet\\components\\genet-livery\\Cargo.toml"
+    },
+    {
+      "name": "genet-render",
+      "version": "0.2.0",
+      "source": null,
+      "manifest_path": "C:\\Users\\mark_\\Code\\repos\\genet\\components\\genet-render\\Cargo.toml"
+    },
+    {
+      "name": "genet-render-host",
+      "version": "0.2.0",
+      "source": null,
+      "manifest_path": "C:\\Users\\mark_\\Code\\repos\\genet\\components\\genet-render-host\\Cargo.toml"
+    },
+    {
+      "name": "netrender",
+      "version": "0.1.2",
+      "source": "git+https://github.com/merely-made/netrender.git?rev=f4f9c0d87e6a6030b61075a45118055dfe6a12df#f4f9c0d87e6a6030b61075a45118055dfe6a12df",
+      "manifest_path": "C:\\Users\\mark_\\.cargo\\git\\checkouts\\netrender-a79f0762881dec01\\f4f9c0d\\netrender\\Cargo.toml"
+    },
+    {
+      "name": "netrender-vello",
+      "version": "0.11.0",
+      "source": "git+https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b46648c08f3d2062e70559afa999842e1873c",
+      "manifest_path": "C:\\Users\\mark_\\.cargo\\git\\checkouts\\vello-79c0d0e9216b3668\\276b466\\research\\vello_research\\Cargo.toml"
+    },
+    {
+      "name": "netrender_device",
+      "version": "0.1.2",
+      "source": "git+https://github.com/merely-made/netrender.git?rev=f4f9c0d87e6a6030b61075a45118055dfe6a12df#f4f9c0d87e6a6030b61075a45118055dfe6a12df",
+      "manifest_path": "C:\\Users\\mark_\\.cargo\\git\\checkouts\\netrender-a79f0762881dec01\\f4f9c0d\\netrender_device\\Cargo.toml"
+    },
+    {
+      "name": "paint_list_api",
+      "version": "0.1.2",
+      "source": "git+https://github.com/merely-made/netrender.git?rev=f4f9c0d87e6a6030b61075a45118055dfe6a12df#f4f9c0d87e6a6030b61075a45118055dfe6a12df",
+      "manifest_path": "C:\\Users\\mark_\\.cargo\\git\\checkouts\\netrender-a79f0762881dec01\\f4f9c0d\\paint_list_api\\Cargo.toml"
+    },
+    {
+      "name": "paint_list_render",
+      "version": "0.1.2",
+      "source": "git+https://github.com/merely-made/netrender.git?rev=f4f9c0d87e6a6030b61075a45118055dfe6a12df#f4f9c0d87e6a6030b61075a45118055dfe6a12df",
+      "manifest_path": "C:\\Users\\mark_\\.cargo\\git\\checkouts\\netrender-a79f0762881dec01\\f4f9c0d\\paint_list_render\\Cargo.toml"
+    },
+    {
+      "name": "vello_encoding",
+      "version": "0.11.0",
+      "source": "git+https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b46648c08f3d2062e70559afa999842e1873c",
+      "manifest_path": "C:\\Users\\mark_\\.cargo\\git\\checkouts\\vello-79c0d0e9216b3668\\276b466\\research\\vello_encoding\\Cargo.toml"
+    },
+    {
+      "name": "vello_shaders",
+      "version": "0.11.0",
+      "source": "git+https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b46648c08f3d2062e70559afa999842e1873c",
+      "manifest_path": "C:\\Users\\mark_\\.cargo\\git\\checkouts\\vello-79c0d0e9216b3668\\276b466\\research\\vello_shaders\\Cargo.toml"
+    },
+    {
+      "name": "wgpu",
+      "version": "30.0.1",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "manifest_path": "C:\\Users\\mark_\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\wgpu-30.0.1\\Cargo.toml"
+    }
+  ],
+  "lock_sha256": "89052da1d9b1cf70e999b9452ed61e96aba49485aaecb5da07ab0499fbd3724a",
+  "metadata_sha256": "a762a3dd4ac70748d5d83f8a9b575031b39cb05c90a18b63333e8aca957a76fe",
+  "manifest_sha256": {
+    "Cargo.toml": "961954ff98fae346266f1eb6fc11e26ceb1085acb1c615d08494cd38bed55999",
+    "components/genet-render-host/Cargo.toml": "5cc971336d52d3622fefa60680a35acaa3483c25cce332ffb20303d04b237aab",
+    "examples/netrender_smoke/Cargo.toml": "b921124fabc6f94ed6ba6db196b3aba0926e164b96d26741698af081200a6773"
+  },
+  "standalone_lock_sha256": "fb8f01ec0049c4ae27f931a3a90b843cbc8a6a78cdb1bb8528561e89841e4593",
+  "archive_tag_status": "Removed locally and remotely on 2026-10-15 at owner clarification; published qualified Phase B supersedes the older local snapshot."
+}

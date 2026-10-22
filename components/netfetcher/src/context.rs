@@ -44,11 +44,15 @@ pub struct FetchContext {
     /// subresource fetch share one explicit boundary instead of each consumer
     /// inheriting a transport-private constant.
     pub redirect_limit: u32,
-    /// Largest body buffered into the HTTP cache. A response whose declared
-    /// length exceeds it is streamed straight through and never cached:
-    /// buffering a large media body to store it would stall the response, and
-    /// it is not worth a cache slot. A host policy, so it lives here.
+    /// Largest decoded body buffered into the HTTP cache. Declared lengths
+    /// above the cap bypass caching; an unknown or compressed body stops
+    /// accumulating if its decoded bytes exceed the cap. Zero permits only
+    /// empty bodies. A host policy, so it lives here.
     pub cache_max_body_bytes: u64,
+    /// Optional decoded-byte cap for responses that Fetch must collect before
+    /// returning, notably enforced Subresource Integrity. Hosts that impose a
+    /// response budget set this as well as counting streamed response chunks.
+    pub response_max_body_bytes: Option<usize>,
 }
 
 impl FetchContext {
@@ -74,6 +78,7 @@ impl FetchContext {
             transport: default_transport(),
             redirect_limit: Self::DEFAULT_REDIRECT_LIMIT,
             cache_max_body_bytes: Self::DEFAULT_CACHE_MAX_BODY_BYTES,
+            response_max_body_bytes: None,
         }
     }
 
@@ -92,6 +97,13 @@ impl FetchContext {
     /// Set the largest body this context will buffer into its HTTP cache.
     pub fn with_cache_max_body_bytes(mut self, cache_max_body_bytes: u64) -> Self {
         self.cache_max_body_bytes = cache_max_body_bytes;
+        self
+    }
+
+    /// Bound decoded bytes retained by Fetch itself before the host can read
+    /// the response body. `None` leaves this choice to the consumer.
+    pub fn with_response_max_body_bytes(mut self, max: usize) -> Self {
+        self.response_max_body_bytes = Some(max);
         self
     }
 }

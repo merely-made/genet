@@ -67,9 +67,7 @@ use rustc_hash::FxHashMap;
 use wgpu::Texture;
 
 use crate::compositor::OsCompositorBackend;
-use crate::interop::{
-    HostWgpuContext, InteropBackend, SyncMechanism, VulkanTimelineSemaphoreSynchronizer,
-};
+use crate::interop::{HostWgpuContext, InteropBackend, SyncMechanism};
 use netrender_device::compositor::SurfaceKey;
 
 use bake::BakePipeline;
@@ -96,7 +94,6 @@ pub struct WaylandSubsurfaceBackend {
 
     /// Metadata and pipelines (no wayland proxies).
     bake_pipeline: BakePipeline,
-    vk_timeline_sync: VulkanTimelineSemaphoreSynchronizer,
     modifier_table: ModifierTable,
     chosen: ChosenModifier,
 
@@ -162,14 +159,11 @@ impl WaylandSubsurfaceBackend {
         );
 
         let bake_pipeline = BakePipeline::new(&host.device);
-        let vk_timeline_sync = VulkanTimelineSemaphoreSynchronizer::new(host)
-            .map_err(|e| BackendError::SyncInit(format!("{e}")))?;
 
         Ok(Self {
             surfaces: FxHashMap::default(),
             master_side: None,
             bake_pipeline,
-            vk_timeline_sync,
             modifier_table,
             chosen,
             next_surface_id: 0,
@@ -695,16 +689,17 @@ impl OsCompositorBackend for WaylandSubsurfaceBackend {
     }
 
     fn sync_mechanism(&self) -> SyncMechanism {
-        // Same-queue submits are FIFO-ordered on Vulkan; the
-        // VulkanTimelineSemaphoreSynchronizer wrapper exists for the
-        // multi-queue path but is dormant on the smoke path.
+        // Supported callers must render and present on this host queue.
+        // This backend provides no cross-queue synchronization handshake.
         SyncMechanism::None
     }
 
-    fn present_master(&mut self, master: &Texture) {
-        if let Err(err) = WaylandSubsurfaceBackend::present_master(self, master) {
-            log::warn!("[WaylandSubsurfaceBackend] present_master: {err}");
-        }
+    fn present_master(
+        &mut self,
+        master: &Texture,
+    ) -> Result<(), crate::compositor::BoxedBackendError> {
+        WaylandSubsurfaceBackend::present_master(self, master)
+            .map_err(|err| Box::new(err) as crate::compositor::BoxedBackendError)
     }
 
     fn declare(
@@ -726,12 +721,9 @@ impl OsCompositorBackend for WaylandSubsurfaceBackend {
         transform: [f32; 6],
         clip: Option<[f32; 4]>,
         opacity: f32,
-    ) {
-        if let Err(err) =
-            WaylandSubsurfaceBackend::present_inherent(self, key, transform, clip, opacity)
-        {
-            log::warn!("[WaylandSubsurfaceBackend] present({key:?}): {err}");
-        }
+    ) -> Result<(), crate::compositor::BoxedBackendError> {
+        WaylandSubsurfaceBackend::present_inherent(self, key, transform, clip, opacity)
+            .map_err(|err| Box::new(err) as crate::compositor::BoxedBackendError)
     }
 
     fn destroy(&mut self, key: SurfaceKey) {

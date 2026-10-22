@@ -31,6 +31,7 @@ fn matched_block(
             layer: CascadeLayer::Unlayered,
             specificity: Specificity(specificity),
             source_order: index as u64,
+            source_url: None,
         })
         .collect();
     let custom = block

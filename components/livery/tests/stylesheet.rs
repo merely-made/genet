@@ -39,6 +39,64 @@ fn stylesheet_parser_recovers_rules_and_media_groups() {
 }
 
 #[test]
+fn stylesheet_and_cssom_keep_quoted_markers_inside_nested_values() {
+    let mut sheet = Stylesheet::parse(
+        r#"main {
+            --nested: outer(inner("/* keep ; } */"), 1/**/px);
+            content: "/* literal } ; */";
+            /* actual comment with } and ; */
+            color: red;
+        }
+        aside { color: blue; }
+        /* unterminated comment"#,
+        Origin::Author,
+    );
+    assert!(sheet.diagnostics().is_empty(), "{:?}", sheet.diagnostics());
+    assert_eq!(sheet.rules().len(), 2);
+    let main = &sheet.rules()[0];
+    assert_eq!(main.declaration_block().custom.len(), 1);
+    assert!(main.declaration_block().errors.is_empty());
+    assert!(matches!(
+        &main.declaration_block().custom[0].value,
+        livery::custom::CustomDeclaredValue::Value(value) if value.contains("1/**/px")
+    ));
+    assert!(main.declaration_text().contains("/* literal } ; */"));
+    assert!(main.declaration_text().contains("/* keep ; } */"));
+    assert!(!main.declaration_text().contains("actual comment"));
+    let cssom = sheet.items()[0].cssom_rule();
+    assert!(
+        cssom
+            .style_text
+            .as_deref()
+            .unwrap()
+            .contains("/* literal } ; */")
+    );
+
+    sheet
+        .insert_rule(
+            r#"article { --quoted: "say \"/* keep */\""; /* remove */ color: green; }"#,
+            1,
+        )
+        .expect("insert a rule with a quoted marker");
+    assert_eq!(sheet.rules().len(), 3);
+    let inserted = sheet.items()[1].cssom_rule();
+    assert!(
+        inserted
+            .style_text
+            .as_deref()
+            .unwrap()
+            .contains("/* keep */")
+    );
+    assert!(
+        !inserted
+            .style_text
+            .as_deref()
+            .unwrap()
+            .contains("/* remove */")
+    );
+}
+
+#[test]
 fn stylesheet_retains_bounded_font_face_descriptors() {
     let sheet = Stylesheet::parse(
         "@font-face { font-family: test-face; src: local(ignored), url('/fonts/test.ttf') \

@@ -428,7 +428,13 @@ pub enum SessionIme {
     Disabled,
 }
 
-/// Input delivered by a host to one retained session.
+/// Input delivered by a host to one retained session. For a printable key,
+/// send `Key` first and then its produced `KeyboardText`. `Key` owns keyboard
+/// events and non-text defaults; `KeyboardText` owns that key's character edit
+/// and can be suppressed by a canceled keydown. `Text` is independent input,
+/// including paste and accessibility, and is never canceled by an earlier key.
+/// An IME commit uses `Ime::Commit`. Send control keys such as Enter only as
+/// `Key`; independent `Text` may contain newlines.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum SessionInput {
     PointerMoved {
@@ -449,6 +455,7 @@ pub enum SessionInput {
         modifiers: SessionModifiers,
         repeat: bool,
     },
+    KeyboardText(String),
     Text(String),
     Ime(SessionIme),
     Focus(bool),
@@ -487,6 +494,11 @@ pub enum SessionEffect {
 impl SessionEffect {
     pub fn is_handled(&self) -> bool {
         !matches!(self, Self::Ignored)
+    }
+
+    /// Whether the host may apply a keyboard scroll default after this input.
+    pub fn allows_default_scroll(&self, editable: bool) -> bool {
+        !self.is_handled() && !editable
     }
 }
 
@@ -672,6 +684,130 @@ pub struct HostMutationReport {
 /// Spawns retained document sessions for the engine id it claims. Registered
 /// once per host; holds its lane's construction seams (fetcher, cookie jar,
 /// theme) so the spawn request stays plain data.
+/// Exact document request intent, independent of any transport crate.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionDocumentRequest {
+    pub url: String,
+    pub method: String,
+    pub headers: Vec<(String, String)>,
+    pub body: Option<Vec<u8>>,
+    pub cache: String,
+    pub redirect: String,
+    pub mode: String,
+    /// Raw initiating document URL, also needed for origin eligibility.
+    pub referrer: String,
+    pub referrer_policy: String,
+    pub credentials: String,
+    pub integrity: String,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionEncodedFormSubmission {
+    pub request: SessionDocumentRequest,
+    pub target: String,
+}
+pub struct SessionRequestSpawnResult<F> {
+    pub session: Box<dyn DocumentSession<F>>,
+    pub navigation_address: String,
+}
+
+/// The compatibility input dispatcher, shared by lanes which clear pending
+/// request state before delegating to these actual interaction hooks.
+pub fn dispatch_session_input<F, S: DocumentSession<F> + ?Sized>(
+    session: &mut S, input: SessionInput,
+) -> SessionInputResult {
+        match input {
+            SessionInput::PointerMoved { x, y, .. } => {
+                let cursor = session.cursor_at(x, y);
+                let effect = if session.pointer_move(x, y) {
+                    SessionEffect::Handled
+                } else {
+                    SessionEffect::Ignored
+                };
+                let mut result = SessionInputResult::new(effect, session.editable_focus());
+                result.cursor = Some(cursor);
+                result
+            },
+            SessionInput::PointerButton {
+                x,
+                y,
+                button: SessionPointerButton::Primary,
+                state,
+                ..
+            } => {
+                let cursor = session.cursor_at(x, y);
+                let click = match state {
+                    SessionButtonState::Pressed => session.pointer_down(x, y),
+                    SessionButtonState::Released => session.pointer_up(x, y),
+                };
+                let effect = session.effect_for_click(click);
+                let handled = effect.is_handled();
+                let mut result = SessionInputResult::new(effect, session.editable_focus());
+                result.cursor = Some(cursor);
+                result.capture = Some(matches!(state, SessionButtonState::Pressed) && handled);
+                result
+            },
+            SessionInput::PointerButton { x, y, .. } => {
+                let mut result =
+                    SessionInputResult::new(SessionEffect::Ignored, session.editable_focus());
+                result.cursor = Some(session.cursor_at(x, y));
+                result
+            },
+            SessionInput::Key {
+                key,
+                state,
+                modifiers,
+                repeat,
+            } => SessionInputResult::new(
+                session.key_input(key, state, modifiers, repeat),
+                session.editable_focus(),
+            ),
+            SessionInput::KeyboardText(text) => {
+                let effect = if session.keyboard_text_input(&text) {
+                    SessionEffect::Handled
+                } else {
+                    SessionEffect::Ignored
+                };
+                SessionInputResult::new(effect, session.editable_focus())
+            },
+            SessionInput::Text(text) => {
+                let effect = if session.text_input(&text) {
+                    SessionEffect::Handled
+                } else {
+                    SessionEffect::Ignored
+                };
+                SessionInputResult::new(effect, session.editable_focus())
+            },
+            SessionInput::Ime(ime) => {
+                let effect = if session.ime_input(ime) {
+                    SessionEffect::Handled
+                } else {
+                    SessionEffect::Ignored
+                };
+                SessionInputResult::new(effect, session.editable_focus())
+            },
+            SessionInput::Focus(focused) => {
+                session.focus_input(focused);
+                SessionInputResult::new(SessionEffect::Handled, session.editable_focus())
+            },
+            SessionInput::FocusMove(direction) => {
+                let effect = if session.focus_move(direction) {
+                    SessionEffect::Handled
+                } else {
+                    SessionEffect::Ignored
+                };
+                SessionInputResult::new(effect, session.editable_focus())
+            },
+            SessionInput::Cancel => {
+                let effect = if session.cancel_input() {
+                    SessionEffect::Cancelled
+                } else {
+                    SessionEffect::Ignored
+                };
+                SessionInputResult::new(effect, session.editable_focus())
+            },
+        }
+    }
+
 pub trait SessionEngine<F>: Send + Sync {
     /// Stable engine identifier. Must match the `engine_id` of the
     /// `EngineRouteDecision` that selected this engine.
@@ -681,6 +817,15 @@ pub trait SessionEngine<F>: Send + Sync {
         &self,
         request: &SessionSpawnRequest,
     ) -> Result<Box<dyn DocumentSession<F>>, SessionError>;
+
+    /// Optional exact-request construction through this selected factory.
+    fn spawn_request(
+        &self,
+        _spawn: &SessionSpawnRequest,
+        _request: &SessionDocumentRequest,
+    ) -> Result<SessionRequestSpawnResult<F>, SessionError> {
+        Err(SessionError::Unsupported("request-aware document construction".into()))
+    }
 
     /// Sessions lay real content out through a real layout engine, so unlike
     /// surface engines they default to [`A11yCapability::Partial`]; a lane
@@ -696,6 +841,11 @@ pub trait SessionEngine<F>: Send + Sync {
 /// host's content thread — exactly how the lane types are driven today. Not
 /// `Send` by default (scripted lanes hold JS engine state).
 pub trait DocumentSession<F>: Any {
+    /// Consume the encoded request paired with the latest input's Submit.
+    fn take_encoded_form_submission(&mut self) -> Option<SessionEncodedFormSubmission> { None }
+    /// Visible top-document identity, distinct from an effective resource base.
+    fn current_address(&self) -> Option<String> { None }
+
     /// Document-facing controls this retained session can presently serve.
     ///
     /// A session can expose find while leaving page zoom and raster capture to
@@ -708,6 +858,12 @@ pub trait DocumentSession<F>: Any {
     /// Lay out (if needed) and paint at the given viewport. Resize is
     /// implicit: a size change re-lays-out, same as the lanes today.
     fn frame(&mut self, width: u32, height: u32) -> F;
+
+    /// Paint a frame while preserving an engine's refusal reason. Existing
+    /// infallible sessions inherit the ordinary frame path.
+    fn try_frame(&mut self, width: u32, height: u32) -> Result<F, String> {
+        Ok(self.frame(width, height))
+    }
 
     /// Producer draws associated with the most recent [`Self::frame`].
     fn external_texture_draws(&self) -> &[SessionExternalTextureDraw] {
@@ -761,89 +917,7 @@ pub trait DocumentSession<F>: Any {
     /// floor; richer lanes override the focused keyboard, text, IME, cursor,
     /// and form hooks below.
     fn input(&mut self, input: SessionInput) -> SessionInputResult {
-        match input {
-            SessionInput::PointerMoved { x, y, .. } => {
-                let cursor = self.cursor_at(x, y);
-                let effect = if self.pointer_move(x, y) {
-                    SessionEffect::Handled
-                } else {
-                    SessionEffect::Ignored
-                };
-                let mut result = SessionInputResult::new(effect, self.editable_focus());
-                result.cursor = Some(cursor);
-                result
-            },
-            SessionInput::PointerButton {
-                x,
-                y,
-                button: SessionPointerButton::Primary,
-                state,
-                ..
-            } => {
-                let cursor = self.cursor_at(x, y);
-                let click = match state {
-                    SessionButtonState::Pressed => self.pointer_down(x, y),
-                    SessionButtonState::Released => self.pointer_up(x, y),
-                };
-                let effect = self.effect_for_click(click);
-                let handled = effect.is_handled();
-                let mut result = SessionInputResult::new(effect, self.editable_focus());
-                result.cursor = Some(cursor);
-                result.capture = Some(matches!(state, SessionButtonState::Pressed) && handled);
-                result
-            },
-            SessionInput::PointerButton { x, y, .. } => {
-                let mut result =
-                    SessionInputResult::new(SessionEffect::Ignored, self.editable_focus());
-                result.cursor = Some(self.cursor_at(x, y));
-                result
-            },
-            SessionInput::Key {
-                key,
-                state,
-                modifiers,
-                repeat,
-            } => SessionInputResult::new(
-                self.key_input(key, state, modifiers, repeat),
-                self.editable_focus(),
-            ),
-            SessionInput::Text(text) => {
-                let effect = if self.text_input(&text) {
-                    SessionEffect::Handled
-                } else {
-                    SessionEffect::Ignored
-                };
-                SessionInputResult::new(effect, self.editable_focus())
-            },
-            SessionInput::Ime(ime) => {
-                let effect = if self.ime_input(ime) {
-                    SessionEffect::Handled
-                } else {
-                    SessionEffect::Ignored
-                };
-                SessionInputResult::new(effect, self.editable_focus())
-            },
-            SessionInput::Focus(focused) => {
-                self.focus_input(focused);
-                SessionInputResult::new(SessionEffect::Handled, self.editable_focus())
-            },
-            SessionInput::FocusMove(direction) => {
-                let effect = if self.focus_move(direction) {
-                    SessionEffect::Handled
-                } else {
-                    SessionEffect::Ignored
-                };
-                SessionInputResult::new(effect, self.editable_focus())
-            },
-            SessionInput::Cancel => {
-                let effect = if self.cancel_input() {
-                    SessionEffect::Cancelled
-                } else {
-                    SessionEffect::Ignored
-                };
-                SessionInputResult::new(effect, self.editable_focus())
-            },
-        }
+        dispatch_session_input(self, input)
     }
 
     fn effect_for_click(&mut self, click: SessionClick) -> SessionEffect {
@@ -855,6 +929,8 @@ pub trait DocumentSession<F>: Any {
         }
     }
 
+    /// Dispatch a keyboard event and non-text default. Printable text arrives
+    /// separately through `keyboard_text_input` for the same press.
     fn key_input(
         &mut self,
         _key: SessionKey,
@@ -865,6 +941,13 @@ pub trait DocumentSession<F>: Any {
         SessionEffect::Ignored
     }
 
+    /// Insert text paired with the preceding physical key. Override to honor
+    /// cancellation while keeping independent `text_input` available.
+    fn keyboard_text_input(&mut self, text: &str) -> bool {
+        self.text_input(text)
+    }
+
+    /// Insert independent text, including paste or accessibility edits.
     fn text_input(&mut self, _text: &str) -> bool {
         false
     }
@@ -1040,6 +1123,20 @@ pub trait DocumentSession<F>: Any {
 
     /// Visibility hint (a hidden tile may skip raster-adjacent work).
     fn set_hidden(&mut self, _hidden: bool) {}
+
+    /// Whether the host can suspend and resume this session's task delivery.
+    /// A hidden presentation still runs throttled work and is distinct from
+    /// this lifecycle control.
+    fn supports_freeze_resume(&self) -> bool {
+        false
+    }
+
+    /// Suspend all document task delivery after its lifecycle event. Sessions
+    /// without this capability leave the request unchanged.
+    fn freeze(&mut self) {}
+
+    /// Restore task delivery and dispatch the document's resume event.
+    fn resume(&mut self) {}
 
     /// A structural [`ContentReport`] of the addressed content, for hosts that
     /// cannot downcast to the concrete session type (it may be private to its
@@ -1478,4 +1575,105 @@ mod tests {
             Some(now)
         );
     }
+
+    // TASK5 DRAFT API FIXTURES BEGIN. Missing seams have explicit absence adapters.
+    fn t5_api_take_absent(_session: &mut dyn DocumentSession<TextFrame>) -> Option<()> {
+        _session.take_encoded_form_submission().map(|_| ())
+    }
+    fn t5_api_address_absent(_session: &dyn DocumentSession<TextFrame>) -> Option<String> {
+        _session.current_address()
+    }
+    fn t5_api_request_spawn_absent(
+        _engine: &dyn SessionEngine<TextFrame>,
+        _request: &SessionSpawnRequest,
+        _bytes: &[u8],
+    ) -> Result<(), SessionError> {
+        let request = SessionDocumentRequest { url: _request.address.clone(), method: "POST".into(),
+            headers: vec![], body: Some(_bytes.to_vec()), cache: "default".into(), redirect: "follow".into(),
+            mode: "navigate".into(), referrer: String::new(), referrer_policy: String::new(),
+            credentials: "include".into(), integrity: String::new() };
+        _engine.spawn_request(_request, &request).map(|_| ())
+    }
+    #[test]
+    fn phase_c_t5_api_legacy_submission_literal() {
+        let value = SessionFormSubmission {
+            action: "https://forms.test/send".into(), method: SessionFormMethod::Post,
+            fields: vec![("q".into(), "café".into())],
+        };
+        fn retains_serde<T:serde::Serialize+for<'de>serde::Deserialize<'de>>() {}
+        retains_serde::<SessionFormSubmission>();
+        let copied=value.clone();
+        let SessionFormSubmission{action,method,fields}=copied;
+        assert_eq!((action,method,fields),("https://forms.test/send".into(),SessionFormMethod::Post,vec![("q".into(),"café".into())]));
+    }
+    #[test]
+    fn phase_c_t5_api_legacy_result_literal() {
+        let value = SessionInputResult { effect: SessionEffect::Handled,
+            cursor: Some(SessionCursor::Text), capture: Some(false), editable: true };
+        let SessionInputResult { effect, cursor, capture, editable } = value;
+        let tag = match effect { SessionEffect::Ignored => 0, SessionEffect::Handled => 1,
+            SessionEffect::Navigate(_) => 2, SessionEffect::Submit(_) => 3,
+            SessionEffect::Cancelled => 4 };
+        assert_eq!((tag, cursor, capture, editable), (1, Some(SessionCursor::Text), Some(false), true));
+    }
+    #[test]
+    fn key_default_scroll_respects_effect_and_effective_editable_focus() {
+        let cases = [
+            (SessionEffect::Ignored, false, true),
+            (SessionEffect::Ignored, true, false),
+            (SessionEffect::Handled, false, false),
+            (SessionEffect::Cancelled, false, false),
+            (SessionEffect::Navigate("https://example.test/next".into()), false, false),
+            (SessionEffect::Submit(SessionFormSubmission::default()), false, false),
+        ];
+        for (effect, editable, expected) in cases {
+            assert_eq!(effect.allows_default_scroll(editable), expected, "{effect:?}, editable={editable}");
+        }
+
+        // A native navigation can install a new session during dispatch. Its
+        // editable focus, rather than the outgoing result's flag, decides the
+        // next default action without consuming the typed input result.
+        let result = SessionInputResult {
+            effect: SessionEffect::Ignored,
+            cursor: Some(SessionCursor::Text),
+            capture: Some(false),
+            editable: false,
+        };
+        assert!(result.effect.allows_default_scroll(result.editable));
+        assert!(!result.effect.allows_default_scroll(true));
+        assert_eq!(result.cursor, Some(SessionCursor::Text));
+        assert_eq!(result.capture, Some(false));
+    }
+    #[test]
+    fn phase_c_t5_api_legacy_spawn_unicode_body() {
+        let request = SessionSpawnRequest { address: "https://forms.test/".into(),
+            body: Some("café".into()), content_type: Some("text/html".into()),
+            viewport: (320, 240), hidden: false };
+        assert_eq!(request.body.as_deref(), Some("café"));
+        assert_eq!(SessionSpawnRequest::new("a").with_body("café").body, request.body);
+    }
+    #[test]
+    fn phase_c_t5_api_old_session_accessor_none() {
+        let mut old = EchoSession { address: "old".into(), scroll: 0.0, hidden: false };
+        assert!(t5_api_take_absent(&mut old).is_none());
+        let result = old.input(SessionInput::PointerButton { x: 1.0, y: 1.0,
+            button: SessionPointerButton::Primary, state: SessionButtonState::Pressed,
+            modifiers: SessionModifiers::default() });
+        assert_eq!(result.effect, SessionEffect::Navigate("gemini://example.test/".into()));
+    }
+    #[test]
+    fn phase_c_t5_api_old_factory_rich_decline() {
+        let request = SessionSpawnRequest::new("https://forms.test/");
+        assert!(matches!(t5_api_request_spawn_absent(&EchoSessionEngine, &request, &[0,128,255]),
+            Err(SessionError::Unsupported(_))));
+        let mut ordinary = EchoSessionEngine.spawn(&request).unwrap();
+        assert!(ordinary.frame(1, 1).starts_with("https://forms.test/"));
+    }
+    #[test]
+    fn phase_c_t5_api_old_session_current_address_none() {
+        let old = EchoSession { address: "legacy".into(), scroll: 0.0, hidden: false };
+        assert!(t5_api_address_absent(&old).is_none());
+        assert_eq!(old.address, "legacy");
+    }
+    // TASK5 DRAFT API FIXTURES END.
 }

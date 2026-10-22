@@ -5,6 +5,40 @@
 // SPDX-License-Identifier: MPL-2.0
 
 (function() {
+  'use strict';
+  var O = Object, W = WeakMap, N = Number, S = String;
+  var create = O.create, define = O.defineProperty;
+  var floor = Math.floor, max = Math.max, min = Math.min, parseInteger = parseInt;
+  var charCode = S.prototype.charCodeAt;
+  var wmGet = W.prototype.get, wmSet = W.prototype.set;
+  var wmHas = W.prototype.has, apply = Reflect.apply;
+  function get(map, key) { return apply(wmGet, map, [key]); }
+  function set(map, key, value) { apply(wmSet, map, [key, value]); return value; }
+  function has(map, key) { return apply(wmHas, map, [key]); }
+  var agent = globalThis.__agentTimers;
+  var contexts = agent.webglContexts || (agent.webglContexts = new W());
+  var resources = agent.webglResources || (agent.webglResources = new W());
+  var lifetimes = agent.webglRealmLifetimes || (agent.webglRealmLifetimes = create(null));
+  var realm = globalThis.__realmId || 0;
+  // Each bootstrap owns its record even if the realm id is later reused.
+  // Snapshot restoration rotates only the record's current token, leaving
+  // inherited contexts tied to the old token.
+  var realmRecord = lifetimes[realm] = { current: { live: true }, closed: false };
+  function lifetime() {
+    if (realmRecord.closed || !realmRecord.current.live)
+      throw new TypeError('WebGL realm is gone');
+    return realmRecord.current;
+  }
+  // Surface::set_function makes these setup-only globals configurable. After
+  // capture, authored script cannot call the registry-indexed native sinks.
+  var native = create(null);
+  var sinkNames = 'create_context external_texture_key resize_context clear_color clear enable disable is_enabled color_mask viewport get_error read_pixels_rgba8 create_buffer bind_buffer buffer_data_f32 create_shader shader_source compile_shader get_shader_compile_status get_shader_info_log create_program attach_shader link_program get_program_link_status get_program_info_log use_program get_attrib_location get_uniform_location enable_vertex_attrib_array vertex_attrib_pointer uniform4f uniform_matrix4fv uniform1i create_texture bind_texture_2d active_texture tex_image_2d_rgba8 draw_arrays'.split(' ');
+  for (var si = 0; si < sinkNames.length; si++) {
+    var name = '__webgl_' + sinkNames[si];
+    native[sinkNames[si]] = globalThis[name];
+    if (typeof native[sinkNames[si]] !== 'function' || !delete globalThis[name])
+      throw new TypeError('WebGL native sink was not hidden');
+  }
   // -----------------------------------------------------------------
   // GLenum constants. Numbers only — JS spec values; the host
   // re-maps them to its own enums.
@@ -35,93 +69,168 @@
   };
 
   // -----------------------------------------------------------------
-  // Lightweight reflector classes — each wraps a host-side id.
+  // Public constructors carry no authority. Only the private maps do.
   // -----------------------------------------------------------------
-  function WebGLBuffer(id) { this._id = id; }
-  function WebGLShader(id) { this._id = id; }
-  function WebGLProgram(id) { this._id = id; }
-  function WebGLTexture(id) { this._id = id; }
-  function WebGLUniformLocation(loc) { this._loc = loc; }
+  function WebGLBuffer() { throw new TypeError('Illegal constructor'); }
+  function WebGLShader() { throw new TypeError('Illegal constructor'); }
+  function WebGLProgram() { throw new TypeError('Illegal constructor'); }
+  function WebGLTexture() { throw new TypeError('Illegal constructor'); }
+  function WebGLUniformLocation() { throw new TypeError('Illegal constructor'); }
+  function contextState(value) {
+    if (!has(contexts, value)) throw new TypeError('Illegal WebGL receiver');
+    var state = get(contexts, value);
+    if (!state.life.live) throw new TypeError('WebGL context is gone');
+    return state;
+  }
+  function checkedSink(state, sink) {
+    return function() {
+      if (!state.life.live) throw new TypeError('WebGL context is gone');
+      return apply(sink, undefined, arguments);
+    };
+  }
+  function checkedOps(state) {
+    var ops = create(null);
+    for (var i = 0; i < sinkNames.length; i++) {
+      var name = sinkNames[i];
+      ops[name] = checkedSink(state, native[name]);
+    }
+    return ops;
+  }
+  function resourceState(ctx, value, kind) {
+    if (!has(resources, value)) throw new TypeError('Invalid WebGL resource');
+    var state = get(resources, value);
+    if (state.kind !== kind || state.owner !== ctx || !state.live)
+      throw new TypeError('WebGL resource belongs to another context or is deleted');
+    return state;
+  }
+  function resourceId(ctx, value, kind, nullable) {
+    if (nullable && value == null) return '0';
+    return resourceState(ctx, value, kind).id;
+  }
+  function makeResource(ctx, constructor, kind, id, program) {
+    if (id === '0' && kind !== 'uniform') return null;
+    var value = create(constructor.prototype);
+    set(resources, value, { owner: ctx, kind: kind, id: id, live: true,
+      program: program || null, epoch: program ? program.epoch : 0 });
+    return value;
+  }
+  function isResource(ctx, value, kind) {
+    var state = has(resources, value) ? get(resources, value) : null;
+    return !!(state && state.kind === kind && state.owner === ctx && state.live);
+  }
+  function deleteResource(ctx, value, kind) {
+    if (value == null) return;
+    var state = resourceState(ctx, value, kind);
+    state.live = false;
+    if (kind === 'program') state.epoch++;
+  }
+  function locationId(ctx, loc) {
+    var state = resourceState(ctx, loc, 'uniform');
+    if (!state.program.live || state.program.epoch !== state.epoch)
+      throw new TypeError('Stale WebGL uniform location');
+    return state.id;
+  }
+  function finite(value) {
+    var n = N(value);
+    if (!N.isFinite(n)) throw new TypeError('Finite WebGL number required');
+    return n;
+  }
+  function number(value) { return N(value); }
+  function u32(value) {
+    var n = finite(value);
+    if (n < 0 || n > 4294967295 || floor(n) !== n)
+      throw new TypeError('WebGL unsigned integer required');
+    return n;
+  }
+  function i32(value) {
+    var n = finite(value);
+    if (n < -2147483648 || n > 2147483647 || floor(n) !== n)
+      throw new TypeError('WebGL signed integer required');
+    return n;
+  }
+  var F32 = Float32Array, U8 = Uint8Array;
+  function floatView(value) {
+    var view;
+    if (typeof value === 'number') {
+      var bytes = u32(value);
+      if (bytes % 4) throw new TypeError('WebGL buffer byte size must be divisible by four');
+      view = new F32(bytes / 4);
+    } else {
+      if (value == null) throw new TypeError('WebGL buffer data required');
+      view = new F32(value);
+    }
+    return view;
+  }
 
   // -----------------------------------------------------------------
-  // Float32Array helpers (the conformance JS uses typed arrays
-  // throughout). The "is it typed?" check is duck-typed because
-  // we may not have Float32Array constructor identity preserved
-  // across the engine boundary.
+  // Readback still crosses as a byte string until the sink's return
+  // shape becomes a native Uint8Array. Input views cross as genuine views.
   // -----------------------------------------------------------------
-  function asFloatList(v) {
-    if (v == null) return '';
-    var n = v.length | 0;
-    var parts = new Array(n);
-    for (var i = 0; i < n; i++) parts[i] = String(v[i]);
-    return parts.join(',');
-  }
   function unpackBinary(s) {
     var n = s.length | 0;
-    var out = new Uint8Array(n);
-    for (var i = 0; i < n; i++) out[i] = s.charCodeAt(i) & 0xFF;
+    var out = new U8(n);
+    for (var i = 0; i < n; i++) out[i] = apply(charCode, s, [i]) & 0xFF;
     return out;
   }
-  function idOrZero(o) {
-    if (o == null) return '0';
-    if (typeof o === 'object' && o._id != null) return String(o._id);
-    return '0';
-  }
-
   // -----------------------------------------------------------------
-  // WebGLRenderingContext: thin, the Triangle-class subset. Each
-  // instance carries `_ctx` (the host registry index) threaded as
-  // arg 0 of every sink. Methods that don't fit the surface throw
-  // (so test failures are loud).
+  // WebGLRenderingContext: the Triangle-class subset. Native ids are
+  // only reachable through the context's private state.
   // -----------------------------------------------------------------
-  function WebGLRenderingContext(width, height) {
+  var constructionToken = {};
+  function WebGLRenderingContext(token, contextId, width, height) {
+    if (token !== constructionToken) throw new TypeError('Illegal constructor');
     // GLenum constants on the instance, per the WebGL IDL.
     for (var k in K) { if (K.hasOwnProperty(k)) this[k] = K[k]; }
-    // Direct construction keeps the HTML canvas default dimensions. A canvas
-    // resize can deliberately pass zero, which the host clamps to one pixel.
-    var w = width === undefined ? 300 : Math.max(1, width >>> 0);
-    var h = height === undefined ? 150 : Math.max(1, height >>> 0);
-    this._ctx = parseInt(__webgl_create_context(String(w), String(h)), 10) | 0;
-    this.drawingBufferWidth = w;
-    this.drawingBufferHeight = h;
-    this._externalTextureKey = __webgl_external_texture_key(String(this._ctx));
+    // Creation is attempted before this constructor runs, so an unavailable
+    // host context never becomes a context-shaped JS object.
+    var state = { id: contextId, life: lifetime() };
+    state.ops = checkedOps(state);
+    set(contexts, this, state);
+    this.drawingBufferWidth = width;
+    this.drawingBufferHeight = height;
+    state.externalTextureKey = state.ops.external_texture_key(S(contextId));
+    define(this, '_externalTextureKey', { configurable: false,
+      get: function() { return contextState(this).externalTextureKey; } });
   }
   var P = WebGLRenderingContext.prototype;
 
   P._resizeDrawingBuffer = function(width, height) {
-    var w = Math.max(1, width >>> 0);
-    var h = Math.max(1, height >>> 0);
-    __webgl_resize_context(String(this._ctx), String(w), String(h));
+    var ctx = contextState(this), w = max(1, u32(width)), h = max(1, u32(height));
+    ctx.ops.resize_context(S(ctx.id), w, h);
     this.drawingBufferWidth = w;
     this.drawingBufferHeight = h;
   };
 
   // State / framebuffer.
   P.clearColor = function(r, g, b, a) {
-    __webgl_clear_color(String(this._ctx), String(+r), String(+g), String(+b), String(+a));
+    var ctx = contextState(this);
+    ctx.ops.clear_color(S(ctx.id), number(r), number(g), number(b), number(a));
   };
-  P.clear = function(mask) { __webgl_clear(String(this._ctx), String(mask >>> 0)); };
-  P.enable = function(cap) { __webgl_enable(String(this._ctx), String(cap >>> 0)); };
-  P.disable = function(cap) { __webgl_disable(String(this._ctx), String(cap >>> 0)); };
+  P.clear = function(mask) { var ctx = contextState(this); ctx.ops.clear(S(ctx.id), u32(mask)); };
+  P.enable = function(cap) { var ctx = contextState(this); ctx.ops.enable(S(ctx.id), u32(cap)); };
+  P.disable = function(cap) { var ctx = contextState(this); ctx.ops.disable(S(ctx.id), u32(cap)); };
   P.isEnabled = function(cap) {
-    return __webgl_is_enabled(String(this._ctx), String(cap >>> 0)) === '1';
+    var ctx = contextState(this);
+    return ctx.ops.is_enabled(S(ctx.id), u32(cap)) === '1';
   };
   P.colorMask = function(r, g, b, a) {
-    __webgl_color_mask(String(this._ctx),
+    var ctx = contextState(this);
+    ctx.ops.color_mask(S(ctx.id),
       r ? '1' : '0', g ? '1' : '0', b ? '1' : '0', a ? '1' : '0');
   };
   P.viewport = function(x, y, w, h) {
-    __webgl_viewport(String(this._ctx), String(x|0), String(y|0), String(w>>>0), String(h>>>0));
+    var ctx = contextState(this);
+    ctx.ops.viewport(S(ctx.id), i32(x), i32(y), u32(w), u32(h));
   };
-  P.getError = function() { return parseInt(__webgl_get_error(String(this._ctx)), 10) | 0; };
+  P.getError = function() { var ctx = contextState(this); return parseInteger(ctx.ops.get_error(S(ctx.id)), 10) | 0; };
   P.readPixels = function(x, y, w, h, format, type, dst) {
     // The smoke uses RGBA / UNSIGNED_BYTE only — a richer pixel-pack
     // path lands with the broader read-back conformance.
-    var packed = __webgl_read_pixels_rgba8(
-      String(this._ctx), String(x|0), String(y|0), String(w>>>0), String(h>>>0));
+    var ctx = contextState(this);
+    var packed = ctx.ops.read_pixels_rgba8(S(ctx.id), i32(x), i32(y), u32(w), u32(h));
     var bytes = unpackBinary(packed);
     if (dst) {
-      var n = Math.min(dst.length | 0, bytes.length | 0);
+      var n = min(dst.length | 0, bytes.length | 0);
       for (var i = 0; i < n; i++) dst[i] = bytes[i];
     }
     return bytes;
@@ -129,127 +238,154 @@
 
   // Buffers.
   P.createBuffer = function() {
-    return new WebGLBuffer(__webgl_create_buffer(String(this._ctx)));
+    var ctx = contextState(this);
+    return makeResource(ctx, WebGLBuffer, 'buffer', ctx.ops.create_buffer(S(ctx.id)));
   };
   P.bindBuffer = function(target, buf) {
-    __webgl_bind_buffer(String(this._ctx), String(target >>> 0), idOrZero(buf));
+    var ctx = contextState(this);
+    var targetValue = u32(target);
+    ctx.ops.bind_buffer(S(ctx.id), targetValue, resourceId(ctx, buf, 'buffer', true));
   };
   P.bufferData = function(target, srcOrSize, usage) {
-    var floats;
-    if (typeof srcOrSize === 'number') {
-      floats = new Array(srcOrSize >>> 2).fill(0);
-    } else {
-      floats = srcOrSize;
-    }
-    __webgl_buffer_data_f32(
-      String(this._ctx),
-      String(target >>> 0),
-      asFloatList(floats),
-      String((usage >>> 0) || K.STATIC_DRAW)
-    );
+    var ctx = contextState(this);
+    ctx.ops.buffer_data_f32(S(ctx.id), u32(target), floatView(srcOrSize),
+      usage === undefined ? K.STATIC_DRAW : u32(usage));
   };
 
   // Shaders.
   P.createShader = function(stage) {
-    return new WebGLShader(__webgl_create_shader(String(this._ctx), String(stage >>> 0)));
+    var ctx = contextState(this);
+    return makeResource(ctx, WebGLShader, 'shader', ctx.ops.create_shader(S(ctx.id), u32(stage)));
   };
   P.shaderSource = function(shader, source) {
-    __webgl_shader_source(String(this._ctx), idOrZero(shader), String(source || ''));
+    var ctx = contextState(this);
+    var text = S(source);
+    ctx.ops.shader_source(S(ctx.id), resourceId(ctx, shader, 'shader'), text);
   };
   P.compileShader = function(shader) {
-    __webgl_compile_shader(String(this._ctx), idOrZero(shader));
+    var ctx = contextState(this);
+    ctx.ops.compile_shader(S(ctx.id), resourceId(ctx, shader, 'shader'));
   };
   P.getShaderParameter = function(shader, pname) {
+    var ctx = contextState(this), id = resourceId(ctx, shader, 'shader');
     if (pname === K.COMPILE_STATUS) {
-      return __webgl_get_shader_compile_status(String(this._ctx), idOrZero(shader)) === '1';
+      return ctx.ops.get_shader_compile_status(S(ctx.id), id) === '1';
     }
     return null;
   };
   P.getShaderInfoLog = function(shader) {
-    return __webgl_get_shader_info_log(String(this._ctx), idOrZero(shader));
+    var ctx = contextState(this);
+    return ctx.ops.get_shader_info_log(S(ctx.id), resourceId(ctx, shader, 'shader'));
   };
 
   // Programs.
   P.createProgram = function() {
-    return new WebGLProgram(__webgl_create_program(String(this._ctx)));
+    var ctx = contextState(this);
+    var program = makeResource(ctx, WebGLProgram, 'program', ctx.ops.create_program(S(ctx.id)));
+    if (program) get(resources, program).epoch = 0;
+    return program;
   };
   P.attachShader = function(program, shader) {
-    __webgl_attach_shader(String(this._ctx), idOrZero(program), idOrZero(shader));
+    var ctx = contextState(this);
+    ctx.ops.attach_shader(S(ctx.id), resourceId(ctx, program, 'program'), resourceId(ctx, shader, 'shader'));
   };
   P.linkProgram = function(program) {
-    __webgl_link_program(String(this._ctx), idOrZero(program));
+    var ctx = contextState(this), state = resourceState(ctx, program, 'program');
+    state.epoch++;
+    ctx.ops.link_program(S(ctx.id), state.id);
   };
   P.getProgramParameter = function(program, pname) {
+    var ctx = contextState(this), id = resourceId(ctx, program, 'program');
     if (pname === K.LINK_STATUS) {
-      return __webgl_get_program_link_status(String(this._ctx), idOrZero(program)) === '1';
+      return ctx.ops.get_program_link_status(S(ctx.id), id) === '1';
     }
     return null;
   };
   P.getProgramInfoLog = function(program) {
-    return __webgl_get_program_info_log(String(this._ctx), idOrZero(program));
+    var ctx = contextState(this);
+    return ctx.ops.get_program_info_log(S(ctx.id), resourceId(ctx, program, 'program'));
   };
   P.useProgram = function(program) {
-    __webgl_use_program(String(this._ctx), idOrZero(program));
+    var ctx = contextState(this);
+    ctx.ops.use_program(S(ctx.id), resourceId(ctx, program, 'program', true));
   };
 
   // Attributes / uniforms.
   P.getAttribLocation = function(program, name) {
-    var s = __webgl_get_attrib_location(String(this._ctx), idOrZero(program), String(name || ''));
-    return parseInt(s, 10) | 0;
+    var ctx = contextState(this);
+    var text = S(name);
+    var s = ctx.ops.get_attrib_location(S(ctx.id), resourceId(ctx, program, 'program'), text);
+    return parseInteger(s, 10) | 0;
   };
   P.getUniformLocation = function(program, name) {
-    var s = __webgl_get_uniform_location(String(this._ctx), idOrZero(program), String(name || ''));
-    var loc = parseInt(s, 10) | 0;
-    return loc < 0 ? null : new WebGLUniformLocation(loc);
+    var ctx = contextState(this), text = S(name);
+    var state = resourceState(ctx, program, 'program');
+    var s = ctx.ops.get_uniform_location(S(ctx.id), state.id, text);
+    var loc = parseInteger(s, 10) | 0;
+    return loc < 0 ? null : makeResource(ctx, WebGLUniformLocation, 'uniform', S(loc), state);
   };
   P.enableVertexAttribArray = function(index) {
-    __webgl_enable_vertex_attrib_array(String(this._ctx), String(index >>> 0));
+    var ctx = contextState(this);
+    ctx.ops.enable_vertex_attrib_array(S(ctx.id), u32(index));
   };
   P.vertexAttribPointer = function(index, size, type, normalized, stride, offset) {
     // type is always FLOAT for the Triangle-class smoke; the broader
     // surface gates on it.
-    if ((type >>> 0) !== K.FLOAT) {
+    if (u32(type) !== K.FLOAT) {
       throw new TypeError('vertexAttribPointer: only FLOAT supported at this layer');
     }
-    __webgl_vertex_attrib_pointer(
-      String(this._ctx), String(index >>> 0), String(size >>> 0),
+    var ctx = contextState(this);
+    ctx.ops.vertex_attrib_pointer(
+      S(ctx.id), u32(index), u32(size),
       normalized ? '1' : '0',
-      String(stride >>> 0), String(offset >>> 0)
+      u32(stride), u32(offset)
     );
   };
   P.uniform4f = function(loc, x, y, z, w) {
+    var ctx = contextState(this);
     if (loc == null) return;
-    __webgl_uniform4f(String(this._ctx), String(loc._loc | 0),
-      String(+x), String(+y), String(+z), String(+w));
+    var values = [number(x), number(y), number(z), number(w)];
+    ctx.ops.uniform4f(S(ctx.id), i32(locationId(ctx, loc)),
+      values[0], values[1], values[2], values[3]);
   };
   P.uniformMatrix4fv = function(loc, transpose, value) {
+    var ctx = contextState(this);
     if (loc == null) return;
-    __webgl_uniform_matrix4fv(String(this._ctx), String(loc._loc | 0),
-      transpose ? '1' : '0', asFloatList(value));
+    var matrix = floatView(value);
+    if (matrix.length < 16) throw new TypeError('At least 16 matrix values required');
+    ctx.ops.uniform_matrix4fv(S(ctx.id), i32(locationId(ctx, loc)),
+      transpose ? '1' : '0', matrix);
   };
   P.uniform1i = function(loc, v) {
+    var ctx = contextState(this);
     if (loc == null) return;
-    __webgl_uniform1i(String(this._ctx), String(loc._loc | 0), String(v | 0));
+    var value = i32(v);
+    ctx.ops.uniform1i(S(ctx.id), i32(locationId(ctx, loc)), value);
   };
 
   // Textures.
   P.createTexture = function() {
-    return new WebGLTexture(__webgl_create_texture(String(this._ctx)));
+    var ctx = contextState(this);
+    return makeResource(ctx, WebGLTexture, 'texture', ctx.ops.create_texture(S(ctx.id)));
   };
   P.bindTexture = function(target, tex) {
     // Only TEXTURE_2D is wired through this layer; cube maps land with
     // the broader texture conformance.
-    if ((target >>> 0) !== K.TEXTURE_2D) return;
-    __webgl_bind_texture_2d(String(this._ctx), idOrZero(tex));
+    var ctx = contextState(this);
+    if (u32(target) !== K.TEXTURE_2D) return;
+    ctx.ops.bind_texture_2d(S(ctx.id), resourceId(ctx, tex, 'texture', true));
   };
   P.activeTexture = function(unit) {
     // unit is TEXTURE0 + n; the host wants the 0-based index.
-    __webgl_active_texture(String(this._ctx), String(((unit >>> 0) - K.TEXTURE0) >>> 0));
+    var ctx = contextState(this), value = u32(unit);
+    if (value < K.TEXTURE0) throw new TypeError('Invalid texture unit');
+    ctx.ops.active_texture(S(ctx.id), u32(value - K.TEXTURE0));
   };
   // texParameteri is accepted but a no-op: webgl-wgpu samples NEAREST /
   // CLAMP_TO_EDGE today, which matches the conformance smoke's needs.
-  P.texParameteri = function(target, pname, param) {};
+  P.texParameteri = function(target, pname, param) { contextState(this); };
   P.texImage2D = function() {
+    var ctx = contextState(this);
     // Support the 9-arg pixel-store form
     //   texImage2D(target, level, internalformat, width, height, border,
     //              format, type, pixels)
@@ -258,21 +394,18 @@
     if (a.length < 9) {
       throw new TypeError('texImage2D: only the 9-arg RGBA8 form is supported here');
     }
-    if ((a[0] >>> 0) !== K.TEXTURE_2D) return;
-    var width = a[3] >>> 0, height = a[4] >>> 0, pixels = a[8];
-    var bin = '';
-    if (pixels != null) {
-      var n = pixels.length | 0;
-      var arr = new Array(n);
-      for (var i = 0; i < n; i++) arr[i] = String.fromCharCode(pixels[i] & 0xFF);
-      bin = arr.join('');
-    }
-    __webgl_tex_image_2d_rgba8(String(this._ctx), String(width), String(height), bin);
+    if (u32(a[0]) !== K.TEXTURE_2D) return;
+    var width = u32(a[3]), height = u32(a[4]);
+    var pixels = a[8] == null ? new U8(0) : new U8(a[8]);
+    if (pixels.length && pixels.length !== width * height * 4)
+      throw new TypeError('WebGL texture byte length mismatch');
+    ctx.ops.tex_image_2d_rgba8(S(ctx.id), width, height, pixels);
   };
 
   // Draw.
   P.drawArrays = function(mode, first, count) {
-    __webgl_draw_arrays(String(this._ctx), String(mode >>> 0), String(first | 0), String(count | 0));
+    var ctx = contextState(this);
+    ctx.ops.draw_arrays(S(ctx.id), u32(mode), i32(first), i32(count));
   };
 
   // -----------------------------------------------------------------
@@ -282,33 +415,34 @@
   // missing method.
   // -----------------------------------------------------------------
   // No extensions are exposed at this layer.
-  P.getExtension = function(name) { return null; };
-  P.getSupportedExtensions = function() { return []; };
+  P.getExtension = function(name) { contextState(this); return null; };
+  P.getSupportedExtensions = function() { contextState(this); return []; };
   // getParameter: the conformance utils mostly read this behind feature
   // gates the smoke doesn't hit. Return null (unknown) for now; specific
   // pnames get real values as conformance needs them.
-  P.getParameter = function(pname) { return null; };
+  P.getParameter = function(pname) { contextState(this); return null; };
   // webgl-essl assigns attribute locations in declaration order, which
   // matches how the utils bind them (0, 1, ...), so this is a safe no-op.
-  P.bindAttribLocation = function(program, index, name) {};
+  P.bindAttribLocation = function(program, index, name) {
+    resourceState(contextState(this), program, 'program');
+  };
   // Sampler/pixel-store parameters: we sample NEAREST / CLAMP and treat
   // RGBA8 tightly-packed, which covers the smoke.
-  P.texParameterf = function(target, pname, param) {};
-  P.pixelStorei = function(pname, param) {};
+  P.texParameterf = function(target, pname, param) { contextState(this); };
+  P.pixelStorei = function(pname, param) { contextState(this); };
   // Object deletion: the backend reclaims on context drop; explicit
   // deletes are accepted as no-ops so teardown code runs.
-  P.deleteProgram = function(p) {};
-  P.deleteShader = function(s) {};
-  P.deleteBuffer = function(b) {};
-  P.deleteTexture = function(t) {};
-  // Resource liveness predicates default to true for live handles.
-  P.isProgram = function(p) { return p != null && p._id != null; };
-  P.isShader = function(s) { return s != null && s._id != null; };
-  P.isBuffer = function(b) { return b != null && b._id != null; };
-  P.isTexture = function(t) { return t != null && t._id != null; };
+  P.deleteProgram = function(p) { deleteResource(contextState(this), p, 'program'); };
+  P.deleteShader = function(s) { deleteResource(contextState(this), s, 'shader'); };
+  P.deleteBuffer = function(b) { deleteResource(contextState(this), b, 'buffer'); };
+  P.deleteTexture = function(t) { deleteResource(contextState(this), t, 'texture'); };
+  P.isProgram = function(p) { return isResource(contextState(this), p, 'program'); };
+  P.isShader = function(s) { return isResource(contextState(this), s, 'shader'); };
+  P.isBuffer = function(b) { return isResource(contextState(this), b, 'buffer'); };
+  P.isTexture = function(t) { return isResource(contextState(this), t, 'texture'); };
   // Cooperative scheduling hooks some tests call; harmless here.
-  P.flush = function() {};
-  P.finish = function() {};
+  P.flush = function() { contextState(this); };
+  P.finish = function() { contextState(this); };
 
   // Constructors on the global so tests can `instanceof` them.
   globalThis.WebGLRenderingContext = WebGLRenderingContext;
@@ -319,10 +453,17 @@
   globalThis.WebGLUniformLocation = WebGLUniformLocation;
 
   // Host / test helper: a bare context at the given drawing-buffer size
-  // (defaults to the HTML canvas 300x150). The host must have installed a
-  // WebGlFactory via Runtime::set_webgl_factory; otherwise _ctx is -1 and
-  // every sink no-ops / returns 0 / NO_ERROR.
+  // (defaults to the HTML canvas 300x150). A missing or refusing factory
+  // returns null without constructing a JS context.
   globalThis.__createWebGLContext = function(width, height) {
-    return new WebGLRenderingContext(width, height);
+    lifetime();
+    // A canvas resize can deliberately pass zero, which the host clamps to
+    // one pixel. Keep the same dimensions for bare and canvas contexts.
+    var w = width === undefined ? 300 : max(1, u32(width));
+    var h = height === undefined ? 150 : max(1, u32(height));
+    lifetime();
+    var contextId = parseInteger(native.create_context(w, h), 10);
+    if (!(contextId >= 0)) return null;
+    return new WebGLRenderingContext(constructionToken, contextId, w, h);
   };
 })();

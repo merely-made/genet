@@ -74,6 +74,69 @@ fn only_id(rec: &Recorder) -> u64 {
     ids[0]
 }
 
+#[cfg(test)]
+mod phase_c_private_blob_fixtures {
+    use super::*;
+    fn run<E: ScriptEngine>(rt: &mut Runtime<E>, source: &str) {
+        if let Err(error) = rt.eval(source) {
+            panic!("{}\n{source}", rt.describe_error(&error));
+        }
+    }
+    fn send_private_bytes<E: ScriptEngine>() {
+        let (mut rt, rec) = wired::<E>();
+        run(&mut rt, "var socket=new WebSocket('ws://socket.test/');");
+        let id = only_id(&rec);
+        rt.ws_open(id, "", "");
+        run(
+            &mut rt,
+            r#"var original=new Blob([new Uint8Array([0,128,255])]);original._b=new Uint8Array([9]);Object.defineProperty(original,'size',{value:999});var saved=Blob;Blob=function(){throw new Error('authored Blob');};try{socket.send(original);}finally{Blob=saved;}"#,
+        );
+        assert!(
+            matches!(rec.ops.borrow().last(),Some(Op::Binary(bytes)) if bytes==&[0,128,255]),
+            "WebSocket must extract genuine private Blob bytes"
+        );
+        assert_eq!(
+            read(&mut rt, "socket.bufferedAmount"),
+            "3",
+            "private size derives bytes"
+        );
+    }
+    fn inbound_captured_factory<E: ScriptEngine>() {
+        let (mut rt, rec) = wired::<E>();
+        run(&mut rt,"var socket=new WebSocket('ws://socket.test/'),result='pending';socket.addEventListener('message',function(e){e.data.arrayBuffer().then(function(b){result=Array.from(new Uint8Array(b)).join(',');});});var originalBlob=Blob;Blob=function(){throw new Error('authored Blob factory');};");
+        let id = only_id(&rec);
+        rt.ws_open(id, "", "");
+        rt.ws_message_binary(id, &[0, 128, 255]);
+        run(&mut rt, "Blob=originalBlob;");
+        rt.run_microtasks();
+        assert_eq!(
+            read(&mut rt, "result"),
+            "0,128,255",
+            "inbound Blob factory captured before authors"
+        );
+    }
+    fn fake_blob_uses_text<E: ScriptEngine>() {
+        let (mut rt, rec) = wired::<E>();
+        run(&mut rt, "var socket=new WebSocket('ws://socket.test/');");
+        let id = only_id(&rec);
+        rt.ws_open(id, "", "");
+        run(
+            &mut rt,
+            r#"var fake=Object.create(Blob.prototype);fake._b=new Uint8Array([9]);fake.size=1;fake.toString=function(){return 'fake-plain';};socket.send(fake);"#,
+        );
+        assert!(
+            matches!(rec.ops.borrow().last(),Some(Op::Text(text)) if text=="fake-plain"),
+            "public prototype does not select Blob overload"
+        );
+    }
+    macro_rules! both{($($name:ident=>$case:ident),*$(,)?)=>{$(mod $name{#[test]fn boa(){super::$case::<script_engine_boa::BoaEngine>();}#[cfg(target_pointer_width="64")]#[test]fn nova(){super::$case::<script_engine_nova::NovaEngine>();}})*};}
+    both! {
+        phase_c_websocket_private_blob_send=>send_private_bytes,
+        phase_c_websocket_private_blob_inbound=>inbound_captured_factory,
+        phase_c_websocket_private_blob_fake=>fake_blob_uses_text,
+    }
+}
+
 // ── the interfaces ───────────────────────────────────────────────────────────
 
 fn interfaces_and_constants<E: ScriptEngine>() {
@@ -517,6 +580,18 @@ fn pending_count_tracks_live_sockets<E: ScriptEngine>() {
     assert_eq!(read(&mut rt, "String(b.readyState)"), "3");
 }
 
+fn retained_host_delivery_survives_public_hook_replacement<E: ScriptEngine>() {
+    let (mut rt, rec) = wired::<E>();
+    rt.eval("var socket=new WebSocket('ws://socket.test/'); var received=[]; socket.addEventListener('open',function(){received.push('open');}); socket.addEventListener('message',function(e){received.push(e.data.byteLength);}); socket.addEventListener('close',function(e){received.push(e.wasClean);}); socket.binaryType='arraybuffer'; for(var name of ['__websocketOpen','__websocketMessageBinary','__websocketClose','__websocketPending','__websocketFailAll'])globalThis[name]=function(){throw new Error('stolen '+name);};").expect("setup");
+    let id = only_id(&rec);
+    assert_eq!(rt.pending_websockets(), 1);
+    rt.ws_open(id, "", "");
+    rt.ws_message_binary(id, &[0, 128, 255]);
+    rt.ws_close(id, 1000, "", true);
+    assert_eq!(read(&mut rt, "received.join(',')"), "open,3,true");
+    assert_eq!(rt.pending_websockets(), 0);
+}
+
 macro_rules! both_engines {
     ($($body:ident => ($boa:ident, $nova:ident)),* $(,)?) => {
         $(
@@ -543,4 +618,5 @@ both_engines! {
     with_no_handler_every_connection_fails => (no_handler_on_boa, no_handler_on_nova),
     event_handlers_treat_non_callable_as_null => (handlers_on_boa, handlers_on_nova),
     pending_count_tracks_live_sockets => (pending_on_boa, pending_on_nova),
+    retained_host_delivery_survives_public_hook_replacement => (retained_delivery_on_boa, retained_delivery_on_nova),
 }

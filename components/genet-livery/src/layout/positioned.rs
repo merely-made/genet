@@ -376,7 +376,7 @@ pub(in crate::layout) fn positioned_placements<D>(
     boxes: &buckram::CssBoxTree<D::NodeId>,
     styles: &StylePlane<D::NodeId>,
     dom: &D,
-    image_sources: &ImageSources,
+    image_sources: &dyn crate::ImageSourceLookup,
     intrinsic_sizes: &HashMap<BoxId, IntrinsicSizes>,
     viewport_width: f32,
     viewport_height: f32,
@@ -462,7 +462,7 @@ fn positioned_placement<D>(
     boxes: &buckram::CssBoxTree<D::NodeId>,
     styles: &StylePlane<D::NodeId>,
     dom: &D,
-    image_sources: &ImageSources,
+    image_sources: &dyn crate::ImageSourceLookup,
     intrinsic_sizes: &HashMap<BoxId, IntrinsicSizes>,
     (viewport_width, viewport_height): (f32, f32),
     candidate: PositionedCandidate<D::NodeId>,
@@ -827,7 +827,7 @@ where
 /// inline size. Other positioned subtrees retain the formatter fallback
 /// until their own K5d sizing route is implemented.
 pub(in crate::layout) fn apply_admitted_positioned_inline_sizes<Context, Source>(
-    tree: &mut AlgorithmTree<Style, Context, Source>,
+    tree: &mut AlgorithmTree<Context, Source>,
     candidates: &[(BoxId, AlgorithmNodeId)],
     placements: &[PositionedPlacement],
     intrinsic_sizes: &HashMap<BoxId, IntrinsicSizes>,
@@ -894,7 +894,7 @@ pub(in crate::layout) fn apply_absolute_and_fixed_positioning<D>(
     styles: &StylePlane<D::NodeId>,
     dom: &D,
     mut text_frame: Option<&mut TextFrame<D::NodeId>>,
-    image_sources: &ImageSources,
+    image_sources: &dyn crate::ImageSourceLookup,
     intrinsic_sizes: &HashMap<BoxId, IntrinsicSizes>,
     viewport_width: f32,
     viewport_height: f32,
@@ -947,7 +947,7 @@ pub(in crate::layout) fn apply_absolute_and_fixed_positioning<D>(
 }
 
 pub(in crate::layout) fn fragment_baselines<Id, Context, Source>(
-    tree: &AlgorithmTree<Style, Context, Source>,
+    tree: &AlgorithmTree<Context, Source>,
     boxes: &GeneratedBoxTree<Id>,
     node: AlgorithmNodeId,
     box_id: BoxId,

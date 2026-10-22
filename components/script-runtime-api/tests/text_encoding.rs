@@ -8,7 +8,7 @@
 use std::time::{Duration, Instant};
 
 use script_engine_api::ScriptEngine;
-use script_runtime_api::{NoScriptLoader, Runtime, ScriptResourceLoader};
+use script_runtime_api::{NoScriptLoader, Runtime, ScriptResourceLoader, WorkerPolicy};
 
 struct Scripts(Vec<(String, String)>);
 
@@ -362,16 +362,18 @@ fn drive_until<E: ScriptEngine>(runtime: &mut Runtime<E>, done: &str) -> bool {
     let mut now_ms = 0.0f64;
     while Instant::now() < deadline {
         runtime.run_microtasks();
-        let fired = runtime.run_timers(64, now_ms);
+        let fired = runtime.run_timers(64, now_ms).expect("timer task");
         let worked = runtime.pump_workers();
         if read(runtime, done) == "true" {
             return true;
         }
-        if let Some(delay) = runtime.next_timer_delay() {
+        if let Some(delay) = runtime.next_timer_delay().expect("timer delay") {
             now_ms += delay.max(0.0);
         }
         if fired == 0 && worked == 0 {
-            if !runtime.has_worker_work() && runtime.next_timer_delay().is_none() {
+            if !runtime.has_worker_work()
+                && runtime.next_timer_delay().expect("timer delay").is_none()
+            {
                 return read(runtime, done) == "true";
             }
             std::thread::sleep(Duration::from_millis(1));
@@ -382,6 +384,10 @@ fn drive_until<E: ScriptEngine>(runtime: &mut Runtime<E>, done: &str) -> bool {
 
 fn worker_has_encoding_surfaces<E: ScriptEngine>() {
     let mut runtime = runtime::<E>();
+    runtime.set_worker_policy(WorkerPolicy::TrustedCooperative {
+        resource_timeout: Duration::from_secs(30),
+        shutdown_grace: Duration::from_millis(500),
+    });
     runtime.set_script_resource_loader(scripts(&[(
         "https://encoding.test/encoding-worker.js",
         "var decoder=new TextDecoder('latin1');var bytes=new Uint8Array([0,128,0]);var view=new Uint8Array(bytes.buffer,1,1);var dest=new Uint8Array(4);var encoded=new TextEncoder().encodeInto('A😀B',dest);postMessage({encoding:decoder.encoding,text:decoder.decode(view),read:encoded.read,written:encoded.written});",

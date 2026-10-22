@@ -131,6 +131,24 @@ impl Parser {
                 let index = self.expr()?;
                 let rbr = self.expect_punct(Punct::RBracket, "`]`")?;
                 let base_span = lhs.span();
+                if self.fragment_output_alias
+                    && matches!(&lhs, Expr::Ident { name, .. } if name == "gl_FragData")
+                {
+                    let span = base_span.merge(rbr);
+                    return if matches!(index, Expr::IntLit { value: 0, .. }) {
+                        Ok(Expr::Ident {
+                            name: "gl_FragColor".into(),
+                            span,
+                        })
+                    } else {
+                        Err(Error::new(
+                            ErrorKind::Unsupported {
+                                what: "fragment draw-buffer outputs beyond gl_FragData[0]",
+                            },
+                            span,
+                        ))
+                    };
+                }
                 Ok(Expr::Index {
                     base: Box::new(lhs),
                     index: Box::new(index),

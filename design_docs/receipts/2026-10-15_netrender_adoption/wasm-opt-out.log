@@ -1,0 +1,155 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling wasm-bindgen-shared v0.2.129
+   Compiling syn v3.0.6
+    Checking cfg-if v1.0.5
+    Checking once_cell v1.21.4
+   Compiling bumpalo v3.20.3
+    Checking futures-core v0.3.34
+   Compiling wasm-bindgen v0.2.129
+    Checking unicode-ident v1.0.26
+    Checking pin-project-lite v0.2.17
+    Checking slab v0.4.12
+    Checking futures-task v0.3.34
+    Checking smallvec v1.16.2
+    Checking futures-util v0.3.34
+   Compiling wasm-bindgen-macro-support v0.2.129
+   Compiling thiserror-impl v2.0.21
+   Compiling bytemuck_derive v1.12.1
+    Checking bytemuck v1.25.2
+    Checking arrayvec v0.7.8
+   Compiling num-traits v0.2.19
+    Checking foldhash v0.2.0
+    Checking hashbrown v0.17.1
+   Compiling parking_lot_core v0.9.12
+   Compiling thiserror v2.0.21
+    Checking equivalent v1.0.2
+    Checking simd-adler32 v0.3.10
+    Checking scopeguard v1.2.0
+    Checking lock_api v0.4.14
+   Compiling wasm-bindgen-macro v0.2.129
+    Checking indexmap v2.14.2
+   Compiling naga-types v30.0.1
+    Checking polycool v0.4.0
+    Checking js-sys v0.3.106
+    Checking font-types v0.12.6
+    Checking bitflags v2.13.2
+    Checking adler2 v2.0.1
+    Checking rustc-hash v1.1.0
+   Compiling naga v30.0.1
+    Checking web-sys v0.3.106
+   Compiling crc32fast v1.5.2
+    Checking read-fonts v0.41.0
+    Checking kurbo v0.13.1
+    Checking parking_lot v0.12.5
+    Checking euclid v0.22.14
+   Compiling wgpu v30.0.1
+    Checking raw-window-handle v0.6.2
+    Checking linebender_resource_handle v0.1.1
+    Checking color v0.3.3
+    Checking svg_fmt v0.4.5
+    Checking static_assertions v1.1.0
+    Checking log v0.4.34
+    Checking peniko v0.6.1
+    Checking wgpu-types v30.0.1
+    Checking guillotiere v0.7.0
+    Checking skrifa v0.44.0
+   Compiling vello_shaders v0.11.0 (https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b4664)
+    Checking wasm-bindgen-futures v0.4.79
+    Checking miniz_oxide v0.9.1
+    Checking profiling v1.0.18
+    Checking flate2 v1.1.10
+    Checking vello_encoding v0.11.0 (https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b4664)
+    Checking miniz_oxide v0.8.9
+    Checking fdeflate v0.3.7
+    Checking png v0.18.1
+    Checking futures-intrusive v0.5.0
+    Checking web-time v1.1.0
+    Checking tracing-core v0.1.36
+    Checking tracing v0.1.44
+    Checking futures-channel v0.3.34
+    Checking gloo-timers v0.3.0
+    Checking netrender-vello v0.11.0 (https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b4664)
+    Checking netrender_device v0.1.2 (https://github.com/merely-made/netrender.git?rev=f4f9c0d87e6a6030b61075a45118055dfe6a12df#f4f9c0d8)
+    Checking netrender v0.1.2 (https://github.com/merely-made/netrender.git?rev=f4f9c0d87e6a6030b61075a45118055dfe6a12df#f4f9c0d8)
+    Checking genet-render-host v0.2.0 (C:\Users\mark_\Code\repos\genet\components\genet-render-host)
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+   --> components\genet-render-host\src\readback.rs:110:18
+    |
+110 |                 .fetch_update(
+    |                  ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+110 -                 .fetch_update(
+110 +                 .try_update(
+    |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+  --> components\genet-render-host\src\recovery.rs:26:10
+   |
+26 |     NEXT.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+   |          ^^^^^^^^^^^^
+   |
+help: replace the use of the deprecated method
+   |
+26 -     NEXT.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+26 +     NEXT.try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+   |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+  --> components\genet-render-host\src\recovery.rs:98:14
+   |
+98 |             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+   |              ^^^^^^^^^^^^
+   |
+help: replace the use of the deprecated method
+   |
+98 -             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+98 +             .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+   |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+   --> components\genet-render-host\src\recovery.rs:214:14
+    |
+214 |             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+    |              ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+214 -             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+214 +             .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+    |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+   --> components\genet-render-host\src\recovery.rs:632:22
+    |
+632 |                     .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+    |                      ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+632 -                     .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+632 +                     .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_add(1))
+    |
+
+warning: associated function `from_options` is never used
+   --> components\genet-render-host\src\lib.rs:107:8
+    |
+106 | impl CoreBootRecipe {
+    | ------------------- associated function in this implementation
+107 |     fn from_options(o: &NetrenderOptions) -> Self {
+    |        ^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `next_generation` is never used
+  --> components\genet-render-host\src\recovery.rs:24:15
+   |
+24 | pub(crate) fn next_generation() -> CoreGeneration {
+   |               ^^^^^^^^^^^^^^^
+
+warning: `genet-render-host` (lib) generated 7 warnings (run `cargo fix --lib -p genet-render-host` to apply 5 suggestions)
+    Finished `dev` profile [unoptimized] target(s) in 1m 35s

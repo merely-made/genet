@@ -22,7 +22,7 @@
 //!   the handler records the order on the Rust side, where no navigation can
 //!   clear it.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use script_engine_api::{MAIN_REALM, RealmId, ScriptEngine};
@@ -77,6 +77,70 @@ impl ScriptResourceLoader for Pages {
             .strip_suffix(".html")?;
         Some(Pages::page(name))
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum HistoryReply {
+    Normal,
+    NetworkError,
+    NoContent,
+    ResetContent,
+    Redirect,
+}
+
+struct HistoryPages(Rc<Cell<HistoryReply>>);
+
+impl ScriptResourceLoader for HistoryPages {
+    fn load(&self, url: &str) -> Option<String> {
+        // The history fixture keeps a fragment on A's entry. Fragments do not
+        // select a different document resource when traversal reloads A.
+        Pages.load(url.split('#').next().unwrap_or(url))
+    }
+
+    fn load_document(&self, url: &str) -> Option<FetchOutcome> {
+        if !url.starts_with("https://top.test/one.html") {
+            return None;
+        }
+        match self.0.get() {
+            HistoryReply::Normal => None,
+            HistoryReply::NetworkError => Some(FetchOutcome::network_error()),
+            HistoryReply::NoContent | HistoryReply::ResetContent => Some(FetchOutcome {
+                network_error: false,
+                status: if self.0.get() == HistoryReply::NoContent { 204 } else { 205 },
+                status_text: String::new(),
+                response_type: "basic".into(),
+                url: url.into(),
+                redirected: false,
+                headers: vec![],
+                body: vec![],
+            }),
+            HistoryReply::Redirect => Some(FetchOutcome {
+                network_error: false,
+                status: 200,
+                status_text: "OK".into(),
+                response_type: "basic".into(),
+                url: "https://top.test/final.html".into(),
+                redirected: true,
+                headers: vec![("Content-Type".into(), "text/html".into())],
+                body: Pages::page("final").into_bytes(),
+            }),
+        }
+    }
+}
+
+fn history_runtime<E: ScriptEngine>(reply: &Rc<Cell<HistoryReply>>) -> Runtime<E> {
+    let journal = Journal::default();
+    let mut runtime = runtime::<E>(&journal);
+    runtime.set_script_resource_loader(Box::new(HistoryPages(reply.clone())));
+    runtime.eval(r#"
+        history.pushState({ page: 'A' }, '', 'https://top.test/one.html#saved');
+        location.href = 'https://top.test/two.html';
+    "#).expect("open B after stateful A");
+    runtime.run_event_loop(100).expect("B navigation");
+    assert_eq!(read(&mut runtime, "window.__page"), "two");
+    runtime.eval("history.replaceState({ page: 'B' }, '')")
+        .expect("stateful B");
+    runtime
 }
 
 fn runtime<E: ScriptEngine>(journal: &Journal) -> Runtime<E> {
@@ -307,6 +371,145 @@ fn top_level_history_joins_and_traverses<E: ScriptEngine>() {
     );
 }
 
+fn history_state_survives_document_replacement<E: ScriptEngine>() {
+    let journal = Journal::default();
+    let mut runtime = runtime::<E>(&journal);
+    let first_realm = runtime.top_realm();
+    runtime.eval(r#"
+        var shared = { n: 7 };
+        var state = { first: shared, second: shared, map: new Map(),
+                      date: new Date(1700000000000), big: BigInt(23) };
+        state.self = state;
+        state.map.set(shared, state);
+        history.pushState(state, '', 'https://top.test/one.html');
+        location.href = 'https://top.test/two.html';
+    "#).expect("push and navigate");
+    runtime.run_event_loop(100).expect("second document");
+    assert_ne!(runtime.top_realm(), first_realm);
+    assert_eq!(read(&mut runtime, "window.__page"), "two");
+
+    runtime.eval("history.back();").expect("history back");
+    runtime.run_event_loop(100).expect("traversed document");
+    let restored_realm = runtime.top_realm();
+    assert_eq!(read(&mut runtime, "window.__page"), "one");
+    assert_eq!(read(&mut runtime, "location.href"), "https://top.test/one.html");
+    assert_eq!(read(&mut runtime, "String(history.length)"), "3");
+    assert_eq!(read(&mut runtime, r#"
+        (function() {
+          var a = history.state, b = history.state;
+          return a !== b && a.self === a && a.first === a.second &&
+            a.map.get(a.first) === a && a.first.n === 7 &&
+            a.date.getTime() === 1700000000000 && a.big === BigInt(23) &&
+            Object.getPrototypeOf(a) === Object.prototype &&
+            Object.getPrototypeOf(a.map) === Map.prototype &&
+            Object.getPrototypeOf(a.date) === Date.prototype;
+        })()
+    "#), "true");
+
+    runtime.eval("history.back();").expect("same-document back");
+    runtime.run_event_loop(20).expect("same-document tasks");
+    assert_eq!(runtime.top_realm(), restored_realm);
+    assert_eq!(read(&mut runtime, "history.state === null"), "true");
+    runtime.eval("history.forward();").expect("same-document forward");
+    runtime.run_event_loop(20).expect("same-document tasks");
+    assert_eq!(runtime.top_realm(), restored_realm);
+    assert_eq!(read(&mut runtime, "history.state.first.n"), "7");
+}
+
+fn queued_history_target_is_cancelled_after_a_write<E: ScriptEngine>() {
+    let reply = Rc::new(Cell::new(HistoryReply::Normal));
+    let mut runtime = history_runtime::<E>(&reply);
+    let realm = runtime.top_realm();
+    runtime.eval(r#"
+        history.back();
+        history.pushState({ page: 'new' }, '', 'https://top.test/new');
+    "#).expect("queue then mutate history");
+    runtime.run_event_loop(100).expect("queued traversal task");
+    assert_eq!(runtime.top_realm(), realm, "stale target replaced B");
+    assert_eq!(read(&mut runtime, "window.__page"), "two");
+    assert_eq!(read(&mut runtime, "location.href"), "https://top.test/new");
+    assert_eq!(read(&mut runtime, "history.state.page"), "new");
+    assert_eq!(read(&mut runtime, "String(history.length)"), "4");
+    runtime.eval("history.back();").expect("back to B entry");
+    runtime.run_event_loop(20).expect("same-document traversal");
+    assert_eq!(runtime.top_realm(), realm);
+    assert_eq!(read(&mut runtime, "history.state.page"), "B");
+    assert_eq!(read(&mut runtime, "location.href"), "https://top.test/two.html");
+}
+
+fn unload_history_write_cancels_queued_target<E: ScriptEngine>() {
+    let reply = Rc::new(Cell::new(HistoryReply::Normal));
+    let mut runtime = history_runtime::<E>(&reply);
+    let realm = runtime.top_realm();
+    runtime.eval(r#"
+        window.addEventListener('unload', function() {
+          window.__unloadSeen = true;
+          history.pushState({ page: 'unload' }, '', 'https://top.test/during-unload');
+        });
+        history.back();
+    "#).expect("queue traversal with unload write");
+    runtime.run_event_loop(100).expect("unload callback and traversal task");
+    assert_eq!(runtime.top_realm(), realm, "unload write did not cancel target");
+    assert_eq!(read(&mut runtime, "window.__page"), "two");
+    assert_eq!(read(&mut runtime, "window.__unloadSeen === true"), "true");
+    assert_eq!(read(&mut runtime, "history.state.page"), "unload");
+    assert_eq!(read(&mut runtime, "location.href"), "https://top.test/during-unload");
+    assert_eq!(read(&mut runtime, "String(history.length)"), "4");
+    runtime.eval("history.back();").expect("back to B after unload write");
+    runtime.run_event_loop(20).expect("same-document task");
+    assert_eq!(runtime.top_realm(), realm);
+    assert_eq!(read(&mut runtime, "history.state.page"), "B");
+}
+
+fn refused_history_target_keeps_source<E: ScriptEngine>() {
+    let reply = Rc::new(Cell::new(HistoryReply::Normal));
+    let mut runtime = history_runtime::<E>(&reply);
+    let realm = runtime.top_realm();
+    runtime.set_top_level_navigation_policy(|url| !url.starts_with("https://top.test/one.html"));
+    runtime.eval("history.back();").expect("refused back");
+    assert_eq!(read(&mut runtime, "history.state.page"), "B");
+    runtime.run_event_loop(20).expect("refused tasks");
+    assert_eq!(runtime.top_realm(), realm);
+    assert_eq!(read(&mut runtime, "location.href"), "https://top.test/two.html");
+    assert_eq!(read(&mut runtime, "history.state.page"), "B");
+    runtime.eval("history.forward();").expect("forward stays out of range");
+    assert_eq!(read(&mut runtime, "history.state.page"), "B");
+}
+
+fn failed_history_target_keeps_source<E: ScriptEngine>() {
+    let reply = Rc::new(Cell::new(HistoryReply::Normal));
+    let mut runtime = history_runtime::<E>(&reply);
+    let realm = runtime.top_realm();
+    for failed in [HistoryReply::NetworkError, HistoryReply::NoContent, HistoryReply::ResetContent] {
+        reply.set(failed);
+        runtime.eval("history.back();").expect("back request");
+        assert_eq!(read(&mut runtime, "history.state.page"), "B");
+        runtime.run_event_loop(100).expect("failed navigation task");
+        assert_eq!(runtime.top_realm(), realm);
+        assert_eq!(read(&mut runtime, "window.__page"), "two");
+        assert_eq!(read(&mut runtime, "location.href"), "https://top.test/two.html");
+        assert_eq!(read(&mut runtime, "history.state.page"), "B");
+    }
+}
+
+fn redirected_history_target_keeps_state_and_final_url<E: ScriptEngine>() {
+    let reply = Rc::new(Cell::new(HistoryReply::Normal));
+    let mut runtime = history_runtime::<E>(&reply);
+    reply.set(HistoryReply::Redirect);
+    runtime.eval("history.back();").expect("redirected back");
+    runtime.run_event_loop(100).expect("redirected traversal");
+    let landed_realm = runtime.top_realm();
+    assert_eq!(read(&mut runtime, "window.__page"), "final");
+    assert_eq!(read(&mut runtime, "location.href"), "https://top.test/final.html#saved");
+    assert_eq!(read(&mut runtime, "history.state.page"), "A");
+    assert_eq!(read(&mut runtime, "String(history.length)"), "3");
+    runtime.eval("history.go(0);").expect("revisit landed entry");
+    runtime.run_event_loop(20).expect("same-document tasks");
+    assert_eq!(runtime.top_realm(), landed_realm);
+    assert_eq!(read(&mut runtime, "location.href"), "https://top.test/final.html#saved");
+    assert_eq!(read(&mut runtime, "history.state.page"), "A");
+}
+
 /// A top document whose host was never given a base URL still has a document
 /// URL - `about:blank`, which is what `location.href` reports - and a
 /// fragment-only navigation resolves against it. The WPT corpus runs in disk
@@ -437,6 +640,30 @@ macro_rules! backend {
             #[test]
             fn history_joins_and_traverses() {
                 super::top_level_history_joins_and_traverses::<$engine>();
+            }
+            #[test]
+            fn structured_history_survives_document_replacement() {
+                super::history_state_survives_document_replacement::<$engine>();
+            }
+            #[test]
+            fn queued_history_target_cancelled_after_write() {
+                super::queued_history_target_is_cancelled_after_a_write::<$engine>();
+            }
+            #[test]
+            fn unload_history_write_cancels_queued_target() {
+                super::unload_history_write_cancels_queued_target::<$engine>();
+            }
+            #[test]
+            fn refused_history_target_keeps_source() {
+                super::refused_history_target_keeps_source::<$engine>();
+            }
+            #[test]
+            fn failed_history_target_keeps_source() {
+                super::failed_history_target_keeps_source::<$engine>();
+            }
+            #[test]
+            fn redirected_history_target_keeps_state_and_final_url() {
+                super::redirected_history_target_keeps_state_and_final_url::<$engine>();
             }
             #[test]
             fn base_less_fragment_resolves() {

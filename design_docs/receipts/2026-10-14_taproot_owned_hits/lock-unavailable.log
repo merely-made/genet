@@ -1,0 +1,2 @@
+error: cannot create the lock file C:\Users\mark_\Code\worktrees\genet-taproot-owned-hits\Cargo.lock because --locked was passed to prevent this
+help: to generate the lock file without accessing the network, remove the --locked flag and use --offline instead.

@@ -7,12 +7,39 @@
 (function() {
   // Captured during trusted bootstrap, before authored scripts can run. The
   // realm hooks and raw record lookup never become an authored-script API.
+  var eventCore = globalThis.__eventCore;
+  delete globalThis.__eventCore;
   var domAgentDispatch = globalThis.__domAgentDispatch;
   var domRegisterHooks = globalThis.__domRegisterHooks;
-  var domRealmHooks;
+  var domRealmHooks, formOperations, privateValidateForm;
+  var hostFocusedRef = null;
+  var focusParent = globalThis.__parentNode, focusType = globalThis.__nodeType;
+  var focusBody = globalThis.__documentBody, focusRoot = globalThis.__documentElement;
+  var focusShadowHost = globalThis.__shadowHost;
+  var nativeFormOwner = globalThis.__formControlOwner, nativeFormReflect = globalThis.__reflectNode;
+  var formNamespace = globalThis.__namespaceURI, formNodeType = globalThis.__nodeType;
+  var formSplit = String.prototype.split, formParse = JSON.parse, formTypeError = TypeError;
+  var nativeHostFormEdit;
+  var pointerEventPrototype = globalThis.PointerEvent.prototype;
+  var keyboardEventPrototype = globalThis.KeyboardEvent.prototype;
+  var formRefs = globalThis.__agentTimers.domFormRefs;
+  var nodeDispatchers = globalThis.__agentTimers.domNodeDispatch;
+  var mouseEvents = globalThis.__agentTimers.domMouseEvents;
+  var reportListenerException = globalThis.__agentTimers.reportException;
+  var formEventCreators = globalThis.__agentTimers.domFormEventCreators;
+  var documentModes = globalThis.__agentTimers.domDocumentModes;
+  if (!formEventCreators) formEventCreators = globalThis.__agentTimers.domFormEventCreators = new WeakMap();
+  var creatorFormKind = globalThis.__formControlGet;
+
   // Captured before authored code runs: parser lifecycle events cannot depend
   // on the page-deletable public Event global at dispatch time.
   var userAgentEventConstructor = globalThis.Event;
+  var userAgentEventPrototype = userAgentEventConstructor.prototype;
+  var userAgentTouchEventConstructor = globalThis.TouchEvent;
+  var userAgentWheelEventConstructor = globalThis.WheelEvent;
+  var userAgentTouchConstructor = globalThis.Touch;
+  var userAgentString = String, userAgentNumber = Number;
+  var userAgentSetPrototypeOf = Object.setPrototypeOf;
   delete globalThis.__domAgentDispatch;
   delete globalThis.__domRegisterHooks;
 
@@ -57,10 +84,23 @@
   var gcWeakMapGet = WeakMap.prototype.get;
   var gcWeakMapSet = WeakMap.prototype.set;
   var gcWeakMapDelete = WeakMap.prototype.delete;
+  var gcWeakMapHas = WeakMap.prototype.has;
+  var gcWeakSetHas = WeakSet.prototype.has;
+  function privateGet(map, key) { return applyDOMBrand(gcWeakMapGet, map, [key]); }
+  function privateSet(map, key, value) { return applyDOMBrand(gcWeakMapSet, map, [key, value]); }
+  function privateHas(map, key) { return applyDOMBrand(gcWeakMapHas, map, [key]); }
+  function privateDelete(map, key) { return applyDOMBrand(gcWeakMapDelete, map, [key]); }
+  function privateSetHas(set, key) { return applyDOMBrand(gcWeakSetHas, set, [key]); }
   var gcStringSplit = String.prototype.split;
   var gcStringIndexOf = String.prototype.indexOf;
   var gcStringSlice = String.prototype.slice;
   var gcDefineProperty = Object.defineProperty;
+  var formObjectCreate = Object.create;
+  var formInvalidEventTrust = globalThis.__agentTimers.domEventTrust;
+  var formValidityObjects = globalThis.__agentTimers.domValidityObjects;
+  var formValidityOwners = globalThis.__agentTimers.domValidityOwners;
+  var formValidityCreators = globalThis.__agentTimers.domValidityCreators;
+  var formInvalidEventCreators = globalThis.__agentTimers.domInvalidEventCreators;
   var gcReflectNode = globalThis.__reflectNode;
   // Agent-private identity branding survives public property/prototype changes.
   var domNodes = globalThis.__agentTimers.domNodes;
@@ -94,7 +134,24 @@
   if (!nodeBaseReaders) nodeBaseReaders = globalThis.__agentTimers.domBaseReaders = new WeakMap();
   function nativeNodeBaseURI(ref, selector) { return __nodeBaseURI(ref, selector); }
   function registerBaseReader(node) {
+    applyDOMBrand(gcWeakMapSet, formRefs, [node, node.__ref]);
+    applyDOMBrand(gcWeakMapSet, nodeDispatchers, [node, dispatchNodeEvent]);
     nodeBaseReaders.set(node, nativeNodeBaseURI);
+    // This private factory retains the wrapper's creation realm. A borrowed
+    // getter must return the same validity object with that realm's prototype.
+    applyDOMBrand(gcWeakMapSet, formValidityCreators, [node, validityObjectLocal]);
+    // Invalid events must likewise be created in the target's relevant realm,
+    // even when a borrowed validation method runs in another realm.
+    applyDOMBrand(gcWeakMapSet, formInvalidEventCreators, [node, fireInvalidLocal]);
+    // Actual canonical form wrappers keep their first creator factory across
+    // adoption, collections and creator-host retirement. The weak key bounds it.
+    if (creatorFormKind(node.__ref, 'kind') === 'form' && !applyDOMBrand(gcWeakMapGet, formEventCreators, [node])) {
+      applyDOMBrand(gcWeakMapSet, formEventCreators, [node, createFormEventLocal]);
+    }
+  }
+  function createFormEventLocal(kind, value) {
+    if (!formOperations) throw new formTypeError('Form operations unavailable');
+    return formOperations.event(kind, value);
   }
   var wrapperGroups = globalThis.__agentTimers.domWrapperGroups;
   // A template retains its contents, but contents do not retain the template.
@@ -163,7 +220,7 @@
   // A document is an HTML document unless it was minted as an XML one
   // (`new Document()`, `createDocument`, an XML `DOMParser` parse).
   function isHtmlDocument(doc) {
-    return !doc || doc.__isHtml !== false;
+    return !doc || privateGet(documentModes, doc) === true;
   }
   // `tagName` / `nodeName` for an element: the qualified name, ASCII-uppercased
   // only for an HTML-namespaced element whose *current* node document is an HTML
@@ -268,13 +325,10 @@
     'missing-glyph': true
   };
   var upgradedCustomElements = new WeakMap();
-  var connectedCustomElements = new WeakMap();
   var ownerDocuments = globalThis.__agentTimers.domOwners;
 
 
   var htmlElementConstructionStack = [];
-  var customElementReactionQueue = [];
-  var customElementReactionScheduled = false;
 
   // Node: the base every node shares (tree + events + textContent). Methods live
   // on the prototype (shared, instanceof-able), not per-object. `this.__ref` is
@@ -489,7 +543,9 @@
     if (!root) return;
     var contents = templateContentsOf(root);
     if (contents) {
-      ownerDocuments.set(contents, wrapNode(__templateOwnerDocument(contents.__ref)));
+      var inertDocument = wrapNode(__templateOwnerDocument(contents.__ref));
+      privateSet(documentModes, inertDocument, true);
+      ownerDocuments.set(contents, inertDocument);
       rehomeTemplateOwnersLocal(contents);
     }
     var kids = root.childNodes;
@@ -510,21 +566,12 @@
       if (nodes[i] && nodes[i].nodeType !== 9) ownerDocuments.set(nodes[i], doc);
     }
   }
-  function enqueueAdoptedTree(root, oldDoc, newDoc) {
-    if (domAgentDispatch) return domAgentDispatch('adopted', root, oldDoc, newDoc);
-    return enqueueAdoptedTreeLocal(root, oldDoc, newDoc);
-  }
-  function enqueueAdoptedTreeLocal(root, oldDoc, newDoc) {
-    if (!root || oldDoc === newDoc) return;
-    if (root.nodeType === 1 && upgradedCustomElements.get(root)) {
-      enqueueCustomElementReaction(root, 'adoptedCallback', [oldDoc, newDoc]);
+  function recordAdoptedRoots(move) {
+    if (!ceShared.active || !move || move.oldDoc === move.newDoc) return;
+    if (!move.oldDoc || !move.newDoc) return;
+    for (var i = 0; i < move.roots.length; i++) {
+      __ceAdopted(move.roots[i].__ref, move.oldDoc.__ref, move.newDoc.__ref);
     }
-    var kids = root.childNodes;
-    for (var i = 0; i < kids.length; i++) enqueueAdoptedTreeLocal(kids[i], oldDoc, newDoc);
-    // A custom element inside a shadow tree is adopted with its host, so its
-    // adoptedCallback is owed the same pair of documents.
-    var shadow = shadowRootOfAny(root);
-    if (shadow) enqueueAdoptedTreeLocal(shadow, oldDoc, newDoc);
   }
   function prepareNodeMove(parent, node) {
     ensureLocalNode(parent);
@@ -545,22 +592,22 @@
       oldParent: node.parentNode
     };
   }
-  function disconnectMovedRoots(move) {
-    if (!move || !move.oldParent) return;
-    for (var i = 0; i < move.roots.length; i++) {
-      if (move.roots[i].isConnected) disconnectCustomElementTree(move.roots[i]);
+  // HTML's adopt, before insertion: remove the node from its old parent, then
+  // record adopted, so each custom element sees disconnected, adopted and
+  // connected in that order.
+  function adoptMovedRoots(move, node) {
+    if (!move || move.oldDoc === move.newDoc) return;
+    if (move.oldParent && node.nodeType !== 11 && node.parentNode === move.oldParent) {
+      moRemoveChild(move.oldParent.__ref, node.__ref);
     }
+    recordAdoptedRoots(move);
   }
   function finalizeNodeMove(move) {
     if (!move) return;
     if (move.oldDoc && move.newDoc && move.oldDoc !== move.newDoc) {
       setOwnerDocumentSnapshot(move.snapshot, move.newDoc);
-      for (var i = 0; i < move.roots.length; i++) {
-        rehomeTemplateOwners(move.roots[i]);
-        enqueueAdoptedTree(move.roots[i], move.oldDoc, move.newDoc);
-      }
+      for (var i = 0; i < move.roots.length; i++) rehomeTemplateOwners(move.roots[i]);
     }
-    for (var j = 0; j < move.roots.length; j++) connectCustomElementTree(move.roots[j]);
   }
   // DOM "insert a node into a parent before a child": a DocumentFragment
   // contributes its **children**, not itself. The children leave the fragment
@@ -597,7 +644,7 @@
   Node.prototype.appendChild = function(child) {
     ensureInsertable(this, child);
     var move = prepareNodeMove(this, child);
-    if (move.oldDoc !== move.newDoc) disconnectMovedRoots(move);
+    adoptMovedRoots(move, child);
     insertNodeInto(this, child, undefined);
     finalizeNodeMove(move);
     prepareScriptsAfterInsertion(this, move.roots);
@@ -792,7 +839,8 @@
         // A Document clone begins empty, even when deep. createHTMLDocument()
         // would prepopulate html/head/body and make copied children duplicates.
         copy = wrapNode(__createDocument());
-        copy.__isHtml = isHtmlDocument(node);
+        privateSet(documentModes, copy, isHtmlDocument(node));
+        __copyDocumentEncoding(node.__ref, copy.__ref);
         copyDocument = copy;
         break;
       default: copy = copyDocument.createTextNode('');
@@ -840,7 +888,6 @@
       throw new DOMException("The node to be removed is not a child of this node.", "NotFoundError");
     }
     moRemoveChild(this.__ref, child.__ref);
-    disconnectCustomElementTree(child);
     return child;
   };
   Node.prototype.insertBefore = function(node, ref) {
@@ -849,7 +896,7 @@
       throw new DOMException("The reference node is not a child of this node.", "NotFoundError");
     }
     var move = prepareNodeMove(this, node);
-    if (move.oldDoc !== move.newDoc) disconnectMovedRoots(move);
+    adoptMovedRoots(move, node);
     insertNodeInto(this, node, ref ? ref.__ref : undefined);
     finalizeNodeMove(move);
     prepareScriptsAfterInsertion(this, move.roots);
@@ -891,15 +938,9 @@
     if (thisTop !== treeTopOf(node)) {
       throw new DOMException("moveBefore does not adopt: both nodes must share a root.", "HierarchyRequestError");
     }
+    // Custom elements: the arena records the disconnected + connected fallback
+    // pair for a connected move; connectedMoveCallback is not captured yet.
     moMoveBefore(this.__ref, node.__ref, ref ? ref.__ref : undefined);
-    // Custom elements: the spec fires connectedMoveCallback when defined, else
-    // the disconnected + connected fallback pair. genet's registry does not
-    // capture connectedMoveCallback yet (plan S4), so a connected-tree move
-    // fires the fallback pair; a detached-tree move fires nothing.
-    if (thisTop.nodeType === 9) {
-      disconnectCustomElementTree(node);
-      connectCustomElementTree(node);
-    }
     return node;
   };
   Node.prototype.replaceChild = function(newChild, oldChild) {
@@ -917,6 +958,7 @@
     if (reference === newChild) reference = newChild.nextSibling;
     var move = prepareNodeMove(this, newChild);
     if (newChild.parentNode) newChild.parentNode.removeChild(newChild);
+    recordAdoptedRoots(move);
     // Transfer before grouping: the store refuses cross-arena moves while an
     // observer transaction is active. Keep the original document snapshot.
     adoptIntoInsertionArena(this, newChild);
@@ -927,170 +969,55 @@
     } finally {
       moEndGroup();
     }
-    disconnectCustomElementTree(oldChild);
     finalizeNodeMove(move);
     prepareScriptsAfterInsertion(this, move.roots);
     return oldChild;
   };
 
-  // Node-level EventTarget with real tree propagation (capture → target → bubble)
-  // over the parentNode chain. Listeners live on the (cached) wrapper, keyed by
-  // phase: 'c:'+type for capture, 'b:'+type for bubble/target.
-  // The 3rd arg of add/removeEventListener is either a boolean `capture` or an
-  // options object `{ capture, once, passive }` (DOM §dom-eventtarget-addeventlistener).
-  function eventOpts(arg) {
-    if (arg && typeof arg === 'object') {
-      return { capture: !!arg.capture, once: !!arg.once, passive: !!arg.passive };
-    }
-    return { capture: !!arg, once: false, passive: false };
-  }
-  // A listener is stored as `{ cb, once, passive }`: `once` so it can be removed
-  // after it first fires; `passive` so its `preventDefault()` is ignored (DOM:
-  // a passive listener cannot cancel the default action). Listeners are keyed by
-  // phase ('c:'/'b:' + type), so a capture and a bubble listener for the same
-  // callback are distinct entries (matching the DOM's (type, callback, capture)
-  // listener identity).
+  // Node-level EventTarget over the Rust listener registry (genet-events): the
+  // shared binding lives in EVENT_TARGET_BOOTSTRAP. A node dispatches through the
+  // registry's shadow-including path (slots, closed trees, and the window of a
+  // connected node's own document); no walk happens here.
   Node.prototype.addEventListener = function(type, cb, opts) {
-    if (typeof cb !== 'function') return;
-    var o = eventOpts(opts);
-    if (!this.__listeners) this.__listeners = {};
-    var key = (o.capture ? 'c:' : 'b:') + type;
-    var l = this.__listeners[key] || (this.__listeners[key] = []);
-    // Duplicate (type, callback, capture) listeners are ignored (DOM spec).
-    for (var i = 0; i < l.length; i++) { if (l[i].cb === cb) return; }
-    l.push({ cb: cb, once: o.once, passive: o.passive });
+    eventCore.add(this, this.__ref, type, cb, opts);
   };
   Node.prototype.removeEventListener = function(type, cb, opts) {
-    if (!this.__listeners) return;
-    var o = eventOpts(opts);
-    var l = this.__listeners[(o.capture ? 'c:' : 'b:') + type];
-    if (!l) return;
-    for (var i = 0; i < l.length; i++) {
-      if (l[i].cb === cb) { l.splice(i, 1); return; }
-    }
+    eventCore.remove(this, this.__ref, type, cb, opts);
   };
-  function fire(node, event, key) {
-    if (!node.__listeners) return;
-    var l = node.__listeners[key];
-    if (!l) return;
-    event.currentTarget = node;
-    // Snapshot: addEventListener during dispatch must not affect this node's
-    // current firing (DOM spec). stopImmediatePropagation halts the rest of
-    // THIS node's listeners (not just later nodes — that's __stop).
-    var copy = l.slice();
-    for (var i = 0; i < copy.length && !event.__stopImmediate; i++) {
-      var rec = copy[i];
-      // `once`: remove from the live list before calling, so a handler that
-      // re-dispatches the same event does not re-enter this listener.
-      if (rec.once) {
-        var j = l.indexOf(rec);
-        if (j !== -1) l.splice(j, 1);
-      }
-      // `passive`: preventDefault() must be a no-op for the duration of this
-      // listener (DOM). The flag is read by Event.preventDefault (lib.rs).
-      event.__inPassive = rec.passive;
-      // A listener's exception is *reported*, not propagated: dispatch continues
-      // to the remaining listeners and dispatchEvent returns normally (DOM
-      // §dispatch step "if this throws an exception, report the exception").
-      // Without this, one throwing onload/handler errors out the whole test.
-      try { rec.cb.call(node, event); }
-      catch (ex) { globalThis.__reportListenerException(ex); }
-      event.__inPassive = false;
-    }
+  // The window that terminates the path of a node connected to its document:
+  // each realm's document names its own window.
+  var documentWindows = globalThis.__agentTimers.eventDocumentWindows;
+  if (!documentWindows) documentWindows = globalThis.__agentTimers.eventDocumentWindows = new WeakMap();
+  function windowKeyOf(node) {
+    var doc = node.nodeType === 9 ? node : node.ownerDocument;
+    var key = doc ? applyDOMBrand(gcWeakMapGet, documentWindows, [doc]) : undefined;
+    return key === undefined ? '' : key;
   }
-  Node.prototype.dispatchEvent = function(event) {
+  function dispatchNodeEvent(event) {
     // DOM §dispatch: an uninitialized event (createEvent without initEvent) or
     // one already mid-dispatch is an InvalidStateError.
     if (event.__initialized === false || event.__dispatch) {
       throw new DOMException("The event is not initialized or is being dispatched.", "InvalidStateError");
     }
-    event.__dispatch = true;
-    // The propagation path is the **shadow-including** ancestor chain: at the
-    // top of a shadow tree it continues through the host, but only for an event
-    // whose `composed` flag is set. A non-composed event stops at the shadow
-    // root, which is what makes a shadow tree's events private.
-    //
-    // Each entry carries the target the listeners on that node must see —
-    // "retargeting". Inside the shadow tree the target is the real one; once the
-    // path crosses out through a host, every node above sees the *host* as
-    // `event.target`, because the outer tree may not learn about nodes it cannot
-    // reach. `composedPath()` returns the nodes themselves, trimmed to what the
-    // currently-firing node is allowed to see.
-    var path = [];
-    var targets = [];
-    var n = this;
-    var currentTarget = this;
-    while (n) {
-      path.push(n);
-      targets.push(currentTarget);
-      var parent = n.parentNode;
-      if (!parent && n.nodeType === 11) {
-        var host = wrapNode(__shadowHost(n.__ref));
-        if (host) {
-          if (!event.composed) break;
-          parent = host;
-          // Everything at or above the host sees the host as the target.
-          currentTarget = host;
-        }
-      }
-      n = parent;
+    var activation = event.type === 'click' && applyDOMBrand(gcWeakMapGet, mouseEvents, [event]) && formOperations;
+    return eventCore.dispatch(this, this.__ref, event, windowKeyOf(this), !!activation);
+  }
+  eventCore.setNodeOps({
+    resolve: function(raw) { return nodeByRawId(userAgentString(raw)); },
+    activationTarget: function(node) { return !!(formOperations && node && formOperations.activationTarget(node)); },
+    activate: function(node, event) { if (formOperations && node) formOperations.activation(node, event); }
+  });
+  Node.prototype.dispatchEvent = function(event) {
+    if (event.__initialized === false || event.__dispatch) {
+      throw new DOMException("The event is not initialized or is being dispatched.", "InvalidStateError");
     }
-    // window sits above the document in the propagation path (DOM: the event
-    // path's root is the Window for a node in a document). window shares the
-    // EventTarget listener-record shape, so `fire` handles it like any node.
-    // Appended only when the chain reaches the document (a connected node), so
-    // detached subtrees don't spuriously route to window.
-    var terminalDocument = path.length && path[path.length - 1];
-    var terminalWindow = terminalDocument && terminalDocument.nodeType === 9 && terminalDocument.defaultView;
-    if (terminalWindow) {
-      path.push(terminalWindow);
-      targets.push(currentTarget);
+    // A script redispatch is untrusted, including a retained UA invalid event.
+    if (applyDOMBrand(gcWeakMapGet, formInvalidEventTrust, [event]) !== undefined) {
+      applyDOMBrand(gcWeakMapSet, formInvalidEventTrust, [event, false]);
+    } else {
+      gcDefineProperty(event, 'isTrusted', { configurable: true, enumerable: true, value: false });
     }
-    event.target = this;
-    event.srcElement = this; // legacy alias for target
-    event.__path = path;
-    event.__pathTargets = targets;
-    // The stop-propagation flags are NOT cleared here. The DOM clears them
-    // *after* dispatch (§dispatch), so an event whose `cancelBubble` /
-    // `stopPropagation()` was set *before* dispatch arrives already stopped and
-    // fires nothing — every phase below is guarded on `__stop`. Clearing them
-    // here instead silently un-stopped such an event.
-    // Fire one path entry with the target that entry is allowed to see.
-    function fireAt(index, kind) {
-      event.__pathIndex = index;
-      event.target = targets[index] || targets[targets.length - 1] || null;
-      event.srcElement = event.target;
-      fire(path[index], event, kind + ':' + event.type);
-    }
-    // eventPhase constants: NONE 0, CAPTURING 1, AT_TARGET 2, BUBBLING 3.
-    // Capture: root → just above the target.
-    event.eventPhase = 1;
-    for (var i = path.length - 1; i >= 1 && !event.__stop; i--) {
-      fireAt(i, 'c');
-    }
-    // Target: capture- then bubble-registered listeners on the target itself.
-    event.eventPhase = 2;
-    if (!event.__stop) { fireAt(0, 'c'); }
-    if (!event.__stop) { fireAt(0, 'b'); }
-    // Bubble: just above the target → root, when the event bubbles.
-    event.eventPhase = 3;
-    if (event.bubbles) {
-      for (var j = 1; j < path.length && !event.__stop; j++) {
-        fireAt(j, 'b');
-      }
-    }
-    // Clear the dispatch flag + transient fields (DOM: after dispatch
-    // currentTarget is null, eventPhase is NONE, the stop flags are unset, and
-    // the event may be dispatched again).
-    event.__dispatch = false;
-    event.currentTarget = null;
-    event.eventPhase = 0;
-    event.__stop = false;
-    event.__stopImmediate = false;
-    event.__pathIndex = undefined;
-    event.target = this;
-    event.srcElement = this;
-    return !event.__canceled;
+    return applyDOMBrand(dispatchNodeEvent, this, [event]);
   };
   // stopPropagation halts further nodes (the current node's other listeners still
   // run). stopImmediatePropagation also halts the rest of the current node's
@@ -1106,6 +1033,9 @@
     // mid-dispatch, per spec.
     globalThis.Event.prototype.initEvent = function(type, bubbles, cancelable) {
       if (this.__dispatch) { return; }
+      if (applyDOMBrand(gcWeakMapGet, formInvalidEventTrust, [this]) !== undefined) {
+        applyDOMBrand(gcWeakMapSet, formInvalidEventTrust, [this, false]);
+      }
       this.__initialized = true;
       this.type = String(type);
       this.bubbles = !!bubbles;
@@ -1120,20 +1050,9 @@
       get: function() { return !!this.__stop; },
       set: function(v) { if (v) { this.__stop = true; } },
     });
-    // composedPath(): the propagation path recorded during dispatch, minus the
-    // nodes the node currently firing may not see. An **open** shadow tree is
-    // visible to everyone on the path; a **closed** one is visible only from
-    // inside itself, which is the whole point of closed mode. Returns a fresh
-    // array, or [] outside a dispatch (DOM spec).
-    globalThis.Event.prototype.composedPath = function() {
-      if (!this.__path) return [];
-      var index = this.__pathIndex;
-      var viewer = index === undefined ? null : this.__path[index];
-      var self = this;
-      return this.__path.filter(function(node) {
-        return globalThis.__composedPathVisible(node, viewer, self.__path);
-      });
-    };
+    // composedPath(): the dispatch's path as the registry computed it, trimmed
+    // to what the node currently firing may see. [] outside a dispatch.
+    globalThis.Event.prototype.composedPath = function() { return eventCore.composedPath(this); };
     // eventPhase constants (DOM). Instances carry a live `eventPhase` number set
     // during dispatch; these are the named values, on the constructor + proto.
     var E = globalThis.Event;
@@ -1293,7 +1212,6 @@
     moSetAttribute(this.__ref, name, newValue);
     if (name === 'style') inlineStyleStates.delete(this);
     resizeWebGlCanvas(this, name);
-    customElementAttributeChanged(this, name, oldValue, newValue);
     frameSourceChanged(this, name, oldValue, newValue);
     // The third re-preparation trigger: a connected script element gains a
     // `src` it did not have.
@@ -1306,14 +1224,9 @@
     configurable: true,
     get: function() { return String(__getInnerHtml(this.__ref)); },
     set: function(value) {
-      var oldChildren = this.childNodes;
-      for (var i = 0; i < oldChildren.length; i++) disconnectCustomElementTree(oldChildren[i]);
       moSetInnerHtml(this.__ref, String(value));
       var newChildren = this.childNodes;
-      for (var j = 0; j < newChildren.length; j++) {
-        upgradeCustomElementTree(newChildren[j]);
-        if (this.isConnected) connectCustomElementTree(newChildren[j]);
-      }
+      for (var j = 0; j < newChildren.length; j++) upgradeCustomElementTree(newChildren[j]);
       __refreshNamedProperties();
     }
   });
@@ -1361,7 +1274,6 @@
     var newValue = String(value);
     moSetAttributeNS(this.__ref, nsArg(ns), qname, newValue);
     if (qname === 'style') inlineStyleStates.delete(this);
-    customElementAttributeChanged(this, local, oldValue, newValue);
   };
   Element.prototype.getAttributeNS = function(ns, local) {
     return __getAttributeNS(this.__ref, nsArg(ns), String(local));
@@ -1373,8 +1285,8 @@
     local = String(local);
     var oldValue = __getAttributeNS(this.__ref, nsArg(ns), local);
     if (oldValue === null) return;
+    detachAttrView(this, nsArg(ns), local, oldValue);
     moRemoveAttributeNS(this.__ref, nsArg(ns), local);
-    customElementAttributeChanged(this, local, oldValue, null);
   };
   Element.prototype.hasAttribute = function(name) { return __getAttribute(this.__ref, String(name)) !== null; };
   Element.prototype.hasAttributes = function() { return __attributeRecords(this.__ref) !== ''; };
@@ -1385,10 +1297,18 @@
     name = String(name);
     if (this.namespaceURI === 'http://www.w3.org/1999/xhtml') name = name.toLowerCase();
     var oldValue = __getAttribute(this.__ref, name);
+    if (oldValue !== null) {
+      var recs = attributeRecords(this);
+      for (var i = 0; i < recs.length; i++) {
+        if (recs[i].qname === name) {
+          detachAttrView(this, recs[i].ns, recs[i].local, oldValue);
+          break;
+        }
+      }
+    }
     moRemoveAttribute(this.__ref, name);
     if (name === 'style') inlineStyleStates.delete(this);
     resizeWebGlCanvas(this, name);
-    customElementAttributeChanged(this, name, oldValue, null);
   };
   Element.prototype.toggleAttribute = function(name, force) {
     var has = this.hasAttribute(name);
@@ -1397,7 +1317,15 @@
     if (has) this.removeAttribute(name);
     return false;
   };
-  Element.prototype.matches = function(sel) { return __matches(this.__ref, String(sel)) === 'true'; };
+  function selectorResult(value) {
+    if (typeof value === 'string' && value.slice(0, 7) === 'syntax:') {
+      throw new DOMException(value.slice(7), 'SyntaxError');
+    }
+    return value;
+  }
+  Element.prototype.matches = function(sel) {
+    return selectorResult(__matches(this.__ref, String(sel), String(isHtmlDocument(ownerDocumentOf(this))))) === 'true';
+  };
   Object.defineProperty(Element.prototype, 'tagName', {
     configurable: true, get: function() { return elementQualifiedName(this); }
   });
@@ -1435,34 +1363,32 @@
   });
 
   // element.style: a CSSStyleDeclaration over the inline `style` content
-  // attribute. The declaration string is parsed/serialized in JS (no engine CSS
-  // parser here); a value containing ';' (url(), quoted strings) is a known gap.
+  // attribute. Livery parses complete declaration lists before JS receives
+  // ordered name/value/priority records.
   // Surface: getPropertyValue / setProperty / removeProperty / item / length /
   // cssText, plus camelCase (`style.fontSize`) and numeric-index access via a
   // Proxy. A fresh declaration is returned each access; all of them read/write
   // the same live attribute, so it stays correct (identity `el.style === el.style`
   // is not preserved — a later refinement).
-  function cssKebab(s) { return s.replace(/[A-Z]/g, function(m) { return '-' + m.toLowerCase(); }); }
+  function cssKebab(s) { return s.slice(0, 2) === '--' ? s : s.replace(/[A-Z]/g, function(m) { return '-' + m.toLowerCase(); }); }
+  function cssName(s) { return s.slice(0, 2) === '--' ? s : s.toLowerCase(); }
   function cssParse(text) {
-    var out = [];
-    if (!text) return out;
-    var decls = String(text).split(';');
-    for (var i = 0; i < decls.length; i++) {
-      var ci = decls[i].indexOf(':');
-      if (ci < 0) continue;
-      var name = decls[i].slice(0, ci).trim().toLowerCase();
-      var value = decls[i].slice(ci + 1).trim();
-      if (name) out.push([name, value]);
+    var rows = cssDecodeRows(String(__inlineStyleDeclarations(text || '')), 3);
+    if (rows === null) throw new TypeError('Malformed native CSS declaration record');
+    for (var i = 0; i < rows.length; i++) {
+      if (!rows[i][0] || (rows[i][2] !== '' && rows[i][2] !== 'important'))
+        throw new TypeError('Malformed native CSS declaration record');
     }
-    return out;
+    return rows;
   }
-  // Native inline-style records are line-oriented, so values are escaped before
-  // crossing the boundary. Keep decoding strict: a malformed native expansion
-  // must not turn into a partial CSS declaration update.
+  // Record grammar: LF separates rows, TAB separates fields, and each field
+  // escapes backslash/LF/CR/TAB as \\, \n, \r, \t. Empty record means no rows.
+  // Decode the full record before changing a declaration map.
   function cssDecodeField(field) {
     var out = '';
     for (var i = 0; i < field.length; i++) {
       var ch = field.charAt(i);
+      if (ch === '\n' || ch === '\r' || ch === '\t') return null;
       if (ch !== '\\') { out += ch; continue; }
       if (++i >= field.length) return null;
       ch = field.charAt(i);
@@ -1477,51 +1403,52 @@
   function cssEncodeField(field) {
     return String(field).replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
   }
-  function cssDecodeList(record) {
+  function cssDecodeRows(record, width) {
     if (record === '') return [];
     var raw = record.split('\n');
-    var values = [];
+    var rows = [];
     for (var i = 0; i < raw.length; i++) {
-      var value = cssDecodeField(raw[i]);
-      if (value === null || value === '') return null;
-      values.push(value);
+      var fields = raw[i].split('\t');
+      if (fields.length !== width) return null;
+      var row = [];
+      for (var j = 0; j < fields.length; j++) {
+        var field = cssDecodeField(fields[j]);
+        if (field === null) return null;
+        row.push(field);
+      }
+      rows.push(row);
     }
-    return values;
+    return rows;
   }
-  function cssDecodePairs(record) {
-    if (record === '') return [];
-    var raw = record.split('\n');
-    var pairs = [];
-    for (var i = 0; i < raw.length; i++) {
-      var tab = raw[i].indexOf('\t');
-      if (tab <= 0 || raw[i].indexOf('\t', tab + 1) >= 0) return null;
-      var name = cssDecodeField(raw[i].slice(0, tab));
-      var value = cssDecodeField(raw[i].slice(tab + 1));
-      if (name === null || name === '' || value === null) return null;
-      pairs.push([name, value]);
-    }
-    return pairs;
-  }
-  function cssEncodePairs(pairs) {
+  function cssEncodeRows(rows) {
     var lines = [];
-    for (var i = 0; i < pairs.length; i++) {
-      lines.push(cssEncodeField(pairs[i][0]) + '\t' + cssEncodeField(pairs[i][1]));
+    for (var i = 0; i < rows.length; i++) {
+      var fields = [];
+      for (var j = 0; j < rows[i].length; j++) fields.push(cssEncodeField(rows[i][j]));
+      lines.push(fields.join('\t'));
     }
     return lines.join('\n');
   }
   function cssShorthandComponents(name) {
-    var components = cssDecodeList(String(__inlineStyleShorthandComponents(name)));
-    return components === null ? [] : components;
+    var rows = cssDecodeRows(String(__inlineStyleShorthandComponents(name)), 1);
+    if (rows === null || rows.some(function(row) { return !row[0]; }))
+      throw new TypeError('Malformed native CSS shorthand metadata');
+    return rows.map(function(row) { return row[0]; });
   }
   function cssShorthands() {
-    var names = cssDecodeList(String(__inlineStyleShorthands()));
-    return names === null ? [] : names;
+    var rows = cssDecodeRows(String(__inlineStyleShorthands()), 1);
+    if (rows === null || rows.some(function(row) { return !row[0]; }))
+      throw new TypeError('Malformed native CSS shorthand metadata');
+    return rows.map(function(row) { return row[0]; });
   }
   function cssPendingShorthand(map, shorthand, components) {
     var pending = null;
+    var priority = null;
     for (var i = 0; i < components.length; i++) {
       var index = cssIdx(map, components[i]);
       if (index < 0 || !map[index][2]) return null;
+      if (priority === null) priority = map[index][3] || '';
+      else if (priority !== (map[index][3] || '')) return null;
       var origin = map[index][2];
       if (origin[0] !== shorthand) return null;
       if (pending === null) pending = origin;
@@ -1534,18 +1461,22 @@
     var rows = [];
     var first = map.length;
     var hasPending = false;
+    var priority = null;
     for (var i = 0; i < components.length; i++) {
       var index = cssIdx(map, components[i]);
       if (index < 0) return null;
+      if (priority === null) priority = map[index][3] || '';
+      else if (priority !== (map[index][3] || '')) return null;
       first = Math.min(first, index);
       if (map[index][2]) hasPending = true;
       rows.push([components[i], map[index][1]]);
     }
     var pending = cssPendingShorthand(map, shorthand, components);
-    if (pending !== null) return { first: first, value: pending[1], components: components };
+    if (pending !== null) return { first: first, value: pending[1], components: components, priority: priority };
     if (hasPending) return null;
-    var value = cssDecodeField(String(__inlineStyleShorthandValue(shorthand, cssEncodePairs(rows))));
-    return value === null || value === '' ? null : { first: first, value: value, components: components };
+    var value = cssDecodeField(String(__inlineStyleShorthandValue(shorthand, cssEncodeRows(rows))));
+    if (value === null) throw new TypeError('Malformed native CSS shorthand value');
+    return value === '' ? null : { first: first, value: value, components: components, priority: priority };
   }
   function cssSerialize(map) {
     var shorthands = cssShorthands();
@@ -1567,7 +1498,7 @@
       for (var k = 0; k < serializations.length; k++) {
         var candidate = serializations[k];
         if (candidate.first !== index) continue;
-        parts.push(candidate.name + ': ' + candidate.value + ';');
+        parts.push(candidate.name + ': ' + candidate.value + (candidate.priority ? ' !important' : '') + ';');
         for (var c = 0; c < candidate.components.length; c++) {
           var component = cssIdx(map, candidate.components[c]);
           if (component >= 0) consumed[component] = true;
@@ -1578,7 +1509,7 @@
       if (!emitted && !consumed[index]) {
         // A pending-substitution longhand is unobservable on its own. This
         // matters after a later longhand mutation breaks an authored shorthand.
-        parts.push(map[index][0] + ': ' + (map[index][2] ? '' : map[index][1]) + ';');
+        parts.push(map[index][0] + ': ' + (map[index][2] ? '' : map[index][1]) + (map[index][3] ? ' !important' : '') + ';');
       }
     }
     return parts.join(' ');
@@ -1586,36 +1517,47 @@
   function cssStyleValue(name, value) {
     var record = String(__inlineStyleValue(name, value));
     var split = record.indexOf('\n');
-    var kind = split < 0 ? record : record.slice(0, split);
-    if (kind === 'invalid') return null;
+    if (split < 0) throw new TypeError('Malformed native CSS value record');
+    var kind = record.slice(0, split);
+    var payload = record.slice(split + 1);
+    if (kind === 'invalid' && payload === '') return null;
     if (kind === 'canonical') {
-      var canonical = cssDecodeField(record.slice(split + 1));
-      return canonical === null ? null : { kind: kind, entries: [[name, canonical]] };
+      var canonical = cssDecodeField(payload);
+      if (canonical === null) throw new TypeError('Malformed native CSS value record');
+      return { kind: kind, entries: [[name, canonical]] };
     }
     if (kind === 'expanded') {
-      var entries = cssDecodePairs(record.slice(split + 1));
-      return entries === null || entries.length === 0 ? null : { kind: kind, entries: entries };
+      var entries = cssDecodeRows(payload, 2);
+      if (entries === null || entries.length === 0 || entries.some(function(row) { return !row[0]; }))
+        throw new TypeError('Malformed native CSS value record');
+      return { kind: kind, entries: entries };
     }
-    return { kind: kind, entries: [[name, value]] };
+    if ((kind === 'pass' || kind === 'deferred') && payload === '')
+      return { kind: kind, entries: [[name, value]] };
+    throw new TypeError('Malformed native CSS value record');
   }
   function cssIdx(map, name) {
     for (var i = 0; i < map.length; i++) { if (map[i][0] === name) return i; }
     return -1;
   }
-  function cssRemoveNames(map, names) {
+  function cssRemoveNames(map, names, preserveImportant) {
     var removed = false;
     for (var i = map.length - 1; i >= 0; i--) {
-      if (names.indexOf(map[i][0]) >= 0) { map.splice(i, 1); removed = true; }
+      if (names.indexOf(map[i][0]) >= 0 && !(preserveImportant && map[i][3] === 'important')) {
+        map.splice(i, 1); removed = true;
+      }
     }
     return removed;
   }
-  function cssPut(map, name, value, pending) {
+  function cssPut(map, name, value, pending, priority, preserveImportant) {
     var i = cssIdx(map, name);
     if (i >= 0) {
+      if (preserveImportant && map[i][3] === 'important') return;
       map[i][1] = value;
       map[i][2] = pending;
+      map[i][3] = priority || '';
     } else {
-      map.push(pending ? [name, value, pending] : [name, value]);
+      map.push([name, value, pending || null, priority || '']);
     }
   }
   function cssMatchesComponents(entries, components) {
@@ -1625,31 +1567,34 @@
     }
     return true;
   }
-  function cssApplyDeclaration(map, name, value) {
+  function cssApplyDeclaration(map, name, value, priority, fromParse) {
     var normalized = cssStyleValue(name, value);
     if (normalized === null) return false;
     var components = cssShorthandComponents(name);
     if (normalized.kind === 'expanded' &&
-        (components.length === 0 || !cssMatchesComponents(normalized.entries, components))) return false;
-    if (normalized.kind === 'deferred' && components.length === 0) return false;
-    if (components.length > 0) cssRemoveNames(map, [name].concat(components));
+        (components.length === 0 || !cssMatchesComponents(normalized.entries, components)))
+      throw new TypeError('Malformed native CSS shorthand expansion');
+    if (normalized.kind === 'deferred' && components.length === 0)
+      throw new TypeError('Malformed native CSS shorthand metadata');
+    var preserveImportant = fromParse && priority !== 'important';
+    if (components.length > 0) cssRemoveNames(map, [name].concat(components), preserveImportant);
     if (normalized.kind === 'expanded') {
       for (var i = 0; i < normalized.entries.length; i++) {
-        cssPut(map, normalized.entries[i][0], normalized.entries[i][1]);
+        cssPut(map, normalized.entries[i][0], normalized.entries[i][1], null, priority, preserveImportant);
       }
     } else if (normalized.kind === 'deferred') {
       for (var j = 0; j < components.length; j++) {
-        cssPut(map, components[j], value, [name, value]);
+        cssPut(map, components[j], value, [name, value], priority, preserveImportant);
       }
     } else {
-      cssPut(map, name, normalized.entries[0][1]);
+      cssPut(map, name, normalized.entries[0][1], null, priority, preserveImportant);
     }
     return true;
   }
   function cssCanonicalMap(map) {
     var out = [];
     for (var i = 0; i < map.length; i++) {
-      cssApplyDeclaration(out, map[i][0], map[i][1]);
+      cssApplyDeclaration(out, map[i][0], map[i][1], map[i][2], true);
     }
     return out;
   }
@@ -1661,13 +1606,24 @@
     var pending = cssPendingShorthand(map, name, components);
     if (pending !== null) return pending[1];
     var rows = [];
+    var priority = null;
     for (var i = 0; i < components.length; i++) {
       var component = cssIdx(map, components[i]);
       if (component < 0 || map[component][2]) return '';
+      if (priority === null) priority = map[component][3] || '';
+      else if (priority !== (map[component][3] || '')) return '';
       rows.push([components[i], map[component][1]]);
     }
-    var shorthand = cssDecodeField(String(__inlineStyleShorthandValue(name, cssEncodePairs(rows))));
-    return shorthand === null ? '' : shorthand;
+    var shorthand = cssDecodeField(String(__inlineStyleShorthandValue(name, cssEncodeRows(rows))));
+    if (shorthand === null) throw new TypeError('Malformed native CSS shorthand value');
+    return shorthand;
+  }
+  function cssPropertyPriority(map, name) {
+    var direct = cssIdx(map, name);
+    if (direct >= 0) return map[direct][3] || '';
+    var components = cssShorthandComponents(name);
+    var shorthand = cssShorthandSerialization(map, name, components);
+    return shorthand === null ? '' : shorthand.priority;
   }
   function cssRemoveProperty(map, name) {
     return cssRemoveNames(map, [name].concat(cssShorthandComponents(name)));
@@ -1680,7 +1636,7 @@
   function cssCloneMap(map) {
     var cloned = [];
     for (var i = 0; i < map.length; i++) {
-      cloned.push(map[i][2] ? [map[i][0], map[i][1], [map[i][2][0], map[i][2][1]]] : [map[i][0], map[i][1]]);
+      cloned.push([map[i][0], map[i][1], map[i][2] ? [map[i][2][0], map[i][2][1]] : null, map[i][3] || '']);
     }
     return cloned;
   }
@@ -1697,16 +1653,19 @@
       inlineStyleStates.set(el, { text: text, map: cssCloneMap(map) });
     }
     var api = {
-      getPropertyValue: function(name) { return cssPropertyValue(read(), String(name).toLowerCase()); },
-      setProperty: function(name, value) {
-        name = String(name).toLowerCase();
+      getPropertyValue: function(name) { return cssPropertyValue(read(), cssName(String(name))); },
+      getPropertyPriority: function(name) { return cssPropertyPriority(read(), cssName(String(name))); },
+      setProperty: function(name, value, priority) {
+        name = cssName(String(name));
         value = (value === undefined || value === null) ? '' : String(value);
+        priority = priority === undefined ? '' : String(priority).trim().toLowerCase();
+        if (priority !== '' && priority !== 'important') return;
         var m = read();
         if (value === '') { if (cssRemoveProperty(m, name)) write(m); return; }
-        if (cssApplyDeclaration(m, name, value)) write(m);
+        if (cssApplyDeclaration(m, name, value, priority)) write(m);
       },
       removeProperty: function(name) {
-        name = String(name).toLowerCase();
+        name = cssName(String(name));
         var m = read(); var old = cssPropertyValue(m, name);
         if (cssRemoveProperty(m, name)) write(m);
         return old;
@@ -1719,7 +1678,7 @@
       get: function() { return cssSerialize(read()); },
       set: function(v) { write(cssCanonicalMap(cssParse(v))); },
     });
-    var reserved = { getPropertyValue: 1, setProperty: 1, removeProperty: 1, item: 1, length: 1, cssText: 1 };
+    var reserved = { getPropertyValue: 1, getPropertyPriority: 1, setProperty: 1, removeProperty: 1, item: 1, length: 1, cssText: 1 };
     return new Proxy(api, {
       get: function(target, prop) {
         if (typeof prop !== 'string' || reserved[prop]) { return target[prop]; }
@@ -1788,18 +1747,17 @@
   if (globalThis.window) { globalThis.window.getComputedStyle = globalThis.getComputedStyle; }
 
   // The selected style engine classifies two-argument CSS.supports queries.
-  // A one-string declaration is split at its first colon; condition grammar is
-  // a later surface.
+  // One-string declarations use the same CSS-owner parser as inline style;
+  // condition grammar is a later surface.
   var cssApi = globalThis.CSS || {};
   cssApi.supports = function(property, value) {
     if (arguments.length < 2) {
-      var declaration = String(property);
-      var colon = declaration.indexOf(':');
-      if (colon < 1) return false;
-      value = declaration.slice(colon + 1).trim();
-      property = declaration.slice(0, colon).trim();
+      var declarations = cssParse(String(property));
+      if (declarations.length !== 1 || declarations[0][2]) return false;
+      property = declarations[0][0];
+      value = declarations[0][1];
     }
-    return String(__supportsStyleValue(String(property).toLowerCase(), String(value))) === 'true';
+    return String(__supportsStyleValue(cssName(String(property)), String(value))) === 'true';
   };
   globalThis.CSS = cssApi;
   if (globalThis.window) { globalThis.window.CSS = cssApi; }
@@ -1843,20 +1801,22 @@
   // already routed through the retained engine. The surface still supplies the
   // standard reads needed for CSSStyleRule and CSSKeyframeRule inspection.
   function makeRuleStyleDecl(text) {
+    function read() { return cssCanonicalMap(cssParse(text)); }
     var api = {
       getPropertyValue: function(name) {
-        var m = cssParse(text), target = String(name).toLowerCase();
-        for (var i = 0; i < m.length; i++) if (m[i][0] === target) return m[i][1];
-        return '';
+        return cssPropertyValue(read(), cssName(String(name)));
+      },
+      getPropertyPriority: function(name) {
+        return cssPropertyPriority(read(), cssName(String(name)));
       },
       setProperty: function() {}, removeProperty: function() { return ''; },
-      item: function(i) { var m = cssParse(text); i = i >>> 0; return i < m.length ? m[i][0] : ''; },
+      item: function(i) { var m = read(); i = i >>> 0; return i < m.length ? m[i][0] : ''; },
     };
-    Object.defineProperty(api, 'length', { configurable: true, get: function() { return cssParse(text).length; } });
+    Object.defineProperty(api, 'length', { configurable: true, get: function() { return read().length; } });
     Object.defineProperty(api, 'cssText', { configurable: true, get: function() { return text || ''; }, set: function() {} });
     return new Proxy(api, {
       get: function(target, prop) {
-        if (typeof prop !== 'string' || prop === 'getPropertyValue' || prop === 'setProperty' || prop === 'removeProperty' || prop === 'item' || prop === 'length' || prop === 'cssText') return target[prop];
+        if (typeof prop !== 'string' || prop === 'getPropertyValue' || prop === 'getPropertyPriority' || prop === 'setProperty' || prop === 'removeProperty' || prop === 'item' || prop === 'length' || prop === 'cssText') return target[prop];
         if (/^[0-9]+$/.test(prop)) return target.item(Number(prop));
         return target.getPropertyValue(cssKebab(prop));
       },
@@ -2022,15 +1982,17 @@
   globalThis.MediaList = MediaList;
   globalThis.StyleSheetList = StyleSheetList;
 
-  // querySelector / querySelectorAll, shared by Element and Document (scope is the
-  // receiver). querySelectorAll returns an array (NodeList-approximate).
-  function querySelector(sel) { return wrapNode(__querySelector(this.__ref, String(sel))); }
+  // querySelector / querySelectorAll, shared by Element, Document and fragment.
+  function querySelector(sel) {
+    var html = isHtmlDocument(this.nodeType === 9 ? this : ownerDocumentOf(this));
+    return wrapNode(selectorResult(__querySelector(this.__ref, String(sel), String(html))));
+  }
   function querySelectorAll(sel) {
-    // querySelectorAll returns a *static* NodeList: snapshot now, captured by the
-    // collection's getItems closure.
-    var n = +__querySelectorAllCount(this.__ref, String(sel));
+    var html = isHtmlDocument(this.nodeType === 9 ? this : ownerDocumentOf(this));
     var out = [];
-    for (var i = 0; i < n; i++) { out.push(wrapNode(__querySelectorAllItem(this.__ref, String(sel), String(i)))); }
+    selectorResult(__querySelectorAll(this.__ref, String(sel), String(html), function(ref) {
+      out.push(wrapNode(ref));
+    }));
     return makeCollection(function() { return out; }, false);
   }
   Element.prototype.querySelector = querySelector;
@@ -2167,7 +2129,7 @@
       var move = node ? prepareNodeMove(this, node) : null;
       if (node) {
         ensureInsertable(this, node, undefined, undefined, true);
-        disconnectMovedRoots(move);
+        adoptMovedRoots(move, node);
         adoptIntoInsertionArena(this, node);
       }
       moBeginGroup(this);
@@ -2200,7 +2162,9 @@
   // `attr.value` after a `setAttribute`. A detached `Attr` (from
   // `createAttribute`) owns its own value until `setAttributeNode` binds it.
   // Views are cached per element so `getAttributeNode('x')` has identity.
-  var attrViews = new WeakMap();
+  var attrViews = globalThis.__agentTimers.domAttrViews;
+  var attrNodes = globalThis.__agentTimers.domAttrNodes;
+  var attrSlots = globalThis.__agentTimers.domAttrSlots;
   var RS = '\u001e', US = '\u001f';
 
   function attributeRecords(el) {
@@ -2227,69 +2191,92 @@
   Object.defineProperty(Attr.prototype, 'constructor', {
     configurable: true, writable: true, value: Attr
   });
+  function attrSlot(attr) { return privateGet(attrSlots, attr); }
   function makeAttr(owner, ns, prefix, local, doc) {
     var a = Object.create(Attr.prototype);
+    applyDOMBrand(addDOMNode, attrNodes, [a]);
     a.nodeType = 2;
-    a.__owner = owner || null;
-    a.__ns = ns || null;
-    a.__prefix = prefix || null;
-    a.__local = String(local);
-    a.__value = '';
-    a.__doc = doc || document;
+    privateSet(attrSlots, a, {
+      owner: owner || null, ns: ns || null, prefix: prefix || null,
+      local: String(local), value: '', doc: doc || document
+    });
     // Attribute views have no native reflector; follow their current element or
     // saved document, including when the getter is borrowed across realms.
-    nodeBaseReaders.set(a, function() {
-      var target = a.__owner || a.__doc;
-      return nodeBaseReaders.get(target)(target.__ref);
+    privateSet(nodeBaseReaders, a, function() {
+      var slot = attrSlot(a), target = slot.owner || slot.doc;
+      return privateGet(nodeBaseReaders, target)(target.__ref);
     });
-    a.__isAttr = true; // the Range boundary guard rejects an Attr container
     return a;
   }
   function attrFor(el, ns, prefix, local) {
-    var byKey = attrViews.get(el);
-    if (!byKey) { byKey = Object.create(null); attrViews.set(el, byKey); }
+    var byKey = privateGet(attrViews, el);
+    if (!byKey) { byKey = Object.create(null); privateSet(attrViews, el, byKey); }
     var key = attrKey(ns, local);
     var existing = byKey[key];
-    if (existing) { existing.__prefix = prefix || null; return existing; }
+    if (existing) { attrSlot(existing).prefix = prefix || null; return existing; }
     var a = makeAttr(el, ns, prefix, local, ownerDocumentOf(el));
     byKey[key] = a;
     return a;
   }
+  function detachAttrView(el, ns, local, value) {
+    var byKey = privateGet(attrViews, el);
+    var key = attrKey(ns, local);
+    var attr = byKey && byKey[key];
+    if (!attr) return;
+    var slot = attrSlot(attr);
+    slot.value = value;
+    slot.doc = ownerDocumentOf(el);
+    slot.owner = null;
+    delete byKey[key];
+  }
   Object.defineProperty(Attr.prototype, 'namespaceURI', {
-    configurable: true, get: function() { return this.__ns; }
+    configurable: true, get: function() { return attrSlot(this).ns; }
   });
   Object.defineProperty(Attr.prototype, 'prefix', {
-    configurable: true, get: function() { return this.__prefix; }
+    configurable: true, get: function() { return attrSlot(this).prefix; }
   });
   Object.defineProperty(Attr.prototype, 'localName', {
-    configurable: true, get: function() { return this.__local; }
+    configurable: true, get: function() { return attrSlot(this).local; }
   });
   Object.defineProperty(Attr.prototype, 'name', {
     configurable: true,
-    get: function() { return this.__prefix ? this.__prefix + ':' + this.__local : this.__local; }
+    get: function() {
+      var slot = attrSlot(this);
+      return slot.prefix ? slot.prefix + ':' + slot.local : slot.local;
+    }
   });
   Object.defineProperty(Attr.prototype, 'nodeName', {
     configurable: true, get: function() { return this.name; }
   });
   Object.defineProperty(Attr.prototype, 'ownerElement', {
-    configurable: true, get: function() { return this.__owner; }
+    configurable: true, get: function() { return attrSlot(this).owner; }
   });
   Object.defineProperty(Attr.prototype, 'ownerDocument', {
     configurable: true,
-    get: function() { return this.__owner ? ownerDocumentOf(this.__owner) : this.__doc; }
+    get: function() {
+      var slot = attrSlot(this);
+      return slot.owner ? ownerDocumentOf(slot.owner) : slot.doc;
+    }
   });
   Object.defineProperty(Attr.prototype, 'specified', {
     configurable: true, get: function() { return true; }
   });
   function attrValue(a) {
-    if (!a.__owner) return a.__value;
-    var v = __getAttributeNS(a.__owner.__ref, a.__ns || '', a.__local);
-    return v === null ? a.__value : v;
+    var slot = attrSlot(a);
+    if (!slot.owner) return slot.value;
+    var v = __getAttributeNS(slot.owner.__ref, slot.ns || '', slot.local);
+    return v === null ? slot.value : v;
   }
   function setAttrValue(a, v) {
+    var slot = attrSlot(a);
     v = String(v);
-    a.__value = v;
-    if (a.__owner) a.__owner.setAttributeNS(a.__ns, a.name, v);
+    if (slot.owner) {
+      var name = slot.prefix ? slot.prefix + ':' + slot.local : slot.local;
+      var oldValue = __getAttributeNS(slot.owner.__ref, slot.ns || '', slot.local);
+      moSetAttributeNS(slot.owner.__ref, slot.ns || '', name, v);
+      slot.value = v;
+      if (name === 'style') inlineStyleStates.delete(slot.owner);
+    } else slot.value = v;
   }
   var attrValueDescriptor = {
     configurable: true,
@@ -2307,13 +2294,15 @@
   });
   Attr.prototype.hasChildNodes = function() { return false; };
   Attr.prototype.cloneNode = function() {
-    var copy = makeAttr(null, this.__ns, this.__prefix, this.__local, this.ownerDocument);
-    copy.__value = this.value;
+    var slot = attrSlot(this);
+    var copy = makeAttr(null, slot.ns, slot.prefix, slot.local, this.ownerDocument);
+    attrSlot(copy).value = this.value;
     return copy;
   };
   Attr.prototype.isEqualNode = function(other) {
-    return !!other && other.nodeType === 2 && other.__ns === this.__ns &&
-           other.__local === this.__local && other.value === this.value;
+    if (!privateHas(attrSlots, other)) return false;
+    var a = attrSlot(this), b = attrSlot(other);
+    return b.ns === a.ns && b.local === a.local && other.value === this.value;
   };
   globalThis.Attr = Attr;
 
@@ -2394,30 +2383,39 @@
     return null;
   };
   function setAttrNode(el, attr) {
-    if (!attr || attr.nodeType !== 2) throw new TypeError('not an Attr');
-    if (attr.__owner && attr.__owner !== el) {
+    var slot = attrSlot(attr);
+    if (!slot) throw new TypeError('not an Attr');
+    if (slot.owner && slot.owner !== el) {
       throw new DOMException("The attribute is in use by another element.", "InUseAttributeError");
     }
-    var old = el.getAttributeNodeNS(attr.__ns, attr.__local);
-    attr.__owner = el;
-    el.setAttributeNS(attr.__ns, attr.name, attr.__value);
-    var byKey = attrViews.get(el);
-    if (!byKey) { byKey = Object.create(null); attrViews.set(el, byKey); }
-    byKey[attrKey(attr.__ns, attr.__local)] = attr;
+    var name = slot.prefix ? slot.prefix + ':' + slot.local : slot.local;
+    validateNS(slot.ns || null, name);
+    var newValue = attrValue(attr);
+    var old = xpathAttrFor(el, slot.ns || '', slot.local);
+    var oldValue = __getAttributeNS(el.__ref, slot.ns || '', slot.local);
+    moSetAttributeNS(el.__ref, slot.ns || '', name, newValue);
+    if (old && old !== attr) detachAttrView(el, slot.ns, slot.local, oldValue);
+    slot.owner = el;
+    slot.value = newValue;
+    var byKey = privateGet(attrViews, el);
+    if (!byKey) { byKey = Object.create(null); privateSet(attrViews, el, byKey); }
+    byKey[attrKey(slot.ns, slot.local)] = attr;
+    if (name === 'style') inlineStyleStates.delete(el);
     return (old && old !== attr) ? old : null;
   }
   Element.prototype.setAttributeNode = function(attr) { return setAttrNode(this, attr); };
   Element.prototype.setAttributeNodeNS = function(attr) { return setAttrNode(this, attr); };
   Element.prototype.removeAttributeNode = function(attr) {
-    if (!attr || attr.__owner !== this) {
+    var slot = attrSlot(attr);
+    if (!slot || slot.owner !== this) {
       throw new DOMException("The attribute is not on this element.", "NotFoundError");
     }
-    attr.__value = attr.value;
-    attr.__doc = ownerDocumentOf(this);
-    this.removeAttributeNS(attr.__ns, attr.__local);
-    attr.__owner = null;
-    var byKey = attrViews.get(this);
-    if (byKey) delete byKey[attrKey(attr.__ns, attr.__local)];
+    var oldValue = __getAttributeNS(this.__ref, slot.ns || '', slot.local);
+    if (oldValue === null) {
+      throw new DOMException("The attribute is not on this element.", "NotFoundError");
+    }
+    moRemoveAttributeNS(this.__ref, slot.ns || '', slot.local);
+    detachAttrView(this, slot.ns, slot.local, oldValue);
     return attr;
   };
 
@@ -2514,26 +2512,178 @@
     return autonomousCustomElementDefinitions[el.localName] || null;
   }
 
-  function scheduleCustomElementReactions() {
-    if (customElementReactionScheduled) return;
-    customElementReactionScheduled = true;
-    Promise.resolve().then(flushCustomElementReactions);
-  }
+  // ---- HTML custom element reactions (§4.13.6) ----
+  //
+  // The arena records, at each mutation, which custom elements were connected,
+  // disconnected, adopted or had an attribute changed. Every member the IDL
+  // marks [CEReactions] runs inside `ceReactionsScope`: it pushes an element
+  // queue, and on the way out drains the arena's candidates into reactions and
+  // invokes that queue before returning to its caller. Candidates recorded
+  // with no scope open (the parser, a native host edit) go to the backup
+  // element queue, processed in a microtask.
+  var ceApply = Reflect.apply;
+  var ceShared = globalThis.__agentTimers.ceReactions ||
+      (globalThis.__agentTimers.ceReactions = { active: false });
+  var ceReactionsStack = [];
+  var ceBackupQueue = [];
+  var ceBackupScheduled = false;
+  var ceElementReactions = new WeakMap();
+  var ceResolved = Promise.resolve();
+  var ceThen = Promise.prototype.then;
 
-  function enqueueCustomElementReaction(el, name, args) {
-    customElementReactionQueue.push({ el: el, name: name, args: args || [] });
-    scheduleCustomElementReactions();
-  }
-
-  function flushCustomElementReactions() {
-    customElementReactionScheduled = false;
-    while (customElementReactionQueue.length) {
-      var reaction = customElementReactionQueue.shift();
-      var cb = reaction.el && reaction.el[reaction.name];
-      if (typeof cb === 'function') cb.apply(reaction.el, reaction.args);
+  function ceEnqueueElement(el) {
+    if (ceReactionsStack.length) {
+      ceReactionsStack[ceReactionsStack.length - 1].push(el);
+      return;
     }
-    if (customElementReactionQueue.length) scheduleCustomElementReactions();
+    ceBackupQueue.push(el);
+    if (ceBackupScheduled) return;
+    ceBackupScheduled = true;
+    ceApply(ceThen, ceResolved, [ceProcessBackupQueue]);
   }
+
+  function ceProcessBackupQueue() {
+    ceBackupScheduled = false;
+    ceDrainCandidates();
+    var queue = ceBackupQueue;
+    ceBackupQueue = [];
+    ceInvokeReactions(queue);
+  }
+
+  function ceReactionList(el) {
+    var list = ceElementReactions.get(el);
+    if (!list) {
+      list = [];
+      ceElementReactions.set(el, list);
+    }
+    return list;
+  }
+
+  // HTML's "enqueue a custom element callback reaction". Callbacks come from
+  // the definition, captured at define time, not from the element's prototype.
+  function ceEnqueueCallback(el, name, args) {
+    var def = upgradedCustomElements.get(el);
+    if (!def) return;
+    var callback = def.callbacks[name];
+    if (!callback) return;
+    if (name === 'attributeChangedCallback' && !observesAttribute(def, args[0])) return;
+    ceReactionList(el).push({ callback: callback, args: args });
+    ceEnqueueElement(el);
+  }
+
+  function ceInvokeReactions(queue) {
+    for (var i = 0; i < queue.length; i++) {
+      var el = queue[i];
+      var list = ceElementReactions.get(el);
+      while (list && list.length) {
+        var reaction = list.shift();
+        try {
+          ceApply(reaction.callback, el, reaction.args);
+        } catch (err) {
+          reportListenerException(err);
+        }
+      }
+    }
+  }
+
+  // Move the arena's candidates into reactions. Enqueueing only: nothing is
+  // invoked here, so this is safe at any point a scope is open.
+  function ceDrainCandidates() {
+    if (!ceShared.active) return;
+    if (domAgentDispatch) return domAgentDispatch('ceFlush');
+    ceRecords(__ceTake());
+  }
+
+  function ceUnescape(text) {
+    return text.replace(/\\(.)/g, function(_, c) {
+      return c === 'n' ? '\n' : c === 'r' ? '\r' : c === 't' ? '\t' : c;
+    });
+  }
+
+  function ceRecords(blob) {
+    if (!blob) return;
+    var lines = String(blob).split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      var f = lines[i].split('\t');
+      var el = nodeByRawId(f[1]);
+      if (!el || !upgradedCustomElements.get(el)) continue;
+      if (f[0] === 'C') ceEnqueueCallback(el, 'connectedCallback', []);
+      else if (f[0] === 'D') ceEnqueueCallback(el, 'disconnectedCallback', []);
+      else if (f[0] === 'J') {
+        ceEnqueueCallback(el, 'adoptedCallback', [nodeByRawId(f[2]), nodeByRawId(f[3])]);
+      } else if (f[0] === 'A') {
+        ceEnqueueCallback(el, 'attributeChangedCallback', [
+          ceUnescape(f[2]),
+          f[4] === '1' ? ceUnescape(f[5]) : null,
+          f[6] === '1' ? ceUnescape(f[7]) : null,
+          f[3] ? ceUnescape(f[3]) : null
+        ]);
+      }
+    }
+  }
+
+  // HTML's [CEReactions]: push an element queue, run the member, then drain
+  // and invoke that queue before returning.
+  function ceRunScoped(fn, self, args) {
+    ceReactionsStack.push([]);
+    try {
+      return ceApply(fn, self, args);
+    } finally {
+      ceDrainCandidates();
+      ceInvokeReactions(ceReactionsStack.pop());
+    }
+  }
+
+  function ceReactionsScope(fn) {
+    var scoped = function() {
+      if (!ceShared.active) return ceApply(fn, this, arguments);
+      return ceRunScoped(fn, this, arguments);
+    };
+    Object.defineProperty(scoped, 'name', { configurable: true, value: fn.name });
+    Object.defineProperty(scoped, 'length', { configurable: true, value: fn.length });
+    return scoped;
+  }
+
+  // The first definition in any realm of the agent turns recording on in
+  // every arena of the agent.
+  function ceActivate() {
+    if (ceShared.active) return;
+    ceShared.active = true;
+    if (domAgentDispatch) domAgentDispatch('ceActive', true);
+    else __ceRecording('1');
+  }
+
+  function installCustomElementReactions() {
+    var wrapped = new Map();
+    var members = String(__ceReactionMembers()).split(',');
+    for (var i = 0; i < members.length; i++) {
+      var dot = members[i].indexOf('.');
+      if (dot < 0) continue;
+      var Iface = globalThis[members[i].slice(0, dot)];
+      var name = members[i].slice(dot + 1);
+      var owner = Iface && Iface.prototype;
+      while (owner && !Object.prototype.hasOwnProperty.call(owner, name)) {
+        owner = Object.getPrototypeOf(owner);
+      }
+      if (!owner) continue;
+      var done = wrapped.get(owner);
+      if (!done) wrapped.set(owner, done = Object.create(null));
+      if (done[name]) continue;
+      done[name] = true;
+      var desc = Object.getOwnPropertyDescriptor(owner, name);
+      if (desc.set) desc.set = ceReactionsScope(desc.set);
+      else if (typeof desc.value === 'function') desc.value = ceReactionsScope(desc.value);
+      else continue;
+      Object.defineProperty(owner, name, desc);
+    }
+  }
+  globalThis.__cePump = function() {
+    ceDrainCandidates();
+    if (!ceBackupScheduled && ceBackupQueue.length) {
+      ceBackupScheduled = true;
+      ceApply(ceThen, ceResolved, [ceProcessBackupQueue]);
+    }
+  };
 
   function observesAttribute(def, attr) {
     var observed = def && def.observedAttributes;
@@ -2544,21 +2694,15 @@
     return false;
   }
 
-  function customElementAttributeChanged(el, attr, oldValue, newValue) {
-    var def = upgradedCustomElements.get(el);
-    if (!def || oldValue === newValue || !observesAttribute(def, attr)) return;
-    enqueueCustomElementReaction(el, 'attributeChangedCallback', [attr, oldValue, newValue]);
-  }
-
+  // Upgrade step 3: an attributeChangedCallback for each attribute the element
+  // already has, in its attribute list order, with its namespace.
   function enqueueInitialAttributeReactions(el, def) {
-    var observed = def && def.observedAttributes;
-    if (!observed) return;
-    for (var i = 0; i < observed.length; i++) {
-      var attr = observed[i];
-      var value = el.getAttribute(attr);
-      if (value !== null) {
-        enqueueCustomElementReaction(el, 'attributeChangedCallback', [attr, null, value]);
-      }
+    if (!def || !def.observedAttributes || !def.observedAttributes.length) return;
+    var attrs = el.attributes;
+    for (var i = 0; i < attrs.length; i++) {
+      var attr = attrs[i];
+      ceEnqueueCallback(el, 'attributeChangedCallback',
+        [attr.localName, null, attr.value, attr.namespaceURI]);
     }
   }
 
@@ -2590,27 +2734,25 @@
     }
   }
 
-  function connectCustomElement(el) {
-    var def = upgradedCustomElements.get(el);
-    if (!def || !el.isConnected || connectedCustomElements.get(el)) return;
-    connectedCustomElements.set(el, true);
-    enqueueCustomElementReaction(el, 'connectedCallback', []);
-  }
-
-  function disconnectCustomElement(el) {
-    var def = upgradedCustomElements.get(el);
-    if (!def || !connectedCustomElements.get(el)) return;
-    connectedCustomElements.delete(el);
-    enqueueCustomElementReaction(el, 'disconnectedCallback', []);
-  }
-
   function upgradeCustomElement(el, def) {
     if (!el || upgradedCustomElements.get(el) === def) return el;
+    // HTML upgrades only an undefined or uncustomized element; a failed one
+    // stays failed rather than rerunning its constructor at the next define.
+    var state = String(__ceState(el.__ref));
+    if (state === 'failed' || state === 'custom') return el;
     setElementPrototype(el, def.ctor.prototype);
     upgradedCustomElements.set(el, def);
-    constructCustomElement(el, def);
     enqueueInitialAttributeReactions(el, def);
-    connectCustomElement(el);
+    if (el.isConnected) ceEnqueueCallback(el, 'connectedCallback', []);
+    __ceSetState(el.__ref, 'failed');
+    try {
+      constructCustomElement(el, def);
+    } catch (err) {
+      upgradedCustomElements.delete(el);
+      ceElementReactions.delete(el);
+      throw err;
+    }
+    __ceSetState(el.__ref, 'custom');
     return el;
   }
 
@@ -2640,6 +2782,7 @@
     if (def.customizedBuiltIn) el.setAttribute('is', def.name);
     setElementPrototype(el, proto);
     upgradedCustomElements.set(el, def);
+    __ceSetState(el.__ref, 'custom');
     return el;
   }
 
@@ -2655,31 +2798,7 @@
     }
   }
 
-  function connectCustomElementTree(root) {
-    if (domAgentDispatch) return domAgentDispatch('connect', root);
-    return connectCustomElementTreeLocal(root);
-  }
-  function connectCustomElementTreeLocal(root) {
-    if (!root) return;
-    if (root.nodeType === 1) connectCustomElement(root);
-    var kids = root.childNodes;
-    for (var i = 0; i < kids.length; i++) {
-      connectCustomElementTreeLocal(kids[i]);
-    }
-  }
 
-  function disconnectCustomElementTree(root) {
-    if (domAgentDispatch) return domAgentDispatch('disconnect', root);
-    return disconnectCustomElementTreeLocal(root);
-  }
-  function disconnectCustomElementTreeLocal(root) {
-    if (!root) return;
-    if (root.nodeType === 1) disconnectCustomElement(root);
-    var kids = root.childNodes;
-    for (var i = 0; i < kids.length; i++) {
-      disconnectCustomElementTreeLocal(kids[i]);
-    }
-  }
 
   function customElementIsOption(options) {
     if (options === undefined || options === null) return null;
@@ -2696,10 +2815,29 @@
       throw new TypeError("Constructor Document requires 'new'");
     }
     var doc = wrapNode(__createDocument());
-    doc.__isHtml = false;
+    privateSet(documentModes, doc, false);
     return doc;
   }
   Document.prototype = Object.create(Node.prototype);
+  // This projection follows only private native-host focus, never authored properties.
+  Object.defineProperty(Document.prototype, 'activeElement', {
+    configurable: true, get: function() {
+      if (this !== document) return null;
+      var ref = hostFocusedRef, projected = ref;
+      while (ref) {
+        var parent = focusParent(ref);
+        if (parent) { ref = parent; continue; }
+        if (+focusType(ref) === 11) {
+          var host = focusShadowHost(ref);
+          if (host) { projected = host; ref = host; continue; }
+        }
+        break;
+      }
+      if (ref === docRef) return wrapNode(projected);
+      hostFocusedRef = null;
+      return wrapNode(focusBody(docRef) || focusRoot(docRef));
+    }
+  });
   Object.defineProperty(Document.prototype, 'defaultView', {
     get: function() { return this === globalThis.document ? globalThis : null; },
     configurable: true
@@ -2823,20 +2961,15 @@
     // `prepareNodeMove` only snapshots for a move it already sees as crossing
     // documents; overriding the destination here can make it one.
     if (!move.snapshot && move.oldDoc !== move.newDoc) move.snapshot = snapshotMovedNodes(node);
-    if (move.oldParent) {
-      disconnectMovedRoots(move);
-      moRemoveChild(move.oldParent.__ref, node.__ref);
-    }
+    if (move.oldParent) moRemoveChild(move.oldParent.__ref, node.__ref);
     if (move.crossArena) {
       moFlush();
       domAgentDispatch('adopt', this.__ref, node.__ref);
     }
     if (move.oldDoc !== move.newDoc) {
       setOwnerDocumentSnapshot(move.snapshot, move.newDoc);
-      for (var i = 0; i < move.roots.length; i++) {
-        rehomeTemplateOwners(move.roots[i]);
-        enqueueAdoptedTree(move.roots[i], move.oldDoc, move.newDoc);
-      }
+      for (var i = 0; i < move.roots.length; i++) rehomeTemplateOwners(move.roots[i]);
+      recordAdoptedRoots(move);
     }
     return node;
   };
@@ -2868,22 +3001,48 @@
   Document.prototype.getElementsByClassName = getElementsByClassName;
   Document.prototype.querySelector = querySelector;
   Document.prototype.querySelectorAll = querySelectorAll;
-  function XPathResult(resultType, value) {
+  function xpathMutationVersion(doc) { return __xpathMutationCursor(doc.__ref); }
+  var xpathResults = globalThis.__agentTimers.domXPathResults;
+  function xpathResultSlot(result) {
+    var slot = privateGet(xpathResults, result);
+    if (!slot) throw new TypeError('Illegal XPathResult receiver');
+    return slot;
+  }
+  function xpathResultNodes(value) { return value.kind === 'nodes' ? value.nodes : []; }
+  function firstXPathNode(nodes) { return nodes.length ? nodes[0] : null; }
+  function xpathStringValue(value) {
+    if (value.kind === 'nodes') {
+      var node = firstXPathNode(xpathResultNodes(value));
+      return node ? node.textContent : '';
+    }
+    return String(value.value);
+  }
+  function xpathNumberValue(value) {
+    if (value.kind === 'boolean') return value.value === 'true' ? 1 : 0;
+    return Number(xpathStringValue(value));
+  }
+  function xpathBooleanValue(value) {
+    if (value.kind === 'nodes') return xpathResultNodes(value).length > 0;
+    if (value.kind === 'number') {
+      var n = Number(value.value);
+      return n !== 0 && n === n;
+    }
+    if (value.kind === 'string') return value.value.length > 0;
+    return value.value === 'true';
+  }
+  function XPathResult(resultType, value, doc) {
+    var nodes = xpathResultNodes(value);
+    privateSet(xpathResults, this, {
+      type: resultType, nodes: nodes, cursor: 0,
+      document: doc, version: xpathMutationVersion(doc)
+    });
     this.resultType = resultType;
     this.booleanValue = false;
     this.numberValue = 0;
     this.stringValue = '';
     this.singleNodeValue = null;
-    this.invalidIteratorState = false;
-    this._nodes = [];
-    this._cursor = 0;
-    this.snapshotLength = 0;
-
-    if (value.kind === 'nodes') {
-      this._nodes = xpathNodes(value);
-      this.singleNodeValue = firstXPathNode(this._nodes);
-      this.snapshotLength = this._nodes.length;
-    }
+    this.snapshotLength = nodes.length;
+    if (nodes.length) this.singleNodeValue = nodes[0];
     if (resultType === XPathResult.BOOLEAN_TYPE) {
       this.booleanValue = xpathBooleanValue(value);
     } else if (resultType === XPathResult.NUMBER_TYPE) {
@@ -2907,58 +3066,95 @@
       XPathResult.prototype[xk] = XPathResult[xk];
     }
   }
+  function xpathIteratorInvalidated(slot) {
+    return (slot.type === XPathResult.UNORDERED_NODE_ITERATOR_TYPE ||
+            slot.type === XPathResult.ORDERED_NODE_ITERATOR_TYPE) &&
+           __xpathIteratorInvalidated(slot.document.__ref, slot.version) === 'true';
+  }
+  Object.defineProperty(XPathResult.prototype, 'invalidIteratorState', {
+    configurable: true,
+    get: function() {
+      return xpathIteratorInvalidated(xpathResultSlot(this));
+    }
+  });
   XPathResult.prototype.iterateNext = function() {
-    if (this._cursor >= this._nodes.length) return null;
-    return wrapNode(__reflectNode(this._nodes[this._cursor++]));
+    var slot = xpathResultSlot(this);
+    if (xpathIteratorInvalidated(slot)) {
+      throw new DOMException('The document changed after XPath evaluation.', 'InvalidStateError');
+    }
+    return slot.cursor < slot.nodes.length ? slot.nodes[slot.cursor++] : null;
   };
   XPathResult.prototype.snapshotItem = function(i) {
+    var slot = xpathResultSlot(this);
     i = i >>> 0;
-    return i < this._nodes.length ? wrapNode(__reflectNode(this._nodes[i])) : null;
+    return i < slot.nodes.length ? slot.nodes[i] : null;
   };
   globalThis.XPathResult = XPathResult;
-  function xpathNodes(value) {
-    return value.kind === 'nodes' && value.value ? value.value.split(',') : [];
-  }
-  function firstXPathNode(nodes) {
-    return nodes.length ? wrapNode(__reflectNode(nodes[0])) : null;
-  }
-  function xpathStringValue(value) {
-    if (value.kind === 'nodes') {
-      var node = firstXPathNode(xpathNodes(value));
-      return node ? node.textContent : '';
-    }
-    return String(value.value);
-  }
-  function xpathNumberValue(value) {
-    if (value.kind === 'boolean') return value.value === 'true' ? 1 : 0;
-    return Number(xpathStringValue(value));
-  }
-  function xpathBooleanValue(value) {
-    if (value.kind === 'nodes') return xpathNodes(value).length > 0;
-    if (value.kind === 'number') {
-      var n = Number(value.value);
-      return n !== 0 && n === n;
-    }
-    if (value.kind === 'string') return value.value.length > 0;
-    return value.value === 'true';
-  }
-  function parseXPathRecord(record) {
+  function parseXPathRecord(record, nodes) {
     var s = String(record);
     var cut = s.indexOf('\n');
     var kind = cut < 0 ? s : s.slice(0, cut);
     var value = cut < 0 ? '' : s.slice(cut + 1);
-    if (kind === 'error') {
-      throw new DOMException(value, 'SyntaxError');
+    if (kind === 'error') throw new DOMException(value, 'SyntaxError');
+    return { kind: kind, value: value, nodes: nodes };
+  }
+  function xpathAttrFor(owner, ns, local) {
+    var records = attributeRecords(owner);
+    for (var i = 0; i < records.length; i++) {
+      var rec = records[i];
+      if ((rec.ns || '') === ns && rec.local === local) {
+        return attrFor(owner, rec.ns, rec.prefix, rec.local);
+      }
     }
-    return { kind: kind, value: value };
+    return null;
+  }
+  function xpathContextInfo(context) {
+    var slot = attrSlot(context);
+    var owner = slot ? slot.owner : context;
+    var doc = slot ? (owner ? ownerDocumentOf(owner) : slot.doc)
+                   : (privateHas(documentModes, context) ? context : ownerDocumentOf(context));
+    if (!doc || !privateHas(documentModes, doc)) {
+      throw new DOMException('Document.evaluate requires a context node', 'NotSupportedError');
+    }
+    return { slot: slot, owner: owner, doc: doc };
   }
   Document.prototype.evaluate = function(expression, contextNode, namespaceResolver, resultType, result) {
-    var context = contextNode || this;
+    var context = contextNode == null ? this : contextNode;
     var requested = resultType == null ? XPathResult.ANY_TYPE : (resultType >>> 0);
     if (requested > XPathResult.FIRST_ORDERED_NODE_TYPE) {
       throw new DOMException('Unsupported XPathResult type', 'NotSupportedError');
     }
-    var parsed = parseXPathRecord(__xpathEvaluate(String(expression), context.__ref));
+    var state = xpathContextInfo(context);
+    var nodes = [];
+    var resolvePrefix = function(prefix) {
+      if (prefix === 'xml') return 'http://www.w3.org/XML/1998/namespace';
+      if (namespaceResolver == null) return '';
+      var uri;
+      if (typeof namespaceResolver === 'function') uri = namespaceResolver(prefix);
+      else if (typeof namespaceResolver.lookupNamespaceURI === 'function') {
+        uri = namespaceResolver.lookupNamespaceURI(prefix);
+      } else throw new TypeError('XPath namespace resolver is not callable');
+      return uri == null ? '' : String(uri);
+    };
+    var append = function(kind, reference, ns, local) {
+      if (kind === 'detached-attr') nodes.push(context);
+      else if (kind === 'attr') nodes.push(xpathAttrFor(wrapNode(reference), ns, local));
+      else nodes.push(wrapNode(reference));
+    };
+    var contextState = function(field) {
+      if (field === 'ref' || field === 'html') state = xpathContextInfo(context);
+      var slot = state.slot;
+      if (field === 'ref') return state.owner ? state.owner.__ref : null;
+      if (field === 'kind') return slot ? (slot.owner ? 'attr' : 'detached-attr') : 'node';
+      if (field === 'ns') return slot ? (slot.ns || '') : '';
+      if (field === 'prefix') return slot ? (slot.prefix || '') : '';
+      if (field === 'local') return slot ? slot.local : '';
+      if (field === 'value') return slot ? attrValue(context) : '';
+      if (field === 'html') return String(isHtmlDocument(state.doc));
+      return '';
+    };
+    var record = __xpathEvaluate(String(expression), contextState, resolvePrefix, append);
+    var parsed = parseXPathRecord(record, nodes);
     var actual = requested;
     if (requested === XPathResult.ANY_TYPE) {
       actual = parsed.kind === 'number' ? XPathResult.NUMBER_TYPE
@@ -2969,7 +3165,7 @@
     if (actual >= XPathResult.UNORDERED_NODE_ITERATOR_TYPE && parsed.kind !== 'nodes') {
       throw new DOMException('XPath expression did not return a node set', 'TypeError');
     }
-    return new XPathResult(actual, parsed);
+    return new XPathResult(actual, parsed, xpathContextInfo(context).doc);
   };
   // Document takes the ParentNode mixin here, once its prototype exists.
   installMixin(Document.prototype, parentNodeMixin);
@@ -3013,7 +3209,7 @@
         },
         createHTMLDocument: function(title) {
           var doc = wrapNode(__createDocument());
-          doc.__isHtml = true;
+          privateSet(documentModes, doc, true);
           var html = doc.createElement('html'); doc.appendChild(html);
           var head = doc.createElement('head'); html.appendChild(head);
           if (title !== undefined) { var t = doc.createElement('title'); t.textContent = String(title); head.appendChild(t); }
@@ -3022,7 +3218,7 @@
         },
         createDocument: function(ns, qname, doctype) {
           var doc = wrapNode(__createDocument());
-          doc.__isHtml = false; // an XML document: createCDATASection is allowed
+          privateSet(documentModes, doc, false); // an XML document: createCDATASection is allowed
           if (doctype) doc.appendChild(doctype);
           if (qname) { doc.appendChild(doc.createElementNS(ns === null ? '' : String(ns), String(qname))); }
           return doc;
@@ -3054,6 +3250,11 @@
     get: function() { var r = this.documentElement; return r ? r.dir : ''; },
     set: function(v) { var r = this.documentElement; if (r) r.dir = v; }
   });
+  ['characterSet', 'charset', 'inputEncoding'].forEach(function(name) {
+    Object.defineProperty(Document.prototype, name, {
+      configurable: true, get: function() { return __documentEncodingName(this.__ref); }
+    });
+  });
   Object.defineProperty(Document.prototype, 'compatMode', {
     configurable: true, get: function() { return __documentCompatMode(this.__ref); }
   });
@@ -3084,7 +3285,7 @@
   }
 
   function formOwner(control) {
-    return wrapNode(__formControlOwner(control.__ref)) || null;
+    return wrapNode(nativeFormOwner(applyDOMBrand(gcWeakMapGet, formRefs, [control]))) || null;
   }
   function formControlError(error) {
     if (error === 'TypeError') throw new TypeError('Illegal invocation');
@@ -3102,8 +3303,129 @@
       setTimeout(function() { control.dispatchEvent(new Event('select', { bubbles: true })); }, 0);
     }
   }
-  function installTextControlMembers(proto) {
-    Object.defineProperty(proto, 'form', { configurable: true, enumerable: true, get: function() { return formOwner(this); } });
+  // All native validation entry points and branding operations are captured
+  // before authors run. Public RegExp and validity objects are never authority.
+  var nativeValidityGet = globalThis.__formControlValidityGet;
+  var nativeQueueValidationReport = globalThis.__queueValidationReport;
+  var nativeControlGet = globalThis.__formControlGet;
+  var nativeSetCustomValidity = globalThis.__setCustomValidity;
+  var nativeControlListCount = globalThis.__formControlListCount;
+  var nativeControlListItem = globalThis.__formControlListItem;
+  var formToString = String;
+  var formNodeHas = WeakSet.prototype.has;
+  delete globalThis.__formControlValidityGet;
+  delete globalThis.__queueValidationReport;
+  delete globalThis.__setCustomValidity;
+  delete globalThis.__formControlListCount;
+  delete globalThis.__formControlListItem;
+  function validationControlRef(control, kind) {
+    if (!applyDOMBrand(formNodeHas, domNodes, [control])) throw new formTypeError('Illegal invocation');
+    var ref = applyDOMBrand(gcWeakMapGet, formRefs, [control]);
+    if (kind !== undefined && nativeControlGet(ref, 'kind') !== kind) throw new formTypeError('Illegal invocation');
+    if (nativeValidityGet(ref, 'valid') === null) throw new formTypeError('Illegal invocation');
+    return ref;
+  }
+  function formInterfaceRef(control, kind) {
+    if (!applyDOMBrand(formNodeHas, domNodes, [control]) || nativeControlGet(applyDOMBrand(gcWeakMapGet, formRefs, [control]), 'kind') !== kind) {
+      throw new formTypeError('Illegal invocation');
+    }
+    return applyDOMBrand(gcWeakMapGet, formRefs, [control]);
+  }
+  function readValidityFlag(control, key) {
+    return nativeValidityGet(validationControlRef(control), key) === 'true';
+  }
+  function ValidityState() { throw new TypeError('Illegal constructor'); }
+  setClassString(ValidityState.prototype, 'ValidityState');
+  ['valueMissing', 'typeMismatch', 'patternMismatch', 'tooLong', 'tooShort',
+   'rangeUnderflow', 'rangeOverflow', 'stepMismatch', 'badInput', 'customError', 'valid'].forEach(function(key) {
+    gcDefineProperty(ValidityState.prototype, key, { configurable: true, enumerable: true,
+      get: function() {
+        var control = applyDOMBrand(gcWeakMapGet, formValidityOwners, [this]);
+        if (!control) throw new TypeError('Illegal invocation');
+        return readValidityFlag(control, key);
+      }
+    });
+  });
+  var validityStatePrototype = ValidityState.prototype;
+  globalThis.ValidityState = ValidityState;
+  function validityObject(control, kind) {
+    validationControlRef(control, kind);
+    var object = applyDOMBrand(gcWeakMapGet, formValidityObjects, [control]);
+    if (object) return object;
+    var creator = applyDOMBrand(gcWeakMapGet, formValidityCreators, [control]);
+    return applyDOMBrand(creator, undefined, [control]);
+  }
+  function validityObjectLocal(control) {
+    validationControlRef(control);
+    var object = applyDOMBrand(gcWeakMapGet, formValidityObjects, [control]);
+    if (object) return object;
+    object = formObjectCreate(validityStatePrototype);
+    applyDOMBrand(gcWeakMapSet, formValidityOwners, [object, control]);
+    applyDOMBrand(gcWeakMapSet, formValidityObjects, [control, object]);
+    return object;
+  }
+  function invalidControl(control) {
+    return readValidityFlag(control, 'willValidate') && !readValidityFlag(control, 'valid');
+  }
+  function fireInvalid(control) {
+    var creator = applyDOMBrand(gcWeakMapGet, formInvalidEventCreators, [control]);
+    if (!creator) throw new TypeError('Invalid validation target');
+    return applyDOMBrand(creator, undefined, [control]);
+  }
+  function fireInvalidLocal(control) {
+    // UA construction bypasses page constructors and inherited property setters.
+    var event = formObjectCreate(userAgentEventPrototype);
+    var fields = { __proto__: null, type: 'invalid', bubbles: false,
+      cancelable: true, composed: false, defaultPrevented: false, __canceled: false,
+      eventPhase: 0, target: null, currentTarget: null, srcElement: null,
+      __initialized: true, __dispatch: false, __stop: false, __stopImmediate: false,
+      __inPassive: false, __eid: 0 };
+    for (var key in fields) {
+      gcDefineProperty(event, key, { configurable: true, enumerable: true, writable: true, value: fields[key] });
+    }
+    applyDOMBrand(gcWeakMapSet, formInvalidEventTrust, [event, true]);
+    gcDefineProperty(event, 'isTrusted', { enumerable: true,
+      get: function() { return applyDOMBrand(gcWeakMapGet, formInvalidEventTrust, [event]); }
+    });
+    return applyDOMBrand(dispatchNodeEvent, control, [event]);
+  }
+  function nativeControlList(control, kind) {
+    var ref = applyDOMBrand(gcWeakMapGet, formRefs, [control]), count = +nativeControlListCount(ref, kind), result = [];
+    for (var i = 0; i < count; i++) {
+      var item = wrapNode(nativeControlListItem(ref, kind, formToString(i)));
+      if (item) result.push(item);
+    }
+    return result;
+  }
+  function validateControl(control, report, kind) {
+    var ref = validationControlRef(control, kind);
+    if (!invalidControl(control)) return true;
+    var message = report ? nativeValidityGet(ref, 'validationMessage') : '';
+    var unhandled = fireInvalid(control);
+    if (report && unhandled) nativeQueueValidationReport(ref, message);
+    return false;
+  }
+  function installValidationMembers(proto, kind) {
+    gcDefineProperty(proto, 'willValidate', { configurable: true, enumerable: true,
+      get: function() { return nativeValidityGet(validationControlRef(this, kind), 'willValidate') === 'true'; }
+    });
+    gcDefineProperty(proto, 'validity', { configurable: true, enumerable: true,
+      get: function() { return validityObject(this, kind); }
+    });
+    gcDefineProperty(proto, 'validationMessage', { configurable: true, enumerable: true,
+      get: function() { return nativeValidityGet(validationControlRef(this, kind), 'validationMessage'); }
+    });
+    proto.setCustomValidity = function(message) {
+      if (arguments.length === 0) throw new TypeError('setCustomValidity requires a message');
+      var ref = validationControlRef(this, kind);
+      if (typeof message === 'symbol') throw new TypeError('Cannot convert a Symbol to a DOMString');
+      formControlError(nativeSetCustomValidity(ref, formToString(message)));
+    };
+    proto.checkValidity = function() { return validateControl(this, false, kind); };
+    proto.reportValidity = function() { return validateControl(this, true, kind); };
+  }
+  function installTextControlMembers(proto, kind) {
+    Object.defineProperty(proto, 'form', { configurable: true, enumerable: true, get: function() { formInterfaceRef(this, kind); return formOwner(this); } });
     ['selectionStart', 'selectionEnd', 'selectionDirection'].forEach(function(key) {
       Object.defineProperty(proto, key, { configurable: true, enumerable: true,
         get: function() { var value = __formControlGet(this.__ref, key); return value === null || key === 'selectionDirection' ? value : Number(value); },
@@ -3150,37 +3472,123 @@
   }
 
   function installHtmlInterfaceMembers(name, proto) {
+    if (['HTMLInputElement', 'HTMLTextAreaElement', 'HTMLSelectElement', 'HTMLButtonElement',
+         'HTMLFieldSetElement', 'HTMLOutputElement', 'HTMLObjectElement'].indexOf(name) >= 0) {
+      var validationKind = { HTMLInputElement: 'input', HTMLTextAreaElement: 'textarea',
+        HTMLSelectElement: 'select', HTMLButtonElement: 'button', HTMLFieldSetElement: 'fieldset',
+        HTMLOutputElement: 'output', HTMLObjectElement: 'object' }[name];
+      installValidationMembers(proto, validationKind);
+      if (name !== 'HTMLInputElement' && name !== 'HTMLTextAreaElement') {
+        gcDefineProperty(proto, 'form', { configurable: true, enumerable: true,
+          get: function() { formInterfaceRef(this, validationKind); return formOwner(this); }
+        });
+      }
+    }
     if (name === 'HTMLInputElement' || name === 'HTMLTextAreaElement') {
-      installTextControlMembers(proto);
+      installTextControlMembers(proto, name === 'HTMLInputElement' ? 'input' : 'textarea');
       if (name === 'HTMLTextAreaElement') {
         Object.defineProperty(proto, 'textLength', { configurable: true, enumerable: true, get: function() { return this.value.length; } });
       }
       return;
     }
     if (name === 'HTMLFormElement') {
+      function checkForm(form) {
+        formInterfaceRef(form, 'form');
+      }
+      function validateForm(form, report) {
+        checkForm(form);
+        var controls = nativeControlList(form, 'form'), invalid = [], unhandled = [];
+        // Snapshot all invalid candidates before listeners can mutate the form.
+        for (var i = 0; i < controls.length; i++) {
+          if (invalidControl(controls[i])) {
+            var ref = applyDOMBrand(gcWeakMapGet, formRefs, [controls[i]]);
+            invalid.push({ ref: ref, control: controls[i],
+              message: report ? nativeValidityGet(ref, 'validationMessage') : '' });
+          }
+        }
+        for (var j = 0; j < invalid.length; j++) {
+          if (fireInvalid(invalid[j].control)) unhandled.push(invalid[j]);
+        }
+        if (report && unhandled.length) {
+          var first = unhandled[0];
+          nativeQueueValidationReport(first.ref, first.message);
+        }
+        return invalid.length === 0;
+      }
+      privateValidateForm = function(form) { return validateForm(form, true); };
+      proto.checkValidity = function() { return validateForm(this, false); };
+      proto.reportValidity = function() { return validateForm(this, true); };
       var resetting = new WeakSet();
       proto.reset = function() {
-        if (!this || this.namespaceURI !== XHTML_NS || this.localName !== 'form') throw new TypeError('Illegal invocation');
+        checkForm(this);
         if (resetting.has(this)) return;
         resetting.add(this);
         try {
           if (!this.dispatchEvent(new Event('reset', { bubbles: true, cancelable: true }))) return;
-          var seen = new Set();
-          var own = this.querySelectorAll('input,textarea');
-          var all = this.getRootNode().querySelectorAll('input,textarea');
-          function resetAssociated(list, form) {
-            for (var i = 0; i < list.length; i++) {
-              var control = list[i];
-              if (!seen.has(control) && formOwner(control) === form) {
-                seen.add(control);
-                __resetFormControl(control.__ref);
-              }
-            }
-          }
-          resetAssociated(own, this);
-          resetAssociated(all, this);
+          var controls = nativeControlList(this, 'form');
+          for (var i = 0; i < controls.length; i++) __resetFormControl(controls[i].__ref);
         } finally { resetting.delete(this); }
       };
+      return;
+    }
+    if (name === 'HTMLSelectElement') {
+      gcDefineProperty(proto, 'value', { configurable: true, enumerable: true,
+        get: function() { return nativeControlGet(formInterfaceRef(this, 'select'), 'value') || ''; },
+        set: function(value) { formControlError(__formControlSet(formInterfaceRef(this, 'select'), 'value', String(value))); }
+      });
+      gcDefineProperty(proto, 'selectedIndex', { configurable: true, enumerable: true,
+        get: function() { return Number(nativeControlGet(formInterfaceRef(this, 'select'), 'selectedIndex')); },
+        set: function(value) { formControlError(__formControlSet(formInterfaceRef(this, 'select'), 'selectedIndex', String(Number(value) >> 0))); }
+      });
+      gcDefineProperty(proto, 'options', { configurable: true, enumerable: true,
+        get: function() {
+          var select = this;
+          formInterfaceRef(select, 'select');
+          return makeCollection(function() { return nativeControlList(select, 'select'); }, true);
+        }
+      });
+      gcDefineProperty(proto, 'length', { configurable: true, enumerable: true,
+        get: function() { formInterfaceRef(this, 'select'); return nativeControlList(this, 'select').length; }
+      });
+      proto.item = function(index) { return this.options.item(index); };
+      proto.namedItem = function(name) { return this.options.namedItem(String(name)); };
+      proto.add = function(element, before) {
+        formInterfaceRef(this, 'select');
+        requireNode(element, 'select.add');
+        if (element.namespaceURI !== XHTML_NS || ['option', 'optgroup'].indexOf(element.localName) < 0) {
+          throw new TypeError('Expected an option or optgroup');
+        }
+        if (before !== undefined && before !== null && typeof before !== 'object') {
+          before = this.options.item(Number(before) >> 0);
+        }
+        if (before === undefined) before = null;
+        if (before !== null && !this.contains(before)) throw new DOMException('The reference option is not in this select', 'NotFoundError');
+        (before ? before.parentNode : this).insertBefore(element, before);
+      };
+      proto.remove = function(index) {
+        formInterfaceRef(this, 'select');
+        if (arguments.length === 0) {
+          if (this.parentNode) this.parentNode.removeChild(this);
+        } else {
+          var option = this.options.item(Number(index) >> 0);
+          if (option && option.parentNode) option.parentNode.removeChild(option);
+        }
+      };
+      return;
+    }
+    if (name === 'HTMLOptionElement') {
+      gcDefineProperty(proto, 'selected', { configurable: true, enumerable: true,
+        get: function() { return nativeControlGet(formInterfaceRef(this, 'option'), 'selected') === 'true'; },
+        set: function(value) { formControlError(__formControlSet(formInterfaceRef(this, 'option'), 'selected', String(!!value))); }
+      });
+      gcDefineProperty(proto, 'value', { configurable: true, enumerable: true,
+        get: function() { return nativeControlGet(formInterfaceRef(this, 'option'), 'optionValue'); },
+        set: function(value) { this.setAttribute('value', String(value)); }
+      });
+      gcDefineProperty(proto, 'text', { configurable: true, enumerable: true,
+        get: function() { return nativeControlGet(formInterfaceRef(this, 'option'), 'optionText'); },
+        set: function(value) { formInterfaceRef(this, 'option'); this.textContent = String(value); }
+      });
       return;
     }
     if (name === 'HTMLIFrameElement') {
@@ -3219,11 +3627,14 @@
       // the WebGL 1.0 context; the conformance tests use both spellings.
       if (t !== 'webgl' && t !== 'experimental-webgl') return null;
       if (this.__webglContext) return this.__webglContext;
-      var Ctor = globalThis.WebGLRenderingContext;
-      if (typeof Ctor !== 'function') return null;
+      if (typeof globalThis.WebGLRenderingContext !== 'function') return null;
+      var create = globalThis.__createWebGLContext;
+      if (typeof create !== 'function') return null;
       var w = parseInt(this.getAttribute('width'), 10); if (!(w >= 0)) w = 300;
       var h = parseInt(this.getAttribute('height'), 10); if (!(h >= 0)) h = 150;
-      this.__webglContext = new Ctor(w, h);
+      var context = create(w, h);
+      if (context === null) return null;
+      this.__webglContext = context;
       // WebGL helpers use the standard back-reference for drawing-buffer
       // dimensions and context classification. Keep it on the context rather
       // than making the runtime API know about DOM wrapper identity.
@@ -3730,7 +4141,7 @@
   // drains that list. Guarded on there being any shadow root at all, so a
   // document with none pays one native call that returns the empty string
   // — and only outside a coalescing group, so `replaceChild` fires once.
-  function moAfterMutation() {
+  function moAfterMutation(target) {
     if ((domAgentDispatch || moActive) && !moGroupDepth) moFlush();
     if (!moGroupDepth) flushSlotChanges();
   }
@@ -3746,7 +4157,7 @@
     moGroupDepth--;
     if (domAgentDispatch) domAgentDispatch('moGroup', parent.__ref, 0);
     else if (!moGroupDepth) __moGroup('0');
-    if (!moGroupDepth) moAfterMutation();
+    if (!moGroupDepth) moAfterMutation(parent.__ref);
   }
   // The same call sites carry the DOM's live-range steps: `rangeWillRemove`
   // before the tree moves (it needs the child index and the pre-mutation
@@ -3754,35 +4165,35 @@
   // reference child's old index).
   function moAppendChild(p, c) {
     rangeWillRemove(wrapNode(c)); discardFrameSubtree(wrapNode(c), true); __appendChild(p, c);
-    rangeDidInsert(wrapNode(c)); moAfterMutation(); syncFrameSubtree(wrapNode(c));
+    rangeDidInsert(wrapNode(c)); moAfterMutation(p); syncFrameSubtree(wrapNode(c));
   }
   function moInsertBefore(p, n, r) {
     rangeWillRemove(wrapNode(n)); discardFrameSubtree(wrapNode(n), true); __insertBefore(p, n, r);
-    rangeDidInsert(wrapNode(n)); moAfterMutation(); syncFrameSubtree(wrapNode(n));
+    rangeDidInsert(wrapNode(n)); moAfterMutation(p); syncFrameSubtree(wrapNode(n));
   }
   // `moveBefore` is the one mutation that does not destroy a nested browsing
   // context, which is the whole point of the method -- so no discard here.
   function moMoveBefore(p, n, r) {
     rangeWillRemove(wrapNode(n)); __moveBefore(p, n, r);
-    rangeDidInsert(wrapNode(n)); moAfterMutation();
+    rangeDidInsert(wrapNode(n)); moAfterMutation(p);
   }
   function moRemoveChild(p, c) {
     rangeWillRemove(wrapNode(c)); discardFrameSubtree(wrapNode(c), true); __removeChild(p, c);
-    moAfterMutation(); refreshFramesAfterRemoval();
+    moAfterMutation(p); refreshFramesAfterRemoval();
   }
-  function moSetAttribute(e, n, v) { __setAttribute(e, n, v); moAfterMutation(); }
-  function moRemoveAttribute(e, n) { __removeAttribute(e, n); moAfterMutation(); }
-  function moSetAttributeNS(e, ns, q, v) { __setAttributeNS(e, ns, q, v); moAfterMutation(); }
-  function moRemoveAttributeNS(e, ns, l) { __removeAttributeNS(e, ns, l); moAfterMutation(); }
+  function moSetAttribute(e, n, v) { __setAttribute(e, n, v); moAfterMutation(e); }
+  function moRemoveAttribute(e, n) { __removeAttribute(e, n); moAfterMutation(e); }
+  function moSetAttributeNS(e, ns, q, v) { __setAttributeNS(e, ns, q, v); moAfterMutation(e); }
+  function moRemoveAttributeNS(e, ns, l) { __removeAttributeNS(e, ns, l); moAfterMutation(e); }
   function moSetTextContent(n, t) {
     var nodeType = +__nodeType(n);
     if (nodeType === 9 || nodeType === 10) return;
     rangeWillReplaceAll(wrapNode(n)); discardFrameSubtree(wrapNode(n), false);
-    __setTextContent(n, t); moAfterMutation(); refreshFramesAfterRemoval();
+    __setTextContent(n, t); moAfterMutation(n); refreshFramesAfterRemoval();
   }
   function moSetInnerHtml(n, h) {
     rangeWillReplaceAll(wrapNode(n)); discardFrameSubtree(wrapNode(n), false);
-    __setInnerHtml(n, h); moAfterMutation();
+    __setInnerHtml(n, h); moAfterMutation(n);
     syncFrameSubtree(wrapNode(n)); refreshFramesAfterRemoval();
   }
 
@@ -4145,7 +4556,8 @@
     if (!sc || !sc.__ref || !ec || !ec.__ref) {
       throw new TypeError('StaticRange: containers must be Nodes');
     }
-    if (sc.nodeType === 10 || ec.nodeType === 10 || sc.__isAttr || ec.__isAttr) {
+    if (sc.nodeType === 10 || ec.nodeType === 10 ||
+        privateSetHas(attrNodes, sc) || privateSetHas(attrNodes, ec)) {
       throw new DOMException('DocumentType or Attr boundary', 'InvalidNodeTypeError');
     }
     this.__sc = sc;
@@ -4618,6 +5030,117 @@
     return new DOMRect(left, top, right - left, bottom - top);
   };
 
+  // ---- element geometry (CSSOM View) -----------------------------------------
+  //
+  // The host's geometry seam answers; this is only marshalling and the
+  // attribute shapes the spec asks for. No layout bound means no box: empty
+  // rect lists and zero metrics, which is also what a `display: none` element
+  // reads in a real engine.
+  var GEOM = { clientTop: 0, clientLeft: 1, clientWidth: 2, clientHeight: 3,
+               scrollLeft: 4, scrollTop: 5, scrollWidth: 6, scrollHeight: 7,
+               offsetTop: 8, offsetLeft: 9, offsetWidth: 10, offsetHeight: 11 };
+  function geomMetrics(el) {
+    if (typeof __geomMetrics !== 'function') return null;
+    var blob = __geomMetrics(el.__ref);
+    if (!blob) return null;
+    var f = String(blob).split(',');
+    for (var i = 0; i < f.length; i++) f[i] = +f[i];
+    return f;
+  }
+  function geomRects(el) {
+    var out = [];
+    if (typeof __geomRects !== 'function') return out;
+    var blob = __geomRects(el.__ref);
+    if (!blob) return out;
+    var lines = String(blob).split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      if (!lines[i]) continue;
+      var f = lines[i].split(',');
+      out.push(new DOMRect(+f[0], +f[1], +f[2], +f[3]));
+    }
+    return out;
+  }
+  Element.prototype.getClientRects = function() {
+    var rects = geomRects(this);
+    rects.item = function(i) { return this[i] === undefined ? null : this[i]; };
+    return rects;
+  };
+  Element.prototype.getBoundingClientRect = function() {
+    var rects = geomRects(this);
+    if (!rects.length) return new DOMRect(0, 0, 0, 0);
+    var left = rects[0].x, top = rects[0].y;
+    var right = left + rects[0].width, bottom = top + rects[0].height;
+    for (var i = 1; i < rects.length; i++) {
+      var r = rects[i];
+      if (r.x < left) left = r.x;
+      if (r.y < top) top = r.y;
+      if (r.x + r.width > right) right = r.x + r.width;
+      if (r.y + r.height > bottom) bottom = r.y + r.height;
+    }
+    return new DOMRect(left, top, right - left, bottom - top);
+  };
+  function geomInteger(proto, name) {
+    Object.defineProperty(proto, name, {
+      configurable: true, enumerable: true,
+      get: function() { var m = geomMetrics(this); return m ? Math.round(m[GEOM[name]]) : 0; }
+    });
+  }
+  ['clientTop', 'clientLeft', 'clientWidth', 'clientHeight', 'scrollWidth', 'scrollHeight']
+    .forEach(function(name) { geomInteger(Element.prototype, name); });
+  function geomFinite(v) { v = Number(v); return isFinite(v) ? v : 0; }
+  ['scrollLeft', 'scrollTop'].forEach(function(name) {
+    Object.defineProperty(Element.prototype, name, {
+      configurable: true, enumerable: true,
+      get: function() { var m = geomMetrics(this); return m ? m[GEOM[name]] : 0; },
+      set: function(v) {
+        if (typeof __geomScroll !== 'function') return;
+        v = geomFinite(v);
+        if (name === 'scrollLeft') __geomScroll(this.__ref, v, 'keep');
+        else __geomScroll(this.__ref, 'keep', v);
+      }
+    });
+  });
+  function scrollArgs(el, a, b, relative) {
+    var x, y;
+    if (a !== null && typeof a === 'object') { x = a.left; y = a.top; }
+    else { x = a; y = b; }
+    var left = x === undefined ? undefined : geomFinite(x);
+    var top = y === undefined ? undefined : geomFinite(y);
+    if (relative) {
+      left = (left || 0) + el.scrollLeft;
+      top = (top || 0) + el.scrollTop;
+    }
+    if (typeof __geomScroll === 'function') {
+      __geomScroll(el.__ref, left === undefined ? 'keep' : left, top === undefined ? 'keep' : top);
+    }
+  }
+  Element.prototype.scrollTo = function(a, b) { scrollArgs(this, a, b, false); };
+  Element.prototype.scroll = Element.prototype.scrollTo;
+  Element.prototype.scrollBy = function(a, b) { scrollArgs(this, a, b, true); };
+  function installOffsetGeometry() {
+    var htmlElementProto = htmlInterfaceConstructors.HTMLElement && htmlInterfaceConstructors.HTMLElement.prototype;
+  if (htmlElementProto) {
+    ['offsetTop', 'offsetLeft', 'offsetWidth', 'offsetHeight'].forEach(function(name) {
+      geomInteger(htmlElementProto, name);
+    });
+    Object.defineProperty(htmlElementProto, 'offsetParent', {
+      configurable: true, enumerable: true,
+      get: function() {
+        if (typeof __geomOffsetParent !== 'function') return null;
+        var ref = __geomOffsetParent(this.__ref);
+        return ref === undefined ? null : wrapNode(ref);
+      }
+    });
+  }
+  }
+  Object.defineProperty(Document.prototype, 'scrollingElement', {
+    configurable: true, enumerable: true,
+    get: function() {
+      if (this.compatMode === 'BackCompat') return this.body || null;
+      return this.documentElement;
+    }
+  });
+
   setClassString(Range.prototype, 'Range');
   globalThis.Range = Range;
 
@@ -4877,6 +5400,7 @@
   };
 
   installHtmlInterfaceTable();
+  installOffsetGeometry();
   installShapeInterfaces();
   installTraversal();
 
@@ -5394,7 +5918,9 @@
   applyDOMBrand(addDOMNode, domNodes, [document]);
   document.__ref = docRef;
   document.nodeType = 9;
+  privateSet(documentModes, document, true);
   wrappers.set(docRef, document);
+  applyDOMBrand(gcWeakMapSet, documentWindows, [document, eventCore.windowKey()]);
   registerBaseReader(document);
   // On a Window, `document` is `[LegacyUnforgeable]`: a getter with no setter,
   // non-configurable and non-deletable. A worker global keeps it a plain property,
@@ -5609,11 +6135,24 @@
     }
   }
 
-  globalThis.__dispatchSynthetic = function(rawId, type, opts) {
-    var node = wrapNode(__reflectNode(String(rawId)));
+  // Host input dispatch: build the event; the registry does the walk.
+  globalThis.__dispatchHostEvent = function(rawId, type) {
+    var node = wrapNode(__reflectNode(userAgentString(rawId)));
     if (!node) { return false; }
-    var ev = new Event(String(type), opts || { bubbles: true, cancelable: true });
-    return node.dispatchEvent(ev);
+    var ev = new userAgentEventConstructor(userAgentString(type), { bubbles: true, cancelable: true });
+    return applyDOMBrand(dispatchNodeEvent, node, [ev]);
+  };
+  // Parser-owned external script load failure. Keep the node wrapper and event
+  // constructor in this closure so author globals cannot replace the host path.
+  globalThis.__dispatchScriptLoadError = function(rawId) {
+    var node = wrapNode(__reflectNode(userAgentString(rawId)));
+    if (!node) return false;
+    return applyDOMBrand(dispatchNodeEvent, node, [new userAgentEventConstructor('error', { bubbles: false, cancelable: false })]);
+  };
+  globalThis.__dispatchFrameLoad = function(rawId) {
+    var node = wrapNode(__reflectNode(userAgentString(rawId)));
+    if (!node) return false;
+    return applyDOMBrand(dispatchNodeEvent, node, [new userAgentEventConstructor('load', { bubbles: false })]);
   };
 
   // TransitionEvent (css-transitions): an Event carrying `propertyName`,
@@ -5623,31 +6162,32 @@
   // (what the WPT event tests assert first) and `instanceof Event` both hold.
   globalThis.TransitionEvent = function(type, init) {
     init = init || {};
-    var ev = new Event(String(type), {
+    var ev = new userAgentEventConstructor(userAgentString(type), {
       bubbles: init.bubbles !== undefined ? !!init.bubbles : true,
       cancelable: !!init.cancelable,
     });
-    ev.propertyName = init.propertyName !== undefined ? String(init.propertyName) : '';
-    ev.elapsedTime = init.elapsedTime !== undefined ? Number(init.elapsedTime) : 0;
-    ev.pseudoElement = init.pseudoElement !== undefined ? String(init.pseudoElement) : '';
-    Object.setPrototypeOf(ev, TransitionEvent.prototype);
+    ev.propertyName = init.propertyName !== undefined ? userAgentString(init.propertyName) : '';
+    ev.elapsedTime = init.elapsedTime !== undefined ? userAgentNumber(init.elapsedTime) : 0;
+    ev.pseudoElement = init.pseudoElement !== undefined ? userAgentString(init.pseudoElement) : '';
+    userAgentSetPrototypeOf(ev, userAgentTransitionEventConstructor.prototype);
     return ev;
   };
   globalThis.TransitionEvent.prototype = Object.create(Event.prototype, {
     constructor: { value: globalThis.TransitionEvent, writable: true, configurable: true },
   });
+  var userAgentTransitionEventConstructor = globalThis.TransitionEvent;
 
   // Host bridge: dispatch a transition* event at a node (from the layout tick's
   // harvested lifecycle events). `type` is one of transitionrun /
   // transitionstart / transitionend / transitioncancel.
   globalThis.__dispatchTransition = function(rawId, type, propertyName, elapsedTime) {
-    var node = wrapNode(__reflectNode(String(rawId)));
+    var node = wrapNode(__reflectNode(userAgentString(rawId)));
     if (!node) { return false; }
-    var ev = new globalThis.TransitionEvent(String(type), {
+    var ev = new userAgentTransitionEventConstructor(userAgentString(type), {
       propertyName: propertyName,
       elapsedTime: elapsedTime,
     });
-    return node.dispatchEvent(ev);
+    return applyDOMBrand(dispatchNodeEvent, node, [ev]);
   };
 
   // ---- UA-generated input events (touch / wheel) ----
@@ -5664,27 +6204,7 @@
   // whatever `cancelable` its constructor was given, passive listeners or not
   // (`generic-events-stay-cancelable`).
   function hasNonPassiveListener(node, type) {
-    var path = [];
-    var n = node;
-    while (n) { path.push(n); n = n.parentNode; }
-    var terminalDocument = path.length && path[path.length - 1];
-    var terminalWindow = terminalDocument && terminalDocument.nodeType === 9 && terminalDocument.defaultView;
-    if (terminalWindow) {
-      path.push(terminalWindow);
-    }
-    var keys = ['c:' + type, 'b:' + type];
-    for (var i = 0; i < path.length; i++) {
-      var listeners = path[i].__listeners;
-      if (!listeners) continue;
-      for (var k = 0; k < keys.length; k++) {
-        var l = listeners[keys[k]];
-        if (!l) continue;
-        for (var j = 0; j < l.length; j++) {
-          if (!l[j].passive) return true;
-        }
-      }
-    }
-    return false;
+    return eventCore.hasNonPassive(node.__ref, type, windowKeyOf(node));
   }
 
   // Host bridge: dispatch a touch event carrying one touch point. Per Touch
@@ -5692,52 +6212,52 @@
   // (empty once the finger lifts), while `changedTouches` always carries the
   // point this event is about.
   globalThis.__dispatchTouch = function(rawId, type, x, y, identifier) {
-    var node = wrapNode(__reflectNode(String(rawId)));
+    var node = wrapNode(__reflectNode(userAgentString(rawId)));
     if (!node) { return false; }
-    type = String(type);
-    var touch = new Touch({
-      identifier: Number(identifier), target: node,
-      clientX: Number(x), clientY: Number(y),
-      pageX: Number(x), pageY: Number(y),
-      screenX: Number(x), screenY: Number(y),
+    type = userAgentString(type);
+    var touch = new userAgentTouchConstructor({
+      identifier: userAgentNumber(identifier), target: node,
+      clientX: userAgentNumber(x), clientY: userAgentNumber(y),
+      pageX: userAgentNumber(x), pageY: userAgentNumber(y),
+      screenX: userAgentNumber(x), screenY: userAgentNumber(y),
       force: (type === 'touchend' || type === 'touchcancel') ? 0 : 1,
     });
     var lifted = (type === 'touchend' || type === 'touchcancel');
     var active = lifted ? [] : [touch];
-    var ev = new TouchEvent(type, {
+    var ev = new userAgentTouchEventConstructor(type, {
       bubbles: true,
       cancelable: hasNonPassiveListener(node, type),
       touches: active,
       targetTouches: active,
       changedTouches: [touch],
     });
-    return node.dispatchEvent(ev);
+    return applyDOMBrand(dispatchNodeEvent, node, [ev]);
   };
 
   // Host bridge: dispatch a wheel input as both the standard `wheel` event and
   // the legacy `mousewheel` (WPT covers both). Each gets its own cancelable
   // decision, since the rule is per event type.
   globalThis.__dispatchWheel = function(rawId, x, y, deltaX, deltaY, deltaMode) {
-    var node = wrapNode(__reflectNode(String(rawId)));
+    var node = wrapNode(__reflectNode(userAgentString(rawId)));
     if (!node) { return false; }
     var proceed = true;
     for (var i = 0; i < 2; i++) {
       var type = (i === 0) ? 'wheel' : 'mousewheel';
-      var ev = new WheelEvent(type, {
+      var ev = new userAgentWheelEventConstructor(type, {
         bubbles: true,
         cancelable: hasNonPassiveListener(node, type),
-        clientX: Number(x), clientY: Number(y),
-        screenX: Number(x), screenY: Number(y),
-        deltaX: Number(deltaX), deltaY: Number(deltaY), deltaZ: 0,
-        deltaMode: Number(deltaMode),
+        clientX: userAgentNumber(x), clientY: userAgentNumber(y),
+        screenX: userAgentNumber(x), screenY: userAgentNumber(y),
+        deltaX: userAgentNumber(deltaX), deltaY: userAgentNumber(deltaY), deltaZ: 0,
+        deltaMode: userAgentNumber(deltaMode),
       });
       if (type === 'mousewheel') {
         // Legacy: wheelDelta is the inverse of deltaY, scaled by 120 per notch.
-        ev.wheelDelta = -Number(deltaY) * 120;
-        ev.wheelDeltaX = -Number(deltaX) * 120;
-        ev.wheelDeltaY = -Number(deltaY) * 120;
+        ev.wheelDelta = -userAgentNumber(deltaY) * 120;
+        ev.wheelDeltaX = -userAgentNumber(deltaX) * 120;
+        ev.wheelDeltaY = -userAgentNumber(deltaY) * 120;
       }
-      if (!node.dispatchEvent(ev)) { proceed = false; }
+      if (!applyDOMBrand(dispatchNodeEvent, node, [ev])) { proceed = false; }
     }
     return proceed;
   };
@@ -5748,31 +6268,32 @@
   // Prototype-chained exactly like TransitionEvent, for `instanceof`.
   globalThis.AnimationEvent = function(type, init) {
     init = init || {};
-    var ev = new Event(String(type), {
+    var ev = new userAgentEventConstructor(userAgentString(type), {
       bubbles: init.bubbles !== undefined ? !!init.bubbles : true,
       cancelable: !!init.cancelable,
     });
-    ev.animationName = init.animationName !== undefined ? String(init.animationName) : '';
-    ev.elapsedTime = init.elapsedTime !== undefined ? Number(init.elapsedTime) : 0;
-    ev.pseudoElement = init.pseudoElement !== undefined ? String(init.pseudoElement) : '';
-    Object.setPrototypeOf(ev, AnimationEvent.prototype);
+    ev.animationName = init.animationName !== undefined ? userAgentString(init.animationName) : '';
+    ev.elapsedTime = init.elapsedTime !== undefined ? userAgentNumber(init.elapsedTime) : 0;
+    ev.pseudoElement = init.pseudoElement !== undefined ? userAgentString(init.pseudoElement) : '';
+    userAgentSetPrototypeOf(ev, userAgentAnimationEventConstructor.prototype);
     return ev;
   };
   globalThis.AnimationEvent.prototype = Object.create(Event.prototype, {
     constructor: { value: globalThis.AnimationEvent, writable: true, configurable: true },
   });
+  var userAgentAnimationEventConstructor = globalThis.AnimationEvent;
 
   // Host bridge: dispatch an animation* event at a node (from the layout tick's
   // harvested lifecycle events). `type` is one of animationstart /
   // animationiteration / animationend / animationcancel.
   globalThis.__dispatchAnimation = function(rawId, type, animationName, elapsedTime) {
-    var node = wrapNode(__reflectNode(String(rawId)));
+    var node = wrapNode(__reflectNode(userAgentString(rawId)));
     if (!node) { return false; }
-    var ev = new globalThis.AnimationEvent(String(type), {
+    var ev = new userAgentAnimationEventConstructor(userAgentString(type), {
       animationName: animationName,
       elapsedTime: elapsedTime,
     });
-    return node.dispatchEvent(ev);
+    return applyDOMBrand(dispatchNodeEvent, node, [ev]);
   };
 
   // window.matchMedia (css-mediaqueries): a MediaQueryList over the host's
@@ -5920,9 +6441,6 @@
         var observedAttributes = [];
         if (callbacks.attributeChangedCallback) {
           observedAttributes = toDomStringSequence(ctor.observedAttributes);
-          for (var oi = 0; oi < observedAttributes.length; oi++) {
-            observedAttributes[oi] = String(observedAttributes[oi]).toLowerCase();
-          }
         }
         var disabledFeatures = toDomStringSequence(ctor.disabledFeatures).map(String);
         var formAssociated = !!ctor.formAssociated;
@@ -5961,8 +6479,9 @@
         autonomousCustomElementDefinitions[localName] = def;
       }
       customElementDefinitionsByCtor.set(ctor, def);
+      ceActivate();
+      ceRunScoped(upgradeCustomElementTree, null, [document]);
       if (pending[name]) { pending[name].resolve(ctor); delete pending[name]; }
-      upgradeCustomElementTree(document);
     };
     CustomElementRegistry.prototype.get = function(name) {
       var def = customElementDefinitions[name];
@@ -5985,7 +6504,9 @@
       pending[name] = slot;
       return slot.promise;
     };
-    CustomElementRegistry.prototype.upgrade = function(root) { upgradeCustomElementTree(root); };
+    CustomElementRegistry.prototype.upgrade = function(root) {
+      ceRunScoped(upgradeCustomElementTree, null, [root]);
+    };
     globalThis.CustomElementRegistry = CustomElementRegistry;
     globalThis.customElements = new CustomElementRegistry();
   })();
@@ -6098,14 +6619,14 @@
     if (ref === undefined || ref === null) {
       // Parse failure (XML only; the HTML parser never fails).
       var bad = wrapNode(__createDocument());
-      bad.__isHtml = false;
+      privateSet(documentModes, bad, false);
       var err = bad.createElementNS('http://www.mozilla.org/newlayout/xml/parseerror.xml', 'parsererror');
       err.textContent = 'XML parse error';
       bad.appendChild(err);
       return bad;
     }
     var doc = wrapNode(ref);
-    doc.__isHtml = isHtml;
+    privateSet(documentModes, doc, isHtml);
     return doc;
   };
   globalThis.DOMParser = DOMParser;
@@ -6358,7 +6879,9 @@
         // template-contents document, not the page's, and the fragment is
         // detached so no tree walk could work that out.
         if (fragment && !ownerDocuments.get(fragment)) {
-          ownerDocuments.set(fragment, wrapNode(__templateOwnerDocument(fragment.__ref)));
+          var inertDocument = wrapNode(__templateOwnerDocument(fragment.__ref));
+          privateSet(documentModes, inertDocument, true);
+          ownerDocuments.set(fragment, inertDocument);
         }
         return fragment;
       }
@@ -6395,30 +6918,6 @@
     flushSlotChanges();
   };
   ShadowRoot.prototype.setHTMLUnsafe = Element.prototype.setHTMLUnsafe;
-
-  // composedPath()'s visibility rule, called from Event.prototype.composedPath:
-  // an **open** shadow tree is visible to every node on the path; a **closed**
-  // one only from inside itself.
-  globalThis.__composedPathVisible = function(node, viewer, path) {
-    if (!viewer || node === viewer) return true;
-    var root = shadowRootContaining(node);
-    while (root) {
-      var init = shadowInitOf(root);
-      if (init && init.mode === 'closed') {
-        var viewerRoot = shadowRootContaining(viewer);
-        var inside = false;
-        while (viewerRoot) {
-          if (viewerRoot === root) { inside = true; break; }
-          var outer = wrapNode(__shadowHost(viewerRoot.__ref));
-          viewerRoot = outer ? shadowRootContaining(outer) : null;
-        }
-        if (!inside) return false;
-      }
-      var host = wrapNode(__shadowHost(root.__ref));
-      root = host ? shadowRootContaining(host) : null;
-    }
-    return true;
-  };
 
   // The clone walker's shadow hook (declared above it, defined here because it
   // needs `attachShadow`). Only a **clonable** root is carried, and it is
@@ -6540,10 +7039,20 @@
     __rebindDocument();
     __refreshNamedProperties();
   };
+  // The written source runs through the parser inside the call; at each
+  // element a definition may claim, the parser hands back so the upgrade and
+  // that insertion's reactions run before the write goes on.
+  function writeAndUpgrade(text, ref) {
+    var created = __docWrite(text, ref);
+    while (created === 'c') {
+      __ceUpgradeParsed(String(__docWriteCreated()));
+      created = __docWriteContinue();
+    }
+  }
   Document.prototype.write = function() {
     var text = '';
     for (var i = 0; i < arguments.length; i++) text += String(arguments[i]);
-    __docWrite(text, this.__ref);
+    writeAndUpgrade(text, this.__ref);
     pumpOpenStream(this.__ref);
     __rebindDocument();
     __refreshNamedProperties();
@@ -6551,7 +7060,7 @@
   Document.prototype.writeln = function() {
     var text = '';
     for (var i = 0; i < arguments.length; i++) text += String(arguments[i]);
-    __docWrite(text + '\n', this.__ref);
+    writeAndUpgrade(text + '\n', this.__ref);
     pumpOpenStream(this.__ref);
     __rebindDocument();
     __refreshNamedProperties();
@@ -6587,6 +7096,9 @@
     return n;
   };
   globalThis.__ceUpgradeParsed = function(ids) {
+    return ceRunScoped(ceUpgradeParsed, null, [ids]);
+  };
+  function ceUpgradeParsed(ids) {
     var list = String(ids).split(',');
     for (var i = 0; i < list.length; i++) {
       if (!list[i]) continue;
@@ -6608,15 +7120,104 @@
     return target.dispatchEvent(event);
   }
 
+  function privateElementRef(node) {
+    if (!applyDOMBrand(formNodeHas, domNodes, [node])) throw new formTypeError('Illegal HTMLElement receiver');
+    var ref = applyDOMBrand(gcWeakMapGet, formRefs, [node]);
+    if (formNamespace(ref) !== XHTML_NS || +formNodeType(ref) !== 1) throw new formTypeError('Expected HTMLElement');
+    return ref;
+  }
+  function privateEvent(type, prototype, bubbles, cancelable, trusted, extra) {
+    var event = formObjectCreate(prototype);
+    var fields = { __proto__: null, type: type, bubbles: bubbles, cancelable: cancelable, composed: true,
+      defaultPrevented: false, __canceled: false, eventPhase: 0, target: null, currentTarget: null,
+      srcElement: null, __initialized: true, __dispatch: false, __stop: false, __stopImmediate: false, __inPassive: false, __eid: 0 };
+    for (var key in fields) gcDefineProperty(event, key, { value: fields[key], writable: true, configurable: true, enumerable: true });
+    if (extra) for (var key in extra) gcDefineProperty(event, key, { value: extra[key], writable: true, configurable: true, enumerable: true });
+    privateTrust(event, trusted); return event;
+  }
+  function privateTrust(event, trusted) {
+    applyDOMBrand(gcWeakMapSet, formInvalidEventTrust, [event, !!trusted]);
+    gcDefineProperty(event, 'isTrusted', { enumerable: true, get: function() { return applyDOMBrand(gcWeakMapGet, formInvalidEventTrust, [event]); } });
+  }
+  function hostFocusCurrent(node) {
+    var ref = applyDOMBrand(gcWeakMapGet, formRefs, [node]);
+    if (!ref || hostFocusedRef !== ref) return false;
+    while (ref) {
+      var parent = focusParent(ref);
+      if (parent) { ref = parent; continue; }
+      if (+focusType(ref) === 11) { ref = focusShadowHost(ref); continue; }
+      break;
+    }
+    return ref === docRef;
+  }
+  var formsDOM = globalThis.__formsDOM = {
+    ref: formInterfaceRef, elementRef: privateElementRef,
+    nodeRef: function(node) { if (!applyDOMBrand(formNodeHas, domNodes, [node])) throw new formTypeError('Illegal Node receiver'); return applyDOMBrand(gcWeakMapGet, formRefs, [node]); },
+    focused: hostFocusCurrent,
+    isElement: function(node) { return applyDOMBrand(formNodeHas, domNodes, [node]) && +formNodeType(applyDOMBrand(gcWeakMapGet, formRefs, [node])) === 1; },
+    wrap: wrapNode, eventPrototype: userAgentEventPrototype,
+    formPrototype: elementSubclassProto.form, inputPrototype: elementSubclassProto.input,
+    htmlPrototype: htmlInterfaceConstructors.HTMLElement.prototype,
+    validate: function(form) { return privateValidateForm(form); },
+    owner: function(node) { return wrapNode(nativeFormOwner(privateElementRef(node))); },
+    dispatch: function(target,event) { return applyDOMBrand(dispatchNodeEvent,target,[event]); },
+    trust: privateTrust,
+    formEvent: function(form, kind, value) {
+      formInterfaceRef(form, 'form');
+      var creator = applyDOMBrand(gcWeakMapGet, formEventCreators, [form]);
+      if (!creator) throw new formTypeError('Form creator unavailable');
+      return applyDOMBrand(creator, undefined, [kind, value]);
+    },
+    pointer: function(trusted) { var event=privateEvent('click',pointerEventPrototype,true,true,trusted,{__proto__:null,button:0,buttons:0,clientX:0,clientY:0,screenX:0,screenY:0,detail:0,view:globalThis,ctrlKey:false,altKey:false,shiftKey:false,metaKey:false,pointerId:-1,pointerType:'',isPrimary:false,width:1,height:1,pressure:0,tangentialPressure:0,tiltX:0,tiltY:0,twist:0}); applyDOMBrand(gcWeakMapSet,mouseEvents,[event,true]); return event; },
+    key: function(target,details) { return applyDOMBrand(dispatchNodeEvent,target,[privateEvent(details.down === false ? 'keyup' : 'keydown',keyboardEventPrototype,true,true,true,{ __proto__:null,key:details.key,repeat:!!details.repeat,altKey:!!details.alt,ctrlKey:!!details.ctrl,metaKey:!!details.meta,shiftKey:!!details.shift })]); },
+    hostEdit: function(target, details) {
+      var ref = applyDOMBrand(gcWeakMapGet, formRefs, [target]);
+      if (!hostFocusCurrent(target)) return 'rejected';
+      var operation = details.operation, valueWrite = operation === 'insert' || operation === 'backward' || operation === 'forward';
+      if (valueWrite) {
+        var before = privateEvent('beforeinput',userAgentEventPrototype,true,true,true,{__proto__:null,data:operation === 'insert' ? details.text : null,inputType:details.inputType,isComposing:details.inputType === 'insertCompositionText'});
+        if (!applyDOMBrand(dispatchNodeEvent,target,[before])) return 'rejected';
+        // Author listeners can remove, disable, retarget, or change the control.
+        if (!hostFocusCurrent(target)) return 'rejected';
+      }
+      var result = nativeHostFormEdit(ref,operation,details.text);
+      if (result === 'edited') {
+        applyDOMBrand(dispatchNodeEvent,target,[privateEvent('input',userAgentEventPrototype,true,false,true,{__proto__:null,data:operation === 'insert' ? details.text : null,inputType:details.inputType,isComposing:details.inputType === 'insertCompositionText'})]);
+      }
+      return result;
+    },
+    hostChange: function(target) { return applyDOMBrand(dispatchNodeEvent,target,[privateEvent('change',userAgentEventPrototype,true,false,true,null)]); },
+    hostComposition: function(target,details) { return applyDOMBrand(dispatchNodeEvent,target,[privateEvent(details.phase,userAgentEventPrototype,true,false,true,{__proto__:null,data:details.text})]); },
+    task: setTimeout,
+    complete: function(operations) { if (formOperations) throw new TypeError('Form operations already installed'); nativeHostFormEdit=globalThis.__hostFormEdit; formOperations=operations; }
+  };
   domRealmHooks = function(op, a, b, c, d) {
       switch (op) {
+        case 'formPrivate': return formOperations.private(a,b,c);
+        case 'formActivateRaw': var p=applyDOMBrand(formSplit,b,[',']); return formOperations.hostClick(wrapNode(nativeFormReflect(a)),+p[0],+p[1]);
+        case 'formFocusRaw': {
+          var focusRef = nativeFormReflect(a), focusTarget = wrapNode(focusRef);
+          if (b === 'true') {
+            hostFocusedRef = focusRef;
+            applyDOMBrand(dispatchNodeEvent,focusTarget,[privateEvent('focus',userAgentEventPrototype,false,false,true,null)]);
+            applyDOMBrand(dispatchNodeEvent,focusTarget,[privateEvent('focusin',userAgentEventPrototype,true,false,true,null)]);
+            return hostFocusCurrent(focusTarget);
+          }
+          if (hostFocusedRef === focusRef) hostFocusedRef = null;
+          applyDOMBrand(dispatchNodeEvent,focusTarget,[privateEvent('blur',userAgentEventPrototype,false,false,true,null)]);
+          applyDOMBrand(dispatchNodeEvent,focusTarget,[privateEvent('focusout',userAgentEventPrototype,true,false,true,null)]);
+          return true;
+        }
+        case 'formKeyRaw': return formOperations.key(wrapNode(nativeFormReflect(a)),b);
+        case 'hostKeyRaw': return formOperations.key(wrapNode(nativeFormReflect(a)),b);
+        case 'hostTextRaw': return formsDOM.hostEdit(wrapNode(nativeFormReflect(a)),applyDOMBrand(formParse,undefined,[b]));
+        case 'hostChangeRaw': return formsDOM.hostChange(wrapNode(nativeFormReflect(a)));
+        case 'hostCompositionRaw': return formsDOM.hostComposition(wrapNode(nativeFormReflect(a)),applyDOMBrand(formParse,undefined,[b]));
         case 'uaEvent': return dispatchUserAgentEvent(a, b, c);
         case 'wrap': return wrapNodeLocal(a);
         case 'owners': return setOwnerDocumentSnapshotLocal(a, b);
-        case 'adopted': return enqueueAdoptedTreeLocal(a, b, c);
         case 'templateOwners': return rehomeTemplateOwnersLocal(a);
-        case 'connect': return connectCustomElementTreeLocal(a);
-        case 'disconnect': return disconnectCustomElementTreeLocal(a);
+        case 'ceRecords': return ceRecords(a);
         case 'rangeRemove': return rangeWillRemoveLocal(a);
         case 'rangeInsert': return rangeDidInsertLocal(a);
         case 'rangeReplace': return rangeWillReplaceAllLocal(a);
@@ -6628,5 +7229,7 @@
       }
       throw new Error('Unknown private DOM hook operation: ' + String(op));
   };
+  // Last, once every DOM member exists: wrap the [CEReactions] members.
+  installCustomElementReactions();
   if (domRegisterHooks) domRegisterHooks(domRealmHooks);
 })();

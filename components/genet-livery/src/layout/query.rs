@@ -21,8 +21,9 @@ where
         text_frame: Option<TextFrame<Id>>,
         block_algorithms: BlockAlgorithmCounts,
         table_paint: TablePaintPlane,
-        table_shadow: TableShadowLedger,
+        mut table_shadow: TableShadowLedger,
     ) -> Self {
+        table_shadow.materialize_summary();
         Self {
             viewport,
             buckram,
@@ -47,11 +48,24 @@ where
     ) where
         D: LayoutDom<NodeId = Id>,
     {
+        self.prepare_atomic_inline_subtree_text(dom, styles, text, dom.document());
+    }
+
+    /// Prepare only the formatting subtree being replaced in a retained frame.
+    pub(in crate::layout) fn prepare_atomic_inline_subtree_text<D>(
+        &mut self,
+        dom: &D,
+        styles: &StylePlane<Id>,
+        text: &mut TextSystem,
+        root: Id,
+    ) where
+        D: LayoutDom<NodeId = Id>,
+    {
         let Some(mut frame) = self.text_frame.take() else {
             return;
         };
         let mut elements = Vec::new();
-        atomic_inline_elements(dom, styles, dom.document(), false, &mut elements);
+        atomic_inline_elements(dom, styles, root, false, &mut elements);
         for element in elements {
             if let Some(style) = styles.get(element) {
                 // An element's inline boxes are its boxes in the lines that
@@ -72,6 +86,13 @@ where
 
     pub fn boxes(&self) -> &buckram::CssBoxTree<Id> {
         self.buckram.boxes()
+    }
+
+    pub(crate) fn has_sticky_positioning(&self) -> bool {
+        self.buckram
+            .boxes()
+            .iter()
+            .any(|(_, css_box)| css_box.positioning == PositioningScheme::Sticky)
     }
 
     pub fn fragments(&self) -> &FragmentTree {
@@ -301,15 +322,15 @@ where
         true
     }
 
-    /// Apply retained scroll-dependent sticky constraints to this otherwise
-    /// normal-flow layout snapshot. Callers clone the static layout first, so
-    /// scroll changes never accumulate into the next frame's base geometry.
+    /// Apply retained scroll-dependent sticky constraints to an owned copy of
+    /// the normal-flow layout. All placements are scanned before mutation, so
+    /// scrollport lookup can borrow this same pre-translation geometry.
     pub(crate) fn apply_sticky_positioning(
         &mut self,
         styles: &StylePlane<Id>,
         viewport_width: f32,
         viewport_height: f32,
-        mut scrollport_for: impl FnMut(Id) -> Option<StickyScrollport>,
+        mut scrollport_for: impl FnMut(Id, &Self) -> Option<StickyScrollport>,
     ) {
         let placements = self
             .buckram
@@ -325,7 +346,7 @@ where
                     return None;
                 }
                 let node = css_box.origin.node()?;
-                let scrollport = scrollport_for(node)?;
+                let scrollport = scrollport_for(node, self)?;
                 let root = self
                     .buckram
                     .fragments()
@@ -448,7 +469,7 @@ where
         &mut self,
         dom: &D,
         styles: &StylePlane<D::NodeId>,
-        image_sources: &ImageSources,
+        image_sources: &dyn crate::ImageSourceLookup,
         node: D::NodeId,
         viewport_width: f32,
         viewport_height: f32,
@@ -510,7 +531,7 @@ where
         &mut self,
         dom: &D,
         styles: &StylePlane<D::NodeId>,
-        image_sources: &ImageSources,
+        image_sources: &dyn crate::ImageSourceLookup,
         node: D::NodeId,
         viewport_width: f32,
         viewport_height: f32,
@@ -567,7 +588,7 @@ where
         &self,
         dom: &D,
         styles: &StylePlane<D::NodeId>,
-        image_sources: &ImageSources,
+        image_sources: &dyn crate::ImageSourceLookup,
         node: D::NodeId,
         viewport_width: f32,
         viewport_height: f32,
@@ -619,6 +640,12 @@ where
     /// scroll area; callers must still include fragments and respect clipping.
     pub fn inline_scroll_bounds(&self, node: Id) -> Option<Fragment> {
         self.text_frame.as_ref()?.line_bounds(node)
+    }
+
+    /// The per-line boxes of an inline element, in physical layout
+    /// coordinates: what an inline box paints as and what its client rects are.
+    pub fn inline_box_fragments(&self, node: Id) -> Option<&[Fragment]> {
+        self.text_frame.as_ref()?.inline_fragments(node)
     }
 
     /// Compatibility name for callers that only need a node's outermost

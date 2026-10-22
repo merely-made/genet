@@ -4,6 +4,7 @@
 
 use super::pipeline::f32_slice_to_bytes;
 use super::*;
+use crate::shader::{ShaderTranslationError, UniformReflection};
 
 impl WebGlContext {
     pub fn create_shader(&mut self, stage: ShaderStage) -> WebGlShaderId {
@@ -14,6 +15,9 @@ impl WebGlContext {
             ShaderObject {
                 stage,
                 source: String::new(),
+                source_revision: 0,
+                compiled: None,
+                compiled_revision: None,
                 compile_status: false,
                 info_log: String::new(),
             },
@@ -30,16 +34,10 @@ impl WebGlContext {
             self.record_error(WebGlError::InvalidOperation);
             return;
         };
-        // WebGL 1's draw-buffer form is commonly emitted by the Khronos
-        // helpers as `gl_FragData[0]`. The current Rust frontend owns one
-        // fragment output (`gl_FragColor`), so normalize the primary slot at
-        // this boundary before validation and lowering. Higher draw-buffer
-        // indices remain unsupported and must not be silently collapsed.
-        shader.source = if matches!(shader.stage, ShaderStage::Fragment) {
-            source.replace("gl_FragData[0]", "gl_FragColor")
-        } else {
-            source.to_string()
-        };
+        shader.source = source.to_string();
+        shader.source_revision += 1;
+        shader.compiled = None;
+        shader.compiled_revision = None;
         shader.compile_status = false;
         shader.info_log.clear();
     }
@@ -53,12 +51,19 @@ impl WebGlContext {
             self.record_error(WebGlError::InvalidOperation);
             return;
         };
-        let validation = match shader.stage {
-            ShaderStage::Vertex => validate_canonical_vertex_source(&shader.source),
-            ShaderStage::Fragment => validate_canonical_fragment_source(&shader.source),
+        // Each invocation produces an artifact for this exact source revision.
+        // A failed recompile must not leave the previous artifact linkable.
+        shader.compiled = None;
+        shader.compiled_revision = None;
+        shader.compile_status = false;
+        let stage = match shader.stage {
+            ShaderStage::Vertex => webgl_essl::validate::ShaderStage::Vertex,
+            ShaderStage::Fragment => webgl_essl::validate::ShaderStage::Fragment,
         };
-        match validation {
-            Ok(()) => {
+        match compile_canonical_source(&shader.source, stage) {
+            Ok(compiled) => {
+                shader.compiled = Some(compiled);
+                shader.compiled_revision = Some(shader.source_revision);
                 shader.compile_status = true;
                 shader.info_log.clear();
             },
@@ -163,36 +168,44 @@ impl WebGlContext {
             self.set_program_link_failure(program, "program link failed: missing fragment shader");
             return;
         };
-        if !vertex_shader.compile_status || !fragment_shader.compile_status {
+        if !vertex_shader.compile_status
+            || !fragment_shader.compile_status
+            || vertex_shader.compiled.is_none()
+            || fragment_shader.compiled.is_none()
+            || vertex_shader.compiled_revision != Some(vertex_shader.source_revision)
+            || fragment_shader.compiled_revision != Some(fragment_shader.source_revision)
+        {
             self.set_program_link_failure(
                 program,
                 "program link failed: attached shader did not compile",
             );
             return;
         }
-        let vertex_source = vertex_shader.source.clone();
-        let fragment_source = fragment_shader.source.clone();
-        let Ok(cache_key) = canonical_essl_cache_key(&vertex_source, &fragment_source) else {
-            self.set_program_link_failure(program, "program link failed: interface validation");
-            return;
+        let vertex_compiled = vertex_shader.compiled.as_ref().expect("checked above");
+        let fragment_compiled = fragment_shader.compiled.as_ref().expect("checked above");
+        debug_assert_eq!(vertex_compiled.source(), vertex_shader.source);
+        debug_assert_eq!(fragment_compiled.source(), fragment_shader.source);
+        let cache_key =
+            canonical_essl_cache_key(vertex_compiled.source(), fragment_compiled.source());
+        let cached = self.translated_programs.get(&cache_key).cloned();
+        let translation = match cached {
+            Some(translated) => Ok(translated),
+            None => translate_compiled_essl_pair(vertex_compiled, fragment_compiled),
         };
-        let translated = match self.translated_programs.get(&cache_key) {
-            Some(translated) => translated.clone(),
-            None => {
-                let Ok(translated) =
-                    translate_canonical_essl_pair(&vertex_source, &fragment_source)
-                else {
-                    self.set_program_link_failure(
-                        program,
-                        "program link failed: translation rejected linked pair",
-                    );
-                    return;
-                };
-                self.translated_programs
-                    .insert(cache_key, translated.clone());
-                translated
+        let translated = match translation {
+            Ok(translated) => translated,
+            Err(ShaderTranslationError::UnsupportedCanonicalPair) => {
+                self.set_program_link_failure(program, "program link failed: interface validation");
+                return;
+            },
+            Err(error) => {
+                self.set_program_link_failure(program, &format!("program link failed: {error}"));
+                return;
             },
         };
+        self.translated_programs
+            .entry(cache_key)
+            .or_insert_with(|| translated.clone());
         let reflection = translated.reflection.clone();
         let Some(program_object) = self.programs.get_mut(&program) else {
             self.record_error(WebGlError::InvalidOperation);
@@ -390,26 +403,17 @@ impl WebGlContext {
         self.write_block_member(location, UniformKind::Float32x4, &f32_slice_to_bytes(value));
     }
 
-    /// Column-major mat3 — WGSL pads each column to 16 bytes
-    /// (vec3 occupies 12, pad up to 16). Caller passes 9 floats
-    /// in column-major order; this writes 48 bytes with the
-    /// padding inserted.
+    /// Column-major mat3. Caller passes 9 floats in column-major order;
+    /// the reflected WGSL column stride determines where each column lands.
     pub fn uniform_matrix3fv(&mut self, location: WebGlUniformLocation, value: &[f32; 9]) {
-        let mut padded = [0u8; 48];
-        for column in 0..3 {
-            for row in 0..3 {
-                let src = value[column * 3 + row];
-                let dst = column * 16 + row * 4;
-                padded[dst..dst + 4].copy_from_slice(&src.to_ne_bytes());
-            }
-        }
-        self.write_block_member(location, UniformKind::Matrix3, &padded);
+        let bytes = f32_slice_to_bytes(value);
+        self.write_matrix_member(location, UniformKind::Matrix3, &bytes, 3, 3);
     }
 
-    /// Column-major mat4 — 4 columns × vec4 each, 64 bytes, no
-    /// padding gymnastics. Caller passes 16 floats column-major.
+    /// Column-major mat4. Caller passes 16 floats in column-major order.
     pub fn uniform_matrix4fv(&mut self, location: WebGlUniformLocation, value: &[f32; 16]) {
-        self.write_block_member(location, UniformKind::Matrix4, &f32_slice_to_bytes(value));
+        let bytes = f32_slice_to_bytes(value);
+        self.write_matrix_member(location, UniformKind::Matrix4, &bytes, 4, 4);
     }
 
     fn write_block_member(
@@ -417,6 +421,71 @@ impl WebGlContext {
         location: WebGlUniformLocation,
         expected_kind: UniformKind,
         bytes: &[u8],
+    ) {
+        self.write_block_member_with(location, expected_kind, bytes, |buffer, uniform, bytes| {
+            let offset = uniform.block_offset as usize;
+            let size = uniform.block_size as usize;
+            let Some(end) = offset.checked_add(bytes.len()) else {
+                return false;
+            };
+            if bytes.len() > size || end > buffer.len() {
+                return false;
+            }
+            buffer[offset..end].copy_from_slice(bytes);
+            true
+        });
+    }
+
+    fn write_matrix_member(
+        &mut self,
+        location: WebGlUniformLocation,
+        expected_kind: UniformKind,
+        bytes: &[u8],
+        columns: usize,
+        rows: usize,
+    ) {
+        self.write_block_member_with(location, expected_kind, bytes, |buffer, uniform, bytes| {
+            let Some(stride) = uniform.matrix_stride.map(|stride| stride as usize) else {
+                return false;
+            };
+            let Some(column_bytes) = rows.checked_mul(std::mem::size_of::<f32>()) else {
+                return false;
+            };
+            let Some(member_bytes) = stride.checked_mul(columns) else {
+                return false;
+            };
+            let Some(payload_bytes) = column_bytes.checked_mul(columns) else {
+                return false;
+            };
+            if stride < column_bytes
+                || bytes.len() != payload_bytes
+                || member_bytes > uniform.block_size as usize
+            {
+                return false;
+            }
+            let offset = uniform.block_offset as usize;
+            let Some(member_end) = offset.checked_add(member_bytes) else {
+                return false;
+            };
+            if member_end > buffer.len() {
+                return false;
+            }
+            for column in 0..columns {
+                let source_start = column * column_bytes;
+                let destination_start = offset + column * stride;
+                buffer[destination_start..destination_start + column_bytes]
+                    .copy_from_slice(&bytes[source_start..source_start + column_bytes]);
+            }
+            true
+        });
+    }
+
+    fn write_block_member_with(
+        &mut self,
+        location: WebGlUniformLocation,
+        expected_kind: UniformKind,
+        bytes: &[u8],
+        writer: impl FnOnce(&mut [u8], &UniformReflection, &[u8]) -> bool,
     ) {
         if self.lost {
             self.record_error(WebGlError::ContextLostWebgl);
@@ -446,13 +515,9 @@ impl WebGlContext {
             self.record_error(WebGlError::InvalidOperation);
             return;
         }
-        let offset = uniform.block_offset as usize;
-        let end = offset + bytes.len();
-        if end > program.uniform_block_bytes.len() {
+        if !writer(&mut program.uniform_block_bytes, uniform, bytes) {
             self.record_error(WebGlError::InvalidOperation);
-            return;
         }
-        program.uniform_block_bytes[offset..end].copy_from_slice(bytes);
     }
 
     pub fn uniform1i(&mut self, location: WebGlUniformLocation, value: i32) {

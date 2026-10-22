@@ -1,0 +1,26 @@
+{
+  "recorded_utc": "2026-10-20T04:09:14.337608+00:00",
+  "platform": "Windows O-PC (NVIDIA adapter per the forms lane's webgpu-desktop-preflight receipt of 2026-10-16)",
+  "genet_head": "0e9356b78095e79272e28eecfe510073e9bfbb12",
+  "toolchain": "1.99.1",
+  "command": "cargo +1.99.1 test -p genet-render-host --release --locked --lib -- --ignored --test-threads=1",
+  "result": {
+    "passed": 4,
+    "failed": 0,
+    "ignored": 0,
+    "filtered_out": 17,
+    "seconds": 2.88
+  },
+  "tests": [
+    "admitted_raster_tests::actual_device_destroy_after_raster_admission_is_typed_and_does_not_panic",
+    "admitted_raster_tests::finite_huge_curve_returns_provider_error_and_valid_raster_recovers_on_same_core",
+    "admitted_raster_tests::native_scope_captures_actual_renderer_errors_after_final_precheck_loss",
+    "admitted_raster_tests::round_cap_shader_quality_refuses_current_frame_before_checked_raster_success"
+  ],
+  "local_lock": {
+    "note": "genet keeps Cargo.lock untracked; the local lock was regenerated with cargo update --workspace before the run because the week's repins had moved",
+    "boa_engine_source": "git+https://github.com/merely-made/bole.git?rev=aef1134bb121c7aa4e4b408b3fa62460d10740b0#aef1134bb121c7aa4e4b408b3fa62460d10740b0"
+  },
+  "log_sha256": "9b13dd472f95f960f7ba9808dbbb9909fdcff9b312cea5d9a6e36dd9246862b5",
+  "scope": "The four #[ignore]-gated render-host tests the Linux lane could not run. IMG-GPU (shared-device draw/readback matrix for opaque/translucent images, replacement, removal, frame composition) still has no test and remains open."
+}

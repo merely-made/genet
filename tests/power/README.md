@@ -1,24 +1,9 @@
-The power and performance measurement for Servo parallel browser
+`PowerMeasure.py` was a historical Servo PowerMetrics runner. It launched
+`servoshell` with retired command-line arguments and stopped PowerMetrics by
+process name, so the runner and its invocation instructions have been retired.
+Its source remains available in Git history.
 
-This script uses PowerMetrics to measure power usage of Servo on OS X
-
-## Running
-
-``` sh
-cd servo/tests/power
-sudo python PowerMeasure.py
-```
-You can define the maximum number of threads in layout level, rendering by cpu, benchmarks and output directory with these command line arguments:
-
-- `-b BENCHMARK, --benchmark BENCHMARK` sets the benchmark, for example '-B "perf-rainbow.html"'
-- `-c CPU, --CPU CPU` renders with CPU instead of GPU
-- `-l LAYOUTTHREADS, --LayoutThreads LAYOUTTHREADS` sets the maximum number of threads for layout, for example " -L 5"
-- `-o OUTPUT, --Output OUTPUT` specifyes the output directory
-
-## Example
-
-This command will measure power and performance for 1 to 5 threads in layout with CPU rendering when we are running the about-mozilla.html benchmark
-
-``` sh
-sudo python PowerMeasure.py -L 5 -c cpu -b "/Desktop/servo/src/test/html/about-mozilla.html" -o /Desktop/Results/
-```
+Benchmark and expected-result fixtures are retained as data; this runner did
+not establish a current Genet benchmark gate. In particular,
+`tests/jquery/expected_selector.txt` remains alongside the retired jQuery
+launcher. Imported Blink benchmark assets and their licenses are also retained.

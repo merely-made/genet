@@ -50,9 +50,6 @@ mod cors;
 mod data_url;
 mod decode;
 mod fetch;
-// HTTP/3 transport — native-only (QUIC over UDP); excluded from wasm builds.
-#[cfg(all(feature = "h3", not(target_arch = "wasm32")))]
-mod h3_client;
 mod hsts;
 mod referrer;
 mod request;
@@ -80,7 +77,9 @@ pub use request::{
 };
 pub use response::{BodyStream, Response, ResponseBody, ResponseType};
 #[cfg(feature = "hyper-transport")]
-pub use transport::hyper::{DefaultTransport, accept_invalid_certs};
+pub use transport::hyper::{DefaultTransport, WireTransport, accept_invalid_certs};
+#[cfg(feature = "hyper-transport")]
+pub use murm_wire as wire;
 pub use transport::{NoTransport, RawResponse, Transport, TransportFuture, WireRequest};
 #[cfg(all(feature = "websocket", not(target_arch = "wasm32")))]
 pub use websocket::{

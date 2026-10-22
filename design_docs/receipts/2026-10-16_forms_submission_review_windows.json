@@ -1,0 +1,108 @@
+{
+  "status": "Windows repair qualification; Checkpoint C remains open",
+  "recorded_utc": "2026-10-16T09:07:26.692896+00:00",
+  "platform": "Windows O-PC",
+  "base_head": "6186c81ad7019ea51dd28861ef83574bfc992ed1",
+  "rust_toolchain": "1.99.1",
+  "lock_sha256": "75a0a55e3241f794661e2c5d390005e1d56229700d6cbd54f9e05b7034b50381",
+  "product_paths": {
+    "components/genet-documents/src/engines.rs": "979d19fb32a4ae6b3d8baffc72270dd979e6de416acd0ef2f61afd6c7e663113",
+    "components/genet-documents/src/engines/livery.rs": "a8baa0e15bcdba8a4ae4c17a75b86edcfddc90c37339f4e41cfb24d9b41144c6",
+    "components/genet-documents/src/engines/scripted.rs": "d543299ef725d8eacfaa28d2d0cdf0f0124af07f6e0bea3cbef04e1a06c1c13b",
+    "components/genet-documents/src/engines/tests.rs": "17903fe55b66a55ffefb9acfa69fce1d24d0b0ea320e8c6745c71b75ccebd4d5",
+    "components/genet-livery/src/document.rs": "5b569358a646974b086a7fb3f3da6477041a1032804438fc87c5ecb9d4f20190",
+    "components/genet-scripted-dom/forms_submission.rs": "fb41743d7a8697c1c726fb5690ac017ed2efa232d2f0b737c9e13e188a5de85f",
+    "components/genet-scripted-dom/forms_validation.rs": "004e122c127b76ff98be4acca8b52d2925177b396efeed6fcb395eb52e6b7218",
+    "components/genet-scripted-dom/lib.rs": "bcf8b2d162b2f908207f2294fdbf6ad23420f705554b866c186105f7100a6e9e",
+    "components/script-runtime-api/dom/form_controls.rs": "66e7f9fb907e15a088977f01371c0d1b785eb82a367eb64ac6bc79b90700578b",
+    "components/script-runtime-api/form_data.rs": "1de2a764657f337a98d2af58e4d0ed024109b1750f1b5e80dbdfa49f55d9464e",
+    "components/script-runtime-api/form_data/bootstrap.js": "76f7c0db306ded5892f51b34472e1242030688a367acf481fe96a81bbe0a5e26",
+    "components/script-runtime-api/form_submission.rs": "7b2420b1d3d59e38ed4f963b46b780acf0bec7a23b5d325c22bf9ba77819640f",
+    "components/script-runtime-api/lib.rs": "c5a745ddbb763958a82568f563212f84725cfdf83a80812c5cd0abad82e52127",
+    "components/script-runtime-api/tests/forms_submission.rs": "f77d515d31c7f743631db0fc1ab0ff7a97774b0c39aeaaeef2365b883dde05ef"
+  },
+  "product_patch_sha256": "777cf7f7e3c610dad544d41f189aa4a14deee62a596197bd32f5b40d00361a3b",
+  "source_manifest_sha256": "f66ad45be8ef0d8f7faa3bad302f242b47b298d99bf65373e9b9c9635c1a5400",
+  "evidence_roots": {
+    "Windows": "C:\\Users\\mark_\\Code\\testing\\genet\\forms\\phase-c-windows-20261016",
+    "ThinkPad_mirror": "/home/markik/Code/testing/genet/forms/phase-c-windows-20261016"
+  },
+  "repairs": [
+    "Submission marks native user validity before interactive validation, including novalidate; submit() and validity APIs retain bypass behavior",
+    "Captured submitters survive listener type/owner changes; final options read the current submitter/owner while entries and encoding stay with original form; initial checked APIs retained",
+    "Script-free invalid submissions show the shared configurable F9 notice and assertive alert, with dismissal and stale-target retirement"
+  ],
+  "red": {
+    "native_review": {
+      "passed": 0,
+      "failed": 2,
+      "assessment_sha256": "49f2c8ab7ffde7f270f3e289d8ebfe0c39e207610f4d790d9b5e2c8f6a8394de"
+    },
+    "runtime_review": {
+      "passed": 2,
+      "failed": 12,
+      "assessment_sha256": "3915cd4a7d18ee510fc2903927ee0df7f2393b82b8f002d99b7bc8795a11bbed"
+    },
+    "f12_causal_windows": {
+      "passed": 280,
+      "failed": 3,
+      "assessment_sha256": "2f5ff9a3a49755651eddf67c08f37ca483a46d58b3fec112133f422b88c60762"
+    }
+  },
+  "green": [
+    {
+      "label": "review-green-native-v2",
+      "counts": {
+        "passed": 287,
+        "failed": 0,
+        "ignored": 0
+      },
+      "resource_sha256": "ac294c75836c5f2aa83d087065b9d860b9d950fe7cbc5555a6ff50f611a4f3bd",
+      "stdout_sha256": "9b45b59f6ee56f12e1bbdae8420c1fa836df7fd09f61a43107df684634f1d2bc",
+      "assessment_sha256": "cfd8093cdabd66cffe271b3c4be64581bb4f7407f706a64a0b498c8425a5f882"
+    },
+    {
+      "label": "review-green-runtime-v2",
+      "counts": {
+        "passed": 177,
+        "failed": 0,
+        "ignored": 0
+      },
+      "resource_sha256": "72c34a65ab16c68d31cbc637d189efa959db53aae6f9b4c280ea696ba5eccb37",
+      "stdout_sha256": "70689a7712ed336eec1f8a5fcf8e5dc3b99ebd872db3e57f930627dc200d074e",
+      "assessment_sha256": "e41ed1a745af68a1a55a43bda527b5ae9d2048180e614437311f8b50206fdf60"
+    },
+    {
+      "label": "review-green-dom-v2",
+      "counts": {
+        "passed": 214,
+        "failed": 0,
+        "ignored": 0
+      },
+      "resource_sha256": "ed8a456db5a689fc9f4e6a6ad092b39a9b1ca639387de9b853204b23cde85419",
+      "stdout_sha256": "5466c5b33f41c890fce6cd7300bbab65d6c314769937a43514b51eee511e33b8",
+      "assessment_sha256": "36980dc5e39dacecfa6fe3cc390018a8d3df845ff901a703a5525d4420b5d094"
+    }
+  ],
+  "total": {
+    "passed": 678,
+    "failed": 0,
+    "ignored": 0
+  },
+  "all_original_285_native_scripted_occurrences_retained": true,
+  "private_hook_absence_passes_on_boa_and_nova": true,
+  "review": {
+    "read_only_repair_review": "One missing Nova setup-alias predeclaration found; corrected with one whitelist entry and covered by passing extended transient-hook tests. No other concrete finding.",
+    "neutral_F9_control_delta_sha256": "27295fe98e19bd3ec667a4505f9b1f570ec4d57688fd60b325b0355486b9e98a",
+    "control_prepared_not_built": true
+  },
+  "platform_ruling": "Mark directed continuation with then ssh into o-pc; F11 Windows qualification continues there.",
+  "remaining": [
+    "Fresh Windows covering gates",
+    "Fresh Windows all-three-host native transport and visual checks of final binary",
+    "Fresh wasm-bindgen 0.2.129 browser submission checks on working Session1 hardware adapter",
+    "Matched 33 submission and584 encoding records per engine per side, with value/validation/CSS guards and original/corrected controls",
+    "Final complete-change evidence review and Checkpoint C report"
+  ],
+  "checkpoint_c_complete": false
+}

@@ -1,0 +1,324 @@
+{
+  "findings": [
+    "R7",
+    "I6",
+    "H5"
+  ],
+  "status": "addressed locally within stated boundaries",
+  "native_tests_passed": 227,
+  "isolated_worker_scenarios": [
+    "boa/callback/drop",
+    "boa/callback/terminate",
+    "boa/document_drop/drop",
+    "boa/invalid_queue/rejected",
+    "boa/microtasks/drop",
+    "boa/microtasks/terminate",
+    "boa/nested/drop",
+    "boa/nested/terminate",
+    "boa/no_read/startup_timeout",
+    "boa/parent_exit",
+    "boa/positive/terminate",
+    "boa/queue_pressure/terminate",
+    "boa/retained_callback/drop",
+    "boa/retained_callback/terminate",
+    "boa/startup/drop",
+    "boa/startup/terminate",
+    "boa/timer/drop",
+    "boa/timer/terminate",
+    "nova/callback/drop",
+    "nova/callback/terminate",
+    "nova/document_drop/drop",
+    "nova/invalid_queue/rejected",
+    "nova/microtasks/drop",
+    "nova/microtasks/terminate",
+    "nova/nested/drop",
+    "nova/nested/terminate",
+    "nova/no_read/startup_timeout",
+    "nova/parent_exit",
+    "nova/positive/terminate",
+    "nova/queue_pressure/terminate",
+    "nova/retained_callback/drop",
+    "nova/retained_callback/terminate",
+    "nova/startup/drop",
+    "nova/startup/terminate",
+    "nova/timer/drop",
+    "nova/timer/terminate"
+  ],
+  "sources": {
+    "genet": {
+      "base": "7f13b85f53c48fa90f433a6cd2ad45cd744e8b02",
+      "sha256": {
+        "Cargo.toml": "715ecc307d8338dec5bee3decbaf8ec86b9ef05516710a289bb3b4b8409a857e",
+        "components/genet-document-resources/lib.rs": "e01cc32d99bb97eb6c4db265e892bd29eff43c2a098cc2b81b3cffbbb7f8da6c",
+        "components/genet-documents/src/engines/livery.rs": "e3d9455a9d2cee3dd4e7a01a77042f212963a8b74f42244858394f7bf4f70829",
+        "components/genet-documents/src/engines/tests.rs": "91c066bfe38e3351de3a4fd491d9f6247fbb3924cae4725b4deeaf06c9fbaa08",
+        "components/genet-documents/src/fetch.rs": "aaec61b04c43f8433faf086dd79ee2510df155b097926483a05b8cf4b10197e3",
+        "components/genet-host-api/Cargo.toml": "78cb886340fd6b266812d3c6629b1c9f3039d017ef83e9a47aee0d263e945dfa",
+        "components/genet-host-api/lib.rs": "a4cec37b4e31d5617df14fc5548180c27f0ea6eaf7a4e5c8a26c6566e3454ba3",
+        "components/genet-scripted/document.rs": "6bd29aaf9d1cd26f09b1c54245c8ab28e1b05ebfb0501cbbf46e28eb18bb6f73",
+        "components/genet-scripted/host.rs": "4de4d1d788271a21311e4e580f7daf78d1237846a8a74d0db8af2723b37f52ab",
+        "components/genet-scripted/journal_tests.rs": "94e2d0e10e68d009885d7f52a0d0077966b056f7417cb861d40519672decf8ff",
+        "components/genet-scripted/livery.rs": "b5d2cf519389b31a7b69b3e04714c8a07efe5286744c96a54b0324792ad0b756",
+        "components/genet-scripted/resource_bridge.rs": "f29a6e3456cb712dac0b6c4c433f89f77623327b9a230bd9a5dcdff5ec282af8",
+        "components/genet-scripted/tests/image_resource_identity.rs": "a4dd94486254b76e576f542e6596719ac1246ff9df8dc8996bbb2b3c3ef8f859",
+        "components/genet-scripted/tests/live_resource_retention.rs": "7f114de64311fe4d37fb3cac828d33a5b605fd0f984c37a77d09075d798925fd",
+        "components/genet-worker-process/Cargo.toml": "d38391bafeb9ea9e2e1261313c93d3ae0a4aeb1f469a613a9bbe9e3c22aa059b",
+        "components/genet-worker-process/main.rs": "116d54b73ef362ea5bfb01a4b52098e679519fc4b09a87cb9798c96098c10a3c",
+        "components/genet-worker-process/tests/shutdown.rs": "db512c07e0096287a1687d4d556dab9dfc9c7b4c7ddd4529aca5c04178fab0df",
+        "components/netfetcher/Cargo.toml": "a11497fe88d54590f351c2e36409d219d793808de2847c415af8eb4e500af379",
+        "components/netfetcher/src/request.rs": "3f80c12fda0b7701eba317bea83b1aabe4964b8b4da4a5b36d0db9a0848e00ef",
+        "components/netfetcher/src/transport/hyper.rs": "deb4528366865889eec749170cb6d51b511b844e6448631985c8282f69873955",
+        "components/script-engine-api/lib.rs": "96f0caf895df88cf84cf90e2b55d7492fb41a320755f6c57c22f0dc229269567",
+        "components/script-engine-boa/lib.rs": "47071524df1d958f58df6eaa1da7a31a4ef34c9e3786e89346b6bdf0c144c068",
+        "components/script-engine-nova/lib.rs": "4de5d24845e81a65536a65368e9838d5cee26701bfd2047c0a90d742d3b954bf",
+        "components/script-runtime-api/Cargo.toml": "2e2b4e7516cb0f4f518e9a089853eadc0f2a45672391005f4dd610e8e65c512e",
+        "components/script-runtime-api/fetch.rs": "d9a3fd979df1577f704e463d77d22fe76747744caa0da9040c938ae5c564c2eb",
+        "components/script-runtime-api/lib.rs": "720e700130398a5f43acd41e1c040dfda94158f6cae3d69c959f7e5d6665c2c0",
+        "components/script-runtime-api/messaging.rs": "29d58d84eea0a76d25e19c02b96c2da16109f0aec1d09c75d5edf52c04dea5f6",
+        "components/script-runtime-api/worker.rs": "69d86b870d8da21f01297eccfa534e28dc38083b8ee67120f1e8437bd37ac217",
+        "components/script-runtime-api/worker_process.rs": "bec351fa8f470eb6c9ed81e34da3b13085a8a98fc25954c3390d577c0995effa",
+        "ports/ortet/Cargo.toml": "73e42b5f3ce7c314ebbb85b05de5e0980d976f07bfe9d77ce849c831de53122b",
+        "ports/ortet/src/a11y.rs": "ca08b3a12d13bc1434fa048f79ec8c04dc5a8ae469df8e1235b28a5317ebd5bc",
+        "ports/ortet/src/fetch.rs": "924ddd818ae7b6f67339dabb6c4fd0c412931e6f4f4a19b0f466df8c96e86781",
+        "ports/ortet/src/shell.rs": "770cd051e27ede22a80b243aa45a42b87933691d44f5e4a6ace45fbd6b989602",
+        "ports/ortet/src/web.rs": "09174089f00635ac51f1e80915b034b6ce34a10af883e2de4d6389743760ddb2",
+        "ports/ortet/tests/web/fetch_policy_receipt.html": "6852196ec7385eeedb295d7cf3c50703a0f27e83b37f8563ccf68876c7d46084",
+        "support/ci/ortet_http_receipt_server.mjs": "4a5d0040f0c365535b9137d7a98485e19ce61481d44f9377e7fef4552fd40598"
+      }
+    },
+    "mere": {
+      "base": "7c71810550234ccbe11f7429cd44e369b279ec06",
+      "sha256": {
+        "crates/system/document-lanes/src/remote.rs": "61edbd0e4a3c870b089574cbf81db786c90dfaddf6a44e350d62aa5feac3b72b",
+        "crates/system/document-lanes/src/session.rs": "edbdb0e7c331deef2056eb98959722e3afac41a0cda1693c9cfb0dde6f6ea39e",
+        "crates/system/document-lanes/src/smolweb.rs": "3e625f864f3753ab5cf389e2bb1344fbe2a959c74dafa905c5214bd131fd45e5",
+        "crates/system/fetch/src/handle.rs": "720eceb128177d72c69426eaef5f494689189b28d1314d186e0a4e90e855a96e",
+        "crates/system/fetch/src/handle_tests.rs": "0c4b04332010db6a847a5cbdf3dfd192312820502e61d05687308ec690c611d2",
+        "ports/pelt/core/src/native.rs": "ed426630c9e022b99f22147482bc8d4f8ec91a11fb4c29db48c4b41ff11919f6",
+        "ports/pelt/desktop/smolweb_glue.rs": "d225a5a1f0c388eea231d2d0318b5b705967e338d7d30cc52d640acaa982ede2",
+        "ports/pelt/desktop/static_viewer.rs": "f18f06faaad6da8b58371c4048565f55456e7799b6a59dd7da0bc801c0873f5d",
+        "ports/pelt/desktop/workspace_viewer/tests.rs": "3948aecffb35cc66e1885e211aab23e1fe594713cf2e0c09fe82e22678d865a6"
+      }
+    }
+  },
+  "gates": [
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/r3-fetch-native.log",
+      "sha256": "cfefd03a3dff5ec1b55fb84b0f6cc4945707f7ba226579a8aa124e4801b615af",
+      "command": "timeout --signal=TERM --kill-after=10s 600s cargo test --offline --locked -j1 -p genet-host-api -p netfetcher -p ortet --lib -- --test-threads=1",
+      "results": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 96 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s",
+        "test result: ok. 58 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.86s"
+      ],
+      "max_rss_kib": 889892
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/r3-mere-fetch-corrected.log",
+      "sha256": "8082ab821cef34666aadbf0877b9c2cebafb42cbe1ed18ad5d2ec083315b2b94",
+      "command": "timeout --signal=TERM --kill-after=10s 240s cargo test --offline --locked -j1 --config /home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/slice4-genet-local-v2.toml -p mere-fetch -p mere-document-lanes --no-default-features --features mere-document-lanes/netfetch --lib -- --test-threads=1",
+      "results": [
+        "test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.63s",
+        "test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s"
+      ],
+      "max_rss_kib": 313132
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/r3-worker-final.log",
+      "sha256": "cc55c11d5b7af14ae2c82513397d787c6762ef9fbcc8f7714d762f8177251f4e",
+      "command": "timeout --signal=TERM --kill-after=10s 600s cargo test --offline --locked -j1 -p genet-worker-process --test shutdown -- --test-threads=1 --nocapture",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 7.10s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 6.79s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 7.00s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 7.02s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 6.81s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 6.86s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 6.77s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 6.77s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 6.80s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 9.14s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 9.04s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 7.60s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 6.79s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 6.76s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 4.99s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 9.32s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 2.60s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 2.73s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 2.63s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 2.63s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 2.62s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 2.58s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 2.60s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 2.58s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 2.59s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 3.46s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 3.50s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 3.63s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 2.72s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 2.60s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 1.93s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 4.44s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 171.33s"
+      ],
+      "max_rss_kib": 741484
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/r3-worker-retained.log",
+      "sha256": "b2b75eaa7d196f67d416d0839591be1fef7dbbae3039963df842668b41e506ed",
+      "command": "timeout --signal=TERM --kill-after=10s 600s cargo test --offline --locked -j1 -p script-runtime-api --test worker -- --test-threads=1",
+      "results": [
+        "test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 134.12s"
+      ],
+      "max_rss_kib": 731748
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/r3-worker-report-build.log",
+      "sha256": "4d9ac755bd06d48bdc3989dccfdafeffffe01e852b22902d0f26feb03f0063f3",
+      "command": "timeout --signal=TERM --kill-after=10s 600s cargo test --offline --locked -j1 -p genet-worker-process --test shutdown --no-run",
+      "results": [],
+      "max_rss_kib": 741976
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/r3-retained-targets.log",
+      "sha256": "ecd4d648dcdf89a61654c468ad1f05efd0d2697ba307687c976c69fa3de42c79",
+      "command": "timeout --signal=TERM --kill-after=10s 600s cargo check --offline --locked -j1 -p ortet -p genet-scripted -p script-runtime-api --features ortet/scripted-nova --all-targets",
+      "results": [],
+      "max_rss_kib": 415832
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/r3-graphshell-final.log",
+      "sha256": "d41dc6cd13daa505ae3d1139bd6e51f29e4a70a61e06c6564486a4fa13f2e964",
+      "command": "timeout --signal=TERM --kill-after=10s 600s cargo check --offline --locked -j1 --config /home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/slice4-genet-local-v2.toml --target wasm32-unknown-unknown",
+      "results": [],
+      "max_rss_kib": 665372
+    },
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/r3-worker-wasm.log",
+      "sha256": "2472c422eb326a50f41504a6338d48208388e60d139d926ddd1dee45321c2f78",
+      "command": "timeout --signal=TERM --kill-after=10s 600s cargo check --offline --locked -j1 -p genet-scripted-worker --target wasm32-unknown-unknown",
+      "results": [],
+      "max_rss_kib": 887604
+    }
+  ],
+  "worker_final_focused": [
+    {
+      "engine": "boa",
+      "case": "positive",
+      "returncode": 0,
+      "elapsed": 6.639244967984268,
+      "stdout": "\nrunning 1 test\ntest isolated_worker_case ... PASS Boa/positive/terminate\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 6.63s\n\n",
+      "stderr": ""
+    },
+    {
+      "engine": "boa",
+      "case": "queue_pressure",
+      "returncode": 0,
+      "elapsed": 9.140672521985834,
+      "stdout": "\nrunning 1 test\ntest isolated_worker_case ... PASS Boa/queue_pressure/terminate\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 9.13s\n\n",
+      "stderr": ""
+    },
+    {
+      "engine": "boa",
+      "case": "invalid_queue",
+      "returncode": 0,
+      "elapsed": 4.515148578997469,
+      "stdout": "\nrunning 1 test\ntest isolated_worker_case ... PASS Boa/invalid_queue/rejected\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 4.51s\n\n",
+      "stderr": ""
+    },
+    {
+      "engine": "nova",
+      "case": "positive",
+      "returncode": 0,
+      "elapsed": 2.6329195669968612,
+      "stdout": "\nrunning 1 test\ntest isolated_worker_case ... PASS Nova/positive/terminate\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 2.62s\n\n",
+      "stderr": ""
+    },
+    {
+      "engine": "nova",
+      "case": "queue_pressure",
+      "returncode": 0,
+      "elapsed": 4.556953660998261,
+      "stdout": "\nrunning 1 test\ntest isolated_worker_case ... PASS Nova/queue_pressure/terminate\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 4.54s\n\n",
+      "stderr": ""
+    },
+    {
+      "engine": "nova",
+      "case": "invalid_queue",
+      "returncode": 0,
+      "elapsed": 1.8108503140101675,
+      "stdout": "\nrunning 1 test\ntest isolated_worker_case ... PASS Nova/invalid_queue/rejected\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 1.80s\n\n",
+      "stderr": ""
+    }
+  ],
+  "browser": [
+    {
+      "name": "fetch_policy_receipt",
+      "receipt": "ORTET_FETCH_POLICY decoded_chunk_limit=true exact_chunk_length=true decoded_gzip_limit=true exact_gzip_length=true redirected_limit=true elapsed_deadline=true abort_releases_permit=true zero_admission=true queued_wait_deadline=true queued_before_wire=true shared_admission_released=true unsupported_redirect_cap=true",
+      "adapter": {
+        "vendor": "amd",
+        "architecture": "gcn-5",
+        "isFallbackAdapter": false
+      },
+      "messages": [
+        {
+          "kind": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        }
+      ]
+    },
+    {
+      "name": "http_receipt",
+      "receipt": "ORTET_CANVAS_RECEIPT width=640 height=400 non_white=256000 opaque_non_white=256000 page_tone=66920 card_tone=136128 card_border=8960 glyph_tone=24462 image_tone=3744 redirect=true html=true css=true nested_import=true image=true font=true denied=true budget_rejected=true total=256000 rgba_fnv32=0xc2c49edd",
+      "adapter": {
+        "vendor": "amd",
+        "architecture": "gcn-5",
+        "isFallbackAdapter": false
+      },
+      "messages": [
+        {
+          "kind": "error",
+          "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "kind": "warning",
+          "text": "Compilation log for [ShaderModule \"vello.flatten\"]:\n\n1 warning(s) generated while compiling the shader:\n:385:5 warning: code is unreachable\n    return 0xffffffffu;\n    ^^^^^^\n"
+        }
+      ]
+    }
+  ],
+  "artifact_sha256": {
+    "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-three/browser.json": "063ede5b4a3470e017d5b6bd8cc72951d472b8bf3137e05566d964009967a977",
+    "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-three/worker-focused.json": "10c98128e95c6489df344b430797d07e51ba253933efa42db3513c5e09731c9f",
+    "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-three/fetch_policy_receipt.png": "97687f4bd61458ab5a5ace30e4001bec18c500e17db82e032c842b921a4647cf",
+    "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-three/http_receipt.png": "2cb266fe4b9e117da2d19c96c17fabce3e8f4df76594fcad99f79b6dd6359392",
+    "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-three/browser/ortet_bg.wasm": "685037812bbf52691fce42479e96dd9d13215dac1b609c7d6eb2550d4a9cdbc9",
+    "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-three/worker-focused.log": "0b31ced525a5902b83547be7217385c3cd1f2a071909ce57c5b6f2f5d759e0c2"
+  },
+  "resource_policy": {
+    "lock": "/home/markik/Code/testing/machine-heavy.lock",
+    "cargo_jobs": 1,
+    "test_threads": 1,
+    "memory_max": "5G",
+    "swap_max": 0,
+    "cpu_quota": "150%",
+    "nice": 10
+  },
+  "corrected_attempts": {
+    "browser-missing-snippets.json": "Receipt server omitted generated wasm-bindgen snippets; restricted snippet serving added, actual browser rerun passed.",
+    "r3-mere-fetch.log": "Mockito binary matcher fixture API corrected.",
+    "r3-mere-fetch-final.log": "Retained MIME essence regression fixed at the explicit byte-document adapter; rich header assertion added.",
+    "r3-worker-process.log": "Initial isolation pass before queue-pressure semantics and oversized-handshake regression.",
+    "r3-worker-final.log": "All lifecycle/transport scenarios passed; later report-only crashed/reaped distinction and pre-allocation config validation verified by six focused isolated cases plus retained worker suite and native all-target checks."
+  },
+  "boundaries": [
+    "Native process helper must be explicitly configured and trusted; arbitrary forking wrappers are outside lifetime contract.",
+    "Process isolation owns worker lifetime, not VM execution time or OS sandboxing. Explicit trusted cooperative threads may detach.",
+    "Linux worker process/thread reclamation verified; Windows/macOS and actual browser worker lifecycle not qualified.",
+    "Browser supports only its fixed redirect cap; custom caps refuse.",
+    "Byte snapshots and non-HTTP sources explicitly decline rich HTTP requests; byte-document views remain deliberate lossy adapters.",
+    "Mere upstream main 7c71810550234ccbe11f7429cd44e369b279ec06 incorporated before final Mere tests.",
+    "Downstream publication converts tested local paths to Git sources and compares versions, features and dependency edges."
+  ]
+}

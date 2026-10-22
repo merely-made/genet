@@ -1,0 +1,3807 @@
+{
+  "command": "testharness",
+  "engine": "boa",
+  "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
+  "policy": "exact",
+  "renderer": "livery",
+  "runner_sha256": "f9804e1739e5774a192bc839d445e911cda79c139b590cc6c34d46d9f937fc88",
+  "subset": "html/interaction/focus",
+  "tests": {
+    "html/interaction/focus/anchor-element-focus-ring.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/interaction/focus/chrome-object-tab-focus-bug.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "focus advances with tab key thorough object element",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/composed.window.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Focus events are composed",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/document-level-focus-apis/document-has-system-focus.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Top-level document receives blur/focus events and loses system focus during opening/closing of a popup",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/document-level-focus-apis/document-level-apis.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "The body element must be the active element if no element is focused",
+          "status": "pass"
+        },
+        {
+          "name": "The element must be the active element if it is focused",
+          "status": "fail"
+        },
+        {
+          "name": "The hasFocus() method must return false if the Document has no browsing context",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 3
+    },
+    "html/interaction/focus/focus-01.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "The keydown event must be targeted at the input element",
+          "status": "not-run"
+        },
+        {
+          "name": "The keypress event must be targeted at the input element",
+          "status": "not-run"
+        },
+        {
+          "name": "The keyup event must be targeted at the input element",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "html/interaction/focus/focus-02.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "The keydown event must be targeted at the body element",
+          "status": "fail"
+        },
+        {
+          "name": "The keypress event must be targeted at the body element",
+          "status": "not-run"
+        },
+        {
+          "name": "The keyup event must be targeted at the body element",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "html/interaction/focus/focus-after-attach-shadow-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/interaction/focus/focus-file-input.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "HTML Test: file input can be programatically focused before layout",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focus-input-type-switch.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Can change an input's type during focus handler without breaking focus",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focus-keyboard-js.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "focus-keyboard-js",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focus-management/focus-event-targets-simple.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "html/interaction/focus/focus-management/focus-events.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "focusing on a focusable element fires a focus event at the element",
+          "status": "not-run"
+        },
+        {
+          "name": "focusing on a focusable element fires a blur event at the previous focussed element",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/interaction/focus/focus-selection.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "div has contenteditable=false",
+          "status": "fail"
+        },
+        {
+          "name": "div has contenteditable=true",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/interaction/focus/focused-element-move-documents-crash.html": {
+      "reason": "non-testharness",
+      "status": "skip"
+    },
+    "html/interaction/focus/focusgroup/tentative/ax-role-inference-children.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Tablist child gets implied tab role",
+          "status": "fail"
+        },
+        {
+          "name": "Radiogroup child gets implied radio role",
+          "status": "fail"
+        },
+        {
+          "name": "Listbox child gets implied option role",
+          "status": "fail"
+        },
+        {
+          "name": "Menu child gets implied menuitem role",
+          "status": "fail"
+        },
+        {
+          "name": "Menubar child gets implied menuitem role",
+          "status": "fail"
+        },
+        {
+          "name": "Explicit child role preserved over implied mapping",
+          "status": "fail"
+        },
+        {
+          "name": "Native link semantics preserved over implied mapping",
+          "status": "fail"
+        },
+        {
+          "name": "Native input semantics preserved over implied mapping",
+          "status": "fail"
+        },
+        {
+          "name": "Button child gets implied tab role in tablist",
+          "status": "fail"
+        },
+        {
+          "name": "Button child gets implied radio role in radiogroup",
+          "status": "fail"
+        },
+        {
+          "name": "Button child gets implied menuitem role in menu",
+          "status": "fail"
+        },
+        {
+          "name": "Button child gets implied menuitem role in menubar",
+          "status": "fail"
+        },
+        {
+          "name": "Button child with explicit role preserved over implied mapping",
+          "status": "fail"
+        },
+        {
+          "name": "Popup button child gets implied menuitem role in menu",
+          "status": "fail"
+        },
+        {
+          "name": "Popup button child gets implied menuitem role in menubar",
+          "status": "fail"
+        },
+        {
+          "name": "Popup button child gets implied tab role in tablist",
+          "status": "fail"
+        },
+        {
+          "name": "Popup button child gets implied radio role in radiogroup",
+          "status": "fail"
+        },
+        {
+          "name": "Popup button child with explicit role preserved over implied mapping",
+          "status": "fail"
+        },
+        {
+          "name": "Popup button with aria-haspopup=listbox gets implied menuitem role in menubar",
+          "status": "fail"
+        },
+        {
+          "name": "Popup button with aria-haspopup=dialog gets implied menuitem role in menubar",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 20
+    },
+    "html/interaction/focus/focusgroup/tentative/ax-role-inference-item-elementinternals-nested.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "html/interaction/focus/focusgroup/tentative/ax-role-inference-item-elementinternals-owner-implied.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "html/interaction/focus/focusgroup/tentative/ax-role-inference-item-elementinternals.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "html/interaction/focus/focusgroup/tentative/ax-role-inference-owner-elementinternals.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "html/interaction/focus/focusgroup/tentative/ax-role-inference-owner.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "accessibilityController not available (noop)",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/ax-role-inference-top-layer.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Sibling outside the popover still infers the implied tab role",
+          "status": "fail"
+        },
+        {
+          "name": "Item inside a shown popover is excluded from ancestor focusgroup role inference",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/interaction/focus/focusgroup/tentative/backward-navigation/does-not-move-when-on-focusgroup-root.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on the root of a focusgroup element, directional input shouldn't move the focus at all.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/backward-navigation/does-not-move-when-on-non-focusgroup-item.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on a focusable element that isn't a focusgroup item, directional input shouldn't move the focus at all.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/backward-navigation/does-not-move-when-only-one-item-and-wraps.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on the only focusgroup item and the focusgroup wraps in the axis of the directional input, the focus shouldn't move and we shouldn't get stuck in an infinite loop.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/backward-navigation/does-not-move-when-only-one-item.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on the only focusgroup item, the focus shouldn't move and we shouldn't get stuck in an infinite loop.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/backward-navigation/does-not-move-when-outside-focusgroup.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on an element outside of the focusgroup, directional input shouldn't move the focus at all.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/backward-navigation/does-not-wrap-when-not-supported.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on the first item of a focusgroup, backward directional input shouldn't move the focus since there aren't any previous item.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/backward-navigation/horizontal/does-not-ascend-out-of-focusgroup.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on an element in a nested focusgroup that doesn't support the navigation direction, focus should remain on that element and not ascend to the parent focusgroup.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/backward-navigation/horizontal/does-not-move-when-axis-not-supported.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on the last element of a focusgroup that only supports the orthogonal axis of the directional input, the focus shouldn't move.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/backward-navigation/horizontal/does-not-wrap-in-orthogonal-axis.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on the first item of a focusgroup that wraps and supports only the orthogonal axis of the directional input, backward directional input shouldn't move the focus.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/backward-navigation/horizontal/moves-when-only-current-axis-supported.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on an item of a focusgroup that only supports the axis of the directional input the focus should move.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/backward-navigation/horizontal/wraps-in-axis.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on the first item of a focusgroup that wraps and supports only the axis of the directional input, backward directional input should move the focus to the last item within the focusgroup.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/backward-navigation/moves-to-previous-item-and-skips-focusable-item.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on a focusgroup item, directional input should move the focus to the previous item and skip non-focusable items.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/backward-navigation/moves-to-previous-item.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on a focusgroup item, directional input should move the focus to the previous item.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/backward-navigation/skips-non-focusgroup-subtree.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on the last item of a focusgroup and the previous item is located past a non-focusgroup subtree, backward directional input should move the focus to that previous item without getting stuck in the subtree.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/backward-navigation/skips-root-focusgroup-complex-case.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on the last item of a focusgroup and the previous item is located past an other (non-extending) focusgroup subtree, backward directional input should move the focus to that previous item without getting stuck in the other focusgroup. The same should still be true when inside a focusgroup that extends a root focusgroup within the original focusgroup.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/backward-navigation/skips-root-focusgroup.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on the last item of a focusgroup and the previous item is located past an other focusgroup subtree, backward directional input should move the focus to that previous item without getting stuck in the other focusgroup.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/backward-navigation/vertical/does-not-ascend-out-of-focusgroup.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on an element in a nested focusgroup that doesn't support the navigation direction, focus should remain on that element and not ascend to the parent focusgroup.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/backward-navigation/vertical/does-not-move-when-axis-not-supported.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on the last element of a focusgroup that only supports the orthogonal axis of the directional input, the focus shouldn't move.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/backward-navigation/vertical/does-not-wrap-in-orthogonal-axis.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on the first item of a focusgroup that wraps and supports only the orthogonal axis of the directional input, backward directional input shouldn't move the focus.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/backward-navigation/vertical/moves-when-only-current-axis-supported.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on an item of a focusgroup that only supports the axis of the directional input the focus should move.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/backward-navigation/vertical/wraps-in-axis.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on the first item of a focusgroup that wraps and supports only the axis of the directional input, backward directional input should move the focus to the last item within the focusgroup.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/backward-navigation/wraps-successfully-complex-case.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on the first item of an extending focusgroup while there are other non-item elements before, we should still be able to wrap to the last item. Also, if the last item has other non-item elements after itself, skipping these non-item elements shouldn't be an issue.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/backward-navigation/wraps-successfully.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on the first item of a focusgroup that wraps, backward directional input should move the focus to the last item within the focusgroup.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/behavior-first-requirement.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Valid behavior-first token 'toolbar' enables focusgroup navigation",
+          "status": "fail"
+        },
+        {
+          "name": "Valid behavior-first token 'tablist' with modifier enables focusgroup navigation",
+          "status": "fail"
+        },
+        {
+          "name": "Valid behavior-first token 'radiogroup' with modifier enables focusgroup navigation",
+          "status": "fail"
+        },
+        {
+          "name": "Empty focusgroup attribute is rejected and does not enable navigation",
+          "status": "fail"
+        },
+        {
+          "name": "Invalid first token 'inline' is rejected and does not enable navigation",
+          "status": "fail"
+        },
+        {
+          "name": "Invalid first token 'wrap' is rejected and does not enable navigation",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 6
+    },
+    "html/interaction/focus/focusgroup/tentative/behavior-tokens/grid.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "grid: Right moves to next column",
+          "status": "fail"
+        },
+        {
+          "name": "grid: Left moves to previous column",
+          "status": "fail"
+        },
+        {
+          "name": "grid: Down moves to same column next row",
+          "status": "fail"
+        },
+        {
+          "name": "grid: Up moves to same column previous row",
+          "status": "fail"
+        },
+        {
+          "name": "grid: Right does not wrap at row end",
+          "status": "fail"
+        },
+        {
+          "name": "grid: Left does not wrap at row start",
+          "status": "fail"
+        },
+        {
+          "name": "grid: Down does not wrap at column end",
+          "status": "fail"
+        },
+        {
+          "name": "grid: Up does not wrap at column start",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 8
+    },
+    "html/interaction/focus/focusgroup/tentative/behavior-tokens/listbox.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "listbox: Down navigates to the next item",
+          "status": "fail"
+        },
+        {
+          "name": "listbox: Up navigates to the previous item",
+          "status": "fail"
+        },
+        {
+          "name": "listbox: Right blocked",
+          "status": "fail"
+        },
+        {
+          "name": "listbox: Left blocked",
+          "status": "fail"
+        },
+        {
+          "name": "listbox: Down does not wrap at end",
+          "status": "fail"
+        },
+        {
+          "name": "listbox: Up does not wrap at start",
+          "status": "fail"
+        },
+        {
+          "name": "listbox wrap: Down navigates to the next item",
+          "status": "fail"
+        },
+        {
+          "name": "listbox wrap: Down wraps at end",
+          "status": "fail"
+        },
+        {
+          "name": "listbox wrap: Up wraps at start",
+          "status": "fail"
+        },
+        {
+          "name": "listbox wrap: Right still blocked",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 10
+    },
+    "html/interaction/focus/focusgroup/tentative/behavior-tokens/menu.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "menu: Down navigates to the next item",
+          "status": "fail"
+        },
+        {
+          "name": "menu: Up navigates to the previous item",
+          "status": "fail"
+        },
+        {
+          "name": "menu: Right blocked",
+          "status": "fail"
+        },
+        {
+          "name": "menu: Left blocked",
+          "status": "fail"
+        },
+        {
+          "name": "menu: Down wraps at end",
+          "status": "fail"
+        },
+        {
+          "name": "menu: Up wraps at start",
+          "status": "fail"
+        },
+        {
+          "name": "menu inline: Right navigates to the next item",
+          "status": "fail"
+        },
+        {
+          "name": "menu inline: Left navigates to the previous item",
+          "status": "fail"
+        },
+        {
+          "name": "menu inline: Down blocked",
+          "status": "fail"
+        },
+        {
+          "name": "menu inline: Up blocked",
+          "status": "fail"
+        },
+        {
+          "name": "menu inline: Right wraps at end",
+          "status": "fail"
+        },
+        {
+          "name": "menu inline: Left wraps at start",
+          "status": "fail"
+        },
+        {
+          "name": "menu nowrap: Down navigates to the next item",
+          "status": "fail"
+        },
+        {
+          "name": "menu nowrap: Down does not wrap at end",
+          "status": "fail"
+        },
+        {
+          "name": "menu nowrap: Up does not wrap at start",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 15
+    },
+    "html/interaction/focus/focusgroup/tentative/behavior-tokens/menubar.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "menubar: Right navigates to the next item",
+          "status": "fail"
+        },
+        {
+          "name": "menubar: Left navigates to the previous item",
+          "status": "fail"
+        },
+        {
+          "name": "menubar: Down blocked",
+          "status": "fail"
+        },
+        {
+          "name": "menubar: Up blocked",
+          "status": "fail"
+        },
+        {
+          "name": "menubar: Right wraps at end",
+          "status": "fail"
+        },
+        {
+          "name": "menubar: Left wraps at start",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 6
+    },
+    "html/interaction/focus/focusgroup/tentative/behavior-tokens/none.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "none: Right blocked",
+          "status": "fail"
+        },
+        {
+          "name": "none: Left blocked",
+          "status": "fail"
+        },
+        {
+          "name": "none: Down blocked",
+          "status": "fail"
+        },
+        {
+          "name": "none: Up blocked",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "html/interaction/focus/focusgroup/tentative/behavior-tokens/radiogroup.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "radiogroup: Right navigates to the next item",
+          "status": "fail"
+        },
+        {
+          "name": "radiogroup: Left navigates to the previous item",
+          "status": "fail"
+        },
+        {
+          "name": "radiogroup: Down navigates to the next item",
+          "status": "fail"
+        },
+        {
+          "name": "radiogroup: Up navigates to the previous item",
+          "status": "fail"
+        },
+        {
+          "name": "radiogroup: Right wraps at end",
+          "status": "fail"
+        },
+        {
+          "name": "radiogroup: Left wraps at start",
+          "status": "fail"
+        },
+        {
+          "name": "radiogroup: Down wraps at end",
+          "status": "fail"
+        },
+        {
+          "name": "radiogroup: Up wraps at start",
+          "status": "fail"
+        },
+        {
+          "name": "radiogroup inline: Right navigates to the next item",
+          "status": "fail"
+        },
+        {
+          "name": "radiogroup inline: Down blocked",
+          "status": "fail"
+        },
+        {
+          "name": "radiogroup inline: Right wraps at end",
+          "status": "fail"
+        },
+        {
+          "name": "radiogroup nowrap: Right navigates to the next item",
+          "status": "fail"
+        },
+        {
+          "name": "radiogroup nowrap: Right does not wrap at end",
+          "status": "fail"
+        },
+        {
+          "name": "radiogroup nowrap: Down does not wrap at end",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 14
+    },
+    "html/interaction/focus/focusgroup/tentative/behavior-tokens/tablist.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "tablist: Right navigates to the next item",
+          "status": "fail"
+        },
+        {
+          "name": "tablist: Left navigates to the previous item",
+          "status": "fail"
+        },
+        {
+          "name": "tablist: Down blocked",
+          "status": "fail"
+        },
+        {
+          "name": "tablist: Up blocked",
+          "status": "fail"
+        },
+        {
+          "name": "tablist: Right wraps at end",
+          "status": "fail"
+        },
+        {
+          "name": "tablist: Left wraps at start",
+          "status": "fail"
+        },
+        {
+          "name": "tablist block: Down navigates to the next item",
+          "status": "fail"
+        },
+        {
+          "name": "tablist block: Up navigates to the previous item",
+          "status": "fail"
+        },
+        {
+          "name": "tablist block: Right blocked",
+          "status": "fail"
+        },
+        {
+          "name": "tablist block: Left blocked",
+          "status": "fail"
+        },
+        {
+          "name": "tablist block: Down wraps at end",
+          "status": "fail"
+        },
+        {
+          "name": "tablist block: Up wraps at start",
+          "status": "fail"
+        },
+        {
+          "name": "tablist nowrap: Right navigates to the next item",
+          "status": "fail"
+        },
+        {
+          "name": "tablist nowrap: Left navigates to the previous item",
+          "status": "fail"
+        },
+        {
+          "name": "tablist nowrap: Right does not wrap at end",
+          "status": "fail"
+        },
+        {
+          "name": "tablist nowrap: Left does not wrap at start",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 16
+    },
+    "html/interaction/focus/focusgroup/tentative/behavior-tokens/toolbar.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "toolbar: Right navigates to the next item",
+          "status": "fail"
+        },
+        {
+          "name": "toolbar: Left navigates to the previous item",
+          "status": "fail"
+        },
+        {
+          "name": "toolbar: Down blocked",
+          "status": "fail"
+        },
+        {
+          "name": "toolbar: Up blocked",
+          "status": "fail"
+        },
+        {
+          "name": "toolbar: Right does not wrap at end",
+          "status": "fail"
+        },
+        {
+          "name": "toolbar: Left does not wrap at start",
+          "status": "fail"
+        },
+        {
+          "name": "toolbar wrap: Right navigates to the next item",
+          "status": "fail"
+        },
+        {
+          "name": "toolbar wrap: Right wraps at end",
+          "status": "fail"
+        },
+        {
+          "name": "toolbar wrap: Left wraps at start",
+          "status": "fail"
+        },
+        {
+          "name": "toolbar wrap: Down still blocked",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 10
+    },
+    "html/interaction/focus/focusgroup/tentative/descendant-navigation/deeply-nested-items.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Forward navigation should work with deeply nested focusgroup descendants",
+          "status": "fail"
+        },
+        {
+          "name": "Backward navigation should work with deeply nested focusgroup descendants",
+          "status": "fail"
+        },
+        {
+          "name": "Vertical navigation should work with nested descendants",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "html/interaction/focus/focusgroup/tentative/descendant-navigation/mixed-content-navigation.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Navigation should skip non-focusable descendants and only move between focusable items",
+          "status": "fail"
+        },
+        {
+          "name": "Backward navigation should skip non-focusable descendants",
+          "status": "fail"
+        },
+        {
+          "name": "Vertical navigation should work correctly with mixed focusable/non-focusable content",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "html/interaction/focus/focusgroup/tentative/descendant-navigation/simple-descendant-test.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Simple descendant navigation should work",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/descendant-navigation/various-element-types.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Navigation should work with items in various container types",
+          "status": "fail"
+        },
+        {
+          "name": "Backward navigation should work with various container types",
+          "status": "fail"
+        },
+        {
+          "name": "Vertical navigation should work with various container types",
+          "status": "fail"
+        },
+        {
+          "name": "All items in different container types should be focusable within focusgroup",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "html/interaction/focus/focusgroup/tentative/descendant-navigation/wrapping-with-descendants.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Forward wrapping should work from nested descendants to first item",
+          "status": "fail"
+        },
+        {
+          "name": "Backward wrapping should work from first item to nested descendants",
+          "status": "fail"
+        },
+        {
+          "name": "Normal navigation should still work correctly with nested items",
+          "status": "fail"
+        },
+        {
+          "name": "Vertical wrapping should work correctly with nested descendants",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "html/interaction/focus/focusgroup/tentative/forward-navigation/does-not-move-when-on-focusgroup-root.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on the root of a focusgroup element, directional input shouldn't move the focus at all.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/forward-navigation/does-not-move-when-on-non-item.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on a focusable element that isn't a focusgroup item, directional input shouldn't move the focus at all.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/forward-navigation/does-not-move-when-only-one-item-and-wraps.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on the only focusgroup item and the focusgroup wraps in the axis of the directional input, the focus shouldn't move and we shouldn't get stuck in an infinite loop.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/forward-navigation/does-not-move-when-only-one-item.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on the only focusgroup item, the focus shouldn't move and we shouldn't get stuck in an infinite loop.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/forward-navigation/does-not-move-when-outside-focusgroup.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on an element outside of the focusgroup, directional input shouldn't move the focus at all.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/forward-navigation/does-not-wrap-when-not-supported.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on the last item of a focusgroup that doesn't support wrapping in the axis of the directional input, the focus shouldn't move.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/forward-navigation/horizontal/does-not-move-when-axis-not-supported.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on an item of a focusgroup that only supports the orthogonal axis to the directional input, the directional input shouldn't move the focus.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/forward-navigation/horizontal/moves-when-only-current-axis-supported.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on an item of a focusgroup that only supports the axis of the directional input the focus should move.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/forward-navigation/horizontal/rtl-inline-only.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Left moves forward in RTL inline-only focusgroup.",
+          "status": "fail"
+        },
+        {
+          "name": "Right moves backward in RTL inline-only focusgroup.",
+          "status": "fail"
+        },
+        {
+          "name": "Down and Up do not move focus in RTL inline-only focusgroup.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "html/interaction/focus/focusgroup/tentative/forward-navigation/mixed-ltr-rtl-visual-order.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "LTR container: Left (forward in RTL) from item1 moves to item2.",
+          "status": "fail"
+        },
+        {
+          "name": "LTR container: Left (forward in RTL) from item2 crosses to LTR item3.",
+          "status": "fail"
+        },
+        {
+          "name": "LTR container: Right (backward in RTL) from item2 moves to item1.",
+          "status": "fail"
+        },
+        {
+          "name": "LTR container: Right from LTR item3 moves to item4.",
+          "status": "fail"
+        },
+        {
+          "name": "LTR container: Right from LTR item4 moves to item5.",
+          "status": "fail"
+        },
+        {
+          "name": "LTR container: Left from LTR item5 moves to item4.",
+          "status": "fail"
+        },
+        {
+          "name": "LTR container: Left from LTR item3 crosses back to RTL item2.",
+          "status": "fail"
+        },
+        {
+          "name": "RTL container: Left (forward in RTL) from r1 moves to LTR r2.",
+          "status": "fail"
+        },
+        {
+          "name": "RTL container: Right (forward in LTR) from r2 moves to r3.",
+          "status": "fail"
+        },
+        {
+          "name": "RTL container: Left (backward in LTR) from r2 moves to r1.",
+          "status": "fail"
+        },
+        {
+          "name": "RTL container: Left (backward in LTR) from r3 moves to r2.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 11
+    },
+    "html/interaction/focus/focusgroup/tentative/forward-navigation/moves-to-next-item-and-skips-non-focusable.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on a focusgroup item, directional input should move the focus to the next item and skip non-focusable items.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/forward-navigation/moves-to-next-item.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on a focusgroup item, directional input should move the focus to the next item.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/forward-navigation/nested-focusgroup-is-item-of-parent.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Right navigates TO nested focusgroup element",
+          "status": "fail"
+        },
+        {
+          "name": "Left navigates TO nested focusgroup element",
+          "status": "fail"
+        },
+        {
+          "name": "Right from nested focusgroup navigates to next sibling in parent focusgroup",
+          "status": "fail"
+        },
+        {
+          "name": "Left from nested focusgroup navigates to previous sibling in parent focusgroup",
+          "status": "fail"
+        },
+        {
+          "name": "Full bidirectional navigation through outer focusgroup includes nested focusgroup element but skips its contents",
+          "status": "fail"
+        },
+        {
+          "name": "Inner focusgroup navigation works independently",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 6
+    },
+    "html/interaction/focus/focusgroup/tentative/forward-navigation/rtl-direction-reverses-inline.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Left moves focus to the next item in an RTL focusgroup.",
+          "status": "fail"
+        },
+        {
+          "name": "Right moves focus to the previous item in an RTL focusgroup.",
+          "status": "fail"
+        },
+        {
+          "name": "Down moves focus forward in an RTL focusgroup (block axis unaffected).",
+          "status": "fail"
+        },
+        {
+          "name": "Up moves focus backward in an RTL focusgroup (block axis unaffected).",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "html/interaction/focus/focusgroup/tentative/forward-navigation/rtl-wraps-correctly.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Left at last item wraps to first item in RTL focusgroup.",
+          "status": "fail"
+        },
+        {
+          "name": "Right at first item wraps to last item in RTL focusgroup.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/interaction/focus/focusgroup/tentative/forward-navigation/vertical-writing-mode.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Down moves forward inline in vertical-rl inline-only focusgroup.",
+          "status": "fail"
+        },
+        {
+          "name": "Up moves backward inline in vertical-rl inline-only focusgroup.",
+          "status": "fail"
+        },
+        {
+          "name": "Left/Right do not move focus in vertical-rl inline-only focusgroup.",
+          "status": "fail"
+        },
+        {
+          "name": "Down moves forward in both-axes vertical-rl focusgroup.",
+          "status": "fail"
+        },
+        {
+          "name": "Left moves forward (block) in both-axes vertical-rl focusgroup.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 5
+    },
+    "html/interaction/focus/focusgroup/tentative/forward-navigation/vertical/does-not-move-when-axis-not-supported.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on an item of a focusgroup that only supports the orthogonal axis to the directional input, the directional input shouldn't move the focus.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/forward-navigation/vertical/moves-when-only-current-axis-supported.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on an item of a focusgroup that only supports the axis of the directional input the focus should move.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/forward-navigation/wraps-successfully.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When the focus is set on the last item of a focusgroup that supports wrapping in the axis of the directional input, the focus should move back to the first item.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/grid-navigation/col-flow-only.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Navigating right should not flow the focus horziontally when not supported by the focusgroup.",
+          "status": "fail"
+        },
+        {
+          "name": "When on the last row, navigating down should move the focus to first row and next column if the focusgroup flows horizontally.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigating left should not flow the focus horziontally when not supported by the focusgroup.",
+          "status": "fail"
+        },
+        {
+          "name": "When on the first row, navigating up should move the focus to last row and previous column if the focusgroup flows horizontally.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "html/interaction/focus/focusgroup/tentative/grid-navigation/col-wrap-and-row-flow.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When on the last column, navigating right should move the focus to first column and next row if the focusgroup flows horizontally.",
+          "status": "fail"
+        },
+        {
+          "name": "When on the last row, navigating down should move the focus to first row if the focusgroup wraps vertically.",
+          "status": "fail"
+        },
+        {
+          "name": "When on the first column, navigating left should move the focus to last column and previous row if the focusgroup flows horizontally.",
+          "status": "fail"
+        },
+        {
+          "name": "When on the first row, navigating up should move the focus to last row if the focusgroup wraps vertically.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "html/interaction/focus/focusgroup/tentative/grid-navigation/col-wrap-only.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Navigating right should not wrap the focus to the first column when only vertical wrap is supported by the focusgroup.",
+          "status": "fail"
+        },
+        {
+          "name": "When on the last row, navigating down should move the focus to first row if the focusgroup wraps vertically.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigating left should not wrap the focus to the last column when only vertical wrap is supported by the focusgroup.",
+          "status": "fail"
+        },
+        {
+          "name": "When on the first row, navigating up should move the focus to last row if the focusgroup wraps vertically.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "html/interaction/focus/focusgroup/tentative/grid-navigation/colspan.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Navigating right should move the focus to the next column, dealing correctly with colspans.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigating down should move the focus to the right cell on the next row, dealing correctly with colspans.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigating left should move to the previous column, dealing correctly with the colspans.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigating up should move the focus to the right cell on the previous row, dealing correctly with colspans.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "html/interaction/focus/focusgroup/tentative/grid-navigation/css-table-not-focusgroup.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Validates that a CSS table that doesn't have the focusgroup=grid attribute set doesn't allow directional navigation",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/grid-navigation/css-table.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Tests that grid focusgroups also work on CSS tables (i.e.: 'display: table'). The implementation relies on the layout objects, so the other tests that covers HTML tables don't need to be duplicated to test the same cases with CSS tables.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/grid-navigation/does-not-wrap-or-flow.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Navigating right should not move the focus when it is at the last column and the focusgroup doesn't wrap or flow.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigating down should not move the focus when it is at the last row and the focusgroup doesn't wrap or flow.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigating left should not move the focus when it is at the first column and the focusgroup doesn't wrap or flow.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigating up should not move the focus when it is at the first row and the focusgroup doesn't wrap or flow.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "html/interaction/focus/focusgroup/tentative/grid-navigation/empty-spaces.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Navigating right should move the focus to the next column, dealing correctly with the empty spaces.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigating down should move the focus to the right cell on the next row, dealing correctly with empty spaces.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigating left should move to the previous column, dealing correctly with the empty spaces.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigating up should move the focus to the right cell on the previous row, dealing correctly with empty spaces.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "html/interaction/focus/focusgroup/tentative/grid-navigation/flows-in-both-axes.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When on the last column, navigating right should move the focus to first column and next row if the focusgroup flows horizontally.",
+          "status": "fail"
+        },
+        {
+          "name": "When on the last row, navigating down should move the focus to first row and next column if the focusgroup flows horizontally.",
+          "status": "fail"
+        },
+        {
+          "name": "When on the first column, navigating left should move the focus to last column and previous row if the focusgroup flows horizontally.",
+          "status": "fail"
+        },
+        {
+          "name": "When on the first row, navigating up should move the focus to last row and previous column if the focusgroup flows horizontally.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "html/interaction/focus/focusgroup/tentative/grid-navigation/moves-across-table-sections.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Navigating down should move the focus to the next row even when that row is in another section.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigating up should move the focus to the previous row even when that row is in another section.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/interaction/focus/focusgroup/tentative/grid-navigation/non-table.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Validates that focusgroup=grid set on a non table layout doesn't become a grid focusgroup nor a linear one.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/grid-navigation/relayout-before-navigation.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Since |item1| removes the middle row on directional input, the grid focusgroup should check for a relayout before navigating to the next row.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/grid-navigation/row-flow-only.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When on the last column, navigating right should move the focus to first column and next row if the focusgroup flows horizontally.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigating down should not flow the focus vertically when not supported by the focusgroup.",
+          "status": "fail"
+        },
+        {
+          "name": "When on the first column, navigating left should move the focus to last column and previous row if the focusgroup flows horizontally.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigating up should not flow the focus vertically when not supported by the focusgroup.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "html/interaction/focus/focusgroup/tentative/grid-navigation/row-wrap-and-col-flow.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When on the last column, navigating right should move the focus to first column if the focusgroup wraps horizontally.",
+          "status": "fail"
+        },
+        {
+          "name": "When on the last row, navigating down should move the focus to first row and next column if the focusgroup flows vertically.",
+          "status": "fail"
+        },
+        {
+          "name": "When on the first column, navigating left should move the focus to last column if the focusgroup wraps horizontally.",
+          "status": "fail"
+        },
+        {
+          "name": "When on the first row, navigating up should move the focus to last row and previous column if the focusgroup flows horizontally.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "html/interaction/focus/focusgroup/tentative/grid-navigation/row-wrap-only.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When on the last column, navigating right should move the focus to first column if the focusgroup wraps horizontally.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigating down should not wrap the focus to the first row when only horizontal wrap is supported by the focusgroup.",
+          "status": "fail"
+        },
+        {
+          "name": "When on the first column, navigating left should move the focus to last column if the focusgroup wraps horizontally.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigating up should not wrap the focus to the last row when only horizontal wrap is supported by the focusgroup.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "html/interaction/focus/focusgroup/tentative/grid-navigation/rowspan.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Navigating right should move the focus to the next column, dealing correctly with rowspans.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigating down should move the focus to the right cell on the next row, dealing correctly with rowspans.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigating left should move to the previous column, dealing correctly with the rowspans.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigating up should move the focus to the right cell on the previous row, dealing correctly with rowspans.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "html/interaction/focus/focusgroup/tentative/grid-navigation/simple-case-with-non-focusable-cell-in-the-center.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Navigating right should move the focus to the next column, skipping the non-focusable cell.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigating down should move the focus to the next row, skipping the non-focusable cell.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigating left should move to the previous column, skipping the non-focusable cell.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigating up should move the focus to the previous row, skipping the non-focusable cell.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "html/interaction/focus/focusgroup/tentative/grid-navigation/simple-case.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Navigating right should move the focus to the next column.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigating down should move the focus to the next row.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigating left should move to the previous column.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigating up should move the focus to the previous row.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "html/interaction/focus/focusgroup/tentative/grid-navigation/wraps-in-both-axes.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "When on the last column, navigating right should move the focus to first column if the focusgroup wraps horizontally.",
+          "status": "fail"
+        },
+        {
+          "name": "When on the last row, navigating down should move the focus to first row if the focusgroup wraps vertically.",
+          "status": "fail"
+        },
+        {
+          "name": "When on the first column, navigating left should move the focus to last column if the focusgroup wraps horizontally.",
+          "status": "fail"
+        },
+        {
+          "name": "When on the first row, navigating up should move the focus to last row if the focusgroup wraps vertically.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "html/interaction/focus/focusgroup/tentative/home-end-keys.optional.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Home moves focus to first item in toolbar",
+          "status": "fail"
+        },
+        {
+          "name": "End moves focus to last item in toolbar",
+          "status": "fail"
+        },
+        {
+          "name": "Home on first item stays on first item",
+          "status": "fail"
+        },
+        {
+          "name": "End on last item stays on last item",
+          "status": "fail"
+        },
+        {
+          "name": "Home in tablist moves to first item",
+          "status": "fail"
+        },
+        {
+          "name": "End in tablist moves to last item",
+          "status": "fail"
+        },
+        {
+          "name": "Home in block-only menu moves to first item",
+          "status": "fail"
+        },
+        {
+          "name": "End in block-only menu moves to last item",
+          "status": "fail"
+        },
+        {
+          "name": "Home in nested focusgroup moves to first item of inner group",
+          "status": "fail"
+        },
+        {
+          "name": "End in nested focusgroup moves to last item of inner group",
+          "status": "fail"
+        },
+        {
+          "name": "Home goes to first item, not focusgroupstart item",
+          "status": "fail"
+        },
+        {
+          "name": "End goes to last item, not focusgroupstart item",
+          "status": "fail"
+        },
+        {
+          "name": "Home skips opted-out elements and reaches first item",
+          "status": "fail"
+        },
+        {
+          "name": "End skips opted-out elements and reaches last item",
+          "status": "fail"
+        },
+        {
+          "name": "Home inside text input does not navigate focusgroup",
+          "status": "fail"
+        },
+        {
+          "name": "End inside text input does not navigate focusgroup",
+          "status": "fail"
+        },
+        {
+          "name": "Home from button navigates past key conflict element to first item",
+          "status": "fail"
+        },
+        {
+          "name": "End from button navigates past key conflict element to last item",
+          "status": "fail"
+        },
+        {
+          "name": "Home inside select does not navigate focusgroup",
+          "status": "fail"
+        },
+        {
+          "name": "End inside select does not navigate focusgroup",
+          "status": "fail"
+        },
+        {
+          "name": "Home inside textarea does not navigate focusgroup",
+          "status": "fail"
+        },
+        {
+          "name": "End inside textarea does not navigate focusgroup",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 22
+    },
+    "html/interaction/focus/focusgroup/tentative/opt-out-barriers/complex-nested-opt-out.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Outer focusgroup navigation skips opted-out subtree",
+          "status": "fail"
+        },
+        {
+          "name": "Opt-out subtree blocks navigation for its own items",
+          "status": "fail"
+        },
+        {
+          "name": "Nested focusgroup inside opted-out subtree still works internally",
+          "status": "fail"
+        },
+        {
+          "name": "Backward outer navigation skips opted-out subtree",
+          "status": "fail"
+        },
+        {
+          "name": "Outer focusgroup membership excludes opted-out and nested scope items",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 5
+    },
+    "html/interaction/focus/focusgroup/tentative/opt-out-barriers/none-creates-barriers.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Navigation should skip elements in opted-out focusgroup subtree",
+          "status": "fail"
+        },
+        {
+          "name": "Backward navigation should skip elements in opted-out focusgroup subtree",
+          "status": "fail"
+        },
+        {
+          "name": "Directional input should not work within opted-out focusgroup sections",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "html/interaction/focus/focusgroup/tentative/opt-out-barriers/none-opt-out-direct-child.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Tab navigation includes opted-out element in normal tab order",
+          "status": "fail"
+        },
+        {
+          "name": "Directional navigation skips opted-out element",
+          "status": "fail"
+        },
+        {
+          "name": "Directional input does not work from opted-out element",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "html/interaction/focus/focusgroup/tentative/reading-flow-navigation/explicit-visual-reordering.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Focusgroup navigation should follow explicit visual reordering via CSS order property.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/reading-flow-navigation/fallback-to-dom-order.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Focusgroup navigation should fall back to DOM order when no reading-flow is specified.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/reading-flow-navigation/flex-visual-order-basic.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Focusgroup navigation should respect reading-flow: flex-visual order instead of DOM order.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/reading-flow-navigation/nested-containers.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Focusgroup navigation with nested reading flow containers should follow the visual order.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/reading-flow-navigation/partial-reordering.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Focusgroup navigation with multiple reading-flow containers should follow visual order from CSS reading-flow properties.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/reading-flow-navigation/simple-mixed.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Simple mixed reading flow test.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/sequential-navigation/basic-tab-behavior.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Tab enters focusgroup at first item in tree order and exits normally",
+          "status": "fail"
+        },
+        {
+          "name": "Shift+Tab enters focusgroup at first item in tree order and exits normally",
+          "status": "fail"
+        },
+        {
+          "name": "Directional input navigation continues to work normally within focusgroup",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "html/interaction/focus/focusgroup/tentative/sequential-navigation/directional-input-handler-all-types.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "html/interaction/focus/focusgroup/tentative/sequential-navigation/directional-input-handler-multi-tab-stop.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Tab escape from video element inside focusgroup goes to adjacent item",
+          "status": "fail"
+        },
+        {
+          "name": "Shift+Tab escape from video element inside focusgroup goes to adjacent item",
+          "status": "fail"
+        },
+        {
+          "name": "Tab through video controls outside focusgroup follows normal tab order",
+          "status": "fail"
+        },
+        {
+          "name": "Tab escape from inside video shadow DOM controls reaches adjacent focusgroup item",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "html/interaction/focus/focusgroup/tentative/sequential-navigation/directional-input-handler-multiple-in-segment.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Multiple native directional input handlers each block directional navigation independently",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/sequential-navigation/directional-input-handler-nested-focusgroup.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Native directional input handler detection respects nested focusgroup's enabled axes",
+          "status": "fail"
+        },
+        {
+          "name": "Directional navigation works in both outer and inner nested focusgroups",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/interaction/focus/focusgroup/tentative/sequential-navigation/directional-input-handler-only-item.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Directional input does not work from native directional input handler even when it's the only item",
+          "status": "fail"
+        },
+        {
+          "name": "Segment with only native directional input handler navigates correctly based on focus state",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/interaction/focus/focusgroup/tentative/sequential-navigation/directional-input-handler-radio.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Directional input can navigate TO radio button (entry)",
+          "status": "fail"
+        },
+        {
+          "name": "Directional input navigates within radio group, not via focusgroup",
+          "status": "fail"
+        },
+        {
+          "name": "Tab from radio moves to next segment entry",
+          "status": "fail"
+        },
+        {
+          "name": "Shift+Tab from radio moves to previous segment entry",
+          "status": "fail"
+        },
+        {
+          "name": "Tab from second radio also escapes to next segment entry",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 5
+    },
+    "html/interaction/focus/focusgroup/tentative/sequential-navigation/directional-input-handler-scrollable-container.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Horizontal-only scroll container blocks inline axis but allows block axis navigation",
+          "status": "fail"
+        },
+        {
+          "name": "Vertical-only scroll container blocks block axis but allows inline axis navigation",
+          "status": "fail"
+        },
+        {
+          "name": "Both-axis scroll container blocks all directional navigation",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "html/interaction/focus/focusgroup/tentative/sequential-navigation/directional-input-handler-tab-escape-adjacency.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Shift+Tab from directional input handler at end goes to immediately previous item",
+          "status": "fail"
+        },
+        {
+          "name": "Shift+Tab from directional input handler in middle goes to immediately previous item",
+          "status": "fail"
+        },
+        {
+          "name": "Tab from directional input handler does not skip focusable content in opted-out subtree",
+          "status": "fail"
+        },
+        {
+          "name": "Shift+Tab from directional input handler does not skip focusable content in opted-out subtree",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "html/interaction/focus/focusgroup/tentative/sequential-navigation/directional-input-handler-tab-escape.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Directional input can navigate TO native directional input handler (entry)",
+          "status": "fail"
+        },
+        {
+          "name": "Directional input cannot navigate FROM native directional input handler (exit blocked)",
+          "status": "fail"
+        },
+        {
+          "name": "Tab from native directional input handler moves to next adjacent item",
+          "status": "fail"
+        },
+        {
+          "name": "Shift+Tab from native directional input handler goes to previous adjacent item",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "html/interaction/focus/focusgroup/tentative/sequential-navigation/directional-input-handler-with-explicit-optout.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Explicit focusgroup=none excludes element from directional navigation",
+          "status": "fail"
+        },
+        {
+          "name": "Directional input does not work from explicitly opted-out native directional input handler",
+          "status": "fail"
+        },
+        {
+          "name": "Explicit focusgroup=none includes element in Tab order even when not focused",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "html/interaction/focus/focusgroup/tentative/sequential-navigation/directional-input-handler-with-priority.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Tab entry respects focusgroupstart on native directional input handler",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/sequential-navigation/dynamic-changes.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Dynamic focusgroupstart changes affect entry element selection",
+          "status": "fail"
+        },
+        {
+          "name": "Enabling disabled elements makes them available for tab stop",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/interaction/focus/focusgroup/tentative/sequential-navigation/empty-and-non-focusable.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Empty focusgroup is skipped during Tab navigation",
+          "status": "fail"
+        },
+        {
+          "name": "Focusgroup with only non-focusable elements is skipped",
+          "status": "fail"
+        },
+        {
+          "name": "Focusgroup with only disabled elements is skipped",
+          "status": "fail"
+        },
+        {
+          "name": "Focusable empty focusgroup container receives focus",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "html/interaction/focus/focusgroup/tentative/sequential-navigation/focusgroup-segments.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Tab navigation through focusgroup segments - forward direction",
+          "status": "fail"
+        },
+        {
+          "name": "Shift+Tab navigation through focusgroup segments - backward direction",
+          "status": "fail"
+        },
+        {
+          "name": "Directional input navigation treats opted-out elements as if they don't exist",
+          "status": "fail"
+        },
+        {
+          "name": "Complex nested opt-out creates proper focusgroup segments",
+          "status": "fail"
+        },
+        {
+          "name": "Directional input does not work within opted-out focusgroup sections",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 5
+    },
+    "html/interaction/focus/focusgroup/tentative/sequential-navigation/guaranteed-tab-stop-priority.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Element with focusgroupstart is selected as entry element",
+          "status": "fail"
+        },
+        {
+          "name": "When no elements have focusgroupstart, first in tree order is selected",
+          "status": "fail"
+        },
+        {
+          "name": "When multiple items have focusgroupstart, earliest in tree order wins",
+          "status": "fail"
+        },
+        {
+          "name": "focusgroupstart works with natively focusable elements",
+          "status": "fail"
+        },
+        {
+          "name": "Reverse navigation uses same priority algorithm",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 5
+    },
+    "html/interaction/focus/focusgroup/tentative/sequential-navigation/memory-behavior.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Focusgroup with memory remembers last focused item on re-entry",
+          "status": "fail"
+        },
+        {
+          "name": "Focusgroup with no-memory does not remember last focused item",
+          "status": "fail"
+        },
+        {
+          "name": "Memory behavior with focusgroup segments remembers per-segment",
+          "status": "fail"
+        },
+        {
+          "name": "Memory works correctly for first focusgroup segment",
+          "status": "fail"
+        },
+        {
+          "name": "Last focused item is updated by directional navigation",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 5
+    },
+    "html/interaction/focus/focusgroup/tentative/sequential-navigation/nested-focusgroups.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Forward Tab navigation through nested focusgroups",
+          "status": "fail"
+        },
+        {
+          "name": "Reverse Shift+Tab navigation through nested focusgroups",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/interaction/focus/focusgroup/tentative/sequential-navigation/tabindex-minus-one-home-end.optional.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Home from tabindex=-1 navigates to first item in focusgroup",
+          "status": "fail"
+        },
+        {
+          "name": "End from tabindex=-1 navigates to last item in focusgroup",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/interaction/focus/focusgroup/tentative/sequential-navigation/tabindex-minus-one-tab-escape.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Tab from tabindex=-1 exits focusgroup when focusgroupstart is present",
+          "status": "fail"
+        },
+        {
+          "name": "Shift+Tab from tabindex=-1 exits focusgroup when focusgroupstart is present",
+          "status": "fail"
+        },
+        {
+          "name": "Tab from tabindex=-1 exits focusgroup without focusgroupstart",
+          "status": "fail"
+        },
+        {
+          "name": "Shift+Tab from tabindex=-1 exits focusgroup without focusgroupstart",
+          "status": "fail"
+        },
+        {
+          "name": "Tab from tabindex=-1 exits only the inner nested focusgroup",
+          "status": "fail"
+        },
+        {
+          "name": "Tab from tabindex=-1 skips remaining segment items and enters opted-out barrier",
+          "status": "fail"
+        },
+        {
+          "name": "Tab from opted-out barrier reaches second segment entry",
+          "status": "fail"
+        },
+        {
+          "name": "Tab from tabindex=-1 exits to sibling focusgroup",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 8
+    },
+    "html/interaction/focus/focusgroup/tentative/shadow/shadow-items-basic.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Shadow host focusgroup scopes shadow root items for navigation",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/shadow/shadow-nested-scope.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Nested shadow focusgroup is isolated from outer scope navigation",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/top-layer-dialog-excluded.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Modal dialog's own focusgroup navigates in both directions while in the top layer",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/focusgroup/tentative/top-layer-dynamic-exclusion.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Top-layer exclusion is dynamic: show and hide cycles",
+          "status": "fail"
+        },
+        {
+          "name": "Wrapping navigation skips shown popover subtree",
+          "status": "not-run"
+        },
+        {
+          "name": "Home and End keys skip shown popover subtree",
+          "status": "not-run"
+        },
+        {
+          "name": "Block-axis navigation skips shown popover subtree",
+          "status": "not-run"
+        },
+        {
+          "name": "Arrow navigation skips multiple simultaneously shown popovers",
+          "status": "not-run"
+        },
+        {
+          "name": "Focusgroup memory falls through when the remembered item enters the top layer",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 6
+    },
+    "html/interaction/focus/focusgroup/tentative/top-layer-inner-focusgroup.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Popover with own focusgroup is excluded from ancestor arrow navigation",
+          "status": "fail"
+        },
+        {
+          "name": "Inner focusgroup on a shown popover operates independently",
+          "status": "fail"
+        },
+        {
+          "name": "Focusable top-layer element with own focusgroup is not an outer entry",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "html/interaction/focus/focusgroup/tentative/top-layer-popover-excluded.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Arrow navigation skips a shown popover in ancestor focusgroup",
+          "status": "fail"
+        },
+        {
+          "name": "Arrow keys do not navigate from inside a top-layer popover without own focusgroup",
+          "status": "fail"
+        },
+        {
+          "name": "Popover as the first focusgroup child does not break Home/arrow navigation",
+          "status": "fail"
+        },
+        {
+          "name": "Open popover splits an ancestor focusgroup into two segments",
+          "status": "fail"
+        },
+        {
+          "name": "Popover sibling of focusgroup does not interfere with arrow navigation",
+          "status": "fail"
+        },
+        {
+          "name": "focusgroup=none popover inside focusgroup: arrows skip, Tab reaches",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 6
+    },
+    "html/interaction/focus/focusgroup/tentative/top-layer-popover-invoker.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Arrow keys skip a popover opened by a focusgroup-item invoker",
+          "status": "fail"
+        },
+        {
+          "name": "Tab from a focusgroup-item invoker enters the open popover",
+          "status": "fail"
+        },
+        {
+          "name": "Shift+Tab from popover content opened by an invoker returns to the invoker",
+          "status": "fail"
+        },
+        {
+          "name": "Tab and Shift+Tab on a tabindex=-1 popover invoker do not crash",
+          "status": "fail"
+        },
+        {
+          "name": "Tab from a popovertarget invoker reaches the popover even when it precedes the invoker",
+          "status": "fail"
+        },
+        {
+          "name": "Tab from a commandfor invoker reaches the popover even when it precedes the invoker",
+          "status": "fail"
+        },
+        {
+          "name": "Tab from a showPopover source invoker reaches the popover even when it precedes the invoker",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 7
+    },
+    "html/interaction/focus/focusgroup/tentative/untraversable-tabindex-minus-one.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Elements with tabindex=-1 participate in focusgroup navigation when focused, but are skipped relative to other items.",
+          "status": "fail"
+        },
+        {
+          "name": "Navigation respects bounds when edges are tabindex=-1.",
+          "status": "fail"
+        },
+        {
+          "name": "Wrapping logic skips items with tabindex=-1.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "html/interaction/focus/processing-model/focus-fixup-rule-one-no-dialogs.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "#button1",
+          "status": "fail"
+        },
+        {
+          "name": "#button2",
+          "status": "fail"
+        },
+        {
+          "name": "#button3",
+          "status": "fail"
+        },
+        {
+          "name": "#button4",
+          "status": "fail"
+        },
+        {
+          "name": "#button5",
+          "status": "fail"
+        },
+        {
+          "name": "#div",
+          "status": "fail"
+        },
+        {
+          "name": "#editable",
+          "status": "fail"
+        },
+        {
+          "name": "#button6",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 8
+    },
+    "html/interaction/focus/processing-model/focusVisible.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "FocusOptions.focusVisible: button",
+          "status": "fail"
+        },
+        {
+          "name": "FocusOptions.focusVisible: input",
+          "status": "fail"
+        },
+        {
+          "name": "FocusOptions.focusVisible: #contenteditable",
+          "status": "fail"
+        },
+        {
+          "name": "FocusOptions.focusVisible: #tabindex",
+          "status": "fail"
+        },
+        {
+          "name": "FocusOptions.focusVisible: #not_focusable",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 5
+    },
+    "html/interaction/focus/processing-model/legend-focusable.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "legend focusable",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/processing-model/legend.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "legend",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/processing-model/preventScroll-nested-scroll-elements.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "focus(options) - preventScroll on nested scroll elements",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/processing-model/preventScroll-textarea.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "preventScroll: true on a textarea element",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/processing-model/preventScroll.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Sanity test",
+          "status": "fail"
+        },
+        {
+          "name": "elm.focus() without arguments",
+          "status": "fail"
+        },
+        {
+          "name": "elm.focus(undefined)",
+          "status": "fail"
+        },
+        {
+          "name": "elm.focus(null)",
+          "status": "fail"
+        },
+        {
+          "name": "elm.focus({})",
+          "status": "fail"
+        },
+        {
+          "name": "elm.focus({preventScroll: false})",
+          "status": "fail"
+        },
+        {
+          "name": "elm.focus({preventScroll: true})",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 7
+    },
+    "html/interaction/focus/processing-model/textarea-scroll-selection.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "programatic focus() scrolls selection into view including ancestors",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/sequential-focus-navigation-after-disabled.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Tab after disabling a focused button moves focus to the next focusable element",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/sequential-focus-navigation-and-the-tabindex-attribute/focus-tabindex-default-value.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "The default value of tabIndex attribute must be 0 for elements that are focusable",
+          "status": "fail"
+        },
+        {
+          "name": "The default value of tabIndex attribute must be -1 for elements that are not focusable",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 2
+    },
+    "html/interaction/focus/sequential-focus-navigation-and-the-tabindex-attribute/focus-tabindex-negative.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "The element with a negative tabindex must not be focused by press 'Tab' key",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/sequential-focus-navigation-and-the-tabindex-attribute/focus-tabindex-order.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Elements with different tabindex must be focused sequentially when pressing 'Tab' keys",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/sequential-focus-navigation-and-the-tabindex-attribute/focus-tabindex-positive.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "The element with a positive tabindex must be focused by press 'Tab' key",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/sequential-focus-navigation-and-the-tabindex-attribute/focus-tabindex-zero.html": {
+      "reason": "harness-error",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "The element with a zero tabindex must be focused by press 'Tab' key",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/sequential-focus-navigation-and-the-tabindex-attribute/tabindex-getter-frame.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "disconnected frame element .tabIndex should return 0 by default",
+          "status": "fail"
+        },
+        {
+          "name": "disconnected frame element .tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "disconnected frame element .tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "disconnected frame element .tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "connected frame element inside frameset .tabIndex should return 0 by default",
+          "status": "fail"
+        },
+        {
+          "name": "connected frame element inside frameset .tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "connected frame element inside frameset .tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "connected frame element inside frameset .tabIndex should return 1 when set to 1",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 6,
+      "subtests_total": 8
+    },
+    "html/interaction/focus/sequential-focus-navigation-and-the-tabindex-attribute/tabindex-getter.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "input.tabIndex should return 0 by default",
+          "status": "fail"
+        },
+        {
+          "name": "input.tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "input.tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "input.tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "input[type='hidden'].tabIndex should return 0 by default",
+          "status": "fail"
+        },
+        {
+          "name": "input[type='hidden'].tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "input[type='hidden'].tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "input[type='hidden'].tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "button.tabIndex should return 0 by default",
+          "status": "fail"
+        },
+        {
+          "name": "button.tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "button.tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "button.tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "button[disabled].tabIndex should return 0 by default",
+          "status": "fail"
+        },
+        {
+          "name": "button[disabled].tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "button[disabled].tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "button[disabled].tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "button[hidden].tabIndex should return 0 by default",
+          "status": "fail"
+        },
+        {
+          "name": "button[hidden].tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "button[hidden].tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "button[hidden].tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "a.tabIndex should return 0 by default",
+          "status": "fail"
+        },
+        {
+          "name": "a.tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "a.tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "a.tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "a[href].tabIndex should return 0 by default",
+          "status": "fail"
+        },
+        {
+          "name": "a[href].tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "a[href].tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "a[href].tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "svg a.tabIndex should return 0 by default",
+          "status": "fail"
+        },
+        {
+          "name": "svg a.tabIndex should return -1 when set to -1",
+          "status": "fail"
+        },
+        {
+          "name": "svg a.tabIndex should return 0 when set to 0",
+          "status": "fail"
+        },
+        {
+          "name": "svg a.tabIndex should return 1 when set to 1",
+          "status": "fail"
+        },
+        {
+          "name": "textarea.tabIndex should return 0 by default",
+          "status": "fail"
+        },
+        {
+          "name": "textarea.tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "textarea.tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "textarea.tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "select.tabIndex should return 0 by default",
+          "status": "fail"
+        },
+        {
+          "name": "select.tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "select.tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "select.tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "select[multiple].tabIndex should return 0 by default",
+          "status": "fail"
+        },
+        {
+          "name": "select[multiple].tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "select[multiple].tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "select[multiple].tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "option.tabIndex should return -1 by default",
+          "status": "pass"
+        },
+        {
+          "name": "option.tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "option.tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "option.tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "optgroup.tabIndex should return -1 by default",
+          "status": "pass"
+        },
+        {
+          "name": "optgroup.tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "optgroup.tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "optgroup.tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "iframe.tabIndex should return 0 by default",
+          "status": "fail"
+        },
+        {
+          "name": "iframe.tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "iframe.tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "iframe.tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "embed.tabIndex should return -1 by default",
+          "status": "pass"
+        },
+        {
+          "name": "embed.tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "embed.tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "embed.tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "object.tabIndex should return 0 by default",
+          "status": "fail"
+        },
+        {
+          "name": "object.tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "object.tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "object.tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "span.tabIndex should return -1 by default",
+          "status": "pass"
+        },
+        {
+          "name": "span.tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "span.tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "span.tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "div.tabIndex should return -1 by default",
+          "status": "pass"
+        },
+        {
+          "name": "div.tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "div.tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "div.tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "link#nohref.tabIndex should return -1 by default",
+          "status": "pass"
+        },
+        {
+          "name": "link#nohref.tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "link#nohref.tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "link#nohref.tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "link[href].tabIndex should return -1 by default",
+          "status": "pass"
+        },
+        {
+          "name": "link[href].tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "link[href].tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "link[href].tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "details.tabIndex should return -1 by default",
+          "status": "pass"
+        },
+        {
+          "name": "details.tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "details.tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "details.tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "summary.tabIndex should return 0 by default",
+          "status": "fail"
+        },
+        {
+          "name": "summary.tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "summary.tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "summary.tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "summary#secondsummary.tabIndex should return -1 by default",
+          "status": "pass"
+        },
+        {
+          "name": "summary#secondsummary.tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "summary#secondsummary.tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "summary#secondsummary.tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "#hostDelegatesFocus.tabIndex should return -1 by default",
+          "status": "pass"
+        },
+        {
+          "name": "#hostDelegatesFocus.tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "#hostDelegatesFocus.tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "#hostDelegatesFocus.tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "#hostNonDelegatesFocus.tabIndex should return -1 by default",
+          "status": "pass"
+        },
+        {
+          "name": "#hostNonDelegatesFocus.tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "#hostNonDelegatesFocus.tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "#hostNonDelegatesFocus.tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "div[contenteditable].tabIndex should return -1 by default",
+          "status": "pass"
+        },
+        {
+          "name": "div[contenteditable].tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "div[contenteditable].tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "div[contenteditable].tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "#scrollable.tabIndex should return -1 by default",
+          "status": "pass"
+        },
+        {
+          "name": "#scrollable.tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "#scrollable.tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "#scrollable.tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "fieldset.tabIndex should return -1 by default",
+          "status": "pass"
+        },
+        {
+          "name": "fieldset.tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "fieldset.tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "fieldset.tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "output.tabIndex should return -1 by default",
+          "status": "pass"
+        },
+        {
+          "name": "output.tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "output.tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "output.tabIndex should return 1 when set to 1",
+          "status": "pass"
+        },
+        {
+          "name": "slot.tabIndex should return -1 by default",
+          "status": "pass"
+        },
+        {
+          "name": "slot.tabIndex should return -1 when set to -1",
+          "status": "pass"
+        },
+        {
+          "name": "slot.tabIndex should return 0 when set to 0",
+          "status": "pass"
+        },
+        {
+          "name": "slot.tabIndex should return 1 when set to 1",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 103,
+      "subtests_total": 120
+    },
+    "html/interaction/focus/setSequentialFocusStartingPoint.tentative.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "document.setSequentialFocusStartingPoint should set the sequential focus starting point on any element.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/tab-table-caption.html?caption-side=bottom": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "html/interaction/focus/tab-table-caption.html?caption-side=top": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "html/interaction/focus/tabindex-focus-flag.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "a should not be focusable by default.",
+          "status": "fail"
+        },
+        {
+          "name": "a[href] should be focusable by default.",
+          "status": "fail"
+        },
+        {
+          "name": "button should be focusable by default.",
+          "status": "fail"
+        },
+        {
+          "name": "input[type=\"hidden\"] should not be focusable by default.",
+          "status": "fail"
+        },
+        {
+          "name": "input[type=\"button\"] should be focusable by default.",
+          "status": "fail"
+        },
+        {
+          "name": "select should be focusable by default.",
+          "status": "fail"
+        },
+        {
+          "name": "textarea should be focusable by default.",
+          "status": "fail"
+        },
+        {
+          "name": "#summary-out should not be focusable by default.",
+          "status": "fail"
+        },
+        {
+          "name": "#summary-first should be focusable by default.",
+          "status": "fail"
+        },
+        {
+          "name": "#summary-second should not be focusable by default.",
+          "status": "fail"
+        },
+        {
+          "name": "[contenteditable] should be focusable by default.",
+          "status": "fail"
+        },
+        {
+          "name": "iframe should be focusable by default.",
+          "status": "fail"
+        },
+        {
+          "name": "#svg-a should not be focusable by default.",
+          "status": "fail"
+        },
+        {
+          "name": "#svg-text should not be focusable by default.",
+          "status": "fail"
+        },
+        {
+          "name": "img should not be focusable by default.",
+          "status": "fail"
+        },
+        {
+          "name": "A with tabindex=0 should be focusable.",
+          "status": "fail"
+        },
+        {
+          "name": "a with tabindex=0 should be focusable.",
+          "status": "fail"
+        },
+        {
+          "name": "text with tabindex=0 should be focusable.",
+          "status": "fail"
+        },
+        {
+          "name": "SUMMARY#summary-out-tabindex0 with tabindex=0 should be focusable.",
+          "status": "fail"
+        },
+        {
+          "name": "SUMMARY#summary-second-tabindex0 with tabindex=0 should be focusable.",
+          "status": "fail"
+        },
+        {
+          "name": "IMG with tabindex=0 should be focusable.",
+          "status": "fail"
+        },
+        {
+          "name": "A with tabindex=-1 should be focusable.",
+          "status": "fail"
+        },
+        {
+          "name": "a with tabindex=-1 should be focusable.",
+          "status": "fail"
+        },
+        {
+          "name": "text with tabindex=-1 should be focusable.",
+          "status": "fail"
+        },
+        {
+          "name": "SUMMARY#summary-out-tabindex-negative with tabindex=-1 should be focusable.",
+          "status": "fail"
+        },
+        {
+          "name": "SUMMARY#summary-second-tabindex-negative with tabindex=-1 should be focusable.",
+          "status": "fail"
+        },
+        {
+          "name": "IMG with tabindex=-1 should be focusable.",
+          "status": "fail"
+        },
+        {
+          "name": "A with tabindex=invalid should not be focusable.",
+          "status": "fail"
+        },
+        {
+          "name": "A#with-href with tabindex=invalid should be focusable.",
+          "status": "fail"
+        },
+        {
+          "name": "a with tabindex=invalid should not be focusable.",
+          "status": "fail"
+        },
+        {
+          "name": "a#with-href with tabindex=invalid should be focusable.",
+          "status": "fail"
+        },
+        {
+          "name": "text with tabindex=invalid should not be focusable.",
+          "status": "fail"
+        },
+        {
+          "name": "DIV with tabindex=invalid should not be focusable.",
+          "status": "fail"
+        },
+        {
+          "name": "SUMMARY#summary-out-tabindex-invalid with tabindex=invalid should not be focusable.",
+          "status": "fail"
+        },
+        {
+          "name": "IMG with tabindex=invalid should not be focusable.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 35
+    },
+    "html/interaction/focus/the-autofocus-attribute/autofocus-area.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "autofocus works on area element",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/the-autofocus-attribute/autofocus-dialog.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "<dialog> can contain autofocus, without stopping page autofocus content from working",
+          "status": "fail"
+        },
+        {
+          "name": "<dialog>-contained autofocus element gets focused when the dialog is shown",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/interaction/focus/the-autofocus-attribute/autofocus-in-not-fully-active-document.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Autofocus element in not-fully-active document should not be queued.",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/the-autofocus-attribute/autofocus-on-stable-document.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Autofocus should work if an element with autofocus is inserted into a document which was loaded some time ago.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/the-autofocus-attribute/document-with-fragment-empty.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Autofocus elements in iframed documents with empty fragments should work.",
+          "status": "fail"
+        },
+        {
+          "name": "Autofocus elements in top-level browsing context's documents with empty fragments should work.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/interaction/focus/the-autofocus-attribute/document-with-fragment-nonexistent.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Autofocus elements in iframed documents with non-existent fragments should work.",
+          "status": "fail"
+        },
+        {
+          "name": "Autofocus elements in top-level browsing context's documents with non-existent fragments should work.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/interaction/focus/the-autofocus-attribute/document-with-fragment-top.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Autofocus elements in iframed documents with \"top\" fragments should work.",
+          "status": "fail"
+        },
+        {
+          "name": "Autofocus elements in top-level browsing context's documents with \"top\" fragments should work.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "html/interaction/focus/the-autofocus-attribute/document-with-fragment-valid.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Autofocus elements in iframed documents with URL fragments should be skipped. (id matches)",
+          "status": "fail"
+        },
+        {
+          "name": "Autofocus elements in iframed documents with URL fragments should be skipped.(a element)",
+          "status": "fail"
+        },
+        {
+          "name": "Autofocus elements in top-level browsing context's documents with URL fragments should be skipped.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 3
+    },
+    "html/interaction/focus/the-autofocus-attribute/first-reconnected.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "The second autofocus element wins if the first autofocus element was disconnected and reconnected before flushing the autofocus candidates.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/the-autofocus-attribute/first-when-later-but-before.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "The temporally first autofocus in the document wins, even if an element is inserted later that is previous in the document tree.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/the-autofocus-attribute/first-when-later.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "The first autofocus in the document wins, even if elements are inserted later.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/the-autofocus-attribute/first.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "The first autofocus element in the document should win.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/the-autofocus-attribute/focusable-area-in-top-document.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "If topDocument's focused area is not topDocument, autofocus is not processed.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/the-autofocus-attribute/no-autofocus-on-changing-input-type.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Changing input type should not refocus on the element.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/the-autofocus-attribute/no-cross-origin-autofocus.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Autofocus shouldn't work in cross-origin iframe",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/the-autofocus-attribute/no-sandboxed-automatic-features.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "If the sandboxed automatic features browsing context flag is set, autofocus in the browsing context should not be handled.",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/the-autofocus-attribute/not-on-first-task.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "The element is not focused during the initial parsing task",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/the-autofocus-attribute/queue-non-focusable.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "If the first autofocus element is not focusable, but becomes focusable before a frame, it should be focused.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/the-autofocus-attribute/same-origin-autofocus.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Autofocus should not work in the same origin grand child iframe",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/the-autofocus-attribute/skip-another-top-level-browsing-context.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Autofocus elements queued in another top-level browsing context's documents should be skipped.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/the-autofocus-attribute/skip-non-focusable.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Non-focusable autofocus element is skipped.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/the-autofocus-attribute/skip-not-fully-active.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Autofocus element in not-fully-active document should be skipped while flusing.",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/the-autofocus-attribute/spin-by-blocking-style-sheet.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Script-blocking style sheet should pause flushing autofocus candidates.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "html/interaction/focus/the-autofocus-attribute/supported-elements.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Contenteditable element should support autofocus",
+          "status": "fail"
+        },
+        {
+          "name": "Element with tabindex should support autofocus",
+          "status": "fail"
+        },
+        {
+          "name": "Non-HTMLElement should not support autofocus",
+          "status": "fail"
+        },
+        {
+          "name": "Host element with delegatesFocus should support autofocus",
+          "status": "fail"
+        },
+        {
+          "name": "Host element with delegatesFocus including no focusable descendants should be skipped",
+          "status": "fail"
+        },
+        {
+          "name": "Area element should support autofocus",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 6
+    },
+    "html/interaction/focus/the-autofocus-attribute/update-the-rendering.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "\"Flush autofocus candidates\" should be happen before a scroll event and animation frame callbacks",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    }
+  },
+  "version": 1
+}

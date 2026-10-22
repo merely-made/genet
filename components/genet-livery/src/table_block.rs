@@ -530,15 +530,13 @@ pub(crate) fn cell_content_block_size(border_box: f32, offsets: CellBlockOffsets
 /// inline maps to x and block to y. A vertical writing mode reaches this only
 /// once K4f gives the table one, and the flow axes it would need are not
 /// invented here.
-pub(crate) fn commit_table_block<S, Context, Source>(
-    tree: &mut AlgorithmTree<S, Context, Source>,
+pub(crate) fn commit_table_block<Context, Source>(
+    tree: &mut AlgorithmTree<Context, Source>,
     table_node: AlgorithmNodeId,
     layout: &TableBlockLayout,
     inline: &TableInlineSizingResult,
     node_of: impl Fn(BoxId) -> Option<AlgorithmNodeId>,
-) where
-    S: buckram::AlgorithmStyle,
-{
+) {
     for placement in &layout.alignment.cells {
         let Some(node) = node_of(placement.box_id) else {
             continue;
@@ -564,13 +562,14 @@ pub(crate) fn commit_table_block<S, Context, Source>(
             }
         }
     }
+    // The table's own position stays the parent's decision; the backend
+    // overwrites it when it places this node.
+    let position = tree.unrounded_layout(table_node);
     tree.set_layout(
         table_node,
         AlgorithmLayout {
-            // The table's own position stays the parent's decision; the
-            // backend overwrites it when it places this node.
-            x: tree.unrounded_layout(table_node).x,
-            y: tree.unrounded_layout(table_node).y,
+            x: position.x,
+            y: position.y,
             width: inline.used_grid_inline_size,
             height: layout.sizing.used_table_block_size,
         },

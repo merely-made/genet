@@ -1,4 +1,5 @@
 [package]
+rust-version = "1.97.1"
 name = "buckram"
 version = "0.0.3"
 edition = "2024"
@@ -10,7 +11,12 @@ publish = true
 [lib]
 path = "src/lib.rs"
 
+[features]
+# The synthetic block-resume model has no production formatter caller yet.
+experimental-fragmentation-kernel = []
+
 [dependencies]
+css-flow = { package = "genet-css-flow", version = "0.1.0", path = "../shared/css-flow" }
 # Grows the box-tree descent's stack on demand; see `box_tree::with_box_tree_stack`.
 stacker = "0.1.21"
 taffy = { package = "genet-taffy", version = "0.14.0", default-features = false, features = ["std", "block_layout", "float_layout", "flexbox", "grid", "calc", "detailed_layout_info"] }

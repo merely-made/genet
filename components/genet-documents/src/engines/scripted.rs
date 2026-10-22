@@ -136,10 +136,12 @@ where
             address: navigation.script_visible_url,
             pressed_target: None,
             pointer_active: false,
+            pending_key_text: None,
             external_textures: Vec::new(),
             collection_stats: (0, 0),
             a11y_revision: std::cell::Cell::new(0),
             a11y_cache: std::cell::RefCell::new(None),
+            validation_alert_id: std::cell::Cell::new(None),
         };
         if request.hidden {
             session.doc.set_hidden(true);
@@ -157,6 +159,8 @@ pub struct ScriptedDocumentSession<E: script_engine_api::ScriptEngine> {
     address: String,
     pressed_target: Option<genet_scripted_dom::NodeId>,
     pointer_active: bool,
+    /// Whether the Text item paired with the last keydown may insert text.
+    pending_key_text: Option<bool>,
     /// Cumulative `(reflectors_unpinned, nodes_collected)` from normal frame
     /// pumps. Reading this never triggers another collection.
     collection_stats: (usize, usize),
@@ -167,12 +171,19 @@ pub struct ScriptedDocumentSession<E: script_engine_api::ScriptEngine> {
     /// so a host may compare revisions to decide whether to republish.
     a11y_revision: std::cell::Cell<u64>,
     a11y_cache: std::cell::RefCell<Option<document_session_api::DocumentA11yProjection>>,
+    /// Identity belongs to the native notice, independently of arena node IDs.
+    validation_alert_id: std::cell::Cell<Option<(u64, document_session_api::DocumentA11yNodeId)>>,
 }
 
 #[cfg(feature = "scripted")]
 impl<E: script_engine_api::ScriptEngine + 'static> ScriptedDocumentSession<E> {
     pub fn new(doc: genet_scripted::LiveryScriptedDocument<E>) -> Self {
         Self::new_at(doc, "about:blank")
+    }
+
+    /// The latest frame's layout or paint translation failure, if any.
+    pub fn last_error(&self) -> Option<&str> {
+        self.doc.last_error()
     }
 
     pub fn new_at(
@@ -184,10 +195,12 @@ impl<E: script_engine_api::ScriptEngine + 'static> ScriptedDocumentSession<E> {
             address: address.into(),
             pressed_target: None,
             pointer_active: false,
+            pending_key_text: None,
             collection_stats: (0, 0),
             external_textures: Vec::new(),
             a11y_revision: std::cell::Cell::new(0),
             a11y_cache: std::cell::RefCell::new(None),
+            validation_alert_id: std::cell::Cell::new(None),
         }
     }
 
@@ -257,7 +270,15 @@ impl<E: script_engine_api::ScriptEngine + 'static> ScriptedDocumentSession<E> {
                 )
             },
         )?;
-        Some(projection)
+        Some(self.with_validation_alert(projection))
+    }
+
+    fn with_validation_alert(
+        &self,
+        projection: document_session_api::DocumentA11yProjection,
+    ) -> document_session_api::DocumentA11yProjection {
+        super::with_validation_alert(projection, self.doc.validation_notice().map(|notice|
+            (notice.sequence, notice.message.as_str(), notice.bounds)), &self.validation_alert_id)
     }
 
     fn current_accessibility_projection(
@@ -289,6 +310,7 @@ impl<E: script_engine_api::ScriptEngine + 'static> ScriptedDocumentSession<E> {
 impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
     for ScriptedDocumentSession<E>
 {
+    fn current_address(&self) -> Option<String> { Some(self.doc.current_document_address()) }
     fn document_capabilities(&self) -> DocumentCapabilities {
         retained_document_capabilities("scripted sessions do not expose document find")
     }
@@ -307,6 +329,13 @@ impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
             .collect();
         frame.scene
     }
+    fn try_frame(&mut self, width: u32, height: u32) -> Result<Scene, String> {
+        let scene = self.frame(width, height);
+        match self.last_error() {
+            Some(error) => Err(error.to_owned()),
+            None => Ok(scene),
+        }
+    }
     fn external_texture_draws(&self) -> &[document_session_api::SessionExternalTextureDraw] {
         &self.external_textures
     }
@@ -324,7 +353,9 @@ impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
         }
     }
     fn pointer_down(&mut self, x: f32, y: f32) -> SessionClick {
+        self.pending_key_text = None;
         let pressed_target = self.doc.click_target_at(x, y);
+        if let Some(node) = pressed_target { let _ = self.doc.focus_host_node(node); }
         self.pressed_target = pressed_target;
         self.pointer_active = self.doc.begin_text_selection(x, y) || pressed_target.is_some();
         if self.pointer_active {
@@ -347,22 +378,120 @@ impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
         } else if pressed_target.is_some() && self.doc.click_target_at(x, y) == pressed_target {
             self.click_at(x, y)
         } else {
-            SessionClick::Miss
+            // The press was captured; releasing outside consumes it without
+            // activating a different target or leaking the gesture to a host.
+            SessionClick::Handled
         }
     }
     fn focus_input(&mut self, focused: bool) {
+        if !focused { self.doc.clear_host_focus(); self.pending_key_text = None; }
         if !focused && self.pointer_active {
             self.pointer_active = false;
             self.pressed_target = None;
             let _ = self.doc.cancel_text_selection();
         }
     }
+    fn focus_move(&mut self, direction: document_session_api::SessionFocusDirection) -> bool {
+        self.pending_key_text = None;
+        self.doc.move_host_focus(direction == document_session_api::SessionFocusDirection::Backward)
+    }
     fn cancel_input(&mut self) -> bool {
+        self.pending_key_text = None;
         let had_pointer = std::mem::replace(&mut self.pointer_active, false)
             || self.pressed_target.take().is_some();
         self.pressed_target = None;
-        self.doc.cancel_text_selection() || had_pointer
+        let dismissed = self.doc.dismiss_validation_notice();
+        let composition = self.doc.cancel_host_preedit();
+        self.doc.cancel_text_selection() || had_pointer || dismissed || composition
     }
+    fn key_input(
+        &mut self,
+        key: document_session_api::SessionKey,
+        state: document_session_api::SessionButtonState,
+        modifiers: document_session_api::SessionModifiers,
+        repeat: bool,
+    ) -> document_session_api::SessionEffect {
+        use document_session_api::{SessionButtonState, SessionEffect, SessionKey};
+        let name = match &key {
+            SessionKey::Character(value) => value.as_str(), SessionKey::Enter => "Enter",
+            SessionKey::Space => " ", SessionKey::Escape => "Escape", SessionKey::Backspace => "Backspace",
+            SessionKey::Delete => "Delete", SessionKey::ArrowLeft => "ArrowLeft", SessionKey::ArrowRight => "ArrowRight",
+            SessionKey::ArrowUp => "ArrowUp", SessionKey::ArrowDown => "ArrowDown", SessionKey::Home => "Home",
+            SessionKey::End => "End", SessionKey::PageUp => "PageUp", SessionKey::PageDown => "PageDown",
+            SessionKey::Tab => "Tab", SessionKey::Unidentified => "Unidentified",
+        };
+        let had_focus = self.doc.host_has_focus();
+        if state == SessionButtonState::Released { self.pending_key_text = None; }
+        let cancelled = self.doc.dispatch_host_key(name, state == SessionButtonState::Pressed, repeat,
+            modifiers.alt, modifiers.control, modifiers.meta, modifiers.shift);
+        if state == SessionButtonState::Released {
+            self.doc.finish_host_key();
+            return if cancelled { SessionEffect::Cancelled } else { SessionEffect::Ignored };
+        }
+        if cancelled {
+            self.pending_key_text = matches!(&key,SessionKey::Character(_) | SessionKey::Space).then_some(false);
+            self.doc.finish_host_key();
+            return SessionEffect::Cancelled;
+        }
+        let unmodified = !modifiers.alt && !modifiers.control && !modifiers.meta;
+        self.pending_key_text = match &key {
+            SessionKey::Character(_) | SessionKey::Space => Some(!self.doc.host_has_preedit()),
+            _ => None,
+        };
+        let escape = matches!(&key, SessionKey::Escape);
+        let handled = match key {
+            SessionKey::Tab => self.doc.move_host_focus(modifiers.shift),
+            SessionKey::Escape => self.cancel_input(),
+            SessionKey::Enter if unmodified && self.doc.host_focused_is_textarea() =>
+                self.doc.host_text_input("insert", "\n", "insertLineBreak"),
+            SessionKey::Enter => had_focus,
+            SessionKey::Character(_) | SessionKey::Space => false,
+            SessionKey::Backspace if unmodified => self.doc.host_text_input("backward", "", "deleteContentBackward"),
+            SessionKey::Delete if unmodified => self.doc.host_text_input("forward", "", "deleteContentForward"),
+            SessionKey::ArrowLeft if unmodified => self.doc.host_text_input("left", "", ""),
+            SessionKey::ArrowRight if unmodified => self.doc.host_text_input("right", "", ""),
+            SessionKey::Home if unmodified => self.doc.host_text_input("home", "", ""),
+            SessionKey::End if unmodified => self.doc.host_text_input("end", "", ""),
+            _ => false,
+        };
+        self.doc.finish_host_key();
+        if handled && escape { SessionEffect::Cancelled }
+        else if handled { SessionEffect::Handled } else { SessionEffect::Ignored }
+    }
+
+    fn keyboard_text_input(&mut self, text: &str) -> bool {
+        if self.pending_key_text.take() == Some(false) { return false; }
+        self.text_input(text)
+    }
+
+    fn text_input(&mut self, text: &str) -> bool {
+        !text.is_empty() && self.doc.host_text_input("insert", text, "insertText")
+    }
+
+    fn ime_input(&mut self, ime: document_session_api::SessionIme) -> bool {
+        use document_session_api::SessionIme;
+        self.pending_key_text = None;
+        match ime {
+            SessionIme::Enabled => self.doc.host_editable_focus(),
+            SessionIme::Preedit { text, .. } => {
+                let phase = if self.doc.host_has_preedit() { "compositionupdate" } else { "compositionstart" };
+                self.doc.host_composition(phase, &text)
+            },
+            SessionIme::Commit(text) => {
+                let composing = self.doc.host_has_preedit();
+                let accepted = !text.is_empty() && self.doc.host_text_input("insert", &text,
+                    if composing { "insertCompositionText" } else { "insertText" });
+                if composing { let _ = self.doc.host_composition("compositionend", &text); }
+                accepted
+            },
+            SessionIme::Disabled => {
+                if self.doc.host_has_preedit() { self.doc.host_composition("compositionend", "") } else { false }
+            },
+        }
+    }
+
+    fn editable_focus(&self) -> bool { self.doc.host_editable_focus() }
+
     fn text_target(&self, text: &str) -> Option<SessionTextTarget> {
         let (anchor, focus) = self.doc.text_target(text)?;
         Some(SessionTextTarget { anchor, focus })
@@ -383,14 +512,16 @@ impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
         self.collection_stats
     }
     fn pending_work(&mut self) -> SessionPendingWork {
-        let timer = self
+        // The session's deadline field is also the wake for a queued rAF;
+        // `next_wake_delay` returns zero for the next visible rendering turn.
+        let wake = self
             .doc
-            .next_timer_delay()
+            .next_wake_delay()
             .and_then(|delay| delay.is_finite().then_some(delay.max(0.0)))
             .map(|delay| Duration::from_secs_f64(delay / 1000.0));
         let external = self.doc.has_external_work();
         SessionPendingWork {
-            timer,
+            timer: wake,
             microtasks: false,
             external,
         }
@@ -400,6 +531,15 @@ impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
     }
     fn set_hidden(&mut self, hidden: bool) {
         self.doc.set_hidden(hidden);
+    }
+    fn supports_freeze_resume(&self) -> bool {
+        true
+    }
+    fn freeze(&mut self) {
+        self.doc.freeze();
+    }
+    fn resume(&mut self) {
+        self.doc.resume();
     }
     fn inspect(&self) -> Option<document_session_api::ContentReport> {
         Some(self.doc.with_dom(content_report))
@@ -414,11 +554,13 @@ impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
     }
     fn clip(&self) -> Option<DocumentClip> {
         let selection = self.doc.text_selection();
+        let address = self.doc.current_document_address();
+        let resolution_base = self.doc.document_resolution_base().unwrap_or_else(|| address.clone());
         self.doc.with_dom(|dom| match selection {
             Some(selection) => {
                 let selected_links = links_for_source_nodes(dom, &selection.source_nodes);
                 semantic_clip_from_selection_with_links(
-                    &self.address,
+                    &address,
                     dom,
                     ClipSelection {
                         range: ClipRange {
@@ -432,7 +574,12 @@ impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
                     selected_links,
                 )
             },
-            None => semantic_clip_from_dom(&self.address, dom),
+            None => semantic_clip_from_dom(&address, dom).map(|mut clip| {
+                for href in &mut clip.links {
+                    *href = genet_scripted::resolve_href(&resolution_base, href);
+                }
+                clip
+            }),
         })
     }
     /// Observation extras (extract, dom_snapshot, dispatch_event, dom stats)
@@ -453,5 +600,90 @@ impl<E: script_engine_api::ScriptEngine> ScriptedDocumentSession<E> {
     /// observation contract lands).
     pub fn document_mut(&mut self) -> &mut genet_scripted::LiveryScriptedDocument<E> {
         &mut self.doc
+    }
+}
+
+#[cfg(all(test, feature = "scripted"))]
+mod animation_frame_pending_tests {
+    use super::*;
+
+    fn raf_only_session_wakes<E: script_engine_api::ScriptEngine + 'static>() {
+        let doc = genet_scripted::LiveryScriptedDocument::<E>::parse(
+            "<body><script>requestAnimationFrame(function() {\
+               document.body.setAttribute('data-frame', 'done');\
+             });</script></body>",
+        )
+        .expect("scripted document");
+        let mut session = ScriptedDocumentSession::new(doc);
+        let pending = session.pending_work();
+        assert_eq!(pending.timer, Some(Duration::ZERO));
+        assert!(!pending.external);
+        assert!(!pending.is_idle(), "rAF wakes the session host");
+        assert!(session.settled(), "a future rendering turn does not hold a completion receipt open");
+        session.pump(16.0);
+        assert!(
+            session
+                .document_mut()
+                .dom_snapshot()
+                .contains("data-frame=\"done\"")
+        );
+        assert!(session.pending_work().is_settled());
+    }
+
+    fn host_lifecycle_controls_scripted_session<E: script_engine_api::ScriptEngine + 'static>() {
+        let doc = genet_scripted::LiveryScriptedDocument::<E>::parse(
+            "<body><script>\
+             document.addEventListener('visibilitychange', () => console.log('visibility'));\
+             document.addEventListener('freeze', () => console.log('freeze'));\
+             document.addEventListener('resume', () => console.log('resume'));\
+             setInterval(() => console.log('tick'), 16);\
+             </script></body>",
+        ).expect("scripted document");
+        let mut host_session: Box<dyn DocumentSession<Scene>> =
+            Box::new(ScriptedDocumentSession::new(doc));
+        assert!(host_session.supports_freeze_resume());
+        host_session.set_hidden(true);
+        assert_eq!(host_session.pending_work().timer, Some(Duration::ZERO));
+        host_session.pump(0.0);
+        assert_eq!(host_session.pending_work().timer, Some(Duration::from_secs(1)));
+        host_session.freeze();
+        assert!(host_session.pending_work().is_idle());
+        host_session.pump(1000.0);
+        let live = host_session.as_any().downcast_mut::<ScriptedDocumentSession<E>>().unwrap();
+        assert!(live.document_mut().is_hidden());
+        assert!(live.document_mut().is_frozen());
+        assert_eq!(live.document_mut().console(), vec!["visibility", "freeze"]);
+        host_session.resume();
+        assert_eq!(host_session.pending_work().timer, Some(Duration::ZERO));
+        host_session.pump(1000.0);
+        assert_eq!(host_session.pending_work().timer, Some(Duration::from_secs(1)));
+        host_session.set_hidden(false);
+        host_session.pump(1016.0);
+        let live = host_session.as_any().downcast_mut::<ScriptedDocumentSession<E>>().unwrap();
+        assert!(!live.document_mut().is_hidden());
+        assert!(!live.document_mut().is_frozen());
+        assert_eq!(live.document_mut().console(), vec!["visibility", "freeze", "resume", "visibility", "tick"]);
+    }
+
+    #[test]
+    fn raf_only_session_wakes_on_boa() {
+        raf_only_session_wakes::<script_engine_boa::BoaEngine>();
+    }
+
+    #[test]
+    fn host_lifecycle_controls_scripted_session_on_boa() {
+        host_lifecycle_controls_scripted_session::<script_engine_boa::BoaEngine>();
+    }
+
+    #[cfg(all(target_pointer_width = "64", feature = "scripted-nova"))]
+    #[test]
+    fn raf_only_session_wakes_on_nova() {
+        raf_only_session_wakes::<script_engine_nova::NovaEngine>();
+    }
+
+    #[cfg(all(target_pointer_width = "64", feature = "scripted-nova"))]
+    #[test]
+    fn host_lifecycle_controls_scripted_session_on_nova() {
+        host_lifecycle_controls_scripted_session::<script_engine_nova::NovaEngine>();
     }
 }

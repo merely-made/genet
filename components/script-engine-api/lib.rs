@@ -22,6 +22,10 @@
 use std::any::Any;
 use std::rc::Rc;
 
+mod value;
+
+pub use value::{HostFunction, ScriptValue, ValueEngine, ValueError};
+
 /// JS-opaque native data a reflector carries, bridging a JS object back to the host
 /// DOM. Packs a genet `NodeId` (the DOM crate owns the `NodeId` ↔ `u64` mapping;
 /// this crate stays DOM-neutral).
@@ -42,18 +46,33 @@ pub type ReflectorData = u64;
 /// [`pump_microtasks`]: ScriptEngine::pump_microtasks
 pub type PromiseToken = u64;
 
-/// A bound on how much work one [`ScriptEngine::pump`] call may do, as a runaway
-/// guard. The unit is **coarse and backend-defined** (Nova counts reaction *jobs*, a
-/// fuel-metered VM counts VM *steps*), so `Steps(n)` is a "stop a script that never
-/// settles" cap, not precise accounting. `Unbounded` drains to quiescence (the
-/// classic microtask checkpoint).
+/// An explicit work limit. `Steps` means backend-defined coarse VM work units
+/// for `eval_bounded` (Piccolo spends up to 4096 fuel per unit), and completed
+/// jobs for `pump`. A job may run arbitrary VM code, so a job count is not an
+/// execution limit. Check [`ExecutionCapabilities`] before requiring either.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Budget {
     /// Drain the queue fully (a job storm can hang the caller; use only on trusted
     /// scripts or after their work is known-bounded).
     Unbounded,
-    /// Run at most this many coarse steps, then return control even if work remains.
+    /// Limit coarse VM work units in `eval_bounded`, or completed jobs in `pump`.
     Steps(u64),
+}
+
+/// Enforceable script limits advertised by a backend. Worker cancellation also
+/// requires interrupting callbacks and running jobs; these flags do not imply it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ExecutionCapabilities {
+    pub bounded_eval_vm: bool,
+    pub bounded_pump_jobs: bool,
+    pub bounded_pump_vm: bool,
+}
+
+/// A required VM evaluation limit cannot silently fall back to plain `eval`.
+#[derive(Debug)]
+pub enum BoundedEvalError<E> {
+    Unsupported,
+    Engine(E),
 }
 
 /// The result of a [`ScriptEngine::pump`] call.
@@ -65,6 +84,80 @@ pub enum PumpOutcome {
     /// more progress (a runaway script keeps returning this, which is how the caller
     /// detects and abandons it).
     Pending,
+    /// The backend cannot honor a requested bound. Nothing was pumped.
+    UnsupportedBound,
+}
+
+/// The VM boundary at which execution stopped. Hosts can use this without
+/// interpreting an exception's display text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecutionPhase {
+    Parse,
+    Load,
+    Resolution,
+    Runtime,
+}
+
+/// The native brand of a thrown ECMAScript Error object. An arbitrary thrown
+/// object has no native error brand, even if it supplies `name` or `constructor`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NativeErrorKind {
+    Error,
+    AggregateError,
+    EvalError,
+    RangeError,
+    ReferenceError,
+    SyntaxError,
+    TypeError,
+    URIError,
+}
+
+impl NativeErrorKind {
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Error => "Error",
+            Self::AggregateError => "AggregateError",
+            Self::EvalError => "EvalError",
+            Self::RangeError => "RangeError",
+            Self::ReferenceError => "ReferenceError",
+            Self::SyntaxError => "SyntaxError",
+            Self::TypeError => "TypeError",
+            Self::URIError => "URIError",
+        }
+    }
+}
+
+/// A diagnostic execution result. `Pending` means evaluation has not settled;
+/// it must not be mistaken for a completed module or a thrown exception.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecutionObservation {
+    Completed,
+    Failed {
+        phase: ExecutionPhase,
+        native_error: Option<NativeErrorKind>,
+    },
+    Pending,
+    Unsupported,
+}
+
+/// Diagnostic outcome and the exact thrown value, retained together so a host
+/// can check an identity it owns without reading mutable error properties.
+pub struct ObservedExecution<V> {
+    pub observation: ExecutionObservation,
+    pub thrown: Option<V>,
+}
+
+impl<V> From<ExecutionObservation> for ObservedExecution<V> {
+    fn from(observation: ExecutionObservation) -> Self {
+        Self { observation, thrown: None }
+    }
+}
+
+/// A module evaluation can outlive its initial call. The retained handle is
+/// an engine value so the host can drive jobs and inspect its final result.
+pub enum ModuleObservation<V> {
+    Final(ObservedExecution<V>),
+    Pending(V),
 }
 
 /// Opaque, engine-assigned identity for a **realm** inside one engine instance.
@@ -169,6 +262,15 @@ pub const WINDOW_PROXY_HANDLER_SLOT: &str = "__windowProxyHandler";
 pub const WINDOW_PROXY_TARGET_SLOT: &str = "__windowProxyTarget";
 
 pub trait ScriptEngine: Sized {
+    /// Identifies a concrete native worker helper backend, when available.
+    /// An absent identity cannot be used with a killable worker helper.
+    fn native_worker_backend() -> Option<&'static str> {
+        None
+    }
+    /// Limits this backend can enforce. Defaults to no bounded execution.
+    fn execution_capabilities() -> ExecutionCapabilities {
+        ExecutionCapabilities::default()
+    }
     /// A handle to a JS value. For engines whose values are GC-scoped (Nova), this is
     /// a *rooted* handle so it can be held across calls; for others it is the native
     /// value type (Boa `JsValue`).
@@ -190,6 +292,12 @@ pub trait ScriptEngine: Sized {
     /// Evaluate `source` in the global scope, returning its completion value.
     fn eval(&mut self, source: &str) -> Result<Self::Value, Self::Error>;
 
+    /// Parse and evaluate a script with phase and native error-brand evidence.
+    /// Backends that cannot expose that evidence must refuse explicitly.
+    fn observe_script(&mut self, _realm: RealmId, _source: &str) -> ObservedExecution<Self::Value> {
+        ExecutionObservation::Unsupported.into()
+    }
+
     /// Invoke a retained callable directly from the host. The function enters its
     /// own creation realm; values must belong to this engine. Thrown exceptions
     /// are rendered as host errors, unlike the exception-preserving callback API.
@@ -202,16 +310,22 @@ pub trait ScriptEngine: Sized {
         Err(RealmError::Unsupported)
     }
 
+    /// Create a rooted string argument for a host call without evaluating source.
+    /// A backend without retained callable support may refuse this operation.
+    fn host_string(&mut self, _value: &str) -> Result<Self::Value, RealmError> {
+        Err(RealmError::Unsupported)
+    }
+
     /// Evaluate `source` as an ECMAScript **module** (module scope, strict mode,
     /// `import` / `export`), driving its load → link → evaluate to completion.
     ///
-    /// `base_url` is the entry module's own URL (its `import` specifiers resolve
-    /// against it). `resolve` is the host module resolver: given an import
+    /// `base_url` resolves the entry's imports. For fetched entries this is
+    /// their redirect-final URL; inline entries use the document base.
+    /// `resolve` is the host module resolver: given an import
     /// `(specifier, referrer_url)` it returns the imported module's
     /// `(resolved_url, source)`, or `None` if it cannot be resolved/fetched — the
     /// seam through which the host (which owns the fetcher) supplies dependency
-    /// source on demand. The engine keys its module cache on `resolved_url`, so a
-    /// diamond or cycle resolves each module once.
+    /// source on demand. The engine keys its module cache on `resolved_url`.
     ///
     /// Returns `Ok(Some(value))` on success, `Err` if the module (or a dependency)
     /// throws or fails to load, and `Ok(None)` when this backend does not support
@@ -226,44 +340,67 @@ pub trait ScriptEngine: Sized {
         Ok(None)
     }
 
+    /// Load, link and evaluate a module with phase and native error-brand
+    /// evidence. A pending evaluation is reported separately from success.
+    fn observe_module(
+        &mut self,
+        _realm: RealmId,
+        _source: &str,
+        _base_url: &str,
+        _resolve: &mut dyn FnMut(&str, &str) -> Option<(String, String)>,
+    ) -> ModuleObservation<Self::Value> {
+        ModuleObservation::Final(ExecutionObservation::Unsupported.into())
+    }
+
+    /// Inspect a previously pending module evaluation after the host drives
+    /// the event loop. The handle came from `observe_module` on this engine.
+    fn poll_module(&mut self, _pending: &Self::Value) -> ObservedExecution<Self::Value> {
+        ExecutionObservation::Unsupported.into()
+    }
+
+    /// Install an owned module resolver for imports triggered by later jobs.
+    /// Unlike the borrowed callback passed to `observe_module`, this remains
+    /// available until replaced or the engine is dropped.
+    fn set_owned_module_resolver(
+        &mut self,
+        _resolve: Option<Box<dyn FnMut(&str, &str) -> Option<(String, String)>>>,
+    ) -> bool {
+        false
+    }
+
     /// [`eval_module`](Self::eval_module), in `realm` rather than the agent's
     /// bootstrap realm.
     ///
     /// A module script belongs to the document that declared it, and the
     /// top-level browsing context's document has a realm of its own, so "the
     /// bootstrap realm" is no longer the answer for any `<script type=module>`.
-    /// The default forwards to [`eval_module`](Self::eval_module) when `realm`
-    /// *is* the bootstrap realm and otherwise refuses, so a backend with realms
-    /// but no per-realm module entry fails loudly rather than quietly
-    /// evaluating a module against the wrong global.
+    /// `entry_identity` is `Some(final_url)` for a fetched entry and `None`
+    /// for an inline entry. The latter still uses `base_url` for resolving its
+    /// imports, but must not alias a fetched module at that URL in the cache.
+    /// Backends without per-realm module support refuse explicitly.
     fn eval_module_in_realm(
         &mut self,
         realm: RealmId,
         source: &str,
         base_url: &str,
+        entry_identity: Option<&str>,
         resolve: &mut dyn FnMut(&str, &str) -> Option<(String, String)>,
     ) -> Result<Option<Self::Value>, RealmError> {
-        if realm == MAIN_REALM {
-            return self
-                .eval_module(source, base_url, resolve)
-                .map_err(|error| RealmError::Engine(self.describe_error(&error)));
-        }
+        let _ = (realm, source, base_url, entry_identity, resolve);
         Err(RealmError::Unsupported)
     }
 
-    /// Like [`eval`](Self::eval), but bounded: a [`Budget::Steps`] cap stops a
-    /// runaway script (e.g. `while true do end`) after roughly that many
-    /// coarse VM steps and returns an error instead of hanging. The cap is on
-    /// the *main* evaluation, complementing [`pump`](Self::pump)'s cap on
-    /// microtask jobs.
-    ///
-    /// The default ignores the budget and runs [`eval`](Self::eval) unbounded
-    /// — correct for backends whose VM cannot be step-metered (Boa). A
-    /// fuel-metered backend (piccolo) overrides this; an untrusted-script host
-    /// should prefer this method with a [`Budget::Steps`] bound on those
-    /// backends.
-    fn eval_bounded(&mut self, source: &str, _budget: Budget) -> Result<Self::Value, Self::Error> {
-        self.eval(source)
+    /// Evaluate with a required backend-defined VM-work limit. Unsupported backends refuse
+    /// before running source. `Unbounded` explicitly opts into ordinary eval.
+    fn eval_bounded(
+        &mut self,
+        source: &str,
+        budget: Budget,
+    ) -> Result<Self::Value, BoundedEvalError<Self::Error>> {
+        match budget {
+            Budget::Unbounded => self.eval(source).map_err(BoundedEvalError::Engine),
+            Budget::Steps(_) => Err(BoundedEvalError::Unsupported),
+        }
     }
 
     /// Coerce a value to a Rust string (`ToString`).
@@ -289,6 +426,11 @@ pub trait ScriptEngine: Sized {
     /// once before running script.
     fn set_host_data(&mut self, data: HostData);
 
+    /// Supply the Unix-epoch milliseconds ECMAScript `Date` reads, so it
+    /// follows the host's shared clock. A backend without the hook keeps its
+    /// own wall clock.
+    fn set_date_source(&mut self, _source: std::rc::Rc<dyn Fn() -> f64>) {}
+
     /// Install `name` on the global as a native function backed by `F`, with arity
     /// `length`. `F` is a zero-sized type, not a closure: both backends register a
     /// bare `fn` pointer (Nova `RegularFn`, Boa `NativeFunctionPointer`), so the
@@ -301,24 +443,14 @@ pub trait ScriptEngine: Sized {
         length: usize,
     ) -> Result<(), Self::Error>;
 
-    /// Run pending microtasks (Promise reaction jobs) up to `budget`, including jobs
-    /// enqueued while running. Returns [`PumpOutcome::Quiescent`] if the queue drained
-    /// or [`PumpOutcome::Pending`] if `budget` ran out with work remaining. The host
-    /// calls this at task boundaries (after the initial script, between timer tasks) so
-    /// Promise continuations resolve; passing a [`Budget::Steps`] bound lets it cap a
-    /// runaway script instead of hanging. Errors thrown by a job are swallowed (an
-    /// unhandled rejection is not the host's failure).
-    ///
-    /// Backends honor the budget to the degree their job machinery allows: a
-    /// fuel-metered VM bounds by VM step, Nova bounds by job count, and Boa drains
-    /// fully (its `SimpleJobExecutor` has no sub-drain) and so always returns
-    /// `Quiescent`. The contract a caller can rely on everywhere is "`Quiescent` means
-    /// done"; only `Steps`-honoring backends return `Pending`.
+    /// Run pending microtasks. `Steps(n)` requests a completed-job count limit,
+    /// not a bound on VM execution inside a job. A backend that cannot count
+    /// jobs returns `UnsupportedBound` before running any. `Unbounded` opts into
+    /// a full checkpoint. Job errors are swallowed as unhandled rejections.
     fn pump(&mut self, budget: Budget) -> PumpOutcome;
 
-    /// Drain pending microtasks to quiescence: [`pump`] with [`Budget::Unbounded`]. The
-    /// common case at a task boundary; callers that must not hang on a runaway script
-    /// use [`pump`] with a [`Budget::Steps`] bound and loop on [`PumpOutcome::Pending`].
+    /// Drain pending microtasks to quiescence by explicitly choosing unbounded
+    /// work. A counted-job pump cannot stop a job that spins inside the VM.
     ///
     /// [`pump`]: ScriptEngine::pump
     fn pump_microtasks(&mut self) {
@@ -773,6 +905,15 @@ pub trait CallCx {
 
     /// Coerce a value to a Rust string (`ToString`).
     fn value_to_string(&mut self, value: &Self::Value) -> Result<String, Self::Error>;
+
+    /// Apply JavaScript ToNumber without a text round trip.
+    fn value_to_number(&mut self, value: &Self::Value) -> Result<f64, Self::Error>;
+
+    /// Copy a genuine Float32Array view, honoring its offset and length.
+    fn copy_float32_array(&mut self, value: &Self::Value) -> Result<Vec<f32>, Self::Error>;
+
+    /// Copy a genuine Uint8Array view, honoring its offset and length.
+    fn copy_uint8_array(&mut self, value: &Self::Value) -> Result<Vec<u8>, Self::Error>;
 
     /// Recover reflector native data (the JS → host bridge), or `None` if `value`
     /// is not a reflector.

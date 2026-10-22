@@ -1,6 +1,9 @@
 # Shadow DOM
 
-**Status: landed 2026-09-07/08.** Promoted from the Shadow DOM section of
+**Status: landed 2026-09-07/08; residual 11 (the accessibility walk) fixed
+2026-10-14 on branch `shadow-a11y-walk`, not yet merged.**
+*(2026-10-14, the `get_computed_label` lane: the fix is on main, rebased as `42cabb5a886` (failing-first test) and `bd5f7ca0994` (fix), recorded by `85252e20bee`. The hashes `690cf560c04` and `c9d8faf7663` below are the pre-rebase branch commits and are not ancestors of main.)*
+Promoted from the Shadow DOM section of
 [`2026-09-07_deferred_web_platform_lanes_scoping.md`](2026-09-07_deferred_web_platform_lanes_scoping.md#shadow-dom)
 under Mark's three decisions for the lane (below). Genet commit at start:
 `14e7b0200c8`. Residuals are named in **Residuals**; the regression manifest is
@@ -326,6 +329,25 @@ walk from the document reaches one.
   through the host is the entire integration: `is_connected_node`, the opaque
   root and the pin/collect grouping all read from it. That is the payoff of the
   earlier lane expressing liveness as a *relation* rather than a set of roots.
+- **2026-10-14 (residual 11): "no walk from the document reaches a shadow
+  root" cuts both ways.** The parentless shape that kept every DOM-order
+  consumer unchanged also kept the accessibility projection out of every
+  shadow tree. Nothing failed; the content was simply absent. A consumer that
+  should see the rendered page has to opt in to `flat_children`, and nothing
+  flags one that forgot. In `genet-render` that was `projection_walk`, name
+  from content, the ID/label index, and two parent climbs that stop at a
+  shadow root. The accessible-name walk is now a rendered-text traversal in
+  the sense of §5; Fleece's extraction stays in DOM order.
+- **2026-10-14: parent climbs need a flat-tree twin.** `LayoutDom` has
+  `flat_children` but no flat-tree parent. The scroll climbs needed one,
+  because a slotted node's scroll container is an ancestor of its slot, not
+  of its host. `flat_parent` (`genet-render/src/a11y.rs:330`) is local to
+  accessibility; another consumer that climbs for a rendering fact would need
+  the same.
+- **2026-10-14: the walk enters closed roots.** Neither `flat_children` nor
+  the projection asks the mode. Mode withholds `shadowRoot` from script;
+  browsers expose closed shadow content to assistive technology, and so does
+  the projection now.
 
 ## Gates and receipts
 
@@ -528,6 +550,75 @@ Named, not silently deferred:
     changes (see below), but no Ortet fixture exercises a shadow tree; per
     [Ortet O5](2026-09-03_ortet_founding_plan.md) the headed gate for scripted
     behavior stays open.
+11. **The accessibility projection does not enter shadow trees** (added
+    2026-10-14; Mere app composition brief, ruling AC8, at
+    `mere/design_docs/cambium_docs/research/2026-10-06_app_composition_brief.md`
+    §12). `projection_walk` in `components/genet-render/src/a11y.rs` (line 774
+    at `b6bfbeb5`) recurses through `dom_children`. A shadow root is not a DOM
+    child of its host. So shadow-tree content never reaches the AccessKit
+    tree, and names computed from content miss it. *(Corrected 2026-10-14 by
+    the fix lane: this sentence first said `descendant_text` (line 214) is a
+    name walk and that "names built from descendant text miss it".
+    `descendant_text` only supplies a `<textarea>`'s or `<input>`'s fallback
+    value. Names come from `a11y/name.rs`, whose name-from-content step (line
+    263 at `b6bfbeb5`) and ID/label index (line 46) walked `dom_children`.)* This lane moved
+    style, boxes and hit testing onto `flat_children`, but the accessibility
+    walk was not on its list. This comes from reading the code and has not
+    been confirmed by a run. Mark ruled a fix lane, on branch
+    `shadow-a11y-walk`. The test comes first: a button inside an open shadow
+    root must reach the projection, and the same button in light DOM is the
+    control that passes today. Then the walk moves to the flat tree.
+    *Reading, not ruled:* reading order should follow the flat tree, as
+    rendering does. That differs from Fleece's DOM-order decision for
+    extraction (§5). If the lane finds a reason to differ, it brings the
+    ordering back as a fork.
+
+    **Fixed 2026-10-14 on `shadow-a11y-walk`, not merged.** *(Annotated
+    2026-10-14: merged; on main as `42cabb5a886` and `bd5f7ca0994`.)*
+    Confirmed by a run
+    first (`690cf560c04`): the light-DOM control projected `["Mount action"]`
+    and the shadow case projected `[]`. Fixed in `c9d8faf7663`. The reading
+    above held: AccName 1.2's Name From Content step (2F) has a "Determine
+    Child Nodes" sub-step. It takes a host's shadow-root children, a slot's
+    assigned nodes, and otherwise the node's children. That is exactly
+    `flat_children`, so names and reading order both follow the flat tree.
+    No reason to differ was found. The lane put three forks to Mark:
+
+    - **Ruling 11.1, `descendant_text`.** *Question:* the brief said to move
+      both walks, but `descendant_text` is the `<textarea>`/`<input>` fallback
+      value, not a name walk. Does it move? *Options:* (a) leave it on DOM
+      children: HTML defines a textarea's default value as its child text
+      content, and neither element may host a shadow root; (b) move it as the
+      brief literally says, a no-op except for a script-built `<slot>` inside
+      a textarea, where it would be wrong. Mark: **"Leave on DOM
+      (Recommended)"**. *Follows:* `descendant_text` (`a11y.rs:213`) stays on
+      `dom_children`. This amends the brief's "move both walks".
+    - **Ruling 11.2, ID references.** *Question:* the ID/label index covered
+      the document's tree only, so a shadow tree's IDs were missing, and a
+      shadow reference could resolve to a light-DOM element with the same id.
+      AccName does not say which tree an IDREF resolves in. How should
+      references resolve? *Options:* (a) per tree: within the referring node's
+      own tree, as `getElementById` works per tree and browsers resolve
+      references; (b) leave it, as a residual; (c) one index over the flat
+      tree, which leaks IDs across shadow boundaries. Mark: **"Per tree
+      (Recommended)"**. *Follows:* `aria-labelledby`, `aria-describedby` and
+      `<label for>` resolve only within the referring node's own tree
+      (`a11y/name.rs`, `Names::new` line 35, `tree` line 114, `element_by_id`
+      line 122). References across a shadow boundary stay unsupported.
+      Wrapping labels (`first_control`, line 101) stay on DOM children,
+      because HTML defines a label's control by its own tree.
+    - **Ruling 11.3, the scroll climb.** *Question:* `ancestor_scroll` and
+      `has_active_scrolled_ancestor` climbed `dom.parent`, which stops at a
+      shadow root. So shadow content under a scrolled container kept its
+      unscrolled bounds and a Click action. Which parent do they climb?
+      *Options:* (a) the flat-tree parent: a slotted node's slot, otherwise
+      its parent, and a shadow root's host; (b) leave it, as a residual.
+      Mark: **"Flat-tree parent (Recommended)"**. *Follows:* both climb
+      through `flat_parent` (`a11y.rs:330`).
+
+    The rulings came to the lane through the session that started it, quoting
+    Mark. The two tests he added to the brief — per-tree IDs with a light-DOM
+    same-id control, and scrolled shadow content — are among the six below.
 
 ## Progress
 
@@ -540,3 +631,54 @@ pass, `<template>.content` in its shared inert document, and the
 explained pass-to-fail, one explained fail-to-error, one baseline repinned
 forward. Receipts under
 `Code/testing/genet/wpt-ledger/2026-09-07_shadow_dom/`.
+
+**2026-10-14 — residual 11 recorded.** The accessibility walk skips shadow
+trees. Mere's app composition brief made a shadow root the boundary for a
+forest mount (AC7) and authorised a fix lane for this walk (AC8).
+
+**2026-10-14 — residual 11 fixed on `shadow-a11y-walk`, not merged.**
+Failing-first test `690cf560c04`, fix `c9d8faf7663`, under rulings 11.1 to
+11.3. Six tests in `genet-render/src/a11y.rs` (lines 1070-1131):
+
+| Test | Pre-fix result |
+|---|---|
+| `a_light_dom_button_reaches_the_projection` (control) | passes, `["Mount action"]` |
+| `a_button_in_an_open_shadow_root_reaches_the_projection` | fails, `[]` |
+| `slotted_children_project_once_at_their_slot_in_flat_tree_order` | fails, `["Second", "First"]` against `["First", "Second", "Fallback"]` |
+| `names_from_content_include_shadow_and_slotted_text` | fails, `["the panel"]` against `["Open the panel now"]` |
+| `id_references_resolve_within_their_own_tree` | fails |
+| `shadow_and_slotted_content_follow_their_flat_tree_scroll_container` | fails |
+
+The last two tests also failed against the pre-fix code, but only because
+shadow content was missing from the projection. A second control kept the
+fixed walk and reverted one piece at a time. With the old document-wide ID
+index, the shadow button was named `"Light label"`: the cross-tree leak
+ruling 11.2 closes. With the old parent climb, shadow content under a scroll
+offset of 24 kept bounds `y = 0` and its Click action. With the fix, all 48
+`genet-render` tests pass (`cargo test -p genet-render`, debug info off, a
+target directory inside the worktree). `cargo fmt --check` and `cargo clippy`
+report nothing on changed lines. Their remaining reports are older than this
+lane: `lib.rs`'s re-export order, `name.rs`'s `document_role` line, and six
+clippy lints.
+
+Not done here: no WPT run, and no headed screen-reader receipt. The vendored
+tree does carry two AccName shadow tests, `accname/name/shadowdom/basic.html`
+and `slot.html`. They read names through `test_driver.get_computed_label`,
+and genet-wpt's testdriver hook (`ports/genet-wpt/src/harness.rs`,
+`TESTDRIVER_VENDOR_JS`) does not implement it, so they cannot run here until
+it does.
+*(2026-10-14: they now run. See the progress entry below.)*
+Mere's mount probe (AC7) is the first downstream consumer and still has to
+pass "the guest's button is in the AccessKit tree" against a Genet revision
+that contains `c9d8faf7663`.
+
+**2026-10-14 — residual 11 under WPT.** genet-wpt now implements
+`test_driver.get_computed_label` on branch `computed-label`, not merged
+([accessible names plan](2026-09-26_accessible_names_plan.md), section "WPT
+`get_computed_label` hook"). Against main `bbb466f8f36`, which contains the fix,
+`accname/name/shadowdom/basic.html` passes 2/2 and `slot.html` passes 2/4.
+Before the hook, both files failed every subtest. The two `slot.html`
+failures are a new finding, ranked as family I in that plan: `aria-label`
+on a `<slot>` replaces its slotted content (`foo slotted bar` → `foo label
+bar`). They are not fixed in that lane (its ruling 5). Receipt:
+`Code/testing/genet/wpt-ledger/2026-10-14_computed_label/results.md`.

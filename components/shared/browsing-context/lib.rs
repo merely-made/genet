@@ -66,54 +66,17 @@ pub enum Origin {
 
 impl Origin {
     /// The origin of `url`, or an opaque origin when the URL has no tuple
-    /// origin (`data:`, `about:`, `blob:` without a parsable inner URL, or an
+    /// origin (`data:`, `about:`, `blob:` without a tuple inner URL, or an
     /// unparsable spelling). `opaque_serial` distinguishes this opaque origin
     /// from every other; callers mint it from the tree's counter.
     pub fn of_url(url: &str, opaque_serial: u64) -> Self {
-        let Some((scheme, rest)) = url.split_once(':') else {
-            return Origin::Opaque(opaque_serial);
-        };
-        let scheme = scheme.to_ascii_lowercase();
-        // `file:` is treated as opaque, which is what browsers converged on
-        // and what the sandboxing tests assume; `about:` and `data:` have no
-        // tuple origin at all.
-        if !matches!(scheme.as_str(), "http" | "https" | "ws" | "wss" | "ftp") {
-            return Origin::Opaque(opaque_serial);
-        }
-        let Some(rest) = rest.strip_prefix("//") else {
-            return Origin::Opaque(opaque_serial);
-        };
-        let authority = rest
-            .split(['/', '?', '#'])
-            .next()
-            .unwrap_or_default()
-            .rsplit('@')
-            .next()
-            .unwrap_or_default();
-        if authority.is_empty() {
-            return Origin::Opaque(opaque_serial);
-        }
-        // An IPv6 literal keeps its brackets and hides the port colon inside
-        // them, so split after the closing bracket rather than on the first
-        // colon.
-        let (host, port) = match authority.strip_prefix('[') {
-            Some(inner) => match inner.split_once(']') {
-                Some((host, rest)) => (
-                    format!("[{host}]"),
-                    rest.strip_prefix(':').and_then(|p| p.parse().ok()),
-                ),
-                None => (authority.to_owned(), None),
+        match url::Url::parse(url).map(|url| url.origin()) {
+            Ok(url::Origin::Tuple(scheme, host, port)) => Origin::Tuple {
+                port: (Some(port) != default_port(&scheme)).then_some(port),
+                scheme,
+                host: host.to_string(),
             },
-            None => match authority.split_once(':') {
-                Some((host, port)) => (host.to_owned(), port.parse().ok()),
-                None => (authority.to_owned(), None),
-            },
-        };
-        let port = port.filter(|port| Some(*port) != default_port(&scheme));
-        Origin::Tuple {
-            scheme,
-            host: host.to_ascii_lowercase(),
-            port,
+            Ok(url::Origin::Opaque(_)) | Err(_) => Origin::Opaque(opaque_serial),
         }
     }
 
@@ -268,9 +231,9 @@ impl FrameLoading {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HistoryEntry {
     pub url: String,
-    /// The serialized `pushState` / `replaceState` state, in the same JSON
-    /// encoding of the structured-clone record the Worker lane uses as its
-    /// cross-agent wire. `None` is the null state a plain navigation leaves.
+    /// The serialized `pushState` / `replaceState` state, encoded as a
+    /// structured-clone record. `None` is the null state a plain navigation
+    /// leaves. Deserialization happens in the realm reading the entry.
     pub state: Option<String>,
     pub title: Option<String>,
     /// Which of the context's documents this entry belongs to. HTML decides
@@ -308,6 +271,7 @@ impl HistoryEntry {
 pub struct SessionHistory {
     entries: Vec<HistoryEntry>,
     current: usize,
+    generation: u64,
 }
 
 impl SessionHistory {
@@ -315,6 +279,7 @@ impl SessionHistory {
         Self {
             entries: vec![entry],
             current: 0,
+            generation: 0,
         }
     }
 
@@ -332,11 +297,35 @@ impl SessionHistory {
         self.current
     }
 
+    /// Changes whenever a write or traversal can invalidate a queued target.
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    /// Inspect a traversal target without moving the current entry.
+    pub fn target(&self, delta: i64) -> Option<(usize, &HistoryEntry)> {
+        let target = i64::try_from(self.current).ok()?.checked_add(delta)?;
+        let target = usize::try_from(target).ok()?;
+        self.entries.get(target).map(|entry| (target, entry))
+    }
+
+    /// Select a previously inspected target only if no history operation has
+    /// changed the source or target while navigation was pending.
+    pub fn select_if_unchanged(&mut self, target: usize, generation: u64) -> bool {
+        if self.generation != generation || target >= self.entries.len() {
+            return false;
+        }
+        self.current = target;
+        self.generation = self.generation.wrapping_add(1);
+        true
+    }
+
     pub fn current(&self) -> &HistoryEntry {
         &self.entries[self.current]
     }
 
     pub fn current_mut(&mut self) -> &mut HistoryEntry {
+        self.generation = self.generation.wrapping_add(1);
         &mut self.entries[self.current]
     }
 
@@ -350,31 +339,26 @@ impl SessionHistory {
         self.entries.truncate(self.current + 1);
         self.entries.push(entry);
         self.current = self.entries.len() - 1;
+        self.generation = self.generation.wrapping_add(1);
     }
 
     /// `history.replaceState` and a `location.replace()` navigation.
     pub fn replace(&mut self, entry: HistoryEntry) {
         self.entries[self.current] = entry;
+        self.generation = self.generation.wrapping_add(1);
     }
 
     /// `history.go(delta)`. Out-of-range traversal is a no-op that returns
     /// `None`, which is what HTML specifies rather than a clamp.
     pub fn go(&mut self, delta: i64) -> Option<&HistoryEntry> {
-        let target = i64::try_from(self.current).ok()?.checked_add(delta)?;
-        let target = usize::try_from(target).ok()?;
-        if target >= self.entries.len() {
-            return None;
-        }
+        let target = self.target(delta)?.0;
         self.current = target;
+        self.generation = self.generation.wrapping_add(1);
         Some(&self.entries[target])
     }
 
     pub fn can_go(&self, delta: i64) -> bool {
-        i64::try_from(self.current)
-            .ok()
-            .and_then(|current| current.checked_add(delta))
-            .and_then(|target| usize::try_from(target).ok())
-            .is_some_and(|target| target < self.entries.len())
+        self.target(delta).is_some()
     }
 }
 
@@ -504,6 +488,23 @@ impl BrowsingContext {
         } else {
             self.history.push(entry);
         }
+        self.document = document;
+    }
+
+    /// Show the document selected by a history traversal without replacing
+    /// that entry or its state. A discarded document gets a new serial; all
+    /// entries from the old document receive it so sibling entries can still
+    /// traverse within the newly opened document.
+    pub fn activate_traversed_document(&mut self, document: ActiveDocument) {
+        let old_serial = self.history.current().document;
+        self.document_serial += 1;
+        for entry in &mut self.history.entries {
+            if entry.document == old_serial {
+                entry.document = self.document_serial;
+            }
+        }
+        // A redirect changes the landed entry's URL, not its serialized state.
+        self.history.current_mut().url = document.url.clone();
         self.document = document;
     }
 
@@ -811,6 +812,48 @@ mod tests {
             Origin::of_url("https://[::1]:8443/", 0).serialize(),
             "https://[::1]:8443"
         );
+    }
+
+    #[test]
+    fn a_tuple_origin_uses_the_url_parsers_host_normalization() {
+        assert_eq!(
+            Origin::of_url("https://BÜCHER.example/path", 0).serialize(),
+            "https://xn--bcher-kva.example"
+        );
+        assert_eq!(
+            Origin::of_url("http://127.1/path", 0).serialize(),
+            "http://127.0.0.1"
+        );
+        assert_eq!(
+            Origin::of_url(r"https:\\EXAMPLE.com\path", 0).serialize(),
+            "https://example.com"
+        );
+    }
+
+    #[test]
+    fn invalid_authorities_get_distinct_opaque_origins() {
+        for url in [
+            "http://example.com:invalid/",
+            "http://example.com:65536/",
+            "http://[::1/",
+        ] {
+            let first = Origin::of_url(url, 1);
+            let second = Origin::of_url(url, 2);
+            assert_eq!(first, Origin::Opaque(1), "{url}");
+            assert!(!first.is_same_origin(&second), "{url}");
+        }
+    }
+
+    #[test]
+    fn blob_urls_use_their_inner_url_origin_when_it_is_a_tuple() {
+        let blob = Origin::of_url("blob:https://EXAMPLE.com:443/id", 0);
+        let inner = Origin::of_url("https://example.com/path", 1);
+        assert!(blob.is_same_origin(&inner));
+        assert_eq!(blob.serialize(), "https://example.com");
+
+        for url in ["blob:about:blank", "blob:file:///tmp/a", "blob:invalid"] {
+            assert_eq!(Origin::of_url(url, 2), Origin::Opaque(2), "{url}");
+        }
     }
 
     #[test]

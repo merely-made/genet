@@ -555,7 +555,8 @@ fn paused_keyframe_opacity_freezes_progress_across_a_later_pump() {
 
     retained.pump(10_000.0);
     let second = retained.frame(320, 240).expect("frame after pump");
-    let second_opacity = opacity_of(&second).expect("paused animation still emits an opacity layer");
+    let second_opacity =
+        opacity_of(&second).expect("paused animation still emits an opacity layer");
     assert_eq!(
         first_opacity, second_opacity,
         "a paused keyframe animation must not advance when the document clock is pumped"
@@ -2133,6 +2134,16 @@ fn shared_inline_group_height_contains_its_painted_lines() {
         ]),
         Device::screen(320.0, 240.0),
     );
+    // A font whose content area exceeds the 20px line height legitimately
+    // paints past its line box, so the fixture pins a font (Ahem: content area
+    // exactly one em) instead of taking the platform's default sans/serif.
+    let ahem = include_bytes!("../../../tests/wpt/tests/fonts/Ahem.ttf");
+    document
+        .replace_generic_font_resources(
+            ["serif", "sans-serif", "monospace", "system-ui"]
+                .map(|generic| (generic.to_owned(), ahem.to_vec())),
+        )
+        .expect("Ahem binds to every generic family");
     let frame = document.frame(320, 240).unwrap();
     let inline_bottom = frame
         .commands()

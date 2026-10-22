@@ -319,9 +319,10 @@ impl Renderer {
     /// blurred box-shadow masks, rasterize into a fresh RGBA8 target and read
     /// it back. Reftest envelopes carry no producer textures, so external
     /// texture draws are not composited here.
-    fn rasterize(&self, envelope: &PaintEnvelope, viewport: RenderViewport) -> Image {
+    fn rasterize(&self, envelope: &PaintEnvelope, viewport: RenderViewport) -> Result<Image, String> {
         let (device_width, device_height) = viewport.device_size();
-        let translated = translate_envelope_with_external_textures(envelope);
+        let translated = translate_envelope_with_external_textures(envelope)
+            .map_err(|error| format!("paint translation: {error}"))?;
         debug_assert!(
             translated.external_textures.is_empty(),
             "reftest envelopes carry no producer textures"
@@ -347,7 +348,8 @@ impl Renderer {
             .core
             .read_rgba8_texture(&texture, device_width, device_height)
             .expect("reftest readback");
-        Image::from_raw(frame.width, frame.height, frame.rgba).expect("reftest frame dimensions")
+        Ok(Image::from_raw(frame.width, frame.height, frame.rgba)
+            .expect("reftest frame dimensions"))
     }
 
     fn next_pipeline_id(&self) -> PipelineId {
@@ -370,7 +372,7 @@ impl Renderer {
         tests_root: &Path,
         viewport: RenderViewport,
         is_xml: bool,
-    ) -> LiveryRender {
+    ) -> Result<LiveryRender, String> {
         let pipeline_id = self.next_pipeline_id();
         let (css_width, css_height) = viewport.css_size();
         let document = if is_xml {
@@ -424,11 +426,11 @@ impl Renderer {
             pipeline_id,
         );
         let envelope = scale_envelope_for_device(envelope, viewport);
-        let image = self.rasterize(&envelope, viewport);
-        LiveryRender {
+        let image = self.rasterize(&envelope, viewport)?;
+        Ok(LiveryRender {
             image,
             table_ledger,
-        }
+        })
     }
 }
 
@@ -454,6 +456,13 @@ fn isolate_image_keys(mut envelope: PaintEnvelope, pipeline_id: PipelineId) -> P
         match command {
             PaintCmd::DrawImage(item) => remap_key(&mut item.image_key, &remap),
             PaintCmd::DrawRepeatingImage(item) => remap_key(&mut item.image_key, &remap),
+            PaintCmd::DrawBorder(item) => {
+                if let paint_list_api::BorderDetails::NinePatch(nine) = &mut item.details
+                    && let paint_list_api::NinePatchSource::Image(key, _) = &mut nine.source
+                {
+                    remap_key(key, &remap);
+                }
+            },
             PaintCmd::PushLayer(layer) => {
                 if let Some(mask) = &mut layer.mask {
                     if let Some(key) = &mut mask.image_mask {
@@ -525,9 +534,10 @@ mod tests {
         RenderViewport, isolate_image_keys, scale_envelope_for_device, with_reftest_backdrop,
     };
     use paint_list_api::{
-        AlphaType, ColorF, CommonPlacement, DeviceIntSize, EngineId, IdNamespace, ImageItem,
-        ImageKey, ImageRendering, ImageResource, LayoutPoint, LayoutRect, PaintCmd, PaintEnvelope,
-        RectItem,
+        AlphaType, BorderDetails, BorderItem, ColorF, CommonPlacement, DeviceIntSideOffsets,
+        DeviceIntSize, EngineId, IdNamespace, ImageItem, ImageKey, ImageRendering, ImageResource,
+        LayoutPoint, LayoutRect, LayoutSideOffsets, NinePatchBorder, NinePatchSource, PaintCmd,
+        PaintEnvelope, RectItem, RepeatMode,
     };
     use paint_types::PipelineId;
 
@@ -553,7 +563,7 @@ mod tests {
                 key: old_key,
                 width: 1,
                 height: 1,
-                data: vec![255, 255, 255, 255],
+                data: vec![255, 255, 255, 255].into(),
             }],
         };
 
@@ -564,6 +574,52 @@ mod tests {
             panic!("expected image command");
         };
         assert_eq!(item.image_key, new_key);
+    }
+
+    #[test]
+    fn nine_patch_source_key_is_namespaced_with_its_image() {
+        let old_key = ImageKey::new(IdNamespace(1), 1);
+        let envelope = PaintEnvelope {
+            engine: EngineId::GENET,
+            viewport: DeviceIntSize::new(4, 4),
+            generation: 0,
+            commands: vec![PaintCmd::DrawBorder(BorderItem {
+                placement: CommonPlacement::new(LayoutRect::new(
+                    LayoutPoint::new(0.0, 0.0),
+                    LayoutPoint::new(4.0, 4.0),
+                )),
+                widths: LayoutSideOffsets::new(1.0, 1.0, 1.0, 1.0),
+                details: BorderDetails::NinePatch(NinePatchBorder {
+                    source: NinePatchSource::Image(old_key, ImageRendering::Auto),
+                    width: 2,
+                    height: 2,
+                    slice: DeviceIntSideOffsets::new(1, 1, 1, 1),
+                    fill: false,
+                    repeat_horizontal: RepeatMode::Stretch,
+                    repeat_vertical: RepeatMode::Stretch,
+                }),
+            })],
+            fonts: Vec::new(),
+            images: vec![ImageResource {
+                key: old_key,
+                width: 2,
+                height: 2,
+                data: vec![255; 16].into(),
+            }],
+        };
+
+        let rekeyed = isolate_image_keys(envelope, PipelineId(1, 7));
+        let new_key = ImageKey::new(IdNamespace(0x4000_0007), 1);
+        assert_eq!(rekeyed.images[0].key, new_key);
+        let PaintCmd::DrawBorder(border) = &rekeyed.commands[0] else {
+            panic!("expected nine-patch border");
+        };
+        let BorderDetails::NinePatch(nine) = &border.details else {
+            panic!("expected nine-patch details");
+        };
+        assert!(matches!(nine.source, NinePatchSource::Image(key, _) if key == new_key));
+        paint_list_render::translate_envelope_with_external_textures(&rekeyed)
+            .expect("rekeyed border image remains registered");
     }
 
     #[test]

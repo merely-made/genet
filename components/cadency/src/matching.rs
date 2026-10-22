@@ -31,9 +31,18 @@ impl<P: PseudoClass> SelectorList<P> {
     where
         E: Element<PseudoClass = P>,
     {
+        self.matches_scoped(element, shadow_host, None)
+    }
+
+    /// Match with an explicit `:scope` element for DOM queries. Stylesheet
+    /// matching uses `None`, retaining its root fallback.
+    pub fn matches_scoped<E>(&self, element: &E, shadow_host: Option<&E>, scope: Option<&E>) -> bool
+    where
+        E: Element<PseudoClass = P>,
+    {
         self.0
             .iter()
-            .any(|selector| selector.matches(element, shadow_host))
+            .any(|selector| selector.matches_scoped(element, shadow_host, scope))
     }
 }
 
@@ -48,6 +57,14 @@ impl<P: PseudoClass> Selector<P> {
         self.matches_generated(element, shadow_host, None)
     }
 
+    pub fn matches_scoped<E>(&self, element: &E, shadow_host: Option<&E>, scope: Option<&E>) -> bool
+    where
+        E: Element<PseudoClass = P>,
+    {
+        self.generated_pseudo().is_none()
+            && matches_from(self, 0, element, false, shadow_host, scope)
+    }
+
     /// Match a generated pseudo against its originating element. Ordinary
     /// element queries never match a generated pseudo selector.
     pub fn matches_generated<E>(
@@ -59,7 +76,7 @@ impl<P: PseudoClass> Selector<P> {
     where
         E: Element<PseudoClass = P>,
     {
-        self.generated_pseudo() == pseudo && matches_from(self, 0, element, false, shadow_host)
+        self.generated_pseudo() == pseudo && matches_from(self, 0, element, false, shadow_host, None)
     }
 }
 
@@ -68,9 +85,10 @@ fn list_matches<E: Element>(
     element: &E,
     featureless: bool,
     host: Option<&E>,
+    scope: Option<&E>,
 ) -> bool {
     list.iter()
-        .any(|selector| matches_from(selector, 0, element, featureless, host))
+        .any(|selector| matches_from(selector, 0, element, featureless, host, scope))
 }
 
 /// Match `selector.compounds[index..]` with `element` as the candidate for
@@ -82,11 +100,12 @@ fn matches_from<E: Element>(
     element: &E,
     featureless: bool,
     host: Option<&E>,
+    scope: Option<&E>,
 ) -> bool {
     let compound = &selector.compounds[index];
     if !compound
         .iter()
-        .all(|simple| matches_simple(simple, element, featureless, host))
+        .all(|simple| matches_simple(simple, element, featureless, host, scope))
     {
         return false;
     }
@@ -100,12 +119,12 @@ fn matches_from<E: Element>(
     let next = index + 1;
     match combinator {
         Combinator::Child => ancestor_step(element).is_some_and(|(parent, featureless)| {
-            matches_from(selector, next, &parent, featureless, host)
+            matches_from(selector, next, &parent, featureless, host, scope)
         }),
         Combinator::Descendant => {
             let mut current = ancestor_step(element);
             while let Some((ancestor, featureless)) = current {
-                if matches_from(selector, next, &ancestor, featureless, host) {
+                if matches_from(selector, next, &ancestor, featureless, host, scope) {
                     return true;
                 }
                 current = if featureless {
@@ -118,11 +137,11 @@ fn matches_from<E: Element>(
         },
         Combinator::NextSibling => element
             .prev_sibling_element()
-            .is_some_and(|sibling| matches_from(selector, next, &sibling, false, host)),
+            .is_some_and(|sibling| matches_from(selector, next, &sibling, false, host, scope)),
         Combinator::LaterSibling => {
             let mut current = element.prev_sibling_element();
             while let Some(sibling) = current {
-                if matches_from(selector, next, &sibling, false, host) {
+                if matches_from(selector, next, &sibling, false, host, scope) {
                     return true;
                 }
                 current = sibling.prev_sibling_element();
@@ -130,9 +149,9 @@ fn matches_from<E: Element>(
             false
         },
         Combinator::SlotAssignment => slot_in_scope(element, host)
-            .is_some_and(|slot| matches_from(selector, next, &slot, false, host)),
+            .is_some_and(|slot| matches_from(selector, next, &slot, false, host, scope)),
         Combinator::Part => host_for_part(element, host)
-            .is_some_and(|part_host| matches_from(selector, next, &part_host, false, host)),
+            .is_some_and(|part_host| matches_from(selector, next, &part_host, false, host, scope)),
     }
 }
 
@@ -231,15 +250,16 @@ fn matches_simple<E: Element>(
     element: &E,
     featureless: bool,
     host: Option<&E>,
+    scope: Option<&E>,
 ) -> bool {
     if featureless {
         return match simple {
-            Simple::Host(_) => matches_host(simple, element, host),
+            Simple::Host(_) => matches_host(simple, element, host, scope),
             Simple::Is(list) | Simple::Where(list) => list
                 .iter()
-                .any(|s| s.combinators.is_empty() && matches_from(s, 0, element, true, host)),
+                .any(|s| s.combinators.is_empty() && matches_from(s, 0, element, true, host, scope)),
             Simple::Not(list) => {
-                list.iter().all(host_only) && !list_matches(list, element, true, host)
+                list.iter().all(host_only) && !list_matches(list, element, true, host, scope)
             },
             _ => false,
         };
@@ -286,19 +306,18 @@ fn matches_simple<E: Element>(
         },
         Simple::Root => element.is_root(),
         Simple::Empty => element.is_empty(),
-        // No scoping root is ever supplied, so `:scope` is `:root`.
-        Simple::Scope => element.is_root(),
-        Simple::Nth(nth) => matches_nth(nth, element, host),
+        Simple::Scope => scope.map_or_else(|| element.is_root(), |root| element.is_same(root)),
+        Simple::Nth(nth) => matches_nth(nth, element, host, scope),
         Simple::Only { of_type } => {
-            sibling_index(element, *of_type, false, &[], host) == 1
-                && sibling_index(element, *of_type, true, &[], host) == 1
+            sibling_index(element, *of_type, false, &[], host, scope) == 1
+                && sibling_index(element, *of_type, true, &[], host, scope) == 1
         },
-        Simple::Not(list) => !list_matches(list, element, false, host),
-        Simple::Is(list) | Simple::Where(list) => list_matches(list, element, false, host),
-        Simple::Host(_) => matches_host(simple, element, host),
+        Simple::Not(list) => !list_matches(list, element, false, host, scope),
+        Simple::Is(list) | Simple::Where(list) => list_matches(list, element, false, host, scope),
+        Simple::Host(_) => matches_host(simple, element, host, scope),
         // Slots are never slotted content themselves.
         Simple::Slotted(inner) => {
-            !element.is_slot() && matches_from(inner, 0, element, false, host)
+            !element.is_slot() && matches_from(inner, 0, element, false, host, scope)
         },
         Simple::Part(names) => matches_part(element, names, host),
         Simple::State(state) => element.matches_pseudo_class(state),
@@ -310,6 +329,7 @@ fn matches_host<E: Element>(
     simple: &Simple<E::PseudoClass>,
     element: &E,
     host: Option<&E>,
+    scope: Option<&E>,
 ) -> bool {
     let Simple::Host(inner) = simple else {
         return false;
@@ -317,7 +337,7 @@ fn matches_host<E: Element>(
     host.is_some_and(|host| host.is_same(element))
         && inner
             .as_ref()
-            .is_none_or(|inner| matches_from(inner, 0, element, false, host))
+            .is_none_or(|inner| matches_from(inner, 0, element, false, host, scope))
 }
 
 /// 1-based position among the siblings that count.
@@ -327,6 +347,7 @@ fn sibling_index<E: Element>(
     from_end: bool,
     of: &[Selector<E::PseudoClass>],
     host: Option<&E>,
+    scope: Option<&E>,
 ) -> i32 {
     let step = |e: &E| {
         if from_end {
@@ -339,15 +360,15 @@ fn sibling_index<E: Element>(
     let mut current = step(element);
     while let Some(sibling) = current {
         let counts = (!of_type || sibling.is_same_type(element))
-            && (of.is_empty() || list_matches(of, &sibling, false, host));
+            && (of.is_empty() || list_matches(of, &sibling, false, host, scope));
         index += i32::from(counts);
         current = step(&sibling);
     }
     index
 }
 
-fn matches_nth<E: Element>(nth: &Nth<E::PseudoClass>, element: &E, host: Option<&E>) -> bool {
-    if !nth.of.is_empty() && !list_matches(&nth.of, element, false, host) {
+fn matches_nth<E: Element>(nth: &Nth<E::PseudoClass>, element: &E, host: Option<&E>, scope: Option<&E>) -> bool {
+    if !nth.of.is_empty() && !list_matches(&nth.of, element, false, host, scope) {
         return false;
     }
     let index = sibling_index(
@@ -356,6 +377,7 @@ fn matches_nth<E: Element>(nth: &Nth<E::PseudoClass>, element: &E, host: Option<
         nth.kind.counts_from_end(),
         &nth.of,
         host,
+        scope,
     );
     // index = a*n + b for some n >= 0.
     let offset = i64::from(index) - i64::from(nth.b);

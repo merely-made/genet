@@ -2,7 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-//! HSTS + mixed-content upgrade/blocking, and the SameSite same-site test.
+//! HSTS + Upgrade Insecure Requests + mixed-content upgrade/blocking, and the
+//! SameSite same-site test.
 
 use url::Url;
 
@@ -13,7 +14,10 @@ use crate::hsts;
 /// be **blocked** (a network error).
 ///
 /// HSTS is host-keyed and independent of content type: a known host upgrades and
-/// proceeds. Otherwise, in a secure (https-origin) context the mixed-content
+/// proceeds. Upgrade Insecure Requests (`upgrade_insecure`, the requesting
+/// document's policy) does the same for every `http` URL, in or out of a secure
+/// context, except a loopback host, which is already potentially trustworthy.
+/// Otherwise, in a secure (https-origin) context the mixed-content
 /// active/passive split applies — optionally-blockable destinations (image /
 /// audio / video) are auto-upgraded http→https, and blockable ones (script /
 /// style / font / document / the empty fetch() destination) are blocked. Outside
@@ -22,12 +26,18 @@ pub(super) fn resolve_mixed_content(
     url: &mut Url,
     destination: crate::Destination,
     secure_context: bool,
+    upgrade_insecure: bool,
     cx: &FetchContext,
 ) -> bool {
     if url.scheme() != "http" {
         return false;
     }
     if hsts::should_upgrade(url, cx.hsts.as_ref()) {
+        let _ = url.set_scheme("https");
+        return false;
+    }
+    if upgrade_insecure && !is_loopback(url) {
+        // The port is kept: only a default port follows the scheme.
         let _ = url.set_scheme("https");
         return false;
     }
@@ -39,6 +49,19 @@ pub(super) fn resolve_mixed_content(
         false
     } else {
         true
+    }
+}
+
+/// A loopback host: `localhost`, `*.localhost`, `127.0.0.0/8` or `[::1]`.
+fn is_loopback(url: &Url) -> bool {
+    match url.host() {
+        Some(url::Host::Domain(domain)) => {
+            let domain = domain.to_ascii_lowercase();
+            domain == "localhost" || domain.ends_with(".localhost")
+        },
+        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+        None => false,
     }
 }
 

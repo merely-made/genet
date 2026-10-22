@@ -24,7 +24,7 @@ pub(crate) fn layout_retained_formatting_root<D>(
     previous: &LiveryLayout<D::NodeId>,
     node: D::NodeId,
     text: &mut TextSystem,
-    image_sources: &ImageSources,
+    image_sources: &dyn crate::ImageSourceLookup,
 ) -> Result<RetainedRootFormatting<D::NodeId>, LayoutError>
 where
     D: LayoutDom,
@@ -36,7 +36,9 @@ where
 
     let boxes = GeneratedBoxTree::from_dom(dom, styles);
     let Some(root_box) = retained_root_box(&boxes, node) else {
-        return Ok(RetainedRootFormatting::Unsupported);
+        // An inline-formatting node (text under a block container) cannot be
+        // a root; its nearest admitted ancestor can.
+        return Ok(RetainedRootFormatting::PromoteParent);
     };
     let table_root = boxes[root_box].display.internal_table == Some(InternalTableRole::Wrapper);
     if !(table_root && supports_retained_table_root_formatting(&boxes, root_box)
@@ -202,30 +204,32 @@ where
     if !same_retained_root_size(local_rect, retained_rect) {
         return Ok(RetainedRootFormatting::PromoteParent);
     }
-    fragments.translate_subtree(
-        *local_root,
-        PhysicalOffset {
-            x: retained_rect.x - local_rect.x,
-            y: retained_rect.y - local_rect.y,
-        },
-    );
+    let offset = PhysicalOffset {
+        x: retained_rect.x - local_rect.x,
+        y: retained_rect.y - local_rect.y,
+    };
+    fragments.translate_subtree(*local_root, offset);
+    // Shaped text was placed against the local origin; keep it in lockstep.
+    text_frame.translate_subtree(dom, node, (offset.x, offset.y));
     fragments.flush_overflow();
     drop(state);
 
-    Ok(RetainedRootFormatting::Formatted(Box::new(
-        LiveryLayout::new(
-            previous.viewport,
-            LayoutResult::new(boxes.into_tree(), fragments),
-            Some(text_frame),
-            BlockAlgorithmCounts {
-                buckram: buckram_blocks,
-                taffy: taffy_blocks,
-                backend_sizing: backend_sizing_blocks,
-            },
-            table_paint,
-            table_shadow,
-        ),
-    )))
+    let mut fresh = LiveryLayout::new(
+        previous.viewport,
+        LayoutResult::new(boxes.into_tree(), fragments),
+        Some(text_frame),
+        BlockAlgorithmCounts {
+            buckram: buckram_blocks,
+            taffy: taffy_blocks,
+            backend_sizing: backend_sizing_blocks,
+        },
+        table_paint,
+        table_shadow,
+    );
+    // Match the complete-layout text preparation before replacing this root.
+    // Native control values use virtual element sources, not author text nodes.
+    fresh.prepare_atomic_inline_subtree_text(dom, styles, text, node);
+    Ok(RetainedRootFormatting::Formatted(Box::new(fresh)))
 }
 
 pub(in crate::layout) fn supports_retained_root_formatting<Id>(

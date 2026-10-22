@@ -490,7 +490,7 @@ impl Stylesheet {
     /// Parse a sheet whose first rule follows `source_order` rules already
     /// loaded at the same origin.
     pub fn parse_with_offset(input: &str, origin: Origin, source_order: u64) -> Self {
-        let clean = without_comments(input);
+        let clean = crate::css_comments::without_comments(input);
         let mut sheet = Self {
             origin,
             source_order_offset: source_order,
@@ -519,7 +519,7 @@ impl Stylesheet {
         if index > self.items.len() {
             return Err(RuleMutationError::IndexSize);
         }
-        let clean = without_comments(rule);
+        let clean = crate::css_comments::without_comments(rule);
         let mut scratch = Self {
             origin: self.origin,
             ..Self::default()
@@ -960,6 +960,7 @@ impl StyleRule {
                     .source_order
                     .saturating_mul(65_536)
                     .saturating_add(index as u64),
+                source_url: None,
             })
             .collect()
     }
@@ -1103,26 +1104,6 @@ where
             .iter()
             .flat_map(|rule| rule.matched_custom_declarations(element, device)),
     )
-}
-
-fn without_comments(css: &str) -> String {
-    let mut clean = String::with_capacity(css.len());
-    let mut chars = css.chars().peekable();
-    let mut in_comment = false;
-    while let Some(ch) = chars.next() {
-        if in_comment {
-            if ch == '*' && chars.peek() == Some(&'/') {
-                chars.next();
-                in_comment = false;
-            }
-        } else if ch == '/' && chars.peek() == Some(&'*') {
-            chars.next();
-            in_comment = true;
-        } else {
-            clean.push(ch);
-        }
-    }
-    clean
 }
 
 fn find_open_brace(input: &str, start: usize) -> Option<usize> {

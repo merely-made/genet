@@ -7,10 +7,10 @@
 //! Caller-owned scratch tree for Taffy's low-level layout algorithms.
 //!
 //! Taffy supplies block, flex, and grid algorithms. Buckram owns the tree,
-//! source identity, contexts, and returned placements. The public surface in
-//! this module deliberately uses Buckram types rather than Taffy types.
+//! source identity, contexts, and returned placements. The scratch tree takes
+//! Taffy's concrete `Style` until the remaining backend roles are owned here.
 
-use std::{marker::PhantomData, slice};
+use std::slice;
 
 use taffy::{
     BlockContext, Cache, CacheTree, DetailedGridInfo, Layout, LayoutBlockContainer,
@@ -130,33 +130,7 @@ pub struct AlgorithmLayout {
     pub height: f32,
 }
 
-mod sealed {
-    pub trait AlgorithmStyle {
-        fn as_taffy_style(&self) -> &taffy::Style;
-        fn as_taffy_style_mut(&mut self) -> &mut taffy::Style;
-    }
-
-    impl AlgorithmStyle for taffy::Style {
-        fn as_taffy_style(&self) -> &taffy::Style {
-            self
-        }
-
-        fn as_taffy_style_mut(&mut self) -> &mut taffy::Style {
-            self
-        }
-    }
-}
-
-/// A style accepted by the private Taffy algorithm adapter.
-///
-/// This sealed trait keeps Taffy out of Buckram's method signatures while the
-/// K1 caller still constructs the backend style privately. K3 replaces that
-/// caller-side lowering with Buckram-owned logical and intrinsic inputs.
-pub trait AlgorithmStyle: sealed::AlgorithmStyle {}
-
-impl AlgorithmStyle for Style {}
-
-struct AlgorithmNode<S, Context, Source> {
+struct AlgorithmNode {
     kind: AlgorithmKind,
     block_style: BlockStyle,
     block_algorithm: Option<BlockAlgorithm>,
@@ -172,9 +146,10 @@ struct AlgorithmNode<S, Context, Source> {
     flex_content_base_probe_active: bool,
     intrinsic_inline_sizes: Option<IntrinsicSizes>,
     table_wrapper_inline_size: Option<f32>,
-    style: S,
-    context: Option<Context>,
-    source: Source,
+    style: Style,
+    /// Whether the caller attached a measure context. The context itself is
+    /// stored beside the node so the algorithms never depend on its type.
+    has_context: bool,
     parent: Option<AlgorithmNodeId>,
     children: Vec<AlgorithmNodeId>,
     cache: Cache,
@@ -194,10 +169,24 @@ struct AlgorithmNode<S, Context, Source> {
 /// A caller-owned arena used only while running layout algorithms.
 ///
 /// Source identity lives on each node, so callers need no parallel
-/// `NodeId -> source` map. The style parameter is generic and the public
-/// methods expose only Buckram identifiers and geometry.
-pub struct AlgorithmTree<S, Context, Source> {
-    nodes: Vec<AlgorithmNode<S, Context, Source>>,
+/// `NodeId -> source` map. The remaining backend style is explicitly Taffy's;
+/// caller-owned context and source identity stay outside the algorithm core.
+pub struct AlgorithmTree<Context, Source> {
+    core: AlgorithmCore,
+    contexts: Vec<Option<Context>>,
+    sources: Vec<Source>,
+}
+
+/// The algorithm state of an [`AlgorithmTree`], without its caller-owned
+/// measure contexts and source identities.
+///
+/// Every layout algorithm runs over this type, so Taffy's tree traits are
+/// instantiated once rather than once per `(Context, Source)` pair
+/// (2026-10-14: two such pairs duplicated the whole of Taffy in the browser
+/// viewer). Reached through the tree's `Deref`.
+#[doc(hidden)]
+pub struct AlgorithmCore {
+    nodes: Vec<AlgorithmNode>,
     fragmentation_output: FragmentationOutput,
     /// Resolves a Taffy calc() pointer against a percentage basis. The tree
     /// owner stores calc values with stable addresses, tags them into
@@ -206,31 +195,29 @@ pub struct AlgorithmTree<S, Context, Source> {
     calc_resolver: Option<fn(*const (), f32) -> f32>,
 }
 
-impl<S, Context, Source> Default for AlgorithmTree<S, Context, Source> {
+impl<Context, Source> Default for AlgorithmTree<Context, Source> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
+impl<Context, Source> AlgorithmTree<Context, Source> {
     pub fn new() -> Self {
         Self {
-            nodes: Vec::new(),
-            fragmentation_output: FragmentationOutput::default(),
-            calc_resolver: None,
+            core: AlgorithmCore {
+                nodes: Vec::new(),
+                fragmentation_output: FragmentationOutput::default(),
+                calc_resolver: None,
+            },
+            contexts: Vec::new(),
+            sources: Vec::new(),
         }
-    }
-
-    /// Install the interpreter for calc()-tagged dimensions in this tree's
-    /// styles. The caller guarantees every tagged pointer outlives the tree.
-    pub fn set_calc_resolver(&mut self, resolver: fn(*const (), f32) -> f32) {
-        self.calc_resolver = Some(resolver);
     }
 
     pub fn new_with_children(
         &mut self,
         kind: AlgorithmKind,
-        style: S,
+        style: Style,
         children: &[AlgorithmNodeId],
         source: Source,
     ) -> AlgorithmNodeId {
@@ -241,7 +228,7 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
         &mut self,
         kind: AlgorithmKind,
         block_style: BlockStyle,
-        style: S,
+        style: Style,
         children: &[AlgorithmNodeId],
         source: Source,
     ) -> AlgorithmNodeId {
@@ -250,7 +237,7 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
 
     pub fn new_leaf_with_context(
         &mut self,
-        style: S,
+        style: Style,
         context: Context,
         source: Source,
     ) -> AlgorithmNodeId {
@@ -260,7 +247,7 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
     pub fn new_leaf_with_context_and_block_style(
         &mut self,
         block_style: BlockStyle,
-        style: S,
+        style: Style,
         context: Context,
         source: Source,
     ) -> AlgorithmNodeId {
@@ -278,7 +265,7 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
         &mut self,
         kind: AlgorithmKind,
         block_style: BlockStyle,
-        style: S,
+        style: Style,
         children: &[AlgorithmNodeId],
         context: Option<Context>,
         source: Source,
@@ -306,8 +293,7 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
             intrinsic_inline_sizes: None,
             table_wrapper_inline_size: None,
             style,
-            context,
-            source,
+            has_context: context.is_some(),
             parent: None,
             children: children.to_vec(),
             cache: Cache::new(),
@@ -318,6 +304,8 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
             baselines: Baselines::default(),
             sequential_multicol: None,
         });
+        self.contexts.push(context);
+        self.sources.push(source);
         for child in children {
             let previous = self.nodes[child.index()].parent.replace(id);
             assert!(
@@ -329,14 +317,107 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
     }
 
     pub fn source(&self, id: AlgorithmNodeId) -> &Source {
-        &self.nodes[id.index()].source
+        &self.sources[id.index()]
+    }
+
+    /// Query admitted min-content and max-content widths for an out-of-flow
+    /// formatting root.
+    ///
+    /// The caller remains responsible for selecting the containing block and
+    /// resolving the positioned inset equation. This temporarily removes the
+    /// position deferral only for the intrinsic query, so a completed
+    /// normal-flow rectangle never becomes the browser-facing auto width.
+    pub fn positioned_intrinsic_inline_sizes<Measure>(
+        &mut self,
+        id: AlgorithmNodeId,
+        mut measure: Measure,
+    ) -> Option<IntrinsicSizes>
+    where
+        Measure: FnMut(
+            AlgorithmSize<Option<f32>>,
+            AlgorithmSize<AlgorithmAvailableSpace>,
+            AlgorithmNodeId,
+            Option<&mut Context>,
+            Option<&FloatLineConstraints>,
+        ) -> AlgorithmSize<f32>,
+    {
+        if !matches!(
+            self.nodes[id.index()].kind,
+            AlgorithmKind::Block | AlgorithmKind::Leaf
+        ) || !matches!(
+            self.nodes[id.index()].block_style.position,
+            crate::BlockPosition::Absolute | crate::BlockPosition::Fixed
+        ) {
+            return None;
+        }
+
+        let original_style = self.nodes[id.index()].block_style;
+        {
+            let root_style = &mut self.nodes[id.index()].block_style;
+            root_style.position = crate::BlockPosition::Static;
+            // The intrinsic query measures the root's contents. K5d applies
+            // the root's preferred ratio to those contributions afterwards.
+            root_style.aspect_ratio = None;
+        }
+        if !self.intrinsic_inline_subtree_is_admitted(id, true) {
+            self.nodes[id.index()].block_style = original_style;
+            return None;
+        }
+
+        let contexts = &mut self.contexts;
+        let mut measure =
+            |known, available, id: AlgorithmNodeId, constraints: Option<&FloatLineConstraints>| {
+                measure(
+                    known,
+                    available,
+                    id,
+                    contexts[id.index()].as_mut(),
+                    constraints,
+                )
+            };
+        let mut run = AlgorithmRun {
+            tree: &mut self.core,
+            measure: &mut measure,
+            line_constraints: None,
+            nested_float_state: None,
+            resolved_shrink_to_fit: None,
+            fixed_leaf_intrinsics_enabled: false,
+        };
+        let result = run.measure_intrinsic_inline_subtree(id, None).ok();
+        run.tree.nodes[id.index()].block_style = original_style;
+        result
+    }
+
+    pub fn context(&self, id: AlgorithmNodeId) -> Option<&Context> {
+        self.contexts[id.index()].as_ref()
+    }
+}
+
+impl<Context, Source> std::ops::Deref for AlgorithmTree<Context, Source> {
+    type Target = AlgorithmCore;
+    fn deref(&self) -> &AlgorithmCore {
+        &self.core
+    }
+}
+
+impl<Context, Source> std::ops::DerefMut for AlgorithmTree<Context, Source> {
+    fn deref_mut(&mut self) -> &mut AlgorithmCore {
+        &mut self.core
+    }
+}
+
+impl AlgorithmCore {
+    /// Install the interpreter for calc()-tagged dimensions in this tree's
+    /// styles. The caller guarantees every tagged pointer outlives the tree.
+    pub fn set_calc_resolver(&mut self, resolver: fn(*const (), f32) -> f32) {
+        self.calc_resolver = Some(resolver);
     }
 
     pub fn kind(&self, id: AlgorithmNodeId) -> AlgorithmKind {
         self.nodes[id.index()].kind
     }
 
-    pub fn style(&self, id: AlgorithmNodeId) -> &S {
+    pub fn style(&self, id: AlgorithmNodeId) -> &Style {
         &self.nodes[id.index()].style
     }
 
@@ -414,7 +495,7 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
             .count()
     }
 
-    pub fn style_mut(&mut self, id: AlgorithmNodeId) -> &mut S {
+    pub fn style_mut(&mut self, id: AlgorithmNodeId) -> &mut Style {
         &mut self.nodes[id.index()].style
     }
 
@@ -448,10 +529,7 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
     /// The provider is deliberately unavailable outside a flex or grid
     /// parent. Ordinary block, inline, and table-internal out-of-flow routes
     /// have separate Buckram formatting boundaries.
-    pub fn enable_flex_grid_static_position_provider(&mut self, id: AlgorithmNodeId)
-    where
-        S: AlgorithmStyle,
-    {
+    pub fn enable_flex_grid_static_position_provider(&mut self, id: AlgorithmNodeId) {
         let parent = self.nodes[id.index()]
             .parent
             .expect("a flex/grid static-position provider requires an attached direct child");
@@ -469,8 +547,7 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
             ),
             "the static-position provider requires an absolute or fixed child"
         );
-        sealed::AlgorithmStyle::as_taffy_style_mut(&mut self.nodes[id.index()].style).position =
-            taffy::Position::Absolute;
+        self.nodes[id.index()].style.position = taffy::Position::Absolute;
     }
 
     /// Select this direct grid child's finalized grid area as its
@@ -549,7 +626,7 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
     /// necessarily an inline formatter and may ignore float constraints.
     pub fn enable_float_line_constraints(&mut self, id: AlgorithmNodeId) {
         assert!(
-            self.nodes[id.index()].context.is_some(),
+            self.nodes[id.index()].has_context,
             "only a measured leaf can consume float line constraints"
         );
         self.nodes[id.index()].float_line_constraints_enabled = true;
@@ -654,65 +731,6 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
         self.nodes[id.index()].intrinsic_shrink_to_fit_enabled
     }
 
-    /// Query admitted min-content and max-content widths for an out-of-flow
-    /// formatting root.
-    ///
-    /// The caller remains responsible for selecting the containing block and
-    /// resolving the positioned inset equation. This temporarily removes the
-    /// position deferral only for the intrinsic query, so a completed
-    /// normal-flow rectangle never becomes the browser-facing auto width.
-    pub fn positioned_intrinsic_inline_sizes<Measure>(
-        &mut self,
-        id: AlgorithmNodeId,
-        mut measure: Measure,
-    ) -> Option<IntrinsicSizes>
-    where
-        S: AlgorithmStyle,
-        Measure: FnMut(
-            AlgorithmSize<Option<f32>>,
-            AlgorithmSize<AlgorithmAvailableSpace>,
-            AlgorithmNodeId,
-            Option<&mut Context>,
-            Option<&FloatLineConstraints>,
-        ) -> AlgorithmSize<f32>,
-    {
-        if !matches!(
-            self.nodes[id.index()].kind,
-            AlgorithmKind::Block | AlgorithmKind::Leaf
-        ) || !matches!(
-            self.nodes[id.index()].block_style.position,
-            crate::BlockPosition::Absolute | crate::BlockPosition::Fixed
-        ) {
-            return None;
-        }
-
-        let original_style = self.nodes[id.index()].block_style;
-        {
-            let root_style = &mut self.nodes[id.index()].block_style;
-            root_style.position = crate::BlockPosition::Static;
-            // The intrinsic query measures the root's contents. K5d applies
-            // the root's preferred ratio to those contributions afterwards.
-            root_style.aspect_ratio = None;
-        }
-        if !self.intrinsic_inline_subtree_is_admitted(id, true) {
-            self.nodes[id.index()].block_style = original_style;
-            return None;
-        }
-
-        let mut run = AlgorithmRun {
-            tree: self,
-            measure: &mut measure,
-            line_constraints: None,
-            nested_float_state: None,
-            resolved_shrink_to_fit: None,
-            fixed_leaf_intrinsics_enabled: false,
-            marker: PhantomData,
-        };
-        let result = run.measure_intrinsic_inline_subtree(id, None).ok();
-        run.tree.nodes[id.index()].block_style = original_style;
-        result
-    }
-
     fn intrinsic_inline_subtree_is_admitted(&self, id: AlgorithmNodeId, is_root: bool) -> bool {
         let node = &self.nodes[id.index()];
         // An absolute or fixed child adds nothing to its parent's intrinsic
@@ -721,7 +739,7 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
             return true;
         }
         let measured_replaced_leaf =
-            node.kind == AlgorithmKind::Leaf && node.context.is_some() && node.block_style.replaced;
+            node.kind == AlgorithmKind::Leaf && node.has_context && node.block_style.replaced;
         if (node.block_style.replaced || node.block_style.aspect_ratio.is_some())
             && !measured_replaced_leaf
         {
@@ -737,7 +755,7 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
         // vertically intrinsic-capable.
         if !node.block_style.flow.is_horizontal()
             && (matches!(node.kind, AlgorithmKind::Flex | AlgorithmKind::Grid)
-                || (matches!(node.kind, AlgorithmKind::Leaf) && node.context.is_some()))
+                || (matches!(node.kind, AlgorithmKind::Leaf) && node.has_context))
         {
             return false;
         }
@@ -761,10 +779,6 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
 
     pub fn children(&self, id: AlgorithmNodeId) -> &[AlgorithmNodeId] {
         &self.nodes[id.index()].children
-    }
-
-    pub fn context(&self, id: AlgorithmNodeId) -> Option<&Context> {
-        self.nodes[id.index()].context.as_ref()
     }
 
     pub fn layout(&self, id: AlgorithmNodeId) -> AlgorithmLayout {
@@ -991,10 +1005,7 @@ impl<S, Context, Source> AlgorithmTree<S, Context, Source> {
     }
 }
 
-impl<S, Context, Source> AlgorithmTree<S, Context, Source>
-where
-    S: AlgorithmStyle,
-{
+impl<Context, Source> AlgorithmTree<Context, Source> {
     /// Run scratch layout with the root's renderer-owned positioned children
     /// presented to Taffy as out of flow.
     ///
@@ -1022,16 +1033,14 @@ where
             if !self.nodes[child.index()].block_style.is_out_of_flow() {
                 continue;
             }
-            let style =
-                sealed::AlgorithmStyle::as_taffy_style_mut(&mut self.nodes[child.index()].style);
+            let style = &mut self.nodes[child.index()].style;
             flipped.push((child, style.position));
             style.position = taffy::Position::Absolute;
         }
         self.clear_layout_cache();
         self.compute_layout_with_measure(root, available, measure);
         for (child, previous) in flipped {
-            sealed::AlgorithmStyle::as_taffy_style_mut(&mut self.nodes[child.index()].style)
-                .position = previous;
+            self.nodes[child.index()].style.position = previous;
         }
         // The next ordinary run must not reuse a cache entry made while those
         // private backend roles were temporarily different.
@@ -1057,14 +1066,24 @@ where
             width: to_taffy_available(available.width),
             height: to_taffy_available(available.height),
         };
+        let contexts = &mut self.contexts;
+        let mut measure =
+            |known, available, id: AlgorithmNodeId, constraints: Option<&FloatLineConstraints>| {
+                measure(
+                    known,
+                    available,
+                    id,
+                    contexts[id.index()].as_mut(),
+                    constraints,
+                )
+            };
         let mut run = AlgorithmRun {
-            tree: self,
+            tree: &mut self.core,
             measure: &mut measure,
             line_constraints: None,
             nested_float_state: None,
             resolved_shrink_to_fit: None,
             fixed_leaf_intrinsics_enabled: false,
-            marker: PhantomData,
         };
         compute_root_layout(&mut run, root.into_taffy(), available);
         round_layout(&mut run, root.into_taffy());

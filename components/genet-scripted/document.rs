@@ -40,7 +40,7 @@
 //! plan was waiting on. `LiveryScriptedDocument` drives the analogous
 //! script/layout split against its own retained viewport scroll.
 
-use layout_dom_api::{LayoutDom, LocalName, Namespace};
+use layout_dom_api::{LayoutDom, LayoutDomMut, LocalName, Namespace};
 
 use engine_observables_api::DomArenaStats;
 #[cfg(feature = "livery")]
@@ -53,15 +53,131 @@ use genet_livery::{Device, NavigationFragment};
 use genet_scripted_dom::{NodeId, ScriptedDom};
 #[cfg(test)]
 use genet_static_dom::StaticDocument;
+#[cfg(feature = "livery")]
+use script_engine_api::RealmId;
 use script_engine_api::ScriptEngine;
 use script_runtime_api::{CookieProvider, Runtime, WebGlFactory};
 
-use crate::ResourceFetcher;
+use crate::{ResourceFetcher, ScriptedDocumentOptions};
 use crate::capture::DomCaptureRecorder;
 #[cfg(feature = "livery")]
-use crate::{LiveryCssom, ScriptedClick, ScriptedDocumentOptions};
+use crate::{LiveryCssom, ScriptedClick};
 #[cfg(feature = "livery")]
 use crate::{ScriptResourceBridge, ScriptWake};
+
+fn report_runtime_task_error<E: ScriptEngine>(rt: &mut Runtime<E>, task: &str, error: E::Error) {
+    let message = rt.describe_error(&error);
+    rt.report_script_exception(&format!("{task}: {message}"), None);
+}
+
+/// One scheduler state for both the headless and rendered document. Visibility
+/// throttles task delivery; freezing suspends it altogether. The hidden wake
+/// deadline is the same one that admits a pump, so a short interval cannot
+/// repeatedly wake the host while every pump is skipped.
+#[derive(Default)]
+struct DocumentLifecycle {
+    hidden: bool,
+    frozen: bool,
+    hidden_deadline_ms: Option<f64>,
+    last_pump_ms: Option<f64>,
+}
+
+impl DocumentLifecycle {
+    fn set_hidden(&mut self, hidden: bool) -> bool {
+        if self.hidden == hidden {
+            return false;
+        }
+        self.hidden = hidden;
+        // The first hidden pump establishes the host's clock origin. An
+        // immediate wake is needed only if a timer is pending.
+        self.hidden_deadline_ms = None;
+        true
+    }
+
+    fn freeze(&mut self) -> bool {
+        if self.frozen {
+            return false;
+        }
+        self.frozen = true;
+        true
+    }
+
+    fn resume(&mut self) -> bool {
+        if !self.frozen {
+            return false;
+        }
+        self.frozen = false;
+        if self.hidden {
+            self.hidden_deadline_ms = None;
+        }
+        true
+    }
+
+    fn allows_pump(&mut self, now_ms: f64) -> bool {
+        if self.frozen {
+            return false;
+        }
+        self.last_pump_ms = Some(now_ms);
+        if !self.hidden {
+            return true;
+        }
+        match self.hidden_deadline_ms {
+            None => {
+                self.hidden_deadline_ms = Some(now_ms + 1000.0);
+                false
+            },
+            Some(deadline) if now_ms < deadline => false,
+            Some(_) => {
+                self.hidden_deadline_ms = Some(now_ms + 1000.0);
+                true
+            },
+        }
+    }
+
+    fn hidden_wake_delay(&self, source_delay: f64) -> f64 {
+        match (self.hidden_deadline_ms, self.last_pump_ms) {
+            (Some(deadline), Some(now)) => source_delay.max((deadline - now).max(0.0)),
+            // Establish the first hidden deadline without delivering tasks.
+            _ => 0.0,
+        }
+    }
+}
+
+fn next_document_wake_delay<E: ScriptEngine>(
+    rt: &mut Runtime<E>,
+    lifecycle: &DocumentLifecycle,
+    external_pending: bool,
+) -> Option<f64> {
+    if lifecycle.frozen {
+        return None;
+    }
+    let timer = match rt.next_timer_delay() {
+        Ok(delay) => delay,
+        Err(error) => {
+            report_runtime_task_error(rt, "timer wake probe", error);
+            Some(0.0)
+        },
+    };
+    if lifecycle.hidden {
+        // Timer and external work independently request an admitted turn.
+        // A distant timer must not postpone an already queued completion.
+        let timer_wake = timer.map(|delay| lifecycle.hidden_wake_delay(delay));
+        let external_wake = external_pending.then(|| lifecycle.hidden_wake_delay(0.0));
+        return match (timer_wake, external_wake) {
+            (Some(timer), Some(external)) => Some(timer.min(external)),
+            (Some(delay), None) | (None, Some(delay)) => Some(delay),
+            (None, None) => None,
+        };
+    }
+    match rt.has_animation_frame_callbacks() {
+        Ok(true) => Some(0.0),
+        Ok(false) => timer,
+        Err(error) => {
+            report_runtime_task_error(rt, "animation frame wake probe", error);
+            Some(0.0)
+        },
+    }
+}
 
 /// Host-neutral keyboard scrolling for either scripted layout engine.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -160,15 +276,7 @@ pub struct ScriptedDocument<E: ScriptEngine> {
     /// the page's script mutates.
     rt: Runtime<E>,
     capture: Option<DomCaptureRecorder>,
-    /// Page Visibility state (W3C adoption plan P1): `true` = the document is
-    /// not being presented (an unfocused preview card). Hidden documents get
-    /// their timer pump throttled to the spec-licensed 1s clamp; a
-    /// `visibilitychange` event fires on each flip.
-    hidden: bool,
-    /// Page Lifecycle frozen state: no tasks run at all until `resume`.
-    frozen: bool,
-    /// Virtual-clock stamp of the last hidden-state timer pump (the 1s clamp).
-    last_hidden_pump_ms: f64,
+    lifecycle: DocumentLifecycle,
 }
 
 impl<E: ScriptEngine> ScriptedDocument<E> {
@@ -177,7 +285,16 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
     /// same `fetcher`). `Err` on a failed fetch of the document, or a runtime that
     /// would not initialize.
     pub fn load(fetcher: &impl ResourceFetcher, url: &str) -> Result<Self, String> {
-        Self::load_inner(fetcher, url, None)
+        Self::load_inner(fetcher, url, ScriptedDocumentOptions::default(), Default::default())
+    }
+
+    /// Load with host capabilities installed before parser scripts run.
+    pub fn load_with_options(
+        fetcher: &impl ResourceFetcher,
+        url: &str,
+        options: ScriptedDocumentOptions,
+    ) -> Result<Self, String> {
+        Self::load_inner(fetcher, url, options, Default::default())
     }
 
     /// Load a document with a host-owned WebGL factory installed before any
@@ -189,13 +306,23 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         url: &str,
         webgl: WebGlFactory,
     ) -> Result<Self, String> {
-        Self::load_inner(fetcher, url, Some(webgl))
+        Self::load_inner(fetcher, url, ScriptedDocumentOptions {
+            webgl: Some(webgl), ..ScriptedDocumentOptions::default()
+        }, Default::default())
     }
 
+    pub fn load_with_decode_options(
+        fetcher: &impl ResourceFetcher,
+        url: &str,
+        decode_options: script_runtime_api::HtmlDecodeOptions,
+    ) -> Result<Self, String> {
+        Self::load_inner(fetcher, url, ScriptedDocumentOptions::default(), decode_options)
+    }
     fn load_inner(
         fetcher: &impl ResourceFetcher,
         url: &str,
-        webgl: Option<WebGlFactory>,
+        options: ScriptedDocumentOptions,
+        decode_options: script_runtime_api::HtmlDecodeOptions,
     ) -> Result<Self, String> {
         // Split a `url#id` fragment off before fetching (the fetcher takes the
         // resource, not the fragment).
@@ -203,16 +330,23 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
             Some((res, frag)) => (res, (!frag.is_empty()).then(|| frag.to_string())),
             None => (url, None),
         };
-        let bytes = fetcher
-            .fetch(resource)
+        let response = fetcher
+            .fetch_response(resource)
             .ok_or_else(|| format!("could not load {resource}"))?;
+        let decoded = genet_scripted_dom::html_encoding::decode_html_document(
+            &response.bytes,
+            response.content_type.as_deref(),
+            decode_options,
+        );
         // External scripts resolve against the document URL and fetch through the
         // same fetcher; pass both into the builder.
-        let me = Self::build(
-            &String::from_utf8_lossy(&bytes),
-            Some((fetcher, resource)),
+        let me = Self::build_encoded(
+            &decoded.source,
+            Some((fetcher, &response.final_url)),
             None,
-            webgl,
+            options,
+            decoded.encoding,
+            decode_options,
         )?;
         // This headless route carries no layout to scroll a fragment into;
         // `LiveryScriptedDocument::load` (via `NavigationFragment`) is the
@@ -226,14 +360,21 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
     /// `data:` content — with no fetcher, external `<script src>` is reported and
     /// skipped. `Err` if the runtime fails to initialize.
     pub fn parse(html: &str) -> Result<Self, String> {
-        Self::build(html, None, None, None)
+        Self::build(html, None, None, ScriptedDocumentOptions::default())
+    }
+
+    /// Parse with host capabilities installed before inline scripts run.
+    pub fn parse_with_options(html: &str, options: ScriptedDocumentOptions) -> Result<Self, String> {
+        Self::build(html, None, None, options)
     }
 
     /// Parse a document with a host-owned WebGL factory installed before its
     /// inline scripts run. This is the fetch-free companion to
     /// [`load_with_webgl_factory`](Self::load_with_webgl_factory).
     pub fn parse_with_webgl_factory(html: &str, webgl: WebGlFactory) -> Result<Self, String> {
-        Self::build(html, None, None, Some(webgl))
+        Self::build(html, None, None, ScriptedDocumentOptions {
+            webgl: Some(webgl), ..ScriptedDocumentOptions::default()
+        })
     }
 
     /// Parse an already-fetched `html` body and run its scripts, fetching external
@@ -250,7 +391,18 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         base_url: &str,
         cookies: Option<Box<dyn CookieProvider>>,
     ) -> Result<Self, String> {
-        Self::build(html, Some((fetcher, base_url)), cookies, None)
+        Self::build(html, Some((fetcher, base_url)), cookies, ScriptedDocumentOptions::default())
+    }
+
+    /// Parse an already-fetched body with host capabilities set before scripts.
+    pub fn from_body_with_options(
+        html: &str,
+        fetcher: &dyn ResourceFetcher,
+        base_url: &str,
+        cookies: Option<Box<dyn CookieProvider>>,
+        options: ScriptedDocumentOptions,
+    ) -> Result<Self, String> {
+        Self::build(html, Some((fetcher, base_url)), cookies, options)
     }
 
     /// Parse an already-fetched body with a host-owned WebGL factory installed
@@ -262,7 +414,9 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         cookies: Option<Box<dyn CookieProvider>>,
         webgl: WebGlFactory,
     ) -> Result<Self, String> {
-        Self::build(html, Some((fetcher, base_url)), cookies, Some(webgl))
+        Self::build(html, Some((fetcher, base_url)), cookies, ScriptedDocumentOptions {
+            webgl: Some(webgl), ..ScriptedDocumentOptions::default()
+        })
     }
 
     /// Parse `html` into a live DOM and run its scripts in document order. With a
@@ -275,7 +429,24 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         html: &str,
         loader: Option<(&dyn ResourceFetcher, &str)>,
         cookies: Option<Box<dyn CookieProvider>>,
-        webgl: Option<WebGlFactory>,
+        options: ScriptedDocumentOptions,
+    ) -> Result<Self, String> {
+        Self::build_encoded(
+            html,
+            loader,
+            cookies,
+            options,
+            Default::default(),
+            Default::default(),
+        )
+    }
+    fn build_encoded(
+        html: &str,
+        loader: Option<(&dyn ResourceFetcher, &str)>,
+        cookies: Option<Box<dyn CookieProvider>>,
+        options: ScriptedDocumentOptions,
+        encoding: script_runtime_api::DocumentEncoding,
+        decode_options: script_runtime_api::HtmlDecodeOptions,
     ) -> Result<Self, String> {
         // This headless route carries no layout, so it resolves no stylesheets
         // and installs no `getComputedStyle` / `matchMedia` bridge — those are
@@ -284,6 +455,14 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         let sheets: Vec<String> = Vec::new();
 
         let mut rt = Runtime::<E>::new().map_err(|e| format!("script runtime init: {e:?}"))?;
+        rt.set_worker_policy(options.worker_policy);
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(launcher) = options.worker_process_launcher {
+            rt.set_worker_process_launcher(launcher);
+        }
+        rt.set_validation_message_catalog(options.validation_message_catalog);
+        rt.set_document_encoding(encoding);
+        rt.set_html_decode_options(decode_options);
         // The document URL is the base for reflected URL attributes (`a.href`,
         // `img.src`, …) and for resolving fetches; set it from the loader when present
         // (the `parse()` path has no URL, so those reflect their raw values).
@@ -298,12 +477,12 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         // Install the graphics seam before the parsed body enters the runtime
         // and before any parser-blocking script executes. Vano's nova_vm backend
         // and Boa receive the same engine-neutral factory contract here.
-        if let Some(webgl) = webgl {
+        if let Some(webgl) = options.webgl {
             rt.set_webgl_factory(webgl);
         }
         let mut capture = {
-            let mut host = rt.host().borrow_mut();
-            DomCaptureRecorder::from_env(&mut host.dom, &sheets)
+            let host = rt.host().borrow();
+            DomCaptureRecorder::from_env(&host.dom, &sheets)
                 .map_err(|e| format!("dom capture init: {e}"))?
         };
 
@@ -316,18 +495,19 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         rt.parse_document_interleaved(html, &DocumentScriptLoader { loader });
         rt.run_microtasks();
         if let Some(recorder) = capture.as_mut() {
-            let mut host = rt.host().borrow_mut();
+            let host = rt.host().borrow();
             recorder
-                .record_pending(&mut host.dom)
+                .record_pending(&host.dom)
                 .map_err(|e| format!("dom capture write: {e}"))?;
         }
+        // This route has no renderer to compact the journal. The parse result
+        // is a baseline snapshot, whether capture is enabled or not.
+        rt.host().borrow_mut().dom.drain_mutations(&mut Vec::new());
 
         Ok(Self {
             rt,
             capture,
-            hidden: false,
-            frozen: false,
-            last_hidden_pump_ms: f64::NAN,
+            lifecycle: DocumentLifecycle::default(),
         })
     }
 
@@ -341,6 +521,11 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         self.rt.set_script_resource_loader(loader);
     }
 
+    /// Select the worker lifetime contract before evaluating Worker scripts.
+    pub fn set_worker_policy(&mut self, policy: script_runtime_api::WorkerPolicy) {
+        self.rt.set_worker_policy(policy);
+    }
+
     /// Drive the runtime one frame's worth: fire due timers against the `now_ms`
     /// virtual clock, settle microtasks, then take the GC tick. Returns
     /// `(reflectors_unpinned, nodes_collected)` from the collection. This is the
@@ -352,25 +537,25 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         // Visibility: a hidden one pumps timers at most once per second (the
         // HTML-spec-licensed clamp for hidden documents), so a background
         // page's interval loop stops driving per-frame work.
-        if self.frozen {
+        if !self.lifecycle.allows_pump(now_ms) {
             return (0, 0);
         }
-        if self.hidden {
-            // The clamp window anchors at the first pump after hiding (NaN
-            // sentinel set by `set_hidden`), so hiding never grants an
-            // immediate bonus tick.
-            if self.last_hidden_pump_ms.is_nan() || now_ms - self.last_hidden_pump_ms < 1000.0 {
-                if self.last_hidden_pump_ms.is_nan() {
-                    self.last_hidden_pump_ms = now_ms;
-                }
-                return (0, 0);
-            }
-            self.last_hidden_pump_ms = now_ms;
+        if let Err(error) = self.rt.run_timers(64, now_ms) {
+            report_runtime_task_error(&mut self.rt, "timer task", error);
         }
-        self.rt.run_timers(64, now_ms);
         self.rt.run_microtasks();
         let _ = self.rt.pump_workers();
         self.rt.run_microtasks();
+        if !self.lifecycle.hidden {
+            if let Err(error) = self.rt.run_animation_frame_callbacks(now_ms) {
+                report_runtime_task_error(&mut self.rt, "animation frame", error);
+            }
+            // After the frame callbacks, against geometry that has caught up
+            // with them: the observers' update step, delivered later as a task.
+            if let Err(error) = self.rt.update_intersection_observations() {
+                report_runtime_task_error(&mut self.rt, "intersection observations", error);
+            }
+        }
         self.flush_dom_capture();
         self.rt.collect_garbage()
     }
@@ -378,40 +563,39 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
     /// Evaluate a classic script against the live document and settle its
     /// microtasks. This is the engine-neutral operation used by worker hosts.
     pub fn evaluate(&mut self, source: &str) -> Result<(), String> {
-        self.rt
-            .eval(source)
-            .map_err(|e| format!("script evaluation: {e:?}"))?;
-        self.rt.run_microtasks();
+        let result = self.rt.eval(source);
+        if result.is_ok() {
+            self.rt.run_microtasks();
+        }
         self.flush_dom_capture();
-        Ok(())
+        result
+            .map(|_| ())
+            .map_err(|e| format!("script evaluation: {e:?}"))
     }
 
     /// Evaluate a module without an external import loader. Imported modules are
     /// rejected until a host supplies the worker's fetch/resolve capability.
     pub fn evaluate_module(&mut self, source: &str, base_url: &str) -> Result<(), String> {
         let mut unavailable = |_referrer: &str, _specifier: &str| None;
-        match self
-            .rt
-            .eval_module(source, base_url, &mut unavailable)
-            .map_err(|e| format!("module evaluation: {e:?}"))?
-        {
-            Some(_) => {
+        match self.rt.eval_module(source, base_url, &mut unavailable) {
+            Ok(Some(_)) => {
                 self.rt.run_microtasks();
                 self.flush_dom_capture();
                 Ok(())
             },
-            None => Err("selected script engine does not support modules".to_string()),
+            Ok(None) => Err("selected script engine does not support modules".to_string()),
+            Err(e) => {
+                self.flush_dom_capture();
+                Err(format!("module evaluation: {e:?}"))
+            },
         }
     }
 
     /// Dispatch an event at a raw DOM node id and settle listener microtasks.
     pub fn dispatch_event(&mut self, raw_node_id: u64, event_type: &str) -> Result<bool, String> {
-        let proceed = self
-            .rt
-            .dispatch_event(raw_node_id, event_type)
-            .map_err(|e| format!("event dispatch: {e:?}"))?;
+        let result = self.rt.dispatch_event(raw_node_id, event_type);
         self.flush_dom_capture();
-        Ok(proceed)
+        result.map_err(|e| format!("event dispatch: {e:?}"))
     }
 
     /// Serialize the live document root's children for backend-neutral comparison.
@@ -422,21 +606,22 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
 
     /// Force the engine/reflector collection cadence used by worker idle ticks.
     pub fn collect_garbage(&mut self) -> (usize, usize) {
+        self.flush_dom_capture();
         self.rt.collect_garbage()
     }
 
-    /// Whether an unfrozen runtime has a timer or outstanding worker work.
+    /// Whether an unfrozen runtime has a timer, animation frame, or worker work.
     /// Worker liveness keeps a polling host driving until acknowledged idle;
     /// it does not mean a message is ready now or provide a wake callback.
     pub fn has_pending_work(&mut self) -> bool {
-        !self.frozen && (self.rt.next_timer_delay().is_some() || self.rt.has_worker_work())
+        !self.lifecycle.frozen && (self.next_wake_delay().is_some() || self.rt.has_worker_work())
     }
 
-    /// Milliseconds until the next timer is due on the runtime's virtual
-    /// clock. The document adapter uses this to hand an exact deadline to its
-    /// host instead of forcing a repaint loop.
-    pub fn next_timer_delay(&mut self) -> Option<f64> {
-        (!self.frozen).then(|| self.rt.next_timer_delay()).flatten()
+    /// Milliseconds until the next timer or visible animation frame. A pending
+    /// animation frame asks the host for the next rendering opportunity.
+    pub fn next_wake_delay(&mut self) -> Option<f64> {
+        let worker_pending = self.rt.has_worker_work();
+        next_document_wake_delay(&mut self.rt, &self.lifecycle, worker_pending)
     }
 
     /// Set Page Visibility (W3C adoption plan P1). The host calls this as a
@@ -446,12 +631,8 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
     /// an engine-side follow-up; the observable contract here is the event
     /// plus the hidden timer clamp in [`pump`](Self::pump).
     pub fn set_hidden(&mut self, hidden: bool) {
-        if self.hidden == hidden {
+        if !self.lifecycle.set_hidden(hidden) {
             return;
-        }
-        self.hidden = hidden;
-        if hidden {
-            self.last_hidden_pump_ms = f64::NAN;
         }
         let doc = self.rt.host().borrow().dom.document().raw();
         let _ = self.dispatch_event(doc, "visibilitychange");
@@ -459,33 +640,32 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
 
     /// Whether the document is currently hidden (Page Visibility).
     pub fn is_hidden(&self) -> bool {
-        self.hidden
+        self.lifecycle.hidden
     }
 
     /// Whether the document is currently frozen (Page Lifecycle).
     pub fn is_frozen(&self) -> bool {
-        self.frozen
+        self.lifecycle.frozen
     }
 
     /// Page Lifecycle freeze: dispatch `freeze` (listeners get a last turn to
     /// persist state, per spec), then stop running tasks until
     /// [`resume`](Self::resume). Idempotent.
     pub fn freeze(&mut self) {
-        if self.frozen {
+        if self.lifecycle.frozen {
             return;
         }
         let doc = self.rt.host().borrow().dom.document().raw();
         let _ = self.dispatch_event(doc, "freeze");
-        self.frozen = true;
+        self.lifecycle.freeze();
     }
 
     /// Page Lifecycle resume: leave the frozen state and dispatch `resume`.
     /// Idempotent.
     pub fn resume(&mut self) {
-        if !self.frozen {
+        if !self.lifecycle.resume() {
             return;
         }
-        self.frozen = false;
         let doc = self.rt.host().borrow().dom.document().raw();
         let _ = self.dispatch_event(doc, "resume");
     }
@@ -534,17 +714,16 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
     }
 
     fn flush_dom_capture(&mut self) {
-        let Some(mut recorder) = self.capture.take() else {
-            return;
-        };
-        let result = {
-            let mut host = self.rt.host().borrow_mut();
-            recorder.record_pending(&mut host.dom)
-        };
-        match result {
-            Ok(_) => self.capture = Some(recorder),
-            Err(err) => eprintln!("[pelt-scripted] dom capture disabled: {err}"),
+        let mut host = self.rt.host().borrow_mut();
+        if let Some(mut recorder) = self.capture.take() {
+            match recorder.record_pending(&host.dom) {
+                Ok(_) => self.capture = Some(recorder),
+                Err(err) => eprintln!("[pelt-scripted] dom capture disabled: {err}"),
+            }
         }
+        // Headless documents own journal compaction. Bound it on every script
+        // turn, including when capture is disabled or a write failed.
+        host.dom.drain_mutations(&mut Vec::new());
     }
 }
 
@@ -553,6 +732,13 @@ struct EmptyResourceFetcher;
 
 #[cfg(feature = "livery")]
 impl ResourceFetcher for EmptyResourceFetcher {
+    fn fetch_request(
+        &self,
+        _request: &genet_host_api::ResourceRequest,
+    ) -> Option<genet_host_api::ResourceFetchResponse> {
+        None
+    }
+
     fn fetch(&self, _url: &str) -> Option<Vec<u8>> {
         None
     }
@@ -570,6 +756,9 @@ pub struct LiveryScriptedDocument<E: ScriptEngine> {
     // them so the route does not consume the Windows main-thread stack merely
     // by carrying one live document through `ViewerApp`.
     rt: Box<Runtime<E>>,
+    host_focused_node: Option<NodeId>,
+    host_edit_node: Option<NodeId>,
+    host_preedit: Option<String>,
     bridge: ScriptResourceBridge,
     cssom: Box<LiveryCssom>,
     child_cssoms: std::rc::Rc<
@@ -577,9 +766,25 @@ pub struct LiveryScriptedDocument<E: ScriptEngine> {
     >,
     pending_fragment: Option<NavigationFragment>,
     capture: Option<DomCaptureRecorder>,
-    hidden: bool,
-    frozen: bool,
-    last_hidden_pump_ms: f64,
+    lifecycle: DocumentLifecycle,
+    validation_notice: Option<ScriptedValidationNotice>,
+    next_validation_notice_sequence: u64,
+    last_error: Option<String>,
+}
+
+/// A native, inert presentation of an uncanceled constraint-validation
+/// report. It is not inserted into the authored DOM or its accessibility tree.
+#[cfg(feature = "livery")]
+#[derive(Clone, Debug, PartialEq)]
+pub struct ScriptedValidationNotice {
+    pub sequence: u64,
+    pub realm: RealmId,
+    pub node: NodeId,
+    pub message: String,
+    /// `[x, y, width, height]` for the painted background rectangle in the
+    /// top session viewport, independent of document scroll and child-frame
+    /// coordinates. This is `None` until a frame paints the notice.
+    pub bounds: Option<[f32; 4]>,
 }
 
 #[cfg(feature = "livery")]
@@ -648,16 +853,68 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
     where
         Fetch: ResourceFetcher + Send + Sync + 'static,
     {
+        Self::load_with_decode_options_and_wake_generation(
+            fetcher,
+            url,
+            wake,
+            generation,
+            options,
+            Default::default(),
+        )
+    }
+    pub fn load_with_decode_options<Fetch>(
+        fetcher: Fetch,
+        url: &str,
+        decode_options: script_runtime_api::HtmlDecodeOptions,
+    ) -> Result<Self, String>
+    where
+        Fetch: ResourceFetcher + Send + Sync + 'static,
+    {
+        Self::load_with_decode_options_and_wake_generation(
+            fetcher,
+            url,
+            ScriptWake::new(),
+            0,
+            Default::default(),
+            decode_options,
+        )
+    }
+    pub fn load_with_decode_options_and_wake_generation<Fetch>(
+        fetcher: Fetch,
+        url: &str,
+        wake: ScriptWake,
+        generation: u64,
+        options: ScriptedDocumentOptions,
+        decode_options: script_runtime_api::HtmlDecodeOptions,
+    ) -> Result<Self, String>
+    where
+        Fetch: ResourceFetcher + Send + Sync + 'static,
+    {
         let navigation = NavigationFragment::parse(url);
         let fetcher = ScriptResourceBridge::new_with_generation(fetcher, wake, generation);
-        let bytes = fetcher
-            .fetch(&navigation.resource_url)
+        let response = fetcher
+            .fetch_response(&navigation.resource_url)
             .ok_or_else(|| format!("could not load {}", navigation.resource_url))?;
-        let mut document = Self::build(
-            &String::from_utf8_lossy(&bytes),
+        let decoded = genet_scripted_dom::html_encoding::decode_html_document(
+            &response.bytes,
+            response.content_type.as_deref(),
+            decode_options,
+        );
+        let final_address = if response.final_url.contains('#') {
+            response.final_url.clone()
+        } else if let Some((_, fragment)) = url.split_once('#') {
+            format!("{}#{fragment}", response.final_url)
+        } else {
+            response.final_url.clone()
+        };
+        let navigation = NavigationFragment::parse(&final_address);
+        let mut document = Self::build_encoded(
+            &decoded.source,
             fetcher,
             &navigation.script_visible_url,
             options,
+            decoded.encoding,
+            decode_options,
         )?;
         document.pending_fragment = (!navigation.text_directives.is_empty()
             || navigation.element_fragment.is_some())
@@ -757,11 +1014,20 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
     /// Parse an inline fixture with an explicit empty host transport. Inline
     /// styles and scripts still use the same Livery CSSOM ownership path.
     pub fn parse(html: &str) -> Result<Self, String> {
+        Self::parse_with_options(html, ScriptedDocumentOptions::default())
+    }
+
+    /// Parse an inline fixture with host capabilities installed before its
+    /// authored scripts run.
+    pub fn parse_with_options(
+        html: &str,
+        options: ScriptedDocumentOptions,
+    ) -> Result<Self, String> {
         Self::build(
             html,
             ScriptResourceBridge::new(EmptyResourceFetcher, ScriptWake::new()),
             "about:blank",
-            ScriptedDocumentOptions::default(),
+            options,
         )
     }
 
@@ -771,8 +1037,33 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         base_url: &str,
         options: ScriptedDocumentOptions,
     ) -> Result<Self, String> {
+        Self::build_encoded(
+            html,
+            fetcher,
+            base_url,
+            options,
+            Default::default(),
+            Default::default(),
+        )
+    }
+    fn build_encoded(
+        html: &str,
+        fetcher: ScriptResourceBridge,
+        base_url: &str,
+        options: ScriptedDocumentOptions,
+        encoding: script_runtime_api::DocumentEncoding,
+        decode_options: script_runtime_api::HtmlDecodeOptions,
+    ) -> Result<Self, String> {
         let mut rt =
             Runtime::<E>::new().map_err(|error| format!("script runtime init: {error:?}"))?;
+        rt.set_document_encoding(encoding);
+        rt.set_html_decode_options(decode_options);
+        rt.set_validation_message_catalog(options.validation_message_catalog);
+        rt.set_worker_policy(options.worker_policy);
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(launcher) = options.worker_process_launcher {
+            rt.set_worker_process_launcher(launcher);
+        }
         rt.set_fetch_handler(Box::new(fetcher.clone()));
         rt.set_script_resource_loader(Box::new(fetcher.clone()));
         let worker_wake = fetcher.wake();
@@ -844,28 +1135,97 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             })
             .unwrap_or_default();
         let mut capture = {
-            let mut host = rt.host().borrow_mut();
-            DomCaptureRecorder::from_env(&mut host.dom, &capture_sheets)
+            let host = rt.host().borrow();
+            DomCaptureRecorder::from_env(&host.dom, &capture_sheets)
                 .map_err(|error| format!("dom capture init: {error}"))?
         };
         if let Some(recorder) = capture.as_mut() {
-            let mut host = rt.host().borrow_mut();
+            let host = rt.host().borrow();
             recorder
-                .record_pending(&mut host.dom)
+                .record_pending(&host.dom)
                 .map_err(|error| format!("dom capture write: {error}"))?;
         }
 
-        Ok(Self {
+        let mut document = Self {
             rt: Box::new(rt),
+            host_focused_node: None,
+            host_edit_node: None,
+            host_preedit: None,
             bridge: fetcher,
             cssom: Box::new(cssom),
             child_cssoms,
             pending_fragment: None,
             capture,
-            hidden: false,
-            frozen: false,
-            last_hidden_pump_ms: f64::NAN,
-        })
+            lifecycle: DocumentLifecycle::default(),
+            validation_notice: None,
+            next_validation_notice_sequence: 0,
+            last_error: None,
+        };
+        document.drain_validation_reports();
+        Ok(document)
+    }
+
+    fn report_target_is_current(&self, realm: RealmId, node: NodeId) -> bool {
+        let Ok(host) = self.rt.host_in_realm(realm) else {
+            return false;
+        };
+        let host = host.borrow();
+        let dom = &host.dom;
+        if !dom.is_live(node) {
+            return false;
+        }
+        let document = dom.document();
+        if dom.tree_root(node) != Some(document) {
+            return false;
+        }
+        dom.form_control_validity(node)
+            .is_some_and(|validity| validity.will_validate && !validity.flags.valid())
+    }
+
+    /// Drain host-private reports after script work and keep the newest report
+    /// whose control remains live, connected, and eligible for validation.
+    fn drain_validation_reports(&mut self) {
+        let reports = self.rt.take_validation_reports();
+        if self
+            .validation_notice
+            .as_ref()
+            .is_some_and(|notice| !self.report_target_is_current(notice.realm, notice.node))
+        {
+            self.validation_notice = None;
+        }
+        for report in reports {
+            if !self.report_target_is_current(report.realm, report.node) {
+                continue;
+            }
+            self.next_validation_notice_sequence = self
+                .next_validation_notice_sequence
+                .checked_add(1)
+                .expect("validation notice sequence exhausted");
+            self.validation_notice = Some(ScriptedValidationNotice {
+                sequence: self.next_validation_notice_sequence,
+                realm: report.realm,
+                node: report.node,
+                message: report.message,
+                bounds: None,
+            });
+        }
+    }
+
+    /// The latest native validation notice, if its target is still connected
+    /// and invalid. Bounds are populated after the next painted frame.
+    pub fn validation_notice(&self) -> Option<&ScriptedValidationNotice> {
+        self.validation_notice.as_ref()
+    }
+
+    /// The last frame's layout or paint translation failure, if any.
+    pub fn last_error(&self) -> Option<&str> {
+        self.last_error.as_deref()
+    }
+
+    /// Dismiss the current native notice. A later uncanceled report creates a
+    /// new notice with a new sequence number.
+    pub fn dismiss_validation_notice(&mut self) -> bool {
+        self.validation_notice.take().is_some()
     }
 
     /// Render the exact live runtime DOM through Livery and lower the resulting
@@ -890,9 +1250,14 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         } else {
             self.cssom.scroll_to(requested_scroll.0, requested_scroll.1);
         }
+        // Livery compacts the journal after painting. Publish every unseen
+        // mutation, including script work performed since the last host turn,
+        // before that compaction boundary.
+        self.flush_dom_capture();
         let mut list = match self.cssom.frame(&mut self.rt, width, height) {
             Ok(list) => list,
             Err(error) => {
+                self.last_error = Some(format!("layout: {error}"));
                 eprintln!("[pelt-livery-scripted] layout error: {error}");
                 return genet_render::RenderedFrame {
                     scene: netrender::Scene::new(width, height),
@@ -909,9 +1274,11 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             }
             // Reframe retained geometry only. The source bytes were fetched and
             // the live DOM built before this navigation-time activation.
+            self.flush_dom_capture();
             list = match self.cssom.frame(&mut self.rt, width, height) {
                 Ok(list) => list,
                 Err(error) => {
+                    self.last_error = Some(format!("layout: {error}"));
                     eprintln!("[pelt-livery-scripted] layout error: {error}");
                     return genet_render::RenderedFrame {
                         scene: netrender::Scene::new(width, height),
@@ -941,7 +1308,28 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             .borrow_mut()
             .retain(|realm, _| reachable.contains(realm));
         self.composite_child_realms(self.rt.top_realm(), &mut list);
-        genet_render::translate_frame(&list)
+        self.drain_validation_reports();
+        // Media-query and frame callbacks can mutate after the paint drain.
+        // Record them now; Livery will consume them on the next frame.
+        self.flush_dom_capture();
+        if let Some(notice) = &mut self.validation_notice {
+            let message = notice.message.clone();
+            notice.bounds = self.cssom.push_validation_notice(&mut list, &message);
+        }
+        match genet_render::translate_frame(&list) {
+            Ok(frame) => {
+                self.last_error = None;
+                frame
+            },
+            Err(error) => {
+                self.last_error = Some(format!("paint translation: {error}"));
+                eprintln!("[pelt-livery-scripted] paint translation error: {error}");
+                genet_render::RenderedFrame {
+                    scene: netrender::Scene::new(width, height),
+                    external_textures: Vec::new(),
+                }
+            },
+        }
     }
 
     /// Child paint is inserted at the parent's replaced-content slot, inheriting
@@ -1057,6 +1445,185 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         moved
     }
 
+    /// Visible top-context identity from the retained host, with text directives hidden.
+    pub fn current_document_address(&self) -> String {
+        let host = self.rt.host().borrow();
+        NavigationFragment::parse(host.base_url.as_deref().unwrap_or("about:blank")).script_visible_url
+    }
+    pub fn document_resolution_base(&self) -> Option<String> {
+        self.rt.host().borrow().document_base_url()
+    }
+    fn host_focus_is_current(&self, node: NodeId) -> bool {
+        let host = self.rt.host().borrow();
+        host.dom.is_live(node) && host.dom.tree_root(node) == Some(host.dom.document())
+            && !host.dom.form_control_is_disabled(node).unwrap_or(false)
+    }
+    fn finish_host_edit(&mut self, node: NodeId) {
+        if self.host_preedit.take().is_some() {
+            let _ = self.rt.dispatch_host_composition(node.raw(), "compositionend", "");
+        }
+        if let Some(edited) = self.host_edit_node.take() {
+            if edited == node {
+                let changed = self.with_dom(|dom| dom.form_control_interaction_state(node)
+                    .is_some_and(|state| state.user_edit_pending));
+                if changed { let _ = self.rt.dispatch_host_change(node.raw()); }
+                self.rt.host().borrow_mut().dom.commit_form_control_user_edit(node);
+            }
+        }
+    }
+    fn clear_host_focus_step(&mut self) -> bool {
+        if let Some(node) = self.host_focused_node.take() {
+            self.finish_host_edit(node);
+            let _ = self.rt.dispatch_host_focus_step(node.raw(), false);
+            true
+        } else { false }
+    }
+    pub fn clear_host_focus(&mut self) {
+        if self.clear_host_focus_step() {
+            self.rt.finish_host_input();
+        }
+    }
+    pub fn focus_host_node(&mut self, node: NodeId) -> bool {
+        if !self.host_focus_is_current(node) { self.clear_host_focus(); return false; }
+        if self.host_focused_node == Some(node) { return true; }
+        self.clear_host_focus_step();
+        if !self.host_focus_is_current(node) { self.rt.finish_host_input(); return false; }
+        if self.rt.dispatch_host_focus_step(node.raw(), true).unwrap_or(false) {
+            if !self.host_focus_is_current(node) {
+                let _ = self.rt.dispatch_host_focus_step(node.raw(), false);
+                self.rt.finish_host_input();
+                return false;
+            }
+            self.host_focused_node = Some(node);
+            self.rt.finish_host_input();
+            true
+        } else { self.rt.finish_host_input(); false }
+    }
+    pub fn host_editable_focus(&self) -> bool {
+        self.host_focused_node.is_some_and(|node| self.host_focus_is_current(node)
+            && self.with_dom(|dom| dom.can_user_edit_text_control(node)))
+    }
+    pub fn host_has_focus(&self) -> bool { self.host_focused_node.is_some_and(|node| self.host_focus_is_current(node)) }
+    pub fn host_focused_is_textarea(&self) -> bool {
+        self.host_focused_node.is_some_and(|node| self.host_focus_is_current(node)
+            && self.with_dom(|dom| dom.element_name(node).is_some_and(|name| name.local.as_str() == "textarea")))
+    }
+    pub fn host_text_input(&mut self, operation: &str, text: &str, input_type: &str) -> bool {
+        let Some(node) = self.host_focused_node.filter(|node| self.host_focus_is_current(*node)) else { return false };
+        if !self.with_dom(|dom| dom.can_user_edit_text_control(node)) { return false; }
+        let result = self.rt.dispatch_host_text_edit(node.raw(), operation, text, input_type).unwrap_or_else(|_| "rejected".into());
+        if result != "rejected" { self.host_edit_node = Some(node); }
+        if !self.host_focus_is_current(node) { self.clear_host_focus(); }
+        self.rt.finish_host_input();
+        self.drain_validation_reports();
+        self.flush_dom_capture();
+        result != "rejected"
+    }
+    pub fn host_composition(&mut self, phase: &str, text: &str) -> bool {
+        let Some(node) = self.host_focused_node.filter(|node| self.host_focus_is_current(*node)) else { return false };
+        if !self.with_dom(|dom| dom.can_user_edit_text_control(node)) { return false; }
+        let _ = self.rt.dispatch_host_composition(node.raw(), phase, text);
+        if !self.host_focus_is_current(node) { self.clear_host_focus(); return false; }
+        self.host_preedit = if phase == "compositionend" { None } else { Some(text.into()) };
+        self.rt.finish_host_input();
+        true
+    }
+    pub fn host_has_preedit(&self) -> bool { self.host_preedit.is_some() }
+    pub fn cancel_host_preedit(&mut self) -> bool {
+        if self.host_preedit.is_none() { return false; }
+        if let Some(node) = self.host_focused_node {
+            let _ = self.rt.dispatch_host_composition(node.raw(), "compositionend", "");
+        }
+        self.host_preedit = None;
+        self.rt.finish_host_input();
+        true
+    }
+    pub fn move_host_focus(&mut self, backward: bool) -> bool {
+        let nodes = self.with_dom(|dom| {
+            let mut stack = vec![dom.document()]; let mut nodes = Vec::new();
+            while let Some(node) = stack.pop() {
+                if let Some(name) = dom.element_name(node) {
+                    let attr = |key: &str| {
+                        dom.attribute(node, &Namespace::default(), &LocalName::from(key))
+                    };
+                    let tabindex = attr("tabindex").and_then(|v| v.parse::<i32>().ok());
+                    if !dom.form_control_is_disabled(node).unwrap_or(false)
+                        && tabindex.is_none_or(|i| i >= 0)
+                        && (matches!(name.local.as_ref(), "input" | "button" | "select" | "textarea")
+                            && !attr("type").is_some_and(|v| v.eq_ignore_ascii_case("hidden"))
+                            || name.local.as_str() == "a" && attr("href").is_some() || tabindex.is_some()) {
+                        nodes.push(node);
+                    }
+                }
+                stack.extend(dom.dom_children(node).collect::<Vec<_>>().into_iter().rev());
+            }
+            nodes
+        });
+        let nodes = nodes
+            .into_iter()
+            .filter(|node| {
+                self.cssom
+                    .fragment_rect(*node)
+                    .is_some_and(|[_, _, w, h]| w > 0.0 && h > 0.0)
+            })
+            .collect::<Vec<_>>();
+        if nodes.is_empty() {
+            self.clear_host_focus();
+            return false;
+        }
+        let current = self
+            .host_focused_node
+            .and_then(|node| nodes.iter().position(|n| *n == node));
+        let next = if backward {
+            current.map_or(nodes.len() - 1, |i| (i + nodes.len() - 1) % nodes.len())
+        } else {
+            current.map_or(0, |i| (i + 1) % nodes.len())
+        };
+        self.focus_host_node(nodes[next])
+    }
+    pub fn dispatch_host_key(
+        &mut self,
+        key: &str,
+        down: bool,
+        repeat: bool,
+        alt: bool,
+        ctrl: bool,
+        meta: bool,
+        shift: bool,
+    ) -> bool {
+        let Some(node) = self.host_focused_node else {
+            return false;
+        };
+        if !self.host_focus_is_current(node) {
+            self.clear_host_focus();
+            return false;
+        }
+        let allowed = self
+            .rt
+            .dispatch_host_key_step(
+                node.raw(),
+                key,
+                down,
+                repeat,
+                script_runtime_api::FormKeyModifiers {
+                    alt,
+                    ctrl,
+                    meta,
+                    shift,
+                },
+            )
+            .unwrap_or(false);
+        if !self.host_focus_is_current(node) {
+            self.clear_host_focus();
+        }
+        // The caller applies any text and Tab defaults before this checkpoint.
+        // A canceled event is consumed so the shell cannot scroll it.
+        self.drain_validation_reports();
+        self.flush_dom_capture();
+        !allowed
+    }
+    pub fn finish_host_key(&mut self) { self.rt.finish_host_input(); self.drain_validation_reports(); self.flush_dom_capture(); }
+
     pub fn click_at(&mut self, x: f32, y: f32) -> bool {
         !matches!(self.click_at_result(x, y), ScriptedClick::Miss)
     }
@@ -1071,7 +1638,9 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
     /// Dispatch a live-DOM click and preserve its typed external-navigation
     /// default for the embedding document session.
     pub fn click_at_result(&mut self, x: f32, y: f32) -> ScriptedClick {
+        if let Some(node) = self.click_target_at(x, y) { let _ = self.focus_host_node(node); }
         let outcome = self.cssom.click_at_result(&mut self.rt, x, y);
+        self.drain_validation_reports();
         self.flush_dom_capture();
         outcome
     }
@@ -1080,7 +1649,16 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         let host = self.rt.host().borrow();
         let mut links = Vec::new();
         collect_livery_links(&host.dom, host.dom.document(), &self.cssom, &mut links);
+        let base = host.document_base_url();
         links
+            .into_iter()
+            .map(|(href, rect)| {
+                (
+                    crate::resolve_href(base.as_deref().unwrap_or("about:blank"), &href),
+                    rect,
+                )
+            })
+            .collect()
     }
 
     pub fn begin_text_selection(&mut self, x: f32, y: f32) -> bool {
@@ -1165,66 +1743,111 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
     }
 
     pub fn pump(&mut self, now_ms: f64) -> (usize, usize) {
-        if self.frozen {
+        if !self.lifecycle.allows_pump(now_ms) {
             return (0, 0);
         }
-        if self.hidden {
-            if self.last_hidden_pump_ms.is_nan() || now_ms - self.last_hidden_pump_ms < 1000.0 {
-                if self.last_hidden_pump_ms.is_nan() {
-                    self.last_hidden_pump_ms = now_ms;
-                }
-                return (0, 0);
-            }
-            self.last_hidden_pump_ms = now_ms;
-        }
-        let external = self.bridge.pump(&mut self.rt);
+        let external = match self.bridge.pump(&mut self.rt) {
+            Ok(count) => count,
+            Err(error) => {
+                self.rt.report_script_exception(
+                    &format!("resource completion: {error}"),
+                    None,
+                );
+                1
+            },
+        };
         let mut workers = self.rt.pump_workers();
-        self.rt.run_timers(64, now_ms);
+        if let Err(error) = self.rt.run_timers(64, now_ms) {
+            report_runtime_task_error(&mut self.rt, "timer task", error);
+        }
         self.rt.run_microtasks();
         workers += self.rt.pump_workers();
         self.rt.run_microtasks();
+        if !self.lifecycle.hidden {
+            if let Err(error) = self.rt.run_animation_frame_callbacks(now_ms) {
+                report_runtime_task_error(&mut self.rt, "animation frame", error);
+            }
+            // After the frame callbacks, against geometry that has caught up
+            // with them: the observers' update step, delivered later as a task.
+            if let Err(error) = self.rt.update_intersection_observations() {
+                report_runtime_task_error(&mut self.rt, "intersection observations", error);
+            }
+        }
         self.flush_dom_capture();
         let (unpinned, collected) = self.rt.collect_garbage();
+        self.drain_validation_reports();
         (external + workers + unpinned, collected)
     }
 
     pub fn has_pending_work(&mut self) -> bool {
-        !self.frozen
-            && (self.rt.next_timer_delay().is_some()
+        !self.lifecycle.frozen
+            && (self.next_wake_delay().is_some()
                 || self.bridge.has_pending()
                 || self.rt.has_worker_work())
     }
 
-    /// Milliseconds until the next timer is due on the runtime's virtual
-    /// clock. The document adapter uses this to hand an exact deadline to its
-    /// host instead of forcing a repaint loop.
-    pub fn next_timer_delay(&mut self) -> Option<f64> {
-        (!self.frozen).then(|| self.rt.next_timer_delay()).flatten()
+    /// Milliseconds until the next timer or visible animation frame. The
+    /// document adapter hands this deadline to the host's pending-work report.
+    pub fn next_wake_delay(&mut self) -> Option<f64> {
+        let external_pending = self.bridge.has_pending() || self.rt.has_worker_work();
+        next_document_wake_delay(&mut self.rt, &self.lifecycle, external_pending)
     }
 
     pub fn has_external_work(&self) -> bool {
-        !self.frozen && (self.bridge.has_pending() || self.rt.has_worker_work())
+        !self.lifecycle.frozen && (self.bridge.has_pending() || self.rt.has_worker_work())
+    }
+
+    /// Select the worker lifetime contract for workers created after this call.
+    pub fn set_worker_policy(&mut self, policy: script_runtime_api::WorkerPolicy) {
+        self.rt.set_worker_policy(policy);
     }
 
     pub fn set_hidden(&mut self, hidden: bool) {
-        if self.hidden == hidden {
+        if !self.lifecycle.set_hidden(hidden) {
             return;
-        }
-        self.hidden = hidden;
-        if hidden {
-            self.last_hidden_pump_ms = f64::NAN;
         }
         let document = self.rt.host().borrow().dom.document().raw();
         let _ = self.rt.dispatch_event(document, "visibilitychange");
     }
 
+    pub fn is_hidden(&self) -> bool {
+        self.lifecycle.hidden
+    }
+
+    pub fn is_frozen(&self) -> bool {
+        self.lifecycle.frozen
+    }
+
+    /// Dispatch the last lifecycle event before suspending timer, worker,
+    /// resource, and animation-frame delivery. Idempotent.
+    pub fn freeze(&mut self) {
+        if self.lifecycle.frozen {
+            return;
+        }
+        let document = self.rt.host().borrow().dom.document().raw();
+        let _ = self.rt.dispatch_event(document, "freeze");
+        self.lifecycle.freeze();
+    }
+
+    /// Resume the document and notify authored lifecycle listeners.
+    pub fn resume(&mut self) {
+        if !self.lifecycle.resume() {
+            return;
+        }
+        let document = self.rt.host().borrow().dom.document().raw();
+        let _ = self.rt.dispatch_event(document, "resume");
+    }
+
     pub fn evaluate(&mut self, source: &str) -> Result<(), String> {
-        self.rt
-            .eval(source)
-            .map_err(|error| format!("script evaluation: {error:?}"))?;
-        self.rt.run_microtasks();
+        let result = self.rt.eval(source);
+        if result.is_ok() {
+            self.rt.run_microtasks();
+            self.drain_validation_reports();
+        }
         self.flush_dom_capture();
-        Ok(())
+        result
+            .map(|_| ())
+            .map_err(|error| format!("script evaluation: {error:?}"))
     }
 
     pub fn dom_snapshot(&self) -> String {
@@ -1255,8 +1878,8 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             return;
         };
         let result = {
-            let mut host = self.rt.host().borrow_mut();
-            recorder.record_pending(&mut host.dom)
+            let host = self.rt.host().borrow();
+            recorder.record_pending(&host.dom)
         };
         match result {
             Ok(_) => self.capture = Some(recorder),
@@ -1283,6 +1906,10 @@ impl<E: ScriptEngine> Drop for LiveryScriptedDocument<E> {
 }
 
 #[cfg(all(test, feature = "livery"))]
+#[path = "journal_tests.rs"]
+mod journal_tests;
+
+#[cfg(all(test, feature = "livery"))]
 mod livery_text_fragment_tests {
     use super::*;
     use script_engine_boa::BoaEngine;
@@ -1295,6 +1922,13 @@ mod livery_text_fragment_tests {
     }
 
     impl ResourceFetcher for CountingFetcher {
+        fn fetch_request(
+            &self,
+            _request: &genet_host_api::ResourceRequest,
+        ) -> Option<genet_host_api::ResourceFetchResponse> {
+            None
+        }
+
         fn fetch(&self, url: &str) -> Option<Vec<u8>> {
             self.calls.lock().unwrap().push(url.to_owned());
             (url == "https://example.test/article").then(|| self.body.clone())
@@ -1486,6 +2120,35 @@ impl script_runtime_api::ParserScriptLoader for DocumentScriptLoader<'_> {
             Some((_, base)) => crate::resolve_href(base, src),
             None => src.to_owned(),
         }
+    }
+
+    fn load_module(
+        &self,
+        specifier: &str,
+        referrer: &str,
+        charset: Option<&str>,
+        integrity: Option<&str>,
+    ) -> Option<(String, String)> {
+        let (fetcher, document_url) = self.loader?;
+        let requested = crate::resolve_href(
+            if referrer.is_empty() {
+                document_url
+            } else {
+                referrer
+            },
+            specifier,
+        );
+        let response = fetcher.fetch_response(&requested)?;
+        if let Some(metadata) = integrity {
+            if !integrity_matches(metadata, &response.bytes) {
+                eprintln!("[pelt-scripted] integrity mismatch for {requested}; script blocked");
+                return None;
+            }
+        }
+        Some((
+            response.final_url,
+            decode_script_bytes(&response.bytes, charset),
+        ))
     }
 }
 
@@ -1690,7 +2353,7 @@ mod tests {
             html,
             Box::new(move |_width, _height| {
                 marker.set(true);
-                Box::new(NullWebGl(None))
+                Some(Box::new(NullWebGl(None)))
             }),
         )
         .expect("runtime inits");
@@ -1722,8 +2385,9 @@ mod tests {
                 ScriptedDocumentOptions {
                     webgl: Some(Box::new(move |_width, _height| {
                         marker.set(true);
-                        Box::new(NullWebGl(Some(recorded_drops.clone())))
+                        Some(Box::new(NullWebGl(Some(recorded_drops.clone()))))
                     })),
+                    ..ScriptedDocumentOptions::default()
                 },
             )
             .expect("rendered document builds");
@@ -1787,6 +2451,58 @@ mod tests {
             "collect_garbage reaped at least the orphan (got {collected})"
         );
         let _ = unpinned;
+    }
+
+    fn animation_frames_follow_visible_document_turn<E: ScriptEngine>() {
+        let mut doc = ScriptedDocument::<E>::parse("<body></body>").expect("runtime inits");
+        doc.evaluate(
+            "var canceled = requestAnimationFrame(function(){ console.log('canceled'); });\
+             cancelAnimationFrame(canceled);\
+             requestAnimationFrame(function(now) {\
+               console.log('first@' + now);\
+               Promise.resolve().then(function(){ console.log('microtask'); });\
+               requestAnimationFrame(function(next) { console.log('next@' + next); });\
+             });\
+             requestAnimationFrame(function(){ console.log('peer'); });",
+        )
+        .expect("schedule animation frames");
+        assert!(
+            doc.has_pending_work(),
+            "rAF alone keeps the document pending"
+        );
+        assert_eq!(doc.next_wake_delay(), Some(0.0));
+        doc.pump(16.0);
+        assert_eq!(doc.console(), vec!["first@16", "microtask", "peer"]);
+        assert_eq!(
+            doc.next_wake_delay(),
+            Some(0.0),
+            "next-frame callback remains"
+        );
+        doc.pump(32.0);
+        assert_eq!(
+            doc.console(),
+            vec!["first@16", "microtask", "peer", "next@32"]
+        );
+        assert!(!doc.has_pending_work());
+
+        doc.evaluate("requestAnimationFrame(function(){ console.log('resumed'); });")
+            .expect("schedule hidden frame");
+        doc.set_hidden(true);
+        assert_eq!(doc.next_wake_delay(), None, "hidden rAF does not wake");
+        doc.pump(1000.0);
+        doc.pump(2000.0);
+        assert_eq!(doc.console().last().map(String::as_str), Some("next@32"));
+        doc.set_hidden(false);
+        assert_eq!(doc.next_wake_delay(), Some(0.0));
+        doc.freeze();
+        assert_eq!(doc.next_wake_delay(), None, "frozen work cannot wake");
+        doc.pump(2016.0);
+        assert_eq!(doc.console().last().map(String::as_str), Some("next@32"));
+        doc.resume();
+        assert_eq!(doc.next_wake_delay(), Some(0.0));
+        doc.pump(2032.0);
+        assert_eq!(doc.console().last().map(String::as_str), Some("resumed"));
+        assert!(!doc.has_pending_work());
     }
 
     /// Page Visibility + Page Lifecycle (W3C adoption plan P1): a hidden
@@ -1861,6 +2577,45 @@ mod tests {
         );
     }
 
+    fn lifecycle_wake_matches_task_delivery<E: ScriptEngine>() {
+        let mut doc = ScriptedDocument::<E>::parse(
+            "<body><script>\
+             document.addEventListener('visibilitychange', () => console.log('visibility'));\
+             document.addEventListener('freeze', () => console.log('freeze'));\
+             document.addEventListener('resume', () => console.log('resume'));\
+             setInterval(() => console.log('tick'), 16);\
+             </script></body>",
+        ).expect("headless document");
+        doc.set_hidden(true);
+        assert!(doc.is_hidden());
+        assert!(!doc.is_frozen());
+        assert_eq!(doc.next_wake_delay(), Some(0.0), "first hidden wake anchors the clamp");
+        doc.pump(0.0);
+        assert_eq!(doc.next_wake_delay(), Some(1000.0));
+        doc.pump(16.0);
+        assert_eq!(doc.next_wake_delay(), Some(984.0));
+        assert!(!doc.console().iter().any(|line| line == "tick"));
+        doc.pump(1000.0);
+        assert!(doc.console().iter().any(|line| line == "tick"));
+        assert_eq!(doc.next_wake_delay(), Some(1000.0));
+        let before = doc.console().len();
+        doc.freeze();
+        assert!(doc.is_frozen());
+        assert_eq!(doc.next_wake_delay(), None);
+        assert!(!doc.has_pending_work());
+        doc.pump(2000.0);
+        assert_eq!(doc.console().len(), before + 1, "only freeze event ran");
+        doc.resume();
+        assert!(doc.is_hidden(), "resume does not change visibility");
+        assert_eq!(doc.next_wake_delay(), Some(0.0));
+        doc.pump(2000.0);
+        assert_eq!(doc.next_wake_delay(), Some(1000.0));
+        doc.set_hidden(false);
+        assert!(!doc.is_hidden());
+        doc.pump(2016.0);
+        assert_eq!(doc.console().last().map(String::as_str), Some("tick"));
+    }
+
     /// The gc-arena soak (carve-out #2): a page that churns nodes under `setInterval`
     /// is driven through [`pump`](ScriptedDocument::pump) at frame cadence; the GC tick
     /// keeps the live set bounded rather than growing one batch per frame. Without a
@@ -1904,6 +2659,13 @@ mod tests {
     #[derive(Clone)]
     struct MapFetcher(std::collections::HashMap<String, Vec<u8>>);
     impl ResourceFetcher for MapFetcher {
+        fn fetch_request(
+            &self,
+            _request: &genet_host_api::ResourceRequest,
+        ) -> Option<genet_host_api::ResourceFetchResponse> {
+            None
+        }
+
         fn fetch(&self, url: &str) -> Option<Vec<u8>> {
             self.0.get(url).cloned()
         }
@@ -2269,6 +3031,134 @@ mod tests {
         );
     }
 
+    /// Redirected entries and dependencies use their final URL as the next
+    /// import base and as the cache key. Inline modules use the live <base>.
+    fn module_graph_uses_importer_final_urls_and_inline_base<E: ScriptEngine>() {
+        use genet_host_api::ResourceResponse;
+        use std::collections::HashMap;
+        use std::sync::Mutex;
+
+        struct Modules {
+            files: HashMap<String, (String, String)>,
+            requested: Mutex<Vec<String>>,
+        }
+        impl ResourceFetcher for Modules {
+            fn fetch_request(
+                &self,
+                _request: &genet_host_api::ResourceRequest,
+            ) -> Option<genet_host_api::ResourceFetchResponse> {
+                None
+            }
+
+            fn fetch(&self, url: &str) -> Option<Vec<u8>> {
+                self.fetch_response(url).map(|response| response.bytes)
+            }
+            fn fetch_response(&self, url: &str) -> Option<ResourceResponse> {
+                self.requested.lock().unwrap().push(url.into());
+                let (final_url, source) = self.files.get(url)?;
+                Some(ResourceResponse::new(
+                    final_url.clone(),
+                    source.as_bytes().to_vec(),
+                ))
+            }
+        }
+        const ENTRY: &str = "import { left } from './branch/left.js';\
+             import { right } from './branch/right.js';\
+             console.log('entry-once'); console.log('joined:' + left + right);";
+        let files = [
+            (
+                "https://site.test/page/index.html",
+                "https://site.test/page/index.html",
+                "<head><script type=module>import { value } from './early.js'; console.log('early:' + value);</script>\
+                 <base href='https://site.test/assets/'></head><body>\
+                 <script type=module src='../redirect/entry.js'></script>\
+                 <script type=module>import { value } from './inline.js'; console.log('inline:' + value);</script></body>",
+            ),
+            (
+                "https://site.test/page/early.js",
+                "https://site.test/page/early.js",
+                "export const value = 'E';",
+            ),
+            (
+                "https://site.test/redirect/entry.js",
+                "https://site.test/modules/a/entry.js",
+                ENTRY,
+            ),
+            (
+                "https://site.test/modules/a/entry.js",
+                "https://site.test/modules/a/entry.js",
+                ENTRY,
+            ),
+            (
+                "https://site.test/modules/a/branch/left.js",
+                "https://site.test/modules/a/branch/left.js",
+                "import '../entry.js'; import { token } from '../../shared/alias-a.js'; export const left = token;",
+            ),
+            (
+                "https://site.test/modules/a/branch/right.js",
+                "https://site.test/modules/a/branch/right.js",
+                "import { token } from '../../shared/alias-b.js'; export const right = token;",
+            ),
+            (
+                "https://site.test/modules/shared/alias-a.js",
+                "https://site.test/canonical/shared.js",
+                "console.log('shared-once'); export const token = 'S';",
+            ),
+            (
+                "https://site.test/modules/shared/alias-b.js",
+                "https://site.test/canonical/shared.js",
+                "console.log('shared-once'); export const token = 'S';",
+            ),
+            (
+                "https://site.test/assets/inline.js",
+                "https://site.test/assets/inline.js",
+                "export const value = 'I';",
+            ),
+        ];
+        let fetcher = Modules {
+            files: files
+                .into_iter()
+                .map(|(requested, final_url, source)| {
+                    (requested.into(), (final_url.into(), source.into()))
+                })
+                .collect(),
+            requested: Mutex::new(Vec::new()),
+        };
+        let document = ScriptedDocument::<E>::load(&fetcher, "https://site.test/page/index.html")
+            .expect("module document loads");
+        let console = document.console();
+        assert!(console.iter().any(|line| line == "early:E"), "{console:?}");
+        assert!(
+            console.iter().any(|line| line == "joined:SS"),
+            "{console:?}"
+        );
+        assert!(console.iter().any(|line| line == "inline:I"), "{console:?}");
+        assert_eq!(
+            console.iter().filter(|line| *line == "entry-once").count(),
+            1
+        );
+        assert_eq!(
+            console.iter().filter(|line| *line == "shared-once").count(),
+            1
+        );
+        let requested = fetcher.requested.lock().unwrap();
+        for url in [
+            "https://site.test/page/early.js",
+            "https://site.test/redirect/entry.js",
+            "https://site.test/modules/a/entry.js",
+            "https://site.test/modules/a/branch/left.js",
+            "https://site.test/modules/a/branch/right.js",
+            "https://site.test/modules/shared/alias-a.js",
+            "https://site.test/modules/shared/alias-b.js",
+            "https://site.test/assets/inline.js",
+        ] {
+            assert!(
+                requested.iter().any(|seen| seen == url),
+                "missing {url}: {requested:?}"
+            );
+        }
+    }
+
     /// `<script charset>` decodes the fetched bytes with the named encoding, not
     /// UTF-8: an ISO-8859-1 script with a `0xE9` byte ('é') decodes to `café`. As
     /// UTF-8 the lone `0xE9` is invalid and would become a replacement char.
@@ -2428,8 +3318,16 @@ mod tests {
         pump_collects_orphans::<BoaEngine>();
     }
     #[test]
+    fn animation_frames_follow_visible_document_turn_on_boa() {
+        animation_frames_follow_visible_document_turn::<BoaEngine>();
+    }
+    #[test]
     fn hidden_clamps_timers_frozen_stops_them_on_boa() {
         hidden_clamps_timers_frozen_stops_them::<BoaEngine>();
+    }
+    #[test]
+    fn lifecycle_wake_matches_task_delivery_on_boa() {
+        lifecycle_wake_matches_task_delivery::<BoaEngine>();
     }
     #[test]
     fn gc_soak_bounds_memory_on_boa() {
@@ -2496,6 +3394,10 @@ mod tests {
         module_import_diamond_loads_shared_once::<BoaEngine>();
     }
     #[test]
+    fn module_graph_uses_importer_final_urls_and_inline_base_on_boa() {
+        module_graph_uses_importer_final_urls_and_inline_base::<BoaEngine>();
+    }
+    #[test]
     fn external_script_charset_decodes_on_boa() {
         external_script_charset_decodes::<BoaEngine>();
     }
@@ -2532,6 +3434,14 @@ mod tests {
         #[test]
         fn pump_collects_orphans_on_nova() {
             pump_collects_orphans::<NovaEngine>();
+        }
+        #[test]
+        fn animation_frames_follow_visible_document_turn_on_nova() {
+            animation_frames_follow_visible_document_turn::<NovaEngine>();
+        }
+        #[test]
+        fn lifecycle_wake_matches_task_delivery_on_nova() {
+            lifecycle_wake_matches_task_delivery::<NovaEngine>();
         }
         #[test]
         fn gc_soak_bounds_memory_on_nova() {
@@ -2594,6 +3504,10 @@ mod tests {
             module_import_diamond_loads_shared_once::<NovaEngine>();
         }
         #[test]
+        fn module_graph_uses_importer_final_urls_and_inline_base_on_nova() {
+            module_graph_uses_importer_final_urls_and_inline_base::<NovaEngine>();
+        }
+        #[test]
         fn external_script_charset_decodes_on_nova() {
             external_script_charset_decodes::<NovaEngine>();
         }
@@ -2624,9 +3538,29 @@ mod tests {
         use super::*;
         use script_engine_boa::BoaEngine;
 
+        #[test]
+        fn scripted_frame_reports_rejected_border_and_recovers() {
+            let mut doc = LiveryScriptedDocument::<BoaEngine>::parse(
+                "<body><div id='target' style='width: 32px; height: 32px; border: 4px solid red'></div></body>",
+            ).expect("scripted document");
+            assert!(!doc.frame(64, 64).ops.is_empty());
+
+            doc.evaluate("document.getElementById('target').setAttribute('style', 'width: 32px; height: 32px; border: 4px groove red')")
+                .expect("change border style");
+            assert!(doc.frame(64, 64).ops.is_empty());
+            assert!(doc.last_error().is_some_and(|error|
+                error.contains("paint translation: paint command")
+                    && error.contains("border style or geometry is not lowered")));
+
+            doc.evaluate("document.getElementById('target').setAttribute('style', 'width: 32px; height: 32px; border: 4px solid red')")
+                .expect("restore supported border");
+            assert!(!doc.frame(64, 64).ops.is_empty());
+            assert_eq!(doc.last_error(), None);
+        }
+
         fn child_realm_mutations_render<E: ScriptEngine>() {
             let mut doc = LiveryScriptedDocument::<E>::parse(
-                r#"<body><iframe id="f" style="width:180px;height:90px" srcdoc='<body><p id="target" style="margin:0;width:20px;height:10px;background:red">child</p><script>globalThis.initialWidth=getComputedStyle(document.getElementById("target")).width;</script></body>'></iframe></body>"#,
+                r#"<body><iframe id="f" style="width:180px;height:90px;border:2px solid" srcdoc='<body><p id="target" style="margin:0;width:20px;height:10px;background:red">child</p><script>globalThis.initialWidth=getComputedStyle(document.getElementById("target")).width;</script></body>'></iframe></body>"#,
             ).expect("hosted document");
             // The child's load is an agent task. Pump it before inspecting the
             // first child script, while retaining the before-first-paint gate.
@@ -2641,6 +3575,7 @@ mod tests {
                 "child CSSOM is bound before its first inline script and before paint"
             );
             let first = doc.frame(400, 300);
+            assert_eq!(doc.last_error(), None);
             assert!(
                 first
                     .ops
@@ -2659,6 +3594,7 @@ mod tests {
                 .expect("initial child layout");
             doc.evaluate("var p=document.getElementById('f').contentWindow.document.getElementById('target'); p.textContent=''; p.style.width='75px'; p.style.height='30px'; p.style.backgroundColor='blue';").expect("mutate child from parent");
             let second = doc.frame(400, 300);
+            assert_eq!(doc.last_error(), None);
             assert!(
                 !second
                     .ops
@@ -2697,11 +3633,12 @@ mod tests {
                 DomCaptureRecord, DomCaptureRecorder, RecordedMutation, read_capture_records,
             };
             let mut doc = LiveryScriptedDocument::<E>::parse(
-                r#"<body><iframe id="f" srcdoc='<body><p id="target">child</p></body>'></iframe></body>"#,
+                r#"<body><iframe id="f" style="border:2px solid" srcdoc='<body><p id="target">child</p></body>'></iframe></body>"#,
             )
             .expect("hosted document");
             doc.pump(0.0);
             let _ = doc.frame(400, 300);
+            assert_eq!(doc.last_error(), None);
             let child_realm = doc.rt.frame_realms(doc.rt.top_realm())[0].1;
             let child_arena = doc
                 .rt
@@ -2715,6 +3652,7 @@ mod tests {
             )
             .expect("cross-arena adoption");
             let _ = doc.frame(400, 300);
+            assert_eq!(doc.last_error(), None);
             let host = doc
                 .rt
                 .host_in_realm(doc.rt.top_realm())
@@ -2815,6 +3753,76 @@ mod tests {
                     .any(|op| matches!(op, netrender::SceneOp::GlyphRun(_))),
                 "script-injected text renders as glyphs",
             );
+        }
+
+        /// rAF mutation lands before the next retained Livery frame consumes
+        /// the DOM journal; a frame painted before the pump stays unchanged.
+        fn animation_frame_mutation_renders<E: ScriptEngine>() {
+            let mut doc = LiveryScriptedDocument::<E>::parse(
+                "<body><script>requestAnimationFrame(function() {\
+                   var p = document.createElement('p');\
+                   p.textContent = 'frame mutation';\
+                   document.body.appendChild(p);\
+                 });</script></body>",
+            )
+            .expect("runtime inits");
+            assert_eq!(doc.next_wake_delay(), Some(0.0));
+            let before = doc.frame(400, 300);
+            assert!(
+                !before
+                    .ops
+                    .iter()
+                    .any(|op| matches!(op, netrender::SceneOp::GlyphRun(_))),
+                "the callback has not run before the pump"
+            );
+            doc.pump(16.0);
+            let after = doc.frame(400, 300);
+            assert!(
+                after
+                    .ops
+                    .iter()
+                    .any(|op| matches!(op, netrender::SceneOp::GlyphRun(_))),
+                "the retained frame paints the rAF mutation"
+            );
+            assert!(doc.dom_snapshot().contains("frame mutation"));
+            assert_eq!(doc.next_wake_delay(), None);
+        }
+
+        fn live_lifecycle_wake_matches_delivery<E: ScriptEngine>() {
+            let mut doc = LiveryScriptedDocument::<E>::parse(
+                "<body><script>\
+                 document.addEventListener('visibilitychange', () => console.log('visibility'));\
+                 document.addEventListener('freeze', () => console.log('freeze'));\
+                 document.addEventListener('resume', () => console.log('resume'));\
+                 setInterval(() => console.log('tick'), 16);\
+                 </script></body>",
+            ).expect("live document");
+            doc.set_hidden(true);
+            assert!(doc.is_hidden());
+            assert_eq!(doc.next_wake_delay(), Some(0.0));
+            doc.pump(0.0);
+            assert_eq!(doc.next_wake_delay(), Some(1000.0));
+            doc.pump(16.0);
+            assert_eq!(doc.next_wake_delay(), Some(984.0));
+            assert!(!doc.console().iter().any(|line| line == "tick"));
+            doc.pump(1000.0);
+            assert!(doc.console().iter().any(|line| line == "tick"));
+            assert_eq!(doc.next_wake_delay(), Some(1000.0));
+            let before = doc.console().len();
+            doc.freeze();
+            assert!(doc.is_frozen());
+            assert_eq!(doc.next_wake_delay(), None);
+            assert!(!doc.has_external_work());
+            doc.pump(2000.0);
+            assert_eq!(doc.console().len(), before + 1, "only freeze event ran");
+            doc.resume();
+            assert!(doc.is_hidden());
+            assert_eq!(doc.next_wake_delay(), Some(0.0));
+            doc.pump(2000.0);
+            assert_eq!(doc.next_wake_delay(), Some(1000.0));
+            doc.set_hidden(false);
+            doc.pump(2016.0);
+            assert_eq!(doc.console().last().map(String::as_str), Some("tick"));
         }
 
         /// Control: with no script, the same empty body paints no text — so the glyphs in
@@ -3025,6 +4033,202 @@ mod tests {
             );
         }
 
+        fn native_validation_notice_is_painted_and_dismissible<E: ScriptEngine>() {
+            let html = r#"<body><input id="required" required>
+                <script>setTimeout(function(){
+                  document.getElementById('required').reportValidity();
+                }, 0);</script></body>"#;
+            let mut doc = LiveryScriptedDocument::<E>::parse(html).expect("document");
+            let authored_dom = doc.dom_snapshot();
+            assert!(doc.validation_notice().is_none());
+            doc.pump(0.0);
+            let notice = doc
+                .validation_notice()
+                .expect("timer reports invalid control");
+            assert_eq!(notice.realm, doc.rt.top_realm());
+            assert!(!notice.message.is_empty());
+            assert!(notice.bounds.is_none(), "bounds wait for native paint");
+            let first_sequence = notice.sequence;
+
+            let scene = doc.frame(320, 180);
+            let notice = doc.validation_notice().expect("notice remains live");
+            let [x, y, width, height] = notice.bounds.expect("paint returns viewport bounds");
+            assert!(x >= 0.0 && y >= 0.0 && width > 0.0 && height > 0.0);
+            assert!(x + width <= 320.0 && y + height <= 180.0);
+            assert!(
+                scene
+                    .ops
+                    .iter()
+                    .any(|op| matches!(op, netrender::SceneOp::GlyphRun(_))),
+                "host validation text is painted with the retained text system"
+            );
+            assert_eq!(
+                doc.dom_snapshot(),
+                authored_dom,
+                "the native notice does not mutate authored DOM"
+            );
+
+            doc.evaluate("document.getElementById('required').reportValidity();")
+                .expect("repeat report");
+            let repeated = doc.validation_notice().expect("repeated report retained");
+            assert!(repeated.sequence > first_sequence);
+            assert!(doc.dismiss_validation_notice());
+            assert!(doc.validation_notice().is_none());
+            assert!(!doc.dismiss_validation_notice());
+        }
+
+        fn canceled_and_ineligible_reports_do_not_remain<E: ScriptEngine>() {
+            let mut canceled = LiveryScriptedDocument::<E>::parse(
+                r#"<body><input id="required" required><script>
+                  var field = document.getElementById('required');
+                  field.addEventListener('invalid', function(event){ event.preventDefault(); });
+                  setTimeout(function(){ field.reportValidity(); }, 0);
+                </script></body>"#,
+            )
+            .expect("canceled fixture");
+            canceled.pump(0.0);
+            assert!(
+                canceled.validation_notice().is_none(),
+                "preventDefault suppresses native notice"
+            );
+
+            for mutation in [
+                "field.disabled = true;",
+                "field.value = 'accepted';",
+                "field.remove();",
+            ] {
+                let mut doc = LiveryScriptedDocument::<E>::parse(
+                    r#"<body><input id="required" required></body>"#,
+                )
+                .expect("invalidation fixture");
+                doc.evaluate(
+                    "var field = document.getElementById('required'); field.reportValidity();",
+                )
+                .expect("initial report");
+                assert!(doc.validation_notice().is_some());
+                doc.evaluate(mutation).expect("change eligibility");
+                assert!(
+                    doc.validation_notice().is_none(),
+                    "native notice clears after {mutation}"
+                );
+            }
+        }
+
+        fn validation_feedback_follows_adoption_and_clears_after_teardown<E: ScriptEngine>() {
+            let mut doc = LiveryScriptedDocument::<E>::parse(
+                r#"<body><iframe id="frame" style="border:2px solid" srcdoc="&lt;body&gt;&lt;input id='field' required&gt;&lt;/body&gt;"></iframe></body>"#,
+            ).expect("framed validation document");
+            doc.frame(320, 220);
+            assert_eq!(doc.last_error(), None);
+            doc.pump(0.0);
+            doc.evaluate("var frame = document.getElementById('frame'); var field = frame.contentDocument.getElementById('field'); field.setCustomValidity('  exact\\nmessage  '); field.reportValidity();")
+                .expect("child report");
+            let child_realm = doc.validation_notice().expect("child notice").realm;
+            assert_ne!(child_realm, doc.rt.top_realm());
+            doc.evaluate("document.body.appendChild(document.adoptNode(field));")
+                .expect("adopt reported control");
+            assert!(
+                doc.validation_notice().is_none(),
+                "old owner feedback clears"
+            );
+            doc.evaluate("field.reportValidity();")
+                .expect("adopted report");
+            let adopted = doc.validation_notice().expect("new owner notice");
+            assert_eq!(adopted.realm, doc.rt.top_realm());
+            assert_eq!(adopted.message, "  exact\nmessage  ");
+            doc.evaluate("frame.contentDocument.body.appendChild(frame.contentDocument.adoptNode(field)); field.reportValidity();")
+                .expect("return to child");
+            assert_eq!(
+                doc.validation_notice().expect("child again").realm,
+                child_realm
+            );
+            doc.evaluate("frame.remove();").expect("detach child frame");
+            doc.pump(16.0);
+            doc.frame(320, 220);
+            assert!(
+                doc.validation_notice().is_none(),
+                "destroyed realm loses feedback"
+            );
+        }
+
+        fn child_frame_timer_report_keeps_its_realm<E: ScriptEngine>() {
+            let mut doc = LiveryScriptedDocument::<E>::parse(
+                r#"<body><iframe style="width:200px;height:100px;border:2px solid" srcdoc="&lt;body&gt;&lt;input id='child' required&gt;&lt;script&gt;setTimeout(function(){document.getElementById('child').reportValidity()},0)&lt;/script&gt;&lt;/body&gt;"></iframe></body>"#,
+            )
+            .expect("framed document");
+            let authored_dom = doc.dom_snapshot();
+            doc.pump(0.0);
+            let _ = doc.frame(320, 220);
+            assert_eq!(doc.last_error(), None);
+            doc.pump(16.0);
+            let notice = doc.validation_notice().expect("child timer report");
+            assert_ne!(notice.realm, doc.rt.top_realm());
+            let frame = doc.frame(320, 220);
+            assert_eq!(doc.last_error(), None);
+            assert!(
+                frame
+                    .ops
+                    .iter()
+                    .any(|op| matches!(op, netrender::SceneOp::GlyphRun(_))),
+                "the child report is painted by the parent's native overlay"
+            );
+            assert_eq!(doc.dom_snapshot(), authored_dom);
+        }
+
+        fn validation_catalog_is_installed_before_scripts_and_shared_with_children<
+            E: ScriptEngine,
+        >() {
+            let child_html = "<body><input id='child' required><script>\
+                var field = document.getElementById('child');\
+                parent.document.body.setAttribute('child-validation-message', field.validationMessage);\
+                setTimeout(function(){ field.reportValidity(); }, 0);\
+            </script></body>";
+            let escaped_child = child_html
+                .replace('&', "&amp;")
+                .replace('"', "&quot;")
+                .replace('<', "&lt;")
+                .replace('>', "&gt;");
+            let html = format!(
+                "<body><input id='top' required><iframe style='width:200px;height:100px;border:2px solid' srcdoc=\"{escaped_child}\"></iframe><script>\
+                    var field = document.getElementById('top');\
+                    if (field.validationMessage !== 'A value is required (embedder).') throw new Error('top catalog missing');\
+                    document.body.setAttribute('top-validation-message', field.validationMessage);\
+                    field.reportValidity();\
+                </script></body>"
+            );
+            let mut options = ScriptedDocumentOptions::default();
+            options.validation_message_catalog.value_missing =
+                "A value is required (embedder).".into();
+            let mut doc = LiveryScriptedDocument::<E>::parse_with_options(&html, options)
+                .expect("catalog fixture");
+            assert_eq!(
+                doc.validation_notice()
+                    .expect("top authored report")
+                    .message,
+                "A value is required (embedder)."
+            );
+            assert!(
+                doc.dom_snapshot()
+                    .contains("top-validation-message=\"A value is required (embedder).\""),
+                "the top validationMessage observes the configured catalog"
+            );
+
+            doc.pump(0.0);
+            let _ = doc.frame(320, 220);
+            assert_eq!(doc.last_error(), None);
+            doc.pump(16.0);
+            let child_notice = doc
+                .validation_notice()
+                .expect("child authored report reaches host notice");
+            assert_ne!(child_notice.realm, doc.rt.top_realm());
+            assert_eq!(child_notice.message, "A value is required (embedder).");
+            assert!(
+                doc.dom_snapshot()
+                    .contains("child-validation-message=\"A value is required (embedder).\""),
+                "the child validationMessage observes the configured catalog"
+            );
+        }
+
         /// `matchMedia` evaluates against the device the frame was laid out
         /// with. `LiveryCssom` now installs a `MediaQueryHandler`
         /// (`LiveryMediaQueries`) beside its `ComputedStyleHandler`, over
@@ -3053,8 +4257,65 @@ mod tests {
         }
 
         #[test]
+        fn validation_feedback_follows_adoption_and_clears_after_teardown_on_boa() {
+            validation_feedback_follows_adoption_and_clears_after_teardown::<BoaEngine>();
+        }
+        #[cfg(all(target_pointer_width = "64", feature = "scripted-nova"))]
+        #[test]
+        fn validation_feedback_follows_adoption_and_clears_after_teardown_on_vano() {
+            validation_feedback_follows_adoption_and_clears_after_teardown::<
+                script_engine_nova::NovaEngine,
+            >();
+        }
+        #[test]
         fn mutation_renders_on_boa() {
             mutation_renders::<BoaEngine>();
+        }
+        #[test]
+        fn animation_frame_mutation_renders_on_boa() {
+            animation_frame_mutation_renders::<BoaEngine>();
+        }
+        #[test]
+        fn live_lifecycle_wake_matches_delivery_on_boa() {
+            live_lifecycle_wake_matches_delivery::<BoaEngine>();
+        }
+        #[test]
+        fn native_validation_notice_is_painted_and_dismissible_on_boa() {
+            native_validation_notice_is_painted_and_dismissible::<BoaEngine>();
+        }
+        #[test]
+        fn canceled_and_ineligible_reports_do_not_remain_on_boa() {
+            canceled_and_ineligible_reports_do_not_remain::<BoaEngine>();
+        }
+        #[test]
+        fn child_frame_timer_report_keeps_its_realm_on_boa() {
+            child_frame_timer_report_keeps_its_realm::<BoaEngine>();
+        }
+        #[test]
+        fn validation_catalog_is_installed_before_scripts_and_shared_with_children_on_boa() {
+            validation_catalog_is_installed_before_scripts_and_shared_with_children::<BoaEngine>();
+        }
+        #[cfg(all(target_pointer_width = "64", feature = "scripted-nova"))]
+        #[test]
+        fn native_validation_notice_is_painted_and_dismissible_on_nova() {
+            native_validation_notice_is_painted_and_dismissible::<script_engine_nova::NovaEngine>();
+        }
+        #[cfg(all(target_pointer_width = "64", feature = "scripted-nova"))]
+        #[test]
+        fn canceled_and_ineligible_reports_do_not_remain_on_nova() {
+            canceled_and_ineligible_reports_do_not_remain::<script_engine_nova::NovaEngine>();
+        }
+        #[cfg(all(target_pointer_width = "64", feature = "scripted-nova"))]
+        #[test]
+        fn child_frame_timer_report_keeps_its_realm_on_nova() {
+            child_frame_timer_report_keeps_its_realm::<script_engine_nova::NovaEngine>();
+        }
+        #[cfg(all(target_pointer_width = "64", feature = "scripted-nova"))]
+        #[test]
+        fn validation_catalog_is_installed_before_scripts_and_shared_with_children_on_nova() {
+            validation_catalog_is_installed_before_scripts_and_shared_with_children::<
+                script_engine_nova::NovaEngine,
+            >();
         }
         #[test]
         fn empty_body_has_no_text_on_boa() {
@@ -3099,6 +4360,14 @@ mod tests {
                 mutation_renders::<NovaEngine>();
             }
             #[test]
+            fn animation_frame_mutation_renders_on_nova() {
+                animation_frame_mutation_renders::<NovaEngine>();
+            }
+            #[test]
+            fn live_lifecycle_wake_matches_delivery_on_nova() {
+                live_lifecycle_wake_matches_delivery::<NovaEngine>();
+            }
+            #[test]
             fn scripted_content_scrolls_on_nova() {
                 scripted_content_scrolls::<NovaEngine>();
             }
@@ -3127,7 +4396,7 @@ mod tests {
 
         impl LiveryFixtureFetcher {
             fn new() -> Self {
-                let image = include_bytes!("../../resources/servo_64.png").to_vec();
+                let image = include_bytes!("../../resources/merely_64.png").to_vec();
                 let mut resources = std::collections::BTreeMap::new();
                 resources.insert(
                     "https://f4.test/route/theme.css".to_string(),
@@ -3148,6 +4417,13 @@ mod tests {
         }
 
         impl ResourceFetcher for LiveryFixtureFetcher {
+            fn fetch_request(
+                &self,
+                _request: &genet_host_api::ResourceRequest,
+            ) -> Option<genet_host_api::ResourceFetchResponse> {
+                None
+            }
+
             fn fetch(&self, url: &str) -> Option<Vec<u8>> {
                 self.resources.get(url).cloned()
             }
@@ -3249,5 +4525,147 @@ mod tests {
                 "the hit button received its own runtime click listener"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod phase_c_document_encoding_fixtures {
+    use super::*;
+    use genet_host_api::ResourceResponse;
+
+    #[derive(Clone)]
+    struct Pages;
+    impl ResourceFetcher for Pages {
+        fn fetch_request(
+            &self,
+            _request: &genet_host_api::ResourceRequest,
+        ) -> Option<genet_host_api::ResourceFetchResponse> {
+            None
+        }
+
+        fn fetch(&self, url: &str) -> Option<Vec<u8>> {
+            self.fetch_response(url).map(|response| response.bytes)
+        }
+        fn fetch_response(&self, url: &str) -> Option<ResourceResponse> {
+            let (header, bytes): (&str, &[u8]) = match url.rsplit('/').next()? {
+                "sj" => ("text/html;charset=shift_jis", b"<meta charset=utf-8><input id=v value='\x82\xA0'><script>window.seen=document.characterSet+'|'+document.getElementById('v').value</script>"),
+                "kr" => ("text/html;charset=euc-kr", b"<input id=v value='\xB0\xA1'><script>window.seen=document.characterSet+'|'+document.getElementById('v').value</script>"),
+                "fallback" => ("text/html", b"<input id=v value='\xE9'><script>window.seen=document.characterSet+'|'+document.getElementById('v').value</script>"),
+                _ => return None,
+            };
+            Some(ResourceResponse {
+                final_url: url.replace("/sj", "/final-sj"),
+                content_type: Some(header.into()),
+                bytes: bytes.to_vec(),
+            })
+        }
+    }
+    fn read<E: ScriptEngine>(rt: &mut Runtime<E>, js: &str) -> String {
+        let value = rt.eval(js).expect("read initial document");
+        rt.value_to_string(&value).expect("string projection")
+    }
+    fn headless_initial<E: ScriptEngine>() {
+        let mut document =
+            ScriptedDocument::<E>::load(&Pages, "https://encoding.test/sj").expect("load");
+        assert_eq!(
+            read(&mut document.rt, "document.getElementById('v').value"),
+            "あ",
+            "real initial bytes"
+        );
+        assert_eq!(
+            read(&mut document.rt, "seen"),
+            "Shift_JIS|あ",
+            "metadata before authored parser script"
+        );
+        assert_eq!(
+            read(&mut document.rt, "location.href"),
+            "https://encoding.test/final-sj"
+        );
+    }
+    fn headless_euckr<E: ScriptEngine>() {
+        let mut document =
+            ScriptedDocument::<E>::load(&Pages, "https://encoding.test/kr").expect("load");
+        assert_eq!(
+            read(&mut document.rt, "document.getElementById('v').value"),
+            "가"
+        );
+        assert_eq!(read(&mut document.rt, "seen"), "EUC-KR|가");
+    }
+    #[cfg(feature = "livery")]
+    fn livery_initial<E: ScriptEngine>() {
+        let mut document =
+            LiveryScriptedDocument::<E>::load(Pages, "https://encoding.test/sj#part")
+                .expect("livery load");
+        assert_eq!(
+            read(&mut document.rt, "document.getElementById('v').value"),
+            "あ"
+        );
+        assert_eq!(read(&mut document.rt, "seen"), "Shift_JIS|あ");
+        assert_eq!(
+            read(&mut document.rt, "location.href"),
+            "https://encoding.test/final-sj#part"
+        );
+    }
+    // Test-local adapter configures the actual initial byte-load API.
+    fn configured_headless_load<E: ScriptEngine>() -> ScriptedDocument<E> {
+        ScriptedDocument::<E>::load_with_decode_options(
+            &Pages,
+            "https://encoding.test/fallback",
+            script_runtime_api::HtmlDecodeOptions {
+                fallback: genet_scripted_dom::form_encoding::Encoding::for_label(b"windows-1252")
+                    .unwrap(),
+                ..Default::default()
+            },
+        )
+        .expect("configured initial load")
+    }
+    fn headless_configured_fallback<E: ScriptEngine>() {
+        let mut document = configured_headless_load::<E>();
+        assert_eq!(
+            read(&mut document.rt, "document.getElementById('v').value"),
+            "é"
+        );
+        assert_eq!(read(&mut document.rt, "seen"), "windows-1252|é");
+    }
+    #[test]
+    fn phase_c_document_encoding_headless_configured_fallback_boa() {
+        headless_configured_fallback::<script_engine_boa::BoaEngine>();
+    }
+    #[cfg(all(feature = "scripted-nova", target_pointer_width = "64"))]
+    #[test]
+    fn phase_c_document_encoding_headless_configured_fallback_nova() {
+        headless_configured_fallback::<script_engine_nova::NovaEngine>();
+    }
+    #[test]
+    fn phase_c_document_encoding_headless_initial_boa() {
+        headless_initial::<script_engine_boa::BoaEngine>();
+    }
+    #[test]
+    fn phase_c_document_encoding_headless_euckr_boa() {
+        headless_euckr::<script_engine_boa::BoaEngine>();
+    }
+    #[cfg(feature = "livery")]
+    #[test]
+    fn phase_c_document_encoding_livery_initial_boa() {
+        livery_initial::<script_engine_boa::BoaEngine>();
+    }
+    #[cfg(all(feature = "scripted-nova", target_pointer_width = "64"))]
+    #[test]
+    fn phase_c_document_encoding_headless_initial_nova() {
+        headless_initial::<script_engine_nova::NovaEngine>();
+    }
+    #[cfg(all(feature = "scripted-nova", target_pointer_width = "64"))]
+    #[test]
+    fn phase_c_document_encoding_headless_euckr_nova() {
+        headless_euckr::<script_engine_nova::NovaEngine>();
+    }
+    #[cfg(all(
+        feature = "livery",
+        feature = "scripted-nova",
+        target_pointer_width = "64"
+    ))]
+    #[test]
+    fn phase_c_document_encoding_livery_initial_nova() {
+        livery_initial::<script_engine_nova::NovaEngine>();
     }
 }

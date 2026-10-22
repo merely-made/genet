@@ -38,6 +38,41 @@ session rung. Flex and grid containers lower their bounded direction, track,
 gap, alignment, order, and placement values into Taffy. Box shadows lower into
 the neutral shadow primitive before backgrounds.
 
+## Explicit host generic resources
+
+A browser does not lend Parley its installed system fonts. Registering a face
+under a named family called `sans-serif` does not bind the CSS generic.
+`TextSystem::register_generic_font_bytes(bytes, generic)` explicitly binds the
+host-selected face to `sans-serif`, `serif`, `monospace` or `system-ui`. It
+returns the registered-family count or `GenericFontError::InvalidGeneric` /
+`InvalidFont`; refusal preserves the existing generic mapping. Authored family
+requests, weights, sizes and the cascade remain authoritative. This operation
+does not install a global or system fallback.
+
+`LiveryDocument::replace_generic_font_resources` retains the complete host
+ledger and validates a replacement batch before admission. A bad late entry
+cannot replace earlier bindings. Ordinary font-resource and stylesheet-driven
+text-context rebuilds reapply the admitted ledger; removing a binding rebuilds
+from the remaining resources. The glyph IDs and exact selected face bytes still
+travel together in the normal paint font side-table.
+
+Production hosts choose covering, licensed faces appropriate to each requested
+role. A face mapped to `monospace` must be selected and qualified for fixed-width
+use; assigning any available UI face to that generic proves resource delivery,
+not monospace fidelity. The same applies to serif and locale/script coverage.
+Mere's shared recovery delivery fixture intentionally assigns its checked-in
+Roboto face to all four roles. That choice is confined to that fixture and is
+not the production face-selection policy.
+
+The no-system-font control
+`text::tests::explicit_generic_font_shapes_without_system_and_invalid_replace_preserves_face`
+checks actual shaping and selected bytes. The retained document control
+`document::tests::generic_font_ledger_survives_rebuild_and_invalid_batch_is_atomic`
+checks paint output after resource/viewport reconstruction. These are CPU font
+proofs; host presentation and full composed pixels have separate receipts.
+
+## Retained layout and paint
+
 Retained sessions first use Taffy to resolve atomic `inline-block` sizes, then
 represent each consecutive inline group as one Parley-measured Taffy leaf. The
 same shared line layout therefore drives paint geometry and parent block

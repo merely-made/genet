@@ -21,15 +21,35 @@
 use engine_observables_api::{DomArenaStats, DomNodeKindStats};
 use genet_static_dom::{StaticDocument, StaticNodeId};
 use layout_dom_api::{
-    AttributeView, DoctypeView, DomMutation, FormControlState, LayoutDom, LayoutDomMut, LocalName,
-    Namespace, NodeKind, QualName, QuirksMode,
+    AttributeView, DoctypeView, DomMutation, FormControlEditingValue, FormControlInteractionState,
+    FormControlState, FormControlValidity, LayoutDom, LayoutDomMut, LocalName, Namespace,
+    NodeKind, QualName, QuirksMode, SelectOptionState, SelectionDirection,
 };
 
 mod adoption;
 pub use adoption::SubtreeTransferError;
+mod custom_elements;
+pub use custom_elements::{CustomElementState, ReactionCandidate};
 
 mod forms;
 pub use forms::FormControlValueError;
+mod forms_validation;
+pub use forms_validation::{ValidationMessageCatalog, ValidationMessageKind};
+mod forms_editing;
+pub use forms_editing::{
+    FormEditCommand, FormEditOutcome, form_edit_byte_offset_from_utf16,
+    form_edit_utf16_offset_from_byte,
+};
+pub mod form_encoding;
+pub mod html_encoding;
+mod forms_submission;
+pub use forms_submission::{
+    FormEntry, FormEntryError, FormEntryValue, FormFile, FormFileBindingIdentity,
+    FormFileBindingIdentityError, FormFileId, FormImplicitSubmission,
+};
+mod forms_directionality;
+pub use forms_directionality::{FormDirection, text_directionality};
+mod forms_directionality_data;
 pub mod parser;
 mod serialize;
 mod shadow;
@@ -184,6 +204,7 @@ impl std::hash::Hasher for FnvHasher {
 type NodeStore = std::collections::HashMap<u64, Node, std::hash::BuildHasherDefault<FnvHasher>>;
 
 struct Node {
+    document_encoding: Option<html_encoding::DocumentEncoding>,
     kind: NodeKind,
     name: Option<QualName>,
     attrs: Vec<(QualName, String)>,
@@ -192,11 +213,21 @@ struct Node {
     children: Vec<NodeId>,
     /// Script-visible current state for HTML input and textarea controls.
     form_control: Option<FormControlState>,
+    /// User-originated state kept separate to preserve FormControlState's capture wire shape.
+    form_interaction: Option<FormControlInteractionState>,
+    /// Immutable selected files belong to the node, outside the capture wire record.
+    selected_files: Vec<FormFile>,
+    option_state: Option<SelectOptionState>,
+    custom_validity_message: Option<String>,
+    /// HTML's custom element state; see `custom_elements.rs`.
+    custom_state: CustomElementState,
 }
 
 impl Node {
     fn new(kind: NodeKind) -> Self {
         Self {
+            document_encoding: (kind == NodeKind::Document)
+                .then(html_encoding::DocumentEncoding::default),
             kind,
             name: None,
             attrs: Vec::new(),
@@ -204,6 +235,11 @@ impl Node {
             parent: None,
             children: Vec::new(),
             form_control: None,
+            form_interaction: None,
+            selected_files: Vec::new(),
+            option_state: None,
+            custom_validity_message: None,
+            custom_state: CustomElementState::Uncustomized,
         }
     }
 }
@@ -213,6 +249,7 @@ impl Node {
 /// to *live* nodes by [`collect`](ScriptedDom::collect) (G3), not to every node
 /// ever created.
 pub struct ScriptedDom {
+    html_decode_options: html_encoding::HtmlDecodeOptions,
     nodes: NodeStore,
     /// Arenas this store has imported nodes from, in adoption order. The
     /// capture/replay translation registry: an identity whose origin arena is
@@ -273,6 +310,14 @@ pub struct ScriptedDom {
     /// [`shadow::ShadowRootData::host`], kept because `shadowRoot` and
     /// `flat_children` both ask host-first.
     shadow_hosts: std::collections::HashMap<u64, NodeId>,
+    /// Superset of the live checked radio inputs, kept in step wherever
+    /// checkedness, input type or node lifetime changes. Radio reconciliation
+    /// scans this instead of walking the document, so a mutation costs time in
+    /// the number of checked radios and nothing at all when there are none.
+    checked_radios: std::collections::HashSet<NodeId>,
+    /// Checked-radio candidates and parent hops examined by radio
+    /// reconciliation; a deterministic cost counter for tests.
+    radio_scan_visits: std::cell::Cell<u64>,
     /// Slottable store key -> the slot it is assigned to (`assignedSlot`).
     assigned_slots: std::collections::HashMap<u64, NodeId>,
     /// Slot store key -> its assigned nodes, in tree order. The flat tree's hot
@@ -297,6 +342,11 @@ pub struct ScriptedDom {
     /// document is in no-quirks mode, as one no parser decided is
     /// (`createHTMLDocument`, an XML document).
     document_modes: std::collections::HashMap<u64, QuirksMode>,
+    /// Whether tree and attribute mutators record [`ReactionCandidate`]s. On
+    /// once any custom element definition exists; off costs nothing.
+    reaction_recording: bool,
+    /// Pending custom element reaction candidates, in mutation order.
+    reaction_candidates: Vec<ReactionCandidate>,
     /// Unique allocation namespace. Storage may later accept identities born elsewhere.
     arena_id: u32,
 }
@@ -412,6 +462,7 @@ impl ScriptedDom {
     pub fn try_new() -> Result<Self, NodeIdentityError> {
         let arena_id = next_arena_id(&NEXT_ARENA_ID)?;
         let mut dom = Self {
+            html_decode_options: html_encoding::HtmlDecodeOptions::default(),
             nodes: NodeStore::default(),
             imported_arenas: std::collections::BTreeSet::new(),
             next_id: 0,
@@ -430,9 +481,13 @@ impl ScriptedDom {
             structure_epoch: 0,
             shadow_roots: std::collections::HashMap::new(),
             shadow_hosts: std::collections::HashMap::new(),
+            checked_radios: std::collections::HashSet::new(),
+            radio_scan_visits: std::cell::Cell::new(0),
             assigned_slots: std::collections::HashMap::new(),
             slot_assignments: std::collections::HashMap::new(),
             slot_changes: Vec::new(),
+            reaction_recording: false,
+            reaction_candidates: Vec::new(),
             template_contents: std::collections::HashMap::new(),
             template_content_owners: std::collections::HashMap::new(),
             template_document: None,
@@ -441,6 +496,31 @@ impl ScriptedDom {
         };
         dom.root = dom.try_push(Node::new(NodeKind::Document))?;
         Ok(dom)
+    }
+
+    /// Metadata belongs to each live Document, including secondary documents.
+    pub fn document_encoding(&self, document: NodeId) -> Option<html_encoding::DocumentEncoding> {
+        self.nodes.get(&document.raw())?.document_encoding
+    }
+    pub fn set_document_encoding(
+        &mut self,
+        document: NodeId,
+        encoding: html_encoding::DocumentEncoding,
+    ) -> bool {
+        let Some(node) = self.nodes.get_mut(&document.raw()) else {
+            return false;
+        };
+        if node.kind != NodeKind::Document {
+            return false;
+        }
+        node.document_encoding = Some(encoding);
+        true
+    }
+    pub fn html_decode_options(&self) -> html_encoding::HtmlDecodeOptions {
+        self.html_decode_options
+    }
+    pub fn set_html_decode_options(&mut self, options: html_encoding::HtmlDecodeOptions) {
+        self.html_decode_options = options;
     }
 
     /// The namespace used for new allocations, not an ownership query for a node.
@@ -562,13 +642,26 @@ impl ScriptedDom {
 
     pub fn try_create_element(&mut self, name: QualName) -> Result<NodeId, NodeIdentityError> {
         let mut node = Node::new(NodeKind::Element);
-        if name.ns == markup5ever::ns!(html) && matches!(name.local.as_str(), "input" | "textarea")
-        {
-            node.form_control = Some(FormControlState {
-                selection_start: Some(0),
-                selection_end: Some(0),
-                ..FormControlState::default()
-            });
+        if name.ns == markup5ever::ns!(html) {
+            if matches!(name.local.as_ref(), "input" | "textarea") {
+                node.form_control = Some(FormControlState {
+                    selection_start: Some(0),
+                    selection_end: Some(0),
+                    ..FormControlState::default()
+                });
+            }
+            if matches!(name.local.as_ref(), "input" | "textarea" | "select" | "button" | "fieldset" | "output" | "object") {
+                node.form_interaction = Some(FormControlInteractionState::default());
+            }
+            if matches!(name.local.as_ref(), "select" | "button" | "fieldset" | "output" | "object") {
+                node.custom_validity_message = Some(String::new());
+            }
+            if name.local.as_str() == "option" {
+                node.option_state = Some(SelectOptionState {
+                    selected: false,
+                    dirty: false,
+                });
+            }
         }
         node.name = Some(name);
         self.try_push(node)
@@ -791,7 +884,9 @@ impl ScriptedDom {
     /// the subtree is only orphaned; [`collect`](Self::collect) reclaims it once
     /// nothing reaches it.
     fn release_subtree(&mut self, node: NodeId) {
-        if !self.observing && !self.parsing {
+        // A pending reaction candidate can name a removed custom element, so
+        // while reactions are recorded the subtree waits for collection too.
+        if !self.observing && !self.parsing && !self.reaction_recording {
             self.drop_subtree(node);
         }
     }
@@ -807,7 +902,11 @@ impl ScriptedDom {
         let radio_before = self.snapshot_radio_associations(&seeds);
         let previous = self.sibling(child, -1);
         let next = self.sibling(child, 1);
+        let was_connected = self.reaction_recording && self.is_connected(child);
         self.detach(child);
+        if was_connected {
+            self.record_disconnected(child);
+        }
         if let Some(former_parent) = former_parent {
             self.mutations.push(DomMutation::Removed {
                 node: child,
@@ -848,6 +947,7 @@ impl ScriptedDom {
         }
 
         let radio_before = self.snapshot_radio_associations(&[node]);
+        let was_connected = self.reaction_recording && self.is_connected(node);
         let existing = std::mem::take(&mut self.node_mut(node).children);
         let removed = existing.clone();
         for child in existing {
@@ -855,6 +955,9 @@ impl ScriptedDom {
             self.structure_epoch += 1;
             // Replacement detaches like removeChild: a reflector or queued
             // record can still retain this subtree. Only collect sees all pins.
+            if was_connected {
+                self.record_disconnected(child);
+            }
         }
         self.node_mut(node).text = None;
         let mut added = Vec::new();
@@ -1118,6 +1221,7 @@ impl ScriptedDom {
             self.drop_subtree(child);
         }
         let i = self.index(node);
+        self.checked_radios.remove(&node);
         self.nodes.remove(&i);
     }
 
@@ -1139,6 +1243,11 @@ impl ScriptedDom {
         let mut stack: Vec<u64> = Vec::new();
         self.seed_mark(self.root, &mut marked, &mut stack);
         for r in extra_roots {
+            self.seed_mark(r, &mut marked, &mut stack);
+        }
+        // A queued reaction will hand its node to script (G5 lifetime).
+        let pending: Vec<NodeId> = self.reaction_candidates.iter().map(|c| c.node()).collect();
+        for r in pending {
             self.seed_mark(r, &mut marked, &mut stack);
         }
         while let Some(v) = stack.pop() {
@@ -1173,6 +1282,8 @@ impl ScriptedDom {
         self.prune_template_tables();
         let nodes = &self.nodes;
         self.document_modes.retain(|key, _| nodes.contains_key(key));
+        self.checked_radios
+            .retain(|id| nodes.contains_key(&id.raw()));
         pruned
     }
 
@@ -1311,8 +1422,24 @@ impl ScriptedDom {
                         ..FormControlState::default()
                     });
                 }
+                if node.name.as_ref().is_some_and(|q| q.ns == markup5ever::ns!(html)
+                    && matches!(q.local.as_ref(), "input" | "textarea" | "select" | "button" | "fieldset" | "output" | "object")) {
+                    node.form_interaction = Some(FormControlInteractionState::default());
+                }
+                if node.name.as_ref().is_some_and(|q| q.ns == markup5ever::ns!(html)
+                    && matches!(q.local.as_ref(), "select" | "button" | "fieldset" | "output" | "object")) {
+                    node.custom_validity_message = Some(String::new());
+                }
+                if node.name.as_ref().is_some_and(|q| q.ns == markup5ever::ns!(html) && q.local.as_str() == "option") {
+                    node.option_state = Some(SelectOptionState { selected: false, dirty: false });
+                }
                 for attr in src.attributes(sid) {
                     node.attrs.push((attr.name.clone(), attr.value.to_owned()));
+                }
+                if node.option_state.is_some() {
+                    node.option_state.as_mut().unwrap().selected = node.attrs.iter().any(|(name, _)| {
+                        name.ns == markup5ever::ns!() && name.local.as_str() == "selected"
+                    });
                 }
                 self.push(node)
             },
@@ -1410,6 +1537,52 @@ impl LayoutDom for ScriptedDom {
             state.value = crate::forms::api_value_for_state(&state.value);
         }
         Some(state)
+    }
+
+    fn form_control_interaction_state(&self, id: NodeId) -> Option<FormControlInteractionState> {
+        self.node(id).form_interaction.clone()
+    }
+
+    fn form_control_editing_value(&self, id: NodeId) -> Option<FormControlEditingValue> {
+        let state = self.node(id).form_control.as_ref()?;
+        let interaction = self.node(id).form_interaction.as_ref();
+        if let Some(draft) = interaction.and_then(|state| state.draft_value.as_ref()) {
+            return Some(FormControlEditingValue {
+                value: draft.clone(),
+                selection_start: interaction.and_then(|state| state.draft_selection_start),
+                selection_end: interaction.and_then(|state| state.draft_selection_end),
+                selection_direction: interaction.map_or(SelectionDirection::None, |state| state.draft_selection_direction),
+            });
+        }
+        let value = if self.element_name(id).is_some_and(|name| {
+            name.ns == markup5ever::ns!(html) && name.local.as_str() == "textarea"
+        }) {
+            forms::api_value_for_state(&state.value)
+        } else {
+            state.value.clone()
+        };
+        Some(FormControlEditingValue {
+            value,
+            selection_start: state.selection_start,
+            selection_end: state.selection_end,
+            selection_direction: state.selection_direction,
+        })
+    }
+
+    fn form_control_validity(&self, id: NodeId) -> Option<FormControlValidity> {
+        self.compute_form_control_validity(id)
+    }
+
+    fn option_selected_state(&self, id: NodeId) -> Option<SelectOptionState> {
+        self.node(id).option_state
+    }
+
+    fn form_control_form_owner(&self, id: NodeId) -> Option<NodeId> {
+        ScriptedDom::form_control_form_owner(self, id)
+    }
+
+    fn form_control_custom_validity_message(&self, id: NodeId) -> Option<String> {
+        ScriptedDom::form_control_custom_validity_message(self, id)
     }
 
     fn document(&self) -> NodeId {
@@ -1600,9 +1773,39 @@ impl LayoutDomMut for ScriptedDom {
         };
         let changed = *slot != state;
         *slot = state;
+        self.sync_checked_radio(id);
         if changed {
             self.mutations
                 .push(DomMutation::FormControlStateChanged { node: id });
+        }
+        true
+    }
+
+    fn set_form_control_interaction_state(
+        &mut self,
+        id: NodeId,
+        state: FormControlInteractionState,
+    ) -> bool {
+        let Some(slot) = self.node_mut(id).form_interaction.as_mut() else {
+            return false;
+        };
+        if *slot != state {
+            *slot = state;
+            self.mutations.push(DomMutation::FormControlInteractionStateChanged { node: id });
+        }
+        true
+    }
+
+    fn set_option_selected_state(&mut self, id: NodeId, state: SelectOptionState) -> bool {
+        if self.element_name(id).map_or(true, |q| q.ns != markup5ever::ns!(html) || q.local.as_str() != "option") {
+            return false;
+        }
+        let Some(slot) = self.node_mut(id).option_state.as_mut() else {
+            return false;
+        };
+        if *slot != state {
+            *slot = state;
+            self.mutations.push(DomMutation::OptionStateChanged { node: id });
         }
         true
     }
@@ -1622,6 +1825,12 @@ impl LayoutDomMut for ScriptedDom {
         // and the former parent's consumers must hear the removal. The detach
         // used to be silent here. (moveBefore plan S1.)
         let former_parent = self.node(child).parent;
+        let former_select = self.option_select_ancestor(child);
+        let destination_select = if self.html_name(parent) == Some("select") {
+            Some(parent)
+        } else {
+            self.option_select_ancestor(parent)
+        };
         let seeds: Vec<_> = former_parent.into_iter().chain([parent, child]).collect();
         let radio_before = self.snapshot_radio_associations(&seeds);
         if let Some(former_parent) = former_parent {
@@ -1633,19 +1842,29 @@ impl LayoutDomMut for ScriptedDom {
             });
             self.record_implicit_removal(former_parent, child, previous, next);
         }
+        let was_connected = self.reaction_recording && self.is_connected(child);
         self.detach(child);
-        if let Some(former_parent) = former_parent {
+        if was_connected {
+            self.record_disconnected(child);
+        }
+        if let Some(former_parent) = former_parent
+            && (former_select.is_none() || former_select != destination_select)
+        {
             self.form_control_children_changed(former_parent);
         }
         self.node_mut(child).parent = Some(parent);
         self.structure_epoch += 1;
         self.node_mut(parent).children.push(child);
+        if self.reaction_recording && self.is_connected(child) {
+            self.record_connected(child);
+        }
         self.mutations.push(DomMutation::Inserted {
             node: child,
             parent,
         });
         let previous = self.sibling(child, -1);
         self.record_child_list(parent, vec![child], Vec::new(), previous, None);
+        self.form_control_option_subtree_inserted(child, former_select);
         self.form_control_children_changed(parent);
         self.reassign_for_parent(parent, child);
         self.reconcile_radio_associations(&radio_before, &seeds);
@@ -1656,6 +1875,12 @@ impl LayoutDomMut for ScriptedDom {
         // observable. State preservation is `move_before`'s contract, not this
         // one's. (moveBefore plan S1.)
         let former_parent = self.node(child).parent;
+        let former_select = self.option_select_ancestor(child);
+        let destination_select = if self.html_name(parent) == Some("select") {
+            Some(parent)
+        } else {
+            self.option_select_ancestor(parent)
+        };
         let seeds: Vec<_> = former_parent.into_iter().chain([parent, child]).collect();
         let radio_before = self.snapshot_radio_associations(&seeds);
         if let Some(former_parent) = former_parent {
@@ -1667,7 +1892,15 @@ impl LayoutDomMut for ScriptedDom {
             });
             self.record_implicit_removal(former_parent, child, previous, next);
         }
+        let was_connected = self.reaction_recording && self.is_connected(child);
+        self.detach(child);
+        if was_connected {
+            self.record_disconnected(child);
+        }
         self.attach_at(parent, child, reference);
+        if self.reaction_recording && self.is_connected(child) {
+            self.record_connected(child);
+        }
         self.mutations.push(DomMutation::Inserted {
             node: child,
             parent,
@@ -1675,9 +1908,12 @@ impl LayoutDomMut for ScriptedDom {
         let previous = self.sibling(child, -1);
         let next = self.sibling(child, 1);
         self.record_child_list(parent, vec![child], Vec::new(), previous, next);
-        if let Some(former_parent) = former_parent {
+        if let Some(former_parent) = former_parent
+            && (former_select.is_none() || former_select != destination_select)
+        {
             self.form_control_children_changed(former_parent);
         }
+        self.form_control_option_subtree_inserted(child, former_select);
         self.form_control_children_changed(parent);
         self.reassign_for_parent(parent, child);
         self.reconcile_radio_associations(&radio_before, &seeds);
@@ -1685,6 +1921,12 @@ impl LayoutDomMut for ScriptedDom {
 
     fn move_before(&mut self, parent: NodeId, child: NodeId, reference: Option<NodeId>) {
         let from_parent = self.node(child).parent;
+        let former_select = self.option_select_ancestor(child);
+        let destination_select = if self.html_name(parent) == Some("select") {
+            Some(parent)
+        } else {
+            self.option_select_ancestor(parent)
+        };
         // Spec pre-move step: a reference of the moving node itself means
         // "before my own next sibling", i.e. stay in place.
         let reference = if reference == Some(child) {
@@ -1701,16 +1943,28 @@ impl LayoutDomMut for ScriptedDom {
         let radio_before = self.snapshot_radio_associations(&seeds);
         let was_previous = self.sibling(child, -1);
         let was_next = self.sibling(child, 1);
+        // No definition captures connectedMoveCallback yet, so a move owes the
+        // disconnected and connected fallback pair HTML specifies.
+        let was_connected = self.reaction_recording && self.is_connected(child);
         self.attach_at(parent, child, reference);
+        if was_connected {
+            self.record_disconnected(child);
+        }
+        if self.reaction_recording && self.is_connected(child) {
+            self.record_connected(child);
+        }
         if let Some(from_parent) = from_parent {
             self.record_child_list(from_parent, Vec::new(), vec![child], was_previous, was_next);
         }
         let previous = self.sibling(child, -1);
         let next = self.sibling(child, 1);
         self.record_child_list(parent, vec![child], Vec::new(), previous, next);
-        if let Some(from_parent) = from_parent {
+        if let Some(from_parent) = from_parent
+            && (former_select.is_none() || former_select != destination_select)
+        {
             self.form_control_children_changed(from_parent);
         }
+        self.form_control_option_subtree_inserted(child, former_select);
         self.form_control_children_changed(parent);
         match from_parent {
             Some(from_parent) => self.mutations.push(DomMutation::Moved {
@@ -1739,7 +1993,11 @@ impl LayoutDomMut for ScriptedDom {
         let radio_before = self.snapshot_radio_associations(&seeds);
         let previous = self.sibling(node, -1);
         let next = self.sibling(node, 1);
+        let was_connected = self.reaction_recording && self.is_connected(node);
         self.detach(node);
+        if was_connected {
+            self.record_disconnected(node);
+        }
         if let Some(former_parent) = former_parent {
             self.mutations.push(DomMutation::Removed {
                 node,
@@ -1781,6 +2039,7 @@ impl LayoutDomMut for ScriptedDom {
             name: name.clone(),
             old_value: old_value.clone(),
         });
+        self.record_attribute_reaction(node, &name, old_value.clone(), Some(value.to_owned()));
         self.record_attribute(node, name.clone(), old_value);
         self.form_control_attribute_changed(node, &name, old_type.as_deref());
         self.reassign_for_attribute(node, &name);
@@ -1814,6 +2073,7 @@ impl LayoutDomMut for ScriptedDom {
                 name: name.clone(),
                 old_value: Some(old.clone()),
             });
+            self.record_attribute_reaction(node, &name, Some(old.clone()), None);
             self.record_attribute(node, name.clone(), Some(old));
             self.form_control_attribute_changed(node, &name, old_type.as_deref());
             self.reassign_for_attribute(node, &name);
@@ -1835,12 +2095,16 @@ impl LayoutDomMut for ScriptedDom {
     fn set_inner_html(&mut self, node: NodeId, html: &str) {
         // Orphan the current children; the single SubtreeReplaced covers it.
         let radio_before = self.snapshot_radio_associations(&[node]);
+        let was_connected = self.reaction_recording && self.is_connected(node);
         let existing = std::mem::take(&mut self.node_mut(node).children);
         let removed = existing.clone();
         for child in existing {
             self.node_mut(child).parent = None;
             self.structure_epoch += 1;
             // Keep retained descendants available until pin-aware collection.
+            if was_connected {
+                self.record_disconnected(child);
+            }
         }
         // Parse via the static parser (a LayoutDom) and copy the explicitly
         // wrapped <body> children in. The wrapper keeps metadata elements such

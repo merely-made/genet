@@ -50,7 +50,7 @@ mod manifest;
 mod render;
 mod test262;
 mod testdriver;
-#[cfg(test)]
+#[cfg(all(test, feature = "webgl-tests"))]
 mod webgl_conformance;
 
 // The upstream WPT checkout lives under `tests/wpt/tests/`
@@ -927,7 +927,9 @@ fn setup_server(args: &Args) -> Option<net::ServerCtx> {
         eprintln!("spawning `wpt serve` under {} ...", args.tests_root);
         net::ServerCtx::spawn(Path::new(&args.tests_root))
     } else {
-        net::ServerCtx::connect(args.server_base.clone().unwrap())
+        net::ServerCtx::connect(args.server_base.clone().unwrap()).map(|s| {
+            s.with_secure_origins(args.server_https_base.clone(), args.server_h2_base.clone())
+        })
     };
     match result {
         Ok(s) => {
@@ -1039,36 +1041,59 @@ fn synthesize_worker_wrapper(test: &TestCase) -> Option<String> {
 }
 
 fn load_test_document_disk(test: &TestCase) -> TestHtml {
+    load_test_document_disk_encoded(test).0
+}
+fn load_test_document_disk_encoded(
+    test: &TestCase,
+) -> (TestHtml, script_runtime_api::DocumentEncoding) {
+    let encoding = script_runtime_api::DocumentEncoding::default();
     if is_any_js(&test.path) {
-        return match variant_global(test) {
-            VariantGlobal::Unhostable(reason) => TestHtml::Skip(reason),
-            VariantGlobal::DedicatedWorker => match synthesize_worker_wrapper(test) {
-                Some(h) => TestHtml::Html(h),
-                None => TestHtml::Skip("dedicated-worker-unsupported"),
-            },
-            VariantGlobal::Window => {
-                match synthesize_any_js(&test.path, Some(test.name()), test.long_timeout) {
+        return (
+            match variant_global(test) {
+                VariantGlobal::Unhostable(reason) => TestHtml::Skip(reason),
+                VariantGlobal::DedicatedWorker => match synthesize_worker_wrapper(test) {
                     Some(h) => TestHtml::Html(h),
-                    None => TestHtml::Skip("non-window-global"),
-                }
+                    None => TestHtml::Skip("dedicated-worker-unsupported"),
+                },
+                VariantGlobal::Window => {
+                    match synthesize_any_js(&test.path, Some(test.name()), test.long_timeout) {
+                        Some(h) => TestHtml::Html(h),
+                        None => TestHtml::Skip("non-window-global"),
+                    }
+                },
             },
-        };
+            encoding,
+        );
     }
     let Ok(bytes) = fs::read(&test.path) else {
-        return TestHtml::ReadError;
+        return (TestHtml::ReadError, encoding);
     };
-    TestHtml::Html(String::from_utf8_lossy(&bytes).into_owned())
+    // XML retains its separate existing decoding route; this is HTML sniffing.
+    if is_xml_path(&test.path) {
+        return (
+            TestHtml::Html(String::from_utf8_lossy(&bytes).into_owned()),
+            encoding,
+        );
+    }
+    let decoded =
+        genet_scripted_dom::html_encoding::decode_html_document(&bytes, None, Default::default());
+    (TestHtml::Html(decoded.source), decoded.encoding)
 }
 
 fn build_test_html_disk(test: &TestCase) -> TestHtml {
+    build_test_html_disk_encoded(test).0
+}
+fn build_test_html_disk_encoded(
+    test: &TestCase,
+) -> (TestHtml, script_runtime_api::DocumentEncoding) {
     if test.kind != Kind::Testharness {
-        return TestHtml::Skip("non-testharness");
+        return (TestHtml::Skip("non-testharness"), Default::default());
     }
     let ext = test.path.extension().and_then(|e| e.to_str()).unwrap_or("");
     if ext.eq_ignore_ascii_case("xhtml") || ext.eq_ignore_ascii_case("xht") {
-        return TestHtml::Skip("xhtml"); // XML parse mode genet's HTML parser doesn't handle
+        return (TestHtml::Skip("xhtml"), Default::default()); // XML parse mode genet's HTML parser doesn't handle
     }
-    load_test_document_disk(test)
+    load_test_document_disk_encoded(test)
 }
 
 /// Render each reftest in the subset + its reference to side-by-side
@@ -1115,12 +1140,23 @@ fn dump(tests: &[TestCase], args: &Args) {
         let test_dir = test.path.parent().unwrap_or(tests_root);
         let ref_dir = ref_path.parent().unwrap_or(tests_root);
         let render = |html: &str, dir: &Path, xml: bool| {
-            renderer
-                .render_html(html, dir, tests_root, viewport, xml)
-                .image
+            renderer.render_html(html, dir, tests_root, viewport, xml)
+                .map(|rendered| rendered.image)
         };
-        let t = render(&test_html, test_dir, is_xml_path(&test.path));
-        let r = render(&ref_html, ref_dir, is_xml_path(&ref_path));
+        let t = match render(&test_html, test_dir, is_xml_path(&test.path)) {
+            Ok(image) => image,
+            Err(error) => {
+                eprintln!("cannot dump {}: {error}", test.name());
+                continue;
+            },
+        };
+        let r = match render(&ref_html, ref_dir, is_xml_path(&ref_path)) {
+            Ok(image) => image,
+            Err(error) => {
+                eprintln!("cannot dump {} reference: {error}", test.name());
+                continue;
+            },
+        };
         let stem = test
             .path
             .file_stem()

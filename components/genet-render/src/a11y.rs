@@ -5,6 +5,9 @@
 use std::hash::Hash;
 
 #[cfg(feature = "accesskit")]
+pub use document_session_api::a11y::{accesskit_aria_role, accesskit_role_token};
+
+#[cfg(feature = "accesskit")]
 use accesskit::{
     Action, HasPopup, Live, Node as AccessNode, NodeId as AccessNodeId, Orientation, Rect, Role,
     Toggled, TreeId, TreeInfo, TreeUpdate,
@@ -55,6 +58,7 @@ fn document_role<D: LayoutDom>(dom: &D, node: D::NodeId) -> DocumentA11yRole {
             "dialog" => return DocumentA11yRole::Dialog,
             "alert" => return DocumentA11yRole::Alert,
             "menu" => return DocumentA11yRole::Menu,
+            "menubar" => return DocumentA11yRole::MenuBar,
             "menuitem" => return DocumentA11yRole::MenuItem,
             "menuitemcheckbox" => return DocumentA11yRole::MenuItemCheckBox,
             "menuitemradio" => return DocumentA11yRole::MenuItemRadio,
@@ -324,6 +328,23 @@ fn has_tabindex<D: LayoutDom>(dom: &D, node: D::NodeId) -> bool {
         .is_some_and(|value| value.trim().parse::<i32>().is_ok())
 }
 
+/// `node`'s parent in the flat tree, the tree its boxes and scroll containers
+/// come from: a slotted node's slot, else its parent, and a shadow root's host
+/// in place of the root itself.
+fn flat_parent<D: LayoutDom>(dom: &D, node: D::NodeId) -> Option<D::NodeId> {
+    if !dom.has_shadow_trees() {
+        return dom.parent(node);
+    }
+    if let Some(slot) = dom.assigned_slot(node) {
+        return Some(slot);
+    }
+    let parent = dom.parent(node)?;
+    if dom.kind(parent) == NodeKind::ShadowRoot {
+        return dom.shadow_host(parent);
+    }
+    Some(parent)
+}
+
 /// The accumulated scroll owned by element ancestors. A node's own scroll
 /// offset moves its descendants, not its own retained border box.
 fn ancestor_scroll<D>(
@@ -336,13 +357,13 @@ where
     D::NodeId: Copy + Eq + Hash,
 {
     let mut total = (0.0, 0.0);
-    let mut current = dom.parent(node);
+    let mut current = flat_parent(dom, node);
     while let Some(parent) = current {
         if let Some((x, y)) = scroll_offsets.get(&parent) {
             total.0 += x;
             total.1 += y;
         }
-        current = dom.parent(parent);
+        current = flat_parent(dom, parent);
     }
     total
 }
@@ -360,7 +381,7 @@ where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
-    let mut current = dom.parent(node);
+    let mut current = flat_parent(dom, node);
     while let Some(parent) = current {
         if scroll_offsets
             .get(&parent)
@@ -368,7 +389,7 @@ where
         {
             return true;
         }
-        current = dom.parent(parent);
+        current = flat_parent(dom, parent);
     }
     false
 }
@@ -498,6 +519,7 @@ fn accesskit_role(role: DocumentA11yRole) -> Role {
         DocumentA11yRole::Dialog => Role::Dialog,
         DocumentA11yRole::Alert => Role::Alert,
         DocumentA11yRole::Menu => Role::Menu,
+        DocumentA11yRole::MenuBar => Role::MenuBar,
         DocumentA11yRole::MenuItem => Role::MenuItem,
         DocumentA11yRole::TabList => Role::TabList,
         DocumentA11yRole::Tab => Role::Tab,
@@ -771,7 +793,7 @@ where
     let id = projected.then(|| neutral_node_id(dom, node));
     let child_parent = id.or(parent);
     let children = dom
-        .dom_children(node)
+        .flat_children(node)
         .filter(|child| dom.kind(*child) == NodeKind::Element)
         .flat_map(|child| {
             projection_walk(
@@ -1022,6 +1044,173 @@ mod tests {
         dom.set_inner_html(root, html);
         let fragments = fragments_from_scripted_dom(&dom, SHEET, 400, 300).expect("layout");
         document_a11y_projection(&dom, &fragments, None, 7)
+    }
+
+    /// `projection_for` after the declarative shadow pass a parsed page gets,
+    /// so `<template shadowrootmode>` becomes a real shadow root.
+    fn shadow_projection_for(html: &str) -> document_session_api::DocumentA11yProjection {
+        let mut dom = ScriptedDom::new();
+        let root = dom.document();
+        dom.set_inner_html(root, html);
+        let realized = dom.realize_declarative_shadow_roots(root);
+        assert_eq!(
+            realized.len(),
+            html.matches("shadowrootmode").count(),
+            "every declarative template became a shadow root"
+        );
+        let fragments = fragments_from_scripted_dom(&dom, SHEET, 400, 300).expect("layout");
+        document_a11y_projection(&dom, &fragments, None, 7)
+    }
+
+    fn button_names(projection: &document_session_api::DocumentA11yProjection) -> Vec<String> {
+        projection
+            .nodes()
+            .iter()
+            .filter(|node| node.role == DocumentA11yRole::Button)
+            .map(|node| node.name.clone().unwrap_or_default())
+            .collect()
+    }
+
+    #[test]
+    fn a_light_dom_button_reaches_the_projection() {
+        let projection = shadow_projection_for("<div><button>Mount action</button></div>");
+        assert_eq!(button_names(&projection), ["Mount action"]);
+    }
+
+    #[test]
+    fn a_button_in_an_open_shadow_root_reaches_the_projection() {
+        let projection = shadow_projection_for(
+            "<div><template shadowrootmode=\"open\"><button>Mount action</button></template></div>",
+        );
+        assert_eq!(button_names(&projection), ["Mount action"]);
+    }
+
+    #[test]
+    fn slotted_children_project_once_at_their_slot_in_flat_tree_order() {
+        // DOM order is Second, First; the slots put First before Second. A
+        // filled slot's fallback is not rendered; an empty slot's is.
+        let projection = shadow_projection_for(
+            "<div><template shadowrootmode=\"open\">\
+             <slot name=\"a\"><button>Unused fallback</button></slot>\
+             <slot name=\"b\"></slot>\
+             <slot name=\"c\"><button>Fallback</button></slot>\
+             </template>\
+             <button slot=\"b\">Second</button><button slot=\"a\">First</button></div>",
+        );
+        assert_eq!(button_names(&projection), ["First", "Second", "Fallback"]);
+    }
+
+    #[test]
+    fn names_from_content_include_shadow_and_slotted_text() {
+        let projection = shadow_projection_for(
+            "<button><span><template shadowrootmode=\"open\">Open <slot></slot> now</template>the panel</span></button>",
+        );
+        assert_eq!(button_names(&projection), ["Open the panel now"]);
+    }
+
+    #[test]
+    fn nested_whitespace_in_shadow_and_slot_content_separates_words() {
+        for html in [
+            "<button>Open<span><template shadowrootmode=open><span><slot> </slot></span></template></span>panel</button>",
+            "<button>Open<span><template shadowrootmode=open><span><slot></slot></span></template> </span>panel</button>",
+        ] {
+            let projection = shadow_projection_for(html);
+            assert_eq!(button_names(&projection), ["Open panel"]);
+        }
+    }
+
+    #[test]
+    fn id_references_resolve_within_their_own_tree() {
+        // Each tree has its own `lbl` and `f`. The shadow references must
+        // find the shadow targets, and the light ones the light targets.
+        let projection = shadow_projection_for(
+            "<span id=\"lbl\">Light label</span>\
+             <div><template shadowrootmode=\"open\">\
+             <span id=\"lbl\">Shadow label</span>\
+             <button aria-labelledby=\"lbl\">unnamed</button>\
+             <label for=\"f\">Shadow field</label><input id=\"f\">\
+             </template></div>\
+             <button aria-labelledby=\"lbl\">unnamed</button>\
+             <label for=\"f\">Light field</label><input id=\"f\">",
+        );
+        assert_eq!(button_names(&projection), ["Shadow label", "Light label"]);
+        let fields = projection
+            .nodes()
+            .iter()
+            .filter(|node| node.role == DocumentA11yRole::TextField)
+            .map(|node| node.name.clone().unwrap_or_default())
+            .collect::<Vec<_>>();
+        assert_eq!(fields, ["Shadow field", "Light field"]);
+    }
+
+    #[test]
+    fn shadow_and_slotted_content_follow_their_flat_tree_scroll_container() {
+        // `outer` is a light-DOM scroller around a shadow host; `inner` is a
+        // scroller inside the shadow tree around the slot. Shadow content
+        // climbs through its host to `outer`; slotted content climbs through
+        // its slot to `inner`.
+        let mut dom = ScriptedDom::new();
+        let root = dom.document();
+        dom.set_inner_html(
+            root,
+            "<div><div><template shadowrootmode=\"open\">\
+             <button>Shadow action</button><div><slot></slot></div>\
+             </template><button>Slotted action</button></div>\
+             <button>Light action</button></div>",
+        );
+        assert_eq!(dom.realize_declarative_shadow_roots(root).len(), 1);
+        let element_children = |dom: &ScriptedDom, node| {
+            dom.dom_children(node)
+                .filter(|child| dom.kind(*child) == NodeKind::Element)
+                .collect::<Vec<_>>()
+        };
+        let outer = element_children(&dom, root)[0];
+        let host = element_children(&dom, outer)[0];
+        let shadow = dom.shadow_root(host).expect("realized shadow root");
+        let inner = element_children(&dom, shadow)[1];
+        let fragments = fragments_from_scripted_dom(&dom, SHEET, 400, 300).expect("layout");
+        let bounds_and_click = |offsets: &ScrollOffsets<_>, label: &str| {
+            let tree = accesskit_tree_with_scroll(&dom, &fragments, None, offsets);
+            let node = tree
+                .nodes
+                .iter()
+                .find(|(_, node)| node.label() == Some(label))
+                .map(|(_, node)| node)
+                .unwrap_or_else(|| panic!("no node labelled {label}"));
+            (
+                node.bounds().expect("bounds").y0,
+                node.supports_action(Action::Click),
+            )
+        };
+        let still = ScrollOffsets::new();
+        let mut outer_scrolled = ScrollOffsets::new();
+        outer_scrolled.insert(outer, (0.0, 24.0));
+        let mut inner_scrolled = ScrollOffsets::new();
+        inner_scrolled.insert(inner, (0.0, 10.0));
+
+        for label in ["Shadow action", "Slotted action", "Light action"] {
+            let (y, click) = bounds_and_click(&still, label);
+            assert!(click, "{label} is clickable before any scroll");
+            assert_eq!(
+                bounds_and_click(&outer_scrolled, label),
+                (y - 24.0, false),
+                "{label} moves with the light-DOM scroller"
+            );
+        }
+        let (slotted_y, _) = bounds_and_click(&still, "Slotted action");
+        assert_eq!(
+            bounds_and_click(&inner_scrolled, "Slotted action"),
+            (slotted_y - 10.0, false),
+            "slotted content moves with the shadow-tree scroller around its slot"
+        );
+        for label in ["Shadow action", "Light action"] {
+            let (y, _) = bounds_and_click(&still, label);
+            assert_eq!(
+                bounds_and_click(&inner_scrolled, label),
+                (y, true),
+                "{label} is outside the shadow-tree scroller"
+            );
+        }
     }
 
     #[test]

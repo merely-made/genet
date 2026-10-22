@@ -133,6 +133,9 @@ mod tests;
 pub use linebender_resource_handle::FontData;
 pub use util::BoundingBox;
 
+/// Segmenter dictionaries a host loads at runtime (feature `complex-scripts`).
+#[cfg(feature = "complex-scripts")]
+pub use analysis::dictionaries as segmenter_dictionaries;
 pub use builder::{RangedBuilder, StyleRunBuilder, TreeBuilder};
 pub use context::LayoutContext;
 pub use font::FontContext;

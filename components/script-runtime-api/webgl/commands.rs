@@ -17,6 +17,8 @@ impl<E: ScriptEngine> NativeFn<E> for CreateContext {
         let width = parse_u32::<E>(cx, 0)?;
         let height = parse_u32::<E>(cx, 1)?;
         let id = create_webgl_context::<E>(cx, width, height);
+        // -1 is only an internal failure signal. The JS creation helper
+        // returns null and never exposes a context object for it.
         cx.make_string(
             &id.map(|i| i.to_string())
                 .unwrap_or_else(|| "-1".to_string()),
@@ -148,11 +150,8 @@ impl<E: ScriptEngine> NativeFn<E> for BufferDataF32 {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
         let ctx = parse_ctx::<E>(cx)?;
         let target = parse_u32::<E>(cx, 1)?;
-        // The JS wrapper serializes the Float32Array as a comma-separated
-        // list (small enough for the conformance smoke; the production path
-        // can switch to a binary-string when large geometry hits).
-        let data_str = parse_string::<E>(cx, 2)?;
-        let data = parse_f32_list(&data_str);
+        let input = cx.arg(2);
+        let data = cx.copy_float32_array(&input)?;
         let usage = parse_u32::<E>(cx, 3)?;
         with_webgl_ctx::<E, _, _>(cx, ctx, (), |h| h.buffer_data_f32(target, &data, usage));
         Ok(cx.undefined())
@@ -341,8 +340,11 @@ impl<E: ScriptEngine> NativeFn<E> for UniformMatrix4fv {
         let ctx = parse_ctx::<E>(cx)?;
         let loc = parse_i32::<E>(cx, 1)?;
         let transpose = parse_bool::<E>(cx, 2)?;
-        let values_str = parse_string::<E>(cx, 3)?;
-        let values = parse_f32_list(&values_str);
+        let input = cx.arg(3);
+        let values = cx.copy_float32_array(&input)?;
+        if values.len() < 16 {
+            return Err(cx.error("at least 16 WebGL matrix values required"));
+        }
         with_webgl_ctx::<E, _, _>(cx, ctx, (), |handler| {
             handler.uniform_matrix4fv(loc, transpose, &values)
         });
@@ -396,10 +398,15 @@ impl<E: ScriptEngine> NativeFn<E> for TexImage2dRgba8 {
         let ctx = parse_ctx::<E>(cx)?;
         let width = parse_u32::<E>(cx, 1)?;
         let height = parse_u32::<E>(cx, 2)?;
-        // Pixels cross as a binary string (one JS char code per byte), the
-        // same encoding readPixels uses in the other direction.
-        let pixels_str = parse_string::<E>(cx, 3)?;
-        let pixels: Vec<u8> = pixels_str.chars().map(|c| c as u8).collect();
+        let input = cx.arg(3);
+        let pixels = cx.copy_uint8_array(&input)?;
+        let expected = (width as usize)
+            .checked_mul(height as usize)
+            .and_then(|pixels| pixels.checked_mul(4))
+            .ok_or_else(|| cx.error("WebGL texture dimensions overflow"))?;
+        if !pixels.is_empty() && pixels.len() != expected {
+            return Err(cx.error("WebGL texture byte length mismatch"));
+        }
         with_webgl_ctx::<E, _, _>(cx, ctx, (), |h| {
             h.tex_image_2d_rgba8(width, height, &pixels)
         });

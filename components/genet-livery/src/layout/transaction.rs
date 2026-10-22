@@ -26,7 +26,7 @@ where
     D::NodeId: Copy + Eq + Hash,
 {
     taffy_style::reset_calc_scratch();
-    let image_sources = ImageSources::new();
+    let image_sources = HashMap::new();
     let viewport = ViewportSizes::uniform(viewport_width, viewport_height);
     let resolved =
         resolve_container_relative_styles_with_images(dom, styles, viewport, &image_sources)?;
@@ -39,12 +39,13 @@ where
     )
 }
 
-/// Produce the layout bases needed by resolved-value CSSOM reads without
+/// Produce estimated layout bases for synthetic callers without
 /// letting the queried element's own margin expression participate in the
 /// measurement. This matters for percentage-bearing margin math: its basis is
 /// the containing block, which must be known before the expression can be
-/// evaluated.
-pub fn used_value_context<D>(
+/// evaluated. Live CSSOM callers use [`used_value_context_with_text_system`]
+/// so shaped text and loaded image dimensions match the presented layout.
+pub fn estimated_used_value_context<D>(
     dom: &D,
     styles: &StylePlane<D::NodeId>,
     viewport_width: f32,
@@ -64,21 +65,72 @@ where
         style.margin_left = zero;
     }
     let fragments = layout(dom, &measuring, viewport_width, viewport_height)?;
+    Ok(used_context_from_layout(dom, &measuring, &fragments, node))
+}
+
+/// Measure a CSSOM used-value basis with the live text and image owners.
+/// The queried margin is excluded while its containing block is measured;
+/// table width and height use the principal grid fragment, not the wrapper
+/// that can include captions.
+pub fn used_value_context_with_text_system<D>(
+    dom: &D,
+    styles: &StylePlane<D::NodeId>,
+    viewport_width: f32,
+    viewport_height: f32,
+    viewport: ViewportSizes,
+    text: &mut TextSystem,
+    image_sources: &dyn crate::ImageSourceLookup,
+    node: D::NodeId,
+) -> Result<Option<crate::UsedValueContext>, LayoutError>
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    let mut measuring = styles.clone();
+    if let Some(style) = measuring.get_mut(node) {
+        let zero = Margin::Value(CssLengthPercentage::ZERO);
+        style.margin_top = zero;
+        style.margin_right = zero;
+        style.margin_bottom = zero;
+        style.margin_left = zero;
+    }
+    let (resolved, fragments) = layout_with_text_system(
+        dom,
+        &measuring,
+        viewport_width,
+        viewport_height,
+        viewport,
+        text,
+        image_sources,
+    )?;
+    Ok(used_context_from_layout(dom, &resolved, &fragments, node))
+}
+
+fn used_context_from_layout<D>(
+    dom: &D,
+    styles: &StylePlane<D::NodeId>,
+    fragments: &LiveryLayout<D::NodeId>,
+    node: D::NodeId,
+) -> Option<crate::UsedValueContext>
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
     // K4e4: used `width` and `height` are properties of the principal box.
     // For a table element that is the grid, whose border box excludes the
     // captions the wrapper contains.
     let Some(fragment) = fragments.principal_fragment(node) else {
-        return Ok(None);
+        return None;
     };
     let containing_inline_size = dom.parent(node).and_then(|parent| {
-        let style = measuring.get(parent)?;
+        let style = styles.get(parent)?;
         let fragment = fragments.get(parent)?;
         Some(content_box_size(style, fragment).0)
     });
-    Ok(Some(crate::UsedValueContext {
+    Some(crate::UsedValueContext {
         border_box: (fragment.width, fragment.height),
         containing_inline_size,
-    }))
+    })
 }
 
 /// Lay out a retained live document through the caller-owned text system and
@@ -93,7 +145,7 @@ pub fn layout_with_text_system<D>(
     viewport_height: f32,
     viewport: ViewportSizes,
     text: &mut TextSystem,
-    image_sources: &ImageSources,
+    image_sources: &dyn crate::ImageSourceLookup,
 ) -> Result<ResolvedLayout<D::NodeId>, LayoutError>
 where
     D: LayoutDom,
@@ -173,7 +225,7 @@ pub(in crate::layout) fn layout_impl<D>(
     styles: &StylePlane<D::NodeId>,
     viewport_width: f32,
     viewport_height: f32,
-    image_sources: &ImageSources,
+    image_sources: &dyn crate::ImageSourceLookup,
 ) -> Result<LiveryLayout<D::NodeId>, LayoutError>
 where
     D: LayoutDom,
@@ -392,7 +444,7 @@ fn atomic_build_state<'a, D>(
     dom: &'a D,
     styles: &'a StylePlane<D::NodeId>,
     boxes: &'a GeneratedBoxTree<D::NodeId>,
-    image_sources: &'a ImageSources,
+    image_sources: &'a dyn crate::ImageSourceLookup,
     text: &'a mut TextSystem,
     contribution_root: Option<D::NodeId>,
     width_override: Option<(D::NodeId, f32)>,
@@ -428,7 +480,7 @@ pub(in crate::layout) fn layout_atomic_subtrees<D>(
     viewport_height: f32,
     pass: &AtomicPass<'_>,
     text: &mut TextSystem,
-    image_sources: &ImageSources,
+    image_sources: &dyn crate::ImageSourceLookup,
 ) -> Result<AtomicLayoutPlane, LayoutError>
 where
     D: LayoutDom,
@@ -512,14 +564,14 @@ where
         // build_box, and both skip paths would otherwise drop its ledger.
         plane
             .table_shadow
-            .merge(std::mem::take(&mut state.table_shadow));
+            .merge_deferred(std::mem::take(&mut state.table_shadow));
         let Some(atomic_root) = built else {
             // No layout will run for a root that built nothing, but noted
             // tables still record their deferrals.
             state.apply_buckram_table_layout();
             plane
                 .table_shadow
-                .merge(std::mem::take(&mut state.table_shadow));
+                .merge_deferred(std::mem::take(&mut state.table_shadow));
             continue;
         };
         // An inline replaced root contributes its natural box to the line.
@@ -660,7 +712,7 @@ where
             });
             plane
                 .table_shadow
-                .merge(std::mem::take(&mut state.table_shadow));
+                .merge_deferred(std::mem::take(&mut state.table_shadow));
             continue;
         };
         // An inline-block or button aligns on its last line box, unless it
@@ -734,7 +786,7 @@ where
         });
         plane
             .table_shadow
-            .merge(std::mem::take(&mut state.table_shadow));
+            .merge_deferred(std::mem::take(&mut state.table_shadow));
         plane.table_paint.merge(table_paint);
         for candidate in &mut fragments {
             candidate.fragment.x -= root_rect.x;
@@ -751,7 +803,7 @@ where
 }
 
 pub(in crate::layout) fn collect_atomic_fragments(
-    tree: &AlgorithmTree<Style, TextMeasure, Option<BoxId>>,
+    tree: &AlgorithmTree<TextMeasure, Option<BoxId>>,
     node: AlgorithmNodeId,
     parent_origin: Point<f32>,
     output: &mut Vec<AtomicFragment>,
@@ -941,7 +993,7 @@ pub(in crate::layout) fn layout_inline_groups<D>(
     viewport: (f32, f32),
     text: &mut TextSystem,
     atomic: &AtomicLayoutPlane,
-    image_sources: &ImageSources,
+    image_sources: &dyn crate::ImageSourceLookup,
 ) -> Result<LiveryLayout<D::NodeId>, LayoutError>
 where
     D: LayoutDom,
@@ -1185,7 +1237,7 @@ where
     // Tables on the inline route record into the state's own ledger; tables
     // inside atomic subtrees accumulated into the plane's. Both survive.
     let mut table_shadow = std::mem::take(&mut state.table_shadow);
-    table_shadow.merge(atomic.table_shadow.clone());
+    table_shadow.merge_deferred(atomic.table_shadow.clone());
     drop(state);
     merge_atomic_subtrees(atomic, &boxes, &mut fragments);
     table_paint.merge(atomic.table_paint.clone());

@@ -1,0 +1,124 @@
+{
+  "base": "917f88e6004d17e1eff19598468e12d9b3c5ab5b",
+  "toolchain": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "lock_sha256": "a3a837c915e30ce279b3546d003f7261a210547c68f56c50f2c1a0886b78c526",
+  "x1": {
+    "removed_files": [
+      "third_party/mozdebug/mozdebug/__init__.py",
+      "third_party/mozdebug/mozdebug/mozdebug.py",
+      "third_party/mozdebug/patches/0001-Add_rust-lldb_debugger.patch"
+    ],
+    "prior_environment_script_removal": "4c7869e1f6ae0e7b978dd48c95d20c47ed887fb0",
+    "consumer_search": {
+      "genet-audit-reduction-20261016": {
+        "returncode": 0,
+        "matches": "LICENSES.md:47:| `third_party/mozdebug` | MPL-2.0 | Mozilla (`mozdebug`) | in-tree headers |\ndocs/2026-05-08_c3_landed_notes.md:97:Reproduces in [`.cargo-check-logs/cargo-check-env.ps1`](../.cargo-check-logs/cargo-check-env.ps1).\ndocs/2026-05-09_c4_landed_notes.md:82:Validation env at [`.cargo-check-logs/cargo-check-env.ps1`](../.cargo-check-logs/cargo-check-env.ps1)\ndocs/2026-05-16_workspace_audit_snapshot.md:34:If anyone removes `tests/unit/script` from `workspace.exclude`, the full mozjs build env returns. The captured env script lives at `.cargo-check-logs/cargo-check-env.ps1` and requires:\n",
+        "stderr": ""
+      },
+      "mere-retained-geometry-20261017": {
+        "returncode": 1,
+        "matches": "",
+        "stderr": ""
+      },
+      "turnstone-retained-geometry-20261017": {
+        "returncode": 1,
+        "matches": "",
+        "stderr": ""
+      }
+    },
+    "limit": "Unknown private external scripts not inventoried; no supported in-tree or sibling consumer found."
+  },
+  "resources": {
+    "memory_max": "5G",
+    "memory_swap_max": 0,
+    "cpu_quota": "150%",
+    "jobs": 1,
+    "test_threads": 1,
+    "heavy_lock": "/home/markik/Code/testing/machine-heavy.lock"
+  },
+  "attempts": {
+    "qualification-documents-published": "Stopped before tests: missing scripted-nova feature in invocation. Not qualification evidence.",
+    "qualification-live-published": "600s cold compilation/test timeout during Nova tests; no failure observed before termination. Not a completed passing gate.",
+    "qualification-browser-input": "Failed glyph witness because fixture supplied no font; sampled initial controls had zero glyph ink.",
+    "qualification-browser-diagnostic": "Screenshot confirmed missing font; corrected fixture supplies bundled Ahem and requires initial visible glyphs. Production code unchanged."
+  },
+  "gates": {
+    "qualification-live-warm": {
+      "exit": 0,
+      "documents_passed": 150,
+      "boa_passed": 27,
+      "nova_passed": 12,
+      "ignored": 0
+    },
+    "qualification-layout": {
+      "exit": 101,
+      "contextual_consumers_passed": 6,
+      "table_passed": 5,
+      "table_failed": 1,
+      "failure": "nested_table_cell_does_not_change_constrained_column_distribution: c1 plain 261.3333px vs nested 196.21053px"
+    },
+    "qualification-parley": {
+      "exit": 101,
+      "failed": 1,
+      "failure": "tests::test_builders::builders_empty: tab_size 64 versus 0"
+    },
+    "qualification-browser-build": {
+      "exit": 0,
+      "target": "wasm32-unknown-unknown",
+      "package": "ortet",
+      "features": "default"
+    },
+    "qualification-browser-bindgen": {
+      "exit": 0,
+      "version": "0.2.129"
+    },
+    "qualification-browser-font-fixed": {
+      "exit": 0,
+      "recorded_steps": 17,
+      "adapter": {
+        "vendor": "amd",
+        "architecture": "gcn-5",
+        "device": "",
+        "description": "",
+        "isFallbackAdapter": false
+      },
+      "scope": "Real Chromium keys, visible edits in input/textarea, editable default suppression, product scroll pixels, outer scroll fallback. Script-cancelled authored JS and physical IME not covered."
+    }
+  },
+  "raw_receipts": "/home/markik/Code/testing/audits/genet-architecture-20261017/x1-qualification",
+  "status": "X1 removed; bounded qualification completed with two reproduced existing failures and explicit remaining platform/standards gates",
+  "source_sha256": {
+    "ports/ortet/src/web.rs": "7da0abf4c5facca6ff4bc331d5e7160fec370e96f2996f1e0197e17a9523f262",
+    "ports/ortet/tests/web/input_defaults.html": "21c32e48827a39f0d7b245228cbf675a4a5953146ca05ac469a683350116bbe8",
+    "ports/ortet/tests/web/input_defaults.cjs": "d57da79b91e65c504770966dbc4fc16ada737a983c2c7b1af9bb093848afab74",
+    "tests/wpt/tests/fonts/Ahem.ttf": "b719ecb31c5b21fc573c03f6421c74ac63c271a5a3ff841e34f9705fb94b8448"
+  },
+  "raw_sha256": {
+    "qualification-documents-published.log": "e7021d9c5119a32117ce92cf9001ddb74f1f58f07d45fbb0e48e9f3094c569e1",
+    "qualification-live-published.log": "5e48708848d581d8da9ccbf392d141e2055aa30a3ab524232b72046223695bf2",
+    "qualification-browser-input.log": "39d49fe3e66bea08123f5bbfd20121fbab41d4529beab0d42917347fbe1842af",
+    "qualification-browser-diagnostic.log": "abfcc3bd93e01db6481e1af8dd845779b536c76fc694a0459f4a3860392e3bf3",
+    "qualification-live-warm.log": "8d93a61ae048b8d785c158acbccce2d5f83ffc481fc6e49d30d14ada91ae708a",
+    "qualification-layout.log": "f1c171a6ed803c0a837fbb81d2254ca6afe083be8fe78e4ed85e1488b2fe4d62",
+    "qualification-parley.log": "dbfec92332388424bd306a98096e05a56c1631d6991314a40ce73cb850bd1ce0",
+    "qualification-browser-build.log": "f5b1aa721e70e83043a5f839d56954cf55724f69f5912def8c533c57d85d69f8",
+    "qualification-browser-bindgen.log": "73a590c51c3c70d699e145f0d8675903b70426d906f78631a991bbdf32b87677",
+    "qualification-browser-font-fixed.log": "b89f35933c6277070ad487bb05e0db395d10496f7212ae7c61bbad36022f445d",
+    "browser-input.json": "f311d95328183392b1b77ca87b8c4faaf00bba06a02cdb9950f12efd2c07d508",
+    "browser-input-first.json": "706ffac1468d3a5efa175c57cda6b324c2ef8be175993bba9621cde482795eae",
+    "browser-input-font-diagnostic.json": "2bc6a8b5f2e456e90612e56b2a352ed9a71ac848fec1579b8d4d134c43b9f45e",
+    "x1-consumer-search.json": "3290e2631e909efe43326a56aec81b803e0d42248e14190ee4e7a85060f7de8d",
+    "run-browser.sh": "6d8eb5fdd77414f86e2bcfbfbe60c73b6f9952080a2eacbbb7832e0d19f1854f"
+  },
+  "artifact_sha256": {
+    "ortet_bg.wasm": "49ab1d80dac1a0bb40c48cccaa6aff83af792dc051d580baa7182ff61cdd4ad8",
+    "ortet.js": "a3cb91e5bb66397ed10a639d77bc02cc41d76abe274a296720ec1d08166c9b73",
+    "ortet.d.ts": "b04a81e0a4ac5bfc413c504f0adb10fa6cc1bf3343f9a48ee39e96a1fbc5fc66",
+    "ortet_bg.wasm.d.ts": "b0e5a67da57efdf5ae46aab017cd92b1894bd60d766c1535e1d4b22c85de13f1"
+  },
+  "limits": [
+    "Two known failures reproduced, not repaired or relabeled as passing.",
+    "Physical IME, authored-script cancellation in the browser callback, platform checks and standards breadth remain as detailed in the qualification ledger.",
+    "Forms Checkpoint C and native event convergence retain their separately owned acceptance gates."
+  ]
+}

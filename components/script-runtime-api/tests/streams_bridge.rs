@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use script_engine_api::ScriptEngine;
 use script_runtime_api::{
     FetchHandler, FetchOutcome, FetchRequest, NoScriptLoader, Runtime, ScriptResourceLoader,
+    WorkerPolicy,
 };
 
 fn read<E: ScriptEngine>(rt: &mut Runtime<E>, script: &str) -> String {
@@ -264,12 +265,16 @@ impl ScriptResourceLoader for WorkerScript {
 }
 fn worker_installs_transform_and_byob_algorithms<E: ScriptEngine>() {
     let mut rt = runtime::<E>();
+    rt.set_worker_policy(WorkerPolicy::TrustedCooperative {
+        resource_timeout: Duration::from_secs(30),
+        shutdown_grace: Duration::from_millis(500),
+    });
     rt.set_script_resource_loader(Box::new(WorkerScript));
     rt.eval("var result='pending';var worker=new Worker('https://streams.test/streams.js');worker.onmessage=e=>result=e.data;").expect("worker");
     let deadline = Instant::now() + Duration::from_secs(20);
     while Instant::now() < deadline {
         rt.run_microtasks();
-        rt.run_timers(64, 0.0);
+        rt.run_timers(64, 0.0).unwrap();
         rt.pump_workers();
         if read(&mut rt, "result") != "pending" {
             break;

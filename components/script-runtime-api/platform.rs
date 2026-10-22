@@ -102,19 +102,6 @@ fn resolve_against(base: Option<&str>, input: &str) -> String {
     }
 }
 
-/// Seed the session history with one entry (the current document) on first use.
-/// The initial URL is the document base, defaulting to `about:blank`.
-fn ensure_history(h: &mut HostState) {
-    if h.history.is_empty() {
-        let url = h
-            .base_url
-            .clone()
-            .unwrap_or_else(|| "about:blank".to_string());
-        h.history.push(("null".to_string(), url));
-        h.history_index = 0;
-    }
-}
-
 /// `__locationField(field)` -> a Location URL component, or the separate
 /// retained Document URL for the private `documentURL` selector.
 struct LocationField;
@@ -383,10 +370,8 @@ impl<E: ScriptEngine> NativeFn<E> for StorageLength {
 
 // ── history ──────────────────────────────────────────────────────────────────
 
-/// Whether this agent has a browsing-context tree the history surface can use.
-/// A bare runtime - one that never made a frame and never posted a message -
-/// has none, and falls back to the per-document list in [`HostState`], which is
-/// what every `history` test predating browsing contexts exercises.
+/// A realm with a browsing context uses its session history. Bare Window
+/// realms use the same `SessionHistory` type through `with_bare_history`.
 fn context_history<E: ScriptEngine, R>(
     cx: &mut E::CallCx<'_>,
     f: impl FnOnce(&mut browsing_context_api::BrowsingContext) -> R,
@@ -403,7 +388,7 @@ fn adopt_document_url<E: ScriptEngine>(cx: &mut E::CallCx<'_>, url: &str) {
     });
 }
 
-/// `__historyPush(stateJson, url, hasUrl)` -> push a new entry (dropping any
+/// `__historyPush(stateRecord, url, hasUrl)` -> push a new entry (dropping any
 /// forward entries) and make it current. `hasUrl == "true"` resolves `url`
 /// against the current document URL and adopts it; otherwise the URL is unchanged.
 struct HistoryPush;
@@ -413,7 +398,7 @@ impl<E: ScriptEngine> NativeFn<E> for HistoryPush {
     }
 }
 
-/// `__historyReplace(stateJson, url, hasUrl)` -> replace the current entry in
+/// `__historyReplace(stateRecord, url, hasUrl)` -> replace the current entry in
 /// place (same `hasUrl` semantics as push).
 struct HistoryReplace;
 impl<E: ScriptEngine> NativeFn<E> for HistoryReplace {
@@ -464,43 +449,26 @@ fn history_write<E: ScriptEngine>(
         }
         return Ok(cx.undefined());
     }
-    with_host::<E, _>(cx, |h| {
-        ensure_history(h);
-        if replace {
-            let index = h.history_index;
-            h.history[index] = (state, entry_url.clone());
-        } else {
-            h.history.truncate(h.history_index + 1);
-            h.history.push((state, entry_url.clone()));
-            h.history_index = h.history.len() - 1;
-        }
-        if has_url {
-            let _ = h.document_base_url();
-            h.base_url = Some(entry_url);
-        }
+    crate::frames::with_bare_history::<E, _>(cx, |history| {
+        let mut entry = browsing_context_api::HistoryEntry::for_url(entry_url.clone());
+        entry.state = Some(state);
+        if replace { history.replace(entry); } else { history.push(entry); }
     });
+    if has_url { adopt_document_url::<E>(cx, &entry_url); }
     Ok(cx.undefined())
 }
 
-/// `__historyState()` -> the current entry's serialized state JSON.
+/// `__historyState()` -> the current entry's structured-clone record text.
+/// An empty string represents a navigation entry with null state.
 struct HistoryState;
 impl<E: ScriptEngine> NativeFn<E> for HistoryState {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
-        let state = context_history::<E, _>(cx, |context| {
-            context
-                .history()
-                .current()
-                .state
-                .clone()
-                .unwrap_or_else(|| "null".to_string())
-        })
+        let state = context_history::<E, _>(cx, |context| context.history().current().state.clone())
         .or_else(|| {
-            with_host::<E, _>(cx, |h| {
-                ensure_history(h);
-                h.history[h.history_index].0.clone()
-            })
+            crate::frames::with_bare_history::<E, _>(cx, |history| history.current().state.clone())
         })
-        .unwrap_or_else(|| "null".to_string());
+        .flatten()
+        .unwrap_or_default();
         cx.make_string(&state)
     }
 }
@@ -510,12 +478,7 @@ struct HistoryLength;
 impl<E: ScriptEngine> NativeFn<E> for HistoryLength {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
         let n = context_history::<E, _>(cx, |context| context.history().len())
-            .or_else(|| {
-                with_host::<E, _>(cx, |h| {
-                    ensure_history(h);
-                    h.history.len()
-                })
-            })
+            .or_else(|| crate::frames::with_bare_history::<E, _>(cx, |history| history.len()))
             .unwrap_or(1);
         cx.make_string(&n.to_string())
     }
@@ -537,54 +500,43 @@ impl<E: ScriptEngine> NativeFn<E> for HistoryGo {
             .flatten()
             .unwrap_or_else(|| "about:blank".to_string());
         let moved = context_history::<E, _>(cx, |context| {
-            if !context.history().can_go(delta) {
-                return None;
-            }
+            let (target_index, entry) = context.history().target(delta)?;
+            let entry = entry.clone();
             let showing = context.document_serial();
-            let entry = context.history_mut().go(delta)?.clone();
             let same_document = entry.document == showing;
             if same_document {
+                context.history_mut().go(delta)?;
                 context.set_document_url(entry.url.clone());
+                Some((entry, true, None))
+            } else {
+                let traversal = crate::frames::HistoryTraversal::new(context.history(), target_index);
+                Some((entry, false, Some(traversal)))
             }
-            Some((entry, same_document))
         });
         let Some(moved) = moved else {
-            // No browsing context: the pre-context behaviour, which clamps and
-            // fires nothing.
-            with_host::<E, _>(cx, |h| {
-                ensure_history(h);
-                let last = h.history.len() as i64 - 1;
-                let target = (h.history_index as i64 + delta).clamp(0, last);
-                h.history_index = target as usize;
-                let _ = h.document_base_url();
-                h.base_url = Some(h.history[h.history_index].1.clone());
-            });
+            // Bare Window profile: traversal updates its URL without events.
+            let url = crate::frames::with_bare_history::<E, _>(cx, |history| {
+                history.go(delta).map(|entry| entry.url.clone())
+            }).flatten();
+            if let Some(url) = url { adopt_document_url::<E>(cx, &url); }
             return Ok(cx.undefined());
         };
-        let Some((entry, same_document)) = moved else {
+        let Some((entry, same_document, traversal)) = moved else {
             return Ok(cx.undefined());
         };
         if !same_document {
             let realm = cx.current_realm();
-            // A document-changing traversal *is* a navigation, and replaces the
-            // history entry it lands on rather than pushing a new one.
-            return crate::frames::navigate_from_call::<E>(cx, realm, &entry.url, true);
+            // Select only after policy and response acceptance, when the queued
+            // target still belongs to this exact history generation.
+            return crate::frames::navigate_history_entry::<E>(
+                cx, realm, &entry.url, traversal.expect("cross-document target"),
+            );
         }
         adopt_document_url::<E>(cx, &entry.url);
-        let state = entry.state.clone().unwrap_or_else(|| "null".to_string());
+        let state = entry.state.unwrap_or_default();
         let hashed = entry.url != current;
         let script = format!(
-            "setTimeout(function(){{\
-               var e = new Event('popstate');\
-               Object.defineProperty(e, 'state', {{value: JSON.parse({state}), enumerable: true, configurable: true}});\
-               window.dispatchEvent(e);\
-               if ({hashed}) {{\
-                 var h = new Event('hashchange');\
-                 Object.defineProperty(h, 'oldURL', {{value: {old}, enumerable: true, configurable: true}});\
-                 Object.defineProperty(h, 'newURL', {{value: {new}, enumerable: true, configurable: true}});\
-                 window.dispatchEvent(h);\
-               }}\
-             }}, 0)",
+            "__historyQueueTraversalEvents({state}, {hashed}, {old}, {new})",
             state = crate::js_str(&state),
             hashed = hashed,
             old = crate::js_str(&current),
@@ -645,6 +597,27 @@ const PLATFORM_BOOTSTRAP: &str = r#"
     set: function(value) {
       if (!globalOrigins.has(this)) throw new TypeError('Illegal invocation');
       Object.defineProperty(this, 'origin', {configurable:true, enumerable:true, writable:true, value:value});
+    }
+  });
+  // Secure Contexts: whether the global's origin is potentially trustworthy
+  // (https/wss, or a loopback host over http/ws). An opaque origin is not. The
+  // ancestor condition for nested contexts is not applied here.
+  function trustworthyOrigin(origin) {
+    var m = /^([a-z][a-z0-9+.-]*):\/\/([^\/:]*|\[[^\]]*\])(?::\d+)?$/.exec(origin);
+    if (!m) return false;
+    if (m[1] === 'https' || m[1] === 'wss') return true;
+    if (m[1] !== 'http' && m[1] !== 'ws') return false;
+    var host = m[2];
+    return host === 'localhost' || /\.localhost$/.test(host) || host === '[::1]' || /^127\.\d+\.\d+\.\d+$/.test(host);
+  }
+  Object.defineProperty(globalThis, 'isSecureContext', {
+    configurable: true, enumerable: true,
+    get: function() {
+      var realm = globalOrigins.get(this);
+      if (realm === undefined) throw new TypeError('Illegal invocation');
+      var origin = __environmentOrigin(realm);
+      if (origin === '__security_error__') throw new DOMException('Cross-origin Window access', 'SecurityError');
+      return trustworthyOrigin(origin);
     }
   });
   var stringLists = platformState.domStringLists || (platformState.domStringLists = new WeakMap());
@@ -797,31 +770,58 @@ const PLATFORM_BOOTSTRAP: &str = r#"
     },
   });
 
-  // ── history ── pushState / replaceState / state / length / go / back / forward.
-  // No popstate / real navigation (the scripted tier has none); state + URL
-  // bookkeeping is correct. State round-trips through JSON (non-JSON state -> null).
-  function stateJson(state) {
-    var s = JSON.stringify(state);
-    return s === undefined ? 'null' : s;
+  // ── history ── Each entry stores a detached structured-clone record.
+  // Capture the codec here so authored replacements of its global names cannot
+  // change history writes, reads or traversal events.
+  var serializeHistoryState = globalThis.__scSerialize;
+  var deserializeHistoryState = globalThis.__scDeserialize;
+  var pushHistory = __historyPush, replaceHistory = __historyReplace;
+  var readHistory = __historyState, lengthHistory = __historyLength, goHistory = __historyGo;
+  var HistoryString = String, HistoryNumber = Number;
+  var HistoryEvent = Event, defineHistoryProperty = Object.defineProperty;
+  var queueHistoryTask = setTimeout, dispatchHistoryEvent = globalThis.dispatchEvent;
+  function readHistoryState(record) {
+    return record === '' ? null : deserializeHistoryState(record);
   }
+  defineHistoryProperty(globalThis, '__historyQueueTraversalEvents', {
+    value: function(record, hashed, oldURL, newURL) {
+      queueHistoryTask(function() {
+        var event = new HistoryEvent('popstate');
+        defineHistoryProperty(event, 'state', {
+          value: readHistoryState(record), enumerable: true, configurable: true
+        });
+        dispatchHistoryEvent.call(globalThis, event);
+        if (hashed) {
+          var hashEvent = new HistoryEvent('hashchange');
+          defineHistoryProperty(hashEvent, 'oldURL', {
+            value: oldURL, enumerable: true, configurable: true
+          });
+          defineHistoryProperty(hashEvent, 'newURL', {
+            value: newURL, enumerable: true, configurable: true
+          });
+          dispatchHistoryEvent.call(globalThis, hashEvent);
+        }
+      }, 0);
+    }
+  });
   var history = {
     pushState: function(state, title, url) {
-      __historyPush(stateJson(state), url == null ? '' : String(url), url == null ? 'false' : 'true');
+      pushHistory(serializeHistoryState(state), url == null ? '' : HistoryString(url), url == null ? 'false' : 'true');
     },
     replaceState: function(state, title, url) {
-      __historyReplace(stateJson(state), url == null ? '' : String(url), url == null ? 'false' : 'true');
+      replaceHistory(serializeHistoryState(state), url == null ? '' : HistoryString(url), url == null ? 'false' : 'true');
     },
-    go: function(delta) { __historyGo(String((delta || 0) | 0)); },
-    back: function() { __historyGo('-1'); },
-    forward: function() { __historyGo('1'); },
+    go: function(delta) { goHistory(HistoryString((delta || 0) | 0)); },
+    back: function() { goHistory('-1'); },
+    forward: function() { goHistory('1'); },
   };
   Object.defineProperty(history, 'state', {
     enumerable: true, configurable: true,
-    get: function() { return JSON.parse(__historyState()); },
+    get: function() { return readHistoryState(readHistory()); },
   });
   Object.defineProperty(history, 'length', {
     enumerable: true, configurable: true,
-    get: function() { return Number(__historyLength()); },
+    get: function() { return HistoryNumber(lengthHistory()); },
   });
   globalThis.history = history;
 })();
@@ -830,7 +830,34 @@ const PLATFORM_BOOTSTRAP: &str = r#"
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Runtime;
+    use crate::{FetchHandler, FetchOutcome, FetchRequest, Runtime};
+    use std::{cell::RefCell, rc::Rc};
+
+    #[derive(Clone, Default)]
+    struct DocumentFetch(Rc<RefCell<Vec<(String, String)>>>);
+
+    impl FetchHandler for DocumentFetch {
+        fn fetch(&self, request: FetchRequest) -> FetchOutcome {
+            self.0
+                .borrow_mut()
+                .push((request.method, request.url.clone()));
+            let body = match request.url.as_str() {
+                "https://example.com/c.html" => b"<p id=marker>document c</p>".to_vec(),
+                "https://example.com/d.html" => b"<p id=marker>document d</p>".to_vec(),
+                _ => return FetchOutcome::network_error(),
+            };
+            FetchOutcome {
+                network_error: false,
+                status: 200,
+                status_text: "OK".into(),
+                response_type: "basic".into(),
+                url: request.url,
+                redirected: false,
+                headers: vec![("content-type".into(), "text/html".into())],
+                body,
+            }
+        }
+    }
 
     /// `location` reflects the document URL (`HostState::base_url`), parsed into
     /// the WHATWG components.
@@ -883,6 +910,9 @@ mod tests {
         let mut rt = Runtime::<E>::new().expect("runtime");
         rt.set_base_url("https://example.com/a/b.html")
             .expect("base url");
+        let fetch = DocumentFetch::default();
+        rt.set_fetch_handler(Box::new(fetch.clone()));
+        let initial_realm = rt.top_realm();
         rt.eval("location.assign('../c.html'); console.log(location.href);")
             .expect("assign script");
         assert_eq!(
@@ -891,6 +921,11 @@ mod tests {
             "the navigation is queued; this read precedes it"
         );
         rt.run_event_loop(16).expect("drain the navigation");
+        let c_realm = rt.top_realm();
+        assert_ne!(
+            c_realm, initial_realm,
+            "the first response opened a new realm"
+        );
         rt.eval("console.log(location.href); location.href = 'd.html';")
             .expect("read and reassign");
         assert_eq!(
@@ -898,13 +933,67 @@ mod tests {
             vec!["https://example.com/c.html"],
             "the first navigation ran, and its document's console is its own"
         );
+        let c_document = rt.eval("document.URL").expect("document URL");
+        assert_eq!(
+            rt.value_to_string(&c_document).unwrap(),
+            "https://example.com/c.html"
+        );
+        let c_content = rt
+            .eval("document.getElementById('marker').textContent")
+            .expect("loaded document c");
+        assert_eq!(rt.value_to_string(&c_content).unwrap(), "document c");
+        let c_history = rt.eval("String(history.length)").expect("history length");
+        assert_eq!(rt.value_to_string(&c_history).unwrap(), "2");
         rt.run_event_loop(16).expect("drain the second navigation");
+        assert_ne!(
+            rt.top_realm(),
+            c_realm,
+            "the second response opened a new realm"
+        );
         rt.eval("console.log(location.href); console.log(location.pathname);")
             .expect("read back");
         assert_eq!(
             rt.host().borrow().console,
             vec!["https://example.com/d.html", "/d.html"],
             "the second navigation moved the URL and replaced the document again"
+        );
+        let d_document = rt.eval("document.URL").expect("document URL");
+        assert_eq!(
+            rt.value_to_string(&d_document).unwrap(),
+            "https://example.com/d.html"
+        );
+        let d_content = rt
+            .eval("document.getElementById('marker').textContent")
+            .expect("loaded document d");
+        assert_eq!(rt.value_to_string(&d_content).unwrap(), "document d");
+        let d_history = rt.eval("String(history.length)").expect("history length");
+        assert_eq!(rt.value_to_string(&d_history).unwrap(), "3");
+        assert_eq!(
+            &*fetch.0.borrow(),
+            &[
+                ("GET".into(), "https://example.com/c.html".into()),
+                ("GET".into(), "https://example.com/d.html".into()),
+            ]
+        );
+    }
+
+    /// A request without a document loader or fetch transport cannot replace
+    /// the current document or join session history.
+    fn location_assign_without_transport_keeps_document<E: ScriptEngine>() {
+        let mut rt = Runtime::<E>::new().expect("runtime");
+        rt.set_base_url("https://example.com/a/b.html")
+            .expect("base url");
+        rt.eval("globalThis.savedDocument = document; location.assign('../missing.html');")
+            .expect("assign script");
+        let original_realm = rt.top_realm();
+        rt.run_event_loop(16).expect("drain failed navigation");
+        assert_eq!(rt.top_realm(), original_realm);
+        let state = rt
+            .eval("[location.href, document.URL, savedDocument === document, history.length].join('|')")
+            .expect("current document");
+        assert_eq!(
+            rt.value_to_string(&state).unwrap(),
+            "https://example.com/a/b.html|https://example.com/a/b.html|true|1"
         );
     }
 
@@ -1067,6 +1156,80 @@ mod tests {
         );
     }
 
+    fn history_structured_state<E: ScriptEngine>() {
+        let mut rt = Runtime::<E>::new().expect("runtime");
+        rt.set_base_url("https://example.com/a").expect("base url");
+        let result = rt.eval(r#"
+            var shared = { n: 7 };
+            var input = { first: shared, second: shared, map: new Map(),
+                          date: new Date(1700000000000), big: BigInt('9007199254740993') };
+            input.self = input;
+            input.map.set(shared, input);
+            history.pushState(input, '', '/b');
+            shared.n = 99;
+            var first = history.state, second = history.state;
+            first.first.n = 3;
+            first !== input && first !== second && first.self === first &&
+            first.first === first.second && first.map.get(first.first) === first &&
+            first.first.n === 3 && second.first.n === 7 &&
+            first.map instanceof Map && first.date instanceof Date &&
+            first.date.getTime() === 1700000000000 &&
+            first.big === BigInt('9007199254740993')
+        "#).expect("structured history");
+        assert_eq!(rt.value_to_string(&result).unwrap(), "true");
+    }
+
+    fn history_rejects_uncloneable_state<E: ScriptEngine>() {
+        let mut rt = Runtime::<E>::new().expect("runtime");
+        rt.set_base_url("https://example.com/a").expect("base url");
+        let result = rt.eval(r#"
+            var values = [function(){}, Symbol('s'), document.createElement('div'),
+                          new MessageChannel().port1];
+            var rejected = 0;
+            for (var i = 0; i < values.length; i++) {
+              try { history.pushState(values[i], '', '/bad'); }
+              catch (error) { if (error.name === 'DataCloneError') rejected++; }
+            }
+            var originalSerialize = __scSerialize, originalDeserialize = __scDeserialize;
+            var originalReplace = __historyReplace, originalRead = __historyState;
+            __scSerialize = __scDeserialize = function() { throw Error('authored replacement'); };
+            __historyReplace = __historyState = function() { throw Error('authored sink'); };
+            var trusted;
+            try {
+              history.replaceState({ n: 4 }, '', '/good');
+              trusted = history.state.n === 4;
+            }
+            finally {
+              __scSerialize = originalSerialize; __scDeserialize = originalDeserialize;
+              __historyReplace = originalReplace; __historyState = originalRead;
+            }
+            rejected === values.length && trusted && history.length === 1 &&
+            location.pathname === '/good' && history.state.n === 4
+        "#).expect("uncloneable history state");
+        assert_eq!(rt.value_to_string(&result).unwrap(), "true");
+    }
+
+    fn bare_history_moves_into_context<E: ScriptEngine>() {
+        let mut rt = Runtime::<E>::new().expect("runtime");
+        rt.set_base_url("https://example.com/a").expect("base url");
+        let result = rt.eval(r#"
+            history.pushState({ n: 1 }, '', '/b');
+            history.pushState({ n: 2 }, '', '/c');
+            var before = history.length === 3 && history.state.n === 2 &&
+                         location.href === 'https://example.com/c';
+            window.postMessage('initialize context', '*');
+            var moved = history.length === 3 && history.state.n === 2 &&
+                        location.href === 'https://example.com/c';
+            history.back();
+            var back = history.length === 3 && history.state.n === 1 &&
+                       location.href === 'https://example.com/b';
+            history.forward();
+            before && moved && back && history.state.n === 2 &&
+            location.href === 'https://example.com/c'
+        "#).expect("bare history migration");
+        assert_eq!(rt.value_to_string(&result).unwrap(), "true");
+    }
+
     #[test]
     fn location_reflects_base_url_on_boa() {
         location_reflects_base_url::<script_engine_boa::BoaEngine>();
@@ -1093,6 +1256,33 @@ mod tests {
     fn history_navigation_on_nova() {
         history_navigation::<script_engine_nova::NovaEngine>();
     }
+    #[test]
+    fn history_structured_state_on_boa() {
+        history_structured_state::<script_engine_boa::BoaEngine>();
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn history_structured_state_on_nova() {
+        history_structured_state::<script_engine_nova::NovaEngine>();
+    }
+    #[test]
+    fn history_rejects_uncloneable_state_on_boa() {
+        history_rejects_uncloneable_state::<script_engine_boa::BoaEngine>();
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn history_rejects_uncloneable_state_on_nova() {
+        history_rejects_uncloneable_state::<script_engine_nova::NovaEngine>();
+    }
+    #[test]
+    fn bare_history_moves_into_context_on_boa() {
+        bare_history_moves_into_context::<script_engine_boa::BoaEngine>();
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn bare_history_moves_into_context_on_nova() {
+        bare_history_moves_into_context::<script_engine_nova::NovaEngine>();
+    }
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn local_storage_round_trips_on_nova() {
@@ -1101,6 +1291,10 @@ mod tests {
     #[test]
     fn location_assign_updates_url_on_boa() {
         location_assign_updates_url::<script_engine_boa::BoaEngine>();
+    }
+    #[test]
+    fn location_assign_without_transport_keeps_document_on_boa() {
+        location_assign_without_transport_keeps_document::<script_engine_boa::BoaEngine>();
     }
     #[test]
     fn text_fragment_is_hidden_from_script_urls_on_boa() {
@@ -1115,6 +1309,11 @@ mod tests {
     #[test]
     fn location_assign_updates_url_on_nova() {
         location_assign_updates_url::<script_engine_nova::NovaEngine>();
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn location_assign_without_transport_keeps_document_on_nova() {
+        location_assign_without_transport_keeps_document::<script_engine_nova::NovaEngine>();
     }
     #[cfg(not(target_arch = "wasm32"))]
     #[test]

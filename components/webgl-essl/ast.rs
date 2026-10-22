@@ -22,6 +22,20 @@ pub struct TranslationUnit {
     pub version: Option<u32>,
 }
 
+impl TranslationUnit {
+    /// Last parsed default float precision, matching ESSL declaration order.
+    /// Comments and local/inline qualifiers cannot affect this metadata.
+    pub fn fragment_float_precision(&self) -> Option<PrecisionQualifier> {
+        self.decls
+            .iter()
+            .filter_map(|decl| match decl {
+                ExternalDecl::Precision(p) if p.ty.kind == TypeKind::Float => Some(p.qualifier),
+                _ => None,
+            })
+            .last()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExternalDecl {
     /// `precision <q> <type>;`

@@ -7,7 +7,8 @@
 //! HTML input and textarea current-value state.
 
 use layout_dom_api::{
-    FormControlState, LayoutDom, LayoutDomMut, LocalName, QualName, SelectionDirection,
+    FormControlState, LayoutDom, LayoutDomMut, LocalName, QualName, SelectOptionState,
+    SelectionDirection,
 };
 
 use crate::{NodeId, ScriptedDom};
@@ -42,8 +43,7 @@ impl ScriptedDom {
     }
 
     /// Form-control values under `root`, keyed by `name` and then `id`.
-    /// Inputs and textareas use their current arena value; select retains its
-    /// pre-existing attribute-based behavior until selectedness is implemented.
+    /// Inputs, textareas, and selects use their current arena state.
     pub fn form_values(&self, root: NodeId) -> Vec<(String, String)> {
         let mut out = Vec::new();
         self.collect_form_values(root, &mut out);
@@ -64,8 +64,10 @@ impl ScriptedDom {
                             .map(|(_, v)| v.as_str())
                     };
                     if let Some(key) = attr("name").or_else(|| attr("id")) {
-                        let value = match name.local.as_str() {
-                            "input" | "textarea" => self.form_control_value(id).unwrap_or_default(),
+                        let value = match name.local.as_ref() {
+                            "input" | "select" | "textarea" => {
+                                self.form_control_value(id).unwrap_or_default()
+                            },
                             _ => attr("value").unwrap_or("").to_owned(),
                         };
                         out.push((key.to_owned(), value));
@@ -78,6 +80,23 @@ impl ScriptedDom {
         }
     }
 
+    /// HTML-aware option text, with ASCII whitespace stripped and collapsed.
+    pub fn option_text(&self, id: NodeId) -> Option<String> {
+        (self.html_name(id) == Some("option")).then(|| collect_option_text(self, id))
+    }
+
+    /// An explicit value stays exact; otherwise HTML-aware text supplies it.
+    pub fn option_value(&self, id: NodeId) -> Option<String> {
+        if self.html_name(id) != Some("option") {
+            return None;
+        }
+        Some(
+            self.attribute(id, &markup5ever::ns!(), &LocalName::from("value"))
+                .map(str::to_owned)
+                .unwrap_or_else(|| collect_option_text(self, id)),
+        )
+    }
+
     pub fn form_control_value(&self, id: NodeId) -> Option<String> {
         let node = self.node(id);
         let name = node.name.as_ref()?;
@@ -86,6 +105,14 @@ impl ScriptedDom {
         }
         match name.local.as_str() {
             "textarea" => Some(api_value(&self.node(id).form_control.as_ref()?.value)),
+            "select" => {
+                let selected = self.select_options(id).into_iter().find(|&option| {
+                    self.node(option)
+                        .option_state
+                        .is_some_and(|state| state.selected)
+                })?;
+                self.option_value(selected)
+            },
             "input" => {
                 let state = node.form_control.as_ref()?;
                 Some(match self.input_value_mode(id) {
@@ -98,7 +125,9 @@ impl ScriptedDom {
                         .attribute(id, &markup5ever::ns!(), &LocalName::from("value"))
                         .unwrap_or("on")
                         .to_owned(),
-                    InputValueMode::Filename => String::new(),
+                    InputValueMode::Filename => node.selected_files.first()
+                        .map(|file| format!("C:\\fakepath\\{}", file.name))
+                        .unwrap_or_default(),
                 })
             },
             _ => None,
@@ -132,6 +161,16 @@ impl ScriptedDom {
                 }
                 self.mutations
                     .push(crate::DomMutation::FormControlStateChanged { node: id });
+                self.clear_user_edit_state(id);
+                Ok(())
+            },
+            "select" => {
+                let options = self.select_options(id);
+                let index = options
+                    .iter()
+                    .position(|&option| self.option_value(option).as_deref() == Some(value))
+                    .map_or(-1, |index| index.min(i32::MAX as usize) as i32);
+                self.set_select_selected_index(id, index);
                 Ok(())
             },
             "input" => match self.input_value_mode(id) {
@@ -139,13 +178,18 @@ impl ScriptedDom {
                     Err(FormControlValueError::InvalidState)
                 },
                 InputValueMode::Filename => {
+                    self.node_mut(id).selected_files.clear();
                     if let Some(state) = self.node_mut(id).form_control.as_mut() {
                         state.value.clear();
                     }
+                    self.clear_user_edit_state(id);
+                    self.mutations
+                        .push(crate::DomMutation::FormControlStateChanged { node: id });
                     Ok(())
                 },
                 InputValueMode::Default | InputValueMode::DefaultOn => {
                     self.set_attribute(id, attr_name("value"), value);
+                    self.clear_user_edit_state(id);
                     Ok(())
                 },
                 InputValueMode::Value => {
@@ -164,6 +208,7 @@ impl ScriptedDom {
                     }
                     self.mutations
                         .push(crate::DomMutation::FormControlStateChanged { node: id });
+                    self.clear_user_edit_state(id);
                     Ok(())
                 },
             },
@@ -181,6 +226,7 @@ impl ScriptedDom {
         };
         state.checked = checked;
         state.dirty_checkedness = true;
+        self.sync_checked_radio(id);
         if radio {
             self.uncheck_radio_group(id);
         }
@@ -202,6 +248,7 @@ impl ScriptedDom {
                 let default = self.input_attribute(id, "value").unwrap_or("").to_owned();
                 let checked = self.has_input_attribute(id, "checked");
                 let mode = value_mode(&kind);
+                self.node_mut(id).selected_files.clear();
                 let current = match mode {
                     InputValueMode::Default => default.clone(),
                     InputValueMode::DefaultOn => {
@@ -216,12 +263,14 @@ impl ScriptedDom {
                 state.checked = checked;
                 state.dirty_checkedness = false;
                 set_selection_support(state, &kind, false);
+                self.sync_checked_radio(id);
                 let radio = kind == "radio" && checked;
                 if radio {
                     self.uncheck_radio_group(id);
                 }
                 self.mutations
                     .push(crate::DomMutation::FormControlStateChanged { node: id });
+                self.reset_interaction_state(id);
                 true
             },
             "textarea" => {
@@ -231,6 +280,24 @@ impl ScriptedDom {
                 state.dirty_value = false;
                 self.mutations
                     .push(crate::DomMutation::FormControlStateChanged { node: id });
+                self.reset_interaction_state(id);
+                true
+            },
+            "select" => {
+                for option in self.select_options(id) {
+                    let selected = self
+                        .attribute(option, &markup5ever::ns!(), &LocalName::from("selected"))
+                        .is_some();
+                    self.set_option_selected_state(
+                        option,
+                        SelectOptionState {
+                            selected,
+                            dirty: false,
+                        },
+                    );
+                }
+                self.set_select_selectedness(id);
+                self.reset_interaction_state(id);
                 true
             },
             _ => false,
@@ -250,22 +317,46 @@ impl ScriptedDom {
         let Some(src) = self.node(source).form_control.clone() else {
             return false;
         };
-        let Some(dst) = self.node_mut(target).form_control.as_mut() else {
+        {
+            let Some(dst) = self.node_mut(target).form_control.as_mut() else {
+                return false;
+            };
+            match src_name.local.as_ref() {
+                "input" => {
+                    dst.value = src.value;
+                    dst.dirty_value = src.dirty_value;
+                    dst.checked = src.checked;
+                    dst.dirty_checkedness = src.dirty_checkedness;
+                },
+                "textarea" => {
+                    dst.value = src.value;
+                    dst.dirty_value = src.dirty_value;
+                },
+                _ => return false,
+            }
+            dst.custom_validity_message.clear();
+        }
+        self.sync_checked_radio(target);
+        self.reset_interaction_state(target);
+        // HTML input cloning steps do not propagate selected files.
+        if src_name.local.as_str() == "input" {
+            self.node_mut(target).selected_files.clear();
+        }
+        true
+    }
+
+    /// HTML's option cloning steps propagate selectedness and dirtiness.
+    pub fn clone_option_state(&mut self, source: NodeId, target: NodeId) -> bool {
+        if !self.is_html_option(source) || !self.is_html_option(target) {
+            return false;
+        }
+        let Some(state) = self.node(source).option_state else {
             return false;
         };
-        match src_name.local.as_str() {
-            "input" => {
-                dst.value = src.value;
-                dst.dirty_value = src.dirty_value;
-                dst.checked = src.checked;
-                dst.dirty_checkedness = src.dirty_checkedness;
-            },
-            "textarea" => {
-                dst.value = src.value;
-                dst.dirty_value = src.dirty_value;
-            },
-            _ => return false,
-        }
+        let Some(target_state) = self.node_mut(target).option_state.as_mut() else {
+            return false;
+        };
+        *target_state = state;
         true
     }
 
@@ -281,7 +372,50 @@ impl ScriptedDom {
         name: &QualName,
         old_type: Option<&str>,
     ) {
-        if name.ns != markup5ever::ns!() || !self.is_html_input(id) {
+        if name.ns != markup5ever::ns!() {
+            return;
+        }
+        if self.is_html_option(id) && name.local.as_str() == "selected" {
+            if !self.node(id).option_state.is_some_and(|state| state.dirty) {
+                let selected = self
+                    .attribute(id, &markup5ever::ns!(), &LocalName::from("selected"))
+                    .is_some();
+                self.set_option_selected(id, selected, false);
+            }
+            if let Some(select) = self.option_select_ancestor(id) {
+                self.set_select_selectedness(select);
+            }
+        }
+        if self.html_name(id) == Some("select") {
+            match name.local.as_ref() {
+                "size" => {
+                    self.set_select_selectedness(id);
+                },
+                "multiple" if !self.has_input_attribute(id, "multiple") => {
+                    let selected = self
+                        .select_options(id)
+                        .into_iter()
+                        .filter(|&option| {
+                            self.node(option)
+                                .option_state
+                                .is_some_and(|state| state.selected)
+                        })
+                        .collect::<Vec<_>>();
+                    for option in selected.into_iter().skip(1) {
+                        self.set_option_selected(option, false, false);
+                    }
+                    self.set_select_selectedness(id);
+                },
+                _ => {},
+            }
+        }
+        if name.local.as_str() == "disabled"
+            && (self.is_html_option(id) || self.html_name(id) == Some("optgroup"))
+            && let Some(select) = self.option_select_ancestor(id)
+        {
+            self.set_select_selectedness(select);
+        }
+        if !self.is_html_input(id) {
             return;
         }
         match name.local.as_str() {
@@ -314,6 +448,7 @@ impl ScriptedDom {
             {
                 let checked = self.has_input_attribute(id, "checked");
                 self.node_mut(id).form_control.as_mut().unwrap().checked = checked;
+                self.sync_checked_radio(id);
                 if checked && self.input_type(id) == "radio" {
                     self.uncheck_radio_group(id);
                 }
@@ -325,10 +460,25 @@ impl ScriptedDom {
                 self.uncheck_radio_group(id);
             },
             "type" => {
-                let old_type = old_type.unwrap_or("text");
-                let old_mode = value_mode(old_type);
+                let old_type = normalized_input_type(old_type.unwrap_or("text"));
+                let old_mode = value_mode(&old_type);
                 let new_type = self.input_type(id).to_owned();
                 let new_mode = value_mode(&new_type);
+                if old_type != new_type {
+                    self.node_mut(id).selected_files.clear();
+                }
+                let old_api_value = match old_mode {
+                    InputValueMode::Value => {
+                        self.node(id).form_control.as_ref().unwrap().value.clone()
+                    },
+                    InputValueMode::Default => {
+                        self.input_attribute(id, "value").unwrap_or("").to_owned()
+                    },
+                    InputValueMode::DefaultOn => {
+                        self.input_attribute(id, "value").unwrap_or("on").to_owned()
+                    },
+                    InputValueMode::Filename => String::new(),
+                };
                 if old_mode == InputValueMode::Value
                     && matches!(
                         new_mode,
@@ -360,13 +510,22 @@ impl ScriptedDom {
                     InputValueMode::Filename => String::new(),
                 };
                 self.node_mut(id).form_control.as_mut().unwrap().value = synced_value;
+                let value_unchanged =
+                    self.form_control_value(id).as_deref() == Some(old_api_value.as_str());
                 set_selection_support(
                     self.node_mut(id).form_control.as_mut().unwrap(),
                     &new_type,
                     true,
                 );
+                self.sync_checked_radio(id);
                 if new_type == "radio" && self.node(id).form_control.as_ref().unwrap().checked {
                     self.uncheck_radio_group(id);
+                }
+                if old_type != new_type {
+                    // A genuine type-state change replaces the old editing UI.
+                    // Drop any raw, unconvertible draft and its focus baseline,
+                    // while retaining user-validity and custom validity.
+                    self.clear_user_edit_state_preserving_provenance(id, value_unchanged);
                 }
             },
             "min" | "max" | "step" if self.input_type(id) == "range" => {
@@ -396,49 +555,234 @@ impl ScriptedDom {
                 self.node_mut(id).form_control.as_mut().unwrap().value = value;
             }
         }
+        let select = if self.html_name(node) == Some("select") {
+            Some(node)
+        } else {
+            self.option_select_ancestor(node)
+        };
+        if let Some(select) = select {
+            self.set_select_selectedness(select);
+        }
     }
 
-    /// Capture checked radios in the affected ordinary trees, traversing each
-    /// host's shadow root as another tree. Call before topology or `id` changes.
+    /// Apply the select-list insertion rule to selected options in an inserted
+    /// subtree. Moving within one option list preserves its existing selection;
+    /// joining a different list makes newly added selected options take effect.
+    pub(super) fn form_control_option_subtree_inserted(
+        &mut self,
+        subtree: NodeId,
+        former_select: Option<NodeId>,
+    ) {
+        let Some(select) = self.option_select_ancestor(subtree) else {
+            return;
+        };
+        if former_select == Some(select) {
+            return;
+        }
+
+        let inserted_selected_options = self
+            .select_options(select)
+            .into_iter()
+            .filter(|&option| {
+                let mut ancestor = Some(option);
+                while let Some(id) = ancestor {
+                    if id == subtree {
+                        return true;
+                    }
+                    ancestor = self.parent(id);
+                }
+                false
+            })
+            .filter(|&option| {
+                self.option_selected_state(option)
+                    .is_some_and(|state| state.selected)
+            })
+            .collect::<Vec<_>>();
+        for option in inserted_selected_options {
+            // Selectedness changes from adding an option do not dirty it.
+            self.set_option_selected(option, true, false);
+        }
+    }
+
+    /// HTML's select display size. A parsed zero remains zero; only an absent
+    /// or invalid size uses the select type's fallback.
+    pub(super) fn select_display_size_is_one(&self, select: NodeId) -> bool {
+        self.attribute(select, &markup5ever::ns!(), &LocalName::from("size"))
+            .and_then(parse_html_nonnegative_integer_is_one)
+            .unwrap_or_else(|| !self.has_input_attribute(select, "multiple"))
+    }
+
+    /// Normalize a single-select's selectedness and select the first enabled
+    /// option only for display size 1 when no option is selected.
+    pub(super) fn set_select_selectedness(&mut self, select: NodeId) -> bool {
+        if self.html_name(select) != Some("select") || self.has_input_attribute(select, "multiple")
+        {
+            return false;
+        }
+        let options = self.select_options(select);
+        let mut last_selected = None;
+        let mut first_enabled = None;
+        let mut changed = false;
+        for &option in &options {
+            if self
+                .node(option)
+                .option_state
+                .is_some_and(|state| state.selected)
+            {
+                if let Some(previous) = last_selected {
+                    self.set_option_selected(previous, false, false);
+                    changed = true;
+                }
+                last_selected = Some(option);
+            }
+            if first_enabled.is_none() && !self.option_is_disabled(option) {
+                first_enabled = Some(option);
+            }
+        }
+        if last_selected.is_none() && self.select_display_size_is_one(select) {
+            if let Some(option) = first_enabled {
+                self.set_option_selected(option, true, false);
+                changed = true;
+            }
+        }
+        changed
+    }
+
+    pub(super) fn option_is_disabled(&self, option: NodeId) -> bool {
+        if self.has_input_attribute(option, "disabled") {
+            return true;
+        }
+        let mut ancestor = self.parent(option);
+        while let Some(id) = ancestor {
+            match self.html_name(id) {
+                Some("select" | "hr" | "datalist" | "option") => return false,
+                Some("optgroup") => return self.has_input_attribute(id, "disabled"),
+                _ => ancestor = self.parent(id),
+            }
+        }
+        false
+    }
+
+    pub(super) fn option_select_ancestor(&self, option: NodeId) -> Option<NodeId> {
+        let mut ancestor = self.parent(option);
+        let mut optgroup = false;
+        while let Some(id) = ancestor {
+            match self.html_name(id) {
+                Some("select") => return Some(id),
+                Some("hr" | "datalist" | "option") => return None,
+                Some("optgroup") => {
+                    if optgroup {
+                        return None;
+                    }
+                    optgroup = true;
+                },
+                _ => {},
+            }
+            ancestor = self.parent(id);
+        }
+        None
+    }
+
+    /// Record whether `id` is currently a checked radio input. Every write to
+    /// checkedness or input type calls this, which keeps `checked_radios` a
+    /// superset of the live checked radios.
+    pub(super) fn sync_checked_radio(&mut self, id: NodeId) {
+        let checked = self.is_html_input(id)
+            && self.input_type(id) == "radio"
+            && self
+                .node(id)
+                .form_control
+                .as_ref()
+                .is_some_and(|state| state.checked);
+        if checked {
+            self.checked_radios.insert(id);
+        } else {
+            self.checked_radios.remove(&id);
+        }
+    }
+
+    /// Whether `id`'s ordinary tree is one of `roots`, or hangs from one through
+    /// a chain of shadow hosts.
+    fn radio_tree_affected(&self, id: NodeId, roots: &[NodeId]) -> bool {
+        let mut root = self.radio_tree_root(id);
+        loop {
+            if roots.contains(&root) {
+                return true;
+            }
+            match self.shadow_host_of(root) {
+                Some(host) => root = self.radio_tree_root(host),
+                None => return false,
+            }
+        }
+    }
+
+    fn radio_tree_root(&self, id: NodeId) -> NodeId {
+        let mut root = id;
+        while let Some(parent) = self.parent(root) {
+            self.radio_scan_visits.set(self.radio_scan_visits.get() + 1);
+            root = parent;
+        }
+        root
+    }
+
+    /// Capture checked radios in the affected ordinary trees, including shadow
+    /// trees hanging from them. Call before topology or `id` changes. Costs
+    /// time in the number of checked radios, not in the size of the document.
     pub(super) fn snapshot_radio_associations(
         &self,
         seeds: &[NodeId],
     ) -> Vec<RadioAssociationSnapshot> {
-        let mut stack = Vec::new();
-        for seed in seeds.iter().rev().copied() {
+        if self.checked_radios.is_empty() {
+            return Vec::new();
+        }
+        let mut roots = Vec::new();
+        for seed in seeds.iter().copied() {
             if self.try_index(seed).is_some() {
-                stack.push(self.form_control_tree_root(seed));
+                let root = self.radio_tree_root(seed);
+                if !roots.contains(&root) {
+                    roots.push(root);
+                }
             }
         }
-        let mut seen = std::collections::HashSet::new();
         let mut out = Vec::new();
-        while let Some(root) = stack.pop() {
-            if self.try_index(root).is_none() || !seen.insert(root) {
+        for id in self.checked_radios.iter().copied() {
+            self.radio_scan_visits.set(self.radio_scan_visits.get() + 1);
+            if self.try_index(id).is_none()
+                || !self.is_html_input(id)
+                || self.input_type(id) != "radio"
+                || !self
+                    .node(id)
+                    .form_control
+                    .as_ref()
+                    .is_some_and(|state| state.checked)
+                || !self.radio_tree_affected(id, &roots)
+            {
                 continue;
             }
-            let mut descendants = Vec::new();
-            collect_descendants(self, root, &mut descendants);
-            for id in descendants {
-                if self.is_html_input(id)
-                    && self.input_type(id) == "radio"
-                    && self
-                        .node(id)
-                        .form_control
-                        .as_ref()
-                        .is_some_and(|state| state.checked)
-                {
-                    out.push(RadioAssociationSnapshot {
-                        node: id,
-                        form_owner: self.form_control_form_owner(id),
-                        connected: self.is_connected_through_shadow_hosts(id),
-                    });
-                }
-                if let Some(shadow_root) = self.shadow_root(id) {
-                    stack.push(shadow_root);
-                }
-            }
+            out.push(RadioAssociationSnapshot {
+                node: id,
+                form_owner: self.form_control_form_owner(id),
+                connected: self.is_connected_through_shadow_hosts(id),
+            });
         }
         out
+    }
+
+    /// Child indices from the tree root down to `id`: lexicographic order is
+    /// tree order within one tree.
+    fn radio_tree_path(&self, id: NodeId) -> Vec<usize> {
+        let mut path = Vec::new();
+        let mut node = id;
+        while let Some(parent) = self.parent(node) {
+            path.push(
+                self.dom_children(parent)
+                    .position(|child| child == node)
+                    .unwrap_or(0),
+            );
+            node = parent;
+        }
+        path.reverse();
+        path
     }
 
     /// Reconcile only checked radios whose form owner changed or which became
@@ -452,7 +796,12 @@ impl ScriptedDom {
     ) {
         let old: std::collections::HashMap<_, _> =
             before.iter().map(|item| (item.node, *item)).collect();
-        let after = self.snapshot_radio_associations(seeds);
+        let mut after = self.snapshot_radio_associations(seeds);
+        #[cfg(test)]
+        tests::assert_snapshot_matches_full_walk(self, seeds, &after);
+        if after.len() > 1 {
+            after.sort_by_cached_key(|item| (self.radio_tree_path(item.node), item.node.raw()));
+        }
         for current in after.into_iter().rev() {
             // A remove/release may retire a snapshotted node. The post scan
             // checks roots, and this guard also protects stale candidate IDs.
@@ -489,39 +838,7 @@ impl ScriptedDom {
             .is_some_and(|q| q.ns == markup5ever::ns!(html) && q.local.as_str() == "textarea")
     }
     fn input_type(&self, id: NodeId) -> String {
-        let kind = self
-            .input_attribute(id, "type")
-            .unwrap_or("text")
-            .to_ascii_lowercase();
-        if matches!(
-            kind.as_str(),
-            "hidden"
-                | "text"
-                | "search"
-                | "tel"
-                | "url"
-                | "email"
-                | "password"
-                | "date"
-                | "month"
-                | "week"
-                | "time"
-                | "datetime-local"
-                | "number"
-                | "range"
-                | "color"
-                | "checkbox"
-                | "radio"
-                | "file"
-                | "submit"
-                | "image"
-                | "reset"
-                | "button"
-        ) {
-            kind
-        } else {
-            "text".to_owned()
-        }
+        normalized_input_type(self.input_attribute(id, "type").unwrap_or("text"))
     }
     fn input_attribute(&self, id: NodeId, local: &str) -> Option<&str> {
         self.attribute(id, &markup5ever::ns!(), &LocalName::from(local))
@@ -548,7 +865,7 @@ impl ScriptedDom {
     /// lookup is scoped to the control's ordinary tree; it crosses a shadow
     /// host only when deciding whether the control is connected.
     pub fn form_control_form_owner(&self, id: NodeId) -> Option<NodeId> {
-        if !self.is_html_input(id) && !self.is_html_textarea(id) {
+        if !self.is_listed_control(id) || self.html_name(id) == Some("form") {
             return None;
         }
         let root = self.form_control_tree_root(id);
@@ -596,13 +913,14 @@ impl ScriptedDom {
                 .is_some_and(|state| state.checked);
             if changed {
                 self.node_mut(peer).form_control.as_mut().unwrap().checked = false;
+                self.checked_radios.remove(&peer);
                 self.mutations
                     .push(crate::DomMutation::FormControlStateChanged { node: peer });
             }
         }
     }
     fn input_form_owner(&self, id: NodeId, root: NodeId) -> Option<NodeId> {
-        if let Some(form_id) = self.input_attribute(id, "form")
+        if let Some(form_id) = self.attribute(id, &markup5ever::ns!(), &LocalName::from("form"))
             && self.is_connected_through_shadow_hosts(id)
         {
             let mut nodes = Vec::new();
@@ -628,7 +946,7 @@ impl ScriptedDom {
         }
         None
     }
-    fn is_connected_through_shadow_hosts(&self, id: NodeId) -> bool {
+    pub(super) fn is_connected_through_shadow_hosts(&self, id: NodeId) -> bool {
         let mut current = id;
         loop {
             if self.kind(current) == layout_dom_api::NodeKind::Document {
@@ -643,13 +961,78 @@ impl ScriptedDom {
             }
         }
     }
-    fn form_control_tree_root(&self, id: NodeId) -> NodeId {
+    pub(super) fn form_control_tree_root(&self, id: NodeId) -> NodeId {
         let mut root = id;
         while let Some(parent) = self.parent(root) {
             root = parent;
         }
         root
     }
+
+    pub(super) fn is_html_option(&self, id: NodeId) -> bool {
+        self.element_name(id)
+            .is_some_and(|q| q.ns == markup5ever::ns!(html) && q.local.as_str() == "option")
+    }
+
+    pub(super) fn clear_user_edit_state(&mut self, id: NodeId) {
+        self.clear_user_edit_state_preserving_provenance(id, false);
+    }
+
+    fn clear_user_edit_state_preserving_provenance(
+        &mut self,
+        id: NodeId,
+        preserve_provenance: bool,
+    ) {
+        if let Some(state) = self.node_mut(id).form_interaction.as_mut() {
+            let changed = (!preserve_provenance && state.last_change_by_user)
+                || state.user_edit_pending
+                || state.bad_input
+                || state.draft_value.is_some()
+                || state.draft_selection_start.is_some()
+                || state.draft_selection_end.is_some()
+                || state.draft_selection_direction != SelectionDirection::None
+                || state.user_edit_initial_value.is_some();
+            if !preserve_provenance {
+                state.last_change_by_user = false;
+            }
+            state.user_edit_pending = false;
+            state.user_edit_initial_value = None;
+            state.bad_input = false;
+            state.draft_value = None;
+            state.draft_selection_start = None;
+            state.draft_selection_end = None;
+            state.draft_selection_direction = SelectionDirection::None;
+            if changed {
+                self.mutations
+                    .push(crate::DomMutation::FormControlInteractionStateChanged { node: id });
+            }
+        }
+    }
+}
+
+fn collect_option_text(dom: &ScriptedDom, root: NodeId) -> String {
+    let mut stack = vec![root];
+    let mut out = String::new();
+    while let Some(id) = stack.pop() {
+        if dom.element_name(id).is_some_and(|name| {
+            (name.ns == markup5ever::ns!(html) && matches!(name.local.as_ref(), "script" | "img"))
+                || (name.ns == markup5ever::ns!(svg) && name.local.as_str() == "script")
+        }) {
+            continue;
+        }
+        if matches!(
+            dom.kind(id),
+            layout_dom_api::NodeKind::Text | layout_dom_api::NodeKind::CdataSection
+        ) {
+            out.push_str(dom.text(id).unwrap_or(""));
+        } else {
+            stack.extend(dom.dom_children(id).collect::<Vec<_>>().into_iter().rev());
+        }
+    }
+    out.split(|c| matches!(c, ' ' | '\t' | '\n' | '\u{000c}' | '\r'))
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 #[cfg(test)]
@@ -662,6 +1045,159 @@ mod tests {
     }
     fn attr(local: markup5ever::LocalName) -> QualName {
         QualName::new(None, ns!(), local)
+    }
+
+    thread_local! {
+        static SKIP_ORACLE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    }
+
+    /// The pre-index snapshot: every checked radio in the seeds' trees and the
+    /// shadow trees below them, found by walking the whole tree. Every reconcile
+    /// in a test run is checked against it unless a cost test opts out.
+    pub(super) fn assert_snapshot_matches_full_walk(
+        dom: &ScriptedDom,
+        seeds: &[NodeId],
+        indexed: &[RadioAssociationSnapshot],
+    ) {
+        if SKIP_ORACLE.with(|skip| skip.get()) {
+            return;
+        }
+        let mut stack: Vec<_> = seeds
+            .iter()
+            .rev()
+            .filter(|seed| dom.try_index(**seed).is_some())
+            .map(|seed| dom.form_control_tree_root(*seed))
+            .collect();
+        let mut seen = std::collections::HashSet::new();
+        let mut full = std::collections::HashSet::new();
+        while let Some(root) = stack.pop() {
+            if dom.try_index(root).is_none() || !seen.insert(root) {
+                continue;
+            }
+            let mut descendants = Vec::new();
+            collect_descendants(dom, root, &mut descendants);
+            for id in descendants {
+                if dom.is_html_input(id)
+                    && dom.input_type(id) == "radio"
+                    && dom.node(id).form_control.as_ref().is_some_and(|s| s.checked)
+                {
+                    full.insert((id, dom.form_control_form_owner(id)));
+                }
+                if let Some(shadow_root) = dom.shadow_root(id) {
+                    stack.push(shadow_root);
+                }
+            }
+        }
+        let indexed: std::collections::HashSet<_> =
+            indexed.iter().map(|item| (item.node, item.form_owner)).collect();
+        assert_eq!(indexed, full, "checked-radio index missed or invented a radio");
+    }
+
+    fn radio(dom: &mut ScriptedDom, name: &str) -> NodeId {
+        let radio = dom.create_element(tag(local_name!("input")));
+        dom.set_attribute(radio, attr(local_name!("type")), "radio");
+        dom.set_attribute(radio, attr(local_name!("name")), name);
+        radio
+    }
+
+    /// Append `rows` rows of four elements under a wrapper, with `build` hooks
+    /// for nesting: `nested` hangs every row under a fresh container level.
+    fn build_tree(dom: &mut ScriptedDom, rows: usize, nested: bool) -> NodeId {
+        let document = dom.document();
+        let list = dom.create_element(tag(local_name!("div")));
+        dom.append_child(document, list);
+        let mut parent = list;
+        for i in 0..rows {
+            if nested && i % 8 == 0 {
+                let level = dom.create_element(tag(local_name!("section")));
+                dom.append_child(list, level);
+                parent = level;
+            }
+            let row = dom.create_element(tag(local_name!("div")));
+            let label = dom.create_element(tag(local_name!("span")));
+            let text = dom.create_text("row");
+            let input = dom.create_element(tag(local_name!("input")));
+            dom.set_attribute(input, attr(local_name!("id")), &format!("i{i}"));
+            dom.append_child(label, text);
+            dom.append_child(row, label);
+            dom.append_child(row, input);
+            dom.append_child(parent, row);
+        }
+        list
+    }
+
+    #[test]
+    fn building_documents_without_radios_never_scans_for_them() {
+        SKIP_ORACLE.with(|skip| skip.set(true));
+        for nested in [false, true] {
+            for rows in [100, 400, 1600] {
+                let mut dom = ScriptedDom::new();
+                let list = build_tree(&mut dom, rows, nested);
+                let row = dom.dom_children(list).next().unwrap();
+                dom.remove_child(row);
+                dom.set_attribute(list, attr(local_name!("id")), "list");
+                assert_eq!(
+                    dom.radio_scan_visits.get(),
+                    0,
+                    "{rows} rows, nested={nested}: reconcile inspected a node"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn radio_reconciliation_cost_follows_checked_radios_not_document_size() {
+        SKIP_ORACLE.with(|skip| skip.set(true));
+        let visits = |rows: usize| {
+            let mut dom = ScriptedDom::new();
+            let list = build_tree(&mut dom, rows, true);
+            let mut radios = Vec::new();
+            for group in 0..3 {
+                let r = radio(&mut dom, &format!("g{group}"));
+                dom.append_child(list, r);
+                assert!(dom.set_form_control_checked(r, true));
+                radios.push(r);
+            }
+            let before = dom.radio_scan_visits.get();
+            // One more row per mutation batch; each append reconciles.
+            let extra = build_tree(&mut dom, rows, true);
+            let _ = extra;
+            for r in &radios {
+                assert!(dom.form_control_state(*r).unwrap().checked);
+            }
+            dom.radio_scan_visits.get() - before
+        };
+        let small = visits(200);
+        let large = visits(800);
+        // Four times the mutations over a four times larger document: linear
+        // work is about 4x (plus a small depth term), the old walk was ~16x.
+        assert!(small > 0);
+        assert!(
+            large <= small * 6,
+            "radio scan cost grew superlinearly: {small} -> {large}"
+        );
+    }
+
+    #[test]
+    fn checked_radio_index_follows_type_checkedness_and_removal() {
+        let mut dom = ScriptedDom::new();
+        let document = dom.document();
+        let a = radio(&mut dom, "g");
+        let b = radio(&mut dom, "g");
+        dom.append_child(document, a);
+        dom.append_child(document, b);
+        assert!(dom.checked_radios.is_empty());
+        dom.set_form_control_checked(a, true);
+        assert!(dom.checked_radios.contains(&a));
+        dom.set_form_control_checked(b, true);
+        assert!(!dom.checked_radios.contains(&a), "group uncheck leaves index");
+        assert!(dom.checked_radios.contains(&b));
+        dom.set_attribute(b, attr(local_name!("type")), "checkbox");
+        assert!(dom.checked_radios.is_empty());
+        dom.set_attribute(b, attr(local_name!("type")), "radio");
+        assert!(dom.checked_radios.contains(&b));
+        dom.remove(b);
+        assert!(!dom.checked_radios.contains(&b));
     }
 
     #[test]
@@ -1282,6 +1818,38 @@ fn value_mode(kind: &str) -> InputValueMode {
         _ => InputValueMode::Value,
     }
 }
+fn normalized_input_type(raw: &str) -> String {
+    let kind = raw.to_ascii_lowercase();
+    if matches!(
+        kind.as_str(),
+        "hidden"
+            | "text"
+            | "search"
+            | "tel"
+            | "url"
+            | "email"
+            | "password"
+            | "date"
+            | "month"
+            | "week"
+            | "time"
+            | "datetime-local"
+            | "number"
+            | "range"
+            | "color"
+            | "checkbox"
+            | "radio"
+            | "file"
+            | "submit"
+            | "image"
+            | "reset"
+            | "button"
+    ) {
+        kind
+    } else {
+        "text".to_owned()
+    }
+}
 pub(super) fn value_mode_for_state(kind: &str) -> InputValueModeForState {
     value_mode(kind)
 }
@@ -1324,6 +1892,42 @@ fn collect_descendants(dom: &ScriptedDom, node: NodeId, out: &mut Vec<NodeId>) {
 }
 fn attr_name(local: &str) -> QualName {
     QualName::new(None, markup5ever::ns!(), LocalName::from(local))
+}
+fn parse_html_nonnegative_integer_is_one(raw: &str) -> Option<bool> {
+    let bytes = raw.as_bytes();
+    let mut start = 0;
+    while bytes
+        .get(start)
+        .is_some_and(|byte| matches!(*byte, b' ' | b'\t' | b'\n' | b'\r' | 0x0c))
+    {
+        start += 1;
+    }
+    let negative = match bytes.get(start) {
+        Some(&b'-') => {
+            start += 1;
+            true
+        },
+        Some(&b'+') => {
+            start += 1;
+            false
+        },
+        _ => false,
+    };
+    let digits_start = start;
+    while bytes.get(start).is_some_and(|byte| byte.is_ascii_digit()) {
+        start += 1;
+    }
+    if start == digits_start {
+        return None;
+    }
+    let significant = bytes[digits_start..start]
+        .iter()
+        .position(|&byte| byte != b'0')
+        .map(|offset| &bytes[digits_start + offset..start]);
+    if negative && significant.is_some() {
+        return None;
+    }
+    Some(significant.is_some_and(|digits| digits == b"1"))
 }
 fn api_value(raw: &str) -> String {
     raw.replace("\r\n", "\n").replace('\r', "\n")
@@ -1576,7 +2180,7 @@ fn digits(bytes: &[u8], i: &mut usize) -> bool {
     }
     *i > start
 }
-fn parse_html_float(value: &str) -> Option<f64> {
+pub(super) fn parse_html_float(value: &str) -> Option<f64> {
     (is_html_float(value))
         .then(|| value.parse().ok())
         .flatten()
@@ -1585,7 +2189,7 @@ fn parse_html_float(value: &str) -> Option<f64> {
 fn valid_color(s: &str) -> bool {
     s.len() == 7 && s.starts_with('#') && s[1..].bytes().all(|b| b.is_ascii_hexdigit())
 }
-fn valid_month(s: &str) -> bool {
+pub(super) fn valid_month(s: &str) -> bool {
     let Some((year, month)) = s.split_once('-') else {
         return false;
     };
@@ -1596,7 +2200,7 @@ fn valid_month(s: &str) -> bool {
         && month.bytes().all(|b| b.is_ascii_digit())
         && (1..=12).contains(&month.parse::<u8>().unwrap_or(0))
 }
-fn valid_date(s: &str) -> bool {
+pub(super) fn valid_date(s: &str) -> bool {
     let mut parts = s.split('-');
     let Some(year_text) = parts.next() else {
         return false;
@@ -1641,7 +2245,7 @@ fn valid_date(s: &str) -> bool {
     ];
     day > 0 && day <= days[(month - 1) as usize]
 }
-fn valid_week(s: &str) -> bool {
+pub(super) fn valid_week(s: &str) -> bool {
     let Some((year_text, week_text)) = s.split_once("-W") else {
         return false;
     };
@@ -1679,7 +2283,7 @@ fn decimal_modulo(value: &str, modulus: u32) -> u32 {
 fn has_nonzero_decimal(value: &str) -> bool {
     value.bytes().any(|digit| digit != b'0')
 }
-fn valid_time(s: &str) -> bool {
+pub(super) fn valid_time(s: &str) -> bool {
     let (clock, fraction) = s.split_once('.').unwrap_or((s, ""));
     if s.contains('.')
         && (clock.matches(':').count() != 2

@@ -8,6 +8,7 @@
 
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::{error::Error, fmt};
 
 use genet_livery::{
     Device, InteractionStates, LayoutError, LiveryDocument, LiveryLayout, LiveryPaintList,
@@ -103,15 +104,50 @@ pub struct RenderedFrame {
     pub external_textures: Vec<ExternalTextureDraw>,
 }
 
+/// A failure in either the layout or paint translation stage.
+#[derive(Debug)]
+pub enum RenderError {
+    Layout(LayoutError),
+    Translation(paint_list_render::TranslationError),
+}
+
+impl fmt::Display for RenderError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Layout(error) => write!(f, "layout: {error}"),
+            Self::Translation(error) => write!(f, "paint translation: {error}"),
+        }
+    }
+}
+
+impl Error for RenderError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(match self {
+            Self::Layout(error) => error,
+            Self::Translation(error) => error,
+        })
+    }
+}
+
+impl From<LayoutError> for RenderError {
+    fn from(error: LayoutError) -> Self { Self::Layout(error) }
+}
+
+impl From<paint_list_render::TranslationError> for RenderError {
+    fn from(error: paint_list_render::TranslationError) -> Self { Self::Translation(error) }
+}
+
 /// Lower any owned paint-list vocabulary through the shared NetRender bridge.
-pub fn translate_frame<L: PaintList>(list: &L) -> RenderedFrame {
+pub fn translate_frame<L: PaintList>(
+    list: &L,
+) -> Result<RenderedFrame, paint_list_render::TranslationError> {
     let translated = paint_list_render::translate_paint_cmd_stream(
         list.viewport(),
         list.commands(),
         list.fonts(),
         list.images(),
-    );
-    RenderedFrame {
+    )?;
+    Ok(RenderedFrame {
         scene: translated.scene,
         external_textures: translated
             .external_textures
@@ -123,7 +159,7 @@ pub fn translate_frame<L: PaintList>(list: &L) -> RenderedFrame {
                 scene_op_boundary: draw.scene_op_boundary,
             })
             .collect(),
-    }
+    })
 }
 
 fn overlay_rect(list: &mut LiveryPaintList, rect: TextRect, color: ColorF) {
@@ -280,7 +316,7 @@ pub fn scene_from_scripted_dom(
     height: u32,
     cursor: Option<TextCursor>,
     scroll_offsets: &ScrollOffsets<NodeId>,
-) -> Result<netrender::Scene, LayoutError> {
+) -> Result<netrender::Scene, RenderError> {
     Ok(translate_frame(&paint_list_from_scripted_dom(
         dom,
         stylesheets,
@@ -288,7 +324,7 @@ pub fn scene_from_scripted_dom(
         height,
         cursor,
         scroll_offsets,
-    )?)
+    )?)?
     .scene)
 }
 
@@ -309,7 +345,7 @@ pub fn scene_from_scripted_dom_with_text_system(
     cursor: Option<TextCursor>,
     scroll_offsets: &ScrollOffsets<NodeId>,
     text: &mut TextSystem,
-) -> Result<netrender::Scene, LayoutError> {
+) -> Result<netrender::Scene, RenderError> {
     Ok(
         translate_frame(&paint_list_from_scripted_dom_with_text_system(
             dom,
@@ -319,7 +355,7 @@ pub fn scene_from_scripted_dom_with_text_system(
             cursor,
             scroll_offsets,
             text,
-        )?)
+        )?)?
         .scene,
     )
 }
@@ -373,7 +409,7 @@ pub fn scene_from_layout_dom<D>(
     width: u32,
     height: u32,
     scroll_offsets: &ScrollOffsets<D::NodeId>,
-) -> Result<netrender::Scene, LayoutError>
+) -> Result<netrender::Scene, RenderError>
 where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
@@ -386,7 +422,7 @@ where
         width,
         height,
         scroll_offsets,
-    ))
+    ))?
     .scene)
 }
 
@@ -482,8 +518,8 @@ pub fn scene_from_session(
     cursor: Option<TextCursor>,
     width: u32,
     height: u32,
-) -> Result<netrender::Scene, LayoutError> {
-    Ok(translate_frame(&paint_list_from_session(session, cursor, width, height)?).scene)
+) -> Result<netrender::Scene, RenderError> {
+    Ok(translate_frame(&paint_list_from_session(session, cursor, width, height)?)?.scene)
 }
 
 /// Translate one retained Livery document frame.
@@ -491,19 +527,19 @@ pub fn translated_frame_from_session_dom<D>(
     session: &mut LiveryDocument<D>,
     width: u32,
     height: u32,
-) -> Result<RenderedFrame, LayoutError>
+) -> Result<RenderedFrame, RenderError>
 where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
-    Ok(translate_frame(&session.frame(width, height)?))
+    Ok(translate_frame(&session.frame(width, height)?)?)
 }
 
 pub fn scene_from_session_dom<D>(
     session: &mut LiveryDocument<D>,
     width: u32,
     height: u32,
-) -> Result<netrender::Scene, LayoutError>
+) -> Result<netrender::Scene, RenderError>
 where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
@@ -516,7 +552,7 @@ pub fn scene_from_session_dom_with_scrollbars<D>(
     session: &mut LiveryDocument<D>,
     width: u32,
     height: u32,
-) -> Result<netrender::Scene, LayoutError>
+) -> Result<netrender::Scene, RenderError>
 where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,

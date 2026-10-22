@@ -1,0 +1,155 @@
+Here’s a clean, AI-friendly milestone plan. Each item is a self‑contained commit with a tight scope, concrete artifacts, and tests.
+	1.	Project skeleton + feature gate
+
+	•	Add dfa crate/module inside regress (feature dfa).
+	•	CI runs unit tests with/without dfa.
+	•	Tests: compile loads, feature toggles.
+
+	2.	Byte-class partitioning (no NFA yet)
+
+	•	Input: a list of byte ranges.
+	•	Output: ByteClassPartition { b2c: [u8;256], classes: Vec<RangeSet<u8>> }.
+	•	Tests: property — every byte maps to exactly one class; classes are disjoint and cover 0..=255; stable class IDs across identical inputs.
+
+	3.	Thompson NFA (byte-based) without priorities/tags
+
+	•	NFA builder from a minimal AST subset: literal bytes, concatenation, alternation |, *, +, ?, ..
+	•	Representation: Vec<State> with separate ε edges and byte-range edges.
+	•	Tests: golden graphs for tiny patterns; ε‑closure correctness.
+
+	4.	JS priority stamping on ε/consuming edges
+
+	•	Assign monotone pri: u32 on edges during Thompson:
+	•	Alt: left < right.
+	•	Greedy: take < skip; Reluctant: skip < take.
+	•	Tests: priority totals/order for crafted patterns, e.g. a|ab, a*?b, (ab|a)b.
+
+	5.	Tag model (compile-time only)
+
+	•	Define TagId, TagAction (Set(tag), possibly Copy(src,dst) reserved).
+	•	Instrument NFA with tag actions for:
+	•	T0 (overall start): on first consuming edge leaving the overall start.
+	•	Group open/close: install actions at group entry/exit (AST carries group IDs).
+	•	Tests: emitted tag actions align with group structure in simple patterns.
+
+	6.	Prioritized ε‑closure
+
+	•	Implement closure that resolves multiple paths by (lexicographic) priority and accumulates tag action sequences for the winner.
+	•	Tests: closure yields single winning path per state; deterministic tag sequences.
+
+	7.	Determinization kernel over class IDs (no runtime tables yet)
+
+	•	Lazy subset construction:
+	•	DFA state = set of NFA states + per‑member winner info.
+	•	For each class ID, compute target closure; create new DFA states as needed.
+	•	Single predeclared sink.
+	•	Tests: number of reachable states stable; transitions totality over classes; acceptance resolution consistent.
+
+	8.	Acceptance winner & match IDs
+
+	•	Precompute accepting decision per DFA state (winner by priority).
+	•	Carry match_id (future multi‑pattern support).
+	•	Tests: patterns like ab|a must prefer a at position 0 per JS leftmost‑first.
+
+	9.	Tag program synthesis (Laurikari)
+
+	•	Collapse per‑edge tag action sequences into TagPrograms (small arrays).
+	•	Deduplicate programs and assign TagProgramId.
+	•	Tests: identical sequences dedup to same ID; programs replay to expected offsets in simulated runs.
+
+	10.	Dense runtime DFA layout (double‑indirect)
+
+	•	Freeze partition (K classes).
+	•	Emit:
+	•	b2c: [u8;256]
+	•	next: Vec<StateId> row‑major (state*K + class)
+	•	tag_id: Vec<TagProgramId> parallel to next
+	•	accept: Vec<AcceptId> (0 = none)
+	•	Use u16 where possible, else u32.
+	•	Tests: table sizes, sink row self‑loops.
+
+	11.	Minimal matcher (no search, anchored)
+
+	•	API: exec_anchored(input) -> Option<Match { start, end, caps… }>
+	•	Runtime loop:
+	•	offset = 0; state = START; while offset < n { cid=b2c[b]; idx=state*K+cid; apply tags; state=next[idx]; offset+=1; }
+	•	On accept, return { start: tag[T0], end: offset }; captures via tag array.
+	•	Tests: anchored correctness against backtracker for small inputs.
+
+	12.	Unanchored search (leftmost‑first)
+
+	•	Naïve search: restart at each byte offset; early exit at first accept.
+	•	Tests: many cases vs backtracker, especially greedy/reluctant alternation conflicts.
+
+	13.	Multi‑pattern union
+
+	•	Build NFA that ORs multiple patterns; carry per‑pattern match_id; deterministic union.
+	•	Tests: simultaneous patterns with overlapping prefixes; verify per‑pattern IDs.
+
+	14.	Unicode class expansion to bytes
+
+	•	Expand . (dot), \w, \d, explicit Unicode ranges/classes into byte ranges (builder‑time).
+	•	Keep this modular so advanced classes can plug in later.
+	•	Tests: sample classes vs known byte coverage (ASCII and select multi‑byte ranges).
+
+	15.	Partition integration end‑to‑end
+
+	•	Gather all byte ranges from NFA edges → compute partition → remap NFA edges to class IDs → determinize over K classes.
+	•	Tests: determinization invariants; K stays stable; regression on memory/state counts.
+
+	16.	Capture groups: full TDFA path
+
+	•	Expose captures: return Vec<Option<Range>> (1‑based per JS numbering).
+	•	Greedy/reluctant and alternation must drive tag choice via priorities.
+	•	Tests: rich capture suite: nested groups, optional groups, empty matches, back‑to‑back groups.
+
+	17.	Bench & profiles
+
+	•	Microbenchmarks (criterion): anchored and unanchored, short/long inputs, with/without tags.
+	•	Compare to backtracker on DFA‑eligible patterns.
+	•	Record K, states, table sizes; add --bench-report.
+
+	18.	Validation harness vs existing engine
+
+	•	Differential test against your JS backtracker for a corpus:
+	•	Random regexes restricted to DFA‑eligible subset.
+	•	Random inputs and adversarial cases.
+	•	Fuzz with arbitrary/proptest: assert match set equality & capture equality.
+	•	CI: long‑running subset nightly.
+
+	19.	Serialization format
+
+	•	Stable blob: header (version, K, counts, widths), b2c, next, tag_id (optional), accept, tag_programs.
+	•	Functions: to_bytes(), from_bytes().
+	•	Tests: round‑trip; cross‑version guard.
+
+	20.	Fallback & feature policing
+
+	•	DFA‑eligibility checker on AST (reject backrefs, lookaround with captures, etc.).
+	•	On ineligible, route to backtracker transparently.
+	•	Tests: mixed corpus; ensure no false positives.
+
+	21.	Optional: row compression variants
+
+	•	Per‑state default + overrides; or base/check; or sparse rows when K large.
+	•	Switch behind a compile‑time flag, keep the dense baseline.
+	•	Tests: equivalence to dense; memory/report deltas.
+
+	22.	Optional: reverse DFA builder
+
+	•	Build reversed TDFA for backwards start detection (alternative to T0).
+	•	Tests: agree with T0 approach on all eligible patterns.
+
+	23.	Docs & examples
+
+	•	docs/dfa.md: architecture, invariants, APIs, limits.
+	•	Examples for: anchored, unanchored, multi‑pattern, captures, serialization.
+
+Tips for the AI loop
+	•	Keep each commit under ~300 LOC diff where possible.
+	•	Always add tests before wiring the next feature.
+	•	Prefer #[repr(transparent)] newtypes for IDs, no dynamic dispatch, no Any.
+	•	Avoid generics bloat in runtime tables—use plain PODs and slice views.
+	•	Expose internal counters (states, K, bytes) for regressions.
+
+Want me to turn Milestones 1–3 into concrete Rust stubs and tests so the scaffold is ready? Or pick a different slice to start with (e.g., 6–7: closure + determinization core).

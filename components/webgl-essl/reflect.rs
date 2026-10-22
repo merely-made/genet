@@ -18,8 +18,107 @@
 //! @location(N) decorations the lowering produces against
 //! [`reflect`]'s assignments.
 
-use crate::ast::{ExternalDecl, StorageQualifier, TranslationUnit, TypeKind};
+use crate::ast::{ExternalDecl, PrecisionQualifier, StorageQualifier, TranslationUnit, TypeKind};
 use crate::validate::ShaderStage;
+
+/// One immutable layout decision shared by both stages of a linked program.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct LinkedProgramPlan {
+    pub(crate) uniforms: Vec<LinkedUniform>,
+    pub(crate) varyings: Vec<LinkedVarying>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct LinkedUniform {
+    pub(crate) name: String,
+    pub(crate) kind: TypeKind,
+    pub(crate) member_index: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LinkedVarying {
+    pub name: String,
+    pub kind: TypeKind,
+    pub location: u32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LinkedUniformLayout {
+    pub name: String,
+    pub kind: TypeKind,
+    pub member_index: u32,
+    pub byte_offset: u32,
+    pub byte_size: u32,
+    pub matrix_stride: Option<u32>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct LinkedProgramReflection {
+    pub attributes: Vec<InputBinding>,
+    pub uniforms: Vec<LinkedUniformLayout>,
+    pub uniform_block_size: u32,
+    pub varyings: Vec<LinkedVarying>,
+    pub samplers: Vec<SamplerBinding>,
+    pub fragment_float_precision: Option<PrecisionQualifier>,
+}
+
+impl LinkedProgramPlan {
+    /// Build shared ordering from vertex then fragment declarations and match
+    /// varyings by name, independent of declaration order in either stage.
+    pub(crate) fn build(vertex: &TranslationUnit, fragment: &TranslationUnit) -> Result<Self, ()> {
+        let vr = reflect(vertex, ShaderStage::Vertex);
+        let fr = reflect(fragment, ShaderStage::Fragment);
+        let mut varyings = Vec::new();
+        for input in &fr.inputs {
+            let output = vr
+                .outputs
+                .iter()
+                .find(|output| output.name == input.name)
+                .ok_or(())?;
+            if input.kind != output.kind {
+                return Err(());
+            }
+        }
+        for output in &vr.outputs {
+            if fr.inputs.iter().any(|input| input.name == output.name) {
+                varyings.push(LinkedVarying {
+                    name: output.name.clone(),
+                    kind: output.kind,
+                    location: output.location,
+                });
+            }
+        }
+
+        let mut uniforms: Vec<LinkedUniform> = Vec::new();
+        for tu in [vertex, fragment] {
+            for decl in &tu.decls {
+                let ExternalDecl::Global(global) = decl else {
+                    continue;
+                };
+                if global.storage != StorageQualifier::Uniform {
+                    continue;
+                }
+                let name = &global.name;
+                let kind = global.ty.kind;
+                if let Some(existing) = uniforms.iter().find(|item| item.name == *name) {
+                    if existing.kind != kind {
+                        return Err(());
+                    }
+                } else {
+                    let member_index = (uniform_block_slot_for(kind) > 0).then(|| {
+                        uniforms.iter().filter(|u| u.member_index.is_some()).count() as u32
+                    });
+                    uniforms.push(LinkedUniform {
+                        name: name.clone(),
+                        kind,
+                        member_index,
+                    });
+                }
+            }
+        }
+        Ok(Self { uniforms, varyings })
+    }
+}
 
 /// Everything a consumer needs to wire up vertex buffers,
 /// bind groups, and pipeline layouts without re-parsing the
@@ -219,7 +318,7 @@ fn location_span_for(kind: TypeKind) -> u32 {
 /// Whether a kind has a slot inside the uniform `Block` struct
 /// in `lower.rs`. Returns 1 for the kinds the lowering admits
 /// today, 0 otherwise.
-fn uniform_block_slot_for(kind: TypeKind) -> u32 {
+pub(crate) fn uniform_block_slot_for(kind: TypeKind) -> u32 {
     match kind {
         TypeKind::Float
         | TypeKind::Int

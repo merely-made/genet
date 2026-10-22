@@ -29,6 +29,7 @@ use crate::{LiveryLayout, StylePlane, layout::content_box_rect, paint};
 pub struct ElementGeometry {
     pub content_rect: (f32, f32, f32, f32),
     border_rect: (f32, f32, f32, f32),
+    matrix: Matrix2D,
     inverse: Option<Matrix2D>,
     clips: Vec<GeometryClip>,
     border_clip_count: usize,
@@ -37,6 +38,26 @@ pub struct ElementGeometry {
 impl ElementGeometry {
     pub fn content_size(&self) -> (f32, f32) {
         (self.content_rect.2, self.content_rect.3)
+    }
+
+    /// The untransformed border box `(x, y, width, height)` in document space.
+    pub fn border_rect(&self) -> (f32, f32, f32, f32) {
+        self.border_rect
+    }
+
+    /// The axis-aligned bounds `[x, y, width, height]` of the transformed
+    /// border box in document space, the rectangle `getBoundingClientRect`
+    /// reports before the viewport scroll is removed.
+    pub fn border_bounds(&self) -> Option<[f32; 4]> {
+        let (x, y, w, h) = self.border_rect;
+        let mut min = (f32::INFINITY, f32::INFINITY);
+        let mut max = (f32::NEG_INFINITY, f32::NEG_INFINITY);
+        for corner in [(x, y), (x + w, y), (x, y + h), (x + w, y + h)] {
+            let (px, py) = map_point(self.matrix, corner.0, corner.1)?;
+            min = (min.0.min(px), min.1.min(py));
+            max = (max.0.max(px), max.1.max(py));
+        }
+        Some([min.0, min.1, max.0 - min.0, max.1 - min.1])
     }
 
     pub fn border_size(&self) -> (f32, f32) {
@@ -197,7 +218,8 @@ impl PlacementState {
             }
             if let Some(fragment) = fragments.get(id) {
                 let parent = paint::transform_parent(dom, styles, fragments, id);
-                if let Some(transform) = paint::transform_spec(style, fragment, parent) {
+                let context = paint::transform_context_for_node(dom, styles, fragments, id)?;
+                if let Some(transform) = paint::transform_spec(style, fragment, parent, context) {
                     next.matrix = next.matrix.multiply(spec_matrix(&transform));
                 }
                 let inverse = inverse(next.matrix);
@@ -205,9 +227,7 @@ impl PlacementState {
                     next.clips.push(GeometryClip { inverse, clip });
                 }
                 let border_clip_count = next.clips.len();
-                let paints_as_inline =
-                    matches!(style.display, Display::Inline | Display::InlineBlock)
-                        && !paint::is_blockified_item(fragments, id);
+                let paints_as_inline = paint::paints_as_inline_box(fragments, id, style);
                 if !paints_as_inline {
                     let viewport = DeviceIntSize::new(
                         fragments.viewport.0 as i32,
@@ -220,6 +240,7 @@ impl PlacementState {
                 geometry = Some(ElementGeometry {
                     content_rect: content_box_rect(style, fragment),
                     border_rect: (fragment.x, fragment.y, fragment.width, fragment.height),
+                    matrix: next.matrix,
                     inverse,
                     clips: next.clips.clone(),
                     border_clip_count,

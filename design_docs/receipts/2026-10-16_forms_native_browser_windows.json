@@ -1,0 +1,104 @@
+{
+  "status": "Windows native and browser submission qualification; Checkpoint C remains open",
+  "recorded_utc": "2026-10-16T10:52:55.848791+00:00",
+  "platform": "Windows O-PC interactive desktop",
+  "source_parent": "e3911fb6b2de59ff7526a2c3b437cfa6f662ccae",
+  "browser_product_variant": {
+    "ports/ortet/src/web.rs": "fa509505fcd3fb5513e908ec035cf27e93fa6cec8981bda4aef26bfe95d7448a"
+  },
+  "browser_build_source_manifest_sha256": "4acf7ea7f7fdeabeb9d008de4363615c33c4d0b3f1bba88e7fb2917f0c49e52f",
+  "browser_only_source_change_from_native_qualified_parent": true,
+  "repairs": [
+    "Drop canvas RefCell borrow before synchronous focus callback",
+    "Repaint source after taking encoded submission to retain usable layout while navigation is pending",
+    "Reject superseded source responses before preparing or fetching dependencies; input-only edits do not supersede a submission"
+  ],
+  "native": {
+    "routes": [
+      "livery",
+      "boa",
+      "nova"
+    ],
+    "network_verifier_exit_codes": [
+      0,
+      0,
+      0
+    ],
+    "binary_sha256": "63d8d2d59dfc142bb972e04f11d819f26fa0e0fbeafeeee586041dd43b3958e1",
+    "body_hex": "713de90d0a",
+    "redirect": "307 preserves POST and body; relative proof uses final document URL",
+    "final_semantics": "Final heading and image; no stale source button in last accessibility projection",
+    "visuals": "All three final captures identical; complete heading, green marker and relative image",
+    "invalid_notice": "Visible required-field notice and assertive alert with positive bounds"
+  },
+  "browser": {
+    "chrome": "155.0.8059.80",
+    "wasm_bindgen": "0.2.129",
+    "wasm_sha256": "70a21a58312325769980e19fc211ffc567df7a7a997f12c5a8cf86bcf4eaba81",
+    "cases": {
+      "plain1252": "evidence_complete",
+      "url1252": "evidence_complete",
+      "multi1252": "evidence_complete",
+      "get1252": "evidence_complete",
+      "utf8url": "evidence_complete",
+      "textarea": "evidence_complete",
+      "same-post": "evidence_complete",
+      "same-get": "evidence_complete",
+      "redirect303": "evidence_complete",
+      "redirect307": "evidence_complete",
+      "http404": "evidence_complete",
+      "fail204": "evidence_complete",
+      "fail205": "evidence_complete",
+      "failnetwork": "evidence_complete",
+      "failtruncated": "evidence_complete",
+      "hold": "evidence_complete",
+      "noreferrer": "evidence_complete",
+      "cross-origin": "evidence_complete",
+      "foreign-source": "evidence_complete",
+      "foreign-source-noreferrer": "evidence_complete"
+    },
+    "controls": {
+      "hold-input-only": "evidence_complete"
+    },
+    "verdict": "evidence_complete",
+    "uncaught_javascript_exceptions": 0,
+    "scope": "Original exact-byte/request/timing/trusted-input/painted-marker criteria. These captures do not qualify general browser text rendering.",
+    "network_failure_precondition": "Close idle sockets in this run's private Chrome profile before activation; original one-wire-POST criterion retained.",
+    "unqualified_earlier_runs_preserved": [
+      "browser-batch-v1",
+      "browser-hold-red-v2",
+      "browser-host-repair-green-v1"
+    ],
+    "outer_browser_setup": "Own fresh Chrome profile, block its favicon only, allow chrome diagnostic URL for private idle-socket precondition; product routes and fixture unchanged"
+  },
+  "resource_policy": "One private owned job under shared lock, BelowNormal, Cargo -j1;4GiB build/2GiB browser cap,8GiB available-RAM floor retained. All three final Wasm build/artifact/browser jobs source unchanged, exit0, descendants empty.",
+  "raw_evidence_roots": {
+    "Windows": "C:\\Users\\mark_\\Code\\testing\\genet\\forms\\phase-c-windows-20261016",
+    "ThinkPad": "/home/markik/Code/testing/genet/forms/phase-c-windows-20261016"
+  },
+  "raw_evidence_sha256": {
+    "native-build-binding.json": "78d066458bcb3e619bcce8f433536cde50f515bd7bda264eee40ecf4563261e7",
+    "native-live-fullviewport.receipt.json": "b44ca9169fa1bc53af8ed8aef24409156ded372bf4768c44acd84749b3a679d2",
+    "native-live-fullviewport-assessment.json": "11a6905a7de488f8d1b3a5fbc524e23a04faa94ac960c238ce7658f5116bcdba",
+    "native-visual-review.json": "bd981aea549a366b54ecd9cc17f0e0cd11ab9945bb824681a98b9b9a33d0a992",
+    "wasm-host-repair-v2-binding.json": "5754627ba7e4622173b09503d85aa860d2e379759660f7e4d141d0629ba0280d",
+    "wasm-host-repair-build-v4/resource.json": "5f6e0b75f4fb80c8babdd23d73e59667d145bf6f9b65a7f9ef0e38e14385ec26",
+    "wasm-host-repair-artifact-v3/resource.json": "df7a0477636f922deabd7d99728bceace383a5babe0b5ba108fdd06ce3490f4d",
+    "browser-host-repair-full-v2/resource.json": "b6b0a4cbda94645cb651a6573b81433b7c6cfeefb03e850b6241b66493229b28",
+    "browser-host-repair-full-v2-run/index.json": "cb2cdf0e1cea792f3b9eced0b531c4f7744eec44ddd3b916d9fdfc46e82f2997",
+    "browser-host-repair-full-v2-run/accounting-linux.json": "bfd1bb16693ed489aab46e8abc2106fde4b722d72dabbc7b6855ae476c0bc4c4",
+    "browser-qualification-assessment-v2.json": "4fe4cc412c53b588af9e3267beafbcdafb6acf50cebdfa0ccf4232117aafc617",
+    "browser-host-repair-full-v2-run/runtime-events.jsonl": "7122b31d5d1706633e90a19faf8bd4f31422d984bd0b797994ca05639c01d978",
+    "browser_driver_v6.mjs": "6d2e78a2b56a1a594312be73443d2bf0694adc912e5859dfa2b09e47b5c0da80",
+    "browser_account.py": "77d5c32926592b014cea29e67b4e1f3290e864460503f8bf0b68c2aae03b7727",
+    "browser-tools/proof.json": "d5db55d597fdd5015edf7fb14603057192e66c8e4acffe36c7d504e7886b2d43"
+  },
+  "remaining": [
+    "Candidate and isolated cold-control WPT builds and matched33 submission+584encoding records per engine per side",
+    "Eight prior value/validation maps, original and corrected controls, sixteen CSS slices and all old passing occurrences",
+    "Remaining covering gates",
+    "Whole-change/evidence review and Checkpoint C report"
+  ],
+  "checkpoint_c_complete": false,
+  "push_performed": false
+}

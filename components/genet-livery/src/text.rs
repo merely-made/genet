@@ -18,10 +18,12 @@ use buckram::{
     BoxId, BoxOrigin, CssBoxTree, DisplayInside, DisplayOutside, FloatLineConstraints,
     FormattingContextKind, InternalTableRole, IntrinsicSizeKind, IntrinsicSizes,
 };
+#[cfg(test)]
 use icu_properties::{
     CodePointMapData,
     props::{GeneralCategory, GeneralCategoryGroup, LineBreak},
 };
+#[cfg(test)]
 use icu_segmenter::LineSegmenter;
 use layout_dom_api::{LayoutDom, LocalName, Namespace, NodeKind, QuirksMode};
 use livery::{
@@ -96,6 +98,26 @@ pub struct TextRect {
     pub height: f32,
 }
 
+/// One already-shaped run for a host-owned viewport overlay. These runs have
+/// no DOM source and never enter text selection or the retained document tree.
+#[derive(Clone, Debug)]
+pub(crate) struct NativeOverlayTextRun {
+    pub font: FontResource,
+    pub font_instance: FontInstanceKey,
+    pub font_size: f32,
+    pub color: ColorF,
+    pub glyphs: Vec<GlyphInstance>,
+    pub fragment: LayoutRect,
+    pub line_y: f32,
+}
+
+/// Livery-shaped native overlay text in coordinates rooted at `(0, 0)`.
+#[derive(Clone, Debug)]
+pub(crate) struct NativeOverlayText {
+    pub runs: Vec<NativeOverlayTextRun>,
+    pub bounds: LayoutRect,
+}
+
 /// A source-node text range in rendered byte space.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TextRange<Id> {
@@ -167,11 +189,14 @@ fn break_inline_lines(
                     continue;
                 }
 
-                if line.advance > available.inline_size + 0.01
+                // Trailing whitespace hangs, so it never has to fit beside a
+                // float; only the content ahead of it does.
+                let content_advance = line.advance - line.trailing_whitespace;
+                if content_advance > available.inline_size + 0.01
                     && let Some(next_top) = constraints.next_wider_block_start(
                         line_top,
                         line.line_height.max(0.0),
-                        line.advance,
+                        content_advance,
                     )
                     && breaker.revert()
                 {
@@ -232,6 +257,20 @@ struct ChMetricKey {
     font_style: u8,
 }
 
+/// Refusal to bind an explicit host face to a CSS generic family.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GenericFontError {
+    InvalidGeneric,
+    InvalidFont,
+}
+
+impl std::fmt::Display for GenericFontError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+impl std::error::Error for GenericFontError {}
+
 impl Default for TextSystem {
     fn default() -> Self {
         Self::new()
@@ -274,6 +313,46 @@ impl TextSystem {
         self.ch_advances.clear();
         self.space_advances.clear();
         self.box_metrics.clear();
+    }
+
+    /// Bind a host-supplied face to one CSS generic, without changing authored
+    /// family requests or installing a global/system fallback. Invalid bytes
+    /// leave the existing generic mapping intact. Returns registered families.
+    pub fn register_generic_font_bytes(
+        &mut self,
+        bytes: Vec<u8>,
+        generic: &str,
+    ) -> Result<usize, GenericFontError> {
+        let generic = match generic {
+            "sans-serif" => GenericFamily::SansSerif,
+            "serif" => GenericFamily::Serif,
+            "monospace" => GenericFamily::Monospace,
+            "system-ui" => GenericFamily::SystemUi,
+            _ => return Err(GenericFontError::InvalidGeneric),
+        };
+        let bytes = normalized_font_bytes(bytes).ok_or(GenericFontError::InvalidFont)?;
+        let mut families = self
+            .font_context
+            .collection
+            .register_fonts(parley::fontique::Blob::new(Arc::new(bytes)), None);
+        if families.is_empty() {
+            return Err(GenericFontError::InvalidFont);
+        }
+        families.sort_by_key(|(id, _)| {
+            self.font_context
+                .collection
+                .family_name(*id)
+                .unwrap_or("")
+                .to_owned()
+        });
+        let count = families.len();
+        self.font_context
+            .collection
+            .set_generic_families(generic, families.into_iter().map(|(id, _)| id));
+        self.ch_advances.clear();
+        self.space_advances.clear();
+        self.box_metrics.clear();
+        Ok(count)
     }
 
     /// Register one host-resolved `@font-face` source under its authored CSS
@@ -541,7 +620,6 @@ impl TextSystem {
 
         let Shaped {
             items,
-            break_stream,
             break_lines,
             baselines,
             ..
@@ -594,7 +672,6 @@ impl TextSystem {
                 }),
                 baselines,
                 items,
-                _break_stream: break_stream,
                 text,
                 text_sources,
             })
@@ -605,7 +682,6 @@ impl TextSystem {
                 line_bounds: None,
                 baselines: None,
                 items,
-                _break_stream: break_stream,
                 text,
                 text_sources,
             })
@@ -700,7 +776,7 @@ impl TextSystem {
         if is_textarea && state.is_none() {
             return false;
         }
-        let value = state.as_ref().map_or_else(
+        let mut value = state.as_ref().map_or_else(
             || {
                 if is_textarea {
                     descendant_text(dom, node)
@@ -712,6 +788,13 @@ impl TextSystem {
             },
             |state| state.value.clone(),
         );
+        if let Some(draft) = dom
+            .form_control_interaction_state(node)
+            .filter(|interaction| interaction.bad_input)
+            .and_then(|interaction| interaction.draft_value)
+        {
+            value = draft;
+        }
         let (display, selectable) = if value.is_empty() {
             dom.attribute(node, &Namespace::default(), &LocalName::from("placeholder"))
                 .filter(|placeholder| !placeholder.is_empty())
@@ -1434,19 +1517,20 @@ impl TextSystem {
             });
         }
         let mut layout = builder.build(text);
-        // Keep the shaped logical sequence and its CSS candidate boundaries
-        // alongside the existing Parley path. S1.1 records this model only;
-        // the line loop remains owned by Parley until S1.2.
-        let mut unbounded_projection = layout.clone();
-        unbounded_projection.break_all_lines(None);
-        let mut break_stream = logical_break_stream(
-            text,
-            &unbounded_projection,
-            spans,
-            inline_boxes,
-            inline_styles,
-            root_style,
-        );
+        // Preserve the prospective break model for its unit tests only.
+        #[cfg(test)]
+        let mut break_stream = {
+            let mut unbounded_projection = layout.clone();
+            unbounded_projection.break_all_lines(None);
+            logical_break_stream(
+                text,
+                &unbounded_projection,
+                spans,
+                inline_boxes,
+                inline_styles,
+                root_style,
+            )
+        };
         let font_size = super::paint::used_font_size(root_style);
         let text_indent = root_style
             .text_indent
@@ -1466,53 +1550,56 @@ impl TextSystem {
             root_style.text_wrap_mode == TextWrapMode::Wrap,
             line_constraints,
         );
-        // The unbounded clone supplies the full logical clusters before the
-        // finite breaker chooses lines. Refresh only the break flags from
-        // the matching finite-layout clusters; retain the original glyph,
-        // source, font, and coordinate metadata.
-        let mut retained_cluster_indices = HashMap::new();
-        for (index, item) in break_stream.items.iter().enumerate() {
-            if let LogicalBreakItem::Cluster { text_range, .. } = item {
-                // Keep the former first-match rule if ranges repeat.
-                retained_cluster_indices
-                    .entry((text_range.start, text_range.end))
-                    .or_insert(index);
+        #[cfg(test)]
+        {
+            // The unbounded clone supplies the full logical clusters before the
+            // finite breaker chooses lines. Refresh only the break flags from
+            // the matching finite-layout clusters; retain the original glyph,
+            // source, font, and coordinate metadata.
+            let mut retained_cluster_indices = HashMap::new();
+            for (index, item) in break_stream.items.iter().enumerate() {
+                if let LogicalBreakItem::Cluster { text_range, .. } = item {
+                    // Keep the former first-match rule if ranges repeat.
+                    retained_cluster_indices
+                        .entry((text_range.start, text_range.end))
+                        .or_insert(index);
+                }
             }
-        }
-        for line in layout.lines() {
-            for run in line.runs() {
-                for cluster in run.clusters() {
-                    let text_range = cluster.text_range();
-                    if let Some(LogicalBreakItem::Cluster {
-                        soft_break,
-                        hard_break,
-                        ..
-                    }) = retained_cluster_indices
-                        .get(&(text_range.start, text_range.end))
-                        .and_then(|index| break_stream.items.get_mut(*index))
-                    {
-                        *soft_break = cluster.is_soft_line_break();
-                        *hard_break = cluster.is_hard_line_break();
+            for line in layout.lines() {
+                for run in line.runs() {
+                    for cluster in run.clusters() {
+                        let text_range = cluster.text_range();
+                        if let Some(LogicalBreakItem::Cluster {
+                            soft_break,
+                            hard_break,
+                            ..
+                        }) = retained_cluster_indices
+                            .get(&(text_range.start, text_range.end))
+                            .and_then(|index| break_stream.items.get_mut(*index))
+                        {
+                            *soft_break = cluster.is_soft_line_break();
+                            *hard_break = cluster.is_hard_line_break();
+                        }
                     }
                 }
             }
-        }
-        for (line_index, line) in layout.lines().enumerate() {
-            let kind = match line.break_reason() {
-                parley::BreakReason::Regular => SelectedBreakKind::Regular,
-                parley::BreakReason::Emergency => SelectedBreakKind::Emergency,
-                parley::BreakReason::None | parley::BreakReason::Explicit => continue,
-            };
-            let range = line.text_range();
-            let line_atoms = positioned_atom_orders(line.clone());
-            let next_atoms = layout
-                .get(line_index + 1)
-                .map(positioned_atom_orders)
-                .unwrap_or_default();
-            if let Some(selected) =
-                selected_break_position(range, kind, &line_atoms, &next_atoms, &break_stream.items)
-            {
-                break_stream.selected_breaks.push(selected);
+            for (line_index, line) in layout.lines().enumerate() {
+                let kind = match line.break_reason() {
+                    parley::BreakReason::Regular => SelectedBreakKind::Regular,
+                    parley::BreakReason::Emergency => SelectedBreakKind::Emergency,
+                    parley::BreakReason::None | parley::BreakReason::Explicit => continue,
+                };
+                let range = line.text_range();
+                let line_atoms = positioned_atom_orders(line.clone());
+                let next_atoms = layout
+                    .get(line_index + 1)
+                    .map(positioned_atom_orders)
+                    .unwrap_or_default();
+                if let Some(selected) =
+                    selected_break_position(range, kind, &line_atoms, &next_atoms, &break_stream.items)
+                {
+                    break_stream.selected_breaks.push(selected);
+                }
             }
         }
         let alignment = text_alignment(
@@ -1975,12 +2062,82 @@ impl TextSystem {
         append_positioned_inline_start_markers(&mut result, inline_boxes);
         Shaped {
             items: result,
+            #[cfg(test)]
             break_stream,
             #[cfg(test)]
             finite_break_flags,
             break_lines,
             baselines,
         }
+    }
+
+    /// Shape inert host text through the retained Livery font collection. The
+    /// returned runs have no source node, owner, or selection registration.
+    pub(crate) fn shape_native_overlay(
+        &mut self,
+        text: &str,
+        max_width: f32,
+    ) -> Option<NativeOverlayText> {
+        if text.is_empty() || !max_width.is_finite() || max_width <= 0.0 {
+            return None;
+        }
+        let mut style = ComputedValues::default();
+        style.color = "white".parse().ok()?;
+        style.white_space_collapse = WhiteSpaceCollapse::Preserve;
+        style.text_wrap_mode = TextWrapMode::Wrap;
+        let mut spans = [SourceSpan::<u64> {
+            selectable: false,
+            source: None,
+            owners: Vec::new(),
+            style: style.clone(),
+            range: 0..text.len(),
+        }];
+        let shaped = self.shape(
+            text,
+            &mut spans,
+            &[],
+            &HashMap::new(),
+            false,
+            max_width,
+            &style,
+            None,
+            None,
+        );
+        let mut runs = Vec::new();
+        let mut bounds: Option<LayoutRect> = None;
+        for item in shaped.items {
+            let ShapedItem::Text(run) = item else {
+                continue;
+            };
+            if run.glyphs.is_empty() {
+                continue;
+            }
+            let font = self.fonts.get(&run.font_instance)?.clone();
+            let fragment = LayoutRect::new(
+                LayoutPoint::new(run.fragment.x, run.fragment.y),
+                LayoutPoint::new(
+                    run.fragment.x + run.fragment.width,
+                    run.fragment.y + run.fragment.height,
+                ),
+            );
+            bounds = Some(match bounds {
+                Some(current) => current.union(&fragment),
+                None => fragment,
+            });
+            runs.push(NativeOverlayTextRun {
+                font,
+                font_instance: run.font_instance,
+                font_size: run.font_size,
+                color: run.color,
+                glyphs: run.glyphs,
+                fragment,
+                line_y: run.line_y,
+            });
+        }
+        Some(NativeOverlayText {
+            runs,
+            bounds: bounds?,
+        })
     }
 
     fn intern_font(&mut self, font: &parley::FontData) -> FontInstanceKey {
@@ -2033,7 +2190,6 @@ pub(crate) struct InlineLayout<Source> {
     line_bounds: Option<Fragment>,
     baselines: Option<(f32, f32)>,
     items: Vec<ShapedItem<Source>>,
-    _break_stream: LogicalBreakStream<Source>,
     text: String,
     text_sources: Vec<TextSource<Source>>,
 }
@@ -3100,6 +3256,7 @@ struct InlineAtom<Id> {
 /// What shaping one inline formatting context produced.
 struct Shaped<Id> {
     items: Vec<ShapedItem<Id>>,
+    #[cfg(test)]
     break_stream: LogicalBreakStream<Id>,
     #[cfg(test)]
     finite_break_flags: Vec<(Range<usize>, bool, bool)>,
@@ -3112,14 +3269,15 @@ struct Shaped<Id> {
     baselines: Option<(f32, f32)>,
 }
 
-/// The dormant S1.1 view of a paragraph before Parley's finite-width breaker
+/// Test-only view of a paragraph before Parley's finite-width breaker
 /// selects lines. Byte ranges refer to the exact transformed/collapsed input
 /// passed to Parley; `span_range` is local to its transformed source span.
 #[derive(Clone, Debug)]
 #[allow(
     dead_code,
-    reason = "dormant S1.1 stream; the S1.2 breaker consumes this model"
+    reason = "test-only prospective break diagnostics"
 )]
+#[cfg(test)]
 struct LogicalBreakStream<Id> {
     paragraph_text: String,
     items: Vec<LogicalBreakItem<Id>>,
@@ -3130,6 +3288,7 @@ struct LogicalBreakStream<Id> {
     selected_breaks: Vec<SelectedBreak>,
 }
 
+#[cfg(test)]
 impl<Id> LogicalBreakStream<Id> {
     #[cfg(test)]
     fn selected_breaks_are_permitted(&self) -> bool {
@@ -3194,6 +3353,7 @@ impl<Id> LogicalBreakStream<Id> {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg(test)]
 struct SelectedBreak {
     byte_index: usize,
     kind: SelectedBreakKind,
@@ -3201,12 +3361,14 @@ struct SelectedBreak {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg(test)]
 enum SelectedBreakKind {
     Regular,
     Emergency,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg(test)]
 enum SelectedBreakLocation {
     Text,
     BeforeInline(usize),
@@ -3220,8 +3382,9 @@ enum SelectedBreakLocation {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[allow(
     dead_code,
-    reason = "dormant S1.1 stream; the S1.2 breaker consumes this model"
+    reason = "test-only prospective break diagnostics"
 )]
+#[cfg(test)]
 struct AtomicOpportunity {
     byte_index: usize,
     insertion_order: usize,
@@ -3232,8 +3395,9 @@ struct AtomicOpportunity {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[allow(
     dead_code,
-    reason = "dormant S1.1 stream; the S1.2 breaker consumes this model"
+    reason = "test-only prospective break diagnostics"
 )]
+#[cfg(test)]
 enum AtomicOpportunitySide {
     Before,
     After,
@@ -3242,8 +3406,9 @@ enum AtomicOpportunitySide {
 #[derive(Clone, Debug)]
 #[allow(
     dead_code,
-    reason = "dormant S1.1 stream; the S1.2 breaker consumes this model"
+    reason = "test-only prospective break diagnostics"
 )]
+#[cfg(test)]
 enum LogicalBreakItem<Id> {
     Cluster {
         text_range: Range<usize>,
@@ -3275,8 +3440,9 @@ enum LogicalBreakItem<Id> {
 #[derive(Clone, Debug)]
 #[allow(
     dead_code,
-    reason = "dormant S1.1 stream; the S1.2 breaker consumes this model"
+    reason = "test-only prospective break diagnostics"
 )]
+#[cfg(test)]
 struct SourceSlice<Id> {
     text_range: Range<usize>,
     source: Option<Id>,
@@ -3286,6 +3452,7 @@ struct SourceSlice<Id> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg(test)]
 struct BreakStyle {
     white_space_collapse: WhiteSpaceCollapse,
     text_wrap_mode: TextWrapMode,
@@ -3294,6 +3461,7 @@ struct BreakStyle {
     overflow_wrap: CssOverflowWrap,
 }
 
+#[cfg(test)]
 impl From<&ComputedValues> for BreakStyle {
     fn from(style: &ComputedValues) -> Self {
         Self {
@@ -3306,6 +3474,7 @@ impl From<&ComputedValues> for BreakStyle {
     }
 }
 
+#[cfg(test)]
 fn logical_break_stream<Id>(
     text: &str,
     layout: &parley::Layout<Brush>,
@@ -3556,6 +3725,7 @@ where
     }
 }
 
+#[cfg(test)]
 fn positioned_atom_orders(line: parley::Line<'_, Brush>) -> Vec<usize> {
     line.items()
         .filter_map(|item| match item {
@@ -3567,6 +3737,7 @@ fn positioned_atom_orders(line: parley::Line<'_, Brush>) -> Vec<usize> {
         .collect()
 }
 
+#[cfg(test)]
 fn selected_break_position<Id>(
     range: Range<usize>,
     kind: SelectedBreakKind,
@@ -3613,6 +3784,7 @@ fn selected_break_position<Id>(
     })
 }
 
+#[cfg(test)]
 fn adjacent_character(text: &str, offset: usize, before: bool) -> Option<char> {
     let adjacent = if before {
         text.get(..offset)
@@ -3623,6 +3795,7 @@ fn adjacent_character(text: &str, offset: usize, before: bool) -> Option<char> {
     adjacent
 }
 
+#[cfg(test)]
 fn atomic_side_opportunity<Id: Copy + Eq + Hash>(
     text: &str,
     atom: &InlineAtom<Id>,
@@ -3672,6 +3845,7 @@ fn atomic_side_opportunity<Id: Copy + Eq + Hash>(
     }
 }
 
+#[cfg(test)]
 fn atom_side_text_neighbor<Id>(
     text: &str,
     atom: &InlineAtom<Id>,
@@ -3704,6 +3878,7 @@ fn atom_side_text_neighbor<Id>(
     }
 }
 
+#[cfg(test)]
 fn inline_marker_text<Id>(text: &str, inline_boxes: &[InlineAtom<Id>]) -> String {
     let mut atoms = inline_boxes
         .iter()
@@ -3729,6 +3904,7 @@ fn inline_marker_text<Id>(text: &str, inline_boxes: &[InlineAtom<Id>]) -> String
     marked
 }
 
+#[cfg(test)]
 fn is_hard_break_boundary(text: &str, offset: usize) -> bool {
     text.get(..offset)
         .and_then(|prefix| prefix.chars().next_back())
@@ -3740,6 +3916,7 @@ fn is_hard_break_boundary(text: &str, offset: usize) -> bool {
         })
 }
 
+#[cfg(test)]
 fn preserved_space_opportunity(text: &str, offset: usize, style: BreakStyle) -> bool {
     if style.white_space_collapse != WhiteSpaceCollapse::BreakSpaces || offset == 0 {
         return false;
@@ -3749,6 +3926,7 @@ fn preserved_space_opportunity(text: &str, offset: usize, style: BreakStyle) -> 
         .is_some_and(|character| matches!(character, ' ' | '\t' | '\u{000c}'))
 }
 
+#[cfg(test)]
 fn icu_line_candidates(
     text: &str,
     line_break: CssLineBreak,
@@ -3791,6 +3969,7 @@ fn icu_line_candidates(
     (candidates, emergency)
 }
 
+#[cfg(test)]
 fn complex_context_fallback_boundaries(text: &str) -> impl Iterator<Item = usize> + '_ {
     let graphemes = icu_segmenter::GraphemeClusterSegmenter::new()
         .segment_str(text)
@@ -3818,6 +3997,7 @@ fn complex_context_fallback_boundaries(text: &str) -> impl Iterator<Item = usize
         .into_iter()
 }
 
+#[cfg(test)]
 fn common_style<'a, Id: Copy + Eq + Hash>(
     left: &[Id],
     right: &[Id],
@@ -3836,6 +4016,7 @@ fn common_style<'a, Id: Copy + Eq + Hash>(
 /// Owners are borrowed, not copied per opportunity. Sorting includes the logical
 /// item ordinal to preserve the scan's last-equal left / first-equal right rules,
 /// including gaps, overlapping ranges and bidi runs. Atoms do not own text edges.
+#[cfg(test)]
 struct BoundaryIndex<'a, Id> {
     starts: Vec<(usize, usize, &'a [Id])>,
     ends: Vec<(usize, usize, &'a [Id])>,
@@ -3844,6 +4025,7 @@ struct BoundaryIndex<'a, Id> {
     comparisons: std::cell::Cell<usize>,
 }
 
+#[cfg(test)]
 impl<'a, Id> BoundaryIndex<'a, Id> {
     fn new(text: &str, items: &'a [LogicalBreakItem<Id>]) -> Self {
         let mut starts = Vec::new();
@@ -3919,6 +4101,7 @@ impl<'a, Id> BoundaryIndex<'a, Id> {
     }
 }
 
+#[cfg(test)]
 impl<Id: Copy + Eq + Hash> BoundaryIndex<'_, Id> {
     fn style(
         &self,
@@ -3982,6 +4165,7 @@ fn adjacent_cluster_owners<Id: Copy>(
     }
 }
 
+#[cfg(test)]
 fn logical_item_owners<Id>(item: &LogicalBreakItem<Id>, preceding: bool) -> &[Id] {
     match item {
         LogicalBreakItem::Cluster {
@@ -3999,6 +4183,7 @@ fn logical_item_owners<Id>(item: &LogicalBreakItem<Id>, preceding: bool) -> &[Id
     }
 }
 
+#[cfg(test)]
 fn is_logical_neighbor<Id>(item: &LogicalBreakItem<Id>) -> bool {
     match item {
         LogicalBreakItem::Cluster { .. } => true,
@@ -4070,6 +4255,7 @@ fn disappearing_space_owner_style<Id>(
     })
 }
 
+#[cfg(test)]
 fn atom_side_style<'a, Id: Copy + Eq + Hash>(
     atom: &InlineAtom<Id>,
     insertion_order: usize,
@@ -5966,6 +6152,86 @@ fn content_key(bytes: &[u8], index: u32) -> FontInstanceKey {
 mod tests {
     use super::*;
     use livery::values::FontSize as CssFontSize;
+
+    #[test]
+    fn explicit_generic_font_shapes_without_system_and_invalid_replace_preserves_face() {
+        let bytes = include_bytes!("../../../tests/wpt/tests/fonts/Ahem.ttf").to_vec();
+        let mut system = TextSystem::new();
+        system.font_context.collection =
+            parley::fontique::Collection::new(parley::fontique::CollectionOptions {
+                shared: false,
+                system_fonts: false,
+            });
+        assert!(system.shape_native_overlay("real text", 300.0).is_none());
+        assert_eq!(
+            system.register_generic_font_bytes(bytes.clone(), "sans-serif"),
+            Ok(1)
+        );
+        let shaped = system
+            .shape_native_overlay("real text", 300.0)
+            .expect("explicit generic must shape");
+        assert!(!shaped.runs.is_empty());
+        assert!(
+            shaped
+                .runs
+                .iter()
+                .all(|run| !run.glyphs.is_empty() && run.font.data.as_slice() == bytes)
+        );
+        assert_eq!(
+            system.register_generic_font_bytes(vec![0, 1], "sans-serif"),
+            Err(GenericFontError::InvalidFont)
+        );
+        assert_eq!(
+            system.register_generic_font_bytes(bytes.clone(), "invented-generic"),
+            Err(GenericFontError::InvalidGeneric)
+        );
+        let again = system
+            .shape_native_overlay("real text", 300.0)
+            .expect("prior mapping survived refusal");
+        assert!(
+            again
+                .runs
+                .iter()
+                .all(|run| run.font.data.as_slice() == bytes)
+        );
+        assert_eq!(
+            system.register_generic_font_bytes(bytes.clone(), "sans-serif"),
+            Ok(1)
+        );
+        assert!(
+            system
+                .shape_native_overlay("real text", 300.0)
+                .unwrap()
+                .runs
+                .iter()
+                .all(|run| run.font.data.as_slice() == bytes)
+        );
+    }
+
+    #[test]
+    fn native_validation_overlay_preserves_custom_whitespace() {
+        let mut system = TextSystem::new();
+        let single = system
+            .shape_native_overlay("a b", 500.0)
+            .expect("single space");
+        let double = system
+            .shape_native_overlay("a  b", 500.0)
+            .expect("double space");
+        assert!(
+            double.bounds.width() > single.bounds.width(),
+            "custom spaces must remain visible"
+        );
+        let lines = system
+            .shape_native_overlay("a\nb", 500.0)
+            .expect("two lines");
+        assert!(
+            lines
+                .runs
+                .iter()
+                .any(|run| run.line_y > lines.runs[0].line_y),
+            "custom newline must force another line"
+        );
+    }
 
     fn shape_fixture_stream(
         text: &str,

@@ -25,7 +25,113 @@
 //! core.queue().present(frame);
 //! ```
 
+// Without classic Vello every RenderCore method begins unreachable on purpose.
+#![cfg_attr(feature = "without-classic-vello", allow(unreachable_code, unused_variables))]
+
 use netrender::{ColorLoad, NetrenderOptions, Renderer, Scene};
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex, Weak};
+#[cfg(test)]
+use std::time::Duration;
+
+#[cfg(target_arch = "wasm32")]
+mod browser_frame;
+#[cfg(target_arch = "wasm32")]
+pub use browser_frame::{AcceptedBrowserFrame, BrowserFrameCommands, BrowserFrameStartError, BrowserFrameSubmission, PendingBrowserFrame, RendererAccess};
+
+#[cfg(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"))]
+mod browser_surface_readback;
+#[cfg(any(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"),
+          all(test, feature = "browser-surface-readback-diagnostics")))]
+mod surface_capture_layout;
+#[cfg(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"))]
+pub use browser_surface_readback::{AcquiredSurfaceFrame, AcquiredSurfaceMetadata, AcceptedSurfaceReadback,
+    BrowserFrameScopeObservation,BrowserFrameQualityObservation,
+    PendingSurfaceReadback, SurfaceCaptureCancellation, SurfaceCaptureConfiguration, SurfaceCapturePreparation, SurfaceCaptureFrameIdentity,
+    SurfaceReadbackFailure};
+#[cfg(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"))]
+pub use surface_capture_layout::{SurfaceCaptureBudget, SurfaceCaptureLayout, SurfaceCaptureLimit, SurfaceCaptureReservation};
+
+mod readback;
+mod recovery;
+pub use recovery::{
+    AsyncReplacementFactory, CoreGeneration, DeviceLossMonitor, DeviceLossNotice,
+    PendingReplacement, RecoveryStatus, RecoverySubscription, ReplacementCompletionError,
+    ReplacementExpiry, ReplacementFactory, ReplacementFuture, SharedRenderCore,
+};
+
+/// A rendering refusal on the actual host device. Provider errors do not
+/// imply device loss; only the installed monitor can authorize recovery.
+#[derive(Clone, Debug)]
+pub enum RasterizeFailure {
+    DeviceLost(DeviceLossNotice),
+    ProviderError(Arc<netrender::VelloError>),
+    /// The frame source refused to produce a scene before GPU submission.
+    SourceError(String),
+}
+impl std::fmt::Display for RasterizeFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DeviceLost(loss) => write!(f, "rasterization refused: DeviceLost({loss:?})"),
+            Self::ProviderError(error) => write!(f, "rasterization refused: {error}"),
+            Self::SourceError(error) => write!(f, "frame source refused: {error}"),
+        }
+    }
+}
+impl std::error::Error for RasterizeFailure {}
+
+#[cfg(not(target_arch = "wasm32"))]
+struct ScopedRasterResult {
+    result: Result<(wgpu::Texture, wgpu::TextureView), RasterizeFailure>,
+    #[cfg(test)]
+    captured_scope_error: Option<Arc<netrender::VelloError>>,
+    #[cfg(test)]
+    scope_pending: bool,
+}
+
+pub enum SurfaceAcquire {
+    Frame(wgpu::SurfaceTexture),
+    SurfaceLost,
+    /// The outdated surface was reconfigured on the same device; retry acquisition later.
+    Reconfigured,
+    Unavailable { reason: String },
+    DeviceLost(DeviceLossNotice),
+}
+
+#[derive(Clone, Copy)]
+struct CoreBootRecipe {
+    apply_limit_buckets: bool,
+    tile_cache_size: Option<u32>,
+    enable_vello: bool,
+    enable_tile_dirty_overlay: bool,
+    tile_dirty_overlay_window_frames: u32,
+    backends: Option<wgpu::Backends>,
+    optional_features: wgpu::Features,
+}
+impl CoreBootRecipe {
+    fn from_options(o: &NetrenderOptions) -> Self {
+        Self {
+            apply_limit_buckets: o.apply_limit_buckets,
+            tile_cache_size: o.tile_cache_size,
+            enable_vello: o.enable_vello,
+            enable_tile_dirty_overlay: o.enable_tile_dirty_overlay,
+            tile_dirty_overlay_window_frames: o.tile_dirty_overlay_window_frames,
+            backends: o.backends,
+            optional_features: o.optional_features,
+        }
+    }
+    fn options(self) -> NetrenderOptions {
+        NetrenderOptions {
+            apply_limit_buckets: self.apply_limit_buckets,
+            tile_cache_size: self.tile_cache_size,
+            enable_vello: self.enable_vello,
+            enable_tile_dirty_overlay: self.enable_tile_dirty_overlay,
+            tile_dirty_overlay_window_frames: self.tile_dirty_overlay_window_frames,
+            backends: self.backends,
+            optional_features: self.optional_features,
+        }
+    }
+}
 
 #[derive(Default)]
 struct CaptureMasterCompositor {
@@ -51,6 +157,14 @@ pub struct RgbaFrame {
     pub height: u32,
     pub rgba: Vec<u8>,
 }
+
+/// An owned RGBA copy whose mapping is completed on later host turns.
+///
+/// Polling never waits for the GPU, so a shared render device can keep servicing
+/// native window events and presentations while this capture is outstanding.
+/// The copy is queued when this value is created; later draws cannot replace
+/// the pixels it returns. A host owns its scheduling and deadline.
+pub use readback::{PendingRgbaReadback, ReadbackFailure};
 
 impl RgbaFrame {
     /// A stable, order-sensitive FNV-1a digest of the frame bytes.
@@ -92,6 +206,115 @@ mod rgba_frame_tests {
         };
         assert!(!black.is_blank());
         assert_ne!(black.digest(), transparent.digest());
+    }
+}
+
+#[cfg(test)]
+mod pending_readback_tests {
+    use super::*;
+    use std::time::Instant;
+
+    fn write(core: &RenderCore, texture: &wgpu::Texture, width: u32, height: u32, color: [u8; 4]) {
+        core.queue().write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &color.repeat((width * height) as usize),
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(width * 4),
+                rows_per_image: Some(height),
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+    }
+
+    fn collect(pending: &mut PendingRgbaReadback) -> RgbaFrame {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let before = Instant::now();
+            let result = pending.poll();
+            assert!(
+                before.elapsed() < Duration::from_millis(250),
+                "a readback poll blocked"
+            );
+            if let Some(result) = result {
+                return result.expect("capture maps successfully");
+            }
+            assert!(
+                Instant::now() < deadline,
+                "GPU readback exceeded five seconds"
+            );
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+
+    #[test]
+    fn pending_capture_keeps_original_rows_while_shared_device_draws_again() {
+        // This is an actual adapter test. A boot failure must fail the gate,
+        // rather than turn absent GPU evidence into a successful test result.
+        let core = RenderCore::boot(NetrenderOptions {
+            tile_cache_size: Some(4),
+            ..Default::default()
+        })
+        .expect("GPU adapter is required for the pending readback gate");
+        let adapter = core.renderer.wgpu_device.core.adapter.get_info();
+        eprintln!(
+            "pending readback adapter: {} ({:?}, {:?})",
+            adapter.name, adapter.backend, adapter.device_type
+        );
+        let (width, height) = (67, 3); // Both row padding and multiple rows.
+        let texture = core.device().create_texture(&wgpu::TextureDescriptor {
+            label: Some("pending RGBA readback regression"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        write(&core, &texture, width, height, [18, 52, 86, 255]);
+        let mut first = core.start_rgba8_readback(&texture, width, height).unwrap();
+        write(&core, &texture, width, height, [32, 48, 32, 255]);
+        let mut second = core.start_rgba8_readback(&texture, width, height).unwrap();
+        // Reversing collection order must not alias the first capture's pixels.
+        let second_frame = collect(&mut second);
+        let first_frame = collect(&mut first);
+        assert_eq!(
+            first_frame.rgba,
+            [18, 52, 86, 255].repeat((width * height) as usize)
+        );
+        assert_eq!(
+            second_frame.rgba,
+            [32, 48, 32, 255].repeat((width * height) as usize)
+        );
+        assert!(!first_frame.is_blank());
+        assert_ne!(first_frame.digest(), second_frame.digest());
+        assert!(matches!(
+            first.poll(),
+            Some(Err(ReadbackFailure::AlreadyCollected))
+        ));
+        // A cancelled receiver must not make a later map callback panic.
+        let cancelled = core.start_rgba8_readback(&texture, width, height).unwrap();
+        drop(cancelled);
+        let frame = core.read_rgba8_texture(&texture, width, height).unwrap();
+        assert_eq!(frame.rgba, second_frame.rgba);
+        assert!(
+            core.start_rgba8_readback(&texture, u32::MAX, height)
+                .is_err()
+        );
     }
 }
 
@@ -220,14 +443,45 @@ mod boot_feature_tests {
 /// surface's swapchain without re-rendering. (Multi-window: one device, N surfaces.)
 pub struct RenderCore {
     renderer: Renderer,
+    /// Present only in builds without classic Vello, where no core can exist.
+    #[cfg(feature = "without-classic-vello")]
+    unavailable: Unavailable,
+    loss: Arc<DeviceLossMonitor>,
+    recovery_owner: Mutex<Weak<SharedRenderCore>>,
+    recipe: CoreBootRecipe,
+    #[cfg(target_arch = "wasm32")]
+    browser_frame_gate: Arc<browser_frame::FrameGate>,
 }
 
+/// A browser artifact that presents only through Netrender's WebGL2 backend
+/// leaves classic Vello out of its build (2026-10-15, the Graphshell viewer's
+/// WebGL2 bundle). Its boot refuses, so no `RenderCore` exists and every method
+/// below begins unreachable; the linker then drops the classic raster, wgpu
+/// boot and composition code those methods reach. The feature is subtractive,
+/// so it is refused off wasm, where it could unify into a native host's graph.
+#[cfg(all(feature = "without-classic-vello", not(target_arch = "wasm32")))]
+compile_error!("without-classic-vello is only for wasm viewer artifacts that never boot classic Vello");
+
+#[cfg(feature = "without-classic-vello")]
+enum Unavailable {}
+
+#[cfg(feature = "without-classic-vello")]
+const CLASSIC_UNAVAILABLE: &str = "classic Vello is not compiled into this build";
+
 impl RenderCore {
+    #[cfg(feature = "without-classic-vello")]
+    #[inline(always)]
+    fn unavailable(&self) -> ! {
+        match self.unavailable {}
+    }
+
     /// Boot wgpu + a netrender [`Renderer`] (native blocking). The device is shared;
     /// create per-target surfaces with [`create_surface`](Self::create_surface). On
     /// wasm the WebGPU device request is async, so use [`boot_async`](Self::boot_async).
     #[cfg(not(target_arch = "wasm32"))]
     pub fn boot(options: NetrenderOptions) -> Result<Self, String> {
+        #[cfg(feature = "without-classic-vello")]
+        return Err(CLASSIC_UNAVAILABLE.into());
         // `options.backends` lets a host force a backend (e.g. D3D12 for same-API
         // system-WebView import); `None` honors `WGPU_BACKEND`, else all available.
         // Limit bucketing and optional features are host calls that ride on
@@ -257,6 +511,8 @@ impl RenderCore {
     /// Async boot: awaits netrender's `boot_async`. The only boot path on wasm
     /// (WebGPU device acquisition is asynchronous); works on every target.
     pub async fn boot_async(options: NetrenderOptions) -> Result<Self, String> {
+        #[cfg(feature = "without-classic-vello")]
+        return Err(CLASSIC_UNAVAILABLE.into());
         let needs = netrender::TenantNeeds {
             apply_limit_buckets: options.apply_limit_buckets,
             optional_features: options.optional_features,
@@ -278,13 +534,81 @@ impl RenderCore {
         Self::from_handles(handles, options)
     }
 
+    #[cfg(feature = "without-classic-vello")]
+    fn from_handles(
+        _handles: netrender::WgpuHandles,
+        _options: NetrenderOptions,
+    ) -> Result<Self, String> {
+        Err(CLASSIC_UNAVAILABLE.into())
+    }
+
+    #[cfg(not(feature = "without-classic-vello"))]
     fn from_handles(
         handles: netrender::WgpuHandles,
         options: NetrenderOptions,
     ) -> Result<Self, String> {
+        let recipe = CoreBootRecipe::from_options(&options);
         let renderer = netrender::create_netrender_instance(handles, options)
             .map_err(|e| format!("netrender init failed: {e:?}"))?;
-        Ok(Self { renderer })
+        let generation = recovery::next_generation();
+        let loss = Arc::new(DeviceLossMonitor::new(generation));
+        let callback = loss.clone();
+        renderer
+            .wgpu_device
+            .core
+            .device
+            .set_device_lost_callback(move |reason, message| {
+                callback.notify_loss(DeviceLossNotice {
+                    generation,
+                    reason,
+                    message,
+                });
+            });
+        Ok(Self {
+            renderer,
+            loss,
+            recovery_owner: Mutex::new(Weak::new()),
+            recipe,
+            #[cfg(target_arch = "wasm32")]
+            browser_frame_gate: Arc::new(browser_frame::FrameGate::default()),
+        })
+    }
+
+    pub fn generation(&self) -> CoreGeneration {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
+        self.loss.generation
+    }
+    pub fn loss_notice(&self) -> Option<DeviceLossNotice> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
+        self.loss.notice()
+    }
+    pub fn device_failure(&self) -> Option<DeviceLossNotice> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
+        self.loss.pending_notice()
+    }
+    pub fn shared_recovery(self: &Arc<Self>) -> Arc<SharedRenderCore> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
+        let recipe = self.recipe;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            SharedRenderCore::with_factory(
+                self.clone(),
+                Arc::new(move || Self::boot(recipe.options()).map(Arc::new)),
+            )
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            SharedRenderCore::with_async_factory(
+                self.clone(),
+                Arc::new(move || {
+                    Box::pin(async move { Self::boot_async(recipe.options()).await.map(Arc::new) })
+                }),
+            )
+        }
     }
 
     /// Create + configure a swapchain surface for `target` at `(width, height)`,
@@ -301,7 +625,32 @@ impl RenderCore {
         width: u32,
         height: u32,
     ) -> Result<WindowSurface, String> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
+        if let Some(loss) = self.device_failure() {
+            return Err(format!("surface creation refused: DeviceLost({loss:?})"));
+        }
         self.create_surface_with_transparency(target, width, height, false)
+    }
+
+    /// Explicit diagnostic request for actual WebGPU surface readback.
+    /// COPY_SRC is configured later inside the frame owner's scopes; advertised
+    /// RENDER_ATTACHMENT-only caps are recorded, never relabeled as COPY_SRC.
+    #[cfg(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"))]
+    pub fn create_surface_for_readback_diagnostics(
+        &self, target:impl Into<wgpu::SurfaceTarget<'static>>,width:u32,height:u32,
+    ) -> Result<WindowSurface,String> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
+        if self.device().as_webgpu().is_none() { return Err("surface readback diagnostics requires actual WebGPU".into()); }
+        let mut surface=self.create_surface(target,width,height)?;
+        let advertised=surface.surface.get_capabilities(&self.renderer.wgpu_device.core.adapter).usages.bits();
+        surface.surface_config.usage=wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC;
+        SurfaceCaptureConfiguration::from_window(advertised,&surface.surface_config)
+            .map_err(|error|format!("surface capture configuration refused: {error:?}"))?;
+        surface.readback_diagnostics=Some(advertised);
+        surface.readback_configuration_pending.set(true);
+        Ok(surface)
     }
 
     /// Create and configure a presentation surface, requiring composited alpha
@@ -318,12 +667,20 @@ impl RenderCore {
         height: u32,
         transparent: bool,
     ) -> Result<WindowSurface, String> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
+        if let Some(loss) = self.device_failure() {
+            return Err(format!("surface creation refused: DeviceLost({loss:?})"));
+        }
         let core = &self.renderer.wgpu_device.core;
         let surface = core
             .instance
             .create_surface(target)
             .map_err(|e| format!("create_surface failed: {e}"))?;
         let caps = surface.get_capabilities(&core.adapter);
+        if caps.formats.is_empty() || caps.alpha_modes.is_empty() {
+            return Err("adapter offers no compatible surface format or alpha mode".into());
+        }
         // Prefer the NON-srgb surface format. The vello rasterizer writes
         // display-referred (sRGB-encoded) bytes into the Rgba8Unorm layer
         // textures and the compose pass samples them raw, so an sRGB
@@ -368,15 +725,27 @@ impl RenderCore {
             view_formats: vec![],
         };
         surface.configure(&core.device, &surface_config);
+        if let Some(loss) = self.device_failure() {
+            return Err(format!(
+                "surface configuration refused: DeviceLost({loss:?})"
+            ));
+        }
         Ok(WindowSurface {
             surface,
             surface_config,
+            #[cfg(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"))]
+            readback_diagnostics:None,
+            #[cfg(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"))]
+            readback_configuration_pending:std::cell::Cell::new(false),
         })
     }
 
     /// The netrender renderer — call `compose_external_texture` (and friends) on
     /// it to composite rasterized layers onto a surface's backbuffer.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn renderer(&self) -> &Renderer {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         &self.renderer
     }
 
@@ -384,16 +753,24 @@ impl RenderCore {
     /// is replaced in place. The next [`rasterize_for`](Self::rasterize_for)
     /// call rebuilds the surface from the complete current scene.
     pub fn invalidate_surface(&self, surface: u64) -> bool {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
+        #[cfg(target_arch = "wasm32")]
+        let _renderer_access = self.try_renderer().expect("checked renderer access refused");
         self.renderer.invalidate_surface_tiles(surface)
     }
 
     /// The shared wgpu device backing the renderer.
     pub fn device(&self) -> &wgpu::Device {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         &self.renderer.wgpu_device.core.device
     }
 
     /// The shared wgpu queue (e.g. for external-texture import).
     pub fn queue(&self) -> &wgpu::Queue {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         &self.renderer.wgpu_device.core.queue
     }
 
@@ -408,14 +785,44 @@ impl RenderCore {
         width: u32,
         height: u32,
     ) -> Result<RgbaFrame, String> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
+        let mut pending = self.start_rgba8_readback(texture, width, height)?;
+        // Compatibility for offscreen/CLI callers. Event-loop hosts should use
+        // start_rgba8_readback and poll it on later turns instead of waiting.
+        pending
+            .wait_for_completion()
+            .map_err(|error| error.to_string())
+    }
+
+    /// Queue an RGBA8 copy and mapping without waiting for GPU completion.
+    /// Native event-loop hosts must use this path: blocking after presentation
+    /// can prevent the platform from servicing other windows on the same device.
+    pub fn start_rgba8_readback(
+        &self,
+        texture: &wgpu::Texture,
+        width: u32,
+        height: u32,
+    ) -> Result<PendingRgbaReadback, String> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
+        let _operation = self
+            .loss
+            .begin_operation()
+            .map_err(|loss| format!("readback refused: DeviceLost({loss:?})"))?;
         let width = width.max(1);
         let height = height.max(1);
-        let unpadded = width * 4;
+        let unpadded = width
+            .checked_mul(4)
+            .ok_or("RGBA readback row size overflow")?;
         let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
-        let padded = unpadded.div_ceil(align) * align;
+        let padded = unpadded
+            .div_ceil(align)
+            .checked_mul(align)
+            .ok_or("RGBA readback aligned row size overflow")?;
         let buffer = self.device().create_buffer(&wgpu::BufferDescriptor {
             label: Some("genet render host RGBA readback"),
-            size: (padded * height) as u64,
+            size: u64::from(padded) * u64::from(height),
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
         });
@@ -445,30 +852,24 @@ impl RenderCore {
                 depth_or_array_layers: 1,
             },
         );
-        self.queue().submit(Some(encoder.finish()));
-        let slice = buffer.slice(..);
-        slice.map_async(wgpu::MapMode::Read, |_| {});
-        self.device()
-            .poll(wgpu::PollType::Wait {
-                submission_index: None,
-                timeout: None,
-            })
-            .map_err(|error| format!("RGBA readback poll failed: {error}"))?;
-        let data = slice
-            .get_mapped_range()
-            .map_err(|error| format!("RGBA readback map failed: {error}"))?;
-        let mut rgba = Vec::with_capacity((unpadded * height) as usize);
-        for row in 0..height {
-            let start = (row * padded) as usize;
-            rgba.extend_from_slice(&data[start..start + unpadded as usize]);
-        }
-        drop(data);
-        buffer.unmap();
-        Ok(RgbaFrame {
+        let submission = self.queue().submit(Some(encoder.finish()));
+        let (send, mapped) = mpsc::channel();
+        buffer
+            .slice(..)
+            .map_async(wgpu::MapMode::Read, move |result| {
+                // Cancellation drops the receiver; a late callback is harmless.
+                let _ = send.send(result);
+            });
+        Ok(PendingRgbaReadback::new(
+            self.device().clone(),
+            buffer,
+            mapped,
+            submission,
             width,
             height,
-            rgba,
-        })
+            padded,
+            &self.loss,
+        ))
     }
 
     /// Rasterize `scene` into a fresh `(w, h)` `Rgba8Unorm` texture, cleared to
@@ -482,6 +883,8 @@ impl RenderCore {
         h: u32,
         clear: ColorLoad,
     ) -> (wgpu::Texture, wgpu::TextureView) {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         self.rasterize_scaled(scene, w, h, clear, 1.0)
     }
 
@@ -500,6 +903,8 @@ impl RenderCore {
         h: u32,
         clear: ColorLoad,
     ) -> (wgpu::Texture, wgpu::TextureView) {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         self.rasterize_scaled_for(surface, scene, w, h, clear, 1.0)
     }
 
@@ -514,11 +919,263 @@ impl RenderCore {
         clear: ColorLoad,
         scale: f32,
     ) -> (wgpu::Texture, wgpu::TextureView) {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
+        #[cfg(target_arch = "wasm32")]
+        let _renderer_access = self.try_renderer().expect("checked renderer access refused");
         let (tex, view) = self.scene_target(w, h);
         self.renderer
             .render_vello_scaled_for(surface, scene, &view, clear, scale);
         self.log_raster_spans(w, h);
         (tex, view)
+    }
+
+    /// Checked host drawing keeps provider refusals distinct from an actual
+    /// device loss. Creation/submission participates in loss admission, and
+    /// the monitor is checked again before any output is returned.
+    pub fn try_rasterize_scaled_for(
+        &self,
+        surface: u64,
+        scene: &Scene,
+        w: u32,
+        h: u32,
+        clear: ColorLoad,
+        scale: f32,
+    ) -> Result<(wgpu::Texture, wgpu::TextureView), RasterizeFailure> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
+        self.rasterize_scaled_for_admitted(surface, scene, w, h, clear, scale, || {})
+    }
+
+    // Hooks are private per-call seams. Production passes no-ops; no mutable
+    // global injection state exists.
+    #[allow(clippy::too_many_arguments)]
+    fn rasterize_scaled_for_admitted(
+        &self,
+        surface: u64,
+        scene: &Scene,
+        w: u32,
+        h: u32,
+        clear: ColorLoad,
+        scale: f32,
+        after_admission: impl FnOnce(),
+    ) -> Result<(wgpu::Texture, wgpu::TextureView), RasterizeFailure> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.rasterize_scaled_for_scoped(
+                surface,
+                scene,
+                w,
+                h,
+                clear,
+                scale,
+                after_admission,
+                || {},
+            )
+            .result
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            // WebGPU scope results and current-frame quality completion are
+            // asynchronous. This existing synchronous API does not qualify
+            // either; an async host seam remains open. Do not block JS or
+            // drop a promise and claim native completion guarantees here.
+            let _renderer_access = self.try_renderer()?;
+            let _operation = self
+                .loss
+                .begin_operation()
+                .map_err(RasterizeFailure::DeviceLost)?;
+            let (texture, view) = self.scene_target(w, h);
+            after_admission();
+            if let Some(loss) = self.device_failure() {
+                return Err(RasterizeFailure::DeviceLost(loss));
+            }
+            let rendered = self
+                .renderer
+                .render_vello_scaled_for_checked(surface, scene, &view, clear, scale);
+            if let Some(loss) = self.device_failure() {
+                return Err(RasterizeFailure::DeviceLost(loss));
+            }
+            rendered.map_err(|error| RasterizeFailure::ProviderError(Arc::new(error)))?;
+            self.log_raster_spans(w, h);
+            Ok((texture, view))
+        }
+    }
+
+    /// Native target creation and checked raster submission are covered by
+    /// device error scopes. This does not scope host composition, presentation,
+    /// producer upload/staging, or browser asynchronous validation.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[allow(clippy::too_many_arguments)]
+    fn rasterize_scaled_for_scoped(
+        &self,
+        surface: u64,
+        scene: &Scene,
+        w: u32,
+        h: u32,
+        clear: ColorLoad,
+        scale: f32,
+        after_admission: impl FnOnce(),
+        before_renderer: impl FnOnce(),
+    ) -> ScopedRasterResult {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
+        let _operation = match self.loss.begin_operation() {
+            Ok(operation) => operation,
+            Err(loss) => {
+                return ScopedRasterResult {
+                    result: Err(RasterizeFailure::DeviceLost(loss)),
+                    #[cfg(test)]
+                    captured_scope_error: None,
+                    #[cfg(test)]
+                    scope_pending: false,
+                };
+            },
+        };
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        // wgpu 30 scopes are thread-local and must pop in reverse order.
+        let out_of_memory = self
+            .device()
+            .push_error_scope(wgpu::ErrorFilter::OutOfMemory);
+        let internal = self.device().push_error_scope(wgpu::ErrorFilter::Internal);
+        let validation = self
+            .device()
+            .push_error_scope(wgpu::ErrorFilter::Validation);
+        let rendered = (|| {
+            let (texture, view) = self.scene_target(w, h);
+            after_admission();
+            if let Some(loss) = self.device_failure() {
+                return Err(RasterizeFailure::DeviceLost(loss));
+            }
+            // Regression destroys a device after the final check, then lets
+            // the actual renderer touch its buffers inside these real scopes.
+            before_renderer();
+            self.renderer
+                .render_vello_scaled_for_checked(surface, scene, &view, clear, scale)
+                .map_err(|error| RasterizeFailure::ProviderError(Arc::new(error)))?;
+            self.qualify_native_raster(deadline)?;
+            Ok((texture, view))
+        })();
+        let mut scoped_error = None;
+        let mut scope_pending = false;
+        for scope in [validation, internal, out_of_memory] {
+            use std::future::Future as _;
+            let mut future = Box::pin(scope.pop());
+            let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+            // Native wgpu-core currently returns ready(scope.error). A future
+            // backend that returns Pending is a typed refusal, never success.
+            match future.as_mut().poll(&mut context) {
+                std::task::Poll::Ready(Some(error)) => {
+                    if scoped_error.is_none() {
+                        scoped_error =
+                            Some(Arc::new(netrender::VelloError::WgpuErrorFromScope(error)));
+                    }
+                },
+                std::task::Poll::Ready(None) => {},
+                std::task::Poll::Pending => scope_pending = true,
+            }
+        }
+        let result = if let Some(loss) = self.device_failure() {
+            Err(RasterizeFailure::DeviceLost(loss))
+        } else if let Some(error) = &scoped_error {
+            Err(RasterizeFailure::ProviderError(error.clone()))
+        } else if scope_pending {
+            Err(RasterizeFailure::ProviderError(Arc::new(
+                netrender::VelloError::WgpuErrorFromScope(wgpu::Error::Internal {
+                    source: Box::new(std::io::Error::other(
+                        "native GPU error scope did not resolve synchronously",
+                    )),
+                    description: "native GPU error scope outcome is unavailable".into(),
+                }),
+            )))
+        } else if rendered.is_ok() && std::time::Instant::now() >= deadline {
+            Err(Self::native_raster_unavailable(
+                "native Classic quality completion exceeded five seconds",
+            ))
+        } else {
+            rendered
+        };
+        if result.is_ok() {
+            self.log_raster_spans(w, h);
+        }
+        ScopedRasterResult {
+            result,
+            #[cfg(test)]
+            captured_scope_error: scoped_error,
+            #[cfg(test)]
+            scope_pending,
+        }
+    }
+
+    // An API-error-free submission is not yet a qualified Classic frame.
+    // Observe its shader counters while scopes/admission still protect the
+    // request. Native queue waits are finite; WebGPU must use an async seam.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn native_raster_unavailable(description: impl Into<String>) -> RasterizeFailure {
+        let description = description.into();
+        RasterizeFailure::ProviderError(Arc::new(netrender::VelloError::WgpuErrorFromScope(
+            wgpu::Error::Internal {
+                source: Box::new(std::io::Error::other(description.clone())),
+                description,
+            },
+        )))
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn qualify_native_raster(&self, deadline: std::time::Instant) -> Result<(), RasterizeFailure> {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
+        loop {
+            if let Some(loss) = self.device_failure() {
+                return Err(RasterizeFailure::DeviceLost(loss));
+            }
+            if std::time::Instant::now() >= deadline {
+                return Err(Self::native_raster_unavailable(
+                    "native Classic quality completion exceeded five seconds",
+                ));
+            }
+            match self.renderer.poll_vello_curve_quality() {
+                Ok(Some((0, 0))) => {
+                    if std::time::Instant::now() >= deadline {
+                        return Err(Self::native_raster_unavailable(
+                            "native Classic quality completion exceeded five seconds",
+                        ));
+                    }
+                    return Ok(());
+                },
+                Ok(Some(_)) => {},
+                Ok(None) => {
+                    return Err(Self::native_raster_unavailable(
+                        "native Classic quality observer is unavailable",
+                    ));
+                },
+                Err(error) => return Err(RasterizeFailure::ProviderError(Arc::new(error))),
+            }
+            let remaining = deadline
+                .checked_duration_since(std::time::Instant::now())
+                .filter(|remaining| !remaining.is_zero())
+                .ok_or_else(|| {
+                    Self::native_raster_unavailable(
+                        "native Classic quality completion exceeded five seconds",
+                    )
+                })?;
+            if let Err(error) = self.device().poll(wgpu::PollType::Wait {
+                submission_index: None,
+                timeout: Some(remaining),
+            }) {
+                if let Some(loss) = self.device_failure() {
+                    return Err(RasterizeFailure::DeviceLost(loss));
+                }
+                return Err(Self::native_raster_unavailable(format!(
+                    "native Classic quality completion failed: {error}"
+                )));
+            }
+            // A queue completion may precede delivery of a mapping callback.
+            // Yield before observing again; the shared deadline bounds retries.
+            std::thread::yield_now();
+        }
     }
 
     /// Like [`rasterize`](Self::rasterize) but for a scene laid out in **logical**
@@ -534,6 +1191,10 @@ impl RenderCore {
         clear: ColorLoad,
         scale: f32,
     ) -> (wgpu::Texture, wgpu::TextureView) {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
+        #[cfg(target_arch = "wasm32")]
+        let _renderer_access = self.try_renderer().expect("checked renderer access refused");
         let (tex, view) = self.scene_target(w, h);
         self.renderer
             .render_vello_scaled(scene, &view, clear, scale);
@@ -557,6 +1218,10 @@ impl RenderCore {
         _scale: f32,
         external_textures: &[netrender::ExternalTextureComposite<'_>],
     ) -> (wgpu::Texture, wgpu::TextureView) {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
+        #[cfg(target_arch = "wasm32")]
+        let _renderer_access = self.try_renderer().expect("checked renderer access refused");
         let mut compositor = CaptureMasterCompositor::default();
         let base_color = match clear {
             ColorLoad::Clear(color) => netrender::peniko::Color::new([
@@ -592,6 +1257,8 @@ impl RenderCore {
     }
 
     fn scene_target(&self, w: u32, h: u32) -> (wgpu::Texture, wgpu::TextureView) {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         let device = self.device();
         let tex = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("genet-render-host scene"),
@@ -623,6 +1290,8 @@ impl RenderCore {
     /// frame's raster cost decomposes without a debugger. Debug level; an idle
     /// app renders no frames, so there is no idle log cost.
     fn log_raster_spans(&self, w: u32, h: u32) {
+        #[cfg(feature = "without-classic-vello")]
+        self.unavailable();
         if tracing::enabled!(target: "genet_render_host::raster", tracing::Level::DEBUG) {
             if let Some(t) = self.renderer.last_frame_timings() {
                 let us = |n: &str| t.span(n).map(|d| d.as_micros() as u64).unwrap_or(0);
@@ -650,9 +1319,30 @@ impl RenderCore {
 pub struct WindowSurface {
     surface: wgpu::Surface<'static>,
     surface_config: wgpu::SurfaceConfiguration,
+    #[cfg(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"))]
+    readback_diagnostics:Option<u32>,
+    #[cfg(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"))]
+    readback_configuration_pending:std::cell::Cell<bool>,
 }
 
 impl WindowSurface {
+    /// Run inside phase1 owner's synchronous closure BEFORE snapshotting the
+    /// host surface configuration stamp. Never configure this request unscoped.
+    #[cfg(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"))]
+    pub fn prepare_readback_diagnostics(
+        &self, core:&RenderCore, commands:&BrowserFrameCommands<'_>,
+    ) -> Result<SurfaceCapturePreparation,SurfaceReadbackFailure> {
+        if !commands.matches_core(core) { return Err(SurfaceReadbackFailure::WrongFrame); }
+        if let Some(loss)=core.device_failure() { return Err(SurfaceReadbackFailure::DeviceLost(loss)); }
+        if core.device().as_webgpu().is_none() { return Err(SurfaceReadbackFailure::Unsupported("actual WebGPU only")); }
+        let advertised=self.readback_diagnostics.ok_or(SurfaceReadbackFailure::Unsupported("ordinary surface did not opt in"))?;
+        let configuration=SurfaceCaptureConfiguration::from_window(advertised,&self.surface_config)?;
+        let did_configure=self.readback_configuration_pending.replace(false);
+        if did_configure { self.surface.configure(commands.device(),&self.surface_config); }
+        if let Some(loss)=core.device_failure() { return Err(SurfaceReadbackFailure::DeviceLost(loss)); }
+        Ok(SurfaceCapturePreparation::new(configuration,did_configure))
+    }
+
     /// The surface's texture format (pass to `compose_external_texture`).
     pub fn format(&self) -> wgpu::TextureFormat {
         self.surface_config.format
@@ -661,8 +1351,16 @@ impl WindowSurface {
     /// Reconfigure the surface for a new size (clamped to ≥ 1), via the shared
     /// core's device.
     pub fn resize(&mut self, core: &RenderCore, width: u32, height: u32) {
+        if core.device_failure().is_some() {
+            return;
+        }
         self.surface_config.width = width.max(1);
         self.surface_config.height = height.max(1);
+        #[cfg(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"))]
+        if self.readback_diagnostics.is_some() {
+            self.readback_configuration_pending.set(true);
+            return;
+        }
         self.surface.configure(core.device(), &self.surface_config);
     }
 
@@ -671,17 +1369,410 @@ impl WindowSurface {
     /// lost or otherwise unavailable, so the caller simply skips the frame. Stays
     /// non-blocking so a slow window never stalls another on the shared loop.
     pub fn acquire(&self, core: &RenderCore) -> Option<wgpu::SurfaceTexture> {
+        match self.acquire_status(core) {
+            SurfaceAcquire::Frame(frame) => Some(frame),
+            _ => None,
+        }
+    }
+    pub fn acquire_status(&self, core: &RenderCore) -> SurfaceAcquire {
+        if let Some(loss) = core.device_failure() {
+            return SurfaceAcquire::DeviceLost(loss);
+        }
+        #[cfg(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"))]
+        if self.readback_configuration_pending.get() {
+            return SurfaceAcquire::Unavailable { reason:"diagnostic surface awaits scoped configuration".into() };
+        }
         match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame)
-            | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => Some(frame),
-            wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
+            | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => SurfaceAcquire::Frame(frame),
+            wgpu::CurrentSurfaceTexture::Outdated => {
+                if let Some(loss) = core.device_failure() {
+                    return SurfaceAcquire::DeviceLost(loss);
+                }
                 self.surface.configure(core.device(), &self.surface_config);
-                None
+                SurfaceAcquire::Reconfigured
+            },
+            wgpu::CurrentSurfaceTexture::Lost => {
+                if let Some(loss) = core.device_failure() {
+                    return SurfaceAcquire::DeviceLost(loss);
+                }
+                SurfaceAcquire::SurfaceLost
             },
             other => {
-                eprintln!("[genet-render-host] surface acquire skipped: {other:?}");
-                None
+                if let Some(loss) = core.device_failure() {
+                    return SurfaceAcquire::DeviceLost(loss);
+                }
+                SurfaceAcquire::Unavailable {
+                    reason: format!("surface acquire skipped: {other:?}"),
+                }
             },
         }
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod admitted_raster_tests {
+    use super::*;
+    #[test]
+    #[ignore = "actual device destruction; coordinator executes serialized GPU gate"]
+    fn actual_device_destroy_after_raster_admission_is_typed_and_does_not_panic() {
+        let core = RenderCore::boot(NetrenderOptions {
+            tile_cache_size: Some(8),
+            enable_vello: true,
+            ..Default::default()
+        })
+        .expect("an actual adapter is required for this ignored gate");
+        let scene = Scene::new(32, 24);
+        let result = core.rasterize_scaled_for_admitted(
+            0x6164_6d69_7373,
+            &scene,
+            32,
+            24,
+            ColorLoad::Clear(wgpu::Color::TRANSPARENT),
+            1.0,
+            || {
+                core.device().destroy();
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                while core.device_failure().is_none() {
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "actual loss callback did not arrive within five seconds"
+                    );
+                    let _ = core.device().poll(wgpu::PollType::Poll);
+                    std::thread::yield_now();
+                }
+                assert!(
+                    core.loss_notice().is_none(),
+                    "the admitted raster still prevents replacement readiness"
+                );
+            },
+        );
+        match result {
+            Err(RasterizeFailure::DeviceLost(loss)) => {
+                assert_eq!(loss, core.loss_notice().expect("admission has now drained"));
+                assert_eq!(loss.reason, wgpu::DeviceLostReason::Destroyed);
+            },
+            _ => panic!("mid-admission destruction must refuse the frame without unwinding"),
+        }
+        assert!(matches!(
+            core.try_rasterize_scaled_for(
+                0x6164_6d69_7373,
+                &scene,
+                32,
+                24,
+                ColorLoad::Clear(wgpu::Color::TRANSPARENT),
+                1.0,
+            ),
+            Err(RasterizeFailure::DeviceLost(_))
+        ));
+    }
+    #[test]
+    #[ignore = "actual healthy-device curve refusal; coordinator executes serialized GPU gate"]
+    fn finite_huge_curve_returns_provider_error_and_valid_raster_recovers_on_same_core() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::time::Instant;
+        let core = Arc::new(
+            RenderCore::boot(NetrenderOptions {
+                tile_cache_size: Some(8),
+                enable_vello: true,
+                ..Default::default()
+            })
+            .expect("an actual adapter is required for this ignored gate"),
+        );
+        let calls = Arc::new(AtomicUsize::new(0));
+        let counted = calls.clone();
+        let owner = SharedRenderCore::with_factory(
+            core.clone(),
+            Arc::new(move || {
+                counted.fetch_add(1, Ordering::SeqCst);
+                Err("healthy provider refusal must never request replacement".into())
+            }),
+        );
+        let generation = core.generation();
+        // All GPU/readback work after boot shares one finite deadline. Large
+        // coordinates remain a four-command CPU path and a 32x24 target;
+        // the actual estimate must refuse before allocating curve scratch.
+        let deadline = Instant::now() + Duration::from_secs(5);
+        fn pixels(core: &RenderCore, texture: &wgpu::Texture, deadline: Instant) -> RgbaFrame {
+            let mut pending = core.start_rgba8_readback(texture, 32, 24).unwrap();
+            loop {
+                assert!(
+                    Instant::now() < deadline,
+                    "healthy-refusal gate exceeded five seconds"
+                );
+                if let Some(frame) = pending.poll() {
+                    return frame.unwrap();
+                }
+                std::thread::yield_now();
+            }
+        }
+        let mut valid = Scene::new(32, 24);
+        valid.push_rect(0.0, 0.0, 32.0, 24.0, [0.25, 0.5, 0.75, 1.0]);
+        let (baseline_texture, _) = core
+            .try_rasterize_scaled_for(
+                0x6865_616c_7468,
+                &valid,
+                32,
+                24,
+                ColorLoad::Clear(wgpu::Color::TRANSPARENT),
+                1.0,
+            )
+            .unwrap();
+        let baseline = pixels(&core, &baseline_texture, deadline);
+        assert!(!baseline.is_blank());
+        while core.renderer().poll_vello_curve_quality().unwrap() != Some((0, 0)) {
+            assert!(
+                Instant::now() < deadline,
+                "baseline quality observation exceeded five seconds"
+            );
+            std::thread::yield_now();
+        }
+        let mut huge = Scene::new(32, 24);
+        let mut path = netrender::scene::ScenePath::new();
+        path.move_to(0.0, 0.0)
+            .cubic_to(0.0, 1e30, 1e30, 1e30, 31.0, 0.0)
+            .line_to(0.0, 0.0)
+            .close();
+        huge.push_shape_filled(path, [1.0, 0.0, 0.0, 1.0]);
+        match core.try_rasterize_scaled_for(
+            0x6865_616c_7468,
+            &huge,
+            32,
+            24,
+            ColorLoad::Clear(wgpu::Color::TRANSPARENT),
+            1.0,
+        ) {
+            Err(RasterizeFailure::ProviderError(error)) => {
+                assert!(
+                    matches!(&*error, netrender::VelloError::CurveEstimateLimit { lines, limit }
+                    if *lines as usize > *limit)
+                );
+            },
+            _ => panic!("the real finite curve estimate must return its typed provider refusal"),
+        }
+        assert_eq!(
+            core.renderer().vello_curve_quality_status(),
+            Some((0, 0)),
+            "estimate refusal must not submit a huge frame or allocate its quality counters"
+        );
+        assert!(core.device_failure().is_none());
+        assert_eq!(core.generation(), generation);
+        assert!(Arc::ptr_eq(&owner.current().unwrap(), &core));
+        assert!(
+            matches!(owner.status(), RecoveryStatus::Ready { generation: actual } if actual == generation)
+        );
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        let (after_texture, _) = core
+            .try_rasterize_scaled_for(
+                0x6865_616c_7468,
+                &valid,
+                32,
+                24,
+                ColorLoad::Clear(wgpu::Color::TRANSPARENT),
+                1.0,
+            )
+            .unwrap();
+        assert_eq!(pixels(&core, &after_texture, deadline).rgba, baseline.rgba);
+
+        // Also verify the shared-cache checked API's actual take/put store.
+        // A propagated error must restore tile scenes before releasing locks.
+        let (shared_texture, shared_view) = core.scene_target(32, 24);
+        let shared_error = core
+            .renderer()
+            .render_vello_scaled_checked(
+                &huge,
+                &shared_view,
+                ColorLoad::Clear(wgpu::Color::TRANSPARENT),
+                1.0,
+            )
+            .unwrap_err();
+        assert!(matches!(
+            shared_error,
+            netrender::VelloError::CurveEstimateLimit { .. }
+        ));
+        assert!(
+            core.renderer().vello_cached_tile_count().unwrap() > 0,
+            "the shared tile-scene store must be restored even on provider refusal"
+        );
+        core.renderer()
+            .render_vello_scaled_checked(
+                &valid,
+                &shared_view,
+                ColorLoad::Clear(wgpu::Color::TRANSPARENT),
+                1.0,
+            )
+            .unwrap();
+        assert_eq!(pixels(&core, &shared_texture, deadline).rgba, baseline.rgba);
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        assert!(core.device_failure().is_none());
+    }
+    #[test]
+    #[ignore = "actual destruction after final native precheck; coordinator executes serialized GPU gate"]
+    fn native_scope_captures_actual_renderer_errors_after_final_precheck_loss() {
+        let core = RenderCore::boot(NetrenderOptions {
+            tile_cache_size: Some(8),
+            enable_vello: true,
+            ..Default::default()
+        })
+        .expect("an actual adapter is required for this ignored gate");
+        let mut scene = Scene::new(32, 24);
+        scene.push_rect(0.0, 0.0, 32.0, 24.0, [0.25, 0.5, 0.75, 1.0]);
+        let outcome = core.rasterize_scaled_for_scoped(
+            0x7363_6f70_6564,
+            &scene,
+            32,
+            24,
+            ColorLoad::Clear(wgpu::Color::TRANSPARENT),
+            1.0,
+            || {},
+            || {
+                core.device().destroy();
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                while core.device_failure().is_none() {
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "actual loss callback did not arrive within five seconds"
+                    );
+                    let _ = core.device().poll(wgpu::PollType::Poll);
+                    std::thread::yield_now();
+                }
+                assert!(
+                    core.loss_notice().is_none(),
+                    "raster admission still owns the generation"
+                );
+            },
+        );
+        assert!(
+            !outcome.scope_pending,
+            "native scope results must be observed synchronously"
+        );
+        assert!(
+            matches!(
+                outcome.captured_scope_error.as_deref(),
+                Some(netrender::VelloError::WgpuErrorFromScope(_))
+            ),
+            "the actual invalid renderer buffer calls must be captured by native wgpu scopes"
+        );
+        match outcome.result {
+            Err(RasterizeFailure::DeviceLost(loss)) => {
+                assert_eq!(
+                    loss,
+                    core.loss_notice()
+                        .expect("scoped submission admission has drained")
+                );
+                assert_eq!(loss.reason, wgpu::DeviceLostReason::Destroyed);
+            },
+            _ => panic!("native scoped loss must return a typed refusal, never an output"),
+        }
+        assert!(matches!(
+            core.try_rasterize_scaled_for(
+                0x7363_6f70_6564,
+                &scene,
+                32,
+                24,
+                ColorLoad::Clear(wgpu::Color::TRANSPARENT),
+                1.0,
+            ),
+            Err(RasterizeFailure::DeviceLost(_))
+        ));
+    }
+    #[test]
+    #[ignore = "actual current-frame shader refusal; coordinator executes serialized GPU gate"]
+    fn round_cap_shader_quality_refuses_current_frame_before_checked_raster_success() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let core = Arc::new(
+            RenderCore::boot(NetrenderOptions {
+                tile_cache_size: Some(32),
+                enable_vello: true,
+                ..Default::default()
+            })
+            .expect("an actual adapter is required for this ignored gate"),
+        );
+        let calls = Arc::new(AtomicUsize::new(0));
+        let counted = calls.clone();
+        let owner = SharedRenderCore::with_factory(
+            core.clone(),
+            Arc::new(move || {
+                counted.fetch_add(1, Ordering::SeqCst);
+                Err("shader quality refusal must not replace a healthy device".into())
+            }),
+        );
+        let generation = core.generation();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let mut path = netrender::scene::ScenePath::new();
+        path.move_to(8.0, 12.0).line_to(24.0, 12.0);
+        let mut scene = Scene::new(32, 24);
+        scene.push_shape_stroked(path, [0.25, 0.5, 0.75, 1.0], 40_000_000.0);
+        let netrender::scene::SceneOp::Shape(shape) = &mut scene.ops[0] else {
+            unreachable!()
+        };
+        shape.stroke.as_mut().unwrap().cap = netrender::scene::SceneStrokeCap::Round;
+        // Its conservative estimate is admitted, but the current shader cap
+        // requires more than 65,536 arc segments at 1/256 device-pixel error.
+        // A preflight CurveEstimateLimit is not this regression's success.
+        match core.try_rasterize_scaled_for(
+            0x726f_756e_6463,
+            &scene,
+            32,
+            24,
+            ColorLoad::Clear(wgpu::Color::TRANSPARENT),
+            1.0,
+        ) {
+            Err(RasterizeFailure::ProviderError(error)) => {
+                assert!(
+                    matches!(&*error, netrender::VelloError::CurveFlatteningLimit),
+                    "the current submitted frame's actual shader refusal must be observed: {error:?}"
+                );
+            },
+            _ => panic!(
+                "the current frame must be refused before the checked API can return a texture"
+            ),
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "shader-quality gate exceeded five seconds"
+        );
+        assert_eq!(
+            core.renderer().vello_curve_quality_status(),
+            Some((0, 0)),
+            "the single rejected frame's counter buffer must be retired"
+        );
+        assert!(core.device_failure().is_none());
+        assert_eq!(core.generation(), generation);
+        assert!(Arc::ptr_eq(&owner.current().unwrap(), &core));
+        assert!(
+            matches!(owner.status(), RecoveryStatus::Ready { generation: actual } if actual == generation)
+        );
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        let mut valid = Scene::new(32, 24);
+        valid.push_rect(0.0, 0.0, 32.0, 24.0, [0.25, 0.5, 0.75, 1.0]);
+        let (texture, _) = core
+            .try_rasterize_scaled_for(
+                0x726f_756e_6463,
+                &valid,
+                32,
+                24,
+                ColorLoad::Clear(wgpu::Color::TRANSPARENT),
+                1.0,
+            )
+            .unwrap();
+        assert_eq!(
+            core.renderer().vello_curve_quality_status(),
+            Some((0, 0)),
+            "a successful native checked raster must already have qualified its own counters"
+        );
+        let mut pixels = core.start_rgba8_readback(&texture, 32, 24).unwrap();
+        loop {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "shader-quality/readback gate exceeded five seconds"
+            );
+            if let Some(frame) = pixels.poll() {
+                assert!(!frame.unwrap().is_blank());
+                break;
+            }
+            std::thread::yield_now();
+        }
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
     }
 }

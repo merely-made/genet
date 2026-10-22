@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "+1.99.0",
+    "check",
+    "--manifest-path",
+    "repos/genet/Cargo.toml",
+    "--locked",
+    "--offline",
+    "-j2",
+    "-p",
+    "genet-render-host",
+    "--target",
+    "wasm32-unknown-unknown",
+    "--features",
+    "without-classic-vello"
+  ],
+  "exit_code": 0,
+  "expected_rejection": false,
+  "passed": true,
+  "elapsed_seconds": 95.8
+}

@@ -1,0 +1,207 @@
+{
+  "slice": 2,
+  "base": "ec5d8b997aa",
+  "findings": {
+    "addressed": [
+      "I2",
+      "R8",
+      "R14"
+    ],
+    "partial": [
+      "R7"
+    ]
+  },
+  "source_sha256": {
+    "components/genet-documents/src/engines/scripted.rs": "59eede1ecee7cd127c75f614b9379c9b5e8e4f2a5c0eccba1450cca52f5aa146",
+    "components/genet-scripted/document.rs": "4544cad5eaa6d9826dad06acde382f7aa170f5b6551735c7c9c2cb4e981b4afa",
+    "components/genet-scripted/host.rs": "14f98524d30d2c2022e76b1a856ab92c4b0389354da5ee0e40807e749fc343b7",
+    "components/genet-scripted/tests/worker_service.rs": "6c80ebb4b2b9184af6f2e7956d67d99e8be60043a1f4abba8810c97ed02429c0",
+    "components/script-engine-api/lib.rs": "a6e35dba931a209c86b2cc2c22d0ffe22aa8d80fe3a00ec1ac0de1ca7c448037",
+    "components/script-engine-boa/lib.rs": "d39bed1c66cbb95528aba17a5401419877cd5e4846ff6ac943ac707e2b0338d7",
+    "components/script-engine-nova/Cargo.toml": "5b355a7026bfc8aa2748a58e93eda5d7658a905fc767ad68b55af207185ee239",
+    "components/script-engine-nova/lib.rs": "36740fed13b6b9252eeab7ac48fc6ec657d0cd43a12b0ba9483f158cc7bbe357",
+    "components/script-engine-nova/tests/realms.rs": "2000a20294faca14cf5b6e0bc42c4d2ff2b6ab3e1f554133507b3c467784ebb1",
+    "components/script-engine-piccolo/lib.rs": "e088a0fd37a87d8772642b8610029aca43795fbc3f5c50582618da4f7f8f01da",
+    "components/script-runtime-api/lib.rs": "6245990176d09cc8494dca62947ebeb4c09611ece8d1d743290d96e7fd2629b7",
+    "components/script-runtime-api/tests/global_origin.rs": "b4fcdbd268d5fc98b630a0ab5b1a48849d2d2f6ab2421a13507a29c5f26c9a22",
+    "components/script-runtime-api/tests/streams_bridge.rs": "1560d1aabcbae87e7842ff35681bd17d81cbaeeb1ed8a4badd64bc01e947b049",
+    "components/script-runtime-api/tests/text_encoding.rs": "d6d30d6d63da7e060b0a4cdd4fd5a7d040c9349cda8a7872a8c378c029030b7f",
+    "components/script-runtime-api/tests/worker.rs": "19a46720d47d858a0c41f5015d386819b2a65167c192bc877ceb8497792f9dd3",
+    "components/script-runtime-api/worker.rs": "04e33abbc99c02ef2267ec4110cc3efe14b87993d07a339fcd5d7493982da55c",
+    "components/shared/document-session-api/src/session_engine.rs": "1ab5eaaa67bb6719458efc3d06d5b099a8a661dce00e61b9aaf26b86d2741db3",
+    "ports/ortet/src/shell.rs": "b1d5519b1eb7afdf1b1780da7a72a1189fb0a536346ef39d93ee6b14e2cbceac",
+    "components/genet-scripted/tests/hidden_external_timer_wake.rs": "3b539ce90b78d8127f0480495ff2ac940384a40e358ed1751dcf2847be7d036c",
+    "ports/ortet/src/webgl.rs": "a818f6bbce9286d01230afc836b23885d547cb30ca3af119f9a8fcef528812d1"
+  },
+  "gates": [
+    {
+      "label": "s2-piccolo-final",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s2-piccolo-final.log",
+      "sha256": "1feeaa4d87d089f3a961f9a36a16bb1a1b418901975cb4ccf9efe7cccc10442c",
+      "passed": 11,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s2-nova",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s2-nova.log",
+      "sha256": "42ab57cbe364ca5329e183926d83ab8bc75a2f6ea1c1e8cabd1050acf2e70d41",
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s2-nova-realms",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s2-nova-realms.log",
+      "sha256": "759b945ac932c0ee4464c20cceb0dbacba5a1fa8d922f5c3be76e520bdc60617",
+      "passed": 22,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s2-boa",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s2-boa.log",
+      "sha256": "3337d454170acfa109550def15262b81d81f01d84636a34a6f0061c2cf8d3754",
+      "passed": 27,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s2-workers-final",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s2-workers-final.log",
+      "sha256": "9f56c9361eff394bacec5dd7b51724e7dc7faabe426814882c6fbfbe27c0b23a",
+      "passed": 28,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s2-shutdown-verified",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s2-shutdown-verified.log",
+      "sha256": "3c91cc4392cc4e4a58e7518c6f5f94b50b4a36a3f58ec358061c909b2a11d2c7",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s2-snapshot-final",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s2-snapshot-final.log",
+      "sha256": "5a5ae34d4a0c3420f29a6f9521ace72b2b05c0371bda6ade1ffd669ffb86f13b",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s2-worker-fixtures-focused",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s2-worker-fixtures-focused.log",
+      "sha256": "2d00d9fdf512fea63083dd16ac4d31a6942de2f65115413e08de0518f946a925",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s2-worker-service-final",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s2-worker-service-final.log",
+      "sha256": "46eb3aa222fb3c91a643f1a57f798ec204e9af28ef61f09e1ede509e9edb16c9",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s2-lifecycle-final",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s2-lifecycle-final.log",
+      "sha256": "c6ee343fa0ee4265812d2d12112c2dfc0ed5c3909c1fc4a29ffbb429fcf6297d",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s2-session-final",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s2-session-final.log",
+      "sha256": "9a375722f2a9059c7bafbcbc79112cd2e22f3334549c57fbff300eef2858192f",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s2-animation-final",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s2-animation-final.log",
+      "sha256": "5cdf751443a97e9243d6a0078d61088961f558aa4ca119961ce847840f7f7409",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "label": "s2-ortet-webgl-verified",
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s2-ortet-webgl-verified.log",
+      "sha256": "fd408ae33b5c8eef3b5f5b8c653cdee8c94c59a52c7537d2a13c961249ce2d76",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "totals": {
+    "passed": 131,
+    "failed": 0,
+    "ignored": 0
+  },
+  "lock_sha256": "51cd367e0fec6a4bff43fdd5c353eb77d8a5ce5ac3c7633c96645b28769b74f4",
+  "resource_limits": {
+    "memory": "5G",
+    "swap": "0",
+    "cpu": "150%",
+    "cargo_jobs": 1,
+    "test_threads": 1,
+    "timeout_seconds": 240
+  },
+  "supplier_publication": {
+    "repository": "https://github.com/merely-made/netrender",
+    "main": "69d73c1acd9873eb5bcb1ababe20023a54d5a4ff",
+    "pinned_ancestor": "e8cda06efc11c11595f2fa1bb30bce7e72979537",
+    "merge_only_changed": [
+      ".gitattributes",
+      "CLAUDE.md"
+    ],
+    "new_runtime_tests": false
+  },
+  "excluded_attempts": [
+    {
+      "log": "s2-piccolo.log",
+      "reason": "Existing assertion needed typed error adaptation; final11pass."
+    },
+    {
+      "log": "s2-workers.log",
+      "reason": "Controller edited active shell wrapper, invalidating log; exit127. Final28pass replaces it."
+    },
+    {
+      "log": "s2-shutdown-final.log",
+      "reason": "Filter matched zero tests; s2-shutdown-verified ran2."
+    },
+    {
+      "log": "s2-worker-fixtures-final.log",
+      "reason": "Combined broad gate hit240s cap. Final focused worker fixtures6pass."
+    },
+    {
+      "log": "s2-ortet-check.log",
+      "reason": "Missed R9 Ortet caller still returned unconditional WebGL handler. Repaired and final check passed."
+    },
+    {
+      "log": "s2-ortet-webgl-final.log",
+      "reason": "Cold host dependency build hit bounded gate timeout; warm verified gate supersedes."
+    }
+  ],
+  "boundaries": [
+    "R7 remains partial: no VM interruption/process isolation; default Worker creation refuses required cancellation.",
+    "TrustedCooperative is explicit; shutdown counts direct threads and marks descendants untracked.",
+    "Normal runtime microtask checkpoints are explicitly unbounded; job counts are not VM fuel.",
+    "Lifecycle host adapter tested and compiled; physical suspend/resume not exercised.",
+    "R14 unsafe owned hooks and synchronous name-copy boundary depend on exact Vano7235209 pin; weak queue tests are not total process allocation accounting."
+  ],
+  "checks": [
+    {
+      "log": "/home/markik/Code/testing/audits/genet-architecture-20261017/remaining-slices/s2-ortet-check-final.log",
+      "sha256": "31eeb755b7385e35a4fb8d14a508ede161bfcb904461bf18d9bc3afd86451d2b",
+      "result": "passed"
+    }
+  ],
+  "retained_draw": "Ortet production WebGL handler triangle GPU readback; all five host graphics tests ran without skip."
+}

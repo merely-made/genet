@@ -41,6 +41,7 @@ fn matched(css: &str, source_order: u64) -> MatchedDeclaration {
         layer: CascadeLayer::Unlayered,
         specificity: Specificity(1),
         source_order,
+        source_url: None,
     }
 }
 
@@ -157,6 +158,7 @@ fn c1_keeps_one_contextual_value_through_cascade_paths_and_nested_owners() {
             layer: CascadeLayer::Unlayered,
             specificity: Specificity(1),
             source_order: index as u64,
+            source_url: None,
         });
     let custom = block
         .custom

@@ -19,7 +19,7 @@ fn child_animation_frames_share_agent_drive<E: ScriptEngine>() {
         .unwrap();
     runtime.eval_in_realm(realm, "requestAnimationFrame(function(now){order.push('child:'+now+':'+(this===window));Promise.resolve().then(function(){order.push('child-microtask');});requestAnimationFrame(function(now){order.push('next:'+now);});}); var cancelled=requestAnimationFrame(function(){order.push('cancelled');});cancelAnimationFrame(cancelled);").unwrap();
     assert!(
-        runtime.has_animation_frame_callbacks(),
+        runtime.has_animation_frame_callbacks().unwrap(),
         "child alone keeps host rendering awake"
     );
     runtime.eval("requestAnimationFrame(function(now){order.push('parent:'+now);Promise.resolve().then(function(){order.push('parent-microtask');});});").unwrap();
@@ -30,13 +30,13 @@ fn child_animation_frames_share_agent_drive<E: ScriptEngine>() {
         "parent:16,parent-microtask,child:16:true,child-microtask"
     );
     assert!(
-        runtime.has_animation_frame_callbacks(),
+        runtime.has_animation_frame_callbacks().unwrap(),
         "child's reentrant request is the next frame"
     );
     assert_eq!(runtime.run_animation_frame_callbacks(32.0).unwrap(), 1);
     let value = runtime.eval("order[order.length-1]").unwrap();
     assert_eq!(runtime.value_to_string(&value).unwrap(), "next:32");
-    assert!(!runtime.has_animation_frame_callbacks());
+    assert!(!runtime.has_animation_frame_callbacks().unwrap());
     let realms: Vec<_> = runtime
         .scheduler_trace()
         .iter()
@@ -89,7 +89,7 @@ fn child_animation_callbacks_stay_private<E: ScriptEngine>() {
             "globalThis.childRan=0; requestAnimationFrame(function(){childRan++;});",
         )
         .unwrap();
-    assert!(runtime.has_animation_frame_callbacks());
+    assert!(runtime.has_animation_frame_callbacks().unwrap());
     assert_eq!(runtime.run_animation_frame_callbacks(16.0).unwrap(), 1);
     let value = runtime.eval("stolenChild === null").unwrap();
     assert_eq!(

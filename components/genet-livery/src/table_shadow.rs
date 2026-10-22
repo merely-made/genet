@@ -19,6 +19,11 @@
 
 use std::{collections::HashMap, hash::Hash};
 
+#[cfg(test)]
+thread_local! {
+    static SUMMARY_FOLDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 use buckram::{
     AlgorithmNodeId, BoxId, BoxOrigin, CaptionMinContribution, CollapsedBorderMetrics,
     IntrinsicSizes, ResolvedTableBorderGrid, TableAutomaticColumnMeasureInput,
@@ -119,10 +124,16 @@ pub struct TableShadowLedger {
     /// two axes are one dispatch decision, and two ledgers threaded through
     /// three routes would drift apart.
     pub block: TableBlockLedger,
-    /// Exact table-owned contributions. The aggregate fields above remain the
-    /// public whole-layout receipt, while retained relayout can replace one
-    /// entry without invalidating an unrelated table's verification record.
+    /// Exact table-owned contributions. The public fields above are a
+    /// materialized receipt for a completed layout. Build and retained-update
+    /// code changes these records first, then publishes the receipt once.
     per_table: HashMap<BoxId, Box<TableShadowLedger>>,
+    /// Once contributions own this receipt, an empty source set means an
+    /// empty aggregate, not a standalone ledger with editable counters.
+    aggregate: bool,
+    /// A standalone contribution without a table key (for example one merged
+    /// from an atomic build) must survive later table replacement as well.
+    unkeyed: Option<Box<TableShadowLedger>>,
 }
 
 impl TableShadowLedger {
@@ -134,16 +145,61 @@ impl TableShadowLedger {
     /// `BuildState`, and dropping their ledgers would leave tables reached
     /// through the text path unaccounted.
     pub fn merge(&mut self, other: Self) {
-        if other.per_table.is_empty() {
-            self.merge_summary(&other);
-        } else {
+        self.merge_deferred(other);
+        self.materialize_summary();
+    }
+
+    /// Stage contributions during layout construction; publication refreshes
+    /// the public fields once after all table updates.
+    pub(crate) fn merge_deferred(&mut self, mut other: Self) {
+        self.begin_aggregate();
+        if other.aggregate {
+            if let Some(unkeyed) = other.unkeyed.take() {
+                self.merge_unkeyed(*unkeyed);
+            }
             self.per_table.extend(other.per_table);
-            self.rebuild_summary();
+        } else if other.has_summary() {
+            self.merge_unkeyed(other);
         }
     }
 
+    fn begin_aggregate(&mut self) {
+        if !self.aggregate {
+            if self.has_summary() {
+                let standalone = std::mem::take(self);
+                self.unkeyed = Some(Box::new(standalone));
+            }
+            self.aggregate = true;
+        }
+    }
+
+    fn merge_unkeyed(&mut self, other: Self) {
+        if let Some(unkeyed) = &mut self.unkeyed {
+            unkeyed.merge_summary(&other);
+        } else {
+            self.unkeyed = Some(Box::new(other));
+        }
+    }
+
+    fn has_summary(&self) -> bool {
+        self.collapsed_metrics != 0
+            || self.assigned != 0
+            || self.verified != 0
+            || self.honored != 0
+            || !self.divergences.is_empty()
+            || !self.skipped.is_empty()
+            || !self.positioning_gaps.is_empty()
+            || self.block != TableBlockLedger::default()
+    }
+
     pub(crate) fn remap_box_ids(&mut self, mut id_of: impl FnMut(BoxId) -> BoxId) {
-        self.remap_summary_box_ids(&mut id_of);
+        if !self.aggregate {
+            self.remap_summary_box_ids(&mut id_of);
+            return;
+        }
+        if let Some(unkeyed) = &mut self.unkeyed {
+            unkeyed.remap_summary_box_ids(&mut id_of);
+        }
         self.per_table = std::mem::take(&mut self.per_table)
             .into_iter()
             .map(|(table, mut entry)| {
@@ -151,6 +207,7 @@ impl TableShadowLedger {
                 (id_of(table), entry)
             })
             .collect();
+        self.materialize_summary();
     }
 
     fn remap_summary_box_ids(&mut self, id_of: &mut dyn FnMut(BoxId) -> BoxId) {
@@ -167,21 +224,19 @@ impl TableShadowLedger {
         self.block.remap_box_ids(id_of);
     }
 
-    /// Publish a completed one-table contribution into the aggregate receipt.
+    /// Retain a completed one-table contribution. The public receipt is
+    /// refreshed at publication, after all tables have been verified.
     pub(crate) fn record_table(&mut self, table: BoxId, entry: Self) {
+        self.begin_aggregate();
         self.per_table.insert(table, Box::new(entry));
-        self.rebuild_summary();
     }
 
     /// Take one contribution while it receives its post-fragment verification.
     pub(crate) fn take_table(&mut self, table: BoxId) -> Self {
-        let entry = self
-            .per_table
+        self.per_table
             .remove(&table)
             .map(|entry| *entry)
-            .unwrap_or_default();
-        self.rebuild_summary();
-        entry
+            .unwrap_or_default()
     }
 
     pub(crate) fn can_replace_subtree<Id>(
@@ -223,7 +278,7 @@ impl TableShadowLedger {
                 .filter(|(table, _)| table_is_descendant_of(fresh_boxes, **table, fresh_root))
                 .map(|(table, entry)| (*table, entry.clone())),
         );
-        self.rebuild_summary();
+        self.materialize_summary();
     }
 
     pub(crate) fn skip(&mut self, table: BoxId, reason: TableShadowSkip) {
@@ -231,6 +286,8 @@ impl TableShadowLedger {
     }
 
     fn merge_summary(&mut self, other: &Self) {
+        #[cfg(test)]
+        SUMMARY_FOLDS.with(|folds| folds.set(folds.get() + 1));
         self.collapsed_metrics += other.collapsed_metrics;
         self.assigned += other.assigned;
         self.verified += other.verified;
@@ -242,9 +299,21 @@ impl TableShadowLedger {
         self.block.merge(other.block.clone());
     }
 
-    fn rebuild_summary(&mut self) {
+    /// Build the public whole-layout receipt once from its authoritative
+    /// contributions. Sorting keys gives detail vectors a stable table order;
+    /// each table's own detail order is retained.
+    pub(crate) fn materialize_summary(&mut self) {
+        if !self.aggregate {
+            return;
+        }
         let mut summary = Self::default();
-        for entry in self.per_table.values() {
+        if let Some(unkeyed) = &self.unkeyed {
+            summary.merge_summary(unkeyed);
+        }
+        let mut tables = self.per_table.keys().copied().collect::<Vec<_>>();
+        tables.sort_unstable();
+        for table in tables {
+            let entry = &self.per_table[&table];
             summary.merge_summary(entry);
         }
         self.collapsed_metrics = summary.collapsed_metrics;
@@ -282,6 +351,213 @@ where
         current = boxes[box_id].parent();
     }
     false
+}
+
+#[cfg(test)]
+mod ledger_tests {
+    use super::*;
+    use crate::table_block::{TableBlockDivergence, TableBlockQuantity, TableBlockSkip};
+    use buckram::{
+        BoxOrigin, ContainingBlock, CssBox, CssBoxTree, DisplayRole, FlowAxes, PositioningScheme,
+    };
+
+    fn push_box(boxes: &mut CssBoxTree<usize>, node: usize, parent: Option<BoxId>) -> BoxId {
+        boxes.push(
+            CssBox::new(
+                BoxOrigin::Element(node),
+                DisplayRole::BLOCK_FLOW,
+                FlowAxes::HORIZONTAL_LTR,
+                PositioningScheme::Static,
+                false,
+                None,
+                ContainingBlock::Initial,
+            ),
+            parent,
+            true,
+        )
+    }
+
+    fn detailed_entry(table: BoxId, column: usize) -> TableShadowLedger {
+        TableShadowLedger {
+            collapsed_metrics: 1,
+            assigned: 1,
+            verified: 1,
+            honored: 0,
+            divergences: vec![TableSizingDivergence {
+                table,
+                quantity: TableSizingQuantity::ColumnSize(column),
+                buckram: column as f32,
+                livery: column as f32 + 2.0,
+            }],
+            skipped: vec![(table, TableShadowSkip::AutomaticIncompleteCells)],
+            positioning_gaps: vec![TablePositioningGapRecord {
+                table,
+                part: table,
+                gap: TablePositioningGap::Absolute,
+            }],
+            block: TableBlockLedger {
+                laid_out: 1,
+                relaid_out: 1,
+                verified: 1,
+                agreed: 0,
+                divergences: vec![TableBlockDivergence {
+                    table,
+                    cell: table,
+                    quantity: TableBlockQuantity::CellBlockSize,
+                    buckram: 10.0,
+                    livery: 12.0,
+                }],
+                skipped: vec![(table, TableBlockSkip::IncompleteCells)],
+            },
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn public_merge_publishes_and_empty_sources_clear_old_details() {
+        let mut boxes = CssBoxTree::default();
+        let table = push_box(&mut boxes, 1, None);
+        let mut first = TableShadowLedger::default();
+        first.record_table(table, detailed_entry(table, 0));
+        first.materialize_summary();
+        let mut merged = TableShadowLedger::default();
+        merged.merge(first);
+        assert_eq!(merged.assigned, 1);
+        assert_eq!(merged.divergences.len(), 1);
+        merged.take_table(table);
+        merged.materialize_summary();
+        assert_eq!(merged.assigned, 0);
+        assert!(merged.divergences.is_empty());
+        assert_eq!(merged.block, TableBlockLedger::default());
+        let mut fresh = TableShadowLedger::default();
+        fresh.merge(merged);
+        assert_eq!(fresh.assigned, 0);
+        assert!(fresh.divergences.is_empty());
+    }
+
+    #[test]
+    fn standalone_contribution_survives_first_keyed_record() {
+        let mut boxes = CssBoxTree::default();
+        let table = push_box(&mut boxes, 1, None);
+        let mut ledger = TableShadowLedger {
+            assigned: 3,
+            ..Default::default()
+        };
+        ledger.record_table(table, detailed_entry(table, 0));
+        ledger.materialize_summary();
+        assert_eq!(ledger.assigned, 4);
+        ledger.take_table(table);
+        ledger.materialize_summary();
+        assert_eq!(ledger.assigned, 3);
+        assert!(ledger.divergences.is_empty());
+    }
+
+    #[test]
+    fn detailed_table_records_fold_once_after_many_takes_and_merges() {
+        let mut boxes = CssBoxTree::default();
+        let root = push_box(&mut boxes, 0, None);
+        let tables = (1..=256)
+            .map(|node| push_box(&mut boxes, node, Some(root)))
+            .collect::<Vec<_>>();
+        let mut ledger = TableShadowLedger::default();
+        let mut second = TableShadowLedger::default();
+        SUMMARY_FOLDS.with(|folds| folds.set(0));
+        for (column, table) in tables.iter().copied().enumerate() {
+            let target = if column < 128 {
+                &mut ledger
+            } else {
+                &mut second
+            };
+            target.record_table(table, detailed_entry(table, column));
+        }
+        ledger.merge_deferred(second);
+        for table in &tables {
+            let entry = ledger.take_table(*table);
+            ledger.record_table(*table, entry);
+        }
+        SUMMARY_FOLDS.with(|folds| assert_eq!(folds.get(), 0));
+
+        ledger.materialize_summary();
+        SUMMARY_FOLDS.with(|folds| assert_eq!(folds.get(), tables.len()));
+        assert_eq!(ledger.assigned, tables.len());
+        assert_eq!(ledger.block.laid_out, tables.len());
+        assert_eq!(ledger.divergences.len(), tables.len());
+        assert_eq!(ledger.block.divergences.len(), tables.len());
+        assert_eq!(
+            ledger
+                .divergences
+                .iter()
+                .map(|one| one.table)
+                .collect::<Vec<_>>(),
+            tables,
+        );
+        assert_eq!(
+            ledger
+                .block
+                .skipped
+                .iter()
+                .map(|(table, _)| *table)
+                .collect::<Vec<_>>(),
+            tables,
+        );
+    }
+
+    #[test]
+    fn replacing_and_removing_tables_matches_a_fresh_receipt() {
+        let mut boxes = CssBoxTree::default();
+        let root = push_box(&mut boxes, 0, None);
+        let removed = push_box(&mut boxes, 1, Some(root));
+        let replaced = push_box(&mut boxes, 2, Some(root));
+        let other_root = push_box(&mut boxes, 3, None);
+        let untouched = push_box(&mut boxes, 4, Some(other_root));
+        let remapped = push_box(&mut boxes, 5, Some(other_root));
+
+        let mut old = TableShadowLedger::default();
+        for (index, table) in [removed, replaced, untouched].into_iter().enumerate() {
+            old.record_table(table, detailed_entry(table, index));
+        }
+        let mut unkeyed = TableShadowLedger::default();
+        unkeyed.assigned = 2;
+        unkeyed.block.laid_out = 2;
+        old.merge(unkeyed.clone());
+        old.materialize_summary();
+
+        let mut fresh_subtree = TableShadowLedger::default();
+        fresh_subtree.record_table(replaced, detailed_entry(replaced, 20));
+        old.replace_subtree_from(&fresh_subtree, &boxes, &boxes, root, root);
+
+        let mut expected = TableShadowLedger::default();
+        expected.record_table(replaced, detailed_entry(replaced, 20));
+        expected.record_table(untouched, detailed_entry(untouched, 2));
+        expected.merge(unkeyed);
+        expected.materialize_summary();
+        assert_eq!(old, expected);
+        assert!(!old.per_table.contains_key(&removed));
+        assert_eq!(old.assigned, 4);
+
+        old.remap_box_ids(|id| if id == untouched { remapped } else { id });
+        assert!(old.per_table.contains_key(&remapped));
+        assert!(!old.per_table.contains_key(&untouched));
+        assert_eq!(old.divergences[1].table, remapped);
+        assert_eq!(old.block.divergences[1].cell, remapped);
+    }
+
+    #[test]
+    fn merged_standalone_receipts_survive_later_table_publication() {
+        let mut boxes = CssBoxTree::default();
+        let table = push_box(&mut boxes, 0, None);
+        let mut ledger = TableShadowLedger::default();
+        ledger.assigned = 1;
+        ledger.block.laid_out = 1;
+        let mut additional = TableShadowLedger::default();
+        additional.assigned = 2;
+        additional.block.laid_out = 2;
+        ledger.merge(additional);
+        ledger.record_table(table, detailed_entry(table, 0));
+        ledger.materialize_summary();
+        assert_eq!(ledger.assigned, 4);
+        assert_eq!(ledger.block.laid_out, 4);
+    }
 }
 
 /// Tolerance for verifying assigned columns against painted fragments.

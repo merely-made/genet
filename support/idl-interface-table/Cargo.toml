@@ -4,6 +4,7 @@
 # components/script-runtime-api/dom/html_interfaces_generated.rs.
 # No dependencies: the IDL subset genet needs is parsed by hand (src/idl.rs).
 [package]
+rust-version = "1.97.1"
 name = "genet-idl-interface-table"
 version = "0.0.0"
 edition = "2021"

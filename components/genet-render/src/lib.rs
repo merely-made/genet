@@ -29,7 +29,7 @@ pub use a11y::{
 pub use genet_livery::TextSystem;
 pub use inspect::{ContentReport, OutlineEntry, content_report};
 pub use render::{
-    ExternalTextureDraw, LaidOutDocument, RenderedFrame, TextCursor, caret_byte_at,
+    ExternalTextureDraw, LaidOutDocument, RenderError, RenderedFrame, TextCursor, caret_byte_at,
     caret_position_at, caret_screen_rect, caret_screen_rect_for_position,
     fragments_from_scripted_dom, hit_test_node, paint_list_from_scripted_dom,
     paint_list_from_scripted_dom_with_text_system, paint_list_from_session,

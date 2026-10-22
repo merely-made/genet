@@ -103,7 +103,7 @@ fn document_link<D: LayoutDom>(dom: &D, id: D::NodeId) -> DocumentLink {
     let other = dom
         .attributes(id)
         .filter_map(|attribute| {
-            let name = attribute.name.local.as_ref();
+            let name = attribute.name.local.as_str();
             (!known.contains(&name)).then(|| (name.to_owned(), attribute.value.to_owned()))
         })
         .collect();
@@ -165,5 +165,5 @@ fn group_open_graph(pairs: &[(String, String)]) -> Vec<OpenGraphGroup> {
 
 fn is_html_element<D: LayoutDom>(dom: &D, id: D::NodeId) -> bool {
     dom.element_name(id)
-        .is_some_and(|name| name.ns.as_ref() == HTML_NAMESPACE)
+        .is_some_and(|name| name.ns.as_str() == HTML_NAMESPACE)
 }

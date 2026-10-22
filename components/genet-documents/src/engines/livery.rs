@@ -731,7 +731,7 @@ impl LiveryDocumentSession {
             let is_frame = document
                 .dom()
                 .element_name(node)
-                .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case("iframe"));
+                .is_some_and(|name| name.local.as_str().eq_ignore_ascii_case("iframe"));
             if !is_frame {
                 return Some((context, node));
             }
@@ -976,7 +976,7 @@ impl LiveryDocumentSession {
         self.doc
             .dom()
             .element_name(node)
-            .map(|name| name.local.as_ref())
+            .map(|name| name.local.as_str())
     }
 
     fn aria_true(&self, node: genet_scripted_dom::NodeId, name: &str) -> bool {

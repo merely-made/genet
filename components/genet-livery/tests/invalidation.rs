@@ -92,7 +92,7 @@ fn class_snapshot_restyles_one_branch_and_preserves_sibling_matching() {
     let class = session.snapshots()[0]
         .changed_attributes
         .iter()
-        .find(|attribute| attribute.name.local.as_ref() == "class")
+        .find(|attribute| attribute.name.local.as_str() == "class")
         .expect("class snapshot");
     assert_eq!(class.old_value.as_deref(), Some("off"));
     assert_eq!(stats.hints, 1);

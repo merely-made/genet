@@ -35,8 +35,8 @@ impl<E: ScriptEngine> NativeFn<E> for FormControlGet {
             if key == "kind" {
                 return dom
                     .element_name(node.id())
-                    .filter(|name| name.ns.as_ref() == XHTML_NS)
-                    .map(|name| name.local.as_ref().to_owned());
+                    .filter(|name| name.ns.as_str() == XHTML_NS)
+                    .map(|name| name.local.as_str().to_owned());
             }
             if key == "selectedIndex" {
                 return Some(dom.select_selected_index(node.id()).to_string());
@@ -213,7 +213,7 @@ pub(crate) fn copy_state(
         state.dirty_value = source.dirty_value;
         if dom
             .element_name(copy)
-            .is_some_and(|name| name.local.as_ref() == "input")
+            .is_some_and(|name| name.local.as_str() == "input")
         {
             state.checked = source.checked;
             state.dirty_checkedness = source.dirty_checkedness;

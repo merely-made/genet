@@ -30,7 +30,7 @@ rustc-hash = { workspace = true }
 wgpu = { workspace = true }
 
 [dev-dependencies]
-pollster = "0.4"
+pollster = "1.0"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { workspace = true }

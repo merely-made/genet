@@ -591,7 +591,8 @@ fn normalize_url(url: &str) -> String {
 pub fn sha256_file(path: &Path) -> Result<String, String> {
     let bytes =
         fs::read(path).map_err(|error| format!("cannot read {}: {error}", path.display()))?;
-    Ok(Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect())
+    // sha2 0.11 digests have no `LowerHex`; same lowercase hex, byte by byte.
+    Ok(Sha256::digest(bytes).iter().map(|byte| format!("{byte:02x}")).collect())
 }
 
 impl ConformanceReport {

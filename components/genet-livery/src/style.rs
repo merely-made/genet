@@ -1610,7 +1610,7 @@ fn element_local_name<D>(dom: &D, id: D::NodeId) -> Option<std::borrow::Cow<'_, 
 where
     D: LayoutDom,
 {
-    let local = dom.element_name(id)?.local.as_ref();
+    let local = dom.element_name(id)?.local.as_str();
     if local.bytes().any(|byte| byte.is_ascii_uppercase()) {
         Some(std::borrow::Cow::Owned(local.to_ascii_lowercase()))
     } else {
@@ -1623,7 +1623,7 @@ where
 fn generated_content_attribute<D: LayoutDom>(dom: &D, id: D::NodeId, name: &str) -> Option<String> {
     let name = if dom
         .element_name(id)
-        .is_some_and(|element| element.ns.as_ref() == "http://www.w3.org/1999/xhtml")
+        .is_some_and(|element| element.ns.as_str() == "http://www.w3.org/1999/xhtml")
     {
         name.to_ascii_lowercase()
     } else {

@@ -15,11 +15,11 @@ use cssparser::{ParseError as CssParseError, Parser};
 
 use super::Color;
 
-type Failure<'i> = CssParseError<'i, ()>;
+type Failure = CssParseError<()>;
 
-pub fn parse_contrast_color<'i>(input: &mut Parser<'i, '_>) -> Result<Color, Failure<'i>> {
+pub fn parse_contrast_color<'i>(input: &mut Parser<'i>) -> Result<Color, Failure> {
     let origin = super::parse::parse_from(input)?;
-    contrast_color(origin).ok_or_else(|| input.new_custom_error(()))
+    contrast_color(origin).ok_or_else(|| cssparser::ParseError::custom(()))
 }
 
 fn contrast_color(origin: Color) -> Option<Color> {

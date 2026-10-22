@@ -214,13 +214,13 @@ where
     let Some(name) = dom.element_name(id) else {
         return;
     };
-    if name.ns.as_ref() != "http://www.w3.org/1999/xhtml" {
+    if name.ns.as_str() != "http://www.w3.org/1999/xhtml" {
         return;
     }
 
     collect_direction_hint(dom, id, hints);
 
-    match name.local.as_ref().to_ascii_lowercase().as_str() {
+    match name.local.as_str().to_ascii_lowercase().as_str() {
         "body" => collect_body_hints(dom, id, hints),
         "pre" if html_attribute(dom, id, "wrap").is_some() => {
             let declarations = hints.declarations_for_mut(id);
@@ -441,10 +441,10 @@ fn collect_replaced_content_hints<D>(
     let Some(name) = dom.element_name(id) else {
         return;
     };
-    if name.ns.as_ref() != "http://www.w3.org/1999/xhtml" {
+    if name.ns.as_str() != "http://www.w3.org/1999/xhtml" {
         return;
     }
-    let local = name.local.as_ref().to_ascii_lowercase();
+    let local = name.local.as_str().to_ascii_lowercase();
     let image_input = local == "input"
         && html_attribute(dom, id, "type").is_some_and(|value| value.eq_ignore_ascii_case("image"));
 
@@ -688,10 +688,10 @@ fn collect_text_alignment_hint<D>(
     let Some(name) = dom.element_name(id) else {
         return;
     };
-    if name.ns.as_ref() != "http://www.w3.org/1999/xhtml" {
+    if name.ns.as_str() != "http://www.w3.org/1999/xhtml" {
         return;
     }
-    let local = name.local.as_ref().to_ascii_lowercase();
+    let local = name.local.as_str().to_ascii_lowercase();
     let value = if local == "center" {
         Some(TextAlign::Center)
     } else if matches!(
@@ -732,10 +732,10 @@ where
     let Some(name) = dom.element_name(id) else {
         return (false, None);
     };
-    if name.ns.as_ref() != "http://www.w3.org/1999/xhtml" {
+    if name.ns.as_str() != "http://www.w3.org/1999/xhtml" {
         return (false, None);
     }
-    let local = name.local.as_ref().to_ascii_lowercase();
+    let local = name.local.as_str().to_ascii_lowercase();
     if local == "center" {
         return (false, Some(LegacyDescendantAlignment::Center));
     }
@@ -769,11 +769,11 @@ where
     let Some(name) = dom.element_name(id) else {
         return;
     };
-    if name.ns.as_ref() != "http://www.w3.org/1999/xhtml" {
+    if name.ns.as_str() != "http://www.w3.org/1999/xhtml" {
         return;
     }
 
-    match name.local.as_ref().to_ascii_lowercase().as_str() {
+    match name.local.as_str().to_ascii_lowercase().as_str() {
         "table" => {
             collect_legacy_color_hint(dom, id, hints, "bgcolor", PropertyId::BackgroundColor);
             collect_table_border_color_hint(dom, id, hints);
@@ -1407,8 +1407,8 @@ where
 {
     dom.kind(id) == NodeKind::Element
         && dom.element_name(id).is_some_and(|name| {
-            name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
-                && name.local.as_ref().eq_ignore_ascii_case(local)
+            name.ns.as_str() == "http://www.w3.org/1999/xhtml"
+                && name.local.as_str().eq_ignore_ascii_case(local)
         })
 }
 

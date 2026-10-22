@@ -310,7 +310,7 @@ impl ScriptedDom {
                 .node(id)
                 .name
                 .as_ref()
-                .is_some_and(|name| name.local.as_ref() == "slot")
+                .is_some_and(|name| name.local.as_str() == "slot")
     }
 
     /// Re-run "assign slottables for a tree" on the root that `node` belongs to
@@ -334,10 +334,10 @@ impl ScriptedDom {
     /// on a slot. Every other attribute write costs one namespace-and-local
     /// comparison.
     pub(crate) fn reassign_for_attribute(&mut self, node: NodeId, name: &QualName) {
-        if self.shadow_hosts.is_empty() || !name.ns.as_ref().is_empty() {
+        if self.shadow_hosts.is_empty() || !name.ns.as_str().is_empty() {
             return;
         }
-        match name.local.as_ref() {
+        match name.local.as_str() {
             "slot" => {
                 if let Some(parent) = self.node(node).parent {
                     self.reassign_for(parent);
@@ -731,7 +731,7 @@ impl ScriptedDom {
         };
         let mode = ShadowRootMode::parse(&attr("shadowrootmode")?.to_ascii_lowercase())?;
         let parent = self.node(node).parent?;
-        let local = self.node(parent).name.as_ref()?.local.as_ref().to_owned();
+        let local = self.node(parent).name.as_ref()?.local.as_str().to_owned();
         if !may_host_shadow_tree(&local) || self.shadow_root_of(parent).is_some() {
             return None;
         }
@@ -774,7 +774,7 @@ impl ScriptedDom {
                 .node(id)
                 .name
                 .as_ref()
-                .is_some_and(|name| name.local.as_ref() == local)
+                .is_some_and(|name| name.local.as_str() == local)
     }
 }
 

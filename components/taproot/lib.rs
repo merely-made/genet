@@ -299,11 +299,11 @@ pub fn matching_estimated_fixture(dom: &ScriptedDom, sel: &Selector) -> Vec<Node
                 || (role == "button"
                     && dom
                         .element_name(node)
-                        .is_some_and(|name| name.local.as_ref() == "button"))
+                        .is_some_and(|name| name.local.as_str() == "button"))
                 || (role == "textbox"
                     && dom
                         .element_name(node)
-                        .is_some_and(|name| name.local.as_ref() == "textarea")))
+                        .is_some_and(|name| name.local.as_str() == "textarea")))
             && sel.text.as_ref().is_none_or(|text| {
                 child_text(dom, node).contains(text)
                     || attr(dom, node, "aria-label").is_some_and(|label| label.contains(text))

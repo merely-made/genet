@@ -47,7 +47,7 @@ pub(crate) fn reftest_ref(html: &str) -> Option<(MatchKind, String)> {
     while let Some(id) = stack.pop() {
         if doc
             .element_name(id)
-            .is_some_and(|q| q.local.as_ref() == "link")
+            .is_some_and(|q| q.local.as_str() == "link")
         {
             let kind = match doc.attribute(id, &no_ns, &rel) {
                 Some("match") => Some(MatchKind::Match),
@@ -203,7 +203,7 @@ pub(crate) fn parse_fuzzy(html: &str) -> Option<FuzzyRange> {
     while let Some(id) = stack.pop() {
         if doc
             .element_name(id)
-            .is_some_and(|q| q.local.as_ref() == "meta")
+            .is_some_and(|q| q.local.as_str() == "meta")
             && doc.attribute(id, &no_ns, &name) == Some("fuzzy")
         {
             if let Some(c) = doc.attribute(id, &no_ns, &content) {

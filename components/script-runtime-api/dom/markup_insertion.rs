@@ -300,7 +300,7 @@ fn script_prepare_gate(
 ) -> Option<(crate::parse::ScriptKind, Option<String>, String)> {
     // Both the HTML and the SVG `script` element take these steps; the SVG one
     // is why `svg/scripted/script-invalid-script-type.html` is a receipt here.
-    if dom.element_name(node)?.local.as_ref() != "script" {
+    if dom.element_name(node)?.local.as_str() != "script" {
         return None;
     }
     let html = Namespace::from("");
@@ -372,7 +372,7 @@ fn collect_scripts(dom: &ScriptedDom, root: NodeId) -> Vec<NodeId> {
     fn walk(dom: &ScriptedDom, node: NodeId, out: &mut Vec<NodeId>) {
         if dom
             .element_name(node)
-            .is_some_and(|name| name.local.as_ref() == "script")
+            .is_some_and(|name| name.local.as_str() == "script")
         {
             out.push(node);
         }
@@ -727,7 +727,7 @@ impl<E: ScriptEngine> NativeFn<E> for StageScripts {
             let is_script = host
                 .dom
                 .element_name(node)
-                .is_some_and(|name| name.local.as_ref() == "script");
+                .is_some_and(|name| name.local.as_str() == "script");
             let candidates = match (self_only, is_script) {
                 (true, true) => vec![node],
                 (true, false) => Vec::new(),

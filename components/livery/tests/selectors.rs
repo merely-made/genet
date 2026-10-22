@@ -442,3 +442,20 @@ fn rules_join_selector_media_and_cascade_ordering() {
     assert_eq!(plain.color, "#111111".parse::<Color>().unwrap());
     assert_eq!(plain.background_color, Color::TRANSPARENT);
 }
+
+/// A rule's selector error names the offending token and where the selector
+/// parser stopped, just past it (cssparser 0.38 errors carry no location of
+/// their own). Line is 0-based, column 1-based.
+#[test]
+fn rule_selector_error_names_the_token_and_where_parsing_stopped() {
+    let error = StyleRule::parse(
+        "nav\n  a.5",
+        "color: red",
+        None,
+        Origin::Author,
+        CascadeLayer::Unlayered,
+        0,
+    )
+    .unwrap_err();
+    assert_eq!(error.to_string(), r#"selector: UnexpectedToken(".5") at 1:6"#);
+}

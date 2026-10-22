@@ -39,7 +39,7 @@ fn html_image_dimensions_reach_paint_through_computed_css() {
         .find(|node| {
             document
                 .element_name(*node)
-                .is_some_and(|name| name.local.as_ref() == "img")
+                .is_some_and(|name| name.local.as_str() == "img")
         })
         .expect("image node");
     let computed = styles.get(image_node).expect("computed image style");

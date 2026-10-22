@@ -75,7 +75,7 @@ url = { workspace = true, optional = true }
 # GPU conformance is explicitly selected for its attended validation lane.
 # The ordinary runner and focused CPU network gates omit the compositor.
 webgl_wgpu = { workspace = true, optional = true }
-pollster = { version = "0.4", optional = true }
+pollster = { version = "1.0", optional = true }
 
 [features]
 default = ["image-decode"]

@@ -102,8 +102,9 @@ Also open in the remaining AccName families:
 
 **O-PC housekeeping:**
 - Empty folder `Code/worktrees/genet-input-value-names`, held open by a process.
-- Worktrees `genet-dep-currency` and `genet-value-engine`, owners unknown. The
-  latter is superseded by the landed ValueEngine.
+- Worktree `genet-value-engine`, owner unknown, superseded by the landed
+  ValueEngine. `genet-dep-currency` landed 2026-10-22; see the
+  [dependency currency plan](2026-10-21_dependency_currency_plan.md).
 - Genet's `Cargo.lock` is untracked, so a pin change on main needs a local
   re-resolve without `--locked`.
 

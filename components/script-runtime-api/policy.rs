@@ -110,7 +110,7 @@ pub(crate) fn document_policy(host: &HostState) -> DocumentPolicy {
     while let Some(node) = stack.pop() {
         if dom
             .element_name(node)
-            .is_some_and(|name| name.local.as_ref() == "meta")
+            .is_some_and(|name| name.local.as_str() == "meta")
         {
             let content = dom.attribute(node, &html, &content_attr);
             let is_referrer = dom

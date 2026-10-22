@@ -2263,3 +2263,75 @@ formdata-event timeout as a follow-up (Recommended)"**. `checkpoint_c_complete` 
 `checkpoint_c_report_20261020.json` and its repo copy. Follow-ups, unnumbered until Mark numbers
 them: the formdata-event harness timeout on Windows; the delta gate for the 55 main commits past
 the candidate epoch.
+
+### Findings, 2026-10-22: the formdata-event timeout is a stale target name
+
+**Cause, product.** The "(formdata event)" case is the second case in each enctype file, and the
+first to reuse the iframe name `formtargetframe`. Case one's cleanup removes its iframe:
+`detach_subtree` drops the realm-to-context mapping at once but leaves the context in
+`frames.tree` until a queued `setTimeout(0)` teardown. testharness starts case two from
+microtasks, before that task runs. Case two appends a fresh iframe under the same name and calls
+`form.submit()`. `navigation_target` (`components/script-runtime-api/frames.rs`) took the first
+tree context with that name, which is the dead one. Its realm lookup then returned `None`, and
+the submission was dropped silently. No fetch was issued, the new iframe never fired `load`, and
+testharness's file timeout fired after the runner skipped to it. The formdata event and the
+Windows server port are not involved. Through a logging proxy in front of the lane's
+`windows_wpt_server.py` (unmodified) on current main `d00361b7c6f`, case one sends one
+`POST /FileAPI/file/resources/echo-content-escaped.py` and gets 200; case two sends nothing.
+
+**Fix.** A named lookup matches only contexts that still serve a realm. Regression tests:
+`phase_c_forms_submission_reused_target_name_{before,after}_teardown` in
+`script-runtime-api/tests/forms_submission.rs`, both engines. `before_teardown` failed on main
+with zero requests; `after_teardown` is the positive control and passed both before and after.
+Form submission is the only product caller of `navigation_target`.
+
+**WPT, current main against the fix**, release runner, `--timeout 120 --drive-deadline 15`, lane
+server, Boa and Nova identical:
+
+| File | Before | After |
+|---|---|---|
+| `text-plain.window` | 1/62, harness-timeout at case 2 | 21/21 passed, drive-deadline |
+| `multipart-formdata.window` | 1/62, harness-timeout at case 2 | 21/21 passed, drive-deadline |
+| `urlencoded2.window` | 1/62, harness-timeout at case 2 | 21/21 passed, drive-deadline |
+| `submit-file.sub` | 0/1, harness-timeout | unchanged |
+| `form-double-submit-multiple-targets` | 0/1, harness-timeout | unchanged |
+
+**What still stops the three enctype files: testharness's normal file timeout.** With
+`--drive-deadline 120`, all three stop at case 22 on both engines, with the harness timeout
+firing mid-case. A diagnostic copy of `text-plain` with `timeout=long` (untracked, deleted
+after) ran all 62 cases on Boa: 56 pass and 6 fail. Nova reached 43 passes in 164 s before the
+long timeout. The page clock is wall time plus skipped time (`timing.rs`), and each submission
+round-trip costs about 0.75 s of it on Boa, so 62 cases do not fit in a normal-timeout file. The
+six real failures are encoding: characters outside a non-UTF-8 `accept-charset` are sent raw
+instead of as `&#NNN;` references (four cases), and a lone surrogate in the normal-form case is
+sent as `\uD800` rather than U+FFFD (two cases).
+
+**The other two files fail for other reasons.** The capture report grouped them with the three
+above, but neither passes a first case.
+- `submit-file.sub` posts to `//www1.localhost:18800/...`. On O-PC, `getaddrinfo("www1.localhost")`
+  fails (11001), netfetcher resolves through the OS (tokio `lookup_host` in murm), and no request
+  reaches the server. This is the WPT host setup that upstream's `wpt make-hosts-file` provides,
+  absent on this box: a harness environment defect, not product.
+- `form-double-submit-multiple-targets` submits one form three times, expecting three
+  navigations. HTML's planned navigation cancels the form's earlier planned navigation on each
+  submit, and genet pins that in `pending_replacement`. The test's own header says the
+  expectation "is not explicitly specified". This is a spec-versus-browsers fork.
+
+**Proposals, unnumbered, for Mark:**
+1. Land the target-name fix (branch `formdata-timeout`).
+2. Per-file pacing for the enctype files: leave them as a recorded limitation; give server-mode
+   runs a timeout multiplier, as wptrunner's `--timeout-multiplier` does; or treat the
+   per-navigation cost as product work.
+3. `submit-file.sub` on Windows: install the WPT hosts entries on O-PC (an OS change, so Mark's
+   to make); have netfetcher treat `*.localhost` as loopback (RFC 6761 allows it, Chrome does it);
+   or record it as a Windows limitation.
+4. `form-double-submit-multiple-targets`: keep the spec's single navigation (spec is the guide),
+   or match browsers.
+
+**Crate gate.** The full script-runtime-api suite (debug, both engines) with the fix: 1,208
+passed, 10 failed. All ten fail the same way on main `d00361b7c6f` with the fix reverted, so
+they are not caused by it: `forms_submission` `implicit_default_button`, `implicit_one_blocker`
+and `implicit_key_modifiers`; `cross_arena_replacement` `atomic_refusal`; and
+`frame_arena_boundary` `associated_subtree_boundary`, each on both engines. The runtime gate
+passed 1,078 at the candidate in release, so these fall to the delta gate already named above.
+Evidence: `Code/testing/genet/forms/phase-c-windows-20261016/formdata-followup-20261022/`.

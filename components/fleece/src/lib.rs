@@ -1717,7 +1717,7 @@ fn collect_auto_direction_text<D: LayoutDom>(
 
 /// `id`'s element local name as `&str`, or `None` for non-elements.
 fn local_name<D: LayoutDom>(dom: &D, id: D::NodeId) -> Option<&str> {
-    dom.element_name(id).map(|q| q.local.as_ref())
+    dom.element_name(id).map(|q| q.local.as_str())
 }
 
 /// A null-namespace attribute (`href`, `rel`, `id`, … — the HTML common case).
@@ -1738,12 +1738,12 @@ fn attr_in_namespace<D: LayoutDom>(
 
 fn is_html_element<D: LayoutDom>(dom: &D, id: D::NodeId) -> bool {
     dom.element_name(id)
-        .is_some_and(|name| name.ns.as_ref() == HTML_NAMESPACE)
+        .is_some_and(|name| name.ns.as_str() == HTML_NAMESPACE)
 }
 
 fn is_html_or_svg_element<D: LayoutDom>(dom: &D, id: D::NodeId) -> bool {
     dom.element_name(id)
-        .is_some_and(|name| matches!(name.ns.as_ref(), HTML_NAMESPACE | SVG_NAMESPACE))
+        .is_some_and(|name| matches!(name.ns.as_str(), HTML_NAMESPACE | SVG_NAMESPACE))
 }
 
 /// The whitespace-collapsed concatenation of all descendant text under `id` — an

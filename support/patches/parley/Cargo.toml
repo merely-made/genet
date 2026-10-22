@@ -84,7 +84,7 @@ name = "parley"
 path = "src/lib.rs"
 
 [dependencies.accesskit]
-version = "0.24.0"
+version = "0.25.0"
 optional = true
 
 [dependencies.core_maths]

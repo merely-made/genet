@@ -1611,7 +1611,7 @@ fn html_requests_long_timeout(html: &str) -> bool {
     while let Some(node) = pending.pop() {
         if document
             .element_name(node)
-            .is_some_and(|name| name.local.as_ref() == "meta")
+            .is_some_and(|name| name.local.as_str() == "meta")
             && document.attribute(node, &Namespace::default(), &LocalName::from("name"))
                 == Some("timeout")
         {
@@ -1659,7 +1659,7 @@ fn collect_scripts<D: LayoutDom>(
 ) {
     if dom
         .element_name(node)
-        .is_some_and(|q| q.local.as_ref() == "script")
+        .is_some_and(|q| q.local.as_str() == "script")
     {
         match dom.attribute(node, &Namespace::default(), &LocalName::from("src")) {
             // WPT's deliberately-blank vendor hook: splice genet's automation
@@ -2143,7 +2143,7 @@ test(function() {
                 if host
                     .dom
                     .element_name(node)
-                    .is_some_and(|name| name.local.as_ref() == "div")
+                    .is_some_and(|name| name.local.as_str() == "div")
                 {
                     break node;
                 }

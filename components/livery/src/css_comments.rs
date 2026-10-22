@@ -8,7 +8,7 @@
 
 use std::ops::Range;
 
-use cssparser::{Parser, ParserInput, Token, TokenSerializationType};
+use cssparser::{Parser, Token, TokenSerializationType};
 
 struct CommentEdit {
     range: Range<usize>,
@@ -35,8 +35,7 @@ fn finish_comments(
 }
 
 fn next_token(input: &str) -> Option<(usize, TokenSerializationType, bool)> {
-    let mut parser_input = ParserInput::new(input);
-    let mut parser = Parser::new(&mut parser_input);
+    let mut parser = Parser::new(input);
     let token = parser.next_including_whitespace_and_comments().ok()?;
     let kind = token.serialization_type();
     let is_comment = matches!(token, Token::Comment(_));

@@ -79,19 +79,19 @@ impl StaticDocument {
         let StaticNodeKind::Element { name, attrs, .. } = &self.nodes[node.0].kind else {
             return None;
         };
-        if name.local.as_ref() != "template" {
+        if name.local.as_str() != "template" {
             return None;
         }
         let attr = |want: &str| {
             attrs
                 .iter()
-                .find(|a| a.name.ns.as_ref().is_empty() && a.name.local.as_ref() == want)
+                .find(|a| a.name.ns.as_str().is_empty() && a.name.local.as_str() == want)
                 .map(|a| a.value.as_ref())
         };
         let mode = ShadowRootMode::parse(&attr("shadowrootmode")?.to_ascii_lowercase())?;
         let parent = self.nodes[node.0].parent?;
         let parent_local = match &self.nodes[parent.0].kind {
-            StaticNodeKind::Element { name, .. } => name.local.as_ref().to_owned(),
+            StaticNodeKind::Element { name, .. } => name.local.as_str().to_owned(),
             _ => return None,
         };
         if !may_host_shadow_tree(&parent_local) || self.shadow.hosts.contains_key(&parent) {
@@ -189,7 +189,7 @@ impl StaticDocument {
             let StaticNodeKind::Element { name, .. } = &self.nodes[child.0].kind else {
                 continue;
             };
-            if name.local.as_ref() == "slot" {
+            if name.local.as_str() == "slot" {
                 out.push(*child);
             }
             self.collect_slots(*child, out);
@@ -202,7 +202,7 @@ impl StaticDocument {
         };
         attrs
             .iter()
-            .find(|a| a.name.ns.as_ref().is_empty() && a.name.local.as_ref() == local)
+            .find(|a| a.name.ns.as_str().is_empty() && a.name.local.as_str() == local)
             .map(|a| a.value.as_ref())
     }
 

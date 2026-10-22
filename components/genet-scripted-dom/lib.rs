@@ -656,7 +656,7 @@ impl ScriptedDom {
             if matches!(name.local.as_ref(), "select" | "button" | "fieldset" | "output" | "object") {
                 node.custom_validity_message = Some(String::new());
             }
-            if name.local.as_ref() == "option" {
+            if name.local.as_str() == "option" {
                 node.option_state = Some(SelectOptionState {
                     selected: false,
                     dirty: false,
@@ -1084,12 +1084,12 @@ impl ScriptedDom {
             .iter()
             .map(|(name, _)| {
                 (
-                    name.ns.as_ref().to_string(),
+                    name.ns.as_str().to_string(),
                     name.prefix
                         .as_ref()
-                        .map(|p| p.as_ref().to_string())
+                        .map(|p| p.as_str().to_string())
                         .unwrap_or_default(),
-                    name.local.as_ref().to_string(),
+                    name.local.as_str().to_string(),
                 )
             })
             .collect()
@@ -1130,7 +1130,7 @@ impl ScriptedDom {
                 .filter(|&child| {
                     !fragment
                         .element_name(child)
-                        .is_some_and(|q| q.local.as_ref() == "html")
+                        .is_some_and(|q| q.local.as_str() == "html")
                 })
                 .collect();
         }
@@ -1414,7 +1414,7 @@ impl ScriptedDom {
                 node.name = src.element_name(sid).cloned();
                 if node.name.as_ref().is_some_and(|q| {
                     q.ns == markup5ever::ns!(html)
-                        && matches!(q.local.as_ref(), "input" | "textarea")
+                        && matches!(q.local.as_str(), "input" | "textarea")
                 }) {
                     node.form_control = Some(FormControlState {
                         selection_start: Some(0),
@@ -1430,7 +1430,7 @@ impl ScriptedDom {
                     && matches!(q.local.as_ref(), "select" | "button" | "fieldset" | "output" | "object")) {
                     node.custom_validity_message = Some(String::new());
                 }
-                if node.name.as_ref().is_some_and(|q| q.ns == markup5ever::ns!(html) && q.local.as_ref() == "option") {
+                if node.name.as_ref().is_some_and(|q| q.ns == markup5ever::ns!(html) && q.local.as_str() == "option") {
                     node.option_state = Some(SelectOptionState { selected: false, dirty: false });
                 }
                 for attr in src.attributes(sid) {
@@ -1438,7 +1438,7 @@ impl ScriptedDom {
                 }
                 if node.option_state.is_some() {
                     node.option_state.as_mut().unwrap().selected = node.attrs.iter().any(|(name, _)| {
-                        name.ns == markup5ever::ns!() && name.local.as_ref() == "selected"
+                        name.ns == markup5ever::ns!() && name.local.as_str() == "selected"
                     });
                 }
                 self.push(node)
@@ -1451,7 +1451,7 @@ impl ScriptedDom {
             NodeKind::ProcessingInstruction => {
                 let target = src
                     .element_name(sid)
-                    .map(|q| q.local.as_ref().to_string())
+                    .map(|q| q.local.as_str().to_string())
                     .unwrap_or_default();
                 self.create_processing_instruction(&target, src.text(sid).unwrap_or(""))
             },
@@ -1498,7 +1498,7 @@ impl ScriptedDom {
         let html = doc.document_element()?;
         doc.dom_children(html).find(|&c| {
             doc.element_name(c)
-                .is_some_and(|q| q.local.as_ref() == "body")
+                .is_some_and(|q| q.local.as_str() == "body")
         })
     }
 }
@@ -1512,18 +1512,18 @@ const DOCTYPE_SYSTEM_ID: &str = "__systemId";
 /// An attribute's qualified name (`prefix:local`, or just `local`).
 pub fn qualified_name(name: &QualName) -> String {
     match name.prefix.as_ref() {
-        Some(p) => format!("{}:{}", p.as_ref(), name.local.as_ref()),
-        None => name.local.as_ref().to_string(),
+        Some(p) => format!("{}:{}", p.as_str(), name.local.as_str()),
+        None => name.local.as_str().to_string(),
     }
 }
 
 fn qual_name_bytes(name: &QualName) -> usize {
-    name.ns.as_ref().len()
-        + name.local.as_ref().len()
+    name.ns.as_str().len()
+        + name.local.as_str().len()
         + name
             .prefix
             .as_ref()
-            .map_or(0, |prefix| prefix.as_ref().len())
+            .map_or(0, |prefix| prefix.as_str().len())
 }
 
 impl LayoutDom for ScriptedDom {
@@ -1532,7 +1532,7 @@ impl LayoutDom for ScriptedDom {
     fn form_control_state(&self, id: NodeId) -> Option<FormControlState> {
         let mut state = self.node(id).form_control.clone()?;
         if self.element_name(id).is_some_and(|name| {
-            name.ns == markup5ever::ns!(html) && name.local.as_ref() == "textarea"
+            name.ns == markup5ever::ns!(html) && name.local.as_str() == "textarea"
         }) {
             state.value = crate::forms::api_value_for_state(&state.value);
         }
@@ -1555,7 +1555,7 @@ impl LayoutDom for ScriptedDom {
             });
         }
         let value = if self.element_name(id).is_some_and(|name| {
-            name.ns == markup5ever::ns!(html) && name.local.as_ref() == "textarea"
+            name.ns == markup5ever::ns!(html) && name.local.as_str() == "textarea"
         }) {
             forms::api_value_for_state(&state.value)
         } else {
@@ -1702,7 +1702,7 @@ impl LayoutDom for ScriptedDom {
         let field = |want: &str| {
             node.attrs
                 .iter()
-                .find(|(name, _)| name.local.as_ref() == want)
+                .find(|(name, _)| name.local.as_str() == want)
                 .map_or("", |(_, value)| value.as_str())
         };
         Some(DoctypeView {
@@ -1718,11 +1718,11 @@ impl LayoutDomMut for ScriptedDom {
         let Some(name) = self.element_name(id).cloned() else {
             return false;
         };
-        if name.ns != markup5ever::ns!(html) || !matches!(name.local.as_ref(), "input" | "textarea")
+        if name.ns != markup5ever::ns!(html) || !matches!(name.local.as_str(), "input" | "textarea")
         {
             return false;
         }
-        if name.local.as_ref() == "input" {
+        if name.local.as_str() == "input" {
             let kind = self.input_type_for_state(id);
             match crate::forms::value_mode_for_state(&kind) {
                 crate::forms::InputValueModeForState::Value => {
@@ -1762,7 +1762,7 @@ impl LayoutDomMut for ScriptedDom {
         } else {
             crate::forms::clamp_selection_for_state(&mut state, "textarea");
         }
-        if name.local.as_ref() == "textarea" {
+        if name.local.as_str() == "textarea" {
             let current_raw = self.node(id).form_control.as_ref().unwrap().value.clone();
             if crate::forms::api_value_for_state(&current_raw) == state.value {
                 state.value = current_raw;
@@ -1797,7 +1797,7 @@ impl LayoutDomMut for ScriptedDom {
     }
 
     fn set_option_selected_state(&mut self, id: NodeId, state: SelectOptionState) -> bool {
-        if self.element_name(id).map_or(true, |q| q.ns != markup5ever::ns!(html) || q.local.as_ref() != "option") {
+        if self.element_name(id).map_or(true, |q| q.ns != markup5ever::ns!(html) || q.local.as_str() != "option") {
             return false;
         }
         let Some(slot) = self.node_mut(id).option_state.as_mut() else {
@@ -2012,9 +2012,9 @@ impl LayoutDomMut for ScriptedDom {
     }
 
     fn set_attribute(&mut self, node: NodeId, name: QualName, value: &str) {
-        let tracks_id = name.ns == markup5ever::ns!() && name.local.as_ref() == "id";
+        let tracks_id = name.ns == markup5ever::ns!() && name.local.as_str() == "id";
         let radio_before = tracks_id.then(|| self.snapshot_radio_associations(&[node]));
-        let old_type = (name.ns == markup5ever::ns!() && name.local.as_ref() == "type")
+        let old_type = (name.ns == markup5ever::ns!() && name.local.as_str() == "type")
             .then(|| {
                 self.attribute(node, &markup5ever::ns!(), &LocalName::from("type"))
                     .map(str::to_owned)
@@ -2049,9 +2049,9 @@ impl LayoutDomMut for ScriptedDom {
     }
 
     fn remove_attribute(&mut self, node: NodeId, name: QualName) {
-        let tracks_id = name.ns == markup5ever::ns!() && name.local.as_ref() == "id";
+        let tracks_id = name.ns == markup5ever::ns!() && name.local.as_str() == "id";
         let radio_before = tracks_id.then(|| self.snapshot_radio_associations(&[node]));
-        let old_type = (name.ns == markup5ever::ns!() && name.local.as_ref() == "type")
+        let old_type = (name.ns == markup5ever::ns!() && name.local.as_str() == "type")
             .then(|| {
                 self.attribute(node, &markup5ever::ns!(), &LocalName::from("type"))
                     .map(str::to_owned)

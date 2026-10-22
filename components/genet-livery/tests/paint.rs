@@ -43,7 +43,7 @@ fn find_canvas(document: &StaticDocument) -> <StaticDocument as LayoutDom>::Node
     ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
         if document
             .element_name(node)
-            .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case("canvas"))
+            .is_some_and(|name| name.local.as_str().eq_ignore_ascii_case("canvas"))
         {
             return Some(node);
         }

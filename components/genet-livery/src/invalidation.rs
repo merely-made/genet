@@ -481,9 +481,9 @@ fn for_each_validity_dependent<D: LayoutDom>(
     let mut parent = dom.parent(node);
     while let Some(id) = parent {
         if dom.element_name(id).is_some_and(|name| {
-            name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
-                && (name.local.as_ref().eq_ignore_ascii_case("fieldset")
-                    || name.local.as_ref().eq_ignore_ascii_case("select"))
+            name.ns.as_str() == "http://www.w3.org/1999/xhtml"
+                && (name.local.as_str().eq_ignore_ascii_case("fieldset")
+                    || name.local.as_str().eq_ignore_ascii_case("select"))
         }) {
             affected(id);
             if let Some(form) = dom.form_control_form_owner(id) {
@@ -511,8 +511,8 @@ fn for_each_select_validity_dependent<D: LayoutDom>(
     let mut current = Some(node);
     while let Some(id) = current {
         if dom.element_name(id).is_some_and(|name| {
-            name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
-                && name.local.as_ref().eq_ignore_ascii_case("select")
+            name.ns.as_str() == "http://www.w3.org/1999/xhtml"
+                && name.local.as_str().eq_ignore_ascii_case("select")
         }) {
             affected(id);
             if let Some(form) = dom.form_control_form_owner(id) {
@@ -528,8 +528,8 @@ fn is_radio_control<D: LayoutDom>(dom: &D, node: D::NodeId) -> bool {
         return false;
     }
     dom.element_name(node).is_some_and(|name| {
-        name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
-            && name.local.as_ref().eq_ignore_ascii_case("input")
+        name.ns.as_str() == "http://www.w3.org/1999/xhtml"
+            && name.local.as_str().eq_ignore_ascii_case("input")
     }) && dom
         .attribute(
             node,
@@ -548,8 +548,8 @@ fn radio_group_attribute_changed<D: LayoutDom>(
     if !dom.is_live(node)
         || name.ns != layout_dom_api::Namespace::from("")
         || !dom.element_name(node).is_some_and(|element| {
-            element.ns.as_ref() == "http://www.w3.org/1999/xhtml"
-                && element.local.as_ref().eq_ignore_ascii_case("input")
+            element.ns.as_str() == "http://www.w3.org/1999/xhtml"
+                && element.local.as_str().eq_ignore_ascii_case("input")
         })
     {
         return false;
@@ -580,9 +580,9 @@ fn form_association_attribute_changed<D: LayoutDom>(
         // an explicitly-associated control, regardless of that element's tag.
         "id" => true,
         "form" => {
-            element.ns.as_ref() == "http://www.w3.org/1999/xhtml"
+            element.ns.as_str() == "http://www.w3.org/1999/xhtml"
                 && matches!(
-                    element.local.as_ref().to_ascii_lowercase().as_str(),
+                    element.local.as_str().to_ascii_lowercase().as_str(),
                     "button" | "fieldset" | "input" | "object" | "output" | "select" | "textarea"
                 )
         },
@@ -619,9 +619,9 @@ fn form_validity_tree_root<D: LayoutDom>(dom: &D, node: D::NodeId) -> Option<D::
     let mut contains_aggregate = false;
     while let Some(current) = pending.pop() {
         if dom.element_name(current).is_some_and(|name| {
-            name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
-                && (name.local.as_ref().eq_ignore_ascii_case("form")
-                    || name.local.as_ref().eq_ignore_ascii_case("fieldset"))
+            name.ns.as_str() == "http://www.w3.org/1999/xhtml"
+                && (name.local.as_str().eq_ignore_ascii_case("form")
+                    || name.local.as_str().eq_ignore_ascii_case("fieldset"))
         }) || is_radio_control(dom, current)
         {
             contains_aggregate = true;

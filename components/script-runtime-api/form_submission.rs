@@ -87,7 +87,7 @@ impl<E: ScriptEngine> NativeFn<E> for SubmitterCheck {
         };
         let valid = form.with_dom(|dom| {
             dom.element_name(form.id()).is_some_and(|name| {
-                name.local.as_ref() == "form" && name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
+                name.local.as_str() == "form" && name.ns.as_str() == "http://www.w3.org/1999/xhtml"
             })
         });
         if !valid {
@@ -144,7 +144,7 @@ fn fallback_target(dom: &genet_scripted_dom::ScriptedDom) -> String {
     let mut stack = vec![dom.document()];
     while let Some(node) = stack.pop() {
         if dom.element_name(node).is_some_and(|name| {
-            name.local.as_ref() == "base" && name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
+            name.local.as_str() == "base" && name.ns.as_str() == "http://www.w3.org/1999/xhtml"
         }) {
             if let Some(target) = attr(dom, node, "target") {
                 return if target.contains(['\n', '\t', '<']) {

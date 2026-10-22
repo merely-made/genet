@@ -98,7 +98,7 @@ impl<'a, D: LayoutDom> Names<'a, D> {
     }
 
     fn tag(&self, node: D::NodeId) -> Option<&str> {
-        self.dom.element_name(node).map(|name| name.local.as_ref())
+        self.dom.element_name(node).map(|name| name.local.as_str())
     }
 
     /// The lowercased `type` of an `input` that is a push button or image button.
@@ -309,7 +309,7 @@ impl<'a, D: LayoutDom> Names<'a, D> {
         let native = self
             .dom
             .element_name(node)
-            .is_some_and(|name| name.ns.as_ref() == "http://www.w3.org/1999/xhtml");
+            .is_some_and(|name| name.ns.as_str() == "http://www.w3.org/1999/xhtml");
         let mut role = super::document_role(self.dom, node);
         // Native select/range roles are not yet represented by document_role.
         // Respect effective overrides, not empty or unrecognized role text.

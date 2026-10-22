@@ -35,7 +35,7 @@ fn author_replacement_cannot_steal_host_tasks<E: ScriptEngine>() {
         let mut pending = vec![root];
         loop {
             let node = pending.pop().expect("button node");
-            if host.dom.element_name(node).is_some_and(|name| name.local.as_ref() == "button") {
+            if host.dom.element_name(node).is_some_and(|name| name.local.as_str() == "button") {
                 break node;
             }
             pending.extend(host.dom.dom_children(node));

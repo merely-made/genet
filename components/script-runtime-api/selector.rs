@@ -148,26 +148,26 @@ impl<D: LayoutDom> Element for DomElement<'_, D> {
     }
     fn is_html_element_in_html_document(&self) -> bool {
         self.html_document && self.dom.element_name(self.id)
-            .is_some_and(|name| name.ns.as_ref() == "http://www.w3.org/1999/xhtml")
+            .is_some_and(|name| name.ns.as_str() == "http://www.w3.org/1999/xhtml")
     }
     fn has_local_name(&self, name: &str) -> bool {
         self.dom.element_name(self.id).is_some_and(|q| {
             if self.is_html_element_in_html_document() {
-                q.local.as_ref().eq_ignore_ascii_case(name)
+                q.local.as_str().eq_ignore_ascii_case(name)
             } else {
-                q.local.as_ref() == name
+                q.local.as_str() == name
             }
         })
     }
     fn has_namespace(&self, url: &str) -> bool {
-        self.dom.element_name(self.id).is_some_and(|q| q.ns.as_ref() == url)
+        self.dom.element_name(self.id).is_some_and(|q| q.ns.as_str() == url)
     }
     fn is_same_type(&self, other: &Self) -> bool {
         match (self.dom.element_name(self.id), self.dom.element_name(other.id)) {
-            (Some(a), Some(b)) => a.ns.as_ref() == b.ns.as_ref() && if self.is_html_element_in_html_document() {
-                a.local.as_ref().eq_ignore_ascii_case(b.local.as_ref())
+            (Some(a), Some(b)) => a.ns.as_str() == b.ns.as_str() && if self.is_html_element_in_html_document() {
+                a.local.as_str().eq_ignore_ascii_case(b.local.as_str())
             } else {
-                a.local.as_ref() == b.local.as_ref()
+                a.local.as_str() == b.local.as_str()
             },
             _ => false,
         }
@@ -190,12 +190,12 @@ impl<D: LayoutDom> Element for DomElement<'_, D> {
             let name = attr.name;
             let namespace_matches = match namespace {
                 NamespaceConstraint::Any => true,
-                NamespaceConstraint::Specific(ns) => name.ns.as_ref() == *ns,
+                NamespaceConstraint::Specific(ns) => name.ns.as_str() == *ns,
             };
-            let local_matches = if self.is_html_element_in_html_document() && name.ns.as_ref().is_empty() {
-                name.local.as_ref().eq_ignore_ascii_case(local_name)
+            let local_matches = if self.is_html_element_in_html_document() && name.ns.as_str().is_empty() {
+                name.local.as_str().eq_ignore_ascii_case(local_name)
             } else {
-                name.local.as_ref() == local_name
+                name.local.as_str() == local_name
             };
             namespace_matches && local_matches && operation.eval_str(attr.value)
         })
@@ -224,10 +224,10 @@ fn matches_validity_pseudo<D: LayoutDom>(dom: &D, node: D::NodeId, pseudo: Valid
     let Some(qname) = dom.element_name(node) else {
         return false;
     };
-    if qname.ns.as_ref() != "http://www.w3.org/1999/xhtml" {
+    if qname.ns.as_str() != "http://www.w3.org/1999/xhtml" {
         return false;
     }
-    let name = qname.local.as_ref().to_ascii_lowercase();
+    let name = qname.local.as_str().to_ascii_lowercase();
     let is_form = name == "form";
     let is_fieldset = name == "fieldset";
     let user = matches!(
@@ -249,7 +249,7 @@ fn matches_validity_pseudo<D: LayoutDom>(dom: &D, node: D::NodeId, pseudo: Valid
         for descendant in descendants {
             let Some(control_name) = dom
                 .element_name(descendant)
-                .map(|name| name.local.as_ref().to_ascii_lowercase())
+                .map(|name| name.local.as_str().to_ascii_lowercase())
             else {
                 continue;
             };
@@ -329,8 +329,8 @@ fn associated_with_form<D: LayoutDom>(
     let mut ancestor = dom.parent(control);
     while let Some(node) = ancestor {
         if dom.element_name(node).is_some_and(|name| {
-            name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
-                && name.local.as_ref().eq_ignore_ascii_case("form")
+            name.ns.as_str() == "http://www.w3.org/1999/xhtml"
+                && name.local.as_str().eq_ignore_ascii_case("form")
         }) {
             return node == form;
         }

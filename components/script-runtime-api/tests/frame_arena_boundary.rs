@@ -130,7 +130,7 @@ fn full_width_host_identity<E: ScriptEngine>() {
             if host
                 .dom
                 .element_name(id)
-                .is_some_and(|name| name.local.as_ref() == "p")
+                .is_some_and(|name| name.local.as_str() == "p")
             {
                 break id;
             }

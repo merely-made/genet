@@ -58,7 +58,7 @@ fn trusted_canvas_textures(host: &HostState) -> HashMap<NodeId, u64> {
     let mut nodes = vec![host.dom.document()];
     while let Some(node) = nodes.pop() {
         if host.dom.element_name(node).is_some_and(|name| {
-            name.ns.as_ref() == "http://www.w3.org/1999/xhtml" && name.local.as_ref() == "canvas"
+            name.ns.as_str() == "http://www.w3.org/1999/xhtml" && name.local.as_str() == "canvas"
         }) {
             if let Some(key) = host
                 .dom
@@ -1463,7 +1463,7 @@ fn link_target<D: LayoutDom>(dom: &D, mut node: D::NodeId) -> Option<D::NodeId> 
         if dom.kind(node) == NodeKind::Element
             && dom
                 .element_name(node)
-                .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case("a"))
+                .is_some_and(|name| name.local.as_str().eq_ignore_ascii_case("a"))
             && dom
                 .attribute(node, &Namespace::default(), &LocalName::from("href"))
                 .is_some()
@@ -1852,7 +1852,7 @@ fn inline_stylesheets(dom: &impl LayoutDom) -> Vec<String> {
     fn collect<D: LayoutDom>(dom: &D, node: D::NodeId, output: &mut Vec<String>) {
         if dom
             .element_name(node)
-            .is_some_and(|name| name.local.as_ref() == "style")
+            .is_some_and(|name| name.local.as_str() == "style")
         {
             let mut sheet = String::new();
             text_content(dom, node, &mut sheet);

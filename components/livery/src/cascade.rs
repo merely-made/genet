@@ -6,7 +6,7 @@
 
 //! DOM-neutral declaration parsing and cascade ordering.
 
-use cssparser::{Parser, ParserInput};
+use cssparser::Parser;
 use std::{cmp::Ordering, fmt};
 
 use crate::custom::{
@@ -260,8 +260,7 @@ fn parse_declaration_syntax(input: &str) -> Vec<Result<ParsedDeclaration, Declar
                 }));
             }
             let raw_name = declaration[..colon].trim();
-            let mut parser_input = ParserInput::new(raw_name);
-            let mut parser = Parser::new(&mut parser_input);
+            let mut parser = Parser::new(raw_name);
             let name = parser
                 .expect_ident_cloned()
                 .ok()

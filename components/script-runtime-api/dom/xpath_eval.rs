@@ -282,7 +282,7 @@ impl xpath::Node for XPathNode {
             if let XPathKind::Node(idx) = node.kind {
                 for &attr in &node.tree.nodes[idx].attrs {
                     let attr = &node.tree.attrs[attr];
-                    if attr.name.local.as_ref().eq_ignore_ascii_case("lang") {
+                    if attr.name.local.as_str().eq_ignore_ascii_case("lang") {
                         return Some(attr.value.clone());
                     }
                 }
@@ -434,7 +434,7 @@ impl xpath::Document for XPathDocument {
                 };
                 let has_id = self.tree.nodes[idx].attrs.iter().any(|&attr| {
                     let attr = &self.tree.attrs[attr];
-                    attr.name.local.as_ref() == "id" && attr.value == id
+                    attr.name.local.as_str() == "id" && attr.value == id
                 });
                 (has_id && self.tree.nodes[idx].kind == NodeKind::Element)
                     .then(|| XPathElement { node })
@@ -487,7 +487,7 @@ impl xpath::Element for XPathElement {
     }
 
     fn is_html_element_in_html_document(&self) -> bool {
-        self.node.tree.html_document && self.namespace().as_ref() == XHTML_NS
+        self.node.tree.html_document && self.namespace().as_str() == XHTML_NS
     }
 }
 
@@ -663,7 +663,7 @@ impl<E: ScriptEngine> NativeFn<E> for EvaluateXPath {
             if kind == "attr" {
                 let found = tree.nodes[context_idx].attrs.iter().copied().find(|&idx| {
                     let attr = &tree.attrs[idx];
-                    attr.name.ns.as_ref() == ns.as_str() && attr.name.local.as_ref() == local.as_str()
+                    attr.name.ns.as_str() == ns.as_str() && attr.name.local.as_str() == local.as_str()
                 });
                 let Some(idx) = found else {
                     return cx.make_string("error\nDocument.evaluate context attribute is detached");

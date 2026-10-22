@@ -1506,7 +1506,7 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
     pub fn host_has_focus(&self) -> bool { self.host_focused_node.is_some_and(|node| self.host_focus_is_current(node)) }
     pub fn host_focused_is_textarea(&self) -> bool {
         self.host_focused_node.is_some_and(|node| self.host_focus_is_current(node)
-            && self.with_dom(|dom| dom.element_name(node).is_some_and(|name| name.local.as_ref() == "textarea")))
+            && self.with_dom(|dom| dom.element_name(node).is_some_and(|name| name.local.as_str() == "textarea")))
     }
     pub fn host_text_input(&mut self, operation: &str, text: &str, input_type: &str) -> bool {
         let Some(node) = self.host_focused_node.filter(|node| self.host_focus_is_current(*node)) else { return false };
@@ -1551,7 +1551,7 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
                         && tabindex.is_none_or(|i| i >= 0)
                         && (matches!(name.local.as_ref(), "input" | "button" | "select" | "textarea")
                             && !attr("type").is_some_and(|v| v.eq_ignore_ascii_case("hidden"))
-                            || name.local.as_ref() == "a" && attr("href").is_some() || tabindex.is_some()) {
+                            || name.local.as_str() == "a" && attr("href").is_some() || tabindex.is_some()) {
                         nodes.push(node);
                     }
                 }
@@ -2056,7 +2056,7 @@ fn collect_livery_links(
     if dom.kind(node) == layout_dom_api::NodeKind::Element
         && dom
             .element_name(node)
-            .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case("a"))
+            .is_some_and(|name| name.local.as_str().eq_ignore_ascii_case("a"))
         && let Some(href) = dom.attribute(node, &Namespace::default(), &LocalName::from("href"))
         && let Some(rect) = cssom.fragment_rect(node)
     {

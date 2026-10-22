@@ -191,7 +191,7 @@ impl<'tree, 'dom, D: LayoutDom> ElementRef<'tree, 'dom, D> {
 
     fn attribute(self, namespace: &str, local: &str) -> Option<&'dom str> {
         self.dom().attributes(self.id).find_map(|attribute| {
-            (attribute.name.ns.as_ref() == namespace && attribute.name.local.as_ref() == local)
+            (attribute.name.ns.as_str() == namespace && attribute.name.local.as_str() == local)
                 .then_some(attribute.value)
         })
     }
@@ -265,19 +265,19 @@ impl<D: LayoutDom> Element for ElementRef<'_, '_, D> {
     fn is_html_element_in_html_document(&self) -> bool {
         self.dom()
             .element_name(self.id)
-            .is_some_and(|name| name.ns.as_ref() == "http://www.w3.org/1999/xhtml")
+            .is_some_and(|name| name.ns.as_str() == "http://www.w3.org/1999/xhtml")
     }
 
     fn has_local_name(&self, local_name: &str) -> bool {
         self.dom()
             .element_name(self.id)
-            .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case(local_name))
+            .is_some_and(|name| name.local.as_str().eq_ignore_ascii_case(local_name))
     }
 
     fn has_namespace(&self, namespace: &str) -> bool {
         self.dom()
             .element_name(self.id)
-            .is_some_and(|name| name.ns.as_ref() == namespace)
+            .is_some_and(|name| name.ns.as_str() == namespace)
     }
 
     fn is_same_type(&self, other: &Self) -> bool {
@@ -294,11 +294,11 @@ impl<D: LayoutDom> Element for ElementRef<'_, '_, D> {
             let namespace_matches = match namespace {
                 NamespaceConstraint::Any => true,
                 NamespaceConstraint::Specific(namespace) => {
-                    attribute.name.ns.as_ref() == *namespace
+                    attribute.name.ns.as_str() == *namespace
                 },
             };
             namespace_matches
-                && attribute.name.local.as_ref() == local_name
+                && attribute.name.local.as_str() == local_name
                 && operation.eval_str(attribute.value)
         })
     }
@@ -306,8 +306,8 @@ impl<D: LayoutDom> Element for ElementRef<'_, '_, D> {
     fn matches_pseudo_class(&self, pseudo: &StatePseudoClass) -> bool {
         if *pseudo == StatePseudoClass::Checked
             && self.dom().element_name(self.id).is_some_and(|name| {
-                name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
-                    && name.local.as_ref().eq_ignore_ascii_case("input")
+                name.ns.as_str() == "http://www.w3.org/1999/xhtml"
+                    && name.local.as_str().eq_ignore_ascii_case("input")
             })
             && self.attribute("", "type").is_some_and(|kind| {
                 matches!(kind.to_ascii_lowercase().as_str(), "checkbox" | "radio")
@@ -328,10 +328,10 @@ impl<D: LayoutDom> Element for ElementRef<'_, '_, D> {
             let Some(qname) = self.dom().element_name(self.id) else {
                 return false;
             };
-            if qname.ns.as_ref() != "http://www.w3.org/1999/xhtml" {
+            if qname.ns.as_str() != "http://www.w3.org/1999/xhtml" {
                 return false;
             }
-            let name = qname.local.as_ref().to_ascii_lowercase();
+            let name = qname.local.as_str().to_ascii_lowercase();
             let user = matches!(
                 pseudo,
                 StatePseudoClass::UserValid | StatePseudoClass::UserInvalid
@@ -356,7 +356,7 @@ impl<D: LayoutDom> Element for ElementRef<'_, '_, D> {
                     let Some(control_name) = self
                         .dom()
                         .element_name(node)
-                        .map(|name| name.local.as_ref().to_ascii_lowercase())
+                        .map(|name| name.local.as_str().to_ascii_lowercase())
                     else {
                         continue;
                     };
@@ -503,8 +503,8 @@ fn associated_with_form<D: LayoutDom>(
     let mut ancestor = dom.parent(control);
     while let Some(node) = ancestor {
         if dom.element_name(node).is_some_and(|name| {
-            name.ns.as_ref() == "http://www.w3.org/1999/xhtml"
-                && name.local.as_ref().eq_ignore_ascii_case("form")
+            name.ns.as_str() == "http://www.w3.org/1999/xhtml"
+                && name.local.as_str().eq_ignore_ascii_case("form")
         }) {
             return node == form;
         }

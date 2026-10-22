@@ -519,13 +519,13 @@ where
             if !self
                 .dom
                 .element_name(node)
-                .is_some_and(|name| name.local.as_ref().eq_ignore_ascii_case("img"))
+                .is_some_and(|name| name.local.as_str().eq_ignore_ascii_case("img"))
             {
                 continue;
             }
             if let Some(source) = self.dom.attributes(node).find_map(|attribute| {
-                (attribute.name.ns.as_ref().is_empty()
-                    && attribute.name.local.as_ref().eq_ignore_ascii_case("src"))
+                (attribute.name.ns.as_str().is_empty()
+                    && attribute.name.local.as_str().eq_ignore_ascii_case("src"))
                 .then_some(attribute.value)
             }) {
                 let key = crate::image_resources::document_image_key(

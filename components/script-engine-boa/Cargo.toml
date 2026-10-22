@@ -16,8 +16,8 @@ path = "lib.rs"
 
 [dependencies]
 script-engine-api = { path = "../script-engine-api" }
-boa_engine = { version = "=1.0.0-dev", git = "https://github.com/merely-made/bole.git", rev = "aef1134bb121c7aa4e4b408b3fa62460d10740b0", features = ["array-buffer-transfer"] }
-boa_gc = { version = "=1.0.0-dev", git = "https://github.com/merely-made/bole.git", rev = "aef1134bb121c7aa4e4b408b3fa62460d10740b0" }
+boa_engine = { version = "=1.0.0-dev", git = "https://github.com/merely-made/bole.git", rev = "ddf4e31b0d6cf86c11ea8907b0d07e4799d62368", features = ["array-buffer-transfer"] }
+boa_gc = { version = "=1.0.0-dev", git = "https://github.com/merely-made/bole.git", rev = "ddf4e31b0d6cf86c11ea8907b0d07e4799d62368" }
 # Pin caller provenance and standard buffer transfer so fresh clones share the
 # same realm and detachment rules. Transfer support does not enable Boa's broad
 # experimental feature. The gitignored local config may
@@ -27,4 +27,4 @@ boa_gc = { version = "=1.0.0-dev", git = "https://github.com/merely-made/bole.gi
 
 [target.'cfg(all(target_family = "wasm", not(any(target_os = "emscripten", target_os = "wasi"))))'.dependencies]
 # Browser host glue provides randomness and time on wasm32-unknown-unknown.
-boa_engine = { version = "=1.0.0-dev", git = "https://github.com/merely-made/bole.git", rev = "aef1134bb121c7aa4e4b408b3fa62460d10740b0", features = ["js"] }
+boa_engine = { version = "=1.0.0-dev", git = "https://github.com/merely-made/bole.git", rev = "ddf4e31b0d6cf86c11ea8907b0d07e4799d62368", features = ["js"] }

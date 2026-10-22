@@ -4,8 +4,12 @@
 use script_engine_api::ScriptEngine;
 use script_runtime_api::{NoScriptLoader, Runtime};
 
+#[path = "support/inert_webgl.rs"]
+mod inert_webgl;
+
 fn check<E: ScriptEngine>(source: &str) {
     let mut rt = Runtime::<E>::new().unwrap();
+    rt.set_webgl_factory(inert_webgl::factory());
     rt.set_base_url("https://parent.test/").unwrap();
     rt.parse_document_interleaved("<body><iframe id=frame></iframe></body>", &NoScriptLoader);
     rt.run_event_loop(20).unwrap();
@@ -74,7 +78,7 @@ fn unsupported_replacement_is_atomic<E: ScriptEngine>() {
         // index and texture producer answer to this host alone.
         var first = document.createElement('b'), unsupported = document.createElement('canvas');
         document.body.appendChild(first); document.body.appendChild(unsupported);
-        unsupported.getContext('webgl');
+        if (!unsupported.getContext('webgl')) throw new Error('fixture needs a live context');
         function refused(f) { try {f();} catch(e) {return;} throw new Error('unsupported transfer admitted'); }
         refused(function(){Element.prototype.replaceChildren.call(target,first,unsupported);});
         if (first.parentNode !== document.body || unsupported.parentNode !== document.body || target.firstChild !== old)

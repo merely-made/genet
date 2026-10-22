@@ -1,0 +1,80 @@
+{
+  "status": "qualified bounded supplier intake",
+  "base": "4a518899a2b3a477517523c3a64bf2ea89f4a17f",
+  "change": "Align netfetcher optional tokio-tungstenite 0.30 message types with current murm-wire; no Rust source or public API changes",
+  "wire_source": "git+https://github.com/merely-made/murm.git?branch=main#5b1c5cac2f5d0e275ead94ae4b8b25c65a183694",
+  "tokio_tungstenite": "0.30.0",
+  "tungstenite": "0.30.0",
+  "checks": [
+    {
+      "command": [
+        "cargo",
+        "+1.99.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "netfetcher",
+        "--lib",
+        "-j1"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 55.329,
+      "scope": "32 source-byte-verified files in two-crate workspace; original tests and canonical Git Murm supplier",
+      "passed": 98,
+      "failed": 0,
+      "websocket_passed": 15,
+      "log_sha256": "a1c3380b6807b6cbdf4597ba313cfab95e2612986448ac080215e64892338bbb"
+    }
+  ],
+  "test_workspace": {
+    "members": [
+      "components/netfetcher",
+      "components/genet-host-api"
+    ],
+    "all_32_files_byte_identical_to_source": true,
+    "inherited_metadata": "Source workspace authors The Servo Project Developers, MPL-2.0, edition2024",
+    "canonical_git_supplier": true,
+    "no_local_supplier_overrides": true,
+    "generated_lock_sha256": "028fae5191a1291ff45798a970454e4815c3cccd01baadfa8d411454a52e917d",
+    "source_hashes": {
+      "components/genet-host-api/Cargo.toml": "78cb886340fd6b266812d3c6629b1c9f3039d017ef83e9a47aee0d263e945dfa",
+      "components/genet-host-api/lib.rs": "2d5c272deebc482b572e21aec771cd4d97446e9c7fb79e619a73b9e546957416",
+      "components/genet-host-api/navigation.rs": "0206b7208aa9fa6ce2254c7312cde8063b73a23930cecdc5b9dc5f99f7800880",
+      "components/netfetcher/.gitattributes": "536dcb000e2a911439b889ed185a25159fa43c2fcb03fba456e453c6cfa33d47",
+      "components/netfetcher/.gitignore": "317098c427916a6b8bafe7f29705bac707cf94d3ce498a04cec114d0b6a2627f",
+      "components/netfetcher/Cargo.toml": "8eefe7f4befc06be8712aa5f918d06c122ede0dfa2e8efc1db6ce42b49998044",
+      "components/netfetcher/README.md": "0d4cd35454af768050f8a1de819a8883fe72e6bb1f3ab3ecf19338ae9b35bc83",
+      "components/netfetcher/src/altsvc.rs": "fb5c8a41a2cb3417ab52af6069fe6f9000599044eb1dc1bf54d356b60824ea65",
+      "components/netfetcher/src/cache.rs": "668484df1451940bff7807f1fa32e138a13bc67bb3469f4ee1d4c1a154078829",
+      "components/netfetcher/src/context.rs": "7324c491a9fdab235f62854f40febb5b8fa00148845b9a07f33bea6dcc7f359e",
+      "components/netfetcher/src/cookie_jar.rs": "27f0d8fc8509299372e23011759f1490b23a177c52e10c73e52d2cab541d9680",
+      "components/netfetcher/src/cors.rs": "8d72470a9a48f13eb78dc0c9a62acb8ff0c487a502ae720f27e2ca2456b3e51c",
+      "components/netfetcher/src/data_url.rs": "fe7611d633436b78846af03eedb8e5a7e168aa347edd5ed59316abfc6baba661",
+      "components/netfetcher/src/decode.rs": "ee256b42f7a7e005aac5b31a8391190d9435ba366bf5b3a70fd5062264a12f7a",
+      "components/netfetcher/src/fetch/cache_phase.rs": "6d771d946b6ef9bae3cc300631d7dd4f727ff02d1476a95edf1d97f5a9560f1e",
+      "components/netfetcher/src/fetch/finalize.rs": "28e68e60836ce95bb51b0f20916eca9884094b6ef08f92c2f624c7747ea6f192",
+      "components/netfetcher/src/fetch/mixed_content.rs": "1ec9ac27b1afec578064852cfc1d12c6232a9539996aac7c257ffdaac1298c04",
+      "components/netfetcher/src/fetch/mod.rs": "1fb409ddc50e1ea56ceb5450a656184b3c7bdac754771ea72fd276ce71294f2c",
+      "components/netfetcher/src/fetch/preflight.rs": "96349191c76fb289dfcdf1e3c6dba10a5f127678f6f85a209cb6396ba697e44d",
+      "components/netfetcher/src/fetch/redirect.rs": "4c7053bb817a8d8ddbbada8dc6e524bb24611654673b052b114850a4ea4864ce",
+      "components/netfetcher/src/fetch/request_headers.rs": "e235dda37481f10daaeeb8c465848cc36d258bf2676946a250ba29c801708e33",
+      "components/netfetcher/src/fetch/tests.rs": "2a2696ca19f8dc8876c3bf8f450198ad56bd21e330de80a34fce02d4cba3e611",
+      "components/netfetcher/src/fetch/util.rs": "2c5c838f838fb265145e0ebd093056cfd915f0a27a1a3ed662e600f37fe254f5",
+      "components/netfetcher/src/hsts.rs": "40d59e4aea7a8231d2d85b6863b1c08d8ac360d54b7d24fe21373492799cafc7",
+      "components/netfetcher/src/lib.rs": "d6b2e56d79ba51c97e997fd09bc29c0f8557ae292f4a9a8936935494c8c8273f",
+      "components/netfetcher/src/referrer.rs": "60b7929dff60d79c85b0ae0bac294f93bc7c9cddc03b4c319d72e69ed0f793bc",
+      "components/netfetcher/src/request.rs": "00e51de32c289fe1c19953947ac5506cf5cd6a655cb9ae270f227d3f1a014672",
+      "components/netfetcher/src/response.rs": "997eebb1fe30387db9355ba0315bf25f99204ce5c3292209d25d089fba45ad26",
+      "components/netfetcher/src/sri.rs": "81b7aa0eaa179a3b00e672710c6eddc602f48b5effd021d003e37e2b3a82e635",
+      "components/netfetcher/src/transport.rs": "bebb5fd9a1304df8326023e15f0a2c6005e160e47a1b5e470f6359330185be15",
+      "components/netfetcher/src/transport/hyper.rs": "deb4528366865889eec749170cb6d51b511b844e6448631985c8282f69873955",
+      "components/netfetcher/src/websocket.rs": "c025a81d127021a3199be990bbbfb22060d63c322c8442587080b8c7ba1384d3"
+    }
+  },
+  "limits": [
+    "Tests execute the original crate source and original tests in a two-member workspace, not the full Genet workspace",
+    "Full workspace resolution stopped on unrelated uncached Bole847280f before target selection; no JS/browser/WPT/GPU qualification follows",
+    "Full canonical Git consumer qualification is performed by the coordinated Knot receiving lane; registry publication is separate"
+  ]
+}

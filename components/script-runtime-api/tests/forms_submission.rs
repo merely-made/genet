@@ -225,6 +225,62 @@ fn submitter_target_override<E: ScriptEngineLive>() {
         "submitter target uses existing child context"
     );
 }
+// enctypes-helper.js: each case removes its named iframe in cleanup and the
+// next case appends a fresh one under the same name and submits within the
+// same task, before the removed context's teardown task runs.
+fn reused_target_name<E: ScriptEngineLive>(settle_teardown: bool) {
+    struct Reply(Requests);
+    impl FetchHandler for Reply {
+        fn fetch(&self, r: FetchRequest) -> FetchOutcome {
+            let url = r.url.clone();
+            self.0.0.borrow_mut().push(r);
+            FetchOutcome {
+                network_error: false,
+                status: 200,
+                status_text: "OK".into(),
+                response_type: "basic".into(),
+                url,
+                redirected: false,
+                headers: vec![("content-type".into(), "text/html".into())],
+                body: b"<html><body><p id=loaded>target reply</p></body></html>".to_vec(),
+            }
+        }
+    }
+    let (mut rt, rec) = runtime::<E>();
+    rt.set_fetch_handler(Box::new(Reply(rec.clone())));
+    run(
+        &mut rt,
+        "var old=document.createElement('iframe');old.name='reused';old.srcdoc='<body>old';document.body.appendChild(old);",
+    );
+    rt.run_event_loop(100).unwrap();
+    run(&mut rt, "document.body.removeChild(old);");
+    if settle_teardown {
+        rt.run_event_loop(100).unwrap();
+    }
+    rec.0.borrow_mut().clear();
+    run(
+        &mut rt,
+        "globalThis.frame=document.createElement('iframe');frame.name='reused';document.body.appendChild(frame);var f=makeForm();f.target='reused';f.action='/reused';fixtureSubmit(f);",
+    );
+    assert_eq!(
+        request(&mut rt, &rec).url,
+        "https://forms.test/reused?q=a+b"
+    );
+    assert_eq!(
+        read(
+            &mut rt,
+            "frame.contentDocument.getElementById('loaded').textContent"
+        ),
+        "target reply",
+        "the connected frame of that name is navigated"
+    );
+}
+fn reused_target_name_before_teardown<E: ScriptEngineLive>() {
+    reused_target_name::<E>(false);
+}
+fn reused_target_name_after_teardown<E: ScriptEngineLive>() {
+    reused_target_name::<E>(true);
+}
 fn canceled_submit<E: ScriptEngineLive>() {
     let (mut rt, rec) = runtime::<E>();
     run(
@@ -722,6 +778,8 @@ both! {
     phase_c_forms_submission_request_null_submitter=>request_null_submitter,
     phase_c_forms_submission_request_receiver_errors=>request_receiver_errors,
     phase_c_forms_submission_submitter_target_override=>submitter_target_override,
+    phase_c_forms_submission_reused_target_name_before_teardown=>reused_target_name_before_teardown,
+    phase_c_forms_submission_reused_target_name_after_teardown=>reused_target_name_after_teardown,
     phase_c_forms_submission_canceled_submit=>canceled_submit,
     phase_c_forms_submission_trust_tampering_redispatch=>trust_tampering_redispatch,
     phase_c_forms_submission_mutable_list_reentrancy=>mutable_list_reentrancy,

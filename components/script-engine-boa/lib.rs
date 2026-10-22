@@ -15,6 +15,7 @@ use std::rc::Rc;
 use boa_engine::{
     Context, JsData, JsError, JsNativeError, JsObject, JsResult, JsString,
     JsValue, NativeFunction, Script, Source,
+    job::SimpleJobExecutor,
     builtins::promise::PromiseState,
     builtins::error::ErrorKind as BoaErrorKind,
     class::{Class, ClassBuilder},
@@ -413,9 +414,26 @@ pub struct BoaEngine {
     /// `Realm` is a `Gc` handle, so holding one here roots it; `discard_realm`
     /// drops the handle and the realm becomes collectable.
     registry: Gc<RealmRegistry>,
+    /// The first uncatchable error a job raised since [`ScriptEngine::take_pump_error`].
+    job_error: Option<String>,
+}
+
+/// One line for an error `run_jobs` hands back. `JsError`'s `Display` appends a
+/// frame per stack entry, which for a recursion limit is a page of identical lines.
+fn job_error_line(error: &JsError) -> String {
+    error.to_string().lines().next().unwrap_or_default().to_string()
 }
 
 impl BoaEngine {
+    /// Run the job queue, keeping any error for the host instead of dropping it.
+    /// The context's executor carries on past a failing job (see `new`), so the
+    /// error costs only that job; `run_jobs` returns the first one at quiescence.
+    fn run_queued_jobs(&mut self) {
+        if let Err(error) = self.ctx.run_jobs() {
+            self.job_error.get_or_insert_with(|| job_error_line(&error));
+        }
+    }
+
     fn eval_module_entry(
         &mut self,
         source: &str,
@@ -437,7 +455,7 @@ impl BoaEngine {
                     .insert(identity.into(), module.clone());
             }
             let promise = module.load_link_evaluate(&mut self.ctx);
-            let _ = self.ctx.run_jobs();
+            self.run_queued_jobs();
             Ok::<_, JsError>(promise.state())
         })?;
         match state {
@@ -816,7 +834,13 @@ impl ScriptEngine for BoaEngine {
 
     fn new() -> Result<Self, Self::Error> {
         let loader = Rc::new(HostModuleLoader::default());
-        let mut ctx = Context::builder().module_loader(loader.clone()).build()?;
+        // Boa's default executor clears every queued job when one fails, so an
+        // uncatchable error (a stack limit) in one job silently kills all the others.
+        let executor = Rc::new(SimpleJobExecutor::new().with_continue_on_error(true));
+        let mut ctx = Context::builder()
+            .module_loader(loader.clone())
+            .job_executor(executor)
+            .build()?;
         ctx.register_global_class::<Reflector>()?;
         let registry = Gc::new(RealmRegistry {
             realms: GcRefCell::new(HashMap::new()),
@@ -835,6 +859,7 @@ impl ScriptEngine for BoaEngine {
             ctx,
             loader,
             registry,
+            job_error: None,
         })
     }
 
@@ -905,7 +930,7 @@ impl ScriptEngine for BoaEngine {
             };
             loader.cache.borrow_mut().insert(base_url.into(), module.clone());
             let load = module.load(&mut self.ctx);
-            let _ = self.ctx.run_jobs();
+            self.run_queued_jobs();
             match load.state() {
                 PromiseState::Fulfilled(_) => {},
                 PromiseState::Rejected(reason) => {
@@ -924,7 +949,7 @@ impl ScriptEngine for BoaEngine {
                 Ok(promise) => promise,
                 Err(error) => return ModuleObservation::Final(observed_error_with_value(ExecutionPhase::Runtime, &error, &mut self.ctx)),
             };
-            let _ = self.ctx.run_jobs();
+            self.run_queued_jobs();
             match evaluate.state() {
                 PromiseState::Fulfilled(_) => ModuleObservation::Final(ExecutionObservation::Completed.into()),
                 PromiseState::Rejected(reason) => ModuleObservation::Final(observed_error_with_value(
@@ -1047,8 +1072,12 @@ impl ScriptEngine for BoaEngine {
         if matches!(budget, Budget::Steps(_)) {
             return PumpOutcome::UnsupportedBound;
         }
-        let _ = self.ctx.run_jobs();
+        self.run_queued_jobs();
         PumpOutcome::Quiescent
+    }
+
+    fn take_pump_error(&mut self) -> Option<String> {
+        self.job_error.take()
     }
 
     fn new_host_promise(&mut self) -> Result<(Self::Value, PromiseToken), Self::Error> {
@@ -1957,6 +1986,46 @@ mod tests {
         engine.force_gc();
         let alive = engine.eval("weak.deref() !== undefined").unwrap();
         assert_eq!(engine.value_to_string(&alive).unwrap(), "false");
+    }
+
+    /// Four queued jobs, the second of which recurses without bound and so trips a
+    /// limit no script can catch. Boa's default executor answers that by clearing
+    /// the queue (`ran` would be just `a`) and `run_jobs` hands back an `Err`; the
+    /// engine must keep the rest and keep the error for the host.
+    #[test]
+    fn uncatchable_job_error_keeps_the_other_jobs_and_is_kept_for_the_host() {
+        let mut engine = BoaEngine::new().unwrap();
+        engine.ctx.runtime_limits_mut().set_stack_size_limit(256);
+        engine
+            .eval(
+                "globalThis.ran = [];                  function rec(n) { return rec(n + 1) + 1; }                  Promise.resolve().then(() => ran.push('a'));                  Promise.resolve().then(() => rec(0));                  Promise.resolve().then(() => ran.push('c'));                  Promise.resolve().then(() => ran.push('d'));",
+            )
+            .unwrap();
+        assert_eq!(engine.pump(Budget::Unbounded), PumpOutcome::Quiescent);
+        let ran = engine.eval("ran.join()").unwrap();
+        assert_eq!(engine.value_to_string(&ran).unwrap(), "a,c,d");
+        let error = engine.take_pump_error().expect("the job error is kept");
+        assert!(error.to_lowercase().contains("stack"), "{error}");
+        assert!(!error.contains('\n'), "one line, not a backtrace: {error}");
+        assert_eq!(engine.take_pump_error(), None, "taken once");
+        // The engine is usable afterwards.
+        let sum = engine.eval("1 + 1").unwrap();
+        assert_eq!(engine.value_to_string(&sum).unwrap(), "2");
+    }
+
+    /// The module path drains jobs too, and used to drop the same error.
+    #[test]
+    fn module_job_error_is_kept_for_the_host() {
+        let mut engine = BoaEngine::new().unwrap();
+        engine.ctx.runtime_limits_mut().set_stack_size_limit(256);
+        let source = "globalThis.q = [];                       function rec(n) { return rec(n + 1) + 1; }                       Promise.resolve().then(() => rec(0));                       Promise.resolve().then(() => q.push('x'));";
+        engine
+            .eval_module(source, "https://modules.test/jobs.js", &mut |_, _| None)
+            .unwrap();
+        let q = engine.eval("q.join()").unwrap();
+        assert_eq!(engine.value_to_string(&q).unwrap(), "x");
+        let error = engine.take_pump_error().expect("the job error is kept");
+        assert!(error.to_lowercase().contains("stack"), "{error}");
     }
 
     #[test]

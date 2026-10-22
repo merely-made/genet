@@ -2335,3 +2335,83 @@ and `implicit_key_modifiers`; `cross_arena_replacement` `atomic_refusal`; and
 `frame_arena_boundary` `associated_subtree_boundary`, each on both engines. The runtime gate
 passed 1,078 at the candidate in release, so these fall to the delta gate already named above.
 Evidence: `Code/testing/genet/forms/phase-c-windows-20261016/formdata-followup-20261022/`.
+### Findings, 2026-10-21: delta gate at main `d00361b7c6f`
+
+**Result: the accepted epoch does not carry forward intact.** At main `d00361b7c6f`, 107 commits
+past `e3911fb6b2d`, 14 of the 15 covering gates pass with no lost pass. The runtime gate fails
+10 tests that passed at the epoch, six of them Forms implicit submission. Each loss is pinned to
+one commit by a runtime bisect on O-PC.
+
+**How it ran.** O-PC, toolchain 1.99.1, own worktree and target dir, each row's frozen argv
+(release, `--locked`, `-j1`) plus `--offline` as the accepted run had it, one gate at a time
+under `machine-heavy.lock`. Genet commits no `Cargo.lock`, and the candidate's lock no longer
+satisfies main's manifests (main moved the Boa, Nova, netrender and glifo/vello pins). So the
+gates ran on the main checkout's lock, which passes `--locked` against `d00361b7c6f`
+(sha256 `4695ae29…`, kept as `gated.Cargo.lock`). Dependency drift since the epoch is therefore
+inside what this measures. Baseline names: the accepted `qual-cover-*-run/assessment.json`
+files, and the lib sections of `review-green-native-v2` and `review-green-dom-v2` for the three
+reused gates. Evidence: `Code/testing/genet/forms/delta-gate-20261021/` (`comparison.json`,
+`gate-NN/`, `bisect/`).
+
+| Gate | Then p/f/i | Now p/f/i | Lost passes | New | Responsible |
+|---|---|---|---|---|---|
+| native-only | 25/0/0 | 25/0/0 | 0 | 0 | |
+| scripted | 146/0/0 | 166/0/0 | 1 renamed | 21 | `b297293650c` |
+| Livery | 342/0/2 | 365/0/2 | 0 | 23 | |
+| render | 67/0/0 | 67/0/0 | 0 | 0 | |
+| WPT unit | 81/0/3 | 98/0/3 | 0 | 17 | |
+| Boa adapter | 26/0/0 | 27/0/0 | 1 renamed | 2 | `1b19cc3c286` |
+| Nova adapter | 9/0/0 | 12/0/0 | 0 | 3 | |
+| Ortet | 55/0/0 | 63/0/0 | 0 | 8 | |
+| resources | 18/0/0 | 18/0/0 | 0 | 0 | |
+| Documents | 139/0/0 | 153/0/0 | 2 renamed | 16 | `917f88e6004` |
+| **runtime** | 1,078/0/0 | **1,204/10/0** | **10 failing**, 5 moved | 141 | **`917f88e6004`, `42026a78a4b`** |
+| session API | 22/0/0 | 23/0/0 | 0 | 1 | |
+| native DOM | 187/0/0 | 210/0/0 | 0 | 23 | |
+| netfetcher redirect | 3/0/0 | 3/0/0 | 0 | 0 | |
+| render-host | 17/0/4 | 17/0/4 | 0 | 0 | |
+
+Ignored sets are unchanged in every gate. Under its frozen argv the runtime gate stops at its
+first failing test binary (382 passed, 2 failed, exit 101). The runtime row is a supplementary
+`--no-fail-fast` run of the same argv, so every binary is accounted for.
+
+**Real losses, runtime gate, each bisected (pass at parent, fail at commit):**
+
+- `917f88e6004` "Finish input, shader, Test262 and mutation ownership cuts" (2026-10-17):
+  `forms_submission::phase_c_forms_submission_implicit_default_button`,
+  `_implicit_key_modifiers` and `_implicit_one_blocker`, each on Boa and Nova. An Enter
+  through `dispatch_form_keydown` no longer clicks the default button or issues the request
+  (`"0|false"` against `"1|true"`; 0 requests against 1). `_implicit_disabled_default` and
+  `_implicit_two_blockers` still pass. The commit rewrote the private form host path that
+  `dispatch_form_keydown` uses.
+- `42026a78a4b` "Share query and CSS parsing ownership and refuse unavailable WebGL"
+  (2026-10-17): `cross_arena_replacement::atomic_refusal` and
+  `frame_arena_boundary::associated_subtree_boundary`, each on Boa and Nova. Without a WebGL
+  factory `getContext('webgl')` now returns null. The canvas these tests use as their one
+  refusing element therefore holds no live context, and the transfer is admitted ("a canvas
+  with a live context must refuse explicitly"). The WebCrypto, fetch-security, component-model
+  and observers lanes recorded these 10 as pre-existing on main from 2026-10-20 on, and two of
+  them attributed the canvas pair to the box having no WebGL context. That attribution does not
+  hold: O-PC passed all 10 at the accepted epoch, and the bisect places the loss in the commit.
+
+**Renamed or moved, not lost.** Each replacement passes now. In each case the commit changed the
+asserted contract on purpose, and the old name is gone from the tree:
+`url_only_host_refuses_post_instead_of_loading_get` became
+`…refuses_rich_requests_without_claiming_http_success` (`b297293650c`);
+`pump_drains_fully_regardless_of_budget` became `pump_refuses_unsupported_job_bound_before_running`
+(`1b19cc3c286`); `{boa,nova}_phase_c_t5_scripted_textarea_editor_absence_explicit` became
+`…_textarea_live_edit` (`917f88e6004`, textarea editing now exists). In `42026a78a4b`, three
+`selector::tests` unit tests left with the selector code that moved into shared ownership, and
+`tests/dom_selector_queries.rs` was added. The two canvas tests became
+`html_canvas_get_context_returns_null_without_webgl_factory` and
+`refused_webgl_creation_returns_null_without_caching`.
+
+Not fixed here. Whether these are regressions to repair or contracts to re-baseline is Mark's call.
+
+**Mark's answers on the delta gate's losses, 2026-10-22 (his words; unnumbered until he numbers
+them).** On the six implicit-submission losses pinned to `917f88e6004`: **"Regression, repair it
+(Recommended)"**. On the canvas pair pinned to `42026a78a4b`: **"Re-aim the tests, keep the
+contract (Recommended)"**. Both are briefed as one repair session in script-runtime-api; the
+ten failures every lane since 2026-10-20 recorded as pre-existing are therefore two owned
+regressions of the 2026-10-17 architecture cuts, not a baseline.
+

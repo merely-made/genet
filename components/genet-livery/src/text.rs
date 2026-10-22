@@ -613,8 +613,13 @@ impl TextSystem {
             }
         }
         // A forced break adds text without a span, so a block holding only
-        // `<br>` still formats its line.
-        if text.is_empty() && inline_boxes.is_empty() {
+        // `<br>` still formats its line. Empty-inline markers alone leave the
+        // line phantom (CSS 2.1 9.4.2).
+        if text.is_empty()
+            && inline_boxes
+                .iter()
+                .all(|inline_box| inline_box.marker && inline_box.empty_line)
+        {
             return None;
         }
 
@@ -651,6 +656,7 @@ impl TextSystem {
             let fragment = match item {
                 ShapedItem::Text(run) => run.line_fragment,
                 ShapedItem::InlineBox { line_fragment, .. } => *line_fragment,
+                ShapedItem::Empty { .. } => continue,
             };
             right = right.max(fragment.x + fragment.width);
             top = top.min(fragment.y);
@@ -1331,9 +1337,18 @@ impl TextSystem {
             );
         }
         for item in shaped.items {
-            let mut line = match &item {
-                ShapedItem::Text(run) => run.line_fragment,
-                ShapedItem::InlineBox { line_fragment, .. } => *line_fragment,
+            let mut line = match item {
+                ShapedItem::Text(ref run) => run.line_fragment,
+                ShapedItem::InlineBox { line_fragment, .. } => line_fragment,
+                ShapedItem::Empty {
+                    source,
+                    mut fragment,
+                    line_y,
+                } => {
+                    translate_fragment(&mut fragment, origin);
+                    frame.record_inline_fragment(source, fragment, line_y + origin.1);
+                    continue;
+                },
             };
             translate_fragment(&mut line, origin);
             frame.record_line_bounds(owner, line);
@@ -1420,6 +1435,7 @@ impl TextSystem {
                         );
                     }
                 },
+                ShapedItem::Empty { .. } => {},
             }
         }
         frame.record_prepared_group(prepared_sources, visual_commands);
@@ -1714,7 +1730,16 @@ impl TextSystem {
         let mut previous_break = None;
         let mut span_cursor = 0;
         let mut baselines: Option<(f32, f32)> = None;
-        for line in layout.lines() {
+        // Empty inlines that hold no source fragment of their own.
+        let empty_inlines = inline_boxes
+            .iter()
+            .filter(|inline_box| inline_box.empty_line && !inline_box.paint)
+            .filter_map(|inline_box| {
+                let (line, x) = empty_inline_position(&layout, text, inline_box.index)?;
+                Some((line, x, inline_box.source))
+            })
+            .collect::<Vec<_>>();
+        for (line_index, line) in layout.lines().enumerate() {
             let source_metrics = *line.metrics();
             let shift = if places_lines {
                 let available = line_constraints.map_or(width, |constraints| {
@@ -2058,6 +2083,28 @@ impl TextSystem {
                 baselines =
                     Some(baselines.map_or((baseline, baseline), |(first, _)| (first, baseline)));
             }
+            // Each sits on its own font's content area, as an edge does.
+            for &(_, x, source) in empty_inlines
+                .iter()
+                .filter(|(line, ..)| *line == line_index)
+            {
+                let metrics = box_fonts.get(&source).copied().unwrap_or(root_metrics);
+                let anchor = box_anchors
+                    .get(&source)
+                    .copied()
+                    .unwrap_or_else(Anchor::root);
+                let ascent = metrics.ascent.round();
+                result.push(ShapedItem::Empty {
+                    source,
+                    fragment: Fragment {
+                        x: x + shift,
+                        y: extents.baseline_at(anchor, baseline, line_top, line_height) - ascent,
+                        width: 0.0,
+                        height: ascent + metrics.descent.round(),
+                    },
+                    line_y: line_top,
+                });
+            }
         }
         append_positioned_inline_start_markers(&mut result, inline_boxes);
         Shaped {
@@ -2395,6 +2442,17 @@ where
                         );
                         placement.record(*owner, decorated, line_y);
                         frame.record_inline_fragment(owner_node, decorated, line_y);
+                    }
+                },
+                ShapedItem::Empty {
+                    source,
+                    fragment,
+                    line_y,
+                } => {
+                    let mut fragment = *fragment;
+                    translate_fragment(&mut fragment, origin);
+                    if let Some(node) = node_for(*source) {
+                        frame.record_inline_fragment(node, fragment, *line_y + origin.1);
                     }
                 },
             }
@@ -4308,6 +4366,13 @@ enum ShapedItem<Id> {
         paint: bool,
         line_y: f32,
     },
+    /// An empty inline's zero-width box at its place in the line: geometry
+    /// only, never painted and outside the line's bounds.
+    Empty {
+        source: Id,
+        fragment: Fragment,
+        line_y: f32,
+    },
 }
 
 struct ShapedRun<Id> {
@@ -4335,7 +4400,10 @@ fn append_positioned_inline_start_markers<Id>(
 ) where
     Id: Copy + Eq,
 {
-    for marker in inline_boxes.iter().filter(|inline_box| inline_box.marker) {
+    for marker in inline_boxes
+        .iter()
+        .filter(|inline_box| inline_box.marker && !inline_box.empty_line)
+    {
         let Some((first_index, first_line)) =
             items
                 .iter()
@@ -4352,7 +4420,9 @@ fn append_positioned_inline_start_markers<Id>(
                     } if *source == marker.source || owners.contains(&marker.source) => {
                         Some((index, *line_y))
                     },
-                    ShapedItem::Text(_) | ShapedItem::InlineBox { .. } => None,
+                    ShapedItem::Text(_)
+                    | ShapedItem::InlineBox { .. }
+                    | ShapedItem::Empty { .. } => None,
                 })
         else {
             continue;
@@ -4399,7 +4469,7 @@ fn append_positioned_inline_start_markers<Id>(
 fn shaped_item_line_y<Id>(item: &ShapedItem<Id>) -> f32 {
     match item {
         ShapedItem::Text(run) => run.line_y,
-        ShapedItem::InlineBox { line_y, .. } => *line_y,
+        ShapedItem::InlineBox { line_y, .. } | ShapedItem::Empty { line_y, .. } => *line_y,
     }
 }
 
@@ -4407,7 +4477,38 @@ fn shaped_item_inline_end<Id>(item: &ShapedItem<Id>) -> f32 {
     match item {
         ShapedItem::Text(run) => run.trailing_content_end.unwrap_or(run.line_fragment.x),
         ShapedItem::InlineBox { line_fragment, .. } => line_fragment.x + line_fragment.width,
+        ShapedItem::Empty { fragment, .. } => fragment.x,
     }
+}
+
+/// Where an empty inline at byte `index` sits: its line and the visual x of
+/// that offset in Parley's layout, before Livery's line shift. Downstream: the
+/// next cluster's leading side, else the previous one's trailing side.
+fn empty_inline_position(
+    layout: &parley::Layout<Brush>,
+    text: &str,
+    index: usize,
+) -> Option<(usize, f32)> {
+    use parley::Cluster;
+
+    let side = |cluster: &Cluster<'_, Brush>, trailing: bool| {
+        let offset = cluster.visual_offset()?;
+        let end = if trailing ^ cluster.is_rtl() {
+            cluster.advance()
+        } else {
+            0.0
+        };
+        Some((cluster.path().line_index(), offset + end))
+    };
+    if let Some(cluster) = Cluster::from_byte_index(layout, index) {
+        return side(&cluster, false);
+    }
+    let previous = index.checked_sub(text.get(..index)?.chars().next_back()?.len_utf8())?;
+    let cluster = Cluster::from_byte_index(layout, previous)?;
+    if cluster.is_hard_line_break() {
+        return None;
+    }
+    side(&cluster, true)
 }
 
 #[derive(Clone)]
@@ -4773,44 +4874,19 @@ where
     }
 
     fn push_empty_line_box(&mut self, source: BoxId, style: &ComputedValues, owners: &[BoxId]) {
-        if matches!(style.line_height, CssLineHeight::Normal) {
-            return;
-        }
-        let font_size = super::paint::used_font_size(style);
-        let height = super::layout::line_height_px(&style.line_height, font_size);
-        if height <= 0.0 {
-            return;
-        }
-        let retain_source_fragment = matches!(
+        // An empty positioned inline still establishes the containing block
+        // for an absolute descendant, so its atom keeps its line rectangle.
+        let positioned = matches!(
             self.boxes[source].positioning,
             buckram::PositioningScheme::Relative | buckram::PositioningScheme::Sticky
         );
-        self.inline_boxes.push(InlineAtom {
+        self.inline_boxes.push(empty_inline_atom(
             source,
-            owners: owners.to_vec(),
-            index: self.text.len(),
-            fragment: Fragment {
-                width: 0.0,
-                height,
-                ..Fragment::default()
-            },
-            line_width: 0.0,
-            line_box_height: height,
-            baseline: height,
-            margin_left: 0.0,
-            margin_top: 0.0,
-            edge: false,
-            // An empty positioned inline still establishes the containing
-            // block for an absolute descendant. `paint` also controls source
-            // fragment retention for an atom; keep this zero-width line
-            // rectangle without making it consume inline space.
-            paint: retain_source_fragment,
-            marker: false,
-            empty_line: true,
-            vertical_align: style.vertical_align,
-            font_size,
-            line_height: height,
-        });
+            owners,
+            self.text.len(),
+            style,
+            positioned,
+        ));
     }
 
     fn push_forced_line_break(&mut self, _source: BoxId, style: &ComputedValues) {
@@ -5130,41 +5206,56 @@ where
         style: &ComputedValues,
         owners: &[D::NodeId],
     ) {
-        if matches!(style.line_height, CssLineHeight::Normal) {
-            return;
+        // Paint's pass skips prepared text, so an inline here may only look
+        // empty; it takes the atom alone, never a marker.
+        let atom = empty_inline_atom(source, owners, self.text.len(), style, false);
+        if !atom.marker {
+            self.inline_boxes.push(atom);
         }
-        let font_size = super::paint::used_font_size(style);
-        let height = super::layout::line_height_px(&style.line_height, font_size);
-        if height <= 0.0 {
-            return;
-        }
-        self.inline_boxes.push(InlineAtom {
-            source,
-            owners: owners.to_vec(),
-            index: self.text.len(),
-            fragment: Fragment {
-                width: 0.0,
-                height,
-                ..Fragment::default()
-            },
-            line_width: 0.0,
-            line_box_height: height,
-            baseline: height,
-            margin_left: 0.0,
-            margin_top: 0.0,
-            edge: false,
-            paint: false,
-            marker: false,
-            empty_line: true,
-            vertical_align: style.vertical_align,
-            font_size,
-            line_height: height,
-        });
     }
 
     fn push_forced_line_break(&mut self, _source: D::NodeId, style: &ComputedValues) {
         let start = append_forced_line_break(self.text);
         push_forced_break_span(self.spans, self.owners, style, start..self.text.len());
+    }
+}
+
+/// An inline element holding no text and no atoms. Under an explicit line
+/// height it is a zero-width Parley atom adding its own line height; otherwise
+/// a marker kept out of Parley, boxed after line breaking (CSS 2.1 10.8).
+/// `retain` keeps an atom's line rectangle as its source fragment.
+fn empty_inline_atom<Id: Clone>(
+    source: Id,
+    owners: &[Id],
+    index: usize,
+    style: &ComputedValues,
+    retain: bool,
+) -> InlineAtom<Id> {
+    let font_size = super::paint::used_font_size(style);
+    let line_height = super::layout::line_height_px(&style.line_height, font_size);
+    let atom = !matches!(style.line_height, CssLineHeight::Normal) && line_height > 0.0;
+    let height = if atom { line_height } else { 0.0 };
+    InlineAtom {
+        source,
+        owners: owners.to_vec(),
+        index,
+        fragment: Fragment {
+            width: 0.0,
+            height,
+            ..Fragment::default()
+        },
+        line_width: 0.0,
+        line_box_height: height,
+        baseline: height,
+        margin_left: 0.0,
+        margin_top: 0.0,
+        edge: false,
+        paint: atom && retain,
+        marker: !atom,
+        empty_line: true,
+        vertical_align: style.vertical_align,
+        font_size,
+        line_height,
     }
 }
 

@@ -2079,7 +2079,13 @@ pub(crate) fn navigation_target<E: ScriptEngine>(
     } else if name.eq_ignore_ascii_case("_blank") {
         return None;
     } else {
-        tree.iter().find(|context| context.name() == name)?.id()
+        // A removed frame stays in the tree until its queued teardown, but it
+        // stopped being a navigable at detach: only serving contexts match.
+        tree.iter()
+            .find(|context| {
+                context.name() == name && frames.contexts.values().any(|&id| id == context.id())
+            })?
+            .id()
     };
     let sandbox = tree.get(source)?.sandbox();
     if target != source

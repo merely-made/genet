@@ -7198,6 +7198,8 @@
         case 'formFocusRaw': {
           var focusRef = nativeFormReflect(a), focusTarget = wrapNode(focusRef);
           if (b === 'true') {
+            // Focusing the focused area changes nothing and fires nothing.
+            if (hostFocusCurrent(focusTarget)) return true;
             hostFocusedRef = focusRef;
             applyDOMBrand(dispatchNodeEvent,focusTarget,[privateEvent('focus',userAgentEventPrototype,false,false,true,null)]);
             applyDOMBrand(dispatchNodeEvent,focusTarget,[privateEvent('focusin',userAgentEventPrototype,true,false,true,null)]);

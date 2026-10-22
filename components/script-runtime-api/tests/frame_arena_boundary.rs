@@ -7,8 +7,12 @@
 use script_engine_api::ScriptEngine;
 use script_runtime_api::{NoScriptLoader, Runtime};
 
+#[path = "support/inert_webgl.rs"]
+mod inert_webgl;
+
 fn associated_subtrees_travel_with_their_owner<E: ScriptEngine>() {
     let mut runtime = Runtime::<E>::new().unwrap();
+    runtime.set_webgl_factory(inert_webgl::factory());
     runtime
         .set_base_url("https://parent.test/index.html")
         .unwrap();
@@ -55,7 +59,7 @@ fn associated_subtrees_travel_with_their_owner<E: ScriptEngine>() {
         // The residual refusal is a canvas that minted a drawing context: its
         // registry index and texture producer answer to the source host only.
         var painted = document.getElementById('painted');
-        painted.getContext('webgl');
+        if (!painted.getContext('webgl')) throw new Error('fixture needs a live context');
         var error;
         try { child.document.body.appendChild(painted); } catch (e) { error = e; }
         if (!error || String(error).indexOf('NotSupportedError') === -1)

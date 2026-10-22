@@ -434,12 +434,14 @@ impl<E: ScriptEngine> crate::Runtime<E> {
     }
     /// Dispatch a trusted keydown and, for unmodified Enter, use the shared
     /// native implicit-submission decision before the microtask checkpoint.
+    /// A key reaches the focused control, so the target is host-focused first.
     pub fn dispatch_form_keydown(
         &mut self,
         raw_node_id: u64,
         key: &str,
         modifiers: FormKeyModifiers,
     ) -> Result<bool, E::Error> {
+        self.dispatch_form_focus(raw_node_id, true)?;
         let text = format!(
             "{{\"key\":{},\"alt\":{},\"ctrl\":{},\"meta\":{},\"shift\":{}}}",
             crate::js_str(key),

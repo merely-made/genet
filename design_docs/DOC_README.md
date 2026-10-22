@@ -210,7 +210,7 @@ completed corpus census or bounded slice does not close its enclosing feature.
   Metadata, P4 fetch API residuals; CSP is its own lane. Rulings recorded in Mark's
   words.
 - [Observers and timing](2026-10-20_observers_and_timing_plan.md)
-  (**in progress, 2026-10-20**, branch `observers-timing`, not merged; all phases implemented; IntersectionObserver 0 -> 213/309 and cssom-view 331 -> 569 subtests on both engines; 15 vacuous cssom-view passes recorded as lost): ledger
+  (**in progress, 2026-10-20**, branch `observers-timing`, not merged; all phases implemented; IntersectionObserver 0 -> 213/309 and cssom-view 331 -> 569 subtests on both engines; 15 vacuous cssom-view passes recorded as lost, recovered honestly on branch `empty-inline-boxes` 2026-10-22, cssom-view 581/1933 on both engines, 0 lost, paint unmoved, not merged): ledger
   rows 4–6 as one lane, in Mark's ruled order. First, one host clock per process,
   coarsened to spec, excluding sleep, with `Date` following the harness clock
   on both engines. Then the Performance Timeline residue, then the

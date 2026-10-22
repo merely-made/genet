@@ -2415,3 +2415,68 @@ contract (Recommended)"**. Both are briefed as one repair session in script-runt
 ten failures every lane since 2026-10-20 recorded as pre-existing are therefore two owned
 regressions of the 2026-10-17 architecture cuts, not a baseline.
 
+
+### Findings, 2026-10-22: runtime gate repaired on branch `forms-runtime-repair`
+
+**Result: the script-runtime-api gate is back to zero lost passes.** Under the delta gate's
+frozen argv with `--no-fail-fast` on O-PC (toolchain 1.99.1, own worktree and target dir, main
+checkout's lock), it reads **1,220 passed, 0 failed, 0 ignored** across 67 test binaries, on
+Boa and Nova. The delta gate read 1,204/10/0 and the accepted epoch 1,078/0/0. All ten delta-gate
+failures pass, and nothing that passed at the delta gate is lost. Against the epoch, the only
+names absent are the five already accounted as moved in the delta-gate entry (three
+`selector::tests`, two canvas tests renamed by `42026a78a4b`). The sixteen names new since the
+delta gate are the ten repaired and six tests that reached main afterwards (`reused_target_name_{before,after}_teardown`
+on both engines from `64bee6bbcdd`, and two job-queue tests from `fe949f135f0`). Code commit
+`eeeebe26bcc`. Evidence: `Code/testing/genet/forms/runtime-repair-20261022/`
+(`runtime-full/`, `runtime-comparison.json`, `probe-*`, `before/`, `after/`, `fs0-comparison.json`).
+
+**Implicit submission: where Enter's default went.** `917f88e6004` (I1, live scripted input) made
+the shared `key()` in `form_data/bootstrap.js` skip implicit submission unless
+`DOM.focused(target)`: the target is the host-focused node and still connected. The live
+session (`genet-scripted/document.rs`) host-focuses a node before `dispatch_host_key_step`, so it
+passes. `dispatch_form_keydown` never focused. It still dispatched the keydown and returned true,
+while the default-button click and the request were dropped without any signal. A same-build
+probe showed the cause: with the target host-focused first, all ten implicit tests pass; without
+it, the same six fail and `_implicit_disabled_default` / `_implicit_two_blockers` pass, because
+their assertion is that nothing submits.
+
+**Mark's answers on the repair shape, 2026-10-22 (his words; unnumbered).** For the Enter entry:
+**"Key implies focus (Recommended)"**. For the canvas pair: **"Inert test handler (Recommended)"**.
+
+**Repair, under the new ownership.** `dispatch_form_keydown` now host-focuses its target through
+`dispatch_form_focus`, which keeps the existing connectedness refusal and uses the same
+`formFocusRaw` step the live path uses, then sends the key. One focus precondition, one owner.
+`formFocusRaw` gains the HTML focusing-steps early return: focusing the area that is already
+focused changes nothing and fires no events. Repeated keys therefore fire focus/focusin once,
+on the first key. The live path already short-circuited that case on its own side.
+
+**Canvas pair: re-aimed, contract kept.** `adoption.rs` refuses a canvas only when
+`__noteCanvasContext` recorded a live context, and only `getContext('webgl')` records one; Genet
+has no 2D context path. No other element still refuses, so the re-aim mints a context.
+`tests/support/inert_webgl.rs` is a WebGlHandler that draws nothing. `atomic_refusal` and
+`associated_subtree_boundary` install it through `set_webgl_factory`, and each asserts that
+`getContext('webgl')` is non-null, so neither can pass vacuously again. The null contract is
+unchanged: `html_canvas_get_context_returns_null_without_webgl_factory` and
+`refused_webgl_creation_returns_null_without_caching` pass in the same run.
+
+**form-submission-0, before and after, both engines: no movement.** I froze two `genet-wpt`
+binaries with the Phase C features (`image-decode,netfetch`): main `729414db135`, sha256
+`10e7fd7c…`, and `eeeebe26bcc`, sha256 `326d1df5…`. Each ran all 33 Phase C submission sources
+with the Phase C argv: Livery, jobs 1, timeout 120, drive deadline 15, exact maps, against an
+owned `windows_wpt_server.py` on 18800. The manifest is the inventory's (`d5ec5be9…`). Before and
+after are identical: Boa 95 of 216 subtests and Nova 95 of 339 (the totals differ by partial rows
+of errored files), with 8 pass, 18 fail and 7 error files on each engine. Zero subtests or files
+moved. The accounting: no WPT route reaches `dispatch_form_keydown`.
+`implicit-submission.optional.html` fails 0/3 before and after, as it did at the Phase C
+candidate (`qual-c-candidate-*-20.json`), with "not a callable function". The scripted DOM has no
+`HTMLElement.prototype.focus` and `genet-wpt` has no `test_driver.send_keys` hook, so the file
+stops before an Enter is delivered. The error is consistent with its first call,
+`form.text.focus()`. Moving that file needs focus() and send_keys, which is separate work.
+
+**Instrument notes.** Three capture attempts failed before the counted one, and each is kept
+under `failed-attempt-{1,2,3}/`. In order: the runner needs cwd at the repo root to find
+`tests/wpt/meta/MANIFEST.json`; on Windows, `terminate()` orphans wptserve's spawned children,
+which keep 18800, so teardown now ends the whole tree; and `genet-wpt` server mode needs
+`--features netfetch`, which is not a default feature, so a plain `cargo build -p genet-wpt`
+yields a binary that refuses `--server-base` (exit 2). The counted capture's first row (Boa
+`FormDataEvent.window.js`, 2/2) matches the Phase C capture of the same file.

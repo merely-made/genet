@@ -356,6 +356,8 @@ impl MacosCALayerBackend {
                     height: size.height,
                     depth: 1,
                 },
+                // The drawable's texture is retained; nothing else to release on drop.
+                None,
             );
             self.wgpu_device
                 .create_texture_from_hal::<wgpu::wgc::api::Metal>(

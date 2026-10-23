@@ -704,6 +704,13 @@ same session; links out of it are rewritten for its new depth.
 
 ## Working principles
 
+- For routine maintainer-owned work in this one-person company, use scoped
+  commits, ordinary validation and direct main integration/push when authorized.
+  Create a PR only when requested, collaboration warrants it, or an actual
+  repository rule requires it. This does not waive checks or custody of active
+  work. Mark reiterated this preference on 2026-10-22.
+
+
 - **Bounded shared browser replacement (2026-10-14):** the stored asynchronous
   recipe waits for the same all-host detachment barrier and admits one branded,
   deadline-bound local claim. Two full Workshop mounts passed controlled owned

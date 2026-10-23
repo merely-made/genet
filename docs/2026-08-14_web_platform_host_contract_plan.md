@@ -19,6 +19,22 @@ import alone no longer identifies the implementation owner. Source anchors:
 `mere/crates/inker/inker/src/{lib,surface_engine}.rs`. The split is recorded in
 `mere/design_docs/mere_docs/implementation_strategy/2026-09-02_platform_boundary_and_repository_topology_plan.md`.
 
+## Registry boundary, 2026-10-22
+
+`document-session-api` 0.1.0 is now on crates.io, tagged
+`document-session-api-v0.1.0` at `10a8c5b5d1b`. The normalized 11-file
+package verified before upload and passed all 23 tests with every feature in
+an independent package workspace. No Genet engine or renderer was released.
+
+The new `wgpu-cue` repository owns the neutral `webcue` control protocol and
+the two explicit presentation directions. It reuses this crate's canonical
+input, IME and document-semantic vocabulary. Inker still owns orchestration
+and its existing `WebSurface` consumers; none has been migrated by the initial
+contract proof. Registry publication and the limited receiving-host evidence
+are recorded in `wgpu-cue/docs/2026-10-22-proof.md`. Future changes to the
+published document API receive their own version rather than silently changing
+0.1.0.
+
 ## Thesis
 
 The contract between a browsing engine and its host uses web-platform terms,

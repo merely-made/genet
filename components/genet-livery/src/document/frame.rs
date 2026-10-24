@@ -151,7 +151,7 @@ where
         if let Some((viewport, list)) = &self.cached
             && *viewport == (width, height)
         {
-            return Ok(list.clone().translated(-self.scroll.0, -self.scroll.1));
+            return Ok(list.clone().scrolled(-self.scroll.0, -self.scroll.1));
         }
 
         if !self.layout_dirty
@@ -489,7 +489,7 @@ where
         self.retain_active_data_urls(&styles);
         self.cached = Some(((width, height), list.clone()));
         self.style_only_damage = true;
-        Ok(list.translated(-self.scroll.0, -self.scroll.1))
+        Ok(list.scrolled(-self.scroll.0, -self.scroll.1))
     }
 
     pub(in crate::document) fn sampled_paint_styles<'a>(

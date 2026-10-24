@@ -55,6 +55,11 @@ pub struct LiveryPaintList {
     viewport: DeviceIntSize,
     generation: u64,
     commands: Vec<PaintCmd>,
+    /// The first command fills the CSS canvas, rather than a document box.
+    /// Keep that colour in the viewport during document scroll. General
+    /// placement and page zoom still transform the whole surface.
+    #[serde(skip)]
+    has_canvas_color: bool,
     fonts: Vec<FontResource>,
     images: Vec<ImageResource>,
     #[serde(skip)]
@@ -497,6 +502,7 @@ impl LiveryPaintList {
             viewport,
             generation,
             commands: Vec::new(),
+            has_canvas_color: false,
             fonts: Vec::new(),
             images: Vec::new(),
             host_leaf_slots: Vec::new(),
@@ -514,9 +520,20 @@ impl LiveryPaintList {
             .map(|image| (image.width as f32, image.height as f32))
     }
 
-    /// Translate an already-emitted frame into the current viewport scroll
-    /// coordinate system without rebuilding paint commands.
-    pub fn translated(mut self, x: f32, y: f32) -> Self {
+    /// Scroll the canonical document paint without moving its canvas colour.
+    /// The cached list remains unmodified; ordinary element backgrounds and
+    /// the retained frame/text/host slots stay inside the scroll transform.
+    pub fn scrolled(self, x: f32, y: f32) -> Self {
+        let start = usize::from(self.has_canvas_color);
+        self.translated_from(start, x, y)
+    }
+
+    /// Place the complete surface, including its canvas, at another origin.
+    pub fn translated(self, x: f32, y: f32) -> Self {
+        self.translated_from(0, x, y)
+    }
+
+    fn translated_from(mut self, start: usize, x: f32, y: f32) -> Self {
         if x == 0.0 && y == 0.0 {
             return self;
         }
@@ -525,9 +542,10 @@ impl LiveryPaintList {
             transform: LayoutTransform::translation(x, y, 0.0),
             kind: TransformKind::Standard,
         };
-        self.commands.insert(0, PaintCmd::PushTransform(transform));
+        self.commands
+            .insert(start, PaintCmd::PushTransform(transform));
         self.commands.push(PaintCmd::PopTransform);
-        self.shift_slots_after(0, 1, None);
+        self.shift_slots_after(start, 1, None);
         self
     }
 
@@ -536,7 +554,7 @@ impl LiveryPaintList {
     ///
     /// This is the render half of user-agent page zoom: layout ran at
     /// `width / factor` by `height / factor`, so every painted primitive —
-    /// including a scroll translation already pushed by [`Self::translated`] —
+    /// including document scroll already applied by [`Self::scrolled`] —
     /// is composed under one root scale rather than rewritten. The presentation
     /// size is taken rather than derived so the frame keeps the host's exact
     /// pixel size across the rounding that CSS division introduced.
@@ -4092,10 +4110,15 @@ where
     };
     let color = resolve_color(&source_style.background_color);
     if color.a > 0.0 {
+        debug_assert!(
+            list.commands.is_empty(),
+            "canvas colour precedes document paint"
+        );
         list.commands.push(PaintCmd::DrawRect(RectItem {
             placement: CommonPlacement::new(bounds(&canvas)),
             color,
         }));
+        list.has_canvas_color = true;
     }
     emit_background_image_in(list, source_style, positioning, canvas_rect);
     Some(source)

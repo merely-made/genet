@@ -1,0 +1,1082 @@
+warning: use of deprecated method `icu_properties::props::BidiClass::to_icu4c_value`: please comment on https://github.com/unicode-org/icu4x/issues/6067 if you need this
+   --> support/patches/parley/src/bidi.rs:893:13
+    |
+893 |     1 << (t.to_icu4c_value() as u32)
+    |             ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: `genet-parley` (lib) generated 1 warning
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+  --> components/genet-scripted-dom/forms_submission.rs:98:14
+   |
+98 |             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+   |              ^^^^^^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+   |
+98 -             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+98 +             .try_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+   |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+   --> components/genet-scripted-dom/lib.rs:166:10
+    |
+166 |         .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+    |          ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+166 -         .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+166 +         .try_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+    |
+
+warning: `genet-scripted-dom` (lib) generated 2 warnings (run `cargo fix --lib -p genet-scripted-dom` to apply 2 suggestions)
+   Compiling genet-livery v0.0.4 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/genet-livery)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 12.00s
+     Running unittests src/lib.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/genet_livery-394253f3c785485e)
+
+running 359 tests
+test box_tree::tests::generated_boxes_carry_inherited_writing_mode_and_direction ... ok
+test box_tree::tests::computed_transform_captures_absolute_and_fixed_descendants_in_buckram ... ok
+test box_tree::tests::computed_paint_containment_captures_absolute_and_fixed_descendants_in_buckram ... ok
+test box_tree::tests::generated_tree_applies_suppression_contents_and_comment_rules ... ok
+test box_tree::tests::an_inline_block_keeps_a_block_level_table_child ... ok
+test box_tree::tests::table_display_vocabulary_and_html_ua_roles_reach_buckram ... ok
+test document::tests::a_percentage_child_of_an_auto_inline_block_settles_in_one_pass ... ok
+test document::tests::a_float_keeps_the_contribution_of_its_percentage_inline_block ... ok
+test document::tests::a_row_of_fitting_buttons_needs_no_basis_pass ... ok
+test document::tests::a_percentage_atom_looks_through_nested_positioned_inlines ... ok
+test document::tests::a_percentage_top_inset_takes_the_containing_blocks_height ... ok
+test document::tests::a_buttons_declared_size_includes_its_padding ... ok
+test document::tests::accessible_reveal_unwinds_active_nested_scrollports_inside_out ... ok
+test document::tests::an_auto_inline_block_wraps_within_its_column ... ok
+test document::tests::accessible_pointer_target_uses_the_visible_clipped_hit_descendant ... ok
+test document::tests::changing_background_data_urls_retires_old_pixels_but_keeps_hidden_img ... ok
+test document::tests::an_inline_block_in_a_block_wider_than_the_viewport_reaches_its_max_content ... ok
+test document::tests::an_inline_block_paints_its_border_once_around_its_box ... ok
+test document::tests::a_percentage_height_on_an_atom_needs_a_definite_containing_height ... ok
+test document::tests::a_margined_atom_inside_a_plain_inline_uses_the_enclosing_block ... ok
+test document::tests::atoms_in_a_flex_item_and_a_table_cell_take_their_own_block ... ok
+test document::tests::css_validation_selectors_track_candidate_and_user_validity ... ok
+test document::tests::css_checked_reads_live_checkbox_state_instead_of_the_default_attribute ... ok
+test document::tests::a_percentage_width_on_an_atomic_inline_takes_its_containing_block ... ok
+test document::tests::dom_mutation_records_its_nearest_formatting_context_root ... ok
+test document::tests::geometry_mutation_rejects_the_paint_only_reuse_path ... ok
+test document::retained_motion_tests::retained_motion_reuses_labelled_boxes_and_reorders_paint_and_input ... ok
+test document::tests::empty_live_input_projects_placeholder_instead_of_default_value ... ok
+test document::tests::hidden_ancestor_suppresses_virtual_control_text ... ok
+test document::tests::background_color_mutation_repaints_without_a_geometry_pass ... ok
+test document::tests::live_control_text_updates_after_hiding_and_showing_with_a_retained_neighbor ... ok
+test document::retained_motion_tests::retained_motion_rejects_resources_viewport_and_active_animation ... ok
+test document::tests::non_form_id_blocker_restyles_external_form_association ... ok
+test document::retained_motion_tests::retained_motion_does_not_hide_earlier_text_or_structure_batches ... ok
+test document::tests::live_input_text_is_clipped_to_its_content_box_and_uses_only_current_value ... ok
+test document::tests::moving_selected_placeholder_option_restyles_select_without_selectedness_change ... ok
+test document::tests::percentage_padding_on_an_inline_block_takes_the_containing_width ... ok
+test document::tests::option_selectedness_restyles_the_external_select_form_owner ... ok
+test document::tests::ordinary_paint_and_queries_borrow_retained_planes_until_sampling_needs_a_copy ... ok
+test document::tests::live_input_value_paints_without_replacing_its_default_attribute ... ok
+test document::tests::live_textarea_value_projects_multiline_text_and_preserves_author_children ... ok
+test document::tests::radio_state_and_interaction_or_custom_validity_have_distinct_group_facts ... ok
+test document::tests::password_input_masks_character_clusters_without_retaining_secret_text ... ok
+test document::tests::radio_group_membership_restyles_peer_without_form_or_fieldset ... ok
+test document::tests::radio_group_validity_restyles_separate_fieldset_and_group_attributes ... ok
+test document::tests::positioned_inset_mutation_over_a_fixed_box_keeps_it_on_the_viewport ... ok
+test document::tests::generic_font_ledger_survives_rebuild_and_invalid_batch_is_atomic ... ok
+test document::tests::retained_data_url_layout_and_paint_use_one_cached_raster ... ok
+test document::tests::positioned_leaf_resize_updates_nested_scroll_range ... ok
+test document::tests::positioned_children_do_not_widen_a_flex_item ... ok
+test document::tests::replaced_atoms_inside_inline_wrappers_keep_their_natural_size ... ok
+test document::tests::positioned_descendant_extends_its_scroll_container_range ... ok
+test document::tests::positioned_inset_mutation_reuses_a_stable_fragment_subtree ... ok
+test document::tests::positioned_leaf_geometry_mutation_resizes_the_retained_fragment ... ok
+test document::tests::retained_document_uses_intrinsic_positioned_width_between_insets ... ok
+test document::tests::retained_image_layout_and_paint_share_pixels_across_frames ... ok
+test document::tests::positioned_text_leaf_resize_reformats_instead_of_reusing_shaped_text ... ok
+test document::tests::retained_layout_borrows_the_completed_frame_without_relayout ... ok
+test document::tests::retained_relayout_keeps_unrelated_and_table_generated_ids_after_sibling_insertion ... ok
+test document::tests::retained_disjoint_formatting_roots_publish_atomically ... ok
+test document::tests::retained_flex_root_splice_accepts_an_inserted_child_box ... ok
+test document::tests::a_line_ending_in_a_break_has_height_even_when_empty ... ok
+test document::tests::retained_formatting_root_splice_refreshes_descendants_and_keeps_outside_identity ... ok
+test document::tests::retained_root_formatter_promotes_a_changed_size_to_its_block_parent ... ok
+test document::tests::retained_grid_root_splice_accepts_an_inserted_child_box ... ok
+test document::tests::retained_mutation_paints_like_a_fresh_final_document ... ok
+test document::tests::retained_root_formatter_promotes_through_a_changed_parent_to_a_stable_ancestor ... ok
+test document::tests::positioned_inset_reuse_updates_nested_scroll_range ... ok
+test document::tests::retained_root_formatter_reflows_a_text_free_grid_subtree ... ok
+test document::tests::retained_root_formatter_adds_its_first_text_source_in_dom_order ... ok
+test document::tests::retained_root_formatter_replaces_a_fixed_size_table_and_its_paint_plane ... ok
+test document::tests::retained_root_img_src_changes_retire_prior_data_urls ... ok
+test document::tests::retained_root_formatter_updates_fixed_root_overflow ... ok
+test document::tests::retained_table_root_keeps_an_unrelated_table_paint_plane_live ... ok
+test document::tests::retained_text_position_query_is_frame_backed_and_selection_free ... ok
+test document::tests::retained_root_formatter_replaces_a_captioned_fixed_size_table ... ok
+test document::tests::sticky_scrolls_its_retained_fragment_without_relayout ... ok
+test document::tests::retained_root_formatter_drops_retired_text_sources ... ok
+test document::tests::sticky_table_caption_uses_its_wrapper_scroll_extent_without_relayout ... ok
+test document::tests::sticky_table_cell_uses_its_nested_scrollport_without_relayout ... ok
+test document::tests::retained_root_splice_keeps_an_unrelated_table_paint_plane_live ... ok
+test image_decode::tests::decodes_size_and_pixels_with_the_feature ... ok
+test image_resources::tests::changed_or_removed_source_drops_old_decode ... ok
+test image_resources::tests::data_url_cache_reuses_active_source_and_retires_removed_source ... ok
+test image_resources::tests::failed_decode_is_cached_until_source_changes ... ok
+test image_resources::tests::malformed_data_key_uses_replaceable_supplied_bytes ... ok
+test image_resources::tests::unchanged_source_shares_decode_across_document_views_and_replacement ... ok
+test document::tests::sticky_table_footer_group_uses_the_scrollport_end_without_relayout ... ok
+test layout::tests::absolute_auto_inline_size_fills_between_definite_insets_from_buckram_inputs ... ok
+test layout::tests::absolute_empty_leaf_uses_buckrams_resolved_border_box ... ok
+test layout::tests::absolute_flex_and_grid_children_keep_their_native_static_rectangles ... ok
+test layout::tests::absolute_grid_self_end_uses_the_grid_content_end ... ok
+test layout::tests::absolute_grid_static_position_uses_content_edges_when_the_containing_block_is_elsewhere ... ok
+test layout::tests::absolute_grid_static_position_uses_the_placed_area_when_the_grid_is_its_containing_block ... ok
+test layout::tests::absolute_non_leaf_percentage_block_size_uses_the_initial_containing_block ... ok
+test layout::tests::absolute_nonleaf_reformats_at_buckrams_resolved_inline_size ... ok
+test layout::tests::absolute_position_converts_between_vertical_static_and_containing_flows ... ok
+test document::tests::sticky_table_header_group_moves_its_row_subtree_without_relayout ... ok
+test layout::tests::absolute_static_position_in_a_block_split_from_inline_includes_margins ... ok
+test layout::tests::absolute_static_position_keeps_its_formatting_source_and_k5a_containing_block ... ok
+test document::tests::retained_nested_auto_table_remeasures_outer_columns_like_fresh_layout ... ok
+test layout::tests::absolute_table_caption_uses_shared_k5d_wrapper_geometry ... ok
+test layout::tests::absolute_table_root_uses_shared_k5d_wrapper_geometry ... ok
+test layout::tests::auto_align_self_resolves_parent_self_edges_against_the_subject_flow ... ok
+test document::tests::sticky_table_row_group_moves_its_row_subtree_without_relayout ... ok
+test layout::tests::absolute_table_track_parts_use_zero_track_static_anchors ... ok
+test document::tests::sticky_table_row_moves_its_cell_subtree_without_relayout ... ok
+test document::tests::sticky_uses_the_nearest_nested_scrollport_offset ... ok
+test layout::tests::border_line_height_alignment_and_overflow_converters_follow_their_css_tables ... ok
+test document::tests::text_inside_an_inline_block_has_caret_hit_and_selection_geometry ... ok
+test layout::tests::container_alignment_normal_reaches_taffy_as_unset_and_every_other_keyword_passes_through ... ok
+test document::tests::text_inside_an_inline_block_paints_once ... ok
+test layout::tests::css_display_tables_do_not_consume_html_span_attributes ... ok
+test layout::tests::dimension_converters_tag_percentage_bearing_calc_for_the_basis_and_pass_the_rest_through ... ok
+test layout::tests::fixed_leaf_percentage_block_size_uses_the_initial_containing_block ... ok
+test layout::tests::fixed_position_uses_a_transform_fixed_containing_block ... ok
+test layout::tests::fixed_table_caption_uses_shared_k5d_initial_geometry ... ok
+test layout::tests::flex_axis_projects_logical_direction_matrix_to_taffy ... ok
+test layout::tests::fixed_table_track_parts_use_zero_track_static_anchors ... ok
+test layout::tests::flex_child_style_projection_excludes_non_element_provenance ... ok
+test layout::tests::flex_cross_axis_projects_logical_start_and_wrap_reversal ... ok
+test layout::tests::flex_justify_content_start_and_end_follow_the_logical_main_axis ... ok
+test layout::tests::a_root_element_table_with_a_negative_margin_cell_does_not_panic ... ok
+test layout::tests::grid_item_order_changes_the_topmost_hit_target ... ok
+test layout::tests::hit_test_with_scroll_shifts_the_descendants_of_a_scrolled_container ... ok
+test layout::tests::b3_row_group_height_reaches_the_buckram_table_route ... ok
+test layout::tests::grid_static_self_alignment_uses_the_subject_writing_mode ... ok
+test layout::tests::html_column_and_column_group_spans_are_bounded_at_the_adapter ... ok
+test layout::tests::html_align_descendants_adjusts_used_margins_without_rewriting_computed_css ... ok
+test layout::tests::inline_block_min_content_excludes_hanging_trailing_space ... ignored, known defect: an inline-block's min-content width counts the line's hanging trailing space
+test layout::tests::html_table_spans_are_normalized_before_buckram_receives_them ... ok
+test layout::tests::absolute_siblings_in_one_inline_keep_an_empty_first_fragment ... ok
+test layout::tests::inline_origin_absolute_position_uses_the_line_fragment_as_its_static_source ... ok
+test layout::tests::b3_inline_table_uses_its_first_table_baseline ... ok
+test layout::tests::flex_child_align_self_projects_parent_cross_axis_and_subject_flow ... ok
+test layout::tests::k4c5b_automatic_explicit_width_is_distributed_and_painted ... ok
+test layout::tests::k4c5b_automatic_shrink_to_fit_is_buckram_owned ... ok
+test layout::tests::k4c5b_fixed_border_spacing_distribution_is_painted ... ok
+test layout::tests::k4c5b_fixed_table_columns_are_buckram_owned ... ok
+test layout::tests::horizontal_direction_changes_keep_shape_constraints_for_atomic_lines ... ok
+test document::tests::transferred_subtree_pending_mutations_damage_both_retained_documents ... ok
+test layout::tests::k4d1_cell_formatter_formats_contents_at_exact_inline_sizes ... ok
+test layout::tests::k4d2_row_minima_follow_from_formatted_cell_contents ... ok
+test layout::tests::inline_origin_absolute_auto_width_refits_to_the_k5d_inline_size ... ok
+test layout::tests::inline_origin_fixed_auto_width_refits_to_the_k5d_inline_size ... ok
+test layout::tests::k4d5_cell_contents_return_baselines_directly ... ok
+test layout::tests::k4c5b_tables_inside_atomic_inline_subtrees_are_buckram_owned ... ok
+test layout::tests::k4c5b_text_path_automatic_tables_are_buckram_owned ... ok
+test layout::tests::k4d4c_cell_min_and_max_height_are_ignored ... ok
+test layout::tests::k4c5b_text_path_fixed_tables_are_buckram_owned ... ok
+test layout::tests::contained_root_keeps_body_writing_mode_local_to_body_content ... ok
+test layout::tests::k4d6b_row_heights_reach_the_painted_rows ... ok
+test layout::tests::k4d6_rows_groups_and_columns_have_their_own_fragments ... ok
+test layout::tests::k4e1_a_percentage_table_skips_the_wrapper_it_would_otherwise_wait_on ... ok
+test layout::tests::b3_auto_row_group_does_not_repeat_the_table_height ... ok
+test layout::tests::k4e1_a_table_flex_item_is_the_wrapper_and_keeps_the_grids_width ... ok
+test layout::tests::k4e1_the_wrapper_takes_the_margin_and_the_grid_keeps_its_own_box ... ok
+test layout::tests::k4e2_an_auto_width_wrapper_measures_the_grid_instead_of_filling ... ok
+test layout::tests::k4e2_auto_margins_centre_a_table ... ok
+test layout::tests::k4e3_a_captioned_table_no_longer_defers ... ok
+test document::tests::retained_text_edit_in_a_keyed_flex_row_list_paints_like_fresh_layout ... ok
+test layout::tests::k4g4_consumes_projected_metrics_on_both_table_axes ... ok
+test layout::tests::inline_replaced_auto_width_is_intrinsic_whatever_its_display ... ok
+test document::tests::retained_text_edit_under_a_block_cell_promotes_and_paints_like_fresh_layout ... ok
+test layout::tests::k4e4_used_height_of_a_captioned_table_is_the_grids ... ok
+test layout::tests::live_bfc_auto_margins_fit_or_move_below_floats_in_both_directions ... ok
+test layout::tests::live_auto_float_width_clamps_retained_inline_intrinsics ... ok
+test layout::tests::live_bfc_fragments_expose_text_flex_grid_and_atomic_baselines ... ok
+test layout::tests::k4e4_an_inline_table_sits_in_the_text_line ... ok
+test layout::tests::live_bfc_places_blockified_floats_and_direct_clearance_in_buckram ... ok
+test layout::tests::live_block_bfcs_narrow_beside_a_float_or_move_below_it ... ok
+test layout::tests::k4e3_a_captions_margins_count_toward_what_it_contributes ... ok
+test layout::tests::live_block_flow_keeps_collapsed_margin_chains_in_buckram ... ok
+test layout::tests::live_empty_clearance_keeps_its_following_margin_chain_in_buckram ... ok
+test layout::tests::live_flex_and_grid_bfcs_use_buckram_float_placement ... ok
+test document::retained_motion_tests::retained_motion_rejects_geometry_clip_generated_and_context_changes ... ok
+test layout::tests::live_flex_projects_rtl_rows_and_sideways_lr_rows_to_physical_axes ... ok
+test layout::tests::live_flex_shorthands_reach_taffy_and_change_wrap_geometry ... ok
+test layout::tests::live_generated_block_roots_translate_nested_float_state ... ok
+test document::tests::a_blockified_span_that_starts_a_stacking_context_paints_its_text ... ok
+test layout::tests::live_inline_lines_in_an_ordinary_wrapper_share_outer_float_exclusions ... ok
+test layout::tests::k4e3_a_caption_widens_the_grid_and_its_columns ... ok
+test layout::tests::live_nested_float_state_crosses_ordinary_wrappers_but_stops_at_bfcs ... ok
+test layout::tests::k4f_a_collapsed_column_group_gives_its_width_back ... ok
+test layout::tests::live_nonlinear_shape_radius_retains_buckram_and_the_default_margin_area ... ok
+test layout::tests::livery_box_tree_preserves_split_inline_float_provenance ... ok
+test layout::tests::live_nowrap_nested_inline_content_uses_float_bands_in_both_directions ... ok
+test layout::tests::nested_absolute_card_keeps_its_editor_in_the_card_region ... ok
+test layout::tests::nested_multicol_build_admits_only_the_outer_algorithm_node ... ok
+test layout::tests::non_flex_vertical_style_does_not_receive_flex_direction_lowering ... ok
+test layout::tests::livery_lowers_only_definite_auto_multicol_inputs ... ok
+test layout::tests::nonlinear_corner_radius_falls_back_only_when_shape_outside_consumes_it ... ok
+test layout::tests::order_modified_children_reorders_only_flex_and_grid_containers ... ok
+test layout::tests::ordinary_block_flow_keeps_an_absolute_subtree_out_of_its_cursor ... ok
+test layout::tests::partial_inline_groups_do_not_share_one_box_intrinsic_cache_entry ... ok
+test layout::tests::live_shape_outside_keeps_forced_break_lines_in_the_selected_float_band ... ok
+test layout::tests::live_rounded_shape_boxes_shift_left_and_right_line_edges ... ok
+test layout::tests::ph3_rules_attribute_reaches_k4g_collapsed_border_resolution ... ok
+test layout::tests::live_orthogonal_normal_flow_preserves_logical_fragment_geometry_and_baseline ... ok
+test layout::tests::live_shape_outside_reference_boxes_change_lines_but_not_float_placement ... ok
+test layout::tests::positioned_child_uses_the_positioned_ancestor_padding_box ... ok
+test layout::tests::live_unbreakable_line_retries_inside_a_rounded_bottom_contour ... ok
+test layout::tests::positioned_descendant_paints_above_its_stacking_context_background ... ok
+test layout::tests::positioned_hit_test_respects_stacking_level_and_ancestor_clip ... ok
+test layout::tests::positioned_grid_area_transforms_from_flow_relative_tracks_to_physical_insets ... ok
+test layout::tests::live_two_level_orthogonal_flow_uses_the_inner_line_block_contribution ... ok
+test layout::tests::relative_table_parts_move_their_retained_fragment_subtree ... ok
+test layout::tests::relative_position_moves_its_fragment_subtree_without_reflowing_siblings ... ok
+test layout::tests::k4f_a_collapsed_row_gives_its_space_back_to_the_table ... ok
+test layout::tests::ordinary_live_block_flow_uses_buckram_without_backend_dispatch ... ok
+test layout::tests::percentage_height_chain_uses_initial_containing_block_height ... ok
+test layout::tests::replaced_min_max_follows_css21_10_4_for_every_box_sizing_replaced_case ... ok
+test layout::tests::positioned_replaced_leaf_keeps_its_hint_size_between_definite_insets ... ok
+test layout::tests::relative_zero_height_wrapper_retains_its_floated_descendant ... ok
+test layout::tests::stacking_paint_children_applies_order_first_and_stacking_level_second ... ok
+test layout::tests::static_block_z_index_keeps_normal_hit_order ... ok
+test layout::tests::replaced_html_dimensions_use_computed_css_and_canvas_intrinsics ... ok
+test layout::tests::positioned_child_of_a_split_inline_uses_first_and_last_content_edges ... ok
+test layout::tests::vertical_flex_transposes_logical_gap_components ... ok
+test layout::tests::tables_dispatch_through_buckram_without_a_grid_bridge ... ok
+test layout::tests::vertical_absolute_nonleaf_reformats_at_buckrams_resolved_inline_size ... ok
+test legacy_color::tests::accepts_named_shorthand_and_legacy_garbage_forms ... ok
+test legacy_color::tests::rejects_only_the_algorithms_explicit_failures ... ok
+test layout::tests::z_index_stacking_level_exists_only_where_css_lets_z_index_establish_a_context ... ok
+test layout::tests::vertical_grid_static_alignment_uses_the_placed_area_block_end ... ok
+test layout::tests::positioned_child_of_inline_split_by_a_block_uses_all_continuations ... ok
+test layout::tests::ph2_table_width_hint_reaches_buckram_through_computed_css ... ok
+test paint::collapsed_border_style_tests::collapsed_border_styles_lower_to_rectangles_or_styled_strokes ... ok
+test layout::tests::live_multi_child_float_and_atomic_inline_use_intrinsic_subtrees ... ok
+test layout::tests::replaced_element_as_table_cell_lays_out_like_a_cell_around_it ... ok
+test paint::collapsed_border_paint_tests::collapsed_table_paints_atomic_winners_once_without_generic_cell_borders ... ok
+test layout::tests::retained_inline_format_is_not_shaped_again_for_paint ... ok
+test paint::frame_slot_tests::a_default_frame_records_a_three_hundred_by_one_fifty_content_box ... ok
+test layout::tests::split_inline_continuations_format_their_own_box_children ... ok
+test paint::collapsed_border_paint_tests::hidden_collapsed_winner_suppresses_its_atomic_edge ... ok
+test layout::tests::live_used_values_match_shaped_text_and_loaded_image_fragments ... ok
+test paint::collapsed_border_paint_tests::collapsed_outer_edge_covers_block_foreground_in_the_later_table_phase ... ok
+test paint::collapsed_border_paint_tests::collapsed_outer_edge_stays_inside_the_cell_foreground_coverage ... ok
+test paint::frame_slot_tests::a_display_none_frame_records_no_slot ... ok
+test paint::frame_slot_tests::a_frame_with_no_child_scene_splices_nothing ... ok
+test layout::tests::b3_vertical_caption_side_uses_the_wrappers_logical_block_axis ... ok
+test paint::frame_slot_tests::a_specified_width_does_not_transfer_to_the_frames_height ... ok
+test paint::frame_slot_tests::splicing_a_child_clips_and_translates_it_into_the_content_box ... ok
+test paint::frame_slot_tests::the_slot_is_inset_by_the_frames_own_border_and_padding ... ok
+test paint::frame_slot_tests::frame_fallback_content_generates_no_boxes ... ok
+test layout::tests::k4e3_caption_side_moves_the_caption_without_changing_the_table ... ok
+test paint::positioned_paint_tests::custom_leaf_stays_below_a_later_stacking_overlay_and_inside_its_clip ... ok
+test phase::tests::a_disabled_recorder_records_nothing ... ok
+test paint::positioned_paint_tests::flex_items_paint_in_order_modified_document_order ... ok
+test phase::tests::phase_names_are_stable_receipt_keys ... ok
+test phase::tests::enabled_spans_accumulate_per_phase_and_drain ... ok
+test presentational_hints::tests::author_css_overrides_replaced_presentational_hints ... ok
+test presentational_hints::tests::author_css_overrides_ph3_hints_and_ua_rule_colors ... ok
+test presentational_hints::tests::caller_provider_is_a_real_cascade_input_not_a_stylesheet ... ok
+test presentational_hints::tests::border_attribute_distinguishes_zero_prefixes_from_errors ... ok
+test presentational_hints::tests::cellpadding_attribute_mutation_restyles_the_table_subtree ... ok
+test presentational_hints::tests::center_div_and_paragraph_alignment_project_text_align ... ok
+test presentational_hints::tests::deepest_applicable_alignment_owner_selects_descendant_used_margin_policy ... ok
+test presentational_hints::tests::dimension_and_alignment_attribute_mutations_restyle_computed_css ... ok
+test presentational_hints::tests::failed_legacy_colors_are_diagnosed_without_declarations ... ok
+test presentational_hints::tests::html_dimension_parser_keeps_legacy_prefix_and_percentage_rules ... ok
+test paint::positioned_paint_tests::grid_items_paint_in_order_modified_document_order ... ok
+test presentational_hints::tests::html_integer_parser_keeps_signed_prefixes_for_frameborder ... ok
+test presentational_hints::tests::html_non_negative_integer_parser_keeps_its_legacy_acceptance ... ok
+test presentational_hints::tests::group_rules_target_column_and_row_groups_on_logical_axes ... ok
+test presentational_hints::tests::legacy_font_size_parser_keeps_html_relative_and_clamping_rules ... ok
+test presentational_hints::tests::invalid_html_values_are_diagnosed_without_css_parsing ... ok
+test presentational_hints::tests::html_dir_hint_inherits_and_author_css_can_override_it ... ok
+test presentational_hints::tests::logical_table_rules_follow_the_cells_writing_mode ... ok
+test presentational_hints::tests::outer_table_rules_do_not_cross_a_nested_table_boundary ... ok
+test paint::frame_slot_tests::wrapping_the_list_keeps_the_slot_pointing_at_the_same_command ... ok
+test presentational_hints::tests::ph3_attribute_mutation_restyles_table_and_cells_without_stale_rules ... ok
+test presentational_hints::tests::provider_rejects_important_declarations ... ok
+test presentational_hints::tests::ph5_attribute_mutation_restyles_the_same_computed_style_path ... ok
+test presentational_hints::tests::ph5_first_body_margin_source_and_author_precedence_are_preserved ... ok
+test presentational_hints::tests::ph5_flow_page_font_and_horizontal_rule_hints_project_typed_css ... ok
+test presentational_hints::tests::table_alignment_uses_float_or_logical_centering_margins ... ok
+test presentational_hints::tests::replaced_and_embedded_attributes_project_typed_css ... ok
+test presentational_hints::tests::table_dimensions_follow_the_element_specific_zero_rules ... ok
+test presentational_hints::tests::replaced_attribute_mutation_restyles_one_computed_style_path ... ok
+test paint::native_validation_overlay_tests::native_validation_overlay_stays_within_narrow_viewport ... ok
+test presentational_hints::tests::table_dimensions_preserve_percentages_and_author_css_wins ... ok
+test presentational_hints::tests::table_color_border_frame_and_rules_project_typed_css ... ok
+test presentational_hints::tests::table_part_alignment_projects_text_align_without_changing_table_align ... ok
+test style::tests::logical_properties_map_to_the_winning_physical_axis_and_side ... ok
+test table_shadow::ledger_tests::merged_standalone_receipts_survive_later_table_publication ... ok
+test table_shadow::ledger_tests::public_merge_publishes_and_empty_sources_clear_old_details ... ok
+test table_shadow::ledger_tests::replacing_and_removing_tables_matches_a_fresh_receipt ... ok
+test table_shadow::ledger_tests::standalone_contribution_survives_first_keyed_record ... ok
+test table_sizing::tests::automatic_track_lowering_preserves_k4b_order_and_box_identity ... ok
+test table_sizing::tests::collapsed_border_lowering_maps_physical_sides_once_and_reverses_only_the_rtl_tie ... ok
+test presentational_hints::tests::table_spacing_and_cell_padding_project_at_the_hint_origin ... ok
+test table_sizing::tests::computed_size_constraints_preserve_affine_percentages_and_box_sizing ... ok
+test table_sizing::tests::logical_edges_follow_writing_direction_before_buckram_receives_them ... ok
+test table_sizing::tests::fixed_track_lowering_preserves_k4b_order_and_box_identity ... ok
+test table_sizing::tests::percentage_padding_is_carried_unresolved_and_math_stays_unreduced ... ok
+test table_sizing::tests::vertical_align_collapses_to_the_four_table_cell_behaviors ... ok
+test table_shadow::ledger_tests::detailed_table_records_fold_once_after_many_takes_and_merges ... ok
+test table_wrapper::tests::a_percentage_survives_an_indefinite_containing_block ... ok
+test table_wrapper::tests::a_percentage_table_width_resolves_against_the_wrappers_containing_block ... ok
+test table_wrapper::tests::an_inline_table_wrapper_is_an_inline_block ... ok
+test table_wrapper::tests::everything_off_the_list_stays_on_the_grid ... ok
+test table_wrapper::tests::supported_transform_context_properties_belong_to_the_wrapper ... ok
+test table_wrapper::tests::the_grid_sees_those_properties_unset_rather_than_zeroed ... ok
+test table_wrapper::tests::the_wrapper_takes_the_properties_css_2_1_section_17_4_names ... ok
+test text::tests::adjacent_atoms_break_the_middle_edge_despite_outer_glue ... ok
+test text::tests::adjacent_inline_text_nodes_do_not_create_a_collapsed_space ... ok
+test text::tests::adjacent_atoms_use_each_others_owner_chain_in_logical_order ... ok
+test text::tests::atomic_boundaries_use_the_common_ancestor_white_space ... ok
+test text::tests::atomic_inline_adds_regular_breaks_by_punctuation_and_nbsp_exception ... ok
+test style::tests::flattened_font_faces_keep_sheet_relative_sources_while_cssom_stays_authored ... ok
+test text::tests::atomic_marker_uses_icu_gl_wj_zwj_rules_with_nbsp_compatibility ... ok
+test text::tests::atomic_line_break_anywhere_uses_the_common_owner_after_nowrap_gate ... ok
+test text::tests::boundary_index_timing_matches_reference_semantics ... ignored, manual bounded timing observation; comparison-count scaling is the enforced gate
+test text::tests::boundary_index_matches_scan_for_ties_gaps_overlaps_and_atoms ... ok
+test text::tests::boundary_style_uses_deepest_common_inline_owner ... ok
+test text::tests::break_spaces_adds_an_opportunity_after_each_preserved_space ... ok
+test presentational_hints::tests::table_part_valign_and_cell_nowrap_reach_computed_css ... ok
+test paint::positioned_paint_tests::positioned_numeric_z_indices_wrap_the_normal_paint_phase ... ok
+test text::tests::disappearing_space_uses_its_direct_white_space_owner ... ok
+test text::tests::boundary_index_lookup_comparisons_scale_logarithmically_per_edge ... ok
+test paint::positioned_paint_tests::absolute_card_subtree_translates_its_shaped_text_with_its_fragment ... ok
+test text::tests::forced_line_break_is_not_collapsed_to_a_space ... ok
+test text::tests::glue_and_joiner_boundaries_are_not_generic_whitespace_candidates ... ok
+test text::tests::icu_candidate_boundaries_are_utf8_aligned_and_emergency_rules_are_observable ... ok
+test paint::positioned_paint_tests::positioned_stacking_item_keeps_its_overflow_clip ... ok
+test text::tests::malformed_woff2_is_rejected_before_font_registration ... ok
+test paint::positioned_paint_tests::static_flex_item_z_indices_wrap_the_normal_paint_phase ... ok
+test paint::positioned_paint_tests::static_grid_item_z_indices_wrap_the_normal_paint_phase ... ok
+test paint::positioned_paint_tests::relative_subtree_translates_its_shaped_text_with_its_fragment ... ok
+test text::tests::selected_break_mapping_uses_logical_ranges_and_atom_insertion_order ... ok
+test text::tests::sfnt_font_bytes_keep_their_existing_identity ... ok
+test text::tests::explicit_generic_font_shapes_without_system_and_invalid_replace_preserves_face ... ok
+test paint::positioned_paint_tests::one_overflow_scope_wraps_a_run_of_flattened_items ... ok
+test text::tests::synthetic_inline_edges_do_not_hide_text_or_replace_the_nca_owner ... ok
+test layout::tests::percentage_bearing_calc_resolves_against_the_same_basis_as_a_bare_percentage ... ok
+test text::tests::text_directive_matches_contextual_range_across_retained_sources ... ok
+test text::tests::text_directive_skips_occurrences_without_the_required_context ... ok
+test text::tests::valid_woff2_is_decoded_to_sfnt_with_its_nko_glyph ... ok
+test text::tests::wpt_031_text_before_atomic_inline_uses_common_ancestor_white_space ... ok
+test text::tests::wpt_032_atomic_inline_before_text_uses_common_ancestor_white_space ... ok
+test text_fragment::tests::parses_text_directive_shapes_and_percent_decodes_utf8 ... ok
+test text_fragment::tests::preserves_element_fragment_and_hides_directive_from_scripts ... ok
+test text_fragment::tests::rejects_malformed_text_directives ... ok
+test text::tests::forced_break_boundary_is_a_regular_candidate ... ok
+test text::tests::native_validation_overlay_preserves_custom_whitespace ... ok
+test text::tests::retained_forced_break_cluster_keeps_finite_hard_flag ... ok
+test text::tests::shaped_stream_keeps_utf8_source_ranges_and_permits_selected_breaks ... ok
+test text::tests::shaped_stream_retains_tabs_and_trailing_hanging_space_metadata ... ok
+test text::tests::css_complex_script_fallback_adds_regular_grapheme_boundaries ... ok
+test text::tests::t1_shaped_60px_nowrap_inline_box_edges_have_a_failing_control ... ok
+test text::tests::manual_soft_hyphen_breaks_survive_while_hyphens_none_removes_them ... ok
+test text::tests::boundary_index_matches_shaped_rtl_and_ligature_cluster_edges ... ok
+test document::tests::shared_mutation_dependencies_match_fresh_selectors_and_geometry ... ok
+test layout::tests::replaced_auto_width_is_intrinsic_in_flow_and_stretchable_in_flex_and_grid ... ok
+test text::tests::correct_today_css_text_and_line_box_breaks_are_candidates ... ok
+test text::tests::ideographic_space_fixture_keeps_its_opportunity_class ... ok
+test text::tests::correct_today_css_text_contexts_keep_current_breaks_and_prohibitions ... ok
+test document::tests::retained_text_edit_in_a_thousand_flex_rows_paints_like_fresh_layout ... ok
+
+test result: ok. 357 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 11.44s
+
+     Running tests/anonymous_boxes.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/anonymous_boxes-449e35054420e7ba)
+
+running 12 tests
+test live_layout_exposes_buckram_box_and_fragment_identity ... ok
+test list_item_generates_a_marker_box_with_owner_provenance ... ok
+test display_contents_has_no_principal_box_and_promotes_its_child ... ok
+test inline_split_around_block_produces_continuation_boxes_and_fragments ... ok
+test table_grid_places_cells_from_buckram_tracks ... ok
+test fixed_table_layout_sizes_columns_from_the_first_row ... ok
+test auto_table_layout_does_not_use_the_fixed_algorithm ... ok
+test block_flow_whitespace_does_not_change_sibling_placement ... ok
+test a_no_break_space_still_generates_a_line_box ... ok
+test whitespace_between_flex_items_generates_no_item ... ok
+test whitespace_between_grid_items_generates_no_item ... ok
+test preserved_whitespace_still_generates_its_box ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/anonymous_tables.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/anonymous_tables-aeeb6a76fcd25fdc)
+
+running 4 tests
+test generated_table_grid_reaches_table_layout_in_flow ... ok
+test generated_table_grid_sizes_its_absolute_wrapper ... ok
+test overlapping_absolute_tables_keep_the_earlier_text_run ... ok
+test html_column_backgrounds_paint_in_an_absolute_table ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.43s
+
+     Running tests/block_admission.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/block_admission-e407c374c2ef35c0)
+
+running 4 tests
+test a_deferred_flow_root_does_not_defer_its_block_ancestors ... ok
+test a_caption_is_as_wide_as_the_table_wrapper ... ok
+test an_auto_margin_table_is_centered_by_its_grid_width ... ok
+test a_table_under_nested_blocks_keeps_every_block_ancestor_on_buckram ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/cambium_lane.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/cambium_lane-29bcf13a99ba2d22)
+
+running 15 tests
+test inherited_relative_font_sizes_are_computed_once ... ok
+test hidden_attribute_generates_no_box ... ok
+test geometry_properties_reach_taffy ... ok
+test flex_properties_reach_taffy ... ok
+test flex_order_reorders_layout_items ... ok
+test html_presentational_hints_reach_cssom_and_layout_through_one_style_plane ... ok
+test grid_tracks_and_placements_reach_taffy ... ok
+test viewport_units_resolve_from_the_current_device_before_layout ... ok
+test host_state_and_inline_style_enter_the_same_cascade ... ok
+test container_type_applies_physical_size_containment ... ok
+test cambium_catalog_resolves_through_the_layout_dom_boundary ... ok
+test standalone_layout_consumes_livery_values_without_stylo ... ok
+test logical_units_follow_vertical_writing_and_container_axes ... ok
+test container_units_select_axes_independently_and_use_content_box_sizes ... ok
+test named_container_queries_recascade_from_laid_out_sizes ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+
+     Running tests/collapsed_border_mutation.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/collapsed_border_mutation-cc7e78d21b672a6e)
+
+running 2 tests
+test retained_document_rebuilds_collapsed_geometry_and_paint_from_one_mutation_batch ... ok
+test retained_document_rebuilds_every_dynamic_collapsed_candidate_field ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.65s
+
+     Running tests/color_context.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/color_context-caee9c209c3b6aa6)
+
+running 1 test
+test style_plane_uses_the_elements_scheme_without_changing_host_preference ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/contextual_consumers.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/contextual_consumers-ea82531606f411a5)
+
+running 6 tests
+test cssom_distinguishes_direct_and_inherited_system_colors ... ok
+test style_plane_cssom_uses_the_retained_element_context ... ok
+test scheme_and_palette_changes_invalidate_cssom_and_paint ... ok
+test contrast_color_uses_each_elements_foreground_without_a_fallback ... ok
+test contextual_transition_interpolates_numeric_endpoints ... ok
+test inherited_currentcolor_re_resolves_for_cssom_and_every_paint_consumer ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s
+
+     Running tests/css_text_lane.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/css_text_lane-01862750de6effb1)
+
+running 17 tests
+test preserved_tabs_advance_to_tab_stops ... ok
+test tab_stops_include_letter_and_word_spacing ... ok
+test text_align_places_non_wrapping_lines ... ok
+test first_opening_punctuation_hangs_by_its_shaped_advance ... ok
+test hyphens_none_suppresses_soft_hyphen_breaks ... ok
+test overflow_wrap_and_word_break_wrap_unbreakable_words ... ok
+test text_align_start_and_end_follow_direction ... ok
+test pre_line_preserves_segment_breaks_and_collapses_spaces ... ok
+test percentage_letter_and_word_spacing_resolve_against_font_size ... ok
+test text_align_last_aligns_the_final_line ... ok
+test justify_all_and_text_justify_none ... ok
+test nowrap_inline_inside_a_wrapping_block ... ok
+test text_indent_offsets_the_selected_lines ... ok
+test forced_line_break_keeps_both_lines_in_the_block_height ... ok
+test ideographic_space_hangs_before_an_emergency_wrap ... ok
+test word_break_keep_all_keeps_cjk_runs_together ... ok
+test text_transform_maps_text_before_shaping ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.86s
+
+     Running tests/cssom.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/cssom-4f09c14f1cc1e1b7)
+
+running 12 tests
+test computed_style_serializes_border_lengths_and_box_shorthands ... ok
+test computed_style_resolves_without_a_prior_frame ... ok
+test computed_transform_resolves_percentages_against_a_definite_box ... ok
+test inherited_column_width_keeps_the_parent_font_basis ... ok
+test computed_transform_serializes_as_a_resolved_2d_matrix ... ok
+test computed_style_serializes_longhands_and_custom_properties ... ok
+test rule_mutation_errors_surface_and_leave_the_document_intact ... ok
+test inserted_media_rules_respect_the_device ... ok
+test computed_style_serializes_k6a_columns_and_fragmentation_values ... ok
+test retained_k6a_mutation_matches_a_fresh_final_document ... ok
+test insert_and_delete_author_rules_restyle_the_retained_document ... ok
+test computed_style_serializes_flex_shorthands_from_longhands ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.39s
+
+     Running tests/deep_nesting.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/deep_nesting-f72d554826d0e248)
+
+running 2 tests
+test eight_levels_lay_out_on_a_small_stack ... ok
+test sixty_four_levels_lay_out_on_a_small_stack ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/empty_inline_boxes.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/empty_inline_boxes-45d547c7abfbc73b)
+
+running 8 tests
+test empty_inline_after_a_forced_break ... ok
+test empty_inline_after_text ... ok
+test a_line_of_one_empty_inline_stays_phantom ... ok
+test empty_inline_under_explicit_line_height ... ok
+test collapsed_whitespace_only_inline_is_empty ... ok
+test empty_inline_at_paragraph_end_follows_the_last_glyph ... ok
+test empty_inline_in_rtl_between_latin_runs ... ok
+test empty_inline_adds_no_line_height ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.69s
+
+     Running tests/flex_automatic_minimum.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/flex_automatic_minimum-88ec55fe3db1bce3)
+
+running 1 test
+test nested_wrapped_column_uses_the_sum_of_intrinsic_item_heights_for_auto_minimum ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/flex_basis_content.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/flex_basis_content-f10c254aa6d52a0e)
+
+running 2 tests
+test taffy_flex_basis_helpers_keep_auto_and_numeric_construction_distinct ... ok
+test flex_basis_content_bypasses_the_preferred_main_size_in_rows_and_columns ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/flex_basis_content_repro.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/flex_basis_content_repro-2a4229428b2c539f)
+
+running 6 tests
+test column_content_basis_uses_fit_content_width_and_formats_float_line ... ok
+test content_basis_uses_an_inline_subtree_max_content_width ... ok
+test column_auto_basis_with_a_definite_cross_size_keeps_its_content_height ... ok
+test column_content_basis_sizes_direct_canvas_and_nested_flex ... ok
+test content_basis_uses_the_cross_sized_canvas_ratio_before_space_between ... ok
+test flex_basis_content_geometry_covers_each_content_family ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.13s
+
+     Running tests/flex_vertical_cross_axis.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/flex_vertical_cross_axis-a6127af632bca4d4)
+
+running 6 tests
+test anonymous_flex_item_does_not_reuse_its_owners_self_alignment ... ok
+test vertical_rl_row_wrap_reverse_keeps_logical_start_and_reverses_flex_lines ... ok
+test flex_self_start_uses_the_subject_writing_mode ... ok
+test rtl_vertical_rl_column_wrap_uses_the_bottom_cross_start ... ok
+test rtl_vertical_columns_project_explicit_align_self_across_wrap_states ... ok
+test horizontal_block_flow_sizes_vertical_rl_row_wrap_reverse_by_its_flex_cross_size ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/form_control_hit.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/form_control_hit-75feb4a0e60c2767)
+
+running 6 tests
+test author_zero_size_keeps_the_half_open_containment_fix ... ok
+test default_controls_are_no_longer_zero_extent ... ok
+test each_control_is_hit_at_its_layout_centre ... ok
+test transformed_controls_are_hit_where_paint_places_them ... ok
+test scrolled_controls_are_hit_where_paint_places_them_and_clip_outside ... ok
+test non_exact_rotations_are_hit_where_paint_places_them ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/form_control_sizing.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/form_control_sizing-6c3db19ca3831ffa)
+
+running 13 tests
+test image_input_keeps_its_natural_size_path_untouched ... ok
+test display_block_input_does_not_collapse_to_a_line ... ok
+test a_button_in_a_shrinking_flex_column_keeps_its_content_height ... ok
+test size_zero_is_invalid_and_falls_back_to_the_default ... ok
+test select_is_one_line_with_a_non_zero_width ... ok
+test hidden_inputs_stay_boxless ... ok
+test checkbox_and_radio_are_a_thirteen_pixel_square ... ok
+test textarea_defaults_to_twenty_columns_and_two_rows ... ok
+test border_box_text_controls_keep_their_padding_and_border ... ok
+test size_cols_rows_never_reach_computed_style ... ok
+test author_width_and_height_win_over_every_default_and_hint ... ok
+test button_like_controls_have_a_non_zero_shrink_to_fit_minimum ... ok
+test text_entry_types_are_non_zero_and_default_to_twenty_characters ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running tests/generated_counters.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/generated_counters-e040107ec2ec0685)
+
+running 8 tests
+test content_instantiates_a_missing_counter_only_in_its_scope ... ok
+test reset_increment_set_defaults_duplicates_and_negative_values ... ok
+test same_named_parent_and_sibling_instances_keep_their_creator_identity ... ok
+test previous_descendant_values_and_before_after_order_are_used ... ok
+test nested_counters_restore_outer_scope_and_sibling_resets_replace ... ok
+test counters_paint_like_literal_text_and_preserve_dom_selection ... ok
+test no_box_suppression_missing_counter_and_saturation ... ok
+test partial_restyle_refreshes_later_counter_users_and_matches_fresh ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.93s
+
+     Running tests/generated_text.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/generated_text-ea71d80ae0d8d2ff)
+
+running 6 tests
+test attr_and_rule_mutations_refresh_generated_text ... ok
+test pseudo_cascade_does_not_leak_to_owner_and_none_suppresses ... ok
+test hidden_generated_text_keeps_layout_but_is_not_named_or_visible ... ok
+test contents_owner_keeps_text_but_suppressed_owner_does_not ... ok
+test generated_text_paints_like_literal_text_and_does_not_change_dom ... ok
+test pseudo_only_text_and_wrapping_match_literal_references ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.08s
+
+     Running tests/grid_abspos.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/grid_abspos-f5240c1ba41f50e5)
+
+running 2 tests
+test static_grid_parent_uses_content_static_rectangle_unless_it_is_the_containing_block ... ok
+test probe_positioned_grid_items ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/host_ch_lengths.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/host_ch_lengths-d22226006d4d8348)
+
+running 2 tests
+test host_layout_resolves_ch_and_mixed_calc_from_registered_zero_advance ... ok
+test host_layout_refreshes_ch_after_font_registration_font_size_and_viewport_changes ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.04s
+
+     Running tests/host_content_geometry.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/host_content_geometry-9fd7239d697437e1)
+
+running 10 tests
+test used_foreground_keeps_encoded_channels_alpha_palette_and_element_scheme ... ok
+test singular_and_nonfinite_input_refuse_mapping_without_losing_content_size ... ok
+test display_none_and_hidden_ancestors_suspend_geometry_and_pointer_hits ... ok
+test flattened_stacking_leaf_keeps_scroll_between_transformed_clip_ancestors ... ok
+test border_padding_and_own_scroll_keep_the_producer_in_its_content_box ... ok
+test nested_transform_with_noncentral_origins_matches_all_four_content_edges ... ok
+test plain_retained_leaf_keeps_zero_clip_and_layer_depth ... ok
+test rotated_aabb_corner_does_not_steal_a_pointer ... ok
+test transformed_and_translucent_contexts_keep_descendants_below_later_dom_overlay ... ok
+test overflow_clips_at_padding_edge_and_document_scroll_is_caller_owned ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.79s
+
+     Running tests/image_source_animation.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/image_source_animation-367e4368aa9d6060)
+
+running 1 test
+test source_less_keyframe_url_follows_document_base_set_after_parse ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.53s
+
+     Running tests/interaction.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/interaction-be7dac50049333f5)
+
+running 25 tests
+test css_transition_background_repeat_switches_at_the_retained_midpoint ... ok
+test css_transition_background_image_interpolates_gradient_stops ... ok
+test css_transition_background_position_uses_the_retained_clock ... ok
+test css_transition_all_animates_opacity_and_background_color ... ok
+test hit_test_skips_pointer_events_none_overlays ... ok
+test css_transition_opacity_uses_the_retained_clock ... ok
+test polygon_clip_path_excludes_the_tile_rectangle_corners ... ok
+test css_transition_three_property_list_shares_the_retained_clock ... ok
+test css_transition_border_styles_switches_at_the_retained_midpoint ... ok
+test css_keyframes_opacity_use_the_retained_clock ... ok
+test css_transition_border_widths_use_the_retained_clock ... ok
+test css_transition_box_shadow_uses_the_retained_clock ... ok
+test css_transition_explicit_pair_animates_opacity_and_background_color ... ok
+test css_transition_border_bottom_color_uses_the_retained_clock ... ok
+test css_transition_border_left_and_right_colors_use_the_retained_clock ... ok
+test css_transition_border_top_color_uses_the_retained_clock ... ok
+test css_transition_color_uses_the_retained_clock ... ok
+test css_transition_border_radius_uses_the_retained_clock ... ok
+test css_transition_transform_resolves_percentage_translation_at_paint ... ok
+test css_transition_transform_decomposes_mismatched_function_lists ... ok
+test css_transition_transform_uses_the_retained_clock ... ok
+test nested_scroll_chains_into_paint_and_then_the_viewport ... ok
+test retained_document_focuses_controls ... ok
+test retained_document_routes_scroll_fragment_and_links ... ok
+test retained_opacity_clock_paints_intermediate_frames ... ok
+
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.94s
+
+     Running tests/intersection_geometry.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/intersection_geometry-e683cbc108e3d541)
+
+running 7 tests
+test display_none_and_detached_targets_do_not_intersect ... ok
+test an_absolute_child_skips_clips_outside_its_containing_block ... ok
+test a_clipping_ancestor_clips_the_target ... ok
+test scroll_metrics_measure_the_padding_box_and_overflow ... ok
+test the_implicit_root_is_the_viewport ... ok
+test root_margin_grows_the_root_and_lifts_the_far_edge_case ... ok
+test an_explicit_scrolling_root_clips_to_its_padding_box_and_follows_its_scroll ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/invalidation.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/invalidation-d8292e1fd1ffe5db)
+
+running 5 tests
+test class_invalidation_recomputes_k6a_fragmentation_values ... ok
+test interaction_state_restyles_only_the_stateful_subtree ... ok
+test stylesheet_generation_makes_document_wide_work_explicit ... ok
+test structural_selector_restyles_its_parent_after_insert_and_remove ... ok
+test class_snapshot_restyles_one_branch_and_preserves_sibling_matching ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/invalidation_work.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/invalidation_work-cbd8cd618c3b9ae6)
+
+running 4 tests
+test disjoint_html_hint_mutations_use_current_document_facts ... ok
+test disjoint_shadow_roots_share_facts_without_sharing_scopes ... ok
+test batched_ancestor_descendant_and_duplicate_hints_keep_full_cascade_results ... ok
+test moving_siblings_do_not_repeat_document_and_sibling_walks ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+     Running tests/k5d_aspect_ratio.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/k5d_aspect_ratio-44e946750af6deaf)
+
+running 3 tests
+test size_contained_abspos_uses_its_contain_intrinsic_size_before_ratio_clamping ... ok
+test abspos_max_height_transfers_through_the_aspect_ratio_to_the_inline_size ... ok
+test abspos_single_line_field_uses_contained_intrinsic_width_with_descendants ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.21s
+
+     Running tests/k5d_font_feature_resolution.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/k5d_font_feature_resolution-3d7fbf72a2b2f9fb)
+
+running 2 tests
+test font_feature_precedence_reaches_parley_with_authored_face_aliases ... ok
+test join_controls_and_presentation_ligatures_keep_the_face_line_metrics ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.60s
+
+     Running tests/k5d_nested_inline_positioning.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/k5d_nested_inline_positioning-3f20afc27e3885d5)
+
+running 1 test
+test nested_inline_wrappers_preserve_the_positioned_ancestors_line_rectangle ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.62s
+
+     Running tests/k5d_pre_wrap_leading_spaces.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/k5d_pre_wrap_leading_spaces-2a5373d1278c71a4)
+
+running 1 test
+test pre_wrap_leading_space_keeps_its_break_before_a_full_width_word ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+
+     Running tests/k6_fragmentation_contracts.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/k6_fragmentation_contracts-819b19b9805f5b7f)
+
+running 6 tests
+test continued_block_root_resumes_across_two_columns ... ignored, K6: block continuation is not connected to the live formatter
+test continued_inline_root_resumes_its_lines_in_the_next_column ... ignored, K6: inline continuation kernel not implemented
+test continued_table_root_repeats_its_header_and_footer_in_each_column ... ignored, K6: table continuation kernel not implemented
+test document_session_hosts_a_continued_block_root ... ignored, K6: fragmented block session consumers not implemented
+test document_session_hosts_a_continued_inline_root ... ignored, K6: fragmented inline session consumers not implemented
+test document_session_hosts_a_continued_table_root ... ignored, K6: fragmented table session consumers not implemented
+
+test result: ok. 0 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/line_box_model.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/line_box_model-b6afec8ec9aed260)
+
+running 3 tests
+test quirks_mode_line_boxes_match_chromium ... ok
+test standards_mode_line_boxes_match_chromium ... ok
+test atom_baselines_match_chromium ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.50s
+
+     Running tests/list_marker_regressions.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/list_marker_regressions-795f1be6f8a91b6b)
+
+running 3 tests
+test decimal_markers_follow_html_ordinals_and_marker_only_block_children ... ok
+test quoted_inside_string_markers_match_literal_glyphs_and_cached_frames ... ok
+test rtl_marker_only_nested_decimal_lists_match_literal_frames ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.51s
+
+     Running tests/logical_insets.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/logical_insets-1393845492f46266)
+
+running 9 tests
+test margin_block_end_maps_to_the_block_end_side ... ok
+test shape_reference_shape_places_each_box_distinctly ... ok
+test inset_block_start_follows_writing_mode ... ok
+test a_later_physical_declaration_wins_over_an_earlier_logical_one ... ok
+test inset_block_start_matches_top_in_horizontal_tb ... ok
+test block_size_maps_to_the_block_axis ... ok
+test inset_inline_start_follows_direction ... ok
+test auto_margins_centre_under_inset_zero_for_every_block_size ... ok
+test inset_shorthand_expands_to_four_sides ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.78s
+
+     Running tests/out_of_flow_placement.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/out_of_flow_placement-a1f0461c2e03273e)
+
+running 4 tests
+test percentage_padded_inline_blocks_shrink_to_fit_in_both_entries ... ok
+test relative_and_sticky_children_size_their_shrink_to_fit_parent ... ok
+test out_of_flow_children_leave_shrink_to_fit_widths_alone ... ok
+test fixed_boxes_inside_absolute_ones_match_chromium ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.07s
+
+     Running tests/paint.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/paint-c060d2efc187a23d)
+
+running 78 tests
+test backgrounds_and_borders_follow_dom_paint_order ... ok
+test a_cell_spanning_a_collapsed_column_gets_an_exact_content_clip ... ok
+test background_position_and_no_repeat_place_the_intrinsic_image ... ok
+test a_tables_background_paints_on_the_grid_and_spares_the_caption ... ok
+test background_origin_and_clip_use_the_requested_css_boxes ... ok
+test a_tables_opacity_layer_wraps_its_caption ... ok
+test collapsed_table_caption_paints_once ... ok
+test box_shadow_reaches_the_neutral_shadow_primitive ... ok
+test border_radii_reach_the_neutral_border_primitive ... ok
+test border_radii_clip_background_fills ... ok
+test data_uri_background_image_reaches_neutral_image_side_table ... ok
+test body_background_propagates_to_the_canvas_and_not_its_offset_box ... ok
+test display_none_root_keeps_the_canvas_background_transparent ... ok
+test background_round_and_space_have_distinct_axis_tiling ... ok
+test blockified_flex_item_does_not_reenter_inline_paint_layout ... ok
+test background_size_preserves_ratio_and_cover_uses_the_positioning_area ... ok
+test display_none_subtrees_and_transparent_boxes_emit_nothing ... ok
+test external_canvas_uses_content_box_and_inherits_element_opacity_layer ... ok
+test flattened_positioned_descendants_replay_ancestor_clips ... ok
+test four_inset_absolute_background_fills_its_containing_block ... ok
+test hidden_visibility_keeps_layout_space_but_suppresses_paint ... ok
+test host_image_resource_resolves_a_non_data_background_url ... ok
+test host_image_resource_resolves_a_remote_url_without_engine_fetching ... ok
+test bidi_runs_paint_in_parley_visual_order ... ok
+test individual_rotate_and_scale_reach_the_paint_transform ... ok
+test collapsed_whitespace_crosses_inline_element_boundaries ... ok
+test inline_host_resolved_image_uses_intrinsic_size ... ok
+test inline_background_uses_the_shaped_line_fragment ... ok
+test inline_replaced_image_negative_margin_collapses_the_line_box ... ok
+test inline_table_atoms_keep_their_structural_background_layers ... ok
+test linear_gradient_background_reaches_neutral_primitive ... ok
+test containment_on_html_or_body_disables_body_background_propagation ... ok
+test linear_gradient_layers_over_background_fill ... ok
+test inline_positioned_contexts_retain_shaping_and_compete_by_z_index ... ok
+test matrix_and_skew_functions_reach_the_paint_transform ... ok
+test negative_delay_keyframe_background_color_reaches_the_canvas ... ok
+test negative_delay_keyframe_rotate_reaches_the_paint_transform ... ok
+test empty_cells_hide_suppresses_an_actual_blank_cells_ink ... ok
+test overflow_clips_only_the_non_visible_axis ... ok
+test formatting_whitespace_does_not_shift_following_block_flow ... ok
+test opacity_creates_an_atomic_level_zero_context_and_compositing_layer ... ok
+test inline_replaced_image_uses_the_shaped_line_fragment ... ok
+test overflow_clips_wrap_descendants_and_nest ... ok
+test page_zoom_scales_an_emitted_frame_into_the_presentation_viewport ... ok
+test inherited_text_styles_and_font_keys_are_stable ... ok
+test paused_keyframe_opacity_freezes_progress_across_a_later_pump ... ok
+test paint_output_crosses_the_neutral_envelope ... ok
+test paused_keyframe_rotate_freezes_progress_across_a_later_pump ... ok
+test inline_blocks_occupy_atomic_space_in_the_text_line ... ok
+test percentage_translation_uses_the_fragment_border_box ... ok
+test polygon_clip_path_establishes_a_stacking_context ... ok
+test polygon_clip_path_scopes_its_box_and_descendants ... ok
+test positioned_children_paint_in_stable_z_index_order ... ok
+test positioned_descendants_flatten_into_the_nearest_stacking_context ... ok
+test replaced_img_uses_intrinsic_size_and_paints_a_neutral_image ... ok
+test replaced_img_width_preserves_intrinsic_ratio ... ok
+test retained_opacity_clock_samples_and_settles ... ok
+test retained_replaced_img_uses_host_resolved_bytes_for_intrinsic_size ... ok
+test separated_table_background_fills_single_sized_border_spacing_gaps ... ok
+test separated_table_backgrounds_follow_table_phase_and_cell_dom_order ... ok
+test retained_document_reuses_complete_frames_and_font_allocations ... ok
+test root_text_background_clip_is_ignored_for_canvas_propagation ... ok
+test transform_creates_an_atomic_level_zero_coordinate_space ... ok
+test transform_origin_uses_border_box_keywords_lengths_and_percentages ... ok
+test table_row_and_group_backgrounds_paint ... ok
+test transform_wraps_opacity_layer_in_coordinate_space ... ok
+test table_shadow_uses_the_grid_while_overflow_clips_the_wrapper ... ok
+test text_background_clip_projects_a_flat_color_into_glyph_paint ... ok
+test text_nodes_emit_positioned_glyphs_with_font_resources ... ok
+test inline_horizontal_edges_occupy_text_advance ... ok
+test vertical_inline_edges_paint_outside_the_line_box ... ok
+test zero_delay_running_keyframe_rotate_applies_at_progress_zero ... ok
+test wrapped_inline_borders_use_slice_edges ... ok
+test wrapped_inline_spans_paint_one_fragment_per_line ... ok
+test shared_inline_group_height_contains_its_painted_lines ... ok
+test shaped_text_height_moves_the_following_block ... ok
+test text_alignment_and_spacing_reach_parley ... ok
+test vertical_writing_inline_block_edges_do_not_widen_the_line_box ... ok
+
+test result: ok. 78 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.10s
+
+     Running tests/positioned_block_children.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/positioned_block_children-604cce16c36cb455)
+
+running 12 tests
+test absolute_block_after_an_in_flow_sibling_honors_top_zero ... ok
+test plain_in_flow_table_block_algorithm_census ... ok
+test absolute_block_honors_a_top_inset_that_differs_from_its_static_position ... ok
+test absolute_block_takes_no_flow_space_whatever_it_contains ... ok
+test absolute_box_before_a_table_keeps_its_static_position_above_the_table ... ok
+test relative_caption_moves_by_its_inset ... ok
+test document_session_places_an_absolute_block_after_an_in_flow_sibling_at_top_zero ... ok
+test relative_table_parts_move_their_positioned_descendants ... ok
+test document_session_gives_an_absolute_block_no_flow_space_whatever_it_contains ... ok
+test document_session_probe_bisection_for_top_zero_after_a_sibling ... ok
+test relative_block_percentage_insets_resolve_only_against_a_specified_height ... ok
+test document_session_paints_the_text_of_a_moved_absolute_block_inside_its_fragment ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.13s
+
+     Running tests/reftest.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/reftest-71ab6811a1d85e9d)
+
+running 1 test
+test equivalent_inline_and_stylesheet_cases_share_a_native_paint_receipt ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+
+     Running tests/replaced_image.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/replaced_image-6c3a8fcd7b4d0d92)
+
+running 2 tests
+test authored_auto_axis_uses_the_decoded_natural_ratio_not_the_attribute_ratio ... ok
+test html_image_dimensions_reach_paint_through_computed_css ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+
+     Running tests/retained_cpu_raster.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/retained_cpu_raster-ce8a044699d55ae3)
+
+running 5 tests
+test retained_background_color_repaints_cpu_pixel_without_relayout ... ok
+test scrolling_a_transparent_canvas_does_not_pin_the_first_element_background ... ok
+test placing_a_scrolled_surface_moves_its_canvas_with_its_content ... ok
+test a_spliced_child_stays_inside_document_scroll_below_the_canvas_color ... ok
+test canvas_color_covers_the_viewport_after_cached_scroll_and_retained_repaint ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s
+
+     Running tests/rtl_root_body_geometry.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/rtl_root_body_geometry-ce9edb1b75e9f3b9)
+
+running 5 tests
+test auto_body_border_and_padding_shrink_inside_default_margins ... ok
+test vertical_root_keeps_auto_body_inside_default_inline_margins ... ok
+test rtl_root_keeps_auto_body_and_nested_blocks_inside_default_margins ... ok
+test ltr_root_keeps_auto_body_and_nested_blocks_inside_default_margins ... ok
+test authored_full_inline_size_still_overflows_by_default_margins ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/selector_index.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/selector_index-59d670aa8de941f3)
+
+running 8 tests
+test the_ua_sheet_is_bucketed_with_the_rest_and_still_applies ... ok
+test an_uppercase_type_selector_still_matches_a_lowercase_element ... ok
+test a_narrowed_compound_is_bucketed_on_the_name_it_carries ... ok
+test the_key_is_the_rightmost_compound_not_the_leftmost ... ok
+test equal_specificity_rules_in_different_buckets_keep_source_order ... ok
+test the_id_bucket_follows_case_sensitive_id_matching ... ok
+test a_rule_is_reachable_through_every_key_in_its_selector_list ... ok
+test compounds_naming_nothing_indexable_still_reach_every_element ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/shadow_flat_tree.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/shadow_flat_tree-727dcb2b07878118)
+
+running 6 tests
+test declarative_template_becomes_a_shadow_root_with_slot_assignment ... ok
+test flat_children_splice_the_shadow_tree_in_and_the_light_dom_out ... ok
+test exportparts_renames_a_part_for_the_outer_scope ... ok
+test inheritance_follows_the_flat_tree ... ok
+test slotted_content_and_fallback_content_both_get_boxes ... ok
+test a_shadow_tree_styles_itself_and_the_document_does_not_reach_in ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/table_sibling_blocks.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/table_sibling_blocks-e68b2e521f7c2ec1)
+
+running 8 tests
+test explicit_width_nested_table_still_constrains_its_outer_column ... ok
+test inferred_cells_with_nested_tables_match_html_table_glyphs ... ok
+test active_nested_table_minimum_constrains_outer_column ... ok
+test inferred_cell_block_child_matches_sibling_html_table_glyphs ... ok
+test consecutive_tables_match_between_block_and_shrink_to_fit_containers ... ok
+test inherited_nowrap_aligns_sibling_table_glyphs_with_block_rows ... ok
+test nowrap_spanning_cell_does_not_steal_width_from_percentage_column ... ok
+test nested_table_cell_does_not_change_constrained_column_distribution ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.76s
+
+     Running tests/text_fragment_line_box.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/text_fragment_line_box-98140a2f98b9fa3e)
+
+running 1 test
+test normal_text_fragments_stay_inside_their_line_boxes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s
+
+     Running tests/text_paint_slots.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/text_paint_slots-4c7fc190c184f986)
+
+running 5 tests
+test normal_field_selection_and_caret_stay_beneath_later_overlay ... ok
+test field_after_content_precedes_its_positive_z_descendant_and_external_overlay ... ok
+test equal_index_frame_and_leaf_slots_keep_owner_phase_order_in_either_splice_order ... ok
+test positioned_scrolled_field_keeps_text_paint_inside_clip_and_transform ... ok
+test text_slots_survive_frame_and_host_leaf_splices_and_skip_hidden_fields ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.60s
+
+     Running tests/transform_context.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/transform_context-8701bcb877c139b6)
+
+running 12 tests
+test positioned_inline_clip_encloses_hoisted_child_paint_and_hit ... ok
+test perspective_and_preserve_3d_capture_positioned_descendants_without_an_own_matrix ... ok
+test inline_item_through_display_contents_captures_descendants_in_flex_and_grid ... ok
+test static_item_through_display_contents_keeps_its_numeric_z_index ... ok
+test replaced_inline_canvas_applies_an_individual_transform_to_its_paint ... ok
+test entering_and_leaving_each_individual_transform_repositions_retained_descendants ... ok
+test non_replaced_inline_perspective_and_preserve_3d_do_not_change_child_matrix ... ok
+test individual_properties_and_perspective_keep_high_descendants_in_their_stacking_context ... ok
+test contents_does_not_interrupt_parent_perspective_or_preserve_3d ... ok
+test individual_properties_capture_absolute_and_fixed_descendants_in_layout_and_paint ... ok
+test table_caption_uses_its_wrapper_owners_3d_context ... ok
+test non_replaced_inline_transform_values_do_not_capture_positioned_descendants ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.17s
+
+     Running tests/transforms_3d.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/transforms_3d-ce815f842815d474)
+
+running 8 tests
+test orthographic_three_d_is_exact_in_the_projected_cells ... ok
+test a_three_d_transform_reaches_the_paint_matrix_as_a_full_four_by_four ... ok
+test a_flat_parent_flattens_its_child_instead_of_composing_in_three_d ... ok
+test individual_properties_apply_before_transform_in_the_spec_order ... ok
+test a_preserve_3d_context_paints_its_boxes_in_transformed_depth_order ... ok
+test an_individual_rotate_moves_alone_while_the_parent_matrix_is_unchanged ... ok
+test a_perspective_divide_is_reported_as_a_named_gap_and_approximated ... ok
+test backface_visibility_hidden_culls_a_box_whose_normal_turned_away ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.70s
+
+     Running tests/tree_counting.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/tree_counting-682215a4f1dbe7b8)
+
+running 4 tests
+test the_root_element_counts_itself_as_the_only_sibling ... ok
+test non_element_siblings_do_not_shift_the_ordinals ... ok
+test tree_counting_functions_resolve_from_the_element_position ... ok
+test removing_a_sibling_recounts_the_group_incrementally ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Doc-tests genet_livery
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

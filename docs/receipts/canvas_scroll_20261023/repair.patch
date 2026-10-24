@@ -1,0 +1,309 @@
+diff --git a/components/genet-livery/examples/capture_paint_corpus.rs b/components/genet-livery/examples/capture_paint_corpus.rs
+index 11329752a89..7a1f3a05672 100644
+--- a/components/genet-livery/examples/capture_paint_corpus.rs
++++ b/components/genet-livery/examples/capture_paint_corpus.rs
+@@ -186,7 +186,7 @@ fn elide_payloads(envelope: &mut PaintEnvelope) -> (usize, usize) {
+         // Keep width/height honest by shrinking to a 1x1 RGBA pixel.
+         image.width = 1;
+         image.height = 1;
+-        image.data = vec![0, 0, 0, 0];
++        image.data = vec![0, 0, 0, 0].into();
+     }
+     let after = envelope.fonts.iter().map(|f| f.data.len()).sum::<usize>()
+         + envelope.images.iter().map(|i| i.data.len()).sum::<usize>();
+diff --git a/components/genet-livery/src/document/frame.rs b/components/genet-livery/src/document/frame.rs
+index e9316a55cef..bba7812e1f0 100644
+--- a/components/genet-livery/src/document/frame.rs
++++ b/components/genet-livery/src/document/frame.rs
+@@ -151,7 +151,7 @@ where
+         if let Some((viewport, list)) = &self.cached
+             && *viewport == (width, height)
+         {
+-            return Ok(list.clone().translated(-self.scroll.0, -self.scroll.1));
++            return Ok(list.clone().scrolled(-self.scroll.0, -self.scroll.1));
+         }
+ 
+         if !self.layout_dirty
+@@ -489,7 +489,7 @@ where
+         self.retain_active_data_urls(&styles);
+         self.cached = Some(((width, height), list.clone()));
+         self.style_only_damage = true;
+-        Ok(list.translated(-self.scroll.0, -self.scroll.1))
++        Ok(list.scrolled(-self.scroll.0, -self.scroll.1))
+     }
+ 
+     pub(in crate::document) fn sampled_paint_styles<'a>(
+diff --git a/components/genet-livery/src/paint.rs b/components/genet-livery/src/paint.rs
+index 427cd51bb07..c3e8efc491a 100644
+--- a/components/genet-livery/src/paint.rs
++++ b/components/genet-livery/src/paint.rs
+@@ -55,6 +55,11 @@ pub struct LiveryPaintList {
+     viewport: DeviceIntSize,
+     generation: u64,
+     commands: Vec<PaintCmd>,
++    /// The first command fills the CSS canvas, rather than a document box.
++    /// Keep that colour in the viewport during document scroll. General
++    /// placement and page zoom still transform the whole surface.
++    #[serde(skip)]
++    has_canvas_color: bool,
+     fonts: Vec<FontResource>,
+     images: Vec<ImageResource>,
+     #[serde(skip)]
+@@ -497,6 +502,7 @@ impl LiveryPaintList {
+             viewport,
+             generation,
+             commands: Vec::new(),
++            has_canvas_color: false,
+             fonts: Vec::new(),
+             images: Vec::new(),
+             host_leaf_slots: Vec::new(),
+@@ -514,9 +520,20 @@ impl LiveryPaintList {
+             .map(|image| (image.width as f32, image.height as f32))
+     }
+ 
+-    /// Translate an already-emitted frame into the current viewport scroll
+-    /// coordinate system without rebuilding paint commands.
+-    pub fn translated(mut self, x: f32, y: f32) -> Self {
++    /// Scroll the canonical document paint without moving its canvas colour.
++    /// The cached list remains unmodified; ordinary element backgrounds and
++    /// the retained frame/text/host slots stay inside the scroll transform.
++    pub fn scrolled(self, x: f32, y: f32) -> Self {
++        let start = usize::from(self.has_canvas_color);
++        self.translated_from(start, x, y)
++    }
++
++    /// Place the complete surface, including its canvas, at another origin.
++    pub fn translated(self, x: f32, y: f32) -> Self {
++        self.translated_from(0, x, y)
++    }
++
++    fn translated_from(mut self, start: usize, x: f32, y: f32) -> Self {
+         if x == 0.0 && y == 0.0 {
+             return self;
+         }
+@@ -525,9 +542,10 @@ impl LiveryPaintList {
+             transform: LayoutTransform::translation(x, y, 0.0),
+             kind: TransformKind::Standard,
+         };
+-        self.commands.insert(0, PaintCmd::PushTransform(transform));
++        self.commands
++            .insert(start, PaintCmd::PushTransform(transform));
+         self.commands.push(PaintCmd::PopTransform);
+-        self.shift_slots_after(0, 1, None);
++        self.shift_slots_after(start, 1, None);
+         self
+     }
+ 
+@@ -536,7 +554,7 @@ impl LiveryPaintList {
+     ///
+     /// This is the render half of user-agent page zoom: layout ran at
+     /// `width / factor` by `height / factor`, so every painted primitive —
+-    /// including a scroll translation already pushed by [`Self::translated`] —
++    /// including document scroll already applied by [`Self::scrolled`] —
+     /// is composed under one root scale rather than rewritten. The presentation
+     /// size is taken rather than derived so the frame keeps the host's exact
+     /// pixel size across the rounding that CSS division introduced.
+@@ -4092,10 +4110,15 @@ where
+     };
+     let color = resolve_color(&source_style.background_color);
+     if color.a > 0.0 {
++        debug_assert!(
++            list.commands.is_empty(),
++            "canvas colour precedes document paint"
++        );
+         list.commands.push(PaintCmd::DrawRect(RectItem {
+             placement: CommonPlacement::new(bounds(&canvas)),
+             color,
+         }));
++        list.has_canvas_color = true;
+     }
+     emit_background_image_in(list, source_style, positioning, canvas_rect);
+     Some(source)
+diff --git a/components/genet-livery/tests/host_ch_lengths.rs b/components/genet-livery/tests/host_ch_lengths.rs
+index 0fd76473ac7..d8427a734db 100644
+--- a/components/genet-livery/tests/host_ch_lengths.rs
++++ b/components/genet-livery/tests/host_ch_lengths.rs
+@@ -73,7 +73,7 @@ impl HostFixture {
+             600.0,
+             ViewportSizes::uniform(viewport_width, 600.0),
+             text,
+-            &Default::default(),
++            &std::collections::HashMap::<String, Vec<u8>>::new(),
+         )
+         .expect("host-owned layout");
+         assert_eq!(
+diff --git a/components/genet-livery/tests/retained_cpu_raster.rs b/components/genet-livery/tests/retained_cpu_raster.rs
+index 441beef4353..2a97df647cc 100644
+--- a/components/genet-livery/tests/retained_cpu_raster.rs
++++ b/components/genet-livery/tests/retained_cpu_raster.rs
+@@ -68,3 +68,148 @@ fn retained_background_color_repaints_cpu_pixel_without_relayout() {
+     );
+     assert_eq!(document.hit_test(16.0, 16.0), Some(target));
+ }
++
++fn scroll_document(canvas_style: &str) -> LiveryDocument<ScriptedDom> {
++    let mut dom = ScriptedDom::from_serialized_document(
++        "<html><body><div style='height:32px'></div>\
++         <div id=target></div><div style='width:180px;height:180px'></div></body></html>",
++    );
++    dom.drain_mutations(&mut Vec::new());
++    LiveryDocument::new(
++        dom,
++        StyleSet::cambium(&[&format!(
++            "html,body {{ margin:0; padding:0; }} {canvas_style} \
++             #target {{ margin-left:24px; width:16px; height:16px; background:red; }}"
++        )]),
++        Device::screen(64.0, 64.0),
++    )
++}
++
++#[test]
++fn canvas_color_covers_the_viewport_after_cached_scroll_and_retained_repaint() {
++    for selector in ["html", "body"] {
++        for zoom in [1.0_f32, 1.1] {
++            let mut document = scroll_document(&format!("{selector} {{ background:#f4efe3; }}"));
++            let mut cpu = CpuSession::new(SparseResourceLimits::default());
++            document.frame(64, 64).unwrap();
++            let generation = document.layout_generation();
++            assert!(document.scroll_by(16.0, 24.0));
++            assert_eq!(document.scroll(), (16.0, 24.0));
++            let width = (64.0 * zoom).round() as u32;
++            for repaint in [false, true] {
++                if repaint {
++                    let target = target(document.dom());
++                    document.mutate_dom(|dom| {
++                        dom.set_attribute(
++                            target,
++                            QualName::new(None, Namespace::from(""), LocalName::from("style")),
++                            "background:blue",
++                        );
++                    });
++                }
++                let list = document
++                    .frame(64, 64)
++                    .unwrap()
++                    .scaled_to(zoom, width, width);
++                let scene = translate_paint_list(&list).unwrap();
++                let pixels = cpu.render(&scene).unwrap();
++                let bytes = pixels.data_as_u8_slice();
++                let sample = (60.0 * zoom) as usize;
++                assert_eq!(
++                    pixel_at(bytes, width as usize, sample, sample),
++                    [244, 239, 227, 255],
++                    "{selector} canvas must cover the lower viewport: zoom={zoom}, repaint={repaint}"
++                );
++                let marker = (12.0 * zoom) as usize;
++                assert_eq!(
++                    pixel_at(bytes, width as usize, marker, marker),
++                    if repaint {
++                        [0, 0, 255, 255]
++                    } else {
++                        [255, 0, 0, 255]
++                    },
++                    "document content must still move with scroll"
++                );
++                assert_eq!(document.layout_generation(), generation);
++            }
++        }
++    }
++}
++
++#[test]
++fn placing_a_scrolled_surface_moves_its_canvas_with_its_content() {
++    let mut document = scroll_document("body { background:#f4efe3; }");
++    document.frame(64, 64).unwrap();
++    assert!(document.scroll_by(16.0, 24.0));
++    let list = document.frame(64, 64).unwrap().translated(8.0, 8.0);
++    let scene = translate_paint_list(&list).unwrap();
++    let mut cpu = CpuSession::new(SparseResourceLimits::default());
++    let pixels = cpu.render(&scene).unwrap();
++    assert_eq!(pixel_at(pixels.data_as_u8_slice(), 64, 4, 4), [0, 0, 0, 0]);
++    assert_eq!(
++        pixel_at(pixels.data_as_u8_slice(), 64, 12, 12),
++        [244, 239, 227, 255]
++    );
++    assert_eq!(
++        pixel_at(pixels.data_as_u8_slice(), 64, 20, 20),
++        [255, 0, 0, 255]
++    );
++}
++
++#[test]
++fn scrolling_a_transparent_canvas_does_not_pin_the_first_element_background() {
++    let mut document = scroll_document("html,body { background:transparent; }");
++    document.frame(64, 64).unwrap();
++    assert!(document.scroll_by(16.0, 24.0));
++    let scene = translate_paint_list(&document.frame(64, 64).unwrap()).unwrap();
++    let mut cpu = CpuSession::new(SparseResourceLimits::default());
++    let pixels = cpu.render(&scene).unwrap();
++    assert_eq!(
++        pixel_at(pixels.data_as_u8_slice(), 64, 12, 12),
++        [255, 0, 0, 255]
++    );
++    assert_eq!(
++        pixel_at(pixels.data_as_u8_slice(), 64, 60, 60),
++        [0, 0, 0, 0]
++    );
++}
++
++#[test]
++fn a_spliced_child_stays_inside_document_scroll_below_the_canvas_color() {
++    use paint_list_api::{ColorF, CommonPlacement, LayoutPoint, LayoutRect, PaintCmd, RectItem};
++    let mut document = LiveryDocument::new(
++        ScriptedDom::from_serialized_document(
++            "<html><body><div style='height:32px'></div><iframe></iframe>\
++             <div style='width:180px;height:180px'></div></body></html>",
++        ),
++        StyleSet::cambium(&[
++            "html,body { margin:0; padding:0; } body { background:#f4efe3; } \
++             iframe { display:block; margin-left:24px; width:16px; height:16px; border:0; padding:0; }",
++        ]),
++        Device::screen(64.0, 64.0),
++    );
++    document.frame(64, 64).unwrap();
++    assert!(document.scroll_by(16.0, 24.0));
++    let mut list = document.frame(64, 64).unwrap();
++    assert_eq!(list.frame_slots().len(), 1);
++    list.splice_frame_slots(|_| {
++        Some(vec![PaintCmd::DrawRect(RectItem {
++            placement: CommonPlacement::new(LayoutRect::new(
++                LayoutPoint::new(0.0, 0.0),
++                LayoutPoint::new(16.0, 16.0),
++            )),
++            color: ColorF::new(1.0, 0.0, 0.0, 1.0),
++        })])
++    });
++    let scene = translate_paint_list(&list).unwrap();
++    let mut cpu = CpuSession::new(SparseResourceLimits::default());
++    let pixels = cpu.render(&scene).unwrap();
++    assert_eq!(
++        pixel_at(pixels.data_as_u8_slice(), 64, 12, 12),
++        [255, 0, 0, 255]
++    );
++    assert_eq!(
++        pixel_at(pixels.data_as_u8_slice(), 64, 60, 60),
++        [244, 239, 227, 255]
++    );
++}
+diff --git a/components/genet-scripted/livery.rs b/components/genet-scripted/livery.rs
+index 87c542a7e9a..18e300f2abd 100644
+--- a/components/genet-scripted/livery.rs
++++ b/components/genet-scripted/livery.rs
+@@ -838,7 +838,7 @@ impl LiveryCssom {
+             && let Some((cached_viewport, frame)) = &state.cached_frame
+             && *cached_viewport == viewport
+         {
+-            let mut displayed = frame.clone().translated(-state.scroll.0, -state.scroll.1);
++            let mut displayed = frame.clone().scrolled(-state.scroll.0, -state.scroll.1);
+             push_selection_overlay(&mut displayed, &state);
+             return Ok(displayed);
+         }
+@@ -871,7 +871,7 @@ impl LiveryCssom {
+         };
+         state.render_cursor = end;
+         state.cached_frame = Some((viewport, frame.clone()));
+-        let mut displayed = frame.translated(-state.scroll.0, -state.scroll.1);
++        let mut displayed = frame.scrolled(-state.scroll.0, -state.scroll.1);
+         push_selection_overlay(&mut displayed, &state);
+         drop(state);
+ 

@@ -1,0 +1,325 @@
+   Compiling unicode-ident v1.0.24
+    Checking smallvec v1.15.2
+    Checking cfg-if v1.0.4
+    Checking libc v0.2.189
+    Checking serde_core v1.0.229
+   Compiling proc-macro2 v1.0.107
+    Checking libm v0.2.16
+   Compiling quote v1.0.47
+    Checking scopeguard v1.2.0
+   Compiling syn v2.0.119
+   Compiling syn v3.0.8
+    Checking num-traits v0.2.19
+    Checking lock_api v0.4.14
+    Checking parking_lot_core v0.9.12
+   Compiling siphasher v1.0.3
+    Checking bitflags v2.13.1
+   Compiling phf_shared v0.14.0
+    Checking parking_lot v0.12.5
+    Checking log v0.4.33
+   Compiling phf_generator v0.14.0
+    Checking stable_deref_trait v1.2.1
+    Checking foldhash v0.2.0
+    Checking once_cell v1.21.4
+    Checking objc2-encode v4.1.0
+    Checking objc2 v0.6.4
+    Checking arrayvec v0.7.8
+    Checking writeable v0.6.4
+   Compiling serde_derive v1.0.229
+   Compiling thiserror-impl v2.0.21
+   Compiling synstructure v0.13.2
+   Compiling zerovec-derive v0.11.6
+    Checking equivalent v1.0.2
+    Checking objc2-core-foundation v0.3.2
+    Checking hashbrown v0.17.1
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling bytemuck_derive v1.11.0
+    Checking serde v1.0.229
+    Checking zerofrom v0.1.8
+   Compiling displaydoc v0.2.6
+   Compiling zerocopy-derive v0.8.55
+    Checking bytemuck v1.25.2
+    Checking yoke v0.8.3
+   Compiling phf_macros v0.14.0
+    Checking zerovec v0.11.8
+    Checking phf v0.14.0
+    Checking litemap v0.8.2
+   Compiling jobserver v0.1.35
+    Checking zerotrie v0.2.5
+   Compiling string_cache_codegen v0.11.2
+   Compiling phf_codegen v0.14.0
+    Checking new_debug_unreachable v1.0.6
+   Compiling cc v1.3.0
+   Compiling web_atoms v0.3.0
+    Checking tinystr v0.8.4
+    Checking potential_utf v0.1.5
+    Checking icu_locale_core v2.3.0
+    Checking objc2-foundation v0.3.2
+    Checking thiserror v2.0.21
+    Checking precomputed-hash v0.1.1
+    Checking icu_provider v2.3.1
+    Checking utf8_iter v1.0.4
+    Checking string_cache v0.11.0
+    Checking icu_collections v2.3.0
+    Checking euclid v0.22.14
+    Checking tendril v0.5.1
+    Checking indexmap v2.14.0
+    Checking rustc-hash v1.1.0
+    Checking icu_properties_data v2.3.0
+    Checking zerocopy v0.8.55
+    Checking font-types v0.12.3
+    Checking naga-types v30.0.0
+    Checking block2 v0.6.2
+    Checking unicode-width v0.2.2
+    Checking bit-vec v0.9.1
+    Checking codespan-reporting v0.13.1
+    Checking bit-set v0.10.0
+    Checking objc2-metal v0.3.2
+    Checking read-fonts v0.41.0
+    Checking markup5ever v0.40.0
+    Checking icu_properties v2.3.0
+    Checking icu_normalizer_data v2.3.0
+    Checking objc2-core-graphics v0.3.2
+    Checking typenum v1.20.1
+    Checking raw-window-handle v0.6.2
+    Checking static_assertions v1.1.0
+    Checking wgpu-types v30.0.0
+    Checking objc2-quartz-core v0.3.2
+    Checking half v2.7.1
+    Checking naga v30.0.1
+    Checking hybrid-array v0.4.15
+    Checking icu_normalizer v2.3.0
+    Checking linebender_resource_handle v0.1.1
+    Checking simd-adler32 v0.3.10
+    Checking raw-window-metal v1.1.0
+    Checking profiling v1.0.18
+    Checking cmov v0.5.4
+    Checking adler2 v2.0.1
+    Checking ctutils v0.4.4
+    Checking miniz_oxide v0.8.9
+    Checking crc32fast v1.5.0
+    Checking skrifa v0.44.0
+    Checking crypto-common v0.2.2
+    Checking block-buffer v0.12.1
+    Checking layout-dom-api v0.1.1 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/shared/layout-dom)
+    Checking wgpu-naga-bridge v30.0.0
+    Checking wgpu-hal v30.0.0
+    Checking polycool v0.4.0
+    Checking memchr v2.8.3
+    Checking const-oid v0.10.2
+    Checking digest v0.11.3
+    Checking kurbo v0.13.1
+    Checking flate2 v1.1.9
+    Checking crossbeam-utils v0.8.22
+    Checking fdeflate v0.3.7
+    Checking idna_adapter v1.2.2
+    Checking wgpu-core-deps-apple v30.0.0
+    Checking itoa v1.0.18
+    Checking dtoa v1.0.11
+    Checking percent-encoding v2.3.2
+    Checking color v0.3.3
+    Checking svg_fmt v0.4.5
+    Checking form_urlencoded v1.2.2
+   Compiling libz-sys v1.1.29
+    Checking guillotiere v0.7.0
+    Checking dtoa-short v0.3.5
+    Checking peniko v0.6.1
+    Checking wgpu-core v30.0.0
+    Checking png v0.18.1
+    Checking idna v1.1.0
+    Checking crossbeam-epoch v0.9.20
+   Compiling psm v0.1.32
+    Checking app_units v0.7.8
+   Compiling cssparser-macros v0.7.0
+    Checking allocator-api2 v0.2.21
+    Checking alloc-no-stdlib v2.0.4
+    Checking unicode-segmentation v1.13.3
+    Checking hashbrown v0.16.1
+    Checking brotli-decompressor v5.0.3
+    Checking cssparser v0.38.0
+   Compiling livery v0.0.5 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/livery)
+    Checking genet-paint-types v0.2.0 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/shared/paint-types)
+    Checking crossbeam-deque v0.8.7
+    Checking url v2.5.8
+    Checking wgpu v30.0.1
+    Checking vello_encoding v0.11.0 (https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b4664)
+    Checking icu_locale_fallback_data v2.3.0
+    Checking html5ever v0.40.1
+    Checking xml5ever v0.40.0
+   Compiling stacker v0.1.25
+    Checking genet-css-flow v0.1.0 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/shared/css-flow)
+    Checking futures-core v0.3.33
+    Checking bytes v1.12.1
+   Compiling fontsan v0.7.0
+    Checking futures-intrusive v0.5.0
+   Compiling vello_shaders v0.11.0 (https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b4664)
+    Checking wuff v0.2.9
+    Checking genet-static-dom v0.1.1 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/genet-static-dom)
+    Checking icu_locale_fallback v2.3.0
+    Checking rayon-core v1.13.0
+    Checking engine-observables-api v0.2.0 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/shared/engine-observables-api)
+    Checking cadency v0.0.1 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/cadency)
+    Checking icu_segmenter_data v2.3.0
+    Checking regress v0.11.1 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/support/patches/regress-0.11.1)
+    Checking genet-text v0.1.0 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/genet-text)
+    Checking genet-host-api v0.2.0 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/genet-host-api)
+    Checking encoding_rs v0.8.35
+    Checking objc2-core-text v0.3.2
+   Compiling tracing-attributes v0.1.31
+    Checking tracing-core v0.1.36
+    Checking memmap2 v0.9.11
+    Checking pin-project-lite v0.2.17
+    Checking zune-core v0.5.1
+    Checking cpufeatures v0.3.0
+    Checking quick-error v2.0.1
+   Compiling zmij v1.0.23
+    Checking color_quant v1.1.0
+    Checking pxfm v0.1.30
+    Checking pollster v1.0.1
+    Checking either v1.16.0
+    Checking weezl v0.1.12
+    Checking parlance v0.1.0
+    Checking byteorder-lite v0.1.0
+    Checking gif v0.14.2
+    Checking genet-fontique v0.10.0 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/support/patches/fontique)
+    Checking image-webp v0.2.4
+    Checking rayon v1.12.0
+    Checking netrender_device v0.1.2 (https://github.com/merely-made/netrender.git?branch=main#8a3d289a)
+    Checking genet-scripted-dom v0.1.2 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/genet-scripted-dom)
+    Checking tracing v0.1.44
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+  --> components/genet-scripted-dom/forms_submission.rs:98:14
+   |
+98 |             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+   |              ^^^^^^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+   |
+98 -             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+98 +             .try_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+   |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+   --> components/genet-scripted-dom/lib.rs:166:10
+    |
+166 |         .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+    |          ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+166 -         .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+166 +         .try_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+    |
+
+    Checking moxcms v0.8.1
+    Checking zune-jpeg v0.5.15
+warning: `genet-scripted-dom` (lib) generated 2 warnings (run `cargo fix --lib -p genet-scripted-dom` to apply 2 suggestions)
+    Checking netrender-vello v0.11.0 (https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b4664)
+    Checking icu_segmenter v2.3.0
+    Checking wuff-capi v0.2.0
+    Checking hmac v0.13.0
+    Checking harfrust v0.12.0
+    Checking parley_data v0.10.0
+    Checking paint_list_api v0.1.2 (https://github.com/merely-made/netrender.git?branch=main#8a3d289a)
+   Compiling enumn v0.1.14
+    Checking genet-taffy v0.14.0 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/support/patches/taffy)
+    Checking uuid v1.24.0
+   Compiling serde_json v1.0.151
+   Compiling getrandom v0.4.3
+    Checking accesskit v0.25.1
+    Checking genet-parley v0.10.0 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/support/patches/parley)
+    Checking buckram v0.0.3 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/buckram)
+warning: use of deprecated method `icu_properties::props::BidiClass::to_icu4c_value`: please comment on https://github.com/unicode-org/icu4x/issues/6067 if you need this
+   --> support/patches/parley/src/bidi.rs:893:13
+    |
+893 |     1 << (t.to_icu4c_value() as u32)
+    |             ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: `genet-parley` (lib) generated 1 warning
+    Checking image v0.25.10
+    Checking netrender v0.1.2 (https://github.com/merely-made/netrender.git?branch=main#8a3d289a)
+    Checking sha2 v0.11.1
+    Checking genet-document-resources v0.2.1 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/genet-document-resources)
+    Checking data-url v0.3.2
+    Checking paint_list_render v0.1.2 (https://github.com/merely-made/netrender.git?branch=main#8a3d289a)
+    Checking document-session-api v0.1.0 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/shared/document-session-api)
+    Checking pbkdf2 v0.13.0
+    Checking hkdf v0.13.0
+    Checking genet-events v0.0.0 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/genet-events)
+    Checking sha1 v0.11.0
+    Checking browsing-context-api v0.1.0 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/shared/browsing-context)
+    Checking servo-xpath v0.2.0 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/xpath)
+    Checking cobs v0.3.0
+    Checking script-engine-api v0.1.1 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/script-engine-api)
+    Checking unicode-bidi v0.3.18
+    Checking zeroize v1.9.0
+    Checking postcard v1.1.3
+    Checking script-runtime-api v0.0.0 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/script-runtime-api)
+    Checking fleece v0.5.0 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/fleece)
+    Checking base64 v0.22.1
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+  --> components/script-runtime-api/text_encoding.rs:22:10
+   |
+22 |         .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+   |          ^^^^^^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+   |
+22 -         .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+22 +         .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+   |
+
+warning: unused import: `crate::OwnerResolvedCx`
+ --> components/script-runtime-api/dom/xpath_eval.rs:9:5
+  |
+9 | use crate::OwnerResolvedCx as _;
+  |     ^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::OwnerResolvedCx`
+  --> components/script-runtime-api/dom/shadow.rs:14:5
+   |
+14 | use crate::OwnerResolvedCx as _;
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::OwnerResolvedCx`
+  --> components/script-runtime-api/dom/markup_insertion.rs:37:5
+   |
+37 | use crate::OwnerResolvedCx as _;
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `script-runtime-api` (lib) generated 4 warnings (run `cargo fix --lib -p script-runtime-api` to apply 1 suggestion)
+    Checking genet-livery v0.0.4 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/genet-livery)
+    Checking genet-render v0.2.0 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/genet-render)
+    Checking genet-scripted v0.2.0 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/genet-scripted)
+warning: enum `ReplayError` is never used
+   --> components/genet-scripted/capture.rs:281:17
+    |
+281 | pub(crate) enum ReplayError {
+    |                 ^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: associated items `translate`, `replay_node`, and `replay_ids` are never used
+   --> components/genet-scripted/capture.rs:311:8
+    |
+307 | impl RecordedMutation {
+    | --------------------- associated items in this implementation
+...
+311 |     fn translate(dom: &ScriptedDom, captured: CapturedNodeId) -> Result<NodeId, ReplayError> {
+    |        ^^^^^^^^^
+...
+320 |     pub(crate) fn replay_node(&self, dom: &ScriptedDom) -> Result<NodeId, ReplayError> {
+    |                   ^^^^^^^^^^^
+...
+339 |     pub(crate) fn replay_ids(&self, dom: &ScriptedDom) -> Result<Vec<NodeId>, ReplayError> {
+    |                   ^^^^^^^^^^
+
+warning: `genet-scripted` (lib) generated 2 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 11s

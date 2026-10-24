@@ -186,7 +186,7 @@ fn elide_payloads(envelope: &mut PaintEnvelope) -> (usize, usize) {
         // Keep width/height honest by shrinking to a 1x1 RGBA pixel.
         image.width = 1;
         image.height = 1;
-        image.data = vec![0, 0, 0, 0];
+        image.data = vec![0, 0, 0, 0].into();
     }
     let after = envelope.fonts.iter().map(|f| f.data.len()).sum::<usize>()
         + envelope.images.iter().map(|i| i.data.len()).sum::<usize>();

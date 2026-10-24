@@ -838,7 +838,7 @@ impl LiveryCssom {
             && let Some((cached_viewport, frame)) = &state.cached_frame
             && *cached_viewport == viewport
         {
-            let mut displayed = frame.clone().translated(-state.scroll.0, -state.scroll.1);
+            let mut displayed = frame.clone().scrolled(-state.scroll.0, -state.scroll.1);
             push_selection_overlay(&mut displayed, &state);
             return Ok(displayed);
         }
@@ -871,7 +871,7 @@ impl LiveryCssom {
         };
         state.render_cursor = end;
         state.cached_frame = Some((viewport, frame.clone()));
-        let mut displayed = frame.translated(-state.scroll.0, -state.scroll.1);
+        let mut displayed = frame.scrolled(-state.scroll.0, -state.scroll.1);
         push_selection_overlay(&mut displayed, &state);
         drop(state);
 

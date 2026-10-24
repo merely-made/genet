@@ -73,7 +73,7 @@ impl HostFixture {
             600.0,
             ViewportSizes::uniform(viewport_width, 600.0),
             text,
-            &Default::default(),
+            &std::collections::HashMap::<String, Vec<u8>>::new(),
         )
         .expect("host-owned layout");
         assert_eq!(

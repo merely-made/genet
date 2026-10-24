@@ -1,0 +1,348 @@
+     Locking 50 packages to highest compatible versions
+    Updating accesskit v0.24.1 -> v0.25.1
+    Updating accesskit_atspi_common v0.18.1 -> v0.21.0
+      Adding accesskit_consumer v0.39.1
+    Updating accesskit_macos v0.26.3 -> v0.27.1
+    Updating accesskit_unix v0.21.1 -> v0.24.0
+    Updating accesskit_windows v0.32.1 -> v0.35.1
+      Adding block-buffer v0.12.1
+      Adding boa_ast v1.0.0-dev (https://github.com/merely-made/bole.git?rev=ddf4e31b0d6cf86c11ea8907b0d07e4799d62368#ddf4e31b)
+      Adding boa_engine v1.0.0-dev (https://github.com/merely-made/bole.git?rev=ddf4e31b0d6cf86c11ea8907b0d07e4799d62368#ddf4e31b)
+      Adding boa_gc v1.0.0-dev (https://github.com/merely-made/bole.git?rev=ddf4e31b0d6cf86c11ea8907b0d07e4799d62368#ddf4e31b)
+      Adding boa_interner v1.0.0-dev (https://github.com/merely-made/bole.git?rev=ddf4e31b0d6cf86c11ea8907b0d07e4799d62368#ddf4e31b)
+      Adding boa_macros v1.0.0-dev (https://github.com/merely-made/bole.git?rev=ddf4e31b0d6cf86c11ea8907b0d07e4799d62368#ddf4e31b)
+      Adding boa_parser v1.0.0-dev (https://github.com/merely-made/bole.git?rev=ddf4e31b0d6cf86c11ea8907b0d07e4799d62368#ddf4e31b)
+      Adding boa_string v1.0.0-dev (https://github.com/merely-made/bole.git?rev=ddf4e31b0d6cf86c11ea8907b0d07e4799d62368#ddf4e31b)
+      Adding cmov v0.5.4
+      Adding const-oid v0.10.2
+      Adding crypto-common v0.2.2
+    Updating cssparser v0.37.0 -> v0.38.0
+      Adding ctutils v0.4.4
+      Adding digest v0.11.3
+      Adding ecmascript_atomics v0.2.3 (https://github.com/merely-made/vano.git?rev=b1f3d25d4b7c62ebfc4977346f55dc152ca2cc88#b1f3d25d)
+      Adding hkdf v0.13.0
+      Adding hmac v0.13.0
+    Updating html5ever v0.39.0 -> v0.40.1
+      Adding hybrid-array v0.4.15
+    Updating markup5ever v0.39.0 -> v0.40.0
+      Adding netrender v0.1.2 (https://github.com/merely-made/netrender.git?branch=main#8a3d289a)
+      Adding netrender_device v0.1.2 (https://github.com/merely-made/netrender.git?branch=main#8a3d289a)
+      Adding nova_vm v1.0.0 (https://github.com/merely-made/vano.git?rev=b1f3d25d4b7c62ebfc4977346f55dc152ca2cc88#b1f3d25d)
+      Adding paint_list_api v0.1.2 (https://github.com/merely-made/netrender.git?branch=main#8a3d289a)
+      Adding paint_list_render v0.1.2 (https://github.com/merely-made/netrender.git?branch=main#8a3d289a)
+      Adding pbkdf2 v0.13.0
+    Updating phf_codegen v0.13.1 -> v0.14.0
+      Adding sha1 v0.11.0
+      Adding sha2 v0.11.1
+      Adding small_btree v0.1.0 (https://github.com/merely-made/bole.git?rev=ddf4e31b0d6cf86c11ea8907b0d07e4799d62368#ddf4e31b)
+      Adding small_string v1.0.0 (https://github.com/merely-made/vano.git?rev=b1f3d25d4b7c62ebfc4977346f55dc152ca2cc88#b1f3d25d)
+    Updating string_cache v0.9.0 -> v0.11.0
+    Updating string_cache_codegen v0.6.1 -> v0.11.2
+      Adding tag_ptr v0.1.0 (https://github.com/merely-made/bole.git?rev=ddf4e31b0d6cf86c11ea8907b0d07e4799d62368#ddf4e31b)
+      Adding tokio-tungstenite v0.30.0
+      Adding tungstenite v0.30.0
+    Updating web_atoms v0.2.5 -> v0.3.0
+    Updating xml5ever v0.39.0 -> v0.40.0
+    Updating zbus v5.18.0 -> v5.19.0
+    Updating zbus_macros v5.18.0 -> v5.19.0
+      Adding zcheapstr v1.1.0
+    Updating zvariant v5.13.1 -> v5.15.1
+    Updating zvariant_derive v5.13.1 -> v5.15.1
+    Updating zvariant_utils v3.5.0 -> v4.2.0
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.47
+   Compiling smallvec v1.15.2
+   Compiling libc v0.2.189
+   Compiling autocfg v1.5.1
+   Compiling cfg-if v1.0.4
+   Compiling libm v0.2.16
+   Compiling serde_core v1.0.229
+   Compiling syn v2.0.119
+   Compiling syn v3.0.8
+   Compiling num-traits v0.2.19
+   Compiling serde v1.0.229
+   Compiling log v0.4.33
+   Compiling bitflags v2.13.1
+   Compiling thiserror v2.0.21
+   Compiling scopeguard v1.2.0
+   Compiling cfg_aliases v0.2.2
+   Compiling serde_derive v1.0.229
+   Compiling arrayvec v0.7.8
+   Compiling thiserror-impl v2.0.21
+   Compiling lock_api v0.4.14
+   Compiling synstructure v0.13.2
+   Compiling foldhash v0.2.0
+   Compiling parking_lot_core v0.9.12
+   Compiling once_cell v1.21.4
+   Compiling equivalent v1.0.2
+   Compiling objc2 v0.6.4
+   Compiling siphasher v1.0.3
+   Compiling bytemuck_derive v1.11.0
+   Compiling stable_deref_trait v1.2.1
+   Compiling phf_shared v0.14.0
+   Compiling zerofrom-derive v0.1.7
+   Compiling objc2-encode v4.1.0
+   Compiling bytemuck v1.25.2
+   Compiling zerofrom v0.1.8
+   Compiling parking_lot v0.12.5
+   Compiling yoke-derive v0.8.2
+   Compiling fastrand v2.5.0
+   Compiling hashbrown v0.17.1
+   Compiling phf_generator v0.14.0
+   Compiling zerocopy v0.8.55
+   Compiling yoke v0.8.3
+   Compiling objc2-core-foundation v0.3.2
+   Compiling zerocopy-derive v0.8.55
+   Compiling zerovec-derive v0.11.6
+   Compiling rustc-hash v1.1.0
+   Compiling displaydoc v0.2.6
+   Compiling zerovec v0.11.8
+   Compiling jobserver v0.1.35
+   Compiling unicode-width v0.2.2
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.9
+   Compiling writeable v0.6.4
+   Compiling bit-vec v0.9.1
+   Compiling bit-set v0.10.0
+   Compiling cc v1.3.0
+   Compiling codespan-reporting v0.13.1
+   Compiling objc2-foundation v0.3.2
+   Compiling euclid v0.22.14
+   Compiling tinystr v0.8.4
+   Compiling phf_macros v0.14.0
+   Compiling font-types v0.12.3
+   Compiling litemap v0.8.2
+   Compiling read-fonts v0.41.0
+   Compiling icu_locale_core v2.3.0
+   Compiling phf v0.14.0
+   Compiling potential_utf v0.1.5
+   Compiling zerotrie v0.2.5
+   Compiling indexmap v2.14.0
+   Compiling linebender_resource_handle v0.1.1
+   Compiling icu_provider v2.3.1
+   Compiling block2 v0.6.2
+   Compiling naga-types v30.0.0
+   Compiling string_cache_codegen v0.11.2
+   Compiling phf_codegen v0.14.0
+   Compiling naga v30.0.1
+   Compiling new_debug_unreachable v1.0.6
+   Compiling utf8_iter v1.0.4
+   Compiling web_atoms v0.3.0
+   Compiling icu_collections v2.3.0
+   Compiling objc2-metal v0.3.2
+   Compiling half v2.7.1
+   Compiling objc2-core-graphics v0.3.2
+   Compiling polycool v0.4.0
+   Compiling static_assertions v1.1.0
+   Compiling icu_properties_data v2.3.0
+   Compiling precomputed-hash v0.1.1
+   Compiling raw-window-handle v0.6.2
+   Compiling string_cache v0.11.0
+   Compiling wgpu-types v30.0.0
+   Compiling kurbo v0.13.1
+   Compiling objc2-quartz-core v0.3.2
+   Compiling skrifa v0.44.0
+   Compiling color v0.3.3
+   Compiling wgpu-hal v30.0.0
+   Compiling icu_normalizer_data v2.3.0
+   Compiling simd-adler32 v0.3.10
+   Compiling crc32fast v1.5.0
+   Compiling svg_fmt v0.4.5
+   Compiling object v0.39.1
+   Compiling guillotiere v0.7.0
+   Compiling peniko v0.6.1
+   Compiling raw-window-metal v1.1.0
+   Compiling tendril v0.5.1
+   Compiling profiling v1.0.18
+   Compiling crossbeam-utils v0.8.22
+   Compiling adler2 v2.0.1
+   Compiling memchr v2.8.3
+   Compiling miniz_oxide v0.8.9
+   Compiling wgpu-naga-bridge v30.0.0
+   Compiling markup5ever v0.40.0
+   Compiling icu_properties v2.3.0
+   Compiling wgpu-core v30.0.0
+   Compiling litrs v1.0.0
+   Compiling crossbeam-epoch v0.9.20
+   Compiling document-features v0.2.12
+   Compiling flate2 v1.1.9
+   Compiling icu_normalizer v2.3.0
+   Compiling ar_archive_writer v0.5.3
+   Compiling wgpu-core-deps-apple v30.0.0
+   Compiling fdeflate v0.3.7
+   Compiling wgpu v30.0.1
+   Compiling winnow v1.0.4
+   Compiling icu_locale_fallback_data v2.3.0
+   Compiling vcpkg v0.2.15
+   Compiling pkg-config v0.3.34
+   Compiling crossbeam-deque v0.8.7
+   Compiling libz-sys v1.1.29
+   Compiling toml_parser v1.1.2+spec-1.1.0
+   Compiling png v0.18.1
+   Compiling psm v0.1.32
+   Compiling serde_spanned v1.1.1
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling dtoa v1.0.11
+   Compiling icu_segmenter_data v2.3.0
+   Compiling rayon-core v1.13.0
+   Compiling wuff-capi v0.2.0
+   Compiling alloc-no-stdlib v2.0.4
+   Compiling fearless_simd v0.7.0
+   Compiling toml_writer v1.1.2+spec-1.1.0
+   Compiling semver v1.0.28
+   Compiling rustc_version v0.4.1
+   Compiling toml v1.1.3+spec-1.1.0
+   Compiling brotli-decompressor v5.0.3
+   Compiling vello_shaders v0.11.0 (https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b4664)
+   Compiling dtoa-short v0.3.5
+   Compiling vello_common v0.3.0 (https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b4664)
+   Compiling layout-dom-api v0.1.1 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/shared/layout-dom)
+   Compiling vello_encoding v0.11.0 (https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b4664)
+   Compiling stacker v0.1.25
+   Compiling cssparser-macros v0.7.0
+   Compiling itoa v1.0.18
+   Compiling glob v0.3.4
+   Compiling futures-core v0.3.33
+   Compiling bytes v1.12.1
+   Compiling futures-intrusive v0.5.0
+   Compiling wuff v0.2.9
+   Compiling fontsan v0.7.0
+   Compiling cssparser v0.38.0
+   Compiling glifo v0.4.0 (https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b4664)
+   Compiling icu_locale_fallback v2.3.0
+   Compiling livery v0.0.5 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/livery)
+   Compiling heapless v0.7.17
+   Compiling idna_adapter v1.2.2
+   Compiling objc2-core-text v0.3.2
+   Compiling app_units v0.7.8
+   Compiling tracing-attributes v0.1.31
+   Compiling tracing-core v0.1.36
+   Compiling memmap2 v0.9.11
+   Compiling pxfm v0.1.30
+   Compiling either v1.16.0
+   Compiling allocator-api2 v0.2.21
+   Compiling quick-error v2.0.1
+   Compiling color_quant v1.1.0
+   Compiling percent-encoding v2.3.2
+   Compiling byteorder v1.5.0
+   Compiling pollster v1.0.1
+   Compiling parlance v0.1.0
+   Compiling zune-core v0.5.1
+   Compiling weezl v0.1.12
+   Compiling byteorder-lite v0.1.0
+   Compiling genet-css-flow v0.1.0 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/shared/css-flow)
+   Compiling pin-project-lite v0.2.17
+   Compiling image-webp v0.2.4
+   Compiling tracing v0.1.44
+   Compiling gif v0.14.2
+   Compiling genet-fontique v0.10.0 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/support/patches/fontique)
+   Compiling moxcms v0.8.1
+   Compiling zune-jpeg v0.5.15
+   Compiling netrender_device v0.1.2 (https://github.com/merely-made/netrender.git?branch=main#8a3d289a)
+   Compiling hash32 v0.2.1
+   Compiling form_urlencoded v1.2.2
+   Compiling hashbrown v0.16.1
+   Compiling rayon v1.12.0
+   Compiling genet-paint-types v0.2.0 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/shared/paint-types)
+   Compiling idna v1.1.0
+   Compiling icu_segmenter v2.3.0
+   Compiling vello_cpu v0.3.0 (https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b4664)
+   Compiling netrender-vello v0.11.0 (https://github.com/mark-ik/vello?rev=276b46648c08f3d2062e70559afa999842e1873c#276b4664)
+   Compiling cadency v0.0.1 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/cadency)
+   Compiling html5ever v0.40.1
+   Compiling parley_data v0.10.0
+   Compiling xml5ever v0.40.0
+   Compiling harfrust v0.12.0
+   Compiling paint_list_api v0.1.2 (https://github.com/merely-made/netrender.git?branch=main#8a3d289a)
+   Compiling genet-host-api v0.2.0 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/genet-host-api)
+   Compiling spin v0.9.9
+   Compiling genet-taffy v0.14.0 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/support/patches/taffy)
+   Compiling unicode-segmentation v1.13.3
+   Compiling genet-text v0.1.0 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/genet-text)
+   Compiling buckram v0.0.3 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/buckram)
+   Compiling genet-parley v0.10.0 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/support/patches/parley)
+warning: use of deprecated method `icu_properties::props::BidiClass::to_icu4c_value`: please comment on https://github.com/unicode-org/icu4x/issues/6067 if you need this
+   --> support/patches/parley/src/bidi.rs:893:13
+    |
+893 |     1 << (t.to_icu4c_value() as u32)
+    |             ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+   Compiling genet-document-resources v0.2.1 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/genet-document-resources)
+   Compiling genet-static-dom v0.1.1 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/genet-static-dom)
+warning: `genet-parley` (lib) generated 1 warning
+   Compiling netrender v0.1.2 (https://github.com/merely-made/netrender.git?branch=main#8a3d289a)
+   Compiling image v0.25.10
+   Compiling engine-observables-api v0.2.0 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/shared/engine-observables-api)
+   Compiling url v2.5.8
+   Compiling regress v0.11.1 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/support/patches/regress-0.11.1)
+   Compiling encoding_rs v0.8.35
+   Compiling cobs v0.3.0
+   Compiling data-url v0.3.2
+   Compiling postcard v1.1.3
+   Compiling genet-scripted-dom v0.1.2 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/genet-scripted-dom)
+   Compiling paint_list_render v0.1.2 (https://github.com/merely-made/netrender.git?branch=main#8a3d289a)
+   Compiling base64 v0.22.1
+warning: use of deprecated method `std::sync::atomic::Atomic::<u64>::fetch_update`: renamed to `try_update` for consistency
+  --> components/genet-scripted-dom/forms_submission.rs:98:14
+   |
+98 |             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+   |              ^^^^^^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+   |
+98 -             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+98 +             .try_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+   |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+   --> components/genet-scripted-dom/lib.rs:166:10
+    |
+166 |         .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+    |          ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+166 -         .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+166 +         .try_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+    |
+
+warning: `genet-scripted-dom` (lib) generated 2 warnings (run `cargo fix --lib -p genet-scripted-dom` to apply 2 suggestions)
+   Compiling genet-livery v0.0.4 (/Users/markik/Code/worktrees/genet-canvas-scroll-20261023/components/genet-livery)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 53s
+     Running tests/retained_cpu_raster.rs (/Users/markik/Code/repos/genet/target/build/debug/deps/retained_cpu_raster-ce8a044699d55ae3)
+
+running 4 tests
+test retained_background_color_repaints_cpu_pixel_without_relayout ... ok
+test canvas_color_covers_the_viewport_after_cached_scroll_and_retained_repaint ... FAILED
+test placing_a_scrolled_surface_moves_its_canvas_with_its_content ... FAILED
+test scrolling_a_transparent_canvas_does_not_pin_the_first_element_background ... ok
+
+failures:
+
+---- canvas_color_covers_the_viewport_after_cached_scroll_and_retained_repaint stdout ----
+
+thread 'canvas_color_covers_the_viewport_after_cached_scroll_and_retained_repaint' (59878313) panicked at components/genet-livery/tests/retained_cpu_raster.rs:115:17:
+assertion `left == right` failed: html canvas must cover the lower viewport: zoom=1, repaint=false
+  left: [0, 0, 0, 0]
+ right: [244, 239, 227, 255]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- placing_a_scrolled_surface_moves_its_canvas_with_its_content stdout ----
+
+thread 'placing_a_scrolled_surface_moves_its_canvas_with_its_content' (59878314) panicked at components/genet-livery/tests/retained_cpu_raster.rs:141:5:
+assertion `left == right` failed
+  left: [244, 239, 227, 255]
+ right: [0, 0, 0, 0]
+
+
+failures:
+    canvas_color_covers_the_viewport_after_cached_scroll_and_retained_repaint
+    placing_a_scrolled_surface_moves_its_canvas_with_its_content
+
+test result: FAILED. 2 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+error: test failed, to rerun pass `-p genet-livery --test retained_cpu_raster`

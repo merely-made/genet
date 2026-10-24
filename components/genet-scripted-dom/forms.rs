@@ -1878,7 +1878,8 @@ pub(super) fn clamp_selection_for_state(state: &mut FormControlState, kind: &str
     state.selection_end = Some(end);
 }
 impl ScriptedDom {
-    pub(super) fn input_type_for_state(&self, id: NodeId) -> String {
+    /// Effective HTML input type, shared by native editing and host metadata.
+    pub fn input_type_for_state(&self, id: NodeId) -> String {
         self.input_type(id)
     }
 }

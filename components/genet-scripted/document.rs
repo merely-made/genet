@@ -1503,6 +1503,20 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         self.host_focused_node.is_some_and(|node| self.host_focus_is_current(node)
             && self.with_dom(|dom| dom.can_user_edit_text_control(node)))
     }
+    /// Focused native editor metadata and current retained caret geometry.
+    pub fn host_text_input_state(&self) -> Option<genet_render::text_input::SessionTextInputState> {
+        let node = self.host_focused_node.filter(|node| self.host_focus_is_current(*node))?;
+        self.with_dom(|dom| {
+            let editing = dom.form_control_editing_value(node)?;
+            let focus = match editing.selection_direction {
+                layout_dom_api::SelectionDirection::Backward => editing.selection_start,
+                _ => editing.selection_end,
+            }.unwrap_or_else(|| editing.value.encode_utf16().count().min(u32::MAX as usize) as u32);
+            let byte = genet_scripted_dom::form_edit_byte_offset_from_utf16(&editing.value, focus);
+            let caret = self.cssom.text_control_caret(dom, node, byte)?;
+            genet_render::text_input::text_input_state(dom, node, caret)
+        })
+    }
     pub fn host_has_focus(&self) -> bool { self.host_focused_node.is_some_and(|node| self.host_focus_is_current(node)) }
     pub fn host_focused_is_textarea(&self) -> bool {
         self.host_focused_node.is_some_and(|node| self.host_focus_is_current(node)

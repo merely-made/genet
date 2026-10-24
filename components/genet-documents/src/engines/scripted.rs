@@ -492,6 +492,11 @@ impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
 
     fn editable_focus(&self) -> bool { self.doc.host_editable_focus() }
 
+    fn text_input_state(&self) -> Option<document_session_api::SessionTextInputState> {
+        self.doc.host_text_input_state()
+    }
+
+
     fn text_target(&self, text: &str) -> Option<SessionTextTarget> {
         let (anchor, focus) = self.doc.text_target(text)?;
         Some(SessionTextTarget { anchor, focus })

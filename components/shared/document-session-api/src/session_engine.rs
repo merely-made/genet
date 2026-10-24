@@ -973,6 +973,14 @@ pub trait DocumentSession<F>: Any {
         false
     }
 
+    /// Observe the focused writable text control against a current completed
+    /// layout. `None` means there is no usable text-control observation (or
+    /// this session does not implement it). This read must not trigger layout.
+    /// Hosts publish refreshed geometry after preparing the next frame.
+    fn text_input_state(&self) -> Option<crate::SessionTextInputState> {
+        None
+    }
+
     fn cursor_at(&self, _x: f32, _y: f32) -> SessionCursor {
         SessionCursor::Default
     }

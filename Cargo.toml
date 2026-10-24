@@ -251,7 +251,7 @@ parley = { package = "genet-parley", version = "0.10.0", path = "support/patches
 # 2026-09-03 under the platform boundary plan, with the doc areas that
 # describe it. Its smolweb protocol crates (nex, spartan, guppy, gopher, gemini,
 # scroll, finger) were errand's wire layer and left this table with it.
-document-session-api = { version = "=0.1.0", path = "components/shared/document-session-api" }
+document-session-api = { version = "=0.1.1", path = "components/shared/document-session-api" }
 genet-documents = { version = "=0.1.0", path = "components/genet-documents", default-features = false }
 genet-document-resources = { version = "=0.2.1", path = "components/genet-document-resources" }
 genet-host-api = { version = "=0.2.0", path = "components/genet-host-api" }

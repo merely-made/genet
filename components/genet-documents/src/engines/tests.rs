@@ -6,6 +6,10 @@
 
 use super::*;
 
+#[cfg(feature = "livery")]
+#[path = "tests/text_input.rs"]
+mod text_input_tests;
+
 use std::any::Any;
 
 use document_session_api::session_engine::SessionRegistry;

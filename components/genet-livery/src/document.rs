@@ -364,6 +364,12 @@ where
         self.generation
     }
 
+    /// Whether spatial observations still describe a completed current frame.
+    /// Mutations, scrolling and pending style/layout changes retire that frame.
+    pub fn has_current_frame(&self) -> bool {
+        self.cached.is_some() && self.layout.is_some() && !self.layout_dirty
+    }
+
     /// The number of completed geometry passes. Paint-only and scroll-only
     /// frames advance [`Self::generation`] but not this counter.
     pub fn layout_generation(&self) -> u64 {

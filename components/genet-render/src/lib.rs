@@ -11,6 +11,7 @@
 
 pub mod a11y;
 pub mod inspect;
+pub mod text_input;
 #[path = "livery_render.rs"]
 pub mod render;
 

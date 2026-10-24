@@ -511,6 +511,7 @@ impl<Fetch> LiverySessionEngine<Fetch> {
             zoom: DocumentZoomState::clamped(1.0, LIVERY_PAGE_ZOOM_MIN, LIVERY_PAGE_ZOOM_MAX),
             a11y_revision: Cell::new(0),
             a11y_cache: RefCell::new(None),
+            text_input_zoom: None,
             contexts,
             frames,
         }))
@@ -634,6 +635,7 @@ pub struct LiveryDocumentSession {
     zoom: DocumentZoomState,
     a11y_revision: Cell<u64>,
     a11y_cache: RefCell<Option<DocumentA11yProjection>>,
+    text_input_zoom: Option<f32>,
     /// This session's browsing-context tree, rooted at the top-level context
     /// the session's own document holds.
     contexts: crate::browsing_context::BrowsingContextTree,
@@ -1741,6 +1743,7 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
     }
 
     fn frame(&mut self, width: u32, height: u32) -> Scene {
+        self.text_input_zoom = None;
         let (css_width, css_height) = self.css_viewport(width, height);
         let mut list = match self.doc.frame(css_width, css_height) {
             Ok(list) => list,
@@ -1791,6 +1794,15 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
                     scene.push_rect(x0, y0, x1, y1, [0.18, 0.46, 0.95, 0.34]);
                 }
             }
+        }
+        // Host mutations may remove or disable the retained editor between
+        // frames. Revoke it before querying its value or publishing geometry.
+        if self.editor.as_ref().is_some_and(|editor| !self.editable_is_writable(editor.node)) {
+            self.editor = None;
+            self.editor_drag = None;
+        }
+        if self.focused_node.is_some_and(|node| !self.doc.dom().is_live(node)) {
+            self.focused_node = None;
         }
         if let Some(editor) = self.editor.as_ref() {
             let editing = self.doc.dom().form_control_editing_value(editor.node);
@@ -1846,7 +1858,7 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
                     .editor_text_source(editor.node)
                     .and_then(|source| self.doc.caret_rect(source, end_byte))
                     .or_else(|| {
-                        (editor.kind == EditableKind::Textarea && value.is_empty())
+                        value.is_empty()
                             .then(|| self.doc.fragment_rect(editor.node))
                             .flatten()
                             .map(|[x, y, _width, height]| genet_livery::TextRect {
@@ -1891,6 +1903,7 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
             scene.append_fragment(netrender::SceneFragment::from_scene(overlay));
         }
         self.last_error = None;
+        self.text_input_zoom = Some(self.zoom());
         scene
     }
 
@@ -2197,6 +2210,30 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
 
     fn editable_focus(&self) -> bool {
         self.focused_node.is_some_and(|node| self.editable_is_writable(node))
+    }
+
+    fn text_input_state(&self) -> Option<document_session_api::SessionTextInputState> {
+        if self.text_input_zoom != Some(self.zoom()) || !self.doc.has_current_frame() {
+            return None;
+        }
+        let node = self.focused_node.filter(|node| self.editable_is_writable(*node))?;
+        let editing = self.doc.dom().form_control_editing_value(node)?;
+        let focus = match editing.selection_direction {
+            SelectionDirection::Backward => editing.selection_start,
+            _ => editing.selection_end,
+        }.unwrap_or_else(|| editing.value.encode_utf16().count().min(u32::MAX as usize) as u32);
+        let byte = form_edit_byte_offset_from_utf16(&editing.value, focus);
+        let rect = self.doc.caret_rect(node, byte).or_else(|| {
+            editing.value.is_empty().then(|| self.doc.fragment_rect(node)).flatten()
+                .map(|[x, y, _, height]| genet_livery::TextRect {
+                    x: x + 1.0, y: y + 1.0, width: 1.0,
+                    height: (height - 2.0).clamp(1.0, 16.0),
+                })
+        })?;
+        genet_render::text_input::text_input_state(self.doc.dom(), node, [
+            self.to_presentation_length(rect.x), self.to_presentation_length(rect.y),
+            self.to_presentation_length(rect.width), self.to_presentation_length(rect.height),
+        ])
     }
 
     fn cursor_at(&self, x: f32, y: f32) -> SessionCursor {

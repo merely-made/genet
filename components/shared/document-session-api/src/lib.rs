@@ -37,6 +37,10 @@ pub mod page_capture;
 /// paint frames (the genet HTML lanes, smolweb native).
 pub mod session_engine;
 
+/// Focused text-control metadata and logical caret geometry.
+pub mod text_input;
+pub use text_input::{SessionTextInputRect, SessionTextInputState};
+
 pub use a11y::{
     A11yCapability, DocumentA11yAction, DocumentA11yActionData, DocumentA11yActionRequest,
     DocumentA11yBounds, DocumentA11yClickTarget, DocumentA11yHasPopup, DocumentA11yLive,

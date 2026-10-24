@@ -1055,6 +1055,27 @@ impl LiveryCssom {
         ])
     }
 
+    /// Caret from the current shaped frame, including nested-scroll shifts.
+    /// Pending DOM changes make the old geometry unavailable until layout.
+    pub fn text_control_caret(&self, dom: &ScriptedDom, node: NodeId, byte: usize) -> Option<[f32; 4]> {
+        let state = self.state.borrow();
+        let (base, pending) = dom.pending_mutations();
+        if state.cached_frame.is_none() || state.render_cursor != base.saturating_add(pending.len() as u64) {
+            return None;
+        }
+        let frame = state.frame.as_ref()?;
+        let shift = frame.shifts.get(&node).copied().unwrap_or_default();
+        if let Some(rect) = frame.fragments.caret_rect(node, byte) {
+            return Some([rect.x - state.scroll.0 - shift.0,
+                rect.y - state.scroll.1 - shift.1, rect.width, rect.height]);
+        }
+        if !dom.form_control_editing_value(node)?.value.is_empty() { return None; }
+        let fragment = frame.fragments.get(node)?;
+        Some([fragment.x + 1.0 - state.scroll.0 - shift.0,
+            fragment.y + 1.0 - state.scroll.1 - shift.1, 1.0,
+            (fragment.height - 2.0).clamp(1.0, 16.0)])
+    }
+
     /// Hit-test the most recently rendered live frame without dispatching an
     /// event. Test drivers use this to resolve typed pointer and wheel targets;
     /// product clicks continue through [`Self::click_at`].

@@ -534,6 +534,18 @@ impl RenderCore {
         Self::from_handles(handles, options)
     }
 
+    /// Adopt one host-owned device, including any native import extensions
+    /// provisioned before renderer construction. Every attached surface and
+    /// producer must share these handles. A host with native producers must
+    /// supply equivalent requirements on recovery, or refuse automatic device
+    /// replacement while those producers remain registered.
+    pub fn from_wgpu_handles(
+        handles: netrender::WgpuHandles,
+        options: NetrenderOptions,
+    ) -> Result<Self, String> {
+        Self::from_handles(handles, options)
+    }
+
     #[cfg(feature = "without-classic-vello")]
     fn from_handles(
         _handles: netrender::WgpuHandles,

@@ -132,7 +132,9 @@ fn livery_text_input_geometry_handles_empty_password_blur_and_detach() {
     assert!(empty.caret.width > 0.0 && empty.caret.height > 0.0);
     focus(&mut *session, "multiline");
     session.try_frame(640, 600).unwrap();
-    let multiline = session.text_input_state().expect("nonempty multiline control has shaped geometry");
+    let multiline = session
+        .text_input_state()
+        .expect("nonempty multiline control has shaped geometry");
     assert!(multiline.multiline);
     assert!(multiline.caret.height > 0.0);
     focus(&mut *session, "password");
@@ -177,6 +179,18 @@ fn scripted_text_input_geometry_uses_live_utf16_selection_and_rejects_stale_layo
     let after = session.text_input_state().unwrap();
     assert_eq!(after.selection_utf16.0, before.selection_utf16.0 + 1);
     assert!(after.caret.x > before.caret.x);
+    assert!(session.focus_move(SessionFocusDirection::Forward));
+    session.try_frame(640, 600).unwrap();
+    let empty = session
+        .text_input_state()
+        .expect("scripted empty textarea has native caret geometry");
+    assert!(empty.multiline);
+    assert_eq!(empty.selection_utf16, (0, 0));
+    assert!(empty.caret.width > 0.0 && empty.caret.height > 0.0);
+    session.input(SessionInput::Ime(SessionIme::Commit("é".into())));
+    assert!(session.text_input_state().is_none());
+    session.try_frame(640, 600).unwrap();
+    assert_eq!(session.text_input_state().unwrap().selection_utf16, (1, 1));
     session.input(SessionInput::Focus(false));
     assert!(session.text_input_state().is_none());
 }

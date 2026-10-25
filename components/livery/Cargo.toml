@@ -9,7 +9,7 @@ description = "Generated CSS property and cascade engine for Genet."
 readme = "README.md"
 
 [dependencies]
-css-flow = { package = "genet-css-flow", version = "0.1.0", path = "../shared/css-flow" }
+css-flow = { package = "genet-flow", version = "0.1.0", path = "../shared/css-flow" }
 cssparser.workspace = true
 cadency = { version = "0.0.1", path = "../cadency" }
 

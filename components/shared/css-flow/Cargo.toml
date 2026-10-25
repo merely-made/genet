@@ -1,6 +1,6 @@
 [package]
 rust-version = "1.97.1"
-name = "genet-css-flow"
+name = "genet-flow"
 version = "0.1.0"
 edition = "2024"
 license = "MPL-2.0"
@@ -8,4 +8,5 @@ repository = "https://github.com/merely-made/genet"
 description = "CSS logical axes and physical side mapping for Genet."
 
 [lib]
+name = "genet_css_flow"
 path = "lib.rs"

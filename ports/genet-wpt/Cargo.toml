@@ -41,7 +41,7 @@ sha2 = { workspace = true }
 
 # Phase 2 (reftests): render to pixels via the paint + netrender path
 # (the same public API the html_to_pixels_e2e test drives) and compare.
-genet-render-host = { path = "../../components/genet-render-host" }
+genet-presenter = { path = "../../components/genet-render-host" }
 paint_list_render = { workspace = true }
 paint_list_api = { workspace = true }
 paint_types = { workspace = true }
@@ -57,9 +57,9 @@ image = { workspace = true }
 # uses regress (ECMAScript engine), so the host runs testharness.js as-is (the
 # old regex shim is retired).
 script-engine-api = { path = "../../components/script-engine-api" }
-script-runtime-api = { path = "../../components/script-runtime-api" }
-script-engine-boa = { path = "../../components/script-engine-boa" }
-script-engine-nova = { path = "../../components/script-engine-nova" }
+genet-runtime = { path = "../../components/script-runtime-api" }
+genet-bole = { path = "../../components/script-engine-boa" }
+genet-vano = { path = "../../components/script-engine-nova" }
 
 # Optional `fetch()` over netfetcher (the `netfetch` feature): wires the runtime's
 # FetchHandler seam to the netfetcher engine (sibling repo). Off by default so the

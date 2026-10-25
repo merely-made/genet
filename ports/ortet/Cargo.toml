@@ -15,8 +15,8 @@ default = []
 # O5a is opt-in so the default Ortet target keeps the script-free dependency
 # cone. These only select existing genet-documents lanes; O5b scheduling and
 # host integration remain separate work.
-scripted = ["genet-documents/scripted", "dep:genet-scripted", "dep:script-engine-boa", "dep:script-runtime-api", "dep:webgl_wgpu"]
-scripted-nova = ["scripted", "genet-documents/scripted-nova", "dep:script-engine-nova"]
+scripted = ["genet-documents/scripted", "dep:genet-scripted", "dep:genet-bole", "dep:genet-runtime", "dep:webgl_wgpu"]
+scripted-nova = ["scripted", "genet-documents/scripted-nova", "dep:genet-vano"]
 # Browser-only real-device lease probe; never exposed in ordinary artifacts.
 browser-frame-fixture = []
 browser-fetch-fixture = []
@@ -44,16 +44,16 @@ genet-documents = { workspace = true, features = ["livery", "image-decode"] }
 genet-document-resources = { workspace = true }
 # The target-neutral present core. Native and web hosts own their distinct
 # target/input adapters below.
-genet-render-host = { workspace = true }
+genet-presenter = { workspace = true }
 netrender = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 accesskit = { workspace = true }
 # Native O5a selection is feature-gated so the default target stays
 # script-free. The shell still defaults to the Livery route.
-script-engine-boa = { path = "../../components/script-engine-boa", optional = true }
-script-engine-nova = { path = "../../components/script-engine-nova", optional = true }
-genet-winit-host = { path = "../../components/genet-winit-host" }
+genet-bole = { path = "../../components/script-engine-boa", optional = true }
+genet-vano = { path = "../../components/script-engine-nova", optional = true }
+genet-winit = { path = "../../components/genet-winit-host" }
 # http(s) for the fallback fetch lane, over netfetcher's default transport on a
 # background tokio runtime this host owns. Local addresses never reach it.
 netfetcher = { path = "../../components/netfetcher" }
@@ -63,7 +63,7 @@ winit = { workspace = true }
 wgpu = { workspace = true }
 # The receipt artifact. `png` alone: ortet writes RGBA8 and reads nothing.
 png = "0.18"
-script-runtime-api = { path = "../../components/script-runtime-api", optional = true }
+genet-runtime = { path = "../../components/script-runtime-api", optional = true }
 genet-scripted = { path = "../../components/genet-scripted", optional = true }
 webgl_wgpu = { workspace = true, optional = true }
 

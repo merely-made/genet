@@ -1,5 +1,5 @@
 [package]
-name = "genet-render-host"
+name = "genet-presenter"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

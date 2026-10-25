@@ -4,7 +4,7 @@
 # docs/2026-05-20_genet_script_engine_plan.md) and the native conformance oracle.
 [package]
 rust-version = "1.97.1"
-name = "script-engine-boa"
+name = "genet-bole"
 version = "0.0.0"
 edition = "2021"
 license = "MPL-2.0"

@@ -69,7 +69,7 @@ automation language.
 
 ## Accessibility
 
-On native platforms Ortet installs `genet-winit-host`'s AccessKit bridge before
+On native platforms Ortet installs `genet-winit`'s AccessKit bridge before
 showing its window and publishes the Livery session's current semantic tree.
 There is no accessibility command-line action syntax: platform assistive
 technology sends normal AccessKit actions, which Ortet routes through the

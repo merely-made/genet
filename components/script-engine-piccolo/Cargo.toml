@@ -7,7 +7,7 @@
 # deviation (Lua has no Promise) deferred to a later pass.
 [package]
 rust-version = "1.97.1"
-name = "script-engine-piccolo"
+name = "genet-didge"
 version = "0.0.0"
 edition = "2021"
 license = "MPL-2.0"

@@ -1,5 +1,5 @@
 [package]
-name = "servo-webgl-wgpu"
+name = "genet-webgl"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -16,7 +16,7 @@ path = "lib.rs"
 
 [dependencies]
 genet-compositor = { workspace = true }
-servo-webgl-essl = { path = "../webgl-essl" }
+genet-essl = { path = "../webgl-essl" }
 wgpu = { version = "30", default-features = false, features = ["std", "parking_lot", "dx12", "metal", "vulkan", "wgsl"] }
 
 [dev-dependencies]

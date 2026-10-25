@@ -1,5 +1,5 @@
 [package]
-name = "genet-worker-process"
+name = "genet-worker"
 version = "0.0.0"
 edition = "2021"
 rust-version = "1.97.1"
@@ -11,12 +11,12 @@ name = "genet-worker-process"
 path = "main.rs"
 
 [dependencies]
-script-runtime-api = { path = "../script-runtime-api" }
+genet-runtime = { path = "../script-runtime-api" }
 script-engine-api = { path = "../script-engine-api" }
-script-engine-boa = { path = "../script-engine-boa" }
+genet-bole = { path = "../script-engine-boa" }
 
 [target.'cfg(target_pointer_width = "64")'.dependencies]
-script-engine-nova = { path = "../script-engine-nova" }
+genet-vano = { path = "../script-engine-nova" }
 
 [dev-dependencies]
 genet-host-api = { path = "../genet-host-api" }

@@ -307,8 +307,8 @@ MERE_CRATES = {
 # remain the pre-existing global Mere catalog.
 MOVED_TO_MERE_NAMES = frozenset({
     "pelt", "pelt-core", "pelt-desktop", "tabard", "knot-editor-host",
-    "cambium", "cambium-rootstock", "cambium-winit", "cambium-winit-a11y",
-    "cambium-genet-winit-host", "cambium-genet-web-host", "cambium-nematic",
+    "cambium", "cambium-rootstock", "cambium-winit", "cambium-a11y",
+    "cambium-desktop", "cambium-web", "cambium-nematic",
     "meristem", "sprigging", "workbench", "mere-surface-api", "inker",
     "document-canvas", "scrying-engine", "graft-engine", "weld-engine",
     "verso-tile", "nematic", "illume", "errand", "tinct",
@@ -548,11 +548,11 @@ def resolved_cone(metadata: dict, package: str) -> set[str]:
 # exists. This uses the same package-ID walk as the Ortet boundary witness.
 STATIC_DOM_FORBIDDEN = frozenset({
     "boa", "boa_engine", "nova", "nova_vm", "mozjs", "mozjs-sys",
-    "script-runtime-api", "servo-script", "servo-script-bindings", "servo-media",
+    "genet-runtime", "servo-script", "servo-script-bindings", "servo-media",
     "servo-storage", "servo-storage-traits", "regress", "webgl-essl",
-    "servo-webgl-essl", "servo-webgl-wgpu", "genet-scripted",
-    "genet-scripted-dom", "genet-scripted-worker", "genet-render",
-    "genet-render-host", "genet-compositor", "genet-winit-host",
+    "genet-essl", "genet-webgl", "genet-scripted",
+    "genet-scripted-dom", "genet-scriptworker", "genet-render",
+    "genet-presenter", "genet-compositor", "genet-winit",
     "netrender", "wgpu",
 })
 STATIC_DOM_FORBIDDEN_PREFIXES = ("script-engine-", "servo-media-")
@@ -716,7 +716,7 @@ def assert_ortet_cone(metadata: dict) -> None:
 
 # The native Ortet host owns these adapters. The wasm host has a browser canvas
 # surface and DOM events instead, so none may be reachable in its normal cone.
-ORTET_WASM_NATIVE_ADAPTERS = frozenset({"accesskit", "winit", "genet-winit-host"})
+ORTET_WASM_NATIVE_ADAPTERS = frozenset({"accesskit", "winit", "genet-winit"})
 
 
 def ortet_wasm_native_adapters(cone: set[str]) -> list[str]:
@@ -767,10 +767,10 @@ def assert_ortet_wasm_cone() -> None:
 
 
 def self_test_ortet_wasm_cone() -> None:
-    clean = {"genet-documents", "netrender", "genet-render-host"}
+    clean = {"genet-documents", "netrender", "genet-presenter"}
     if ortet_wasm_native_adapters(clean):
         fail("ortet wasm32 cone negative control reaches a native adapter")
-    poison = {"accesskit", "winit", "genet-winit-host", "safe-middle"}
+    poison = {"accesskit", "winit", "genet-winit", "safe-middle"}
     if ortet_wasm_native_adapters(poison) != sorted(ORTET_WASM_NATIVE_ADAPTERS):
         fail(
             "ortet wasm32 cone positive control did not name every native adapter: "

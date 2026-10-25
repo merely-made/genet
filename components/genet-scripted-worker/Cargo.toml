@@ -1,5 +1,5 @@
 [package]
-name = "genet-scripted-worker"
+name = "genet-scriptworker"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -17,13 +17,13 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = ["engine-boa"]
-engine-boa = ["dep:script-engine-boa"]
-engine-nova = ["dep:script-engine-nova"]
+engine-boa = ["dep:genet-bole"]
+engine-nova = ["dep:genet-vano"]
 
 [dependencies]
 genet-scripted = { path = "../genet-scripted", default-features = false }
-script-engine-boa = { path = "../script-engine-boa", optional = true }
-script-engine-nova = { path = "../script-engine-nova", optional = true }
+genet-bole = { path = "../script-engine-boa", optional = true }
+genet-vano = { path = "../script-engine-nova", optional = true }
 wasm-bindgen = "=0.2.129"
 
 [target.'cfg(target_family = "wasm")'.dependencies]

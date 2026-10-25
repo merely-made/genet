@@ -13,7 +13,7 @@ reference material rather than a runtime dependency.
 | | |
 |---|---|
 | <img src="assets/screenshots/pelt-gemini.png" alt="A Gemini capsule rendered as a native typographic document inside the Pelt workspace"> | <img src="assets/screenshots/pelt-scripted.png" alt="The scripted profile running a page whose DOM is rebuilt live by JavaScript, the engine control reading Scripted"> |
-| <sub>The smolweb lane: a Gemini capsule as a native document.</sub> | <sub>The scripted profile: a live DOM driven through script-runtime-api.</sub> |
+| <sub>The smolweb lane: a Gemini capsule as a native document.</sub> | <sub>The scripted profile: a live DOM driven through genet-runtime.</sub> |
 
 ## Status (2026-09-05)
 

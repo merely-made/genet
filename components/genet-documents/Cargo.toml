@@ -25,15 +25,15 @@ livery = [
 # The scripted lane: a live LiveryScriptedDocument on Boa.
 scripted = [
     "livery", "dep:genet-scripted", "genet-scripted/livery",
-    "dep:script-engine-api", "dep:script-engine-boa", "dep:url",
+    "dep:script-engine-api", "dep:genet-bole", "dep:url",
 ]
 # Compatibility feature spelling; scripted HTML already uses Livery/Buckram.
 livery-scripted = ["scripted"]
 # Add the Nova engine as a second scripted rung (64-bit targets).
-scripted-nova = ["scripted", "dep:script-engine-nova"]
+scripted-nova = ["scripted", "dep:genet-vano"]
 
 [dependencies]
-browsing-context-api = { path = "../shared/browsing-context" }
+genet-browsing = { path = "../shared/browsing-context" }
 # The engine contracts this component implements (SessionEngine<Scene>).
 document-session-api = { workspace = true }
 # The product-neutral host fetch seam.
@@ -53,8 +53,8 @@ data-url = { workspace = true }
 
 genet-scripted = { path = "../genet-scripted", optional = true, default-features = false }
 script-engine-api = { path = "../script-engine-api", optional = true }
-script-engine-boa = { path = "../script-engine-boa", optional = true }
-script-engine-nova = { path = "../script-engine-nova", optional = true }
+genet-bole = { path = "../script-engine-boa", optional = true }
+genet-vano = { path = "../script-engine-nova", optional = true }
 url = { workspace = true, optional = true }
 
 [dev-dependencies]

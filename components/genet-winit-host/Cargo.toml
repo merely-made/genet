@@ -1,5 +1,5 @@
 [package]
-name = "genet-winit-host"
+name = "genet-winit"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -20,7 +20,7 @@ netrender = { workspace = true }
 # The target-neutral present core (device boot, surface configuration, scene
 # rasterization). Re-exported from this crate's root so existing callers of
 # `genet_winit_host::RenderCore` are unaffected by the split.
-genet-render-host = { workspace = true }
+genet-presenter = { workspace = true }
 # Windowing + wgpu surface (workspace pins: winit 0.30 / wgpu 29).
 winit = { workspace = true }
 wgpu = { version = "30", default-features = false, features = ["std", "wgsl"] }

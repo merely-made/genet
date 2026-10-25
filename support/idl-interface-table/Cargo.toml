@@ -5,7 +5,7 @@
 # No dependencies: the IDL subset genet needs is parsed by hand (src/idl.rs).
 [package]
 rust-version = "1.97.1"
-name = "genet-idl-interface-table"
+name = "genet-idl"
 version = "0.0.0"
 edition = "2021"
 license = "MPL-2.0"

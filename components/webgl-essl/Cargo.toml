@@ -1,5 +1,5 @@
 [package]
-name = "servo-webgl-essl"
+name = "genet-essl"
 version.workspace = true
 authors.workspace = true
 license.workspace = true

@@ -29,7 +29,7 @@ image-decode = ["genet-livery?/image-decode", "genet-render?/image-decode"]
 # compiles nova_vm at all (it was previously always-on on 64-bit targets
 # regardless of this feature -- an unconditional dependency the `#[cfg(feature =
 # "scripted-nova")]` test gate never actually covered).
-scripted-nova = ["dep:script-engine-nova"]
+scripted-nova = ["dep:genet-vano"]
 # Owned CSSOM, layout, and paint bridge for scripted/fullweb hosts.
 livery = ["dep:genet-livery", "dep:genet-render", "dep:livery", "dep:paint_list_api", "dep:paint_list_render", "dep:netrender"]
 
@@ -47,7 +47,7 @@ paint_list_api = { workspace = true, optional = true }
 paint_list_render = { workspace = true, optional = true }
 genet-static-dom = { path = "../genet-static-dom" }
 fleece = { path = "../fleece" }
-script-runtime-api = { path = "../script-runtime-api" }
+genet-runtime = { path = "../script-runtime-api" }
 netrender = { workspace = true, optional = true }
 encoding_rs = { workspace = true }
 postcard = { workspace = true }
@@ -62,9 +62,9 @@ script-engine-api = { path = "../script-engine-api" }
 [dev-dependencies]
 # Boa backs the in-crate tests only. A host picks one engine crate itself:
 # script-engine-boa or script-engine-nova, never both by way of this crate.
-script-engine-boa = { path = "../script-engine-boa" }
+genet-bole = { path = "../script-engine-boa" }
 
 [target.'cfg(target_pointer_width = "64")'.dependencies]
 # Nova backend on all 64-bit targets, including wasm64. Optional, gated by
 # `scripted-nova` (see [features]).
-script-engine-nova = { path = "../script-engine-nova", optional = true }
+genet-vano = { path = "../script-engine-nova", optional = true }

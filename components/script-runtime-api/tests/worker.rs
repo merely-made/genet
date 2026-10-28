@@ -82,7 +82,8 @@ fn read<E: ScriptEngine>(rt: &mut Runtime<E>, expr: &str) -> String {
 /// Drive the page's event loop until `done` reads `"true"`, or give up. The
 /// shape genet-wpt's disk drive loop uses, minus the rendering session.
 fn drive_until<E: ScriptEngine>(rt: &mut Runtime<E>, done: &str) -> bool {
-    let deadline = Instant::now() + Duration::from_secs(20);
+    // A debug build under load needs seconds to start each worker runtime.
+    let deadline = Instant::now() + Duration::from_secs(60);
     let mut now_ms = 0.0f64;
     while Instant::now() < deadline {
         rt.run_microtasks();
@@ -494,6 +495,62 @@ fn deferred_worker_resource_wakes_page_service<E: ScriptEngine>() {
     assert!(wake_count.load(Ordering::Relaxed) > 0);
 }
 
+fn nested_worker_relays_through_its_parent<E: ScriptEngine>() {
+    let mut rt = trusted_runtime::<E>();
+    rt.set_script_resource_loader(scripts(&[
+        (
+            "outer.js",
+            "var inner = new Worker('inner.js'); \
+             inner.onmessage = function(e) { postMessage('outer:' + e.data); }; \
+             onmessage = function(e) { inner.postMessage(e.data); };",
+        ),
+        (
+            "inner.js",
+            "onmessage = function(e) { postMessage('inner:' + e.data); };",
+        ),
+    ]));
+    rt.eval("var got = null; var w = new Worker('outer.js'); w.onmessage = function(e) { got = e.data; }; w.postMessage('hi');")
+        .expect("start");
+    assert!(drive_until(&mut rt, "String(got !== null)"), "no reply");
+    assert_eq!(read(&mut rt, "got"), "outer:inner:hi");
+}
+
+fn worker_listener_exception_reaches_the_worker_object<E: ScriptEngine>() {
+    let mut rt = trusted_runtime::<E>();
+    rt.set_script_resource_loader(scripts(&[(
+        "throws.js",
+        "onmessage = function(e) { throw new Error(e.data); };",
+    )]));
+    rt.eval(
+        "var seen = null; var w = new Worker('throws.js'); \
+         w.onerror = function(e) { e.preventDefault(); seen = [e.message, e.filename, String(e.error)]; }; \
+         w.postMessage('bang');",
+    )
+    .expect("start");
+    assert!(drive_until(&mut rt, "String(seen !== null)"), "no error event");
+    assert_eq!(read(&mut rt, "seen[0]"), "bang");
+    assert_eq!(read(&mut rt, "seen[1]"), "throws.js");
+    assert_eq!(read(&mut rt, "seen[2]"), "null");
+}
+
+fn worker_import_scripts_reads_data_urls_and_checks_the_mime<E: ScriptEngine>() {
+    let mut rt = trusted_runtime::<E>();
+    rt.set_script_resource_loader(scripts(&[(
+        "data.js",
+        "var out = []; \
+         importScripts('data:text/javascript,self.ran%20%3D%201'); out.push(String(self.ran)); \
+         importScripts('data:application/javascript;base64,c2VsZi5yYW4yID0gMg=='); out.push(String(self.ran2)); \
+         try { importScripts('data:text/plain,self.bad%20%3D%201'); out.push('loaded'); } \
+         catch (e) { out.push(e.name); } \
+         try { importScripts('data:text/html,'); out.push('loaded'); } catch (e) { out.push(e.name); } \
+         postMessage(out.join());",
+    )]));
+    rt.eval("var got = null; var w = new Worker('data.js'); w.onmessage = function(e) { got = e.data; };")
+        .expect("start");
+    assert!(drive_until(&mut rt, "String(got !== null)"), "no reply");
+    assert_eq!(read(&mut rt, "got"), "1,2,NetworkError,NetworkError");
+}
+
 macro_rules! both_engines {
     ($($body:ident => ($boa:ident, $nova:ident)),* $(,)?) => {
         $(
@@ -522,4 +579,7 @@ both_engines! {
     transferred_buffer_reaches_the_worker => (buffer_transfer_on_boa, buffer_transfer_on_nova),
     worker_fetch_uses_the_page_route => (worker_fetch_on_boa, worker_fetch_on_nova),
     deferred_worker_resource_wakes_page_service => (deferred_worker_resource_on_boa, deferred_worker_resource_on_nova),
+    nested_worker_relays_through_its_parent => (nested_worker_on_boa, nested_worker_on_nova),
+    worker_listener_exception_reaches_the_worker_object => (worker_listener_error_on_boa, worker_listener_error_on_nova),
+    worker_import_scripts_reads_data_urls_and_checks_the_mime => (worker_data_import_on_boa, worker_data_import_on_nova),
 }

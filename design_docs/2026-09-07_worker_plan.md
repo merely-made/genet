@@ -313,11 +313,44 @@ Named, not faked:
 - **Cross-agent `BroadcastChannel`.** The bootstrap's channel registry is
   per-agent, so a worker and its page do not share a named channel.
 - **Module workers** throw `NotSupportedError`, per the plan's staging.
-- **Nested workers** run (a worker's own runtime has the whole `Worker`
-  surface, and its `pump_workers` drives its children), but
-  `workers/semantics/multiple-workers/003.html` shows only the innermost
-  worker's contribution arriving — nested message relay through two links is
-  not yet ordered correctly.
+- **Nested workers** run inside the helper process (R7). A worker now reports
+  idle only when every child of its own is idle, so the page no longer
+  quiesces on the first link while a grandchild still holds a message
+  (2026-10-28; `nested_worker_relays_through_its_parent`, and the four
+  `workers/nested_worker*` variants). `importScripts` resolves relative to the
+  worker's own script URL. `workers/semantics/multiple-workers/003.html` was
+  not re-measured.
+- **Worker error reporting (2026-10-28).** An exception a worker's own `error`
+  listeners leave uncanceled, in a listener, a timer or the top-level script,
+  now also fires `error` at the owner's `Worker` object (an `ErrorEvent` frame
+  over the link, protocol version 3), and at the owner's window when that is
+  not canceled either. `ErrorEvent.error` is `null` on the owner side. Still
+  missing: `lineno` and `colno` (the engines expose no stack positions, so they
+  are 0) and the thrown value itself (the owner and the worker's own listeners
+  see an `Error` built from the message, not a thrown string or a
+  `DOMException`).
+- **`importScripts` MIME and `data:` (2026-10-28).** A `data:` URL resolves in
+  the worker without a page round trip, and every `importScripts` response with a
+  `content-type` that is not a JavaScript MIME type is a `NetworkError`. `blob:`
+  URLs do not work because `URL.createObjectURL` does not exist in this runtime
+  on any scope; `importscripts_mime.any` needs the server's `.py` handler.
+- **Baselines (2026-10-28).** `dom_boa.json`, `dom_abort_boa.json` and
+  `html_webappapis_timers_boa.json` are re-recorded with the helper installed.
+  The debug-build run at load 15 to 40 timed out 23 heavy files at 90 s
+  (the `dom/ranges/Range-*` population); those were re-run singly with a 900 s
+  limit and their results merged, so `dom_boa.json` is one full run plus 23
+  single-file runs of the same runner. `abort-signal-any.any.worker.html`
+  alternates between fail and error (12/14 either way) with load.
+- **Slow worker files.** `unexpected-self-properties`, `interface-objects/001`
+  and `002`, `worker-performance` and the larger `importscripts_mime_local`
+  pass in the time they take but trip testharness's own 10 s timeout in a debug
+  build. Helper startup is not the cost: the hello handshake acknowledges in
+  about 13 ms and the worker runtime is ready in about 2.5 s on Boa (1.0 s on
+  Nova) in a debug build at load 10. The cost is in each testharness message: a
+  `test()` in a worker posts three, and each `__scSerialize` plus the page's
+  `__scDeserialize` takes 8 to 25 ms in debug Boa, three quarters of it in the
+  `inertRecord` sanitizing copy rather than the walk (`structuredClone` of the
+  same object takes 4 ms).
 - **Real `ArrayBuffer` detachment.** The wire copies the bytes, so the
   *receiver* is correct; the sender's handle still uses the cheap-globals
   emulation (an own `byteLength: 0` shadowing the prototype getter) rather than

@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::worker::{FromWorker, ToWorker, WorkerBoot, WorkerPolicy, worker_main};
 
-const PROTOCOL_VERSION: u32 = 2;
+const PROTOCOL_VERSION: u32 = 3;
 
 /// Concrete engine built into the selected helper executable.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]

@@ -637,7 +637,7 @@ completed corpus census or bounded slice does not close its enclosing feature.
   independent of the first bench. The downstream native receipt is separate from the prior Ortet
   canvas acceptance and is not an Ortet or WPT rerun. Application prerequisite
   authority:
-  `isometry/mesocosm/design_docs/2026-09-11_orthographic_voxel_presentation_plan.md#specimen-bench-prerequisites-2026-09-13`.)
+  `isometry/mesocosm/design_docs/archive_docs/2026-10-28/2026-09-11_orthographic_voxel_presentation_plan.md#specimen-bench-prerequisites-2026-09-13`.)
 
 - [common_script_font_fallback_plan](2026-09-04_common_script_font_fallback_plan.md)
   (**Windows repair accepted 2026-09-05**: the paired Parley/Fontique patch

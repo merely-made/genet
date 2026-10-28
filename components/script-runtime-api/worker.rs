@@ -145,6 +145,14 @@ pub(crate) enum FromWorker {
     Message(String),
     PortMessage(String, String),
     Error(String),
+    /// An unhandled exception the worker's own `error` listeners left
+    /// uncanceled: the owner fires `error` at the `Worker` object.
+    ErrorEvent {
+        message: String,
+        filename: String,
+        lineno: u32,
+        colno: u32,
+    },
     Resource(u64, Box<FetchRequest>),
     /// "I have consumed n messages and have nothing left to do." The count is
     /// what makes it safe: the page only believes it if `n` matches everything
@@ -264,6 +272,8 @@ pub(crate) struct WorkerLink {
     /// `terminate()` was called on the page, or the link died.
     terminated: bool,
     resource_timeout: Duration,
+    /// The worker's script URL: the filename of an error with no better one.
+    script_url: String,
 }
 
 impl WorkerLink {
@@ -337,6 +347,10 @@ impl WorkerLink {
     /// Ask the page for a resource and block until it answers. Messages that
     /// arrive meanwhile are buffered, not dropped.
     fn request(&mut self, req: FetchRequest) -> FetchOutcome {
+        // A `data:` URL carries its own bytes; the page has nothing to add.
+        if req.url.len() > 5 && req.url[..5].eq_ignore_ascii_case("data:") {
+            return data_url_outcome(&req.url);
+        }
         let id = self.next_req;
         self.next_req += 1;
         if self
@@ -388,6 +402,138 @@ impl FetchHandler for WorkerFetch {
     }
 }
 
+/// Resolve a `data:` URL as the fetch scheme does: the media type defaults to
+/// `text/plain;charset=US-ASCII`, `;base64` selects base64, and the payload is
+/// percent-decoded first. A malformed URL is a network error.
+fn data_url_outcome(url: &str) -> FetchOutcome {
+    let Some((meta, payload)) = url[5..].split_once(',') else {
+        return FetchOutcome::network_error();
+    };
+    let payload = payload.split('#').next().unwrap_or("");
+    let mut mime = meta.trim_matches(|c: char| c.is_ascii_whitespace()).to_owned();
+    let base64 = mime
+        .rsplit_once(';')
+        .is_some_and(|(_, last)| last.trim().eq_ignore_ascii_case("base64"));
+    if base64 {
+        mime.truncate(mime.rfind(';').unwrap_or(0));
+    }
+    if mime.is_empty() || mime.starts_with(';') {
+        mime = format!("text/plain{mime};charset=US-ASCII");
+    }
+    let raw = percent_decode(payload);
+    let body = if base64 {
+        match base64_decode(&raw) {
+            Some(body) => body,
+            None => return FetchOutcome::network_error(),
+        }
+    } else {
+        raw
+    };
+    FetchOutcome {
+        network_error: false,
+        status: 200,
+        status_text: "OK".to_owned(),
+        response_type: "basic".to_owned(),
+        url: url.to_owned(),
+        redirected: false,
+        headers: vec![("content-type".to_owned(), mime)],
+        body,
+    }
+}
+
+fn percent_decode(text: &str) -> Vec<u8> {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let hex = |b: u8| (b as char).to_digit(16);
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let (Some(hi), Some(lo)) = (hex(bytes[i + 1]), hex(bytes[i + 2])) {
+                out.push((hi * 16 + lo) as u8);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    out
+}
+
+/// Forgiving base64 (ASCII whitespace ignored, padding optional).
+fn base64_decode(input: &[u8]) -> Option<Vec<u8>> {
+    let mut chars: Vec<u8> = input
+        .iter()
+        .copied()
+        .filter(|b| !b.is_ascii_whitespace())
+        .collect();
+    if chars.len() % 4 == 0 {
+        for _ in 0..2 {
+            if chars.last() == Some(&b'=') {
+                chars.pop();
+            }
+        }
+    }
+    if chars.len() % 4 == 1 || chars.contains(&b'=') {
+        return None;
+    }
+    let mut out = Vec::with_capacity(chars.len() * 3 / 4);
+    let (mut acc, mut bits) = (0u32, 0u32);
+    for c in chars {
+        let v = match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            _ => return None,
+        };
+        acc = (acc << 6) | u32::from(v);
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((acc >> bits) as u8);
+            acc &= (1 << bits) - 1;
+        }
+    }
+    Some(out)
+}
+
+/// Whether a `content-type` names a JavaScript MIME type (HTML: "JavaScript
+/// MIME type"), which `importScripts()` requires of every response.
+fn is_javascript_mime(content_type: &str) -> bool {
+    let essence = content_type.split(';').next().unwrap_or("").trim().to_ascii_lowercase();
+    matches!(
+        essence.as_str(),
+        "application/ecmascript"
+            | "application/javascript"
+            | "application/x-ecmascript"
+            | "application/x-javascript"
+            | "text/ecmascript"
+            | "text/javascript"
+            | "text/javascript1.0"
+            | "text/javascript1.1"
+            | "text/javascript1.2"
+            | "text/javascript1.3"
+            | "text/javascript1.4"
+            | "text/javascript1.5"
+            | "text/jscript"
+            | "text/livescript"
+            | "text/x-ecmascript"
+            | "text/x-javascript"
+    )
+}
+
+/// A response with no `content-type` (the disk route) is accepted; one that
+/// names another type is a network error for a classic script import.
+fn script_mime_ok(out: &FetchOutcome) -> bool {
+    out.headers
+        .iter()
+        .rev()
+        .find(|(name, _)| name.eq_ignore_ascii_case("content-type"))
+        .is_none_or(|(_, value)| is_javascript_mime(value))
+}
+
 fn get_request(url: &str) -> FetchRequest {
     FetchRequest {
         method: "GET".to_owned(),
@@ -434,6 +580,7 @@ pub(crate) fn worker_main<E: ScriptEngine>(boot: WorkerBoot) {
         consumed: 0,
         closed: false,
         terminated: false,
+        script_url: url.clone(),
         resource_timeout: match policy {
             WorkerPolicy::TrustedCooperative {
                 resource_timeout, ..
@@ -485,8 +632,10 @@ pub(crate) fn worker_main<E: ScriptEngine>(boot: WorkerBoot) {
         return;
     }
     if let Err(e) = rt.eval(&src) {
+        // "Report the exception": the worker's own `error` listeners see it
+        // first; the scope's sink forwards it to the owner when uncanceled.
         let msg = rt.describe_error(&e);
-        let _ = tx.send(FromWorker::Error(msg));
+        rt.report_script_exception(&msg, Some(&url));
     }
     run_worker_loop(&mut rt, &link, &tx, wake.as_ref(), clock_start);
     let _ = tx.send(FromWorker::Closed);
@@ -544,9 +693,13 @@ fn run_worker_loop<E: ScriptEngine>(
             idle_sent = false;
         }
         if work == 0 {
+            // A nested worker that has not gone idle can still send this one a
+            // message, so this worker is not idle either: the page quiesces on
+            // the whole tree, not on its first link.
+            let busy_children = has_work(rt.host());
             // A future timer still keeps the worker active. The page must not
             // observe idle before that timer's callback has run.
-            if next_delay.is_none() && !idle_sent {
+            if next_delay.is_none() && !busy_children && !idle_sent {
                 let _ = tx.send(FromWorker::Idle(link.borrow().consumed));
                 if let Some(wake) = wake {
                     wake();
@@ -560,7 +713,7 @@ fn run_worker_loop<E: ScriptEngine>(
                 .filter(|delay| delay.is_finite())
                 .map(|delay| delay - spent_ms)
                 .unwrap_or(50.0)
-                .clamp(0.0, 50.0);
+                .clamp(0.0, if busy_children { 2.0 } else { 50.0 });
             let mut l = link.borrow_mut();
             l.pump(Some(Duration::from_secs_f64(wait_ms / 1_000.0)));
         }
@@ -574,6 +727,7 @@ fn install_worker_scope<E: ScriptEngine>(engine: &mut E) -> Result<(), E::Error>
     engine.set_function::<WsTake>("__ws_take", 0)?;
     engine.set_function::<WsClose>("__ws_close", 0)?;
     engine.set_function::<WsImport>("__ws_import", 1)?;
+    engine.set_function::<WsError>("__ws_error", 4)?;
     engine.eval(WORKER_SCOPE_BOOTSTRAP)?;
     Ok(())
 }
@@ -717,6 +871,7 @@ impl<E: ScriptEngine> NativeFn<E> for WorkerCreate {
             (WorkerSender::Thread(tx), rx)
         };
         let sent = Arc::new(AtomicU64::new(0));
+        let resolved_url = url.clone();
         let boot = WorkerBoot {
             url,
             name,
@@ -782,7 +937,7 @@ impl<E: ScriptEngine> NativeFn<E> for WorkerCreate {
             h.workers.len() - 1
         });
         match id {
-            Some(id) => cx.make_string(&id.to_string()),
+            Some(id) => cx.make_string(&format!("{id}\n{resolved_url}")),
             None => cx.make_string("-1"),
         }
     }
@@ -1001,6 +1156,35 @@ impl<E: ScriptEngine> NativeFn<E> for WsClose {
     }
 }
 
+/// `__ws_error(message, filename, lineno, colno)`: report an uncanceled
+/// unhandled exception to the owner of this worker.
+struct WsError;
+impl<E: ScriptEngine> NativeFn<E> for WsError {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let message = arg_string::<E>(cx, 0)?;
+        let mut filename = arg_string::<E>(cx, 1)?;
+        let lineno = arg_string::<E>(cx, 2)?.parse().unwrap_or(0);
+        let colno = arg_string::<E>(cx, 3)?.parse().unwrap_or(0);
+        with_link::<E, _>(cx, |l| {
+            if filename.is_empty() {
+                filename = l.script_url.clone();
+            }
+            if l.tx
+                .send(FromWorker::ErrorEvent {
+                    message,
+                    filename,
+                    lineno,
+                    colno,
+                })
+                .is_ok()
+            {
+                l.notify();
+            }
+        });
+        Ok(cx.undefined())
+    }
+}
+
 /// `__ws_import(url)` -> `{"ok":true,"src":"…"}` — a blocking load over the
 /// page's resource route, which is what `importScripts` is.
 struct WsImport;
@@ -1009,7 +1193,7 @@ impl<E: ScriptEngine> NativeFn<E> for WsImport {
         let url = arg_string::<E>(cx, 0)?;
         let out = with_link::<E, _>(cx, |l| l.request(get_request(&url)));
         let json = match out {
-            Some(out) if ok_status(&out) => {
+            Some(out) if ok_status(&out) && script_mime_ok(&out) => {
                 let src = String::from_utf8_lossy(&out.body).into_owned();
                 format!("{{\"ok\":true,\"src\":{}}}", js_str(&src))
             },
@@ -1094,6 +1278,20 @@ pub(crate) fn pump_in_realm<E: ScriptEngine>(
                     FromWorker::Error(m) => {
                         h.workers[i].idle = false;
                         let e = format!("{{\"k\":\"e\",\"w\":{i},\"d\":{}}}", js_str(&m));
+                        h.worker_events.push_back(e);
+                    },
+                    FromWorker::ErrorEvent {
+                        message,
+                        filename,
+                        lineno,
+                        colno,
+                    } => {
+                        h.workers[i].idle = false;
+                        let e = format!(
+                            "{{\"k\":\"e\",\"w\":{i},\"d\":{},\"f\":{},\"l\":{lineno},\"c\":{colno}}}",
+                            js_str(&message),
+                            js_str(&filename)
+                        );
                         h.worker_events.push_back(e);
                     },
                     FromWorker::Resource(id, req) => {
@@ -1278,7 +1476,7 @@ const WORKER_HOST_BOOTSTRAP: &str = r#"
     this.filename = init.filename === undefined ? '' : String(init.filename);
     this.lineno = init.lineno === undefined ? 0 : (init.lineno >>> 0);
     this.colno = init.colno === undefined ? 0 : (init.colno >>> 0);
-    this.error = init.error;
+    this.error = init.error === undefined ? null : init.error;
   }
   ErrorEvent.prototype = Object.create(Event.prototype);
   ErrorEvent.prototype.constructor = ErrorEvent;
@@ -1306,7 +1504,11 @@ const WORKER_HOST_BOOTSTRAP: &str = r#"
     }
     this._url = url;
     this._name = (options.name === undefined) ? '' : String(options.name);
-    var id = Number(__worker_create(url, this._name));
+    var created = String(__worker_create(url, this._name));
+    var split = created.indexOf('\n');
+    var id = Number(split < 0 ? created : created.slice(0, split));
+    // Error events carry the script's resolved URL, not the authored string.
+    if (split >= 0) this._url = created.slice(split + 1);
     if (id === -2) throw new DOMException("Worker cancellation is unsupported by this script engine.", "NotSupportedError");
     if (!(id >= 0)) throw new DOMException("Worker could not be started.", "NotSupportedError");
     this._id = id;
@@ -1366,7 +1568,8 @@ const WORKER_HOST_BOOTSTRAP: &str = r#"
         w.dispatchEvent(event);
       } else if (e.k === 'e') {
         var err = new ErrorEvent('error', {
-          cancelable: true, message: e.d, filename: w._url, lineno: 0, colno: 0
+          cancelable: true, message: e.d, filename: e.f || w._url,
+          lineno: e.l >>> 0, colno: e.c >>> 0
         });
         // Not handled on the Worker object: the error reaches the window, which
         // is where an unhandled worker exception is observable.
@@ -1458,6 +1661,12 @@ const WORKER_SCOPE_BOOTSTRAP: &str = r#"
     return __ws_port_forward(id, payload, minted);
   };
   globalThis.close = function() { __ws_close(); };
+
+  // An unhandled exception that the worker's own listeners left uncanceled
+  // also fires `error` at the owner's `Worker` object.
+  globalThis.__setWorkerErrorSink(function(message, filename, lineno, colno) {
+    __ws_error(String(message), String(filename || ''), String(lineno >>> 0), String(colno >>> 0));
+  });
 
   globalThis.__wsPump = function() {
     var n = 0, s;

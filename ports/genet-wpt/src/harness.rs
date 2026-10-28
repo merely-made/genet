@@ -266,7 +266,7 @@ impl ScriptSrcLoader for DiskLoader<'_> {
             return None;
         }
         let path = resolve(src, self.base_dir, self.tests_root)?;
-        fs::read_to_string(path).ok()
+        read_lossy(&path)
     }
 
     fn resource_route(&self) -> Option<Box<dyn ScriptResourceLoader>> {
@@ -298,13 +298,20 @@ impl ScriptResourceLoader for DiskResources {
         let bare = local.as_deref().unwrap_or(bare);
         if let Some(stem) = bare.strip_suffix(".any.worker.js") {
             let source = resolve(&format!("{stem}.any.js"), &self.base_dir, &self.tests_root)?;
-            let src = fs::read_to_string(&source).ok()?;
+            let src = read_lossy(&source)?;
             let name = source.file_name()?.to_str()?;
             return Some(any_worker_wrapper(&src, name, url));
         }
         let path = resolve(bare, &self.base_dir, &self.tests_root)?;
-        fs::read_to_string(path).ok()
+        read_lossy(&path)
     }
+}
+
+/// Source text decoded as UTF-8 with replacement, as a browser decodes a
+/// script: invalid bytes become U+FFFD instead of failing the load.
+fn read_lossy(path: &Path) -> Option<String> {
+    let bytes = fs::read(path).ok()?;
+    Some(String::from_utf8_lossy(&bytes).into_owned())
 }
 
 /// The `// META:` header of a `.any.js`-style test: its `script=` helpers and its

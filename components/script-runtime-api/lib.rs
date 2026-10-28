@@ -960,6 +960,8 @@ impl<E: ScriptEngine> Runtime<E> {
         )
         .map_err(SurfaceError::main)?;
         if scope == GlobalScopeKind::Window {
+            // Only a worker scope installs the sink for its unhandled errors.
+            engine.eval("delete globalThis.__setWorkerErrorSink;")?;
             frames::bind_window_proxy_hooks_in_realm(&mut engine, &agent, MAIN_REALM, MAIN_REALM)
                 .expect("the bootstrap realm accepts its window-proxy host hook");
         }
@@ -3597,6 +3599,14 @@ const EVENT_TARGET_BOOTSTRAP: &str = r#"
   var reporting = false;
   var reportString = String, reportError = Error;
   var reportConsole = globalThis.console && globalThis.console.error;
+  var workerErrorSink = null;
+  Object.defineProperty(globalThis, '__setWorkerErrorSink', {
+    configurable: true, writable: true, enumerable: false,
+    value: function(sink) {
+      workerErrorSink = sink;
+      delete globalThis.__setWorkerErrorSink;
+    }
+  });
   function reportException(ex, filename, label) {
     var msg = (ex && ex.message !== undefined) ? reportString(ex.message) : reportString(ex);
     if (!reporting) {
@@ -3608,7 +3618,12 @@ const EVENT_TARGET_BOOTSTRAP: &str = r#"
         ev.filename = filename || '';
         ev.lineno = 0;
         ev.colno = 0;
-        trustApply(EventTarget.prototype.dispatchEvent, globalThis, [ev]);
+        var notCanceled = trustApply(EventTarget.prototype.dispatchEvent, globalThis, [ev]);
+        // A dedicated worker's unhandled error is also reported to its owner:
+        // the sink is installed only by the worker scope.
+        if (notCanceled && workerErrorSink) {
+          workerErrorSink(msg, ev.filename, ev.lineno, ev.colno);
+        }
       } catch (ignored) {
         // An error handler that itself threw: fall through to the console.
       }

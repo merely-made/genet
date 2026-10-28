@@ -333,6 +333,19 @@ Named, not faked:
 - **`workers/semantics/messaging`** is named in this lane's brief but does not
   exist in the vendored checkout; the equivalent populations are
   `workers/semantics/structured-clone` and `webmessaging`.
+- **Runner hosting (2026-10-28).** Since the 2026-10-17 execution-bounds cut the
+  runtime defaults to `WorkerPolicy::RequireCancellation`, which admits a
+  `Worker` only through a killable helper process. `genet-wpt` keeps that policy
+  and installs the helper in every runtime its testharness path builds
+  (`prepare_runtime` in `ports/genet-wpt/src/harness.rs`), with the backend of the
+  selected `--engine`. Each process resolves `genet-worker-process` from
+  `GENET_WORKER_HELPER` (an absolute path to an existing file), else from beside
+  its own executable, so the `testharness-one` children need nothing passed;
+  `cargo build -p genet-worker` puts it next to `genet-wpt`. With neither, the
+  runner prints one stderr line at startup and dedicated-worker variants error
+  with `NotSupportedError` as before. The runner raises the launcher's queue bound
+  to its maximum (1024): the helper exits when the queue overflows, and a worker
+  reporting a testharness file bursts more messages than the default 32.
 
 ## Before and after
 

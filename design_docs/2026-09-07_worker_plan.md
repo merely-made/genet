@@ -334,6 +334,13 @@ Named, not faked:
   `content-type` that is not a JavaScript MIME type is a `NetworkError`. `blob:`
   URLs do not work because `URL.createObjectURL` does not exist in this runtime
   on any scope; `importscripts_mime.any` needs the server's `.py` handler.
+- **Baselines (2026-10-28).** `dom_boa.json`, `dom_abort_boa.json` and
+  `html_webappapis_timers_boa.json` are re-recorded with the helper installed.
+  The debug-build run at load 15 to 40 timed out 23 heavy files at 90 s
+  (the `dom/ranges/Range-*` population); those were re-run singly with a 900 s
+  limit and their results merged, so `dom_boa.json` is one full run plus 23
+  single-file runs of the same runner. `abort-signal-any.any.worker.html`
+  alternates between fail and error (12/14 either way) with load.
 - **Slow worker files.** `unexpected-self-properties`, `interface-objects/001`
   and `002`, `worker-performance` and the larger `importscripts_mime_local`
   pass in the time they take but trip testharness's own 10 s timeout in a debug

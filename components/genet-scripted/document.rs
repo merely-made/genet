@@ -280,6 +280,19 @@ pub struct ScriptedDocument<E: ScriptEngine> {
 }
 
 impl<E: ScriptEngine> ScriptedDocument<E> {
+    /// The document's listener registry, shared with script. A host registers
+    /// its own listeners here under a non-script owner and runs them with
+    /// [`set_foreign_invoker`](Self::set_foreign_invoker).
+    pub fn events(&self) -> std::rc::Rc<std::cell::RefCell<genet_events::Registry>> {
+        self.rt.events()
+    }
+
+    /// Install the invoker for non-script owners' listeners; see
+    /// [`Runtime::set_foreign_invoker`].
+    pub fn set_foreign_invoker(&mut self, invoker: Option<Box<dyn genet_events::Invoker>>) {
+        self.rt.set_foreign_invoker(invoker);
+    }
+
     /// Fetch `url` through `fetcher`, parse it, and run its scripts — inline and
     /// external `<script src>` (each resolved against `url` and fetched through the
     /// same `fetcher`). `Err` on a failed fetch of the document, or a runtime that
@@ -789,6 +802,19 @@ pub struct ScriptedValidationNotice {
 
 #[cfg(feature = "livery")]
 impl<E: ScriptEngine> LiveryScriptedDocument<E> {
+    /// The document's listener registry, shared with script. A host registers
+    /// its own listeners here under a non-script owner and runs them with
+    /// [`set_foreign_invoker`](Self::set_foreign_invoker).
+    pub fn events(&self) -> std::rc::Rc<std::cell::RefCell<genet_events::Registry>> {
+        self.rt.events()
+    }
+
+    /// Install the invoker for non-script owners' listeners; see
+    /// [`Runtime::set_foreign_invoker`].
+    pub fn set_foreign_invoker(&mut self, invoker: Option<Box<dyn genet_events::Invoker>>) {
+        self.rt.set_foreign_invoker(invoker);
+    }
+
     /// Fetch a document and build the Livery CSSOM session before its first
     /// parser-blocking script executes.
     pub fn load<Fetch>(fetcher: Fetch, url: &str) -> Result<Self, String>

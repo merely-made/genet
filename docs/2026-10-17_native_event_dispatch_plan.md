@@ -348,6 +348,18 @@ against the single dispatcher; its script column stays `dom_node_events_work`
 and `genet-events`' own tests. The convergence plan is marked superseded (ruling
 9), in mere's archive and in this directory's copy.
 
+Host reach (2026-10-28, genet `events-host`): `Runtime::events()`, and the same
+accessor on `ScriptedDocument` and `LiveryScriptedDocument`, return the shared
+`Rc<RefCell<Registry>>`; `set_foreign_invoker(Option<Box<dyn Invoker>>)` on the
+runtime and both documents runs other owners' listeners inside a script-driven
+walk (without one they are skipped). Proof: `genet-scripted/tests/shared_events.rs`
+registers a Rust-owned listener between two JS `addEventListener`s on one
+node in a parsed document, dispatches from JS, and reads `js1, rust1, js2` on
+Boa and Nova. No mere host carries both: pelt's Cambium runners
+(`frisket_surface.rs`) and its `ScriptedDocument` viewer own separate DOMs, so
+Cambium's `set_foreign_invoker` stays unwired until a host runs Cambium over a
+scripted document; mere's genet pin is unchanged.
+
 Where it differs from the sketch in §4:
 
 - `stop_propagation` ends the walk after the current node, so that node's other

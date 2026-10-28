@@ -711,6 +711,9 @@ pub(crate) struct AgentState {
     pub(crate) dom_adoption: dom::adoption::AgentDomState,
     /// The one listener registry every realm of the agent dispatches through.
     pub(crate) events: Rc<RefCell<genet_events::Registry>>,
+    /// Runs the listeners other owners registered in `events`, in the same walk
+    /// as script's own.
+    pub(crate) foreign_invoker: Option<Rc<RefCell<Box<dyn genet_events::Invoker>>>>,
     /// Allocator for the ids of windows and plain `EventTarget` objects.
     pub(crate) next_event_target: u64,
     pub(crate) frames: crate::frames::FrameState,
@@ -2642,6 +2645,20 @@ impl<E: ScriptEngine> Runtime<E> {
     /// Configure HTML decoding for subsequent frame loads and navigation.
     pub fn set_html_decode_options(&mut self, options: HtmlDecodeOptions) {
         self.host.borrow_mut().dom.set_html_decode_options(options);
+    }
+
+    /// The agent's listener registry, shared with every realm. A host registers
+    /// its own listeners here (under an owner other than `Owner::SCRIPT`) so
+    /// they interleave with script's on one node.
+    pub fn events(&self) -> Rc<RefCell<genet_events::Registry>> {
+        self.agent.borrow().events.clone()
+    }
+
+    /// Install the invoker that runs listeners of owners other than script when
+    /// a script-driven dispatch reaches them, at their place in registration
+    /// order. Without one such a listener is skipped.
+    pub fn set_foreign_invoker(&mut self, invoker: Option<Box<dyn genet_events::Invoker>>) {
+        self.agent.borrow_mut().foreign_invoker = invoker.map(|i| Rc::new(RefCell::new(i)));
     }
 
     /// The shared host state (e.g. to read `console` output after a run).

@@ -314,9 +314,12 @@ What Phase 1 built, and where it differs from the sketch in §2:
   Rust walk through the same hook (Phase 3 moves it).
 - Not done yet: `relatedTarget` retargeting (the field is not projected), `signal`
   in `addEventListener` options, and `window.event`.
-- Environment notes: dedicated-worker WPT variants error on every engine at
-  current main ("Worker cancellation is unsupported by this script engine"), so
-  they are baselined as errors. `genet-compositor` does not compile on macOS at
+- Environment notes: dedicated-worker WPT variants errored on every engine from
+  2026-10-17 ("Worker cancellation is unsupported by this script engine"), so the
+  Phase 0 baselines counted them as errors. Since 2026-10-28 the runner installs
+  the worker helper (`GENET_WORKER_HELPER`, else `genet-worker-process` beside
+  `genet-wpt`) and hosts them again; the `dom/events` baselines were re-recorded
+  then. `genet-compositor` does not compile on macOS at
   current main (`compositor_calayer/errors.rs` and `iosurface.rs` are missing),
   which blocks `cargo test -p script-runtime-api` through its `webgl_wgpu`
   dev-dependency; the suite was run with that dev-dependency removed.

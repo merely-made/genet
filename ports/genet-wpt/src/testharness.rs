@@ -35,6 +35,7 @@ struct RunCtx<'a> {
 
 /// Phase 3: run testharness.js tests and report per-subtest results.
 pub(crate) fn testharness(tests: &[TestCase], args: &Args) {
+    crate::worker_helper::announce_if_missing();
     let tests_root = Path::new(&args.tests_root);
     let th_path = tests_root.join("resources/testharness.js");
     let testharness_js = match fs::read_to_string(&th_path) {

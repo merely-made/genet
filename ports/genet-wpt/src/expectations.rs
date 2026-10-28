@@ -708,6 +708,7 @@ pub(crate) fn check_expectations(
 /// JS-engine gap** (Nova's worklist, the fork-improvement signal); a test that
 /// fails on both is a **genet-platform gap** (layout / DOM). Disk mode only.
 pub(crate) fn compare(tests: &[TestCase], args: &Args) {
+    crate::worker_helper::announce_if_missing();
     let tests_root = Path::new(&args.tests_root);
     let testharness_js = match fs::read_to_string(tests_root.join("resources/testharness.js")) {
         Ok(s) => s,

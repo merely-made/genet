@@ -35,7 +35,7 @@ use livery::media::{Device as MediaDevice, MediaQueryList};
 use script_engine_api::ScriptEngine;
 use script_runtime_api::{
     FetchHandler, FetchOutcome, HarnessCompletion, MediaQueryHandler, ParserScriptLoader, Runtime,
-    ScriptResourceLoader, TestResult, WebGlFactory, WebSocketHandler,
+    ScriptResourceLoader, TestResult, WebGlFactory, WebSocketHandler, WorkerPolicy,
 };
 
 /// `matchMedia` seam for the WPT runner: evaluates against a default device.
@@ -840,6 +840,12 @@ fn prepare_runtime<E: ScriptEngine>(
     webgl: Option<WebGlFactory>,
     route: Option<Box<dyn ScriptResourceLoader>>,
 ) {
+    // Dedicated workers run in the killable helper process, so the default
+    // `RequireCancellation` policy admits them; without a helper they error.
+    rt.set_worker_policy(WorkerPolicy::RequireCancellation);
+    if let Some(launcher) = crate::worker_helper::launcher::<E>() {
+        rt.set_worker_process_launcher(launcher);
+    }
     if let Some(base) = base_url {
         let _ = rt.set_base_url(base);
         // Both modes give the page an http:// URL, which makes it a non-secure

@@ -213,3 +213,32 @@ fn a_spliced_child_stays_inside_document_scroll_below_the_canvas_color() {
         [244, 239, 227, 255]
     );
 }
+
+#[test]
+fn an_opaque_canvas_fills_a_transparent_page_with_its_root_scheme_canvas() {
+    use livery::values::ColorScheme;
+    let cases = [
+        ("", ColorScheme::Light, true, [255, 255, 255, 255]),
+        ("html { color-scheme: dark; }", ColorScheme::Dark, true, [18, 18, 18, 255]),
+        ("html { color-scheme: light dark; }", ColorScheme::Light, true, [255, 255, 255, 255]),
+        ("body { background:#f4efe3; }", ColorScheme::Light, true, [244, 239, 227, 255]),
+        ("", ColorScheme::Light, false, [0, 0, 0, 0]),
+    ];
+    for (canvas_style, preference, opaque, expected) in cases {
+        let mut document = scroll_document(canvas_style);
+        document.set_preferred_color_scheme(preference);
+        assert_eq!(document.set_opaque_canvas(opaque), opaque);
+        document.frame(64, 64).unwrap();
+        assert!(document.scroll_by(16.0, 24.0));
+        let scene = translate_paint_list(&document.frame(64, 64).unwrap()).unwrap();
+        let mut cpu = CpuSession::new(SparseResourceLimits::default());
+        let pixels = cpu.render(&scene).unwrap();
+        let bytes = pixels.data_as_u8_slice();
+        assert_eq!(pixel_at(bytes, 64, 60, 60), expected, "{canvas_style:?} opaque={opaque}");
+        assert_eq!(
+            pixel_at(bytes, 64, 12, 12),
+            [255, 0, 0, 255],
+            "content still scrolls over the canvas: {canvas_style:?}"
+        );
+    }
+}

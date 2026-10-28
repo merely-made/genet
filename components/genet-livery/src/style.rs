@@ -956,6 +956,12 @@ where
             .map(|values| self.used_color_context_for(values))
     }
 
+    /// The `Canvas` system color under this element's used color scheme.
+    pub(crate) fn used_canvas_color(&self, id: Id) -> Option<livery::values::Color> {
+        let context = self.used_color_context(id)?;
+        Some(ComputedColor::System(SystemColor::Canvas).resolve_used(context))
+    }
+
     /// Used foreground color as encoded sRGB channels and straight alpha.
     /// Resolves contextual expressions through this plane's device palette
     /// and the element's used color scheme, exactly as paint does.

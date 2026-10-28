@@ -218,6 +218,7 @@ where
     generic_font_sources: HashMap<String, Vec<u8>>,
     selection_anchor: Option<(D::NodeId, usize)>,
     selection_range: Option<TextRange<D::NodeId>>,
+    opaque_canvas: bool,
 }
 
 /// Whether `node` is rendered and visible under an owner's style plane: no
@@ -338,6 +339,7 @@ where
             generic_font_sources: HashMap::new(),
             selection_anchor: None,
             selection_range: None,
+            opaque_canvas: false,
         }
     }
 
@@ -434,6 +436,18 @@ where
         }
         self.device.set_preferred_color_scheme(scheme);
         self.invalidate();
+        true
+    }
+
+    /// Paint the root's `Canvas` color under a canvas the page leaves
+    /// transparent, as a browser does for a top-level document. Embedded
+    /// surfaces such as host chrome keep the default transparent canvas.
+    pub fn set_opaque_canvas(&mut self, opaque: bool) -> bool {
+        if self.opaque_canvas == opaque {
+            return false;
+        }
+        self.opaque_canvas = opaque;
+        self.cached = None;
         true
     }
 

@@ -475,7 +475,7 @@ where
         // keyframe time.
         let styles = self.sampled_paint_styles(layout);
         let fragments = self.sticky_layout_with_styles(layout, &styles);
-        let list = emit_paint_list_with_text_system_scrolled_with_images_and_document_base(
+        let mut list = emit_paint_list_with_text_system_scrolled_with_images_and_document_base(
             &self.dom,
             &styles,
             &fragments,
@@ -486,10 +486,29 @@ where
             &self.image_sources,
             self.style_set.document_base_url(),
         );
+        if self.opaque_canvas {
+            list.fill_transparent_canvas(self.canvas_base_color(&styles));
+        }
         self.retain_active_data_urls(&styles);
         self.cached = Some(((width, height), list.clone()));
         self.style_only_damage = true;
         Ok(list.scrolled(-self.scroll.0, -self.scroll.1))
+    }
+
+    /// CSS Color Adjust 1: the canvas takes `Canvas` under the root element's
+    /// used color scheme. Without a styled root, the host preference decides.
+    fn canvas_base_color(&self, styles: &StylePlane<D::NodeId>) -> livery::values::Color {
+        let root = self
+            .dom
+            .dom_children(self.dom.document())
+            .find(|child| self.dom.kind(*child) == NodeKind::Element);
+        root.and_then(|root| styles.used_canvas_color(root))
+            .unwrap_or_else(|| {
+                self.device.system_palette.get(
+                    self.device.preferred_color_scheme(),
+                    livery::values::SystemColor::Canvas,
+                )
+            })
     }
 
     pub(in crate::document) fn sampled_paint_styles<'a>(

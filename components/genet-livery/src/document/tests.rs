@@ -4530,3 +4530,154 @@ fn retained_text_edit_under_a_block_cell_promotes_and_paints_like_fresh_layout()
         format!("{:?}", fresh_paint.commands()),
     );
 }
+
+#[test]
+fn password_caret_projection_matches_masked_glyphs_and_hit_testing() {
+    for direction in ["ltr", "rtl"] {
+        for (value, boundaries, mask) in [
+            ("abcd", vec![0, 1, 2, 3, 4], "••••"),
+            ("é😀a", vec![0, 2, 6, 7], "•••"),
+            ("e\u{0301}👩‍👩‍👧‍👦🇺🇸", vec![0, 3, 28, 36], "•••"),
+        ] {
+            let mut dom = ScriptedDom::from_serialized_document(
+                "<html><body><input id=secret type=password><input id=reference></body></html>",
+            );
+            let secret = by_id(&dom, "secret");
+            let reference = by_id(&dom, "reference");
+            for (node, text) in [(secret, value), (reference, mask)] {
+                let mut state = dom.form_control_state(node).unwrap();
+                state.value = text.into();
+                state.dirty_value = true;
+                assert!(dom.set_form_control_state(node, state));
+            }
+            let mut document = form_control_paint_document(
+                dom,
+                &format!(
+                    "html,body {{ margin:0 }} input {{ display:block; width:240px; height:28px; direction:{direction} }}"
+                ),
+                400.0,
+                120.0,
+            );
+            document.frame(400, 120).unwrap();
+            for (index, byte) in boundaries.iter().copied().enumerate() {
+                let expected = document
+                    .caret_rect(reference, index * '•'.len_utf8())
+                    .unwrap();
+                let actual = document.caret_rect(secret, byte).unwrap();
+                assert!(
+                    (actual.x - expected.x).abs() < 0.01,
+                    "password boundary {index}: source byte {byte} must reach its masked glyph edge"
+                );
+                assert_eq!(
+                    document.text_position_at_point(expected.x, actual.y + actual.height * 0.5),
+                    Some((secret, byte)),
+                    "pointer hits return editing bytes, not mask bytes"
+                );
+            }
+            let selected = document
+                .selection_for_range(TextRange {
+                    anchor_node: secret,
+                    anchor_offset: 0,
+                    focus_node: secret,
+                    focus_offset: value.len(),
+                })
+                .unwrap();
+            assert_eq!(
+                selected.text, mask,
+                "retained selection must contain only the mask"
+            );
+            let expected = document
+                .selection_for_range(TextRange {
+                    anchor_node: reference,
+                    anchor_offset: 0,
+                    focus_node: reference,
+                    focus_offset: mask.len(),
+                })
+                .unwrap();
+            assert!((selected.rects[0].width - expected.rects[0].width).abs() < 0.01);
+            assert_eq!(selected.range.focus_offset, value.len());
+            assert!(
+                !format!(
+                    "{:?}",
+                    document
+                        .layout
+                        .as_ref()
+                        .unwrap()
+                        .fragments
+                        .text_frame()
+                        .unwrap()
+                )
+                .contains(value)
+            );
+        }
+    }
+}
+
+#[test]
+fn password_caret_projection_refreshes_same_mask_and_covers_partial_graphemes() {
+    let dom = ScriptedDom::from_serialized_document(
+        "<html><body><input id=secret type=password value=abc></body></html>",
+    );
+    let secret = by_id(&dom, "secret");
+    let mut document = form_control_paint_document(
+        dom,
+        "html,body { margin:0 } input { display:block; width:240px; height:28px }",
+        400.0,
+        120.0,
+    );
+    document.frame(400, 120).unwrap();
+    let end = document.caret_rect(secret, 3).unwrap();
+    let value = "e\u{0301}😀z";
+    document.mutate_dom(|dom| {
+        let mut state = dom.form_control_state(secret).unwrap();
+        state.value = value.into();
+        state.dirty_value = true;
+        assert!(dom.set_form_control_state(secret, state));
+    });
+    document.frame(400, 120).unwrap();
+    let refreshed = document.caret_rect(secret, value.len()).unwrap();
+    assert!(
+        (end.x - refreshed.x).abs() < 0.01,
+        "unchanged mask retains its shaped width"
+    );
+    assert_eq!(
+        document.text_position_at_point(refreshed.x, refreshed.y + refreshed.height * 0.5),
+        Some((secret, value.len())),
+        "same-mask edits must refresh the inverse offset map"
+    );
+    let start = document.caret_rect(secret, 0).unwrap();
+    for byte in [1, 2] {
+        assert!(
+            (document.caret_rect(secret, byte).unwrap().x - start.x).abs() < 0.01,
+            "an interior source position stays at the leading masked edge"
+        );
+    }
+    let partial = document
+        .selection_for_range(TextRange {
+            anchor_node: secret,
+            anchor_offset: 1,
+            focus_node: secret,
+            focus_offset: 2,
+        })
+        .unwrap();
+    assert_eq!(
+        partial.text, "•",
+        "a partial grapheme selection covers its whole masked glyph"
+    );
+    document.mutate_dom(|dom| {
+        dom.set_attribute(secret, attr("type"), "text");
+    });
+    document.frame(400, 120).unwrap();
+    let plain = document
+        .selection_for_range(TextRange {
+            anchor_node: secret,
+            anchor_offset: 0,
+            focus_node: secret,
+            focus_offset: value.len(),
+        })
+        .unwrap();
+    assert_eq!(
+        plain.text, value,
+        "changing type removes the password projection"
+    );
+}

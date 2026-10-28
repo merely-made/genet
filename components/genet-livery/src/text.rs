@@ -801,16 +801,16 @@ impl TextSystem {
         {
             value = draft;
         }
+        let mut password_offsets = None;
         let (display, selectable) = if value.is_empty() {
             dom.attribute(node, &Namespace::default(), &LocalName::from("placeholder"))
                 .filter(|placeholder| !placeholder.is_empty())
                 .map_or((value, true), |placeholder| (placeholder.to_owned(), false))
         } else if input_type == "password" && !is_textarea {
-            let clusters = icu_segmenter::GraphemeClusterSegmenter::new()
-                .segment_str(&value)
-                .count()
-                .saturating_sub(1);
-            ("\u{2022}".repeat(clusters), true)
+            let offsets = PasswordOffsets::new(&value);
+            let display = "\u{2022}".repeat(offsets.boundaries.len().saturating_sub(1));
+            password_offsets = Some(offsets);
+            (display, true)
         } else {
             (value, true)
         };
@@ -848,6 +848,9 @@ impl TextSystem {
         }];
         if selectable && !text.is_empty() {
             frame.record_text_group(vec![(node, text.clone())]);
+            if let Some(offsets) = password_offsets {
+                frame.password_offsets.insert(node, offsets);
+            }
         }
         let mut spans = spans;
         let shaped = self.shape(
@@ -2475,6 +2478,44 @@ fn restore<Id: Eq + Hash, V>(map: &mut HashMap<Id, V>, key: Id, value: Option<V>
     };
 }
 
+/// The only retained information about the editing value is its grapheme
+/// byte boundaries. Shaped text, selection text and paint commands keep the
+/// mask. Query inputs/outputs remain source bytes even when one glyph stands
+/// for several source scalars (or a single ASCII byte).
+#[derive(Clone, Debug)]
+struct PasswordOffsets {
+    boundaries: Vec<usize>,
+}
+
+impl PasswordOffsets {
+    fn new(value: &str) -> Self {
+        Self {
+            boundaries: icu_segmenter::GraphemeClusterSegmenter::new()
+                .segment_str(value)
+                .collect(),
+        }
+    }
+
+    fn display_offset(&self, source: usize, round_up: bool) -> usize {
+        // Interior caret positions use the leading edge. A selection's end
+        // rounds outwards so selecting part of a grapheme covers its bullet.
+        let index = if round_up {
+            self.boundaries
+                .partition_point(|boundary| *boundary < source)
+        } else {
+            self.boundaries
+                .partition_point(|boundary| *boundary <= source)
+                .saturating_sub(1)
+        };
+        index.min(self.boundaries.len().saturating_sub(1)) * '\u{2022}'.len_utf8()
+    }
+
+    fn source_offset(&self, display: usize) -> usize {
+        self.boundaries
+            [(display / '\u{2022}'.len_utf8()).min(self.boundaries.len().saturating_sub(1))]
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct TextFrame<Id> {
     prepared_groups: Vec<Vec<PreparedCommand<Id>>>,
@@ -2490,6 +2531,7 @@ pub(crate) struct TextFrame<Id> {
     used_fonts: HashSet<FontInstanceKey>,
     text_order: Vec<Id>,
     text_values: HashMap<Id, String>,
+    password_offsets: HashMap<Id, PasswordOffsets>,
     text_groups: HashMap<Id, usize>,
     text_clusters: Vec<RetainedTextCluster<Id>>,
     /// Every source that has ever contributed a retained cluster. It only
@@ -2513,6 +2555,7 @@ impl<Id> Default for TextFrame<Id> {
             used_fonts: HashSet::new(),
             text_order: Vec::new(),
             text_values: HashMap::new(),
+            password_offsets: HashMap::new(),
             text_groups: HashMap::new(),
             text_clusters: Vec::new(),
             cluster_sources: HashSet::new(),
@@ -2662,6 +2705,9 @@ where
         for (source, value) in &source_frame.text_values {
             if includes(*source) {
                 self.text_values.insert(*source, value.clone());
+                if let Some(offsets) = source_frame.password_offsets.get(source) {
+                    self.password_offsets.insert(*source, offsets.clone());
+                }
                 let group = source_frame
                     .text_groups
                     .get(source)
@@ -2894,6 +2940,8 @@ where
             (false, true) | (true, false) => cluster.range.start,
             (false, false) | (true, true) => cluster.range.end,
         };
+        let offset = self.password_offsets.get(&cluster.source)
+            .map_or(offset, |offsets| offsets.source_offset(offset));
         Some((cluster.source, offset))
     }
 
@@ -2907,9 +2955,9 @@ where
             let start = text.to_ascii_lowercase().find(&needle)?;
             Some(TextRange {
                 anchor_node: *source,
-                anchor_offset: start,
+                anchor_offset: self.source_offset(*source, start),
                 focus_node: *source,
-                focus_offset: start + needle.len(),
+                focus_offset: self.source_offset(*source, start + needle.len()),
             })
         })
     }
@@ -2996,15 +3044,20 @@ where
                 {
                     return Some(TextRange {
                         anchor_node: anchor.0,
-                        anchor_offset: anchor.1,
+                        anchor_offset: self.source_offset(anchor.0, anchor.1),
                         focus_node: focus.0,
-                        focus_offset: focus.1,
+                        focus_offset: self.source_offset(focus.0, focus.1),
                     });
                 }
             }
             search_start = next_char_boundary(&logical, range_start);
         }
         None
+    }
+
+    fn source_offset(&self, source: Id, display: usize) -> usize {
+        self.password_offsets.get(&source)
+            .map_or(display, |offsets| offsets.source_offset(display))
     }
 
     pub(crate) fn caret_rect<F>(
@@ -3016,6 +3069,8 @@ where
     where
         F: FnMut(Id, Fragment) -> TextRect,
     {
+        let offset = self.password_offsets.get(&source)
+            .map_or(offset, |offsets| offsets.display_offset(offset, false));
         let cluster = self
             .text_clusters
             .iter()
@@ -3095,12 +3150,16 @@ where
             let source = self.text_order[index];
             let value = self.text_values.get(&source)?;
             let start = if index == start_index {
-                start_offset.min(value.len())
+                self.password_offsets.get(&source)
+                    .map_or(start_offset, |offsets| offsets.display_offset(start_offset, false))
+                    .min(value.len())
             } else {
                 0
             };
             let end = if index == end_index {
-                end_offset.min(value.len())
+                self.password_offsets.get(&source)
+                    .map_or(end_offset, |offsets| offsets.display_offset(end_offset, true))
+                    .min(value.len())
             } else {
                 value.len()
             };

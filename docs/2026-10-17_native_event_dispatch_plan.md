@@ -1,6 +1,7 @@
 # Native event dispatch, focus and activation (plan, 2026-10-17)
 
-Status: **approved 2026-10-17 as proposed (rulings in §6); Phases 0 and 1 in progress.** Supersedes the
+Status: **approved 2026-10-17 as proposed (rulings in §6); Phases 0, 1 and 2 landed (Phase 2 on
+2026-10-28); Phases 3 to 5 not started.** Supersedes the
 two-dispatcher "shared scenario table" approach of the
 [2026-06-01 convergence plan](./2026-06-01_event_model_convergence_plan.md): that
 plan kept two algorithms and tested them for agreement. This one removes the
@@ -269,7 +270,9 @@ If a gate fails, the phase reverts rather than carrying a fallback dispatcher.
    **Ruling (ruled 2026-10-17: as proposed):** mark the 2026-06-01 convergence plan
    superseded after Phase 2.
 
-## 7. Phase 0 and 1 results (2026-10-17)
+## 7. Phase 0, 1 and 2 results
+
+### Phases 0 and 1 (2026-10-17)
 
 Baselines are `ports/genet-wpt/expectations/testharness/<subset>_<engine>.json`,
 recorded with the release runner (`--jobs 6`) on the rebased main before any
@@ -319,3 +322,56 @@ What Phase 1 built, and where it differs from the sketch in §2:
   dev-dependency; the suite was run with that dev-dependency removed.
   `frame_arena_boundary` and `cross_arena_replacement` need a WebGL context and
   fail the same way without Phase 1.
+
+### Phase 2 (2026-10-28, mere `43d13ce56`)
+
+Cambium's click, key and focus listeners register in a `genet_events::Registry`
+under `Owner(1)` (script is 0), with one token-to-view-path table on `GenetCtx`;
+the click, key and focus registries and `click_handlers_at`, `key_handlers_at`,
+`focus_handler` and `Handler` are gone. The runner's click and key walks and its
+focus transitions go through `genet_events::dispatch` with the runner as the
+`Invoker`; the rebuild still follows the walk, and no dispatcher of Cambium's own
+is left for those three. Genet is unchanged: mere stays on `a732a7d466b`.
+
+Gate: Cambium lib tests 332 to 345 (13 new, in `event_layer_tests.rs`), the
+other Cambium suites unchanged (mesquite 42, cambium-rootstock 193, mere-view
+39, cambium-desktop 182), `check` clean for cambium-winit, cambium-a11y and
+graphshell-mere. `cambium-desktop`'s `wheel_scenario` has one failing test
+(`a_wheel_with_no_target_or_a_typo_fails_the_scenario`, a message mismatch,
+"no current DOM target" against "no current pointer target"), failing the same
+way before this phase. The 2026-06-01 scenario table now runs as `table_*` in
+`event_layer_tests.rs` (click and key walks, focus as the non-bubbling row)
+against the single dispatcher; its script column stays `dom_node_events_work`
+and `genet-events`' own tests. The convergence plan is marked superseded (ruling
+9), in mere's archive and in this directory's copy.
+
+Where it differs from the sketch in §4:
+
+- `stop_propagation` ends the walk after the current node, so that node's other
+  listeners still run. The old runner stopped at the listener, which is what
+  `stop_immediate_propagation` means; the shared table says otherwise.
+- Ruling 2 is a queue, not a `RefCell` try-borrow: the walk holds the runner's
+  state by `&mut`, so a nested call cannot reach it. `NativeOwner` is the
+  endpoint another owner's dispatcher hands Cambium's calls to; it queues them
+  and the runner runs them when the walk unwinds. Only `click`, `focus` and
+  `blur` calls are kept, since `genet-events` carries no event payload yet (a
+  click is synthesised at the origin, as keyboard activation does); a queued
+  `keydown` has nothing to build from until typed `EventData` lands.
+- Sharing a registry is a seam with no host behind it: `GenetCtx::with_events`,
+  `GenetAppRunner::with_events` and `set_foreign_invoker` (the invoker for other
+  owners' listeners in the runner's own walks). The mixed-document property is
+  tested through that seam with a stand-in for the script runtime
+  (`script_and_cambium_listeners_on_one_node_interleave_by_registration_order`,
+  `a_runner_walk_runs_a_shared_registrys_script_listeners_in_place`), not with
+  a script runtime. Wiring a scripted host needs `events()` on the runtime and
+  on genet-scripted's document (no accessor exists, `Runtime`'s registry is
+  `pub(crate)`) and one invoker that serves both owners.
+- Focus transitions go through the layer as non-bubbling `blur` and `focus`
+  events because the observers are registered in it. Traversal, focusable
+  marking and the click-to-focus rule stay in Cambium for Phase 4.
+- Cambium now depends on `genet-events` (git, 0.0.0, `publish = false`), so
+  Cambium cannot be published until this crate is.
+
+Left for Phases 3 to 5: activation and keyboard activation (3); the focus model,
+traversal and exits (4); pointer, hover, wheel, value and file registries and
+dispatch, and the host entry point that drives both owners in one walk (5).

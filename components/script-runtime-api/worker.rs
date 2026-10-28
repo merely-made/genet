@@ -1191,6 +1191,15 @@ struct WsImport;
 impl<E: ScriptEngine> NativeFn<E> for WsImport {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
         let url = arg_string::<E>(cx, 0)?;
+        // Relative to the worker's script URL, which is its base.
+        let url = with_host::<E, _>(cx, |h| {
+            h.document_base_url()
+                .and_then(|base| url::Url::parse(&base).ok())
+                .and_then(|base| base.join(&url).ok())
+                .map(|url| url.to_string())
+        })
+        .flatten()
+        .unwrap_or(url);
         let out = with_link::<E, _>(cx, |l| l.request(get_request(&url)));
         let json = match out {
             Some(out) if ok_status(&out) && script_mime_ok(&out) => {

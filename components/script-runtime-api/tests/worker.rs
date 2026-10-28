@@ -82,7 +82,8 @@ fn read<E: ScriptEngine>(rt: &mut Runtime<E>, expr: &str) -> String {
 /// Drive the page's event loop until `done` reads `"true"`, or give up. The
 /// shape genet-wpt's disk drive loop uses, minus the rendering session.
 fn drive_until<E: ScriptEngine>(rt: &mut Runtime<E>, done: &str) -> bool {
-    let deadline = Instant::now() + Duration::from_secs(20);
+    // A debug build under load needs seconds to start each worker runtime.
+    let deadline = Instant::now() + Duration::from_secs(60);
     let mut now_ms = 0.0f64;
     while Instant::now() < deadline {
         rt.run_microtasks();

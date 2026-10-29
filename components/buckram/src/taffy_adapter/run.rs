@@ -367,6 +367,10 @@ impl AlgorithmRun<'_> {
                 sizing_mode: SizingMode::InherentSize,
                 axis: taffy::RequestedAxis::Both,
                 known_dimensions,
+                known_dimensions_are_definite: taffy::Size {
+                    width: true,
+                    height: true,
+                },
                 parent_size,
                 available_space: physical_available_size(
                     input.containing_flow,
@@ -689,6 +693,10 @@ impl AlgorithmRun<'_> {
                 known_dimensions: taffy::Size {
                     width: None,
                     height: None,
+                },
+                known_dimensions_are_definite: taffy::Size {
+                    width: true,
+                    height: true,
                 },
                 parent_size: taffy::Size {
                     width: None,
@@ -1063,6 +1071,11 @@ impl AlgorithmRun<'_> {
                     known_dimensions: taffy::Size {
                         width: Some(width),
                         height: None,
+                    },
+                    known_dimensions_are_definite: taffy::Size {
+                        width: inputs.known_dimensions.width.is_some()
+                            && inputs.known_dimensions_are_definite.width,
+                        height: true,
                     },
                     parent_size: inputs.parent_size,
                     available_space: inputs.available_space,
@@ -1742,7 +1755,7 @@ impl AlgorithmRun<'_> {
             let node_index = AlgorithmNodeId::from_taffy(node_id).index();
             let kind = tree.tree.nodes[node_index].kind;
 
-            match kind {
+            let mut output = match kind {
                 AlgorithmKind::Hidden => compute_hidden_layout(tree, node_id),
                 AlgorithmKind::Block if block_context.is_none() => {
                     match tree.compute_owned_block_layout(node_id, inputs) {
@@ -1810,7 +1823,12 @@ impl AlgorithmRun<'_> {
                         },
                     )
                 },
+            };
+            if inputs.run_mode == RunMode::PerformLayout {
+                tree.clear_hoisted_children(node_id);
+                compute_oof_layout(tree, node_id, &mut output);
             }
+            output
         })
     }
 }
@@ -2032,8 +2050,31 @@ impl LayoutPartialTree for AlgorithmRun<'_> {
     }
 }
 
+impl LayoutContainingBlock for AlgorithmRun<'_> {
+    type OofItemStyle<'a>
+        = &'a Style
+    where
+        Self: 'a;
+    fn get_oof_item_style(&self, node_id: NodeId) -> Self::OofItemStyle<'_> {
+        self.style(node_id)
+    }
+    fn clear_hoisted_children(&mut self, node_id: NodeId) {
+        self.tree.nodes[AlgorithmNodeId::from_taffy(node_id).index()]
+            .hoisted_children
+            .clear();
+    }
+    fn add_hoisted_children(&mut self, node_id: NodeId, hoisted: &[NodeId]) {
+        self.tree.nodes[AlgorithmNodeId::from_taffy(node_id).index()]
+            .hoisted_children
+            .extend_from_slice(hoisted);
+    }
+    fn get_detailed_layout_info(&self, node_id: NodeId) -> &DetailedLayoutInfo {
+        &self.tree.nodes[AlgorithmNodeId::from_taffy(node_id).index()].detailed_info
+    }
+}
+
 impl CacheTree for AlgorithmRun<'_> {
-    fn cache_get(&self, node_id: NodeId, input: &LayoutInput) -> Option<LayoutOutput> {
+    fn cache_get(&mut self, node_id: NodeId, input: &LayoutInput) -> Option<LayoutOutput> {
         self.tree.nodes[AlgorithmNodeId::from_taffy(node_id).index()]
             .cache
             .get(input)
@@ -2201,12 +2242,24 @@ impl LayoutGridContainer for AlgorithmRun<'_> {
     }
 
     fn set_detailed_grid_info(&mut self, node_id: NodeId, detailed_grid_info: DetailedGridInfo) {
-        self.tree.nodes[AlgorithmNodeId::from_taffy(node_id).index()].grid_info =
-            Some(detailed_grid_info);
+        self.tree.nodes[AlgorithmNodeId::from_taffy(node_id).index()].detailed_info =
+            DetailedLayoutInfo::Grid(Box::new(detailed_grid_info));
     }
 }
 
 impl RoundTree for AlgorithmRun<'_> {
+    fn is_out_of_flow(&self, node_id: NodeId) -> bool {
+        self.style(node_id).position.is_out_of_flow()
+    }
+    fn hoisted_child_count(&self, node_id: NodeId) -> usize {
+        self.tree.nodes[AlgorithmNodeId::from_taffy(node_id).index()]
+            .hoisted_children
+            .len()
+    }
+    fn get_hoisted_child_id(&self, node_id: NodeId, index: usize) -> NodeId {
+        self.tree.nodes[AlgorithmNodeId::from_taffy(node_id).index()].hoisted_children[index]
+    }
+
     fn get_unrounded_layout(&self, node_id: NodeId) -> Layout {
         self.tree.nodes[AlgorithmNodeId::from_taffy(node_id).index()].unrounded_layout
     }

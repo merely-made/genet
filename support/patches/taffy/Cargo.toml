@@ -13,7 +13,7 @@
 edition = "2021"
 rust-version = "1.71"
 name = "genet-taffy"
-version = "0.14.0"
+version = "0.16.0"
 authors = [
     "Alice Cecile <alice.i.cecile@gmail.com>",
     "Johnathan Kelley <jkelleyrtp@gmail.com>",
@@ -33,7 +33,7 @@ autobins = false
 autoexamples = false
 autotests = false
 autobenches = false
-description = "Genet-maintained Taffy fork with CSS float, flex order, and positioned-grid layout support"
+description = "Genet-maintained Taffy fork with CSS float, containment, and formatter geometry support"
 readme = "README.md"
 keywords = [
     "cross-platform",
@@ -58,7 +58,7 @@ rustdoc-args = [
 ]
 
 [features]
-alloc = ["serde?/alloc"]
+alloc = []
 block_layout = []
 calc = []
 content_size = []
@@ -67,6 +67,7 @@ default = [
     "std",
     "taffy_tree",
     "flexbox",
+    "flexbox_balance",
     "grid",
     "block_layout",
     "float_layout",
@@ -76,18 +77,19 @@ default = [
 ]
 detailed_layout_info = []
 flexbox = []
+flexbox_balance = ["flexbox"]
 float_layout = []
-grid = [
-    "alloc",
-    "dep:smallvec",
-]
+grid = ["dep:smallvec"]
 parse = ["dep:cssparser"]
 parse_faster = [
     "parse",
     "cssparser/fast_match_byte",
 ]
 profile = ["std"]
-serde = ["dep:serde"]
+serde = [
+    "dep:serde",
+    "serde/alloc",
+]
 std = [
     "serde?/std",
     "slotmap?/std",
@@ -131,10 +133,6 @@ path = "examples/measure.rs"
 [[example]]
 name = "nested"
 path = "examples/nested.rs"
-
-[dependencies.arrayvec]
-version = "0.7"
-default-features = false
 
 [dependencies.cssparser]
 version = "0.37.0"

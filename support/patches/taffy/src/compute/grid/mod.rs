@@ -2,29 +2,36 @@
 //! <https://www.w3.org/TR/css-grid-1>
 use crate::geometry::{AbsoluteAxis, AbstractAxis, InBothAbsAxis};
 use crate::geometry::{Line, Point, Rect, Size};
-use crate::style::{AlignItems, AlignSelf, AvailableSpace, Overflow, Position};
-use crate::tree::{Layout, LayoutInput, LayoutOutput, LayoutPartialTreeExt, NodeId, RunMode, SizingMode};
+use crate::style::{AlignContent, AlignItems, AvailableSpace, Contain, Overflow};
+use crate::tree::{
+    AxisStaticPosition, Baselines, Layout, LayoutInput, LayoutOutput, LayoutPartialTreeExt, NodeId, OofCandidate,
+    OofCandidates, OofPositioningArea, RunMode, SizingMode,
+};
 use crate::util::debug::debug_log;
 use crate::util::sys::{f32_max, f32_min, GridTrackVec, Vec};
 use crate::util::MaybeMath;
 use crate::util::{MaybeResolve, ResolveOrZero};
 use crate::{
-    style_helpers::*, AlignContent, BoxGenerationMode, BoxSizing, CoreStyle, Direction, GridContainerStyle,
-    GridItemStyle, JustifyContent, LayoutGridContainer, RequestedAxis,
+    style_helpers::*, BoxGenerationMode, BoxSizing, CoreStyle, Direction, GridContainerStyle, GridItemStyle,
+    LayoutGridContainer, RequestedAxis,
 };
 use alignment::{align_and_position_item, align_tracks};
 use explicit_grid::{compute_explicit_grid_size_in_axis, initialize_grid_tracks, AutoRepeatStrategy};
 use implicit_grid::compute_grid_size_estimate;
-use placement::place_grid_items;
+use placement::{place_grid_items, ItemPlacement};
 use track_sizing::{
     determine_if_item_crosses_flexible_or_intrinsic_tracks, resolve_item_track_indexes, track_sizing_algorithm,
 };
-use types::{CellOccupancyMatrix, GridTrack, NamedLineResolver, TrackCounts};
+use types::{CellOccupancyMatrix, GridAreasMap, GridTrack, NamedLineResolver};
 
-#[cfg(feature = "detailed_layout_info")]
-use types::{GridItem, GridTrackKind};
+use crate::sys::{DefaultCheapStr, String};
+use crate::{CheapCloneStr, GridAreaAxis, GridPlacement};
+use core::ops::Range;
+use types::{GridItem, GridTrackKind, TrackCounts};
 
 pub(crate) use types::{GridCoordinate, GridLine, OriginZeroLine, MAX_GRID_TRACKS, MAX_OZ_LINE, MIN_OZ_LINE};
+
+pub use types::{GridLineNames, GridLineNamesIter};
 
 mod alignment;
 mod explicit_grid;
@@ -33,22 +40,64 @@ mod placement;
 mod track_sizing;
 mod types;
 mod util;
+/// The grid container's resolved box, size constraints, alignment styles and available space,
+/// computed once from the container's style and the layout inputs before the grid is laid out
+#[derive(Clone, Copy)]
+struct GridContainerConstants {
+    /// The container's `direction` style
+    direction: Direction,
+    /// The container's `contain` style
+    contain: Contain,
+    /// Which positioning schemes the container is a containing block for
+    /// The container's resolved padding
+    padding: Rect<f32>,
+    /// The container's resolved border
+    border: Rect<f32>,
+    /// The sum of padding and border in each axis
+    padding_border_size: Size<f32>,
+    /// The container's border-box min size, if definite
+    min_size: Size<Option<f32>>,
+    /// The container's border-box max size, if definite
+    max_size: Size<Option<f32>>,
+    /// The container's border-box preferred size, if definite
+    resolved_outer_size: Size<Option<f32>>,
+    /// The space reserved for scrollbars in each axis
+    scrollbar_gutter: Point<f32>,
+    /// Whether the container's overflow makes it a scroll container
+    #[cfg(feature = "content_size")]
+    is_scroll_container: bool,
+    /// Padding, border and scrollbar gutter combined
+    content_box_inset: Rect<f32>,
+    /// The container's `align-content` style
+    align_content: AlignContent,
+    /// The container's `justify-content` style
+    justify_content: AlignContent,
+    /// The container's `align-items` style
+    align_items: AlignItems,
+    /// The container's `justify-items` style
+    justify_items: AlignItems,
+    /// The space available to size the grid tracks in each axis
+    available_grid_space: Size<AvailableSpace>,
+    /// The container's border-box size, if definite
+    outer_node_size: Size<Option<f32>>,
+    /// The container's content-box min size, if definite
+    inner_min_size: Size<Option<f32>>,
+    /// The container's content-box max size, if definite
+    inner_max_size: Size<Option<f32>>,
+    /// The container's content-box size, if definite
+    inner_node_size: Size<Option<f32>>,
+}
 
-/// Grid layout algorithm
-/// This consists of a few phases:
-///   - Resolving the explicit grid
-///   - Placing items (which also resolves the implicit grid)
-///   - Track (row/column) sizing
-///   - Alignment & Final item placement
-pub fn compute_grid_layout<Tree: LayoutGridContainer>(
-    tree: &mut Tree,
-    node: NodeId,
+/// Resolve the grid container's style against the layout inputs (step 1 of `compute_grid_layout`)
+fn compute_container_constants<Tree: LayoutGridContainer>(
+    tree: &Tree,
+    style: &Tree::GridContainerStyle<'_>,
     inputs: LayoutInput,
-) -> LayoutOutput {
-    let LayoutInput { known_dimensions, parent_size, available_space, run_mode, .. } = inputs;
+) -> GridContainerConstants {
+    let LayoutInput { known_dimensions, parent_size, available_space, .. } = inputs;
 
-    let style = tree.get_grid_container_style(node);
     let direction = style.direction();
+    let contain = style.contain();
 
     // 1. Compute "available grid space"
     // https://www.w3.org/TR/css-grid-1/#available-grid-space
@@ -88,6 +137,11 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
         Overflow::Scroll => style.scrollbar_width(),
         _ => 0.0,
     });
+    #[cfg(feature = "content_size")]
+    let is_scroll_container = {
+        let overflow = style.overflow();
+        overflow.x.is_scroll_container() || overflow.y.is_scroll_container()
+    };
     let mut content_box_inset = padding_border;
     content_box_inset.bottom += scrollbar_gutter.y;
 
@@ -96,24 +150,13 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
         Direction::Rtl => content_box_inset.left += scrollbar_gutter.x,
     };
 
-    let align_content = style.align_content().unwrap_or(AlignContent::STRETCH);
-    let justify_content = style.justify_content().unwrap_or(JustifyContent::STRETCH);
+    // `normal` behaves as `stretch` for grid containers
+    let align_content = style.grid_align_content(AbstractAxis::Block);
+    let justify_content = style.grid_align_content(AbstractAxis::Inline);
     let align_items = style.align_items();
     let justify_items = style.justify_items();
-
-    // Note: we avoid accessing the grid rows/columns methods more than once as this can
-    // cause an expensive-ish computation
-    let grid_template_columns = style.grid_template_columns();
-    let grid_template_rows = style.grid_template_rows();
-    let grid_auto_columns = style.grid_auto_columns();
-    let grid_auto_rows = style.grid_auto_rows();
-
-    let containment_size = Size {
-        width: size_containment.width.then_some(padding_border_size.width),
-        height: size_containment.height.then_some(padding_border_size.height),
-    };
+    let containment_size = Size { width: size_containment.width.then_some(padding_border_size.width), height: size_containment.height.then_some(padding_border_size.height) };
     let resolved_outer_size = known_dimensions.or(preferred_size).or(containment_size);
-
     let constrained_available_space = resolved_outer_size
         .map(|size| size.map(AvailableSpace::Definite))
         .unwrap_or(available_space)
@@ -136,12 +179,83 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
     // (which are border-box sizes) need converting to content-box sizes before being passed to it
     let inner_min_size = min_size.maybe_sub(content_box_inset.sum_axes());
     let inner_max_size = max_size.maybe_sub(content_box_inset.sum_axes());
-    let mut inner_node_size = Size {
+    let inner_node_size = Size {
         width: outer_node_size.width.map(|space| space - content_box_inset.horizontal_axis_sum()),
         height: outer_node_size.height.map(|space| space - content_box_inset.vertical_axis_sum()),
     };
 
-    debug_log!("parent_size", dbg:parent_size);
+    GridContainerConstants {
+        direction,
+        contain,
+        padding,
+        border,
+        padding_border_size,
+        min_size,
+        max_size,
+        resolved_outer_size,
+        scrollbar_gutter,
+        #[cfg(feature = "content_size")]
+        is_scroll_container,
+        content_box_inset,
+        align_content,
+        justify_content,
+        align_items,
+        justify_items,
+        available_grid_space,
+        outer_node_size,
+        inner_min_size,
+        inner_max_size,
+        inner_node_size,
+    }
+}
+
+/// Grid layout algorithm
+/// This consists of a few phases:
+///   - Resolving the explicit grid
+///   - Placing items (which also resolves the implicit grid)
+///   - Track (row/column) sizing
+///   - Alignment & Final item placement
+pub fn compute_grid_layout<Tree: LayoutGridContainer>(
+    tree: &mut Tree,
+    node: NodeId,
+    inputs: LayoutInput,
+) -> LayoutOutput {
+    let LayoutInput { run_mode, .. } = inputs;
+
+    let style = tree.get_grid_container_style(node);
+    let constants = compute_container_constants(tree, &style, inputs);
+    let GridContainerConstants {
+        direction,
+        contain,
+        padding,
+        border,
+        padding_border_size,
+        min_size,
+        max_size,
+        resolved_outer_size,
+        scrollbar_gutter,
+        #[cfg(feature = "content_size")]
+        is_scroll_container,
+        content_box_inset,
+        align_content,
+        justify_content,
+        align_items,
+        justify_items,
+        available_grid_space,
+        outer_node_size,
+        inner_min_size,
+        inner_max_size,
+        mut inner_node_size,
+    } = constants;
+
+    // Note: we avoid accessing the grid rows/columns methods more than once as this can
+    // cause an expensive-ish computation
+    let grid_template_columns = style.grid_template_columns();
+    let grid_template_rows = style.grid_template_rows();
+    let grid_auto_columns = style.grid_auto_columns();
+    let grid_auto_rows = style.grid_auto_rows();
+
+    debug_log!("parent_size", dbg:inputs.parent_size);
     debug_log!("outer_node_size", dbg:outer_node_size);
     debug_log!("inner_node_size", dbg:inner_node_size);
 
@@ -159,15 +273,6 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
             }
         }
     }
-
-    // Absolutely positioned children do not take part in grid placement and do not create
-    // implicit tracks, so they are excluded from the grid size estimate.
-    let get_child_styles_iter = |node| {
-        tree.child_ids(node).map(|child_node: NodeId| tree.get_grid_child_style(child_node)).filter(|style| {
-            style.box_generation_mode() != BoxGenerationMode::None && style.position() != Position::Absolute
-        })
-    };
-    let child_styles_iter = get_child_styles_iter(node);
 
     // 2. Resolve the explicit grid
 
@@ -219,34 +324,53 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
     name_resolver.set_explicit_column_count(explicit_col_count);
     name_resolver.set_explicit_row_count(explicit_row_count);
 
-    // 3. Implicit Grid: Estimate Track Counts
+    // Build the per-line names of the explicit grid from the name resolver's collected pairs
+    let mut detailed_column_line_names = name_resolver.detailed_line_names(AbsoluteAxis::Horizontal);
+    let mut detailed_row_line_names = name_resolver.detailed_line_names(AbsoluteAxis::Vertical);
+
+    // 3. Create the grid items (in document order) and resolve the named lines in their `grid-row`/`grid-column` styles
+    // Absolutely positioned children do not take part in grid placement and do not create implicit tracks,
+    // so they are excluded here. Each child's style is read and its named lines resolved exactly once; the
+    // results drive both the grid size estimate and item placement below.
+    let child_count = tree.child_count(node);
+    let mut items: Vec<GridItem> = Vec::with_capacity(child_count);
+    let mut placements: Vec<ItemPlacement> = Vec::with_capacity(child_count);
+    let mut ordered_children: Vec<_> = tree.child_ids(node).enumerate().map(|(index, child)| (index, child, tree.get_grid_child_style(child).order())).collect();
+    ordered_children.sort_by_key(|(_, _, order)| *order);
+    for (index, child_node, _) in ordered_children {
+
+        let child_style = tree.get_grid_child_style(child_node);
+        if child_style.box_generation_mode() == BoxGenerationMode::None || child_style.position().is_out_of_flow() {
+            continue;
+        }
+        placements.push(InBothAbsAxis {
+            horizontal: name_resolver
+                .resolve_column_names(&child_style.grid_column())
+                .into_origin_zero(explicit_col_count),
+            vertical: name_resolver.resolve_row_names(&child_style.grid_row()).into_origin_zero(explicit_row_count),
+        });
+        items.push(GridItem::new_with_style_and_order(
+            child_node,
+            child_style,
+            align_items,
+            justify_items,
+            index as u16,
+        ));
+    }
+
+    // 4. Implicit Grid: Estimate Track Counts
     // Estimate the number of rows and columns in the implicit grid (= the entire grid)
     // This is necessary as part of placement. Doing it early here is a perf optimisation to reduce allocations.
     let (est_col_counts, est_row_counts) =
-        compute_grid_size_estimate(explicit_col_count, explicit_row_count, direction, child_styles_iter);
+        compute_grid_size_estimate(explicit_col_count, explicit_row_count, &placements);
 
-    // 4. Grid Item Placement
+    // 5. Grid Item Placement
     // Match items (children) to a definite grid position (row start/end and column start/end position)
-    let mut items = Vec::with_capacity(tree.child_count(node));
     let mut cell_occupancy_matrix = CellOccupancyMatrix::with_track_counts(est_col_counts, est_row_counts);
-    let in_flow_children_iter = || {
-        tree.child_ids(node)
-            .enumerate()
-            .map(|(index, child_node)| (index, child_node, tree.get_grid_child_style(child_node)))
-            .filter(|(_, _, style)| {
-                style.box_generation_mode() != BoxGenerationMode::None && style.position() != Position::Absolute
-            })
-    };
-    place_grid_items(
-        &mut cell_occupancy_matrix,
-        &mut items,
-        in_flow_children_iter,
-        direction,
-        style.grid_auto_flow(),
-        align_items,
-        justify_items,
-        &name_resolver,
-    );
+    // `items` is in document order from here on (placement only fills in each item's grid area). The track
+    // sizing and baseline passes sort references to the items rather than the items themselves.
+    place_grid_items(&mut cell_occupancy_matrix, &mut items, &placements, style.grid_auto_flow());
+    items.sort_by_key(|item| item.source_order);
 
     // Extract track counts from previous step (auto-placement can expand the number of tracks)
     let final_col_counts = *cell_occupancy_matrix.track_counts(AbsoluteAxis::Horizontal);
@@ -257,25 +381,13 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
     // This resolves the min and max track sizing functions for all tracks and gutters
     let mut columns = GridTrackVec::new();
     let mut rows = GridTrackVec::new();
-    let mut column_track_counts_for_init = final_col_counts;
-    if direction.is_rtl() && final_col_counts.explicit <= 1 {
-        column_track_counts_for_init.negative_implicit = final_col_counts.positive_implicit;
-        column_track_counts_for_init.positive_implicit = final_col_counts.negative_implicit;
-    }
     initialize_grid_tracks(
         &mut columns,
-        column_track_counts_for_init,
+        final_col_counts,
         &style,
         AbsoluteAxis::Horizontal,
         col_auto_repetition_count,
-        |column_index| {
-            let occupancy_index = if direction.is_rtl() {
-                rtl_column_occupancy_index_for_initialization(column_index, final_col_counts)
-            } else {
-                column_index
-            };
-            cell_occupancy_matrix.column_is_occupied(occupancy_index)
-        },
+        |column_index| cell_occupancy_matrix.column_is_occupied(column_index),
     );
     initialize_grid_tracks(
         &mut rows,
@@ -285,9 +397,6 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
         row_auto_repetition_count,
         |row_index| cell_occupancy_matrix.row_is_occupied(row_index),
     );
-    if direction.is_rtl() {
-        reverse_non_gutter_tracks(&mut columns, final_col_counts);
-    }
 
     drop(grid_template_rows);
     drop(grid_template_columns);
@@ -306,7 +415,7 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
     determine_if_item_crosses_flexible_or_intrinsic_tracks(&mut items, &columns, &rows);
 
     // Determine if the grid has any baseline aligned items
-    let has_baseline_aligned_item = items.iter().any(|item| item.align_self == AlignSelf::BASELINE);
+    let has_baseline_aligned_item = items.iter().any(|item| item.participates_in_baseline_alignment());
 
     // Run track sizing algorithm for Inline axis
     track_sizing_algorithm(
@@ -329,6 +438,16 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
     let initial_column_sum = columns.iter().map(|track| track.base_size).sum::<f32>();
     inner_node_size.width = inner_node_size.width.or_else(|| initial_column_sum.into());
 
+    // If only the container's width has been requested then we can skip sizing the rows entirely (which avoids
+    // measuring the height of every item), as column sizing is not re-run when only computing the container's size.
+    // Note: the short-circuit above has already handled the case where the container's width is known.
+    if run_mode == RunMode::ComputeSize && inputs.axis == RequestedAxis::Horizontal {
+        let width = (initial_column_sum + content_box_inset.horizontal_axis_sum())
+            .maybe_clamp(min_size.width, max_size.width)
+            .max(padding_border_size.width);
+        return LayoutOutput::from_outer_size(Size { width, height: 0.0 });
+    }
+
     items.iter_mut().for_each(|item| item.grid_area_size_cache = None);
 
     // Run track sizing algorithm for Block axis
@@ -348,7 +467,6 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
         false, // TODO: Support baseline alignment in the vertical axis
     );
     let initial_row_sum = rows.iter().map(|track| track.base_size).sum::<f32>();
-    inner_node_size.height = inner_node_size.height.or_else(|| initial_row_sum.into());
 
     debug_log!("initial_column_sum", dbg:initial_column_sum);
     debug_log!(dbg: columns.iter().map(|track| track.base_size).collect::<Vec<_>>());
@@ -379,31 +497,9 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
         return LayoutOutput::from_outer_size(container_border_box);
     }
 
-    // 7. Resolve percentage track base sizes
-    // In the case of an indefinitely sized container these resolve to zero during the "Initialise Tracks" step
-    // and therefore need to be re-resolved here based on the content-sized content box of the container
-    if !available_grid_space.width.is_definite() {
-        for column in &mut columns {
-            let min: Option<f32> = column
-                .min_track_sizing_function
-                .resolved_percentage_size(container_content_box.width, |val, basis| tree.calc(val, basis));
-            let max: Option<f32> = column
-                .max_track_sizing_function
-                .resolved_percentage_size(container_content_box.width, |val, basis| tree.calc(val, basis));
-            column.base_size = column.base_size.maybe_clamp(min, max);
-        }
-    }
-    if !available_grid_space.height.is_definite() {
-        for row in &mut rows {
-            let min: Option<f32> = row
-                .min_track_sizing_function
-                .resolved_percentage_size(container_content_box.height, |val, basis| tree.calc(val, basis));
-            let max: Option<f32> = row
-                .max_track_sizing_function
-                .resolved_percentage_size(container_content_box.height, |val, basis| tree.calc(val, basis));
-            row.base_size = row.base_size.maybe_clamp(min, max);
-        }
-    }
+    // The container's size is now determined, so percentages resolve against its content box when re-running track sizing.
+    // This may be a no-op if the container's size was known upfront (in which case it already equals `inner_node_size`).
+    inner_node_size = container_content_box.map(Some);
 
     // Column sizing must be re-run (once) if:
     //   - The grid container's width was initially indefinite and there are any columns with percentage track sizing functions
@@ -414,12 +510,13 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
 
     let has_percentage_column = columns.iter().any(|track| track.uses_percentage());
     let has_percentage_row = rows.iter().any(|track| track.uses_percentage());
-    let parent_width_indefinite = !available_space.width.is_definite();
+    let parent_width_indefinite = outer_node_size.width.is_none();
     rerun_column_sizing = parent_width_indefinite && has_percentage_column;
 
     if !rerun_column_sizing {
+        // Note: every item must be visited (no short-circuiting) as the closure updates each item's caches
         intrinsic_column_contribution_changed =
-            items.iter_mut().filter(|item| item.crosses_intrinsic_column).any(|item| {
+            items.iter_mut().filter(|item| item.crosses_intrinsic_column).fold(false, |any_changed, item| {
                 let grid_area_size = item.grid_area_size(
                     AbstractAxis::Inline,
                     &columns,
@@ -439,7 +536,7 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
                 item.max_content_contribution_cache.width = None;
                 item.minimum_contribution_cache.width = None;
 
-                has_changed
+                any_changed | has_changed
             });
         rerun_column_sizing = intrinsic_column_contribution_changed;
     } else {
@@ -452,7 +549,23 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
         });
     }
 
+    // Row sizing must be re-run (once) if:
+    //   - The grid container's height was initially indefinite and there are any rows with percentage track sizing functions
+    //   - Column sizing was re-run and any grid item crossing an intrinsically sized track's min content contribution height has changed
+    // TODO: Only rerun sizing for tracks that actually require it rather than for all tracks if any need it.
+    let parent_height_indefinite = outer_node_size.height.is_none();
+    let mut rerun_row_sizing = parent_height_indefinite && has_percentage_row;
     let mut intrinsic_row_contribution_changed = false;
+
+    if rerun_row_sizing {
+        // Clear intrinsic height caches
+        items.iter_mut().for_each(|item| {
+            item.grid_area_size_cache = None;
+            item.min_content_contribution_cache.height = None;
+            item.max_content_contribution_cache.height = None;
+            item.minimum_contribution_cache.height = None;
+        });
+    }
 
     if rerun_column_sizing {
         // Re-run track sizing algorithm for Inline axis
@@ -472,18 +585,12 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
             has_baseline_aligned_item,
         );
 
-        // Row sizing must be re-run (once) if:
-        //   - The grid container's height was initially indefinite and there are any rows with percentage track sizing functions
-        //   - Any grid item crossing an intrinsically sized track's min content contribution height has changed
-        // TODO: Only rerun sizing for tracks that actually require it rather than for all tracks if any need it.
-        let mut rerun_row_sizing;
-
-        let parent_height_indefinite = !available_space.height.is_definite();
-        rerun_row_sizing = parent_height_indefinite && has_percentage_row;
-
+        // The column widths may have changed, so the items' intrinsic height contributions need to be recomputed
+        // (unless row sizing is being re-run anyway, in which case the caches have already been cleared).
         if !rerun_row_sizing {
+            // Note: every item must be visited (no short-circuiting) as the closure updates each item's caches
             intrinsic_row_contribution_changed =
-                items.iter_mut().filter(|item| item.crosses_intrinsic_column).any(|item| {
+                items.iter_mut().filter(|item| item.crosses_intrinsic_row).fold(false, |any_changed, item| {
                     let grid_area_size = item.grid_area_size(
                         AbstractAxis::Block,
                         &rows,
@@ -503,37 +610,29 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
                     item.max_content_contribution_cache.height = None;
                     item.minimum_contribution_cache.height = None;
 
-                    has_changed
+                    any_changed | has_changed
                 });
             rerun_row_sizing = intrinsic_row_contribution_changed;
-        } else {
-            items.iter_mut().for_each(|item| {
-                // Clear intrinsic height caches
-                item.grid_area_size_cache = None;
-                item.min_content_contribution_cache.height = None;
-                item.max_content_contribution_cache.height = None;
-                item.minimum_contribution_cache.height = None;
-            });
         }
+    }
 
-        if rerun_row_sizing {
-            // Re-run track sizing algorithm for Block axis
-            track_sizing_algorithm(
-                tree,
-                AbstractAxis::Block,
-                inner_min_size.get(AbstractAxis::Block),
-                inner_max_size.get(AbstractAxis::Block),
-                align_content,
-                justify_content,
-                available_grid_space,
-                inner_node_size,
-                &mut rows,
-                &mut columns,
-                &mut items,
-                |track: &GridTrack, _, _| Some(track.base_size),
-                false, // TODO: Support baseline alignment in the vertical axis
-            );
-        }
+    if rerun_row_sizing {
+        // Re-run track sizing algorithm for Block axis
+        track_sizing_algorithm(
+            tree,
+            AbstractAxis::Block,
+            inner_min_size.get(AbstractAxis::Block),
+            inner_max_size.get(AbstractAxis::Block),
+            align_content,
+            justify_content,
+            available_grid_space,
+            inner_node_size,
+            &mut rows,
+            &mut columns,
+            &mut items,
+            |track: &GridTrack, _, _| Some(track.base_size),
+            false, // TODO: Support baseline alignment in the vertical axis
+        );
     }
 
     if (intrinsic_column_contribution_changed && !has_percentage_column)
@@ -597,58 +696,71 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
     // 9. Size, Align, and Position Grid Items
 
     #[cfg_attr(not(feature = "content_size"), allow(unused_mut))]
-    let mut item_content_size_contribution = Size::ZERO;
-    #[cfg_attr(not(feature = "content_size"), allow(unused_mut, unused))]
-    let mut absolute_content_size = Size::ZERO;
+    let mut item_overflow_rect = Rect::ZERO;
 
-    // Sort items back into original order to allow them to be matched up with styles
-    items.sort_by_key(|item| item.source_order);
+    // Out-of-flow candidates in document order: direct out-of-flow children of the grid
+    // interleaved with candidates bubbled from in-flow children's subtrees. These are laid out
+    // by the out-of-flow positioning pass (`compute_oof_layout`), which runs after this algorithm.
+    let mut oof_candidates = OofCandidates::new();
 
     let container_alignment_styles = InBothAbsAxis { horizontal: justify_items, vertical: align_items };
 
     // Position in-flow children (stored in items vector)
     for (index, item) in items.iter_mut().enumerate() {
+        // Tracks are stored in logical order. In RTL the physical offsets are assigned
+        // right-to-left, so an item's physical left edge is derived from its logical end
+        // line and its physical right edge from its logical start line.
         let grid_area = Rect {
             top: rows[item.row_indexes.start as usize + 1].offset,
             bottom: rows[item.row_indexes.end as usize].offset,
-            left: columns[item.column_indexes.start as usize + 1].offset,
-            right: columns[item.column_indexes.end as usize].offset,
+            left: if direction.is_rtl() {
+                columns[item.column_indexes.end as usize - 1].offset
+            } else {
+                columns[item.column_indexes.start as usize + 1].offset
+            },
+            right: if direction.is_rtl() {
+                columns[item.column_indexes.start as usize].offset
+            } else {
+                columns[item.column_indexes.end as usize].offset
+            },
         };
         #[cfg_attr(not(feature = "content_size"), allow(unused_variables))]
-        let (content_size_contribution, y_position, height) = align_and_position_item(
+        let (overflow_contribution, y_position, height, baseline) = align_and_position_item(
             tree,
             item.node,
             index as u32,
             grid_area,
-            grid_area,
+            Size { width: grid_area.right - grid_area.left, height: grid_area.bottom - grid_area.top },
             container_alignment_styles,
             item.baseline_shim,
             direction,
             container_border_box.width,
             border,
+            #[cfg(feature = "content_size")]
+            is_scroll_container,
+            &mut item.oof_candidates,
         );
         item.y_position = y_position;
         item.height = height;
+        item.baseline = baseline;
 
         #[cfg(feature = "content_size")]
         {
-            item_content_size_contribution = item_content_size_contribution.f32_max(content_size_contribution);
+            item_overflow_rect = item_overflow_rect.union(overflow_contribution);
         }
     }
 
-    // Position hidden and absolutely positioned children. CSS Positioned
-    // Layout can use the content box, rather than this child's grid area, for
-    // its static-position rectangle.
-    let content_box = Rect {
-        top: content_box_inset.top,
-        right: container_border_box.width - content_box_inset.right,
-        bottom: container_border_box.height - content_box_inset.bottom,
-        left: content_box_inset.left,
-    };
+    // Position hidden and absolutely positioned children, merging in the candidates bubbled out
+    // of in-flow children's subtrees (`items` is sorted by `source_order`, i.e. child index)
     let mut order = items.len() as u32;
-    #[cfg(feature = "detailed_layout_info")]
+    let mut in_flow_items = items.iter_mut().peekable();
     let mut positioned_items = Vec::new();
     (0..tree.child_count(node)).for_each(|index| {
+        if let Some(item) = in_flow_items.next_if(|item| item.source_order as usize == index) {
+            oof_candidates.append(&mut item.oof_candidates);
+            return;
+        }
+
         let child = tree.get_child_id(node, index);
         let child_style = tree.get_grid_child_style(child);
 
@@ -668,256 +780,470 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
             return;
         }
 
-        // Position absolutely positioned child
-        if child_style.position() == Position::Absolute {
-            // Convert grid-col-{start/end} into Option's of indexes into the columns vector
-            // The Option is None if the style property is Auto and an unresolvable Span
-            let maybe_col_indexes = name_resolver
-                .resolve_column_names(&child_style.grid_column())
-                .into_origin_zero(final_col_counts.explicit)
-                .resolve_absolutely_positioned_grid_tracks()
-                .map(|maybe_grid_line| {
-                    maybe_grid_line
-                        .map(|line: OriginZeroLine| {
-                            if direction.is_rtl() {
-                                OriginZeroLine(final_col_counts.explicit as i16 - line.0)
-                            } else {
-                                line
-                            }
-                        })
-                        .and_then(|line| line.try_into_track_vec_index(final_col_counts))
-                });
-            let maybe_col_indexes = if direction.is_rtl() {
-                Line { start: maybe_col_indexes.end, end: maybe_col_indexes.start }
-            } else {
-                maybe_col_indexes
-            };
-            // Convert grid-row-{start/end} into Option's of indexes into the row vector
-            // The Option is None if the style property is Auto and an unresolvable Span
-            let maybe_row_indexes = name_resolver
-                .resolve_row_names(&child_style.grid_row())
-                .into_origin_zero(final_row_counts.explicit)
-                .resolve_absolutely_positioned_grid_tracks()
-                .map(|maybe_grid_line| {
-                    maybe_grid_line.and_then(|line: OriginZeroLine| line.try_into_track_vec_index(final_row_counts))
-                });
+        // Emit out-of-flow children as candidates for the out-of-flow positioning pass
+        // (`compute_oof_layout`), which lays out those for which this grid is the containing
+        // block after this algorithm has run (resolving their grid areas from the detailed grid
+        // info recorded below).
+        if child_style.position().is_out_of_flow() {
+            let position = child_style.position();
+            let item_direction = child_style.direction();
+            let justify_self = child_style.justify_self().unwrap_or(justify_items).resolve_self_relative(
+                item_direction,
+                direction,
+                true,
+            );
+            let align_self =
+                child_style.align_self().unwrap_or(align_items).resolve_self_relative(item_direction, direction, false);
 
-            // Content alignment (align-content/justify-content) may distribute free space before, between,
-            // or after tracks. Grid lines used by absolutely positioned items resolve to the edges of the
-            // tracks adjacent to the line rather than to the raw gutter offset:
-            //   - As a start edge, a line resolves to the start of the track that follows it
-            //   - As an end edge, a line resolves to the end of the track that precedes it
-            /// Resolve a grid line (by track vector index) used as a start edge to a position
-            fn line_as_start_edge(tracks: &[GridTrack], index: usize) -> f32 {
-                tracks.get(index + 1).unwrap_or(&tracks[index]).offset
-            }
-            /// Resolve a grid line (by track vector index) used as an end edge to a position
-            fn line_as_end_edge(tracks: &[GridTrack], index: usize) -> f32 {
-                if index == 0 {
-                    tracks.get(1).unwrap_or(&tracks[0]).offset
-                } else {
-                    tracks[index].offset
-                }
-            }
-
-            let grid_area = Rect {
-                top: maybe_row_indexes.start.map(|index| line_as_start_edge(&rows, index)).unwrap_or(border.top),
-                bottom: maybe_row_indexes
-                    .end
-                    .map(|index| line_as_end_edge(&rows, index))
-                    .unwrap_or(container_border_box.height - border.bottom - scrollbar_gutter.y),
-                left: maybe_col_indexes.start.map(|index| line_as_start_edge(&columns, index)).unwrap_or_else(|| {
-                    if direction.is_rtl() {
-                        border.left + scrollbar_gutter.x
-                    } else {
-                        border.left
-                    }
-                }),
-                right: maybe_col_indexes.end.map(|index| line_as_end_edge(&columns, index)).unwrap_or_else(|| {
-                    if direction.is_rtl() {
-                        container_border_box.width - border.right
-                    } else {
-                        container_border_box.width - border.right - scrollbar_gutter.x
-                    }
-                }),
-            };
-            #[cfg(feature = "detailed_layout_info")]
+            // The static-position rectangle: the grid area determined by the grid-placement
+            // properties when this grid is the child's containing block, and otherwise the
+            // grid's content box, as if the child were the sole grid item in a grid area
+            // coinciding with the grid's content edges (grid placement does not apply when the
+            // grid is not the containing block).
+            // https://www.w3.org/TR/css-grid-1/#static-position
+            let (grid_area, grid_area_auto) = resolve_static_position_grid_area(
+                &child_style, &name_resolver, final_row_counts, final_col_counts,
+                &rows, &columns, direction, border, scrollbar_gutter, container_border_box,
+            );
             positioned_items.push(DetailedGridPositionedItemInfo { node: child, grid_area });
+            let content_box = Rect {
+                left: content_box_inset.left,
+                right: container_border_box.width - content_box_inset.right,
+                top: content_box_inset.top,
+                bottom: container_border_box.height - content_box_inset.bottom,
+            };
             let static_position_area = tree.grid_child_static_position_area(
-                node,
-                child,
-                grid_area,
-                content_box,
-                Rect {
-                    left: maybe_col_indexes.start.is_none(),
-                    right: maybe_col_indexes.end.is_none(),
-                    top: maybe_row_indexes.start.is_none(),
-                    bottom: maybe_row_indexes.end.is_none(),
-                },
-                border,
-                container_border_box,
+                node, child, grid_area, content_box, grid_area_auto, border, container_border_box,
             );
             drop(child_style);
 
-            // TODO: Baseline alignment support for absolutely positioned items (should check if is actually specified)
-            #[cfg_attr(not(feature = "content_size"), allow(unused_variables))]
-            let (content_size_contribution, _, _) = align_and_position_item(
-                tree,
-                child,
+            oof_candidates.push(OofCandidate {
+                node: child,
                 order,
-                grid_area,
-                static_position_area,
-                container_alignment_styles,
-                0.0,
-                direction,
-                container_border_box.width,
-                border,
-            );
-            #[cfg(feature = "content_size")]
-            {
-                absolute_content_size = absolute_content_size.f32_max(content_size_contribution);
-            }
+                position,
+                static_position: Point {
+                    x: AxisStaticPosition::from_alignment(
+                        justify_self,
+                        Line { start: static_position_area.left, end: static_position_area.right },
+                        direction.is_rtl(),
+                    ),
+                    y: AxisStaticPosition::from_alignment(
+                        align_self,
+                        Line { start: static_position_area.top, end: static_position_area.bottom },
+                        false,
+                    ),
+                },
+            });
 
             order += 1;
         }
     });
 
-    // Set detailed grid information
-    #[cfg(feature = "detailed_layout_info")]
+    let absolute_position_inset = border
+        + Rect {
+            left: if direction.is_rtl() { scrollbar_gutter.x } else { 0.0 },
+            right: if direction.is_rtl() { 0.0 } else { scrollbar_gutter.x },
+            top: 0.0,
+            bottom: scrollbar_gutter.y,
+        };
+    let absolute_position_area = container_border_box - absolute_position_inset.sum_axes();
+    let absolute_position_offset = Point { x: absolute_position_inset.left, y: absolute_position_inset.top };
+    // Store the detailed grid info before the out-of-flow positioning pass so that the pass can
+    // resolve the grid areas of out-of-flow boxes whose containing block is this grid
+    let areas =
+        name_resolver.populate_detailed_line_resolvers(&mut detailed_row_line_names, &mut detailed_column_line_names);
     tree.set_detailed_grid_info(
         node,
         DetailedGridInfo {
-            rows: DetailedGridTracksInfo::from_grid_tracks_and_track_count(final_row_counts, rows),
-            columns: DetailedGridTracksInfo::from_grid_tracks_and_track_count(final_col_counts, columns),
+            rows: DetailedGridTracksInfo::from_grid_tracks_and_track_count(
+                final_row_counts,
+                rows,
+                detailed_row_line_names,
+            ),
+            columns: DetailedGridTracksInfo::from_grid_tracks_and_track_count(
+                final_col_counts,
+                columns,
+                detailed_column_line_names,
+            ),
             items: items.iter().map(DetailedGridItemsInfo::from_grid_item).collect(),
+            areas,
             positioned_items,
         },
     );
 
-    // If there are not items then return just the container size (no baseline)
+    let oof_positioning_area =
+        Some(OofPositioningArea { size: absolute_position_area, offset: absolute_position_offset });
+
+    // If there are no in-flow items then return the container size and the overflow (no baseline)
     if items.is_empty() {
-        return LayoutOutput::from_outer_size(container_border_box);
+        #[cfg(feature = "content_size")]
+        let mut output = {
+            let mut overflow_rect = item_overflow_rect;
+            if is_scroll_container {
+                overflow_rect.right += if direction.is_rtl() { padding.left } else { padding.right };
+                overflow_rect.bottom += padding.bottom;
+            }
+            LayoutOutput::from_sizes(container_border_box, overflow_rect)
+        };
+        #[cfg(not(feature = "content_size"))]
+        let mut output = LayoutOutput::from_outer_size(container_border_box);
+        output.oof_candidates = oof_candidates;
+        output.oof_positioning_area = oof_positioning_area;
+        return output;
     }
 
     // Determine the grid container baseline(s) (currently we only compute the first baseline)
-    let grid_container_baseline: f32 = {
-        // Sort items by row start position so that we can iterate items in groups which are in the same row
-        items.sort_by_key(|item| item.row_indexes.start);
-
+    // Layout containment suppresses the box's baseline for baseline-alignment purposes
+    let grid_container_baseline: Option<f32> = if contain.suppresses_baseline() {
+        None
+    } else {
         // Get the row index of the first row containing items
-        let first_row = items[0].row_indexes.start;
+        let first_row = items.iter().map(|item| item.row_indexes.start).min().unwrap();
 
-        // Create a slice of all of the items start in this row (taking advantage of the fact that we have just sorted the array)
-        let first_row_items = &items[0..].split(|item| item.row_indexes.start != first_row).next().unwrap();
-
-        // Check if any items in *this row* are baseline aligned
-        let row_has_baseline_item = first_row_items.iter().any(|item| item.align_self == AlignSelf::BASELINE);
-
-        let item = if row_has_baseline_item {
-            first_row_items.iter().find(|item| item.align_self == AlignSelf::BASELINE).unwrap()
+        // Check if any items in *this row* participate in baseline alignment
+        // (items with an auto block-axis margin do not participate: https://www.w3.org/TR/css-align-3/#baseline-align-self)
+        let mut first_row_items = items.iter().filter(|item| item.row_indexes.start == first_row);
+        let first_item = first_row_items.next().unwrap();
+        let item = if first_item.participates_in_baseline_alignment() {
+            first_item
         } else {
-            &first_row_items[0]
+            first_row_items.find(|item| item.participates_in_baseline_alignment()).unwrap_or(first_item)
         };
 
-        item.y_position + item.baseline.unwrap_or(item.height)
+        Some(item.y_position + item.baseline.unwrap_or(item.height))
     };
 
-    // The container's own padding at the end of the content is part of its scrollable
-    // overflow region, so it is included in the in-flow content size.
+    // A scroll container's own padding at the end of the content is part of its scrollable
+    // overflow region, so it is included in the in-flow overflow rect. Boxes that are not
+    // scroll containers do not extend their overflow region by their own padding.
     #[cfg(feature = "content_size")]
-    let content_size = {
-        let mut content_size = item_content_size_contribution;
-        content_size.width += if direction.is_rtl() { padding.left } else { padding.right };
-        content_size.height += padding.bottom;
-        content_size.f32_max(absolute_content_size)
+    let scrollable_overflow_rect = {
+        let mut overflow_rect = item_overflow_rect;
+        if is_scroll_container {
+            overflow_rect.right += if direction.is_rtl() { padding.left } else { padding.right };
+            overflow_rect.bottom += padding.bottom;
+        }
+        overflow_rect
     };
     #[cfg(not(feature = "content_size"))]
-    let content_size = item_content_size_contribution;
+    let scrollable_overflow_rect = item_overflow_rect;
 
-    LayoutOutput::from_sizes_and_baselines(
+    let mut output = LayoutOutput::from_sizes_and_baselines(
         container_border_box,
-        content_size,
-        Point { x: None, y: Some(grid_container_baseline) },
-    )
+        scrollable_overflow_rect,
+        Baselines::from_first(grid_container_baseline),
+    );
+    output.oof_candidates = oof_candidates;
+    output.oof_positioning_area = oof_positioning_area;
+    output
 }
 
-/// Reverses only non-gutter column tracks in-place while preserving line/gutter slots.
-fn reverse_non_gutter_tracks(tracks: &mut [GridTrack], track_counts: TrackCounts) {
-    // When the explicit grid has 0/1 tracks, visual RTL mirroring is entirely determined by implicit tracks.
-    // Reverse all non-gutter tracks in that case.
-    if track_counts.explicit <= 1 {
-        const MIN_TRACK_VEC_LEN_TO_REVERSE_COLUMNS: usize = 5;
-        if tracks.len() < MIN_TRACK_VEC_LEN_TO_REVERSE_COLUMNS {
-            return;
+/// Resolve the static-position rectangle (the grid area determined by the grid-placement
+/// properties) for an out-of-flow child of a positioned grid container.
+///
+/// Content alignment (align-content/justify-content) may distribute free space before, between,
+/// or after tracks. Grid lines used by absolutely positioned items resolve to the edges of the
+/// tracks adjacent to the line rather than to the raw gutter offset:
+///   - As a start edge, a line resolves to the start of the track that follows it
+///   - As an end edge, a line resolves to the end of the track that precedes it
+#[allow(clippy::too_many_arguments)]
+fn resolve_static_position_grid_area<S: CheapCloneStr>(
+    child_style: &impl GridItemStyle<CustomIdent = S>,
+    name_resolver: &NamedLineResolver<S>,
+    final_row_counts: TrackCounts,
+    final_col_counts: TrackCounts,
+    rows: &[GridTrack],
+    columns: &[GridTrack],
+    direction: Direction,
+    border: Rect<f32>,
+    scrollbar_gutter: Point<f32>,
+    container_border_box: Size<f32>,
+) -> (Rect<f32>, Rect<bool>) {
+    // Convert grid-col-{start/end} into Option's of indexes into the columns vector
+    // The Option is None if the style property is Auto and an unresolvable Span
+    let maybe_col_indexes = name_resolver
+        .resolve_column_names(&child_style.grid_column())
+        .into_origin_zero(final_col_counts.explicit)
+        .resolve_absolutely_positioned_grid_tracks()
+        .map(|maybe_grid_line| {
+            maybe_grid_line.and_then(|line: OriginZeroLine| line.try_into_track_vec_index(final_col_counts))
+        });
+    // Convert grid-row-{start/end} into Option's of indexes into the row vector
+    // The Option is None if the style property is Auto and an unresolvable Span
+    let maybe_row_indexes = name_resolver
+        .resolve_row_names(&child_style.grid_row())
+        .into_origin_zero(final_row_counts.explicit)
+        .resolve_absolutely_positioned_grid_tracks()
+        .map(|maybe_grid_line| {
+            maybe_grid_line.and_then(|line: OriginZeroLine| line.try_into_track_vec_index(final_row_counts))
+        });
+
+    /// Resolve a grid line (by track vector index) used as a start edge to a position
+    fn line_as_start_edge(tracks: &[GridTrack], index: usize) -> f32 {
+        tracks.get(index + 1).unwrap_or(&tracks[index]).offset
+    }
+    /// Resolve a grid line (by track vector index) used as an end edge to a position
+    fn line_as_end_edge(tracks: &[GridTrack], index: usize) -> f32 {
+        if index == 0 {
+            tracks.get(1).unwrap_or(&tracks[0]).offset
+        } else {
+            tracks[index].offset
         }
-        let mut left = 1;
-        let mut right = tracks.len() - 2;
-        while left < right {
-            tracks.swap(left, right);
-            left += 2;
-            right = right.saturating_sub(2);
+    }
+    // In RTL, tracks remain in logical order but physical offsets are assigned
+    // right-to-left: a line used as an inline-start edge resolves to the physical
+    // *right* edge of the track that follows it (its gutter's offset), and a line
+    // used as an inline-end edge resolves to the physical *left* edge (offset) of
+    // the track that precedes it.
+    /// Resolve a grid line used as an inline-start edge to a physical right x-position (RTL)
+    fn rtl_line_as_start_edge(tracks: &[GridTrack], index: usize) -> f32 {
+        if tracks.len() > index + 1 {
+            // The gutter's offset is the physical right edge of the track that follows the line
+            tracks[index].offset
+        } else if index == 0 {
+            tracks[0].offset
+        } else {
+            // No track follows the line: resolve to the line itself, which is the physical
+            // left edge of the track that precedes it (the trailing gutter is assigned its
+            // offset before any alignment offset is applied, so it cannot be used here)
+            tracks[index - 1].offset
         }
-        return;
+    }
+    /// Resolve a grid line used as an inline-end edge to a physical left x-position (RTL)
+    fn rtl_line_as_end_edge(tracks: &[GridTrack], index: usize) -> f32 {
+        if index == 0 {
+            tracks[0].offset
+        } else {
+            tracks[index - 1].offset
+        }
     }
 
-    let explicit_track_count = track_counts.explicit as usize;
-    if explicit_track_count < 2 {
-        return;
-    }
-
-    let mut left = track_counts.negative_implicit as usize;
-    let mut right = left + explicit_track_count - 1;
-    while left < right {
-        tracks.swap((2 * left) + 1, (2 * right) + 1);
-        left += 1;
-        right = right.saturating_sub(1);
-    }
-}
-
-/// Maps initialized column indexes to occupancy-matrix indexes for auto-fit collapsing in RTL.
-fn rtl_column_occupancy_index_for_initialization(column_index: usize, track_counts: TrackCounts) -> usize {
-    if track_counts.explicit <= 1 {
-        return track_counts.len() - column_index - 1;
-    }
-
-    let explicit_start = track_counts.negative_implicit as usize;
-    let explicit_end = explicit_start + track_counts.explicit as usize;
-    if (explicit_start..explicit_end).contains(&column_index) {
-        explicit_start + (explicit_end - column_index - 1)
+    // In RTL the item's physical left edge derives from its logical end line and its
+    // physical right edge from its logical start line.
+    let (grid_area_left, grid_area_right) = if direction.is_rtl() {
+        (
+            maybe_col_indexes
+                .end
+                .map(|index| rtl_line_as_end_edge(columns, index))
+                .unwrap_or(border.left + scrollbar_gutter.x),
+            maybe_col_indexes
+                .start
+                .map(|index| rtl_line_as_start_edge(columns, index))
+                .unwrap_or(container_border_box.width - border.right),
+        )
     } else {
-        column_index
-    }
+        (
+            maybe_col_indexes.start.map(|index| line_as_start_edge(columns, index)).unwrap_or(border.left),
+            maybe_col_indexes
+                .end
+                .map(|index| line_as_end_edge(columns, index))
+                .unwrap_or(container_border_box.width - border.right - scrollbar_gutter.x),
+        )
+    };
+
+    let area = Rect {
+        top: maybe_row_indexes.start.map(|index| line_as_start_edge(rows, index)).unwrap_or(border.top),
+        bottom: maybe_row_indexes
+            .end
+            .map(|index| line_as_end_edge(rows, index))
+            .unwrap_or(container_border_box.height - border.bottom - scrollbar_gutter.y),
+        left: grid_area_left,
+        right: grid_area_right,
+    };
+    let auto_edges = Rect {
+        left: maybe_col_indexes.start.is_none(),
+        right: maybe_col_indexes.end.is_none(),
+        top: maybe_row_indexes.start.is_none(),
+        bottom: maybe_row_indexes.end.is_none(),
+    };
+    (area, auto_edges)
 }
 
 /// Information from the computation of grid
 #[derive(Debug, Clone, PartialEq)]
-#[cfg(feature = "detailed_layout_info")]
-pub struct DetailedGridInfo {
+pub struct DetailedGridInfo<S: CheapCloneStr = DefaultCheapStr> {
     /// <https://drafts.csswg.org/css-grid-1/#grid-row>
-    pub rows: DetailedGridTracksInfo,
+    pub rows: DetailedGridTracksInfo<S>,
     /// <https://drafts.csswg.org/css-grid-1/#grid-column>
-    pub columns: DetailedGridTracksInfo,
+    pub columns: DetailedGridTracksInfo<S>,
     /// <https://drafts.csswg.org/css-grid-1/#grid-items>
     pub items: Vec<DetailedGridItemsInfo>,
-    /// The finalized containing rectangles for absolutely positioned grid
-    /// children, in the grid container's border-box coordinate space.
+    /// Finalized containing rectangles for positioned grid children.
     pub positioned_items: Vec<DetailedGridPositionedItemInfo>,
+    /// Grid area edge lookup used by the containing-block positioning pass.
+    areas: GridAreasMap<S>,
 }
 
-/// One absolutely positioned child's grid area, after grid-line resolution.
+/// A positioned grid child's resolved containing area.
 #[derive(Debug, Clone, PartialEq)]
-#[cfg(feature = "detailed_layout_info")]
 pub struct DetailedGridPositionedItemInfo {
-    /// The child whose absolute-positioning containing block is this area.
+    /// The positioned child.
     pub node: NodeId,
-    /// The grid area selected before absolute-positioned self-alignment.
+    /// The child's grid area in border-box coordinates.
     pub grid_area: Rect<f32>,
+}
+
+impl<S: CheapCloneStr> DetailedGridTracksInfo<S> {
+    /// Resolve an absolute placement in this axis to physical start and end coordinates
+    fn resolve_absolute_grid_axis(
+        &self,
+        placement: Line<GridPlacement<S>>,
+        areas: &GridAreasMap<S>,
+        axis: GridAreaAxis,
+        padding_start: f32,
+        padding_end: f32,
+        is_reversed: bool,
+    ) -> Line<f32> {
+        let track_counts = TrackCounts {
+            negative_implicit: self.negative_implicit_tracks,
+            explicit: self.explicit_tracks,
+            positive_implicit: self.positive_implicit_tracks,
+        };
+        let min_line = -(track_counts.negative_implicit as i16);
+        let max_line = (track_counts.explicit + track_counts.positive_implicit) as i16;
+        // Resolve the placement to a pair of (sorted) lines first, and only then treat lines
+        // that fall outside the grid as `auto`. A placement whose lines end up swapped (e.g.
+        // `grid-column: 3 / 1`, or a non-existent named line which resolves past the end of the
+        // explicit grid) is normalized before the out-of-grid check, so e.g. `foo / 3` on a
+        // 2-column grid resolves to the area between line 3 and the end padding edge.
+        let placement = self
+            .line_names
+            .resolve_line_names(&placement, areas, axis, self.explicit_tracks)
+            .into_origin_zero(self.explicit_tracks)
+            .resolve_absolutely_positioned_grid_tracks()
+            .map(|line| line.filter(|line| line.0 >= min_line && line.0 <= max_line))
+            .map(|line| line.and_then(|line| line.try_into_track_vec_index(track_counts).map(|index| index / 2)));
+        let start_position = placement
+            .start
+            .and_then(|line| {
+                (line < self.positions.len())
+                    .then(|| self.absolute_track_edge(line, true, is_reversed))
+                    .or_else(|| self.positions.last().map(|track| if is_reversed { track.start } else { track.end }))
+                    .or(self.empty_axis_line)
+            })
+            .unwrap_or(if is_reversed { padding_end } else { padding_start });
+        let end_position = placement
+            .end
+            .and_then(|line| {
+                line.checked_sub(1)
+                    .filter(|&line| line < self.positions.len())
+                    .map(|line| self.absolute_track_edge(line, false, is_reversed))
+                    .or_else(|| self.positions.first().map(|track| if is_reversed { track.end } else { track.start }))
+                    .or(self.empty_axis_line)
+            })
+            .unwrap_or(if is_reversed { padding_start } else { padding_end });
+
+        // An area whose lines all fall within a collapsed run is zero-sized and anchored at its
+        // logical start edge (as in Chrome; Gecko anchors it before the shared gutter instead).
+        if is_reversed {
+            Line { start: f32_min(start_position, end_position), end: start_position }
+        } else {
+            Line { start: start_position, end: f32_max(start_position, end_position) }
+        }
+    }
+
+    /// Resolve a track edge, excluding gutters that overlap across a collapsed track run.
+    fn absolute_track_edge(&self, index: usize, is_start: bool, is_reversed: bool) -> f32 {
+        let range_index = self.collapsed_tracks.partition_point(|range| range.end <= index);
+        let range = self.collapsed_tracks.get(range_index).filter(|range| range.contains(&index));
+        let track = range
+            .and_then(|range| {
+                let adjacent = if is_start { Some(range.end) } else { range.start.checked_sub(1) };
+                adjacent.and_then(|index| self.positions.get(index))
+            })
+            .unwrap_or(&self.positions[index]);
+        // Collapsed gutters overlap: a start edge follows the shared gutter, while an end
+        // edge precedes it.
+        if is_start != is_reversed {
+            track.start
+        } else {
+            track.end
+        }
+    }
+}
+
+impl<S: CheapCloneStr> DetailedGridInfo<S> {
+    /// Write the used row track sizes and line names to the passed writer in the resolved value
+    /// format of the `grid-template-rows` property
+    /// (see <https://www.w3.org/TR/css-grid-1/#resolved-track-list>)
+    /// Track sizes are divided by `zoom` (the container's effective CSS `zoom`, or `1.0`) to give unzoomed px.
+    pub fn write_grid_template_rows(&self, out: &mut impl core::fmt::Write, zoom: f32) -> core::fmt::Result {
+        self.rows.write_track_list(out, zoom)
+    }
+
+    /// Write the used column track sizes and line names to the passed writer in the resolved value
+    /// format of the `grid-template-columns` property
+    /// (see <https://www.w3.org/TR/css-grid-1/#resolved-track-list>)
+    /// Track sizes are divided by `zoom` (the container's effective CSS `zoom`, or `1.0`) to give unzoomed px.
+    pub fn write_grid_template_columns(&self, out: &mut impl core::fmt::Write, zoom: f32) -> core::fmt::Result {
+        self.columns.write_track_list(out, zoom)
+    }
+
+    /// Serialize the used row track sizes and line names in the resolved value format of the
+    /// `grid-template-rows` property (see <https://www.w3.org/TR/css-grid-1/#resolved-track-list>)
+    /// Track sizes are divided by `zoom` (the container's effective CSS `zoom`, or `1.0`) to give unzoomed px.
+    pub fn grid_template_rows(&self, zoom: f32) -> String {
+        self.rows.to_track_list_string(zoom)
+    }
+
+    /// Serialize the used column track sizes and line names in the resolved value format of the
+    /// `grid-template-columns` property (see <https://www.w3.org/TR/css-grid-1/#resolved-track-list>)
+    /// Track sizes are divided by `zoom` (the container's effective CSS `zoom`, or `1.0`) to give unzoomed px.
+    pub fn grid_template_columns(&self, zoom: f32) -> String {
+        self.columns.to_track_list_string(zoom)
+    }
+
+    /// Resolve the physical grid area for an absolutely positioned box from its grid placement.
+    /// The padding box and returned area use coordinates relative to the grid container's border box.
+    pub fn resolve_absolute_grid_area(
+        &self,
+        grid_row: Line<GridPlacement<S>>,
+        grid_column: Line<GridPlacement<S>>,
+        direction: Direction,
+        padding_box: Rect<f32>,
+    ) -> Rect<f32> {
+        let columns = self.columns.resolve_absolute_grid_axis(
+            grid_column,
+            &self.areas,
+            GridAreaAxis::Column,
+            padding_box.left,
+            padding_box.right,
+            direction.is_rtl(),
+        );
+        let rows = self.rows.resolve_absolute_grid_axis(
+            grid_row,
+            &self.areas,
+            GridAreaAxis::Row,
+            padding_box.top,
+            padding_box.bottom,
+            false,
+        );
+        Rect { left: columns.start, right: columns.end, top: rows.start, bottom: rows.end }
+    }
+
+    /// Compute the location and size of the grid area occupied by the item at `item_index` (an
+    /// index into [`DetailedGridInfo::items`]), relative to the grid container's border box.
+    ///
+    /// The edges resolve to the edges of the tracks bounding the item's grid area (a start line
+    /// resolves to the start of the track that follows it and an end line to the end of the track
+    /// that precedes it), so the area excludes any gutter or content-alignment spacing around it.
+    ///
+    /// Returns `None` if `item_index` is out of bounds.
+    pub fn item_grid_area(&self, item_index: usize) -> Option<(Point<f32>, Size<f32>)> {
+        let item = self.items.get(item_index)?;
+        let start_col = self.columns.positions[item.column_start as usize - 1];
+        let end_col = self.columns.positions[item.column_end as usize - 2];
+        let left = f32_min(start_col.start, end_col.start);
+        let right = f32_max(start_col.end, end_col.end);
+        let top = self.rows.positions[item.row_start as usize - 1].start;
+        let bottom = self.rows.positions[item.row_end as usize - 2].end;
+        Some((Point { x: left, y: top }, Size { width: right - left, height: bottom - top }))
+    }
 }
 
 /// Information from the computation of grids tracks
 #[derive(Debug, Clone, PartialEq)]
-#[cfg(feature = "detailed_layout_info")]
-pub struct DetailedGridTracksInfo {
+pub struct DetailedGridTracksInfo<S: CheapCloneStr = DefaultCheapStr> {
     /// Number of leading implicit grid tracks
     pub negative_implicit_tracks: u16,
     /// Number of explicit grid tracks
@@ -925,45 +1251,144 @@ pub struct DetailedGridTracksInfo {
     /// Number of trailing implicit grid tracks
     pub positive_implicit_tracks: u16,
 
-    /// Gutters between tracks
-    pub gutters: Vec<f32>,
-    /// The used size of the tracks
-    pub sizes: Vec<f32>,
+    /// The start and end position of each track relative to the grid container's border box.
+    /// These positions account for the container's border and padding, the `gap` property,
+    /// content alignment (`align-content`/`justify-content`), and collapsed tracks.
+    pub positions: Vec<Line<f32>>,
+
+    /// Sorted, disjoint ranges of collapsed `auto-fit` tracks (indices into `positions`), whose
+    /// adjacent gutters overlap when resolving absolute grid-area edges. Empty (and never
+    /// allocated) unless a track collapsed.
+    pub collapsed_tracks: Vec<Range<usize>>,
+
+    /// The position of the axis' single grid line relative to the grid container's border box
+    /// when the axis has no tracks (an empty grid still contains one grid line in each axis,
+    /// positioned by content alignment). `None` when the axis has tracks.
+    pub empty_axis_line: Option<f32>,
+
+    /// The names of each *explicit* grid line. Stored line `i` (0-indexed) bounds the start of
+    /// explicit track `i`; use [`DetailedGridTracksInfo::names_for_line`] or
+    /// [`DetailedGridTracksInfo::iter_line_names`] for indices relative to the full grid
+    /// (including implicit tracks). Empty if the grid has no named lines.
+    pub line_names: GridLineNames<S>,
 }
 
-#[cfg(feature = "detailed_layout_info")]
-impl DetailedGridTracksInfo {
-    /// Get the base_size of [`GridTrack`] with a kind [`types::GridTrackKind`]
-    #[inline(always)]
-    fn grid_track_base_size_of_kind(grid_tracks: &[GridTrack], kind: GridTrackKind) -> Vec<f32> {
-        grid_tracks
-            .iter()
-            .filter_map(|track| match track.kind == kind {
-                true => Some(track.base_size),
-                false => None,
-            })
-            .collect()
-    }
-
-    /// Get the sizes of the gutters
-    fn gutters_from_grid_track_layout(grid_tracks: &[GridTrack]) -> Vec<f32> {
-        DetailedGridTracksInfo::grid_track_base_size_of_kind(grid_tracks, GridTrackKind::Gutter)
-    }
-
-    /// Get the sizes of the tracks
-    fn sizes_from_grid_track_layout(grid_tracks: &[GridTrack]) -> Vec<f32> {
-        DetailedGridTracksInfo::grid_track_base_size_of_kind(grid_tracks, GridTrackKind::Track)
+impl<S: CheapCloneStr> DetailedGridTracksInfo<S> {
+    /// Get the start and end position of each track relative to the grid container's border box,
+    /// along with the index ranges of any runs of collapsed `auto-fit` tracks
+    fn positions_from_grid_track_layout(grid_tracks: &[GridTrack]) -> (Vec<Line<f32>>, Vec<Range<usize>>) {
+        let mut positions = Vec::with_capacity(grid_tracks.len() / 2);
+        let mut collapsed_tracks: Vec<Range<usize>> = Vec::new();
+        for track in grid_tracks.iter().filter(|track| track.kind == GridTrackKind::Track) {
+            if track.is_collapsed {
+                let index = positions.len();
+                match collapsed_tracks.last_mut() {
+                    Some(range) if range.end == index => range.end += 1,
+                    _ => collapsed_tracks.push(index..index + 1),
+                }
+            }
+            positions.push(Line { start: track.offset, end: track.offset + track.base_size });
+        }
+        (positions, collapsed_tracks)
     }
 
     /// Construct DetailedGridTracksInfo from TrackCounts and GridTracks
-    fn from_grid_tracks_and_track_count(track_count: TrackCounts, grid_tracks: Vec<GridTrack>) -> Self {
+    fn from_grid_tracks_and_track_count(
+        track_count: TrackCounts,
+        grid_tracks: Vec<GridTrack>,
+        line_names: GridLineNames<S>,
+    ) -> Self {
+        let (positions, collapsed_tracks) = DetailedGridTracksInfo::<S>::positions_from_grid_track_layout(&grid_tracks);
+        // An axis with no tracks consists of a single gutter whose offset is where the axis'
+        // single grid line was positioned by content alignment
+        let empty_axis_line = if positions.is_empty() { grid_tracks.first().map(|track| track.offset) } else { None };
         DetailedGridTracksInfo {
             negative_implicit_tracks: track_count.negative_implicit,
             explicit_tracks: track_count.explicit,
             positive_implicit_tracks: track_count.positive_implicit,
-            gutters: DetailedGridTracksInfo::gutters_from_grid_track_layout(&grid_tracks),
-            sizes: DetailedGridTracksInfo::sizes_from_grid_track_layout(&grid_tracks),
+            positions,
+            collapsed_tracks,
+            empty_axis_line,
+            line_names,
         }
+    }
+
+    /// The names of the grid line with the passed 0-indexed line index, where line `i` bounds
+    /// the start of track `i` of the full grid (including implicit tracks).
+    /// Returns an empty slice if the line has no names or the index is out of range.
+    pub fn names_for_line(&self, line_index: usize) -> &[S] {
+        match line_index.checked_sub(self.negative_implicit_tracks as usize) {
+            Some(stored_index) => self.line_names.line(stored_index),
+            None => &[],
+        }
+    }
+
+    /// Iterate over the name group (`&[S]`) of each grid line of the full grid (including
+    /// implicit tracks) in line order, yielding empty groups for unnamed (implicit) lines.
+    /// Yields nothing if the grid has no named lines.
+    pub fn iter_line_names(&self) -> GridLineNamesIter<'_, S> {
+        if self.line_names.is_empty() {
+            return self.line_names.iter();
+        }
+        let total_line_count = self.positions.len() + 1;
+        let leading_empty = self.negative_implicit_tracks as usize;
+        let trailing_empty = total_line_count.saturating_sub(leading_empty + self.line_names.line_count());
+        self.line_names.iter_padded(leading_empty, trailing_empty)
+    }
+
+    /// Write the used track sizes and line names of this axis to the passed writer in the
+    /// resolved value format of the `grid-template-rows`/`grid-template-columns` properties
+    /// (see <https://www.w3.org/TR/css-grid-1/#resolved-track-list>)
+    /// Track sizes are divided by `zoom` (the container's effective CSS `zoom`, or `1.0`) to give unzoomed px.
+    pub fn write_track_list(&self, out: &mut impl core::fmt::Write, zoom: f32) -> core::fmt::Result {
+        /// Write a bracketed line name group (e.g. `[foo bar]`)
+        fn write_line_names<S: CheapCloneStr>(out: &mut impl core::fmt::Write, names: &[S]) -> core::fmt::Result {
+            out.write_char('[')?;
+            for (i, name) in names.iter().enumerate() {
+                if i != 0 {
+                    out.write_char(' ')?;
+                }
+                out.write_str(name.as_ref())?;
+            }
+            out.write_char(']')
+        }
+
+        if self.positions.is_empty() {
+            return out.write_str("none");
+        }
+
+        let mut needs_space = false;
+        for (track_index, position) in self.positions.iter().enumerate() {
+            let names = self.names_for_line(track_index);
+            if !names.is_empty() {
+                if needs_space {
+                    out.write_char(' ')?;
+                }
+                write_line_names(out, names)?;
+                needs_space = true;
+            }
+            if needs_space {
+                out.write_char(' ')?;
+            }
+            write!(out, "{}px", (position.end - position.start) / zoom)?;
+            needs_space = true;
+        }
+        let trailing_names = self.names_for_line(self.positions.len());
+        if !trailing_names.is_empty() {
+            out.write_char(' ')?;
+            write_line_names(out, trailing_names)?;
+        }
+        Ok(())
+    }
+
+    /// Serialize the used track sizes and line names of this axis in the resolved value format of
+    /// the `grid-template-rows`/`grid-template-columns` properties
+    /// (see <https://www.w3.org/TR/css-grid-1/#resolved-track-list>)
+    /// Track sizes are divided by `zoom` (the container's effective CSS `zoom`, or `1.0`) to give unzoomed px.
+    pub fn to_track_list_string(&self, zoom: f32) -> String {
+        let mut out = String::new();
+        self.write_track_list(&mut out, zoom).expect("writing to a String cannot fail");
+        out
     }
 }
 
@@ -972,7 +1397,6 @@ impl DetailedGridTracksInfo {
 /// The values is 1-indexed grid line numbers bounding the area.
 /// This matches the Chrome and Firefox's format as of 2nd Jan 2024.
 #[derive(Debug, Clone, PartialEq)]
-#[cfg(feature = "detailed_layout_info")]
 pub struct DetailedGridItemsInfo {
     /// row-start with 1-indexed grid line numbers
     pub row_start: u16,
@@ -985,7 +1409,6 @@ pub struct DetailedGridItemsInfo {
 }
 
 /// Grid area information from the placement algorithm
-#[cfg(feature = "detailed_layout_info")]
 impl DetailedGridItemsInfo {
     /// Construct from GridItems
     #[inline(always)]

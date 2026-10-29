@@ -62,12 +62,12 @@ pub(in crate::layout) fn to_taffy_style(computed: &ComputedValues, font_size: f3
             height: dimension(computed.height, font_size),
         },
         min_size: Size {
-            width: dimension(computed.min_width, font_size),
-            height: dimension(computed.min_height, font_size),
+            width: size_limit(computed.min_width, font_size),
+            height: size_limit(computed.min_height, font_size),
         },
         max_size: Size {
-            width: dimension(computed.max_width, font_size),
-            height: dimension(computed.max_height, font_size),
+            width: size_limit(computed.max_width, font_size),
+            height: size_limit(computed.max_height, font_size),
         },
         aspect_ratio: computed.aspect_ratio.preferred_ratio(),
         size_containment: match computed.container_type {
@@ -134,29 +134,33 @@ pub(in crate::layout) fn to_taffy_style(computed: &ComputedValues, font_size: f3
         // grid can resolve it per item: a replaced item with a natural size
         // takes `start`, everything else still stretches. An explicit
         // `stretch` keeps stretching either way.
-        align_items: container_alignment(computed.align_items).map(|value| {
-            align_items(physical_flex_cross_alignment(
-                computed,
-                value,
-                computed.flex_direction,
-                flex_direction,
-                flex_flow,
-            ))
-        }),
+        align_items: container_alignment(computed.align_items)
+            .map(|value| {
+                align_items(physical_flex_cross_alignment(
+                    computed,
+                    value,
+                    computed.flex_direction,
+                    flex_direction,
+                    flex_flow,
+                ))
+            })
+            .unwrap_or(AlignItems::NORMAL),
         // `auto` on the self properties defers to the parent's items value,
         // which is taffy's `None`. A content-keyword size in that axis
         // additionally suppresses stretch (see `suppresses_stretch`).
         align_self: self_alignment(computed.align_self, computed.height),
-        justify_items: container_alignment(computed.justify_items).map(align_items),
+        justify_items: container_alignment(computed.justify_items)
+            .map(align_items)
+            .unwrap_or(AlignItems::NORMAL),
         justify_self: self_alignment(computed.justify_self, computed.width),
-        align_content: Some(align_content(physical_flex_cross_alignment(
+        align_content: align_content(physical_flex_cross_alignment(
             computed,
             computed.align_content,
             computed.flex_direction,
             flex_direction,
             flex_flow,
-        ))),
-        justify_content: Some(physical_flex_justify_content(computed, flex_flow)),
+        )),
+        justify_content: physical_flex_justify_content(computed, flex_flow),
         grid_template_columns: grid_template(&computed.grid_template_columns, font_size),
         grid_template_rows: grid_template(&computed.grid_template_rows, font_size),
         grid_auto_flow: grid_auto_flow(computed.grid_auto_flow),
@@ -667,7 +671,8 @@ pub(in crate::layout) fn reverse_self_alignment(
             // stays responsible for vertical writing modes.
             AlignItemsKeyword::SelfStart => AlignItemsKeyword::SelfEnd,
             AlignItemsKeyword::SelfEnd => AlignItemsKeyword::SelfStart,
-            AlignItemsKeyword::Center
+            AlignItemsKeyword::Normal
+            | AlignItemsKeyword::Center
             | AlignItemsKeyword::Baseline
             | AlignItemsKeyword::Stretch => alignment.keyword,
         };
@@ -744,6 +749,7 @@ pub(in crate::layout) fn suppresses_stretch(size: CssSize) -> bool {
 pub(in crate::layout) fn align_items(value: CssAlignment) -> AlignItems {
     AlignItems {
         keyword: match value {
+            CssAlignment::Normal => AlignItemsKeyword::Normal,
             CssAlignment::Start => AlignItemsKeyword::Start,
             CssAlignment::End => AlignItemsKeyword::End,
             // Taffy has no subject-writing-mode self edge. The narrow direct
@@ -756,12 +762,12 @@ pub(in crate::layout) fn align_items(value: CssAlignment) -> AlignItems {
             CssAlignment::Baseline => AlignItemsKeyword::Baseline,
             _ => AlignItemsKeyword::Stretch,
         },
-        safety: taffy::style::AlignmentSafety::Unsafe,
+        safety: taffy::style::AlignmentSafety::Default,
     }
 }
 
-/// `normal` behaves as an unset container alignment, which taffy models as
-/// `None`. Every other keyword, `stretch` included, is passed through.
+/// Preserve `normal` as the container default. Explicit keywords, including
+/// `stretch`, pass through without losing their authored meaning.
 fn container_alignment(value: CssAlignment) -> Option<CssAlignment> {
     (value != CssAlignment::Normal).then_some(value)
 }
@@ -769,6 +775,7 @@ fn container_alignment(value: CssAlignment) -> Option<CssAlignment> {
 pub(in crate::layout) fn align_content(value: CssAlignment) -> AlignContent {
     AlignContent {
         keyword: match value {
+            CssAlignment::Normal => AlignContentKeyword::Normal,
             CssAlignment::Start => AlignContentKeyword::Start,
             CssAlignment::End => AlignContentKeyword::End,
             CssAlignment::FlexStart => AlignContentKeyword::FlexStart,
@@ -779,7 +786,7 @@ pub(in crate::layout) fn align_content(value: CssAlignment) -> AlignContent {
             CssAlignment::SpaceEvenly => AlignContentKeyword::SpaceEvenly,
             _ => AlignContentKeyword::Stretch,
         },
-        safety: taffy::style::AlignmentSafety::Unsafe,
+        safety: taffy::style::AlignmentSafety::Default,
     }
 }
 
@@ -842,6 +849,24 @@ pub(in crate::layout) fn calc_slot(value: CssLengthPercentage, em: f32) -> *cons
     calc_tag(index)
 }
 
+/// Project a minimum/maximum size into Taffy's length-percentage-auto vocabulary.
+pub(in crate::layout) fn size_limit(size: CssSize, em: f32) -> taffy::LengthPercentageAuto {
+    use taffy::LengthPercentageAuto as Limit;
+    match size {
+        CssSize::Value(CssLengthPercentage::Percentage(value)) => Limit::percent(value),
+        CssSize::Value(value)
+            if matches!(
+                value,
+                CssLengthPercentage::Calc(_) | CssLengthPercentage::Math(_)
+            ) && value.has_percentage() =>
+        {
+            Limit::calc(calc_slot(value, em))
+        },
+        CssSize::Value(value) => Limit::length(absolute_length_percentage(value, em, 16.0, 0.0)),
+        _ => Limit::auto(),
+    }
+}
+
 pub(in crate::layout) fn dimension(size: CssSize, em: f32) -> Dimension {
     match size {
         CssSize::Value(value) => match value {
@@ -885,6 +910,26 @@ pub(in crate::layout) fn flex_basis(basis: CssFlexBasis, em: f32) -> TaffyFlexBa
         CssFlexBasis::MinContent | CssFlexBasis::MaxContent | CssFlexBasis::FitContent => {
             TaffyFlexBasis::auto()
         },
+    }
+}
+
+pub(in crate::layout) fn size_limit_with_basis(
+    size: CssSize,
+    em: f32,
+    basis: Option<f32>,
+) -> taffy::LengthPercentageAuto {
+    match (size, basis) {
+        (CssSize::Value(value), Some(basis))
+            if value.has_percentage() && !matches!(value, CssLengthPercentage::Percentage(_)) =>
+        {
+            taffy::LengthPercentageAuto::length(absolute_length_percentage(value, em, 16.0, basis))
+        },
+        (CssSize::Value(value), None)
+            if matches!(value, CssLengthPercentage::Math(_)) && value.has_percentage() =>
+        {
+            taffy::LengthPercentageAuto::auto()
+        },
+        (size, _) => size_limit(size, em),
     }
 }
 

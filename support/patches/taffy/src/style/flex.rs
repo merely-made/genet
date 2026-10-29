@@ -1,143 +1,6 @@
 //! Style types for Flexbox layout
-use super::{
-    AlignContent, AlignItems, AlignSelf, CompactLength, CoreStyle, Dimension, JustifyContent,
-    LengthPercentage, Style,
-};
+use super::{AlignContent, AlignItems, AlignSelf, CoreStyle, Dimension, JustifyContent, LengthPercentage, Style};
 use crate::geometry::Size;
-use crate::style_helpers::{FromLength, FromPercent, TaffyAuto, TaffyZero};
-#[cfg(feature = "parse")]
-use crate::util::parse::{CssParseResult, FromCss, Parser, Token, from_str_from_css};
-
-/// The used kind of a flex item's flex basis.
-///
-/// CSS `auto` uses a definite preferred main size before falling back to
-/// content sizing, whereas `content` bypasses that preferred-size fallback.
-/// A generic [`Dimension`] cannot retain that distinction because both values
-/// otherwise resolve to an absent definite length.
-#[derive(Copy, Clone, PartialEq, Debug)]
-#[repr(transparent)]
-pub struct FlexBasis(CompactLength);
-
-impl Default for FlexBasis {
-    fn default() -> Self {
-        Self::AUTO
-    }
-}
-
-impl FlexBasis {
-    /// Resolve a preferred main size when one is definite, otherwise use
-    /// content sizing.
-    pub const AUTO: Self = Self(CompactLength::AUTO);
-
-    /// Use content sizing without consulting the preferred main size.
-    pub const CONTENT: Self = Self(CompactLength::FLEX_BASIS_CONTENT);
-
-    /// Construct an automatic flex basis.
-    #[inline(always)]
-    pub const fn auto() -> Self {
-        Self::AUTO
-    }
-
-    /// Construct a content-sized flex basis.
-    #[inline(always)]
-    pub const fn content() -> Self {
-        Self::CONTENT
-    }
-
-    /// Returns true when this is a content-sized flex basis.
-    #[inline(always)]
-    pub fn is_content(self) -> bool {
-        self.0.tag() == CompactLength::FLEX_BASIS_CONTENT_TAG
-    }
-
-    /// Returns true when this is an automatic flex basis.
-    #[inline(always)]
-    pub fn is_auto(self) -> bool {
-        self.0.is_auto()
-    }
-
-    #[inline(always)]
-    pub(crate) fn into_dimension(self) -> Option<Dimension> {
-        if self.is_content() {
-            None
-        } else {
-            Some(Dimension(self.0))
-        }
-    }
-}
-
-impl TaffyAuto for FlexBasis {
-    const AUTO: Self = Self(CompactLength::AUTO);
-}
-
-impl TaffyZero for FlexBasis {
-    const ZERO: Self = Self(CompactLength::ZERO);
-}
-
-impl FromLength for FlexBasis {
-    fn from_length<Input: Into<f64> + Copy>(value: Input) -> Self {
-        Self(CompactLength::length(value.into() as f32))
-    }
-}
-
-impl FromPercent for FlexBasis {
-    fn from_percent<Input: Into<f64> + Copy>(value: Input) -> Self {
-        Self(CompactLength::percent(value.into() as f32))
-    }
-}
-
-impl From<Dimension> for FlexBasis {
-    fn from(value: Dimension) -> Self {
-        Self(value.0)
-    }
-}
-
-#[cfg(feature = "parse")]
-impl FromCss for FlexBasis {
-    fn from_css<'i>(parser: &mut Parser<'i, '_>) -> CssParseResult<'i, Self> {
-        if let Ok(dimension) = parser.try_parse(Dimension::from_css) {
-            return Ok(dimension.into());
-        }
-        match parser.next()?.clone() {
-            Token::Ident(ident) if ident == "content" => Ok(Self::CONTENT),
-            token => Err(parser.new_unexpected_token_error(token))?,
-        }
-    }
-}
-
-#[cfg(feature = "parse")]
-from_str_from_css!(FlexBasis);
-
-#[cfg(feature = "serde")]
-impl serde::Serialize for FlexBasis {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        self.0.serialize(serializer)
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<'de> serde::Deserialize<'de> for FlexBasis {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let value = CompactLength::deserialize(deserializer)?;
-        if matches!(
-            value.tag(),
-            CompactLength::LENGTH_TAG
-                | CompactLength::PERCENT_TAG
-                | CompactLength::AUTO_TAG
-                | CompactLength::FLEX_BASIS_CONTENT_TAG
-        ) {
-            Ok(Self(value))
-        } else {
-            Err(serde::de::Error::custom("Invalid flex basis tag"))
-        }
-    }
-}
 
 /// The set of styles required for a Flexbox container
 pub trait FlexboxContainerStyle: CoreStyle {
@@ -151,6 +14,15 @@ pub trait FlexboxContainerStyle: CoreStyle {
     fn flex_wrap(&self) -> FlexWrap {
         Style::<Self::CustomIdent>::DEFAULT.flex_wrap
     }
+    /// The minimum number of flex lines requested for a multi-line container. When items are
+    /// balanced ([`FlexWrap::Balance`] or [`FlexWrap::BalanceReverse`]) they are balanced into
+    /// at least this many lines. For any multi-line container, definite cross-axis available
+    /// space for measuring items is divided between this many lines.
+    #[cfg(feature = "flexbox_balance")]
+    #[inline(always)]
+    fn flex_line_count(&self) -> u16 {
+        Style::<Self::CustomIdent>::DEFAULT.flex_line_count
+    }
 
     /// How large should the gaps between items in a grid or flex container be?
     #[inline(always)]
@@ -162,26 +34,28 @@ pub trait FlexboxContainerStyle: CoreStyle {
 
     /// How should content contained within this item be aligned in the cross/block axis
     #[inline(always)]
-    fn align_content(&self) -> Option<AlignContent> {
+    fn align_content(&self) -> AlignContent {
         Style::<Self::CustomIdent>::DEFAULT.align_content
     }
     /// How this node's children aligned in the cross/block axis?
     #[inline(always)]
-    fn align_items(&self) -> Option<AlignItems> {
+    fn align_items(&self) -> AlignItems {
         Style::<Self::CustomIdent>::DEFAULT.align_items
     }
     /// How this node's children should be aligned in the inline axis
     #[inline(always)]
-    fn justify_content(&self) -> Option<JustifyContent> {
+    fn justify_content(&self) -> JustifyContent {
         Style::<Self::CustomIdent>::DEFAULT.justify_content
     }
 }
 
 /// The set of styles required for a Flexbox item (child of a Flexbox container)
 pub trait FlexboxItemStyle: CoreStyle {
+    /// CSS order used before flex item layout.
+    fn order(&self) -> i32 { 0 }
     /// Sets the initial main axis size of the item
     #[inline(always)]
-    fn flex_basis(&self) -> FlexBasis {
+    fn flex_basis(&self) -> Dimension {
         Style::<Self::CustomIdent>::DEFAULT.flex_basis
     }
     /// The relative rate at which this item grows when it is expanding to fill space
@@ -201,21 +75,10 @@ pub trait FlexboxItemStyle: CoreStyle {
     fn align_self(&self) -> Option<AlignSelf> {
         Style::<Self::CustomIdent>::DEFAULT.align_self
     }
-
-    /// The CSS `order` property. Flex items are laid out (and painted) in
-    /// ascending `order`, ties broken by document order ("order-modified
-    /// document order"). Defaults to 0.
-    ///
-    /// genet patch (flex `order`): this method does not exist upstream; the
-    /// flex algorithm stable-sorts items by it before line collection. Style
-    /// adapters that do not override it keep the default 0 (document order).
-    #[inline(always)]
-    fn order(&self) -> i32 {
-        0
-    }
 }
 
 use crate::geometry::AbsoluteAxis;
+use crate::tree::RequestedAxis;
 
 /// Controls whether flex items are forced onto one line or can wrap onto multiple lines.
 ///
@@ -232,14 +95,95 @@ pub enum FlexWrap {
     Wrap,
     /// Items will wrap in the opposite direction to this item's [`FlexDirection`]
     WrapReverse,
+    /// Items will wrap according to this item's [`FlexDirection`], and be balanced across
+    /// lines such that the largest line is as small as possible
+    ///
+    /// [Specification](https://drafts.csswg.org/css-flexbox-2/#balance-values)
+    #[cfg(feature = "flexbox_balance")]
+    Balance,
+    /// Items will wrap in the opposite direction to this item's [`FlexDirection`], and be
+    /// balanced across lines such that the largest line is as small as possible
+    ///
+    /// [Specification](https://drafts.csswg.org/css-flexbox-2/#balance-values)
+    #[cfg(feature = "flexbox_balance")]
+    BalanceReverse,
 }
 
-#[cfg(feature = "parse")]
+impl FlexWrap {
+    /// Is this a wrapping mode (any value other than [`FlexWrap::NoWrap`])?
+    #[inline]
+    pub(crate) fn is_multi_line(self) -> bool {
+        self != Self::NoWrap
+    }
+
+    /// Do lines stack in the opposite direction to the cross axis?
+    #[inline]
+    pub(crate) fn is_reverse(self) -> bool {
+        match self {
+            Self::WrapReverse => true,
+            #[cfg(feature = "flexbox_balance")]
+            Self::BalanceReverse => true,
+            _ => false,
+        }
+    }
+
+    /// Are items balanced across lines?
+    #[cfg(feature = "flexbox_balance")]
+    #[inline]
+    pub(crate) fn is_balance(self) -> bool {
+        matches!(self, Self::Balance | Self::BalanceReverse)
+    }
+}
+
+#[cfg(all(feature = "parse", not(feature = "flexbox_balance")))]
 crate::util::parse::impl_parse_for_keyword_enum!(FlexWrap,
     "nowrap" => NoWrap,
     "wrap" => Wrap,
     "wrap-reverse" => WrapReverse,
 );
+
+#[cfg(all(feature = "parse", feature = "flexbox_balance"))]
+impl crate::util::parse::FromCss for FlexWrap {
+    fn from_css<'i>(input: &mut crate::util::parse::Parser<'i, '_>) -> crate::util::parse::CssParseResult<'i, Self> {
+        let mut wrap: Option<Self> = None;
+        let mut balance = false;
+        let mut is_first = true;
+        loop {
+            let ident = if is_first {
+                input.expect_ident()?.clone()
+            } else {
+                match input.try_parse(|input| input.expect_ident().cloned()) {
+                    Ok(ident) => ident,
+                    Err(_) => break,
+                }
+            };
+            let is_valid = cssparser::match_ignore_ascii_case! { &ident,
+                "nowrap" => {
+                    if is_first {
+                        return Ok(Self::NoWrap);
+                    }
+                    false
+                },
+                "wrap" => wrap.replace(Self::Wrap).is_none(),
+                "wrap-reverse" => wrap.replace(Self::WrapReverse).is_none(),
+                "balance" => !core::mem::replace(&mut balance, true),
+                _ => false,
+            };
+            if !is_valid {
+                return Err(input.new_unexpected_token_error(crate::util::parse::Token::Ident(ident)));
+            }
+            is_first = false;
+        }
+        Ok(match (wrap, balance) {
+            (Some(Self::WrapReverse), true) => Self::BalanceReverse,
+            (_, true) => Self::Balance,
+            // At least one keyword is always parsed, so `wrap` must be `Some` if `balance` is false
+            (wrap, false) => wrap.unwrap_or(Self::NoWrap),
+        })
+    }
+}
+#[cfg(all(feature = "parse", feature = "flexbox_balance"))]
+crate::util::parse::from_str_from_css!(FlexWrap);
 
 /// The direction of the flexbox layout main axis.
 ///
@@ -301,6 +245,16 @@ impl FlexDirection {
         matches!(self, Self::RowReverse | Self::ColumnReverse)
     }
 
+    #[inline(always)]
+    /// Is the main axis the (single) axis that a size was requested for?
+    pub(crate) const fn main_axis_is_requested_axis(self, axis: RequestedAxis) -> bool {
+        match axis {
+            RequestedAxis::Horizontal => self.is_row(),
+            RequestedAxis::Vertical => self.is_column(),
+            RequestedAxis::Both => false,
+        }
+    }
+
     #[inline]
     /// The `AbsoluteAxis` that corresponds to the main axis
     pub(crate) const fn main_axis(self) -> AbsoluteAxis {
@@ -350,3 +304,6 @@ mod tests {
         }
     }
 }
+
+/// Flex basis uses the same sizing values as other dimensions.
+pub type FlexBasis = Dimension;

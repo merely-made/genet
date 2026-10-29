@@ -777,10 +777,10 @@ fn format_table_cell<Context, Source>(
     let saved = (style.size, style.min_size, style.max_size, style.box_sizing);
     style.box_sizing = BoxSizing::ContentBox;
     style.size.width = Dimension::length(request.content_inline_size);
-    style.min_size.width = Dimension::auto();
-    style.max_size.width = Dimension::auto();
-    style.min_size.height = Dimension::auto();
-    style.max_size.height = Dimension::auto();
+    style.min_size.width = LengthPercentageAuto::auto();
+    style.max_size.width = LengthPercentageAuto::auto();
+    style.min_size.height = LengthPercentageAuto::auto();
+    style.max_size.height = LengthPercentageAuto::auto();
     style.size.height = match request.pass {
         TableCellLayoutPass::Measure => Dimension::auto(),
         // The percentage pass supplies a used border-box block size; the
@@ -2585,10 +2585,10 @@ where
     if is_floor {
         if !has_own_content(dom, id) {
             if matches!(computed.min_width, CssSize::Auto) {
-                style.min_size.width = Dimension::length(width.max(0.0) + edge_x);
+                style.min_size.width = LengthPercentageAuto::length(width.max(0.0) + edge_x);
             }
             if matches!(computed.min_height, CssSize::Auto) {
-                style.min_size.height = Dimension::length(height.max(0.0) + edge_y);
+                style.min_size.height = LengthPercentageAuto::length(height.max(0.0) + edge_y);
             }
         }
     } else {

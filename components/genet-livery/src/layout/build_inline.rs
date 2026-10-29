@@ -384,8 +384,8 @@ where
         let style = self.tree.style_mut(cell_node);
         let saved = (style.size.width, style.min_size.width, style.max_size.width);
         style.size.width = Dimension::auto();
-        style.min_size.width = Dimension::auto();
-        style.max_size.width = Dimension::auto();
+        style.min_size.width = LengthPercentageAuto::auto();
+        style.max_size.width = LengthPercentageAuto::auto();
         let mut measure = |available| {
             for table in &nested_tables {
                 let width = match available {

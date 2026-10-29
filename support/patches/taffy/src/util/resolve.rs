@@ -33,7 +33,7 @@ impl MaybeResolve<Option<f32>, Option<f32>> for LengthPercentage {
             CompactLength::LENGTH_TAG => Some(self.0.value()),
             CompactLength::PERCENT_TAG => context.map(|dim| dim * self.0.value()),
             #[cfg(feature = "calc")]
-            _ if self.0.is_calc() => context.map(|dim| calc(self.0.calc_value(), dim)),
+            _ if self.0.is_plain_calc() => context.map(|dim| calc(self.0.calc_value(), dim)),
             _ => unreachable!(),
         }
     }
@@ -48,7 +48,7 @@ impl MaybeResolve<Option<f32>, Option<f32>> for LengthPercentageAuto {
             CompactLength::LENGTH_TAG => Some(self.0.value()),
             CompactLength::PERCENT_TAG => context.map(|dim| dim * self.0.value()),
             #[cfg(feature = "calc")]
-            _ if self.0.is_calc() => context.map(|dim| calc(self.0.calc_value(), dim)),
+            _ if self.0.is_plain_calc() => context.map(|dim| calc(self.0.calc_value(), dim)),
             _ => unreachable!(),
         }
     }
@@ -61,10 +61,15 @@ impl MaybeResolve<Option<f32>, Option<f32>> for Dimension {
     fn maybe_resolve(self, context: Option<f32>, calc: impl Fn(*const (), f32) -> f32) -> Option<f32> {
         match self.0.tag() {
             CompactLength::AUTO_TAG => None,
+            // The content keyword is only valid for flex-basis. In any other context it behaves as auto.
+            CompactLength::CONTENT_TAG => None,
             CompactLength::LENGTH_TAG => Some(self.0.value()),
             CompactLength::PERCENT_TAG => context.map(|dim| dim * self.0.value()),
             #[cfg(feature = "calc")]
-            _ if self.0.is_calc() => context.map(|dim| calc(self.0.calc_value(), dim)),
+            _ if self.0.is_plain_calc() => context.map(|dim| calc(self.0.calc_value(), dim)),
+            // Intrinsic sizing keywords cannot be resolved to a definite size out of context.
+            // Layout algorithms that support them must handle them explicitly.
+            _ if self.0.is_sizing_keyword() => None,
             _ => unreachable!(),
         }
     }
@@ -83,6 +88,7 @@ impl<T: MaybeResolve<Option<f32>, Option<f32>>> MaybeResolve<f32, Option<f32>> f
 // Generic MaybeResolve for Size
 impl<In, Out, T: MaybeResolve<In, Out>> MaybeResolve<Size<In>, Size<Out>> for Size<T> {
     /// Converts any `parent`-relative values for size into an absolute size
+    #[inline(always)]
     fn maybe_resolve(self, context: Size<In>, calc: impl Fn(*const (), f32) -> f32) -> Size<Out> {
         Size {
             width: self.width.maybe_resolve(context.width, &calc),
@@ -139,6 +145,7 @@ impl<In: Copy, Out: TaffyZero, T: ResolveOrZero<In, Out>> ResolveOrZero<Size<In>
 // Generic ResolveOrZero for resolving Rect against Option
 impl<Out: TaffyZero, T: ResolveOrZero<Option<f32>, Out>> ResolveOrZero<Option<f32>, Rect<Out>> for Rect<T> {
     /// Converts any `parent`-relative values for Rect into an absolute Rect
+    #[inline(always)]
     fn resolve_or_zero(self, context: Option<f32>, calc: impl Fn(*const (), f32) -> f32) -> Rect<Out> {
         Rect {
             left: self.left.resolve_or_zero(context, &calc),

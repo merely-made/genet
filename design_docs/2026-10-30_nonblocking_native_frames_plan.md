@@ -1,6 +1,6 @@
 # Nonblocking native frame qualification
 
-**Status (2026-10-30): in progress.** Native hosts need checked GPU frames
+**Status (2026-10-30): landed; bounded native Metal qualification complete.** Native hosts need checked GPU frames
 without making their UI thread wait for every surface's completion. Genet owns
 admission, quality attribution and device-loss cancellation; hosts retain their
 window scheduling and presentation policy.
@@ -97,3 +97,9 @@ establish another machine's throughput or a physical driver-reset guarantee.
 - 2026-10-30: an actual-loss control inside the publication callback exposed
   an idle-versus-active admission distinction. Final publication now holds a
   separate active interval, while unpolled idle acceptance remains cancellable.
+- 2026-10-30: Turnstone receives pending frames in its primary and lens paths,
+  pipelines the next demanded batch without an extra redraw turn and retains
+  staged capture waiters. Controlled palette, Arrange and document cadence
+  comparisons improve; resize, tear-out, lens input/capture and quiet paused
+  admission controls pass. The Arrange CPU geometry projection cost remains
+  separate from GPU completion, as does receiving newer supplier cohorts.

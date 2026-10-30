@@ -55,6 +55,8 @@ Netfetcher wire adoption (2026-10-14): [receiving plan](2026-10-14_netfetcher_wi
 
 - [Architecture reduction implementation plan, 2026-10-16](2026-10-16_architecture_reduction_plan.md): bounded task execution across the audited ownership lanes, with serialized memory-capped validation and preserved Forms acceptance boundaries.
 
+- [Nonblocking native frame qualification](2026-10-30_nonblocking_native_frames_plan.md): pending native batches preserve current-frame quality and device-loss admission while the host services input; Turnstone pane/tile measurements are receiving evidence.
+
 ## Current engine work (2026-09-07)
 
 Use the linked plan's current gate and dated receipts before implementing a

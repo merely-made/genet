@@ -103,3 +103,7 @@ establish another machine's throughput or a physical driver-reset guarantee.
   comparisons improve; resize, tear-out, lens input/capture and quiet paused
   admission controls pass. The Arrange CPU geometry projection cost remains
   separate from GPU completion, as does receiving newer supplier cohorts.
+- 2026-10-30: hosts sharing the Core also include native workshop windows
+  using checked drawing. The status-only busy hint exposes canceled work still
+  retiring after a host drops staging, without admitting another draw or
+  polling the GPU. Host scheduling remains responsible for fair window turns.

@@ -84,7 +84,9 @@ fn begin_after_retirement(core: &Arc<RenderCore>) -> NativeFrameSubmission {
 #[ignore = "actual GPU; execute the serialized native frame gate"]
 fn native_batch_stages_before_quality_completion_and_publishes_exact_pixels() {
     let core = core();
+    assert!(!core.native_frame_busy());
     let frame = core.try_begin_native_frame().unwrap();
+    assert!(core.native_frame_busy());
     let (texture, _) = draw(&frame, &scene());
     assert!(
         core.renderer.vello_curve_quality_status().unwrap().0 > 0,

@@ -244,6 +244,19 @@ pub struct NativeFrameSubmission {
     _submitting: LossOperation,
 }
 impl RenderCore {
+    /// Status-only scheduling hint for other hosts on this Core. Raster
+    /// admission remains authoritative; this does not acquire a drawing lease.
+    /// A terminal attribution refusal is reported by the checked draw itself.
+    pub fn native_frame_busy(&self) -> bool {
+        !matches!(
+            *self
+                .native_frames
+                .state
+                .lock()
+                .expect("native frames poisoned"),
+            State::Idle | State::Unavailable
+        )
+    }
     pub(super) fn rasterize_native_batch(
         &self,
         surface: u64,

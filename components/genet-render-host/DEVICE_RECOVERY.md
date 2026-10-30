@@ -78,6 +78,11 @@ returns `PendingNativeFrame<T>`; its `poll` only reads a completion channel.
 Only an `AcceptedNativeFrame<T>` can invoke the publication callback. Hosts
 must discard obsolete window, session, custody, size or generation staging.
 
+`native_frame_busy` provides a status-only scheduling hint, including canceled
+staging still draining on the worker. Checked admission remains authoritative.
+Hosts sharing a Core coordinate their window turns, including initial draws
+from child hosts using the synchronous checked API.
+
 One lazily started worker per shared Core observes current shader counters and
 all submission and worker-local error scopes. Acceptance requires completed
 scopes and zero outstanding counter bytes and buffers, within the original

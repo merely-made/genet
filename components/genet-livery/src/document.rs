@@ -281,17 +281,25 @@ pub fn rendered_generated_text<D: LayoutDom>(
         }
         ancestor = dom.parent(id);
     }
+    let (before, after) = visible_generated_text(styles, node);
+    (before.to_owned(), after.to_owned())
+}
+
+/// Borrow the pseudo-content visibility decision shared by single-node and
+/// batched queries. The caller has already checked display suppression and
+/// whether the owner is replaced.
+pub(crate) fn visible_generated_text<Id: Copy + Eq + Hash>(
+    styles: &StylePlane<Id>,
+    node: Id,
+) -> (&str, &str) {
     let visible_text = |pseudo| {
         if styles
             .generated_style(node, pseudo)
             .is_some_and(|style| style.visibility == livery::values::Visibility::Visible)
         {
-            styles
-                .generated_text(node, pseudo)
-                .unwrap_or_default()
-                .to_owned()
+            styles.generated_text(node, pseudo).unwrap_or_default()
         } else {
-            String::new()
+            ""
         }
     };
     (

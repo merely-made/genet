@@ -59,6 +59,67 @@ fn assert_fresh(
 }
 
 #[test]
+fn translated_geometry_matches_fresh_after_retained_motion() {
+    type Rect = (f32, f32, f32, f32);
+    type Row = (
+        String,
+        Option<Rect>,
+        Option<Rect>,
+        bool,
+        bool,
+        String,
+        String,
+    );
+    fn rows(document: &LiveryDocument<ScriptedDom>) -> Vec<Row> {
+        let layout = document.layout.as_ref().unwrap();
+        let scroll = HashMap::from([
+            (id(document, "stage"), (4.0, 6.0)),
+            (id(document, "a"), (2.0, 3.0)),
+        ]);
+        let mut rows = Vec::new();
+        crate::walk_translated_geometry(
+            document.dom(),
+            &layout.styles,
+            &layout.fragments,
+            &scroll,
+            |node, geometry| {
+                if let Some(name) =
+                    document
+                        .dom()
+                        .attribute(node, &Namespace::from(""), &LocalName::from("id"))
+                {
+                    rows.push((
+                        name.to_owned(),
+                        geometry.border_rect,
+                        geometry.content_rect,
+                        geometry.rendered,
+                        geometry.placement_visible,
+                        geometry.generated_text.0.to_owned(),
+                        geometry.generated_text.1.to_owned(),
+                    ));
+                }
+            },
+        );
+        rows
+    }
+    let extra = "#a::before { content:'before'; } #caption::after { content:'after'; }";
+    let mut retained = fixture(INITIAL_A, INITIAL_B, extra);
+    paint(&mut retained);
+    let generation = retained.layout_generation();
+    let moved = "transform: translate(50px, 30px); z-index: 3";
+    set_style(&mut retained, "a", moved);
+    paint(&mut retained);
+    assert_eq!(
+        retained.layout_generation(),
+        generation,
+        "exercise retained geometry"
+    );
+    let mut fresh = fixture(moved, INITIAL_B, extra);
+    paint(&mut fresh);
+    assert_eq!(rows(&retained), rows(&fresh));
+}
+
+#[test]
 fn retained_motion_reuses_labelled_boxes_and_reorders_paint_and_input() {
     let mut document = fixture(INITIAL_A, INITIAL_B, "");
     let initial = paint(&mut document);

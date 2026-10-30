@@ -8,9 +8,12 @@ use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
     ops::{Deref, DerefMut},
+    sync::{Arc, OnceLock},
 };
 
 mod counters;
+#[cfg(test)]
+mod used_color_tests;
 pub(crate) use counters::resolve as resolve_counters;
 
 use genet_document_resources::{
@@ -730,6 +733,9 @@ pub struct StylePlane<Id> {
     presentational_hint_diagnostics: HashMap<Id, Vec<PresentationalHintDiagnostic>>,
     legacy_descendant_alignment: HashMap<Id, LegacyDescendantAlignment>,
     color_context: ColorComputeContext,
+    // Derived numeric paint view. Every mutation gateway below invalidates it;
+    // clones share only this immutable view, never mutable computed styles.
+    used_colors: OnceLock<Arc<Self>>,
 }
 
 impl<Id> PartialEq for StylePlane<Id>
@@ -757,6 +763,7 @@ impl<Id> Default for StylePlane<Id> {
             presentational_hint_diagnostics: HashMap::new(),
             legacy_descendant_alignment: HashMap::new(),
             color_context: ColorComputeContext::default(),
+            used_colors: OnceLock::new(),
         }
     }
 }
@@ -977,31 +984,29 @@ where
         Some([r, g, b, a])
     }
 
-    /// Turn all color-bearing fields into numeric leaves for a paint or
-    /// animation consumer. The retained plane itself stays contextual so
+    /// Turn all color-bearing fields into numeric leaves for a paint
+    /// consumer, once per unchanged plane. The retained plane stays contextual so
     /// inheritance and CSSOM can still use the authored computed model.
-    pub(crate) fn with_used_colors(&self) -> Self
+    pub(crate) fn with_used_colors(&self) -> &Self
     where
         Id: Clone,
     {
-        let mut used = self.clone();
-        for values in used.values.values_mut() {
-            let context = self.used_color_context_for(values);
-            for &property in PropertyId::ALL {
-                let value = resolve_property_used_colors(values.get(property), context);
-                values
-                    .set(property, value)
-                    .expect("generated property read and write types agree");
-            }
-        }
-        for (values, _) in used.generated.values_mut() {
-            let context = self.used_color_context_for(values);
-            for &property in PropertyId::ALL {
-                let value = resolve_property_used_colors(values.get(property), context);
-                values.set(property, value).expect("matching property type");
-            }
-        }
-        used
+        self.used_colors
+            .get_or_init(|| {
+                let mut used = self.clone();
+                for values in used.values.values_mut() {
+                    values.resolve_used_colors_in_place(self.used_color_context_for(values));
+                }
+                for (values, _) in used.generated.values_mut() {
+                    values.resolve_used_colors_in_place(self.used_color_context_for(values));
+                }
+                Arc::new(used)
+            })
+            .as_ref()
+    }
+
+    fn invalidate_used_colors(&mut self) {
+        self.used_colors.take();
     }
 
     /// Resolve one tagged property for an animation endpoint. This is the
@@ -1154,6 +1159,7 @@ where
     }
 
     pub(crate) fn get_mut(&mut self, id: Id) -> Option<&mut ComputedValues> {
+        self.invalidate_used_colors();
         self.values.get_mut(&id)
     }
 
@@ -1163,6 +1169,7 @@ where
         id: Id,
         environment: livery::values::RelativeLengthEnvironment,
     ) -> bool {
+        self.invalidate_used_colors();
         self.values
             .get_mut(&id)
             .is_some_and(|computed| resolve_relative_lengths(computed, environment))
@@ -1176,6 +1183,7 @@ where
         text: &mut crate::TextSystem,
         viewport: ViewportSizes,
     ) {
+        self.invalidate_used_colors();
         for computed in self.values.values_mut() {
             let environment = livery::values::RelativeLengthEnvironment::viewport(viewport)
                 .with_vertical_writing(computed.writing_mode.is_vertical())
@@ -1211,6 +1219,7 @@ where
     }
 
     pub(crate) fn remove(&mut self, id: Id) {
+        self.invalidate_used_colors();
         self.generated.retain(|(owner, _), _| *owner != id);
         self.values.remove(&id);
         self.custom.remove(&id);
@@ -1219,10 +1228,21 @@ where
         self.legacy_descendant_alignment.remove(&id);
     }
 
-    pub(crate) fn retain(&mut self, mut keep: impl FnMut(Id) -> bool)
+    pub(crate) fn retain(&mut self, mut keep_id: impl FnMut(Id) -> bool)
     where
         Id: Copy,
     {
+        // A no-op incremental update still tests liveness. Preserve the view
+        // unless a removal actually occurs, clearing before the first write
+        // even if a later predicate call unwinds.
+        let used_colors = &mut self.used_colors;
+        let mut keep = |id| {
+            let retained = keep_id(id);
+            if !retained {
+                used_colors.take();
+            }
+            retained
+        };
         self.values.retain(|id, _| keep(*id));
         self.generated.retain(|(id, _), _| keep(*id));
         self.custom.retain(|id, _| keep(*id));
@@ -1591,6 +1611,7 @@ where
     P: PresentationalHintProvider<D::NodeId>,
 {
     crate::with_recursion_stack(move || {
+        plane.invalidate_used_colors();
         resolve_subtree_on_this_stack(
             selector_tree,
             style_set,

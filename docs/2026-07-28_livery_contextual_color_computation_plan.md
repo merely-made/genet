@@ -1,7 +1,8 @@
 # Livery contextual color computation plan
 
 **Date:** 2026-07-28
-**Status:** corrective F0 subplan. C0 through C3 are complete.
+**Status (2026-10-30):** C0 through C3 are complete; retained paint-view reuse
+is landed with source-owner qualification; native receiving is pending.
 
 **Parent:** `2026-07-24_livery_fullweb_cutover_and_servo_retirement_plan.md`
 
@@ -374,3 +375,49 @@ transition sample.
 
 The named selected WPT gates remain unmeasured. C3 is a retained-style and
 headed-paint receipt, not a WPT-conformance claim.
+
+## Retained paint-view reuse (2026-10-30)
+
+The contextual plane remains the authority for inheritance, CSSOM and animation.
+Painting currently clones that entire plane and sends every generated property
+through a tagged read/write conversion on every paint, including properties that
+contain no color. Repeated paints of unchanged retained UI pay that cost again.
+
+Livery's generated computed-value owner will resolve only color-bearing fields
+in place. Genet will retain a lazy immutable numeric view for each unchanged
+style plane. Ordinary plane clones may share that immutable view. Mutable style
+access, relative-length resolution, removal, retention, incremental cascade and
+generated-counter updates invalidate it before writing. Device changes already
+replace the retained plane and therefore its palette and scheme context. The
+view is bounded to its source plane's lifetime; hosts acquire no invalidation
+responsibility.
+
+**Done conditions:** repeated unchanged paint performs no plane clone or color
+materialization; all generated color owners match the former property-wise
+conversion; source expressions remain contextual; mutations, generated content,
+length changes and host palette/scheme changes reach the next paint; and retained
+paint, geometry, animation and CSSOM controls retain their assertions. Native
+consumer comparisons must retain source cohorts and report memory as well as
+cadence.
+
+### Findings
+
+- 2026-10-30: `StylePlane::with_used_colors` performs a full plane clone and a
+  `PropertyId::ALL` read/write walk for both element and generated styles.
+  `paint.rs` is its sole production caller. Tagged single-property conversion
+  remains separately necessary for animation endpoints and CSSOM.
+- 2026-10-30: used context depends on the retained device palette and each
+  element's scheme and foreground. In-place mutation gateways are owned by
+  `style.rs` and its counter resolver; device invalidation already replaces
+  the plane through `IncrementalStyle::update`.
+
+### Progress
+
+- 2026-10-30: adding deterministic repeat-work and freshness controls before
+  replacing the repeated conversion. Consumer scene planning is qualified in
+  `turnstone/design_docs/2026-10-30_retained_projection_plan.md`.
+
+- 2026-10-30: the generated color-only field walk and invalidated-on-write
+  numeric view pass the owner color, layout and paint suites. Unchanged clones
+  share the immutable view; no-op liveness checks preserve it. Native consumer
+  measurements and product controls remain receiving evidence.

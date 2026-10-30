@@ -57,6 +57,8 @@ Netfetcher wire adoption (2026-10-14): [receiving plan](2026-10-14_netfetcher_wi
 
 - [Nonblocking native frame qualification](2026-10-30_nonblocking_native_frames_plan.md): pending native batches preserve current-frame quality and device-loss admission while the host services input; Turnstone pane/tile measurements are receiving evidence.
 
+Used-color paint reuse (2026-10-30): the [contextual color plan](../docs/2026-07-28_livery_contextual_color_computation_plan.md#retained-paint-view-reuse-2026-10-30) preserves contextual source styles while sharing an invalidated-on-write numeric paint view and a generated color-only field walk.
+
 ## Current engine work (2026-09-07)
 
 Use the linked plan's current gate and dated receipts before implementing a

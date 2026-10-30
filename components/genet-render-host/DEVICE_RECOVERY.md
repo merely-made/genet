@@ -69,6 +69,40 @@ then zero pending counters and a valid render on the same healthy device.
 Browser current-frame shader-counter qualification also requires an async host
 seam and remains separate from the native completion guarantee.
 
+## Native pending frames
+
+Interactive native hosts can use `RenderCore::try_begin_native_frame` and
+`NativeFrameSubmission::rasterize` to encode a batch without waiting on their
+UI thread. These targets are staging resources. `seal` or `seal_with_wake`
+returns `PendingNativeFrame<T>`; its `poll` only reads a completion channel.
+Only an `AcceptedNativeFrame<T>` can invoke the publication callback. Hosts
+must discard obsolete window, session, custody, size or generation staging.
+
+`native_frame_busy` provides a status-only scheduling hint, including canceled
+staging still draining on the worker. Checked admission remains authoritative.
+Hosts sharing a Core coordinate their window turns, including initial draws
+from child hosts using the synchronous checked API.
+
+One lazily started worker per shared Core observes current shader counters and
+all submission and worker-local error scopes. Acceptance requires completed
+scopes and zero outstanding counter bytes and buffers, within the original
+five-second deadline. The first provider error is retained while its counters
+drain; an actual device-loss notice takes priority. Admission excludes another
+batch and ordinary checked raster calls until the batch retires. A healthy,
+fully drained provider refusal allows a subsequent batch on that same Core;
+an unprovable outcome refuses further batch attribution.
+
+The submission is confined to its submitting thread because native error
+scopes are thread-local. Active submission, worker GPU access and publication callbacks retain loss
+admission until their resources retire. Idle pending or accepted publication
+leases are canceled on loss, including when a host never polls again. Pending
+values hold no strong Core. Dropping one discards its staging immediately;
+the existing worker drains its qualification without a destructor GPU wait.
+Publication rechecks loss and expiry, while the host remains responsible for
+its composition and present operations. Existing checked raster callers keep
+the synchronous current-frame guarantee described above. The browser pending
+frame adapter remains a separate implementation.
+
 ## Browser controlled shared replacement R6
 
 The accepted browser R6 consumer uses Genet

@@ -107,7 +107,7 @@ default-members = ["ports/ortet"]
 # path, which genet-wpt absorbed. The platform compositor half of
 # servo-paint survives as components/genet-compositor. See
 # design_docs/2026-09-07_servo_cone_retirement_plan.md.
-exclude = [".cargo", "support/patches/regress-0.11.1"]
+exclude = [".cargo", "support/patches/regress-0.11.1", "support/patches/taffy"]
 
 [workspace.package]
 version = "0.2.0"
@@ -300,7 +300,7 @@ string_cache = "0.9"
 strum = { version = "0.28", features = ["derive"] }
 syn = { version = "2", default-features = false, features = ["clone-impls", "derive", "parsing"] }
 synstructure = "0.13"
-taffy = { version = "0.10.1", default-features = false, features = ["calc", "detailed_layout_info", "grid", "std"] }
+taffy = { version = "0.15.1", default-features = false, features = ["calc", "detailed_layout_info", "grid", "std"] }
 tendril = { version = "0.5", features = ["encoding_rs"] }
 time = { package = "time", version = "0.3", features = ["large-dates", "local-offset", "serde"] }
 tokio = "1"

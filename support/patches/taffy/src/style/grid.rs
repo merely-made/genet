@@ -1,7 +1,7 @@
 //! Style types for CSS Grid layout
 use super::{
-    AlignContent, AlignItems, AlignSelf, CheapCloneStr, CompactLength, CoreStyle, Dimension, JustifyContent,
-    LengthPercentage, LengthPercentageAuto, Style,
+    AlignContent, AlignContentKeyword, AlignItems, AlignSelf, CheapCloneStr, CompactLength, CoreStyle, Dimension,
+    JustifyContent, LengthPercentage, LengthPercentageAuto, Style,
 };
 use crate::compute::grid::{GridCoordinate, GridLine, OriginZeroLine, MAX_GRID_TRACKS};
 use crate::geometry::{AbsoluteAxis, AbstractAxis, Line, MinMax, Size};
@@ -99,6 +99,10 @@ pub trait GenericRepetition {
         self.tracks().len().min(u16::MAX as usize) as u16
     }
     /// Returns an iterator over the lines names
+    ///
+    /// Line name sets are positional: set `i` names the `i`th line of each repetition. The iterator
+    /// must yield either no line name sets at all (all lines are unnamed) or exactly
+    /// `track_count() + 1` of them (one set per line, including both edge lines).
     fn lines_names(&self) -> Self::TemplateLineNames<'_>;
 }
 
@@ -227,22 +231,22 @@ pub trait GridContainerStyle: CoreStyle {
 
     /// How should content contained within this item be aligned in the cross/block axis
     #[inline(always)]
-    fn align_content(&self) -> Option<AlignContent> {
+    fn align_content(&self) -> AlignContent {
         Style::<Self::CustomIdent>::DEFAULT.align_content
     }
     /// How should contained within this item be aligned in the main/inline axis
     #[inline(always)]
-    fn justify_content(&self) -> Option<JustifyContent> {
+    fn justify_content(&self) -> JustifyContent {
         Style::<Self::CustomIdent>::DEFAULT.justify_content
     }
     /// How this node's children aligned in the cross/block axis?
     #[inline(always)]
-    fn align_items(&self) -> Option<AlignItems> {
+    fn align_items(&self) -> AlignItems {
         Style::<Self::CustomIdent>::DEFAULT.align_items
     }
     /// How this node's children should be aligned in the inline axis
     #[inline(always)]
-    fn justify_items(&self) -> Option<AlignItems> {
+    fn justify_items(&self) -> AlignItems {
         Style::<Self::CustomIdent>::DEFAULT.justify_items
     }
 
@@ -256,17 +260,24 @@ pub trait GridContainerStyle: CoreStyle {
     }
 
     /// Get a grid container's align-content or justify-content alignment depending on the axis passed
+    /// (with `normal` resolved to `stretch`)
     #[inline(always)]
     fn grid_align_content(&self, axis: AbstractAxis) -> AlignContent {
-        match axis {
-            AbstractAxis::Inline => self.justify_content().unwrap_or(AlignContent::STRETCH),
-            AbstractAxis::Block => self.align_content().unwrap_or(AlignContent::STRETCH),
+        let alignment = match axis {
+            AbstractAxis::Inline => self.justify_content(),
+            AbstractAxis::Block => self.align_content(),
+        };
+        match alignment.keyword {
+            AlignContentKeyword::Normal => AlignContent::STRETCH,
+            _ => alignment,
         }
     }
 }
 
 /// The set of styles required for a CSS Grid item (child of a CSS Grid container)
 pub trait GridItemStyle: CoreStyle {
+    /// CSS order used before grid auto-placement.
+    fn order(&self) -> i32 { 0 }
     /// Defines which row in the grid the item should start and end at
     #[inline(always)]
     fn grid_row(&self) -> Line<GridPlacement<Self::CustomIdent>> {
@@ -533,9 +544,9 @@ impl<S: CheapCloneStr> GridPlacement<S> {
     pub fn into_origin_zero_placement_ignoring_named(&self, explicit_track_count: u16) -> OriginZeroGridPlacement {
         match self {
             Self::Auto => OriginZeroGridPlacement::Auto,
-            // Spans are clamped to the maximum track limit
-            // https://www.w3.org/TR/css-grid-1/#overlarge-grids
-            Self::Span(span) => OriginZeroGridPlacement::Span(min(*span, MAX_GRID_TRACKS)),
+            // Spans are clamped between 1 (a zero span is an invalid value which is treated as 1)
+            // and the maximum track limit (https://www.w3.org/TR/css-grid-1/#overlarge-grids)
+            Self::Span(span) => OriginZeroGridPlacement::Span((*span).clamp(1, MAX_GRID_TRACKS)),
             // Grid line zero is an invalid index, so it gets treated as Auto
             // See: https://developer.mozilla.org/en-US/docs/Web/CSS/grid-row-start#values
             Self::Line(line) => match line.as_i16() {
@@ -567,9 +578,9 @@ impl NonNamedGridPlacement {
     ) -> OriginZeroGridPlacement {
         match self {
             Self::Auto => OriginZeroGridPlacement::Auto,
-            // Spans are clamped to the maximum track limit
-            // https://www.w3.org/TR/css-grid-1/#overlarge-grids
-            Self::Span(span) => OriginZeroGridPlacement::Span(min(*span, MAX_GRID_TRACKS)),
+            // Spans are clamped between 1 (a zero span is an invalid value which is treated as 1)
+            // and the maximum track limit (https://www.w3.org/TR/css-grid-1/#overlarge-grids)
+            Self::Span(span) => OriginZeroGridPlacement::Span((*span).clamp(1, MAX_GRID_TRACKS)),
             // Grid line zero is an invalid index, so it gets treated as Auto
             // See: https://developer.mozilla.org/en-US/docs/Web/CSS/grid-row-start#values
             Self::Line(line) => match line.as_i16() {
@@ -765,7 +776,14 @@ impl From<LengthPercentageAuto> for MaxTrackSizingFunction {
 }
 impl From<Dimension> for MaxTrackSizingFunction {
     fn from(input: Dimension) -> Self {
-        Self(input.0)
+        // Dimension supports values that are not valid max track sizing functions.
+        // Map those to `auto`.
+        match input.0.tag() {
+            CompactLength::FIT_CONTENT_KEYWORD_TAG | CompactLength::STRETCH_TAG | CompactLength::CONTENT_TAG => {
+                Self::auto()
+            }
+            _ => Self(input.0),
+        }
     }
 }
 impl From<MinTrackSizingFunction> for MaxTrackSizingFunction {
@@ -913,6 +931,16 @@ impl MaxTrackSizingFunction {
         Self(CompactLength::calc(ptr))
     }
 
+    /// A `fit-content()` track sizing function whose limit is a `calc()` value. The value passed here is treated
+    /// as an opaque handle to the actual calc representation and may be a pointer, index, etc.
+    ///
+    /// The low 3 bits are used as a tag value and will be returned as 0.
+    #[inline]
+    #[cfg(feature = "calc")]
+    pub fn fit_content_calc(ptr: *const ()) -> Self {
+        Self(CompactLength::fit_content_calc(ptr))
+    }
+
     /// Create a LengthPercentageAuto from a raw `CompactLength`.
     /// # Safety
     /// CompactLength must represent a valid variant for LengthPercentageAuto
@@ -983,7 +1011,7 @@ impl MaxTrackSizingFunction {
             CompactLength::LENGTH_TAG => true,
             CompactLength::PERCENT_TAG => parent_size.is_some(),
             #[cfg(feature = "calc")]
-            _ if self.0.is_calc() => parent_size.is_some(),
+            _ if self.0.is_plain_calc() => parent_size.is_some(),
             _ => false,
         }
     }
@@ -1001,7 +1029,27 @@ impl MaxTrackSizingFunction {
             CompactLength::LENGTH_TAG => Some(self.0.value()),
             CompactLength::PERCENT_TAG => parent_size.map(|size| self.0.value() * size),
             #[cfg(feature = "calc")]
-            _ if self.0.is_calc() => parent_size.map(|size| calc_resolver(self.0.calc_value(), size)),
+            _ if self.0.is_plain_calc() => parent_size.map(|size| calc_resolver(self.0.calc_value(), size)),
+            _ => None,
+        }
+    }
+
+    /// Resolve the `fit-content()` limit of this track sizing function against the passed `parent_size`.
+    /// Returns `None` if this is not a `fit-content()` function, or if it has a percentage or `calc()`
+    /// argument and `parent_size` is indefinite.
+    #[inline(always)]
+    pub fn fit_content_limit(
+        self,
+        parent_size: Option<f32>,
+        calc_resolver: impl Fn(*const (), f32) -> f32,
+    ) -> Option<f32> {
+        #[cfg(not(feature = "calc"))]
+        let _ = &calc_resolver;
+        match self.0.tag() {
+            CompactLength::FIT_CONTENT_PX_TAG => Some(self.0.value()),
+            CompactLength::FIT_CONTENT_PERCENT_TAG => parent_size.map(|size| self.0.value() * size),
+            #[cfg(feature = "calc")]
+            _ if self.0.is_fit_content_calc() => parent_size.map(|size| calc_resolver(self.0.calc_value(), size)),
             _ => None,
         }
     }
@@ -1021,6 +1069,8 @@ impl MaxTrackSizingFunction {
         match self.0.tag() {
             CompactLength::FIT_CONTENT_PX_TAG => Some(self.0.value()),
             CompactLength::FIT_CONTENT_PERCENT_TAG => parent_size.map(|size| self.0.value() * size),
+            #[cfg(feature = "calc")]
+            _ if self.0.is_fit_content_calc() => parent_size.map(|size| calc_resolver(self.0.calc_value(), size)),
             _ => self.definite_value(parent_size, calc_resolver),
         }
     }
@@ -1040,6 +1090,86 @@ impl MaxTrackSizingFunction {
     #[inline(always)]
     pub fn uses_percentage(self) -> bool {
         self.0.uses_percentage()
+    }
+
+    /// Expand the compact representation into an [`ExpandedMaxTrackSizingFunction`] enum.
+    ///
+    /// This is useful when integrating with other libraries (e.g. for style inspection or
+    /// serialization) as it allows the value to be pattern-matched without having to work
+    /// with the raw [`CompactLength`] tagged-pointer representation directly.
+    pub fn expand(self) -> ExpandedMaxTrackSizingFunction {
+        match self.0.tag() {
+            CompactLength::LENGTH_TAG => ExpandedMaxTrackSizingFunction::Length(self.0.value()),
+            CompactLength::PERCENT_TAG => ExpandedMaxTrackSizingFunction::Percent(self.0.value()),
+            CompactLength::AUTO_TAG => ExpandedMaxTrackSizingFunction::Auto,
+            CompactLength::MIN_CONTENT_TAG => ExpandedMaxTrackSizingFunction::MinContent,
+            CompactLength::MAX_CONTENT_TAG => ExpandedMaxTrackSizingFunction::MaxContent,
+            CompactLength::FIT_CONTENT_PX_TAG => ExpandedMaxTrackSizingFunction::FitContentPx(self.0.value()),
+            CompactLength::FIT_CONTENT_PERCENT_TAG => ExpandedMaxTrackSizingFunction::FitContentPercent(self.0.value()),
+            #[cfg(feature = "calc")]
+            _ if self.0.is_fit_content_calc() => ExpandedMaxTrackSizingFunction::FitContentCalc(self.0.calc_value()),
+            CompactLength::FR_TAG => ExpandedMaxTrackSizingFunction::Fr(self.0.value()),
+            #[cfg(feature = "calc")]
+            _ if self.0.is_plain_calc() => ExpandedMaxTrackSizingFunction::Calc(self.0.calc_value()),
+            _ => unreachable!("MaxTrackSizingFunction contains a value with an invalid tag"),
+        }
+    }
+}
+
+/// The expanded, non-compact representation of a [`MaxTrackSizingFunction`].
+///
+/// Obtained via [`MaxTrackSizingFunction::expand`]. Can be converted back into a
+/// [`MaxTrackSizingFunction`] using the [`From`] implementation.
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub enum ExpandedMaxTrackSizingFunction {
+    /// An absolute length (see [`MaxTrackSizingFunction::length`])
+    Length(f32),
+    /// A percentage length (see [`MaxTrackSizingFunction::percent`])
+    Percent(f32),
+    /// The automatic keyword (see [`MaxTrackSizingFunction::auto`])
+    Auto,
+    /// The `min-content` keyword (see [`MaxTrackSizingFunction::min_content`])
+    MinContent,
+    /// The `max-content` keyword (see [`MaxTrackSizingFunction::max_content`])
+    MaxContent,
+    /// A `fit-content(...)` value with a length limit (see [`MaxTrackSizingFunction::fit_content_px`])
+    FitContentPx(f32),
+    /// A `fit-content(...)` value with a percentage limit (see [`MaxTrackSizingFunction::fit_content_percent`])
+    FitContentPercent(f32),
+    /// Track maximum size should be content sized under a max-content constraint, but not larger than
+    /// the `calc()` limit (an opaque handle to the calc representation)
+    #[cfg(feature = "calc")]
+    FitContentCalc(*const ()),
+    /// A fraction of the leftover space (see [`MaxTrackSizingFunction::fr`])
+    Fr(f32),
+    /// A `calc()` value (see [`MaxTrackSizingFunction::calc`]). The pointer is an opaque handle to
+    /// the calc representation, exactly as passed to the constructor.
+    #[cfg(feature = "calc")]
+    Calc(*const ()),
+}
+
+impl From<MaxTrackSizingFunction> for ExpandedMaxTrackSizingFunction {
+    fn from(value: MaxTrackSizingFunction) -> Self {
+        value.expand()
+    }
+}
+
+impl From<ExpandedMaxTrackSizingFunction> for MaxTrackSizingFunction {
+    fn from(value: ExpandedMaxTrackSizingFunction) -> Self {
+        match value {
+            ExpandedMaxTrackSizingFunction::Length(val) => Self::length(val),
+            ExpandedMaxTrackSizingFunction::Percent(val) => Self::percent(val),
+            ExpandedMaxTrackSizingFunction::Auto => Self::auto(),
+            ExpandedMaxTrackSizingFunction::MinContent => Self::min_content(),
+            ExpandedMaxTrackSizingFunction::MaxContent => Self::max_content(),
+            ExpandedMaxTrackSizingFunction::FitContentPx(val) => Self::fit_content_px(val),
+            ExpandedMaxTrackSizingFunction::FitContentPercent(val) => Self::fit_content_percent(val),
+            #[cfg(feature = "calc")]
+            ExpandedMaxTrackSizingFunction::FitContentCalc(ptr) => Self::fit_content_calc(ptr),
+            ExpandedMaxTrackSizingFunction::Fr(val) => Self::fr(val),
+            #[cfg(feature = "calc")]
+            ExpandedMaxTrackSizingFunction::Calc(ptr) => Self::calc(ptr),
+        }
     }
 }
 
@@ -1085,7 +1215,17 @@ impl From<LengthPercentageAuto> for MinTrackSizingFunction {
 }
 impl From<Dimension> for MinTrackSizingFunction {
     fn from(input: Dimension) -> Self {
-        Self(input.0)
+        // Dimension supports values that are not valid min track sizing functions.
+        // Map those to `auto`.
+        match input.0.tag() {
+            CompactLength::FIT_CONTENT_PX_TAG
+            | CompactLength::FIT_CONTENT_PERCENT_TAG
+            | CompactLength::FIT_CONTENT_KEYWORD_TAG
+            | CompactLength::STRETCH_TAG
+            | CompactLength::CONTENT_TAG => Self::auto(),
+            _ if input.0.is_fit_content_calc() => Self::auto(),
+            _ => Self(input.0),
+        }
     }
 }
 
@@ -1228,6 +1368,12 @@ impl MinTrackSizingFunction {
         self.0.is_auto()
     }
 
+    /// Returns true if the value is `Auto`, or is a percentage and `parent_size` is `None`
+    #[inline(always)]
+    pub fn behaves_as_auto(&self, parent_size: Option<f32>) -> bool {
+        self.0.is_auto() || (parent_size.is_none() && self.0.uses_percentage())
+    }
+
     /// Returns true if value is MinContent
     #[inline(always)]
     pub fn is_min_content(&self) -> bool {
@@ -1253,7 +1399,7 @@ impl MinTrackSizingFunction {
             CompactLength::LENGTH_TAG => Some(self.0.value()),
             CompactLength::PERCENT_TAG => parent_size.map(|size| self.0.value() * size),
             #[cfg(feature = "calc")]
-            _ if self.0.is_calc() => parent_size.map(|size| calc_resolver(self.0.calc_value(), size)),
+            _ if self.0.is_plain_calc() => parent_size.map(|size| calc_resolver(self.0.calc_value(), size)),
             _ => None,
         }
     }
@@ -1272,13 +1418,66 @@ impl MinTrackSizingFunction {
     /// Whether the track sizing functions depends on the size of the parent node
     #[inline(always)]
     pub fn uses_percentage(self) -> bool {
-        #[cfg(feature = "calc")]
-        {
-            matches!(self.0.tag(), CompactLength::PERCENT_TAG) || self.0.is_calc()
+        self.0.uses_percentage()
+    }
+
+    /// Expand the compact representation into an [`ExpandedMinTrackSizingFunction`] enum.
+    ///
+    /// This is useful when integrating with other libraries (e.g. for style inspection or
+    /// serialization) as it allows the value to be pattern-matched without having to work
+    /// with the raw [`CompactLength`] tagged-pointer representation directly.
+    pub fn expand(self) -> ExpandedMinTrackSizingFunction {
+        match self.0.tag() {
+            CompactLength::LENGTH_TAG => ExpandedMinTrackSizingFunction::Length(self.0.value()),
+            CompactLength::PERCENT_TAG => ExpandedMinTrackSizingFunction::Percent(self.0.value()),
+            CompactLength::AUTO_TAG => ExpandedMinTrackSizingFunction::Auto,
+            CompactLength::MIN_CONTENT_TAG => ExpandedMinTrackSizingFunction::MinContent,
+            CompactLength::MAX_CONTENT_TAG => ExpandedMinTrackSizingFunction::MaxContent,
+            #[cfg(feature = "calc")]
+            _ if self.0.is_plain_calc() => ExpandedMinTrackSizingFunction::Calc(self.0.calc_value()),
+            _ => unreachable!("MinTrackSizingFunction contains a value with an invalid tag"),
         }
-        #[cfg(not(feature = "calc"))]
-        {
-            matches!(self.0.tag(), CompactLength::PERCENT_TAG)
+    }
+}
+
+/// The expanded, non-compact representation of a [`MinTrackSizingFunction`].
+///
+/// Obtained via [`MinTrackSizingFunction::expand`]. Can be converted back into a
+/// [`MinTrackSizingFunction`] using the [`From`] implementation.
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub enum ExpandedMinTrackSizingFunction {
+    /// An absolute length (see [`MinTrackSizingFunction::length`])
+    Length(f32),
+    /// A percentage length (see [`MinTrackSizingFunction::percent`])
+    Percent(f32),
+    /// The automatic keyword (see [`MinTrackSizingFunction::auto`])
+    Auto,
+    /// The `min-content` keyword (see [`MinTrackSizingFunction::min_content`])
+    MinContent,
+    /// The `max-content` keyword (see [`MinTrackSizingFunction::max_content`])
+    MaxContent,
+    /// A `calc()` value (see [`MinTrackSizingFunction::calc`]). The pointer is an opaque handle to
+    /// the calc representation, exactly as passed to the constructor.
+    #[cfg(feature = "calc")]
+    Calc(*const ()),
+}
+
+impl From<MinTrackSizingFunction> for ExpandedMinTrackSizingFunction {
+    fn from(value: MinTrackSizingFunction) -> Self {
+        value.expand()
+    }
+}
+
+impl From<ExpandedMinTrackSizingFunction> for MinTrackSizingFunction {
+    fn from(value: ExpandedMinTrackSizingFunction) -> Self {
+        match value {
+            ExpandedMinTrackSizingFunction::Length(val) => Self::length(val),
+            ExpandedMinTrackSizingFunction::Percent(val) => Self::percent(val),
+            ExpandedMinTrackSizingFunction::Auto => Self::auto(),
+            ExpandedMinTrackSizingFunction::MinContent => Self::min_content(),
+            ExpandedMinTrackSizingFunction::MaxContent => Self::max_content(),
+            #[cfg(feature = "calc")]
+            ExpandedMinTrackSizingFunction::Calc(ptr) => Self::calc(ptr),
         }
     }
 }
@@ -1298,8 +1497,12 @@ impl TrackSizingFunction {
         self.max
     }
     /// Determine whether at least one of the components ("min" and "max") are fixed sizing function
+    ///
+    /// A fixed sizing function is a `<length-percentage>`, which includes `calc()` values (and so
+    /// `min()`, `max()` and `clamp()`) such as `minmax(min(100%, 300px), 1fr)`.
+    /// <https://www.w3.org/TR/css-grid-1/#fixed-sizing-function>
     pub fn has_fixed_component(&self) -> bool {
-        self.min.0.is_length_or_percentage() || self.max.0.is_length_or_percentage()
+        self.min.0.is_length_percentage_or_calc() || self.max.0.is_length_percentage_or_calc()
     }
 }
 impl TaffyAuto for TrackSizingFunction {
@@ -1448,6 +1651,10 @@ pub struct GridTemplateRepetition<S: CheapCloneStr> {
     /// The tracks to repeat
     pub tracks: Vec<TrackSizingFunction>,
     /// The line names for the repeated tracks
+    ///
+    /// Line name sets are positional: set `i` names the `i`th line of each repetition. This must
+    /// either be empty (all lines are unnamed) or contain exactly `tracks.len() + 1` sets (one set
+    /// per line, including both edge lines; sets may be empty). Other lengths panic during layout.
     pub line_names: Vec<Vec<S>>,
 }
 
@@ -1607,16 +1814,14 @@ impl<S: CheapCloneStr, Track: FromCss + Debug> FromCss for GridTemplateTracks<S,
             })
         }
 
+        // Line name groups are positional (group `i` names line `i`), so a group is pushed for
+        // every line, empty when the line has no `[...]` in the source
         let mut tracks = Self::default();
-        if let Ok(line_names) = try_parse_line_names(parser) {
-            tracks.line_names.push(line_names);
-        }
+        tracks.line_names.push(try_parse_line_names(parser).unwrap_or_default());
 
         while !parser.is_exhausted() {
             tracks.tracks.push(Track::from_css(parser)?);
-            if let Ok(line_names) = try_parse_line_names(parser) {
-                tracks.line_names.push(line_names);
-            }
+            tracks.line_names.push(try_parse_line_names(parser).unwrap_or_default());
         }
 
         if tracks.tracks.is_empty() {
@@ -1697,5 +1902,83 @@ mod tests {
             line_names: Vec::new(),
         };
         assert_eq!((&repetition).track_count(), u16::MAX);
+    }
+}
+
+#[cfg(test)]
+mod expand_tests {
+    use super::*;
+
+    #[test]
+    fn max_track_sizing_function_round_trips() {
+        let cases = [
+            MaxTrackSizingFunction::length(12.0),
+            MaxTrackSizingFunction::percent(0.5),
+            MaxTrackSizingFunction::auto(),
+            MaxTrackSizingFunction::min_content(),
+            MaxTrackSizingFunction::max_content(),
+            MaxTrackSizingFunction::fit_content_px(30.0),
+            MaxTrackSizingFunction::fit_content_percent(0.75),
+            MaxTrackSizingFunction::fr(2.0),
+        ];
+        for value in cases {
+            assert_eq!(MaxTrackSizingFunction::from(value.expand()), value);
+            assert_eq!(ExpandedMaxTrackSizingFunction::from(value), value.expand());
+        }
+        assert_eq!(MaxTrackSizingFunction::fr(2.0).expand(), ExpandedMaxTrackSizingFunction::Fr(2.0));
+        assert_eq!(
+            MaxTrackSizingFunction::fit_content_px(30.0).expand(),
+            ExpandedMaxTrackSizingFunction::FitContentPx(30.0)
+        );
+    }
+
+    #[test]
+    fn min_track_sizing_function_round_trips() {
+        let cases = [
+            MinTrackSizingFunction::length(12.0),
+            MinTrackSizingFunction::percent(0.5),
+            MinTrackSizingFunction::auto(),
+            MinTrackSizingFunction::min_content(),
+            MinTrackSizingFunction::max_content(),
+        ];
+        for value in cases {
+            assert_eq!(MinTrackSizingFunction::from(value.expand()), value);
+            assert_eq!(ExpandedMinTrackSizingFunction::from(value), value.expand());
+        }
+        assert_eq!(MinTrackSizingFunction::max_content().expand(), ExpandedMinTrackSizingFunction::MaxContent);
+    }
+
+    #[cfg(feature = "calc")]
+    #[test]
+    fn track_sizing_function_calc_round_trips() {
+        #[allow(dead_code)]
+        #[repr(align(8))]
+        struct Aligned(u64);
+        static HANDLE: Aligned = Aligned(0);
+        let handle = &HANDLE as *const Aligned as *const ();
+
+        assert_eq!(MaxTrackSizingFunction::calc(handle).expand(), ExpandedMaxTrackSizingFunction::Calc(handle));
+        assert_eq!(
+            MaxTrackSizingFunction::fit_content_calc(handle).expand(),
+            ExpandedMaxTrackSizingFunction::FitContentCalc(handle)
+        );
+        assert_eq!(
+            MaxTrackSizingFunction::from(ExpandedMaxTrackSizingFunction::FitContentCalc(handle)),
+            MaxTrackSizingFunction::fit_content_calc(handle)
+        );
+        assert_eq!(
+            MaxTrackSizingFunction::fit_content(LengthPercentage::calc(handle)),
+            MaxTrackSizingFunction::fit_content_calc(handle)
+        );
+        assert_eq!(
+            MinTrackSizingFunction::from(MaxTrackSizingFunction::fit_content_calc(handle)),
+            MinTrackSizingFunction::AUTO
+        );
+        assert_eq!(MinTrackSizingFunction::from(Dimension::fit_content_calc(handle)), MinTrackSizingFunction::AUTO);
+        assert_eq!(
+            MaxTrackSizingFunction::from(ExpandedMaxTrackSizingFunction::Calc(handle)),
+            MaxTrackSizingFunction::calc(handle)
+        );
+        assert_eq!(MinTrackSizingFunction::calc(handle).expand(), ExpandedMinTrackSizingFunction::Calc(handle));
     }
 }

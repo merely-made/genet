@@ -426,3 +426,23 @@ fn native_batch_ignored_raster_error_still_refuses_the_whole_batch() {
         _ => panic!("ignored raster refusal allowed a partially valid batch to publish"),
     }
 }
+
+#[test]
+#[ignore = "actual GPU; execute the serialized native frame gate"]
+fn native_batch_loss_waits_for_active_publication_to_retire() {
+    let core = core();
+    let frame = core.try_begin_native_frame().unwrap();
+    let staging = draw(&frame, &scene());
+    let mut pending = frame.seal(staging);
+    let accepted = collect(&mut pending).unwrap();
+    let result = accepted.publish(|staging| {
+        actual_loss(&core);
+        assert!(
+            core.loss_notice().is_none(),
+            "loss escaped active publication"
+        );
+        drop(staging);
+    });
+    assert!(matches!(result, Err(RasterizeFailure::DeviceLost(_))));
+    assert!(core.loss_notice().is_some());
+}

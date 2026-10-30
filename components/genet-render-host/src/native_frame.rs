@@ -505,10 +505,18 @@ pub struct AcceptedNativeFrame<T> {
 }
 impl<T> AcceptedNativeFrame<T> {
     pub fn publish<R>(mut self, publish: impl FnOnce(T) -> R) -> Result<R, RasterizeFailure> {
-        self.qualification
+        let core = self
+            .qualification
             .as_ref()
             .expect("native frame already published")
             .check()?;
+        // Publication may access GPU resources. Cancellation may release an
+        // idle lease, but recovery must await this active callback interval.
+        let _publishing = core
+            .loss
+            .begin_operation()
+            .map_err(RasterizeFailure::DeviceLost)?;
+        drop(core);
         let result = publish(self.value.take().expect("native frame value"));
         self.qualification.as_ref().unwrap().check()?;
         Ok(result)

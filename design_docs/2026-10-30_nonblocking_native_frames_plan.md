@@ -94,3 +94,6 @@ establish another machine's throughput or a physical driver-reset guarantee.
   collection pass the owner regression suite, including actual shader refusal,
   scope errors, cancellation and loss during submission, completion and final
   publication. Turnstone receiving and matched measurements remain in progress.
+- 2026-10-30: an actual-loss control inside the publication callback exposed
+  an idle-versus-active admission distinction. Final publication now holds a
+  separate active interval, while unpolled idle acceptance remains cancellable.

@@ -88,7 +88,7 @@ fully drained provider refusal allows a subsequent batch on that same Core;
 an unprovable outcome refuses further batch attribution.
 
 The submission is confined to its submitting thread because native error
-scopes are thread-local. Active submission and worker GPU access retain loss
+scopes are thread-local. Active submission, worker GPU access and publication callbacks retain loss
 admission until their resources retire. Idle pending or accepted publication
 leases are canceled on loss, including when a host never polls again. Pending
 values hold no strong Core. Dropping one discards its staging immediately;

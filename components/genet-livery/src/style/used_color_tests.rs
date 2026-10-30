@@ -102,11 +102,14 @@ fn used_view_preserves_contextual_source_and_shared_clones_refresh_independently
 #[test]
 fn removal_and_retention_drop_cached_elements_and_generated_content() {
     let mut plane = colored_plane();
-    let view = plane.with_used_colors() as *const _;
+    plane.with_used_colors();
+    // Keep the old allocation alive: an address-only check could accidentally
+    // pass if a discarded view was rebuilt at the allocator's same address.
+    let view = plane.used_colors.get().unwrap().clone();
     plane.retain(|_| true);
-    assert_eq!(
-        view,
-        plane.with_used_colors() as *const _,
+    plane.with_used_colors();
+    assert!(
+        Arc::ptr_eq(&view, plane.used_colors.get().unwrap()),
         "no-op liveness checks retain the view"
     );
     assert_eq!(

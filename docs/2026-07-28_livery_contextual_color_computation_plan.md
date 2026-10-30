@@ -2,7 +2,8 @@
 
 **Date:** 2026-07-28
 **Status (2026-10-30):** C0 through C3 are complete; retained paint-view reuse
-is landed with source-owner qualification; native receiving is pending.
+is landed with source-owner qualification. Native receiving is tracked in
+`turnstone/design_docs/2026-10-30_retained_projection_plan.md`.
 
 **Parent:** `2026-07-24_livery_fullweb_cutover_and_servo_retirement_plan.md`
 

@@ -136,7 +136,7 @@ accesskit_windows = "0.35.1"
 accesskit_macos = "0.27.1"
 accesskit_unix = "0.24.0"
 app_units = "0.7"
-arboard = { git = "https://github.com/mark-ik/arboard.git", branch = "custom-formats" }
+arboard = "3.7"
 argon2 = { version = "0.5", features = ["alloc"] }
 arrayvec = "0.7"
 async-tungstenite = { version = "0.34", features = ["tokio-rustls-webpki-roots"] }

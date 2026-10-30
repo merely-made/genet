@@ -21,9 +21,11 @@
 //! Backends: [`SystemClipboard`] (arboard: text, html, image, and file/uri
 //! lists) and an in-memory [`MemoryClipboard`] for tests and headless hosts.
 //! arboard holds one primary representation per write and cannot carry arbitrary
-//! custom MIME types; simultaneous text+image and `Mime::Custom` (the audio and
-//! app-format lane) are the per-platform backend's follow-on, tracked in the
-//! capability plan's P3.
+//! custom MIME types, so the system backend reports a custom format as
+//! [`Unsupported`](ClipboardError::Unsupported). Custom formats on the OS
+//! clipboard (the audio and app-format lane) are meant to arrive as a capability
+//! through the family's capability door, over arboard used as a library, not a
+//! fork (Mark, 2026-10-30).
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -209,6 +211,8 @@ pub enum ClipboardError {
     Empty,
     /// The backend failed for another reason.
     Backend(String),
+    /// This backend cannot carry the requested representation.
+    Unsupported(String),
 }
 
 impl fmt::Display for ClipboardError {
@@ -217,6 +221,7 @@ impl fmt::Display for ClipboardError {
             Self::Unavailable(why) => write!(f, "clipboard unavailable: {why}"),
             Self::Empty => f.write_str("clipboard holds nothing to read"),
             Self::Backend(why) => write!(f, "clipboard error: {why}"),
+            Self::Unsupported(what) => write!(f, "clipboard cannot carry {what}"),
         }
     }
 }

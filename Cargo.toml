@@ -209,7 +209,7 @@ image = { version = "0.25", default-features = false, features = ["rayon", "bmp"
 imsz = "0.4"
 indexmap = { version = "2.14.0", features = ["std"] }
 inventory = { version = "0.3.24" }
-ipc-channel = "0.22"
+ipc-channel = "0.23.1"
 itertools = "0.14"
 js = { package = "mozjs", version = "=0.15.14", default-features = false, features = ["libz-sys", "intl"] }
 keyboard-types = { version = "0.8.3", features = ["serde", "webdriver"] }
@@ -480,15 +480,6 @@ genet-taffy = { path = "support/patches/taffy" }
 # git here, which the local `[patch]` redirect in `.cargo/config.toml` could
 # not layer on). Fork provenance: docs/2026-05-20_genet_script_engine_plan.md
 # and G1 in docs/2026-06-11_gc_arena_dom_plan.md.
-# ipc-channel: in-process fork, vendored at support/patches/ipc-channel (like
-# taffy + gpu-allocator). Servo's multiprocess IPC transport is vestigial in
-# genet's single-process embedding (pelt; and mere's library use), so the fork
-# defaults to ipc-channel's built-in force-inprocess backend and makes the OS deps
-# optional. That drops the windows 0.61 dependency, whose loose <=0.62 range
-# otherwise let gpu-allocator latch onto 0.61.3 while wgpu-hal forces 0.62, breaking
-# the dx12 suballocator in any build that compiles the dx12 backend (meerkat, via
-# scrying). Vendored, not a git fork, since the change is manifest-only.
-ipc-channel = { path = "support/patches/ipc-channel" }
 # Genet's own render-host tests must use the same qualified native shader
 # family as application roots. Cargo root patches are not inherited by
 # consumers: each application must restate all three rows at this revision.

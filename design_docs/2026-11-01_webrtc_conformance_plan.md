@@ -1,10 +1,11 @@
 # WebRTC conformance and shared transport evaluation
 
-**Status (2026-11-01): E0/E1a qualified; E1b/E2 implementation in progress; E3 open.** Current-source
-ownership and vendored WPT reviewed; six native API/SDP probes pass and the
-three independent dependency graphs are recorded.
-The Genet binding and native receiving adapter are being qualified. No shipping
-application-carrier replacement or headed browser interoperability is claimed.
+**Status (2026-11-01): E0/E1a qualified; native Genet data-channel intake
+qualified; application-carrier cutover, broader E2 acceptance and E3 remain open.**
+The native receiving path is checked on both engines against selected unmodified
+WPT and direct encrypted data transfer. Ortet's scripted host compiles with the
+capability. Headed Chrome/Firefox, browser-guest, discovery/relay and media
+acceptance remain separate gates.
 
 **Brief:** Mark asked to evaluate webrtc-rs against the existing stack, inspect
 Murm for duplication and dependency direction, and place the implementation
@@ -34,13 +35,13 @@ Mere/Turnstone -> Murm application carrier -> admitted application session
 ```
 
 Arrows denote dependencies or a supplied capability, not network direction.
-The reusable provider can live as a separate leaf in Murm's independent `wire/`
+The reusable provider lives as a separate leaf in Murm's independent `wire/`
 workspace. It must not depend on Genet, `murm`, `mere-transport`, Personae,
 Notochord, Luggage, storage, the radio root, or Graphshell. Separate package
 selection must keep HTTP/QUIC and RTC dependencies independent. A crate name
 and a universal transport trait are not prerequisites for this evaluation.
 
-The E1a implementation now lives in `murm/wire/crates/rtc` (`murm-rtc`): a
+The provider implementation lives in `murm/wire/crates/rtc` (`murm-rtc`): a
 shared protocol API plus an optional caller-owned UDP adapter. Genet's host
 binding now consumes this exact Git supplier through `components/genet-webrtc`;
 the application carrier has not changed. Host-only candidate
@@ -169,14 +170,42 @@ interfaces/tests such as `webrtc-stats`, encoded transforms and media capture.
 
 ## Findings (2026-11-01)
 
-- `components/script-runtime-api/lib.rs` installs WebSocket and WebGL host
-  surfaces, but no WebRTC surface. `components/genet-scripted/host.rs` currently
-  has no RTC capability. Adding an external crate alone exposes no JS API.
-  The real receiving integration is the runtime capability plus
-  `ports/genet-wpt/src/{harness.rs,net.rs,testharness.rs}` and Ortet's
-  `ports/ortet/src/webgl.rs` document-options setup. The WPT host already
-  installs a deferred WebSocket handler there; that is a delivery pattern,
-  not a sufficient RTC interface definition.
+- `components/script-runtime-api/webrtc.rs` and its bootstrap now install
+  Window RTC objects over a per-realm host factory. The runtime contract carries
+  no socket or protocol implementation; `components/genet-webrtc` depends on
+  that contract and the immutable independent `murm-rtc` Git supplier.
+  `genet-scripted` takes the capability before parser scripts and pumps it on
+  host turns. WPT's default `webrtc` feature and Ortet's scripted native route
+  install the real adapter. Ortet's `--rtc-bind` selects a concrete host address;
+  the initial address is loopback. A generic runtime without a host rejects
+  peer construction with `NotSupportedError`.
+- The selected constructor/candidate/channel files now complete on both engines
+  with unchanged assertion identities. Remaining failures in that selection are
+  the audio/video cases, which require E3's capture and RTP surface. Exact case
+  maps, compiler/lock/binary/source identities, failed attempts and gate commands
+  are kept in the [receipt file](archive_docs/receipts/2026-11-01_webrtc_conformance_plan_receipts.md).
+  This diagnostic source selection does not represent all WebRTC WPT.
+- Genet enforces stream-ID uniqueness and the ignored/non-negotiated ID rule.
+  Its web-visible SCTP Connected procedure waits for initial stream-ID
+  assignment. UTF-8 string limits are checked in the native host, avoiding
+  temporary JS byte arrays for large labels/protocols; USV conversion preserves
+  valid pairs and repairs lone surrogates. Local candidate metadata is retained
+  when cloned and omitted from the signaled candidate dictionary.
+- Native ownership is independent of VM collection: discarded realms revoke
+  factories and peer handles, stale callbacks check active document ownership,
+  retained wrappers close before an outgoing host cell is reused, and snapshots
+  with active peers refuse. Resource ceilings and the polling
+  interval are caller settings. JS event delivery uses retained per-realm hooks
+  and checkpoints microtasks after each observation. SDP operations run as tasks,
+  with signaling events before promise completion. Revisioned observations cannot
+  overwrite a newer command result; description getters preserve slot aliases.
+- The first native route gathers host candidates. Relay-only construction owns
+  no socket and registers no direct candidate; changing route policy after
+  construction refuses with `NotSupportedError`. ICE server configuration is
+  retained, but discovery/allocation is not yet driven. Custom certificates,
+  complete media/IDL, and full stats and transport event qualification remain
+  open. `bufferedAmount` currently reflects the core's outstanding send bytes;
+  exact web-visible timing and send-buffer saturation need their own coverage.
 - `components/media/webrtc/{lib.rs,thread.rs,datachannel.rs}` is the inherited
   controller/backend contract. It spawns its own thread, configures one STUN
   server and a bundle policy, and lacks the full current peer-connection
@@ -234,59 +263,17 @@ interfaces/tests such as `webrtc-stats`, encoded transforms and media capture.
 
 ## Progress
 
-- 2026-11-01: Mark accepted continuing with RTC after E0. E1a implements the
-  independent provider and an explicitly driven native host route; candidate
-  discovery/relay expansion and the receiving consumer migrations remain E1b.
-
-- 2026-11-01: E0 complete. Working Rust 1.99.1 on Windows passes all six
-  independent native probes: current/pending SDP, local rollback and a fresh
-  offer, invalid options and closed-peer refusal, str0m's own negotiation,
-  and cross-engine data-channel SDP offer/answer in each direction.
-  `murm/testing/webrtc-evaluation/receipts/native-tests.json` records exact
-  source/lock/binary hashes and the passing cases. The dependency report freezes
-  independent graphs; `existing-carrier-crypto.txt` verifies the current native
-  carrier's transitive AWS-LC edge. Native tests used both cores in one process
-  and exchanged no network packets. No MSRV execution, WPT pass count, headed
-  interop, TURN, media, provider migration or runtime dependency change is
-  claimed. E1-E3 retain the implementation and acceptance gates above.
-
-- 2026-11-01: E1a real packet tests found a release defect that the E0 SDP
-  probes could not reveal: rtc 0.21.1 discards accepted DCEP reliability
-  settings and leaves the accepting SCTP stream ordered/reliable. The exact
-  upstream fix is `70901c3df6ad92dcb87d97af3d1e2fa8a2e2ae38` (#280), now
-  pinned by `murm-rtc`. The published-release failed run is retained. The UDP
-  adapter observes remote DTLS closure separately from a local peer-connection
-  `Closed` state, so it does not fabricate a web-visible connection-state
-  transition. All four native tests pass on Rust 1.99.1 and MSRV 1.97.1;
-  core-only compilation, strict Clippy and formatting pass. Native coverage
-  includes text, fragmented binary, ordered and unordered/zero-retransmit
-  channels, reverse traffic during a paused data read, retained message
-  delivery, certificate fingerprints, close, cancellation/socket release and
-  route/datagram-budget refusal. `murm/testing/webrtc-evaluation/receipts/provider-qualification.json`
-  and `provider-boundaries.json` freeze the source/binary/compiler and core
-  dependency evidence. The final workspace default-selection audit preserves
-  ordinary HTTP/WebSocket builds. E1b/E2 retain actual Genet, application,
-  discovery/relay, browser and WPT qualification. No saturation, packet-loss
-  policy or media claim follows from the native loopback test.
-
-- 2026-11-01: E1b/E2 receiving work uses a per-realm `WebRtcFactory` contract in
-  `genet-runtime` and a separate native `genet-webrtc` component. Both std socket
-  polling and Tokio waits now use Murm's same packet/timer driver. The immutable
-  supplier is `murm` commit `c58b70421d31ed9f2288dc44152dcb6d719552a9`, published
-  through main after preserving and merging concurrent remote work. Protocol
-  source remains the exact upstream DCEP fix. Native provider qualification is
-  appended to Murm's family-move receipt file; earlier cited evidence remains
-  in its original location.
-
-- Receiving boundaries under qualification: Window-only objects; private
-  retained event hooks; caller-owned peer resources; child factory inheritance;
-  native resource revocation on discarded realms; active-peer snapshot refusal;
-  and document/WPT scheduling that waits for actual network progress. Ortet's
-  scripted route installs the real host, with configurable `--rtc-bind` and
-  loopback as its initial concrete address. STUN/TURN discovery, route-policy
-  changes after construction, custom certificates, full media, headed interop
-  and broad WPT conformance remain open. Relay-only construction registers no
-  socket or direct candidate in this host-only adapter.
+- 2026-11-01: E0 selected rtc and established the independent provider boundary.
+- 2026-11-01: E1a qualified `murm-rtc`; application-carrier cutover remains open.
+- 2026-11-01: E1b/E2 added Genet's per-document capability, native adapter,
+  Window objects, transport observations, document/WPT scheduling and Ortet
+  intake. Qualification is in the appended [receipt file](archive_docs/receipts/2026-11-01_webrtc_conformance_plan_receipts.md).
+  Both engines pass the native integration gate, including encrypted text and
+  binary transfer, operation/event ordering and navigation lifetime. Selected
+  WPT is accounted against frozen case identities with its media failures
+  retained. Strict native-adapter Clippy and Ortet all-target receiving checks
+  pass. Concurrent upstream runtime/runner work was merged before final
+  qualification.
 
 ## Decisions
 

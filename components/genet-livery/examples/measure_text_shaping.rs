@@ -67,8 +67,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ => return Err(format!("unknown option {key}").into()),
         }
     }
-    if mode != "uncached-serial" {
+    if mode != "uncached-serial" && mode != "cached-serial" {
         return Err(format!("mode {mode} is not implemented").into());
+    }
+    if mode == "uncached-serial" {
+        options.retained_entries = 0;
+        options.retained_text_bytes = 0;
     }
     if ![
         "small",
@@ -84,8 +88,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     if paragraphs == 0 || iterations == 0 || workers != 1 {
         return Err(
-            "paragraphs and iterations must be positive; uncached-serial requires one worker"
-                .into(),
+            "paragraphs and iterations must be positive; serial modes require one worker".into(),
         );
     }
     if source_revision.len() != 40 || !source_revision.bytes().all(|c| c.is_ascii_hexdigit()) {

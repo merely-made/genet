@@ -307,6 +307,51 @@ mod tests {
     }
 
     #[test]
+    fn intrinsic_policy_reuses_only_equal_builder_inputs() {
+        let mut style = ComputedValues::default();
+        style.color = "black".parse().unwrap();
+        let make = |style: &ComputedValues, kind| {
+            let mut input = fixture();
+            input.defaults = properties(style, 0, Vec::new(), kind, 8.0);
+            input.spans[0].properties = input.defaults.clone();
+            super::super::cache::ShapeKey {
+                generation: 0,
+                input,
+            }
+        };
+        let mut worker = super::super::shaping::ShapeWorker::new();
+        let mut cache = super::super::cache::ShapeCache::default();
+        let used = make(&style, None);
+        let value = std::sync::Arc::new(worker.shape(&used.input));
+        cache.insert(used.clone(), value, 8, 1000);
+        assert!(
+            cache
+                .get(&make(&style, Some(IntrinsicSizeKind::MinContent)))
+                .is_some()
+        );
+        assert!(
+            cache
+                .get(&make(&style, Some(IntrinsicSizeKind::MaxContent)))
+                .is_some()
+        );
+        style.overflow_wrap = CssOverflowWrap::BreakWord;
+        let changed = make(&style, None);
+        assert!(cache.get(&changed).is_none());
+        assert!(
+            cache
+                .get(&make(&style, Some(IntrinsicSizeKind::MinContent)))
+                .is_some()
+        );
+        let value = std::sync::Arc::new(worker.shape(&changed.input));
+        cache.insert(changed, value, 8, 1000);
+        assert!(
+            cache
+                .get(&make(&style, Some(IntrinsicSizeKind::MaxContent)))
+                .is_some()
+        );
+    }
+
+    #[test]
     fn split_shape_payloads_are_send() {
         fn assert_send<T: Send>() {}
         assert_send::<ShapeInput>();

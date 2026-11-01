@@ -6,6 +6,7 @@
 
 //! Clean-room Parley adapter for Livery inline formatting.
 
+mod cache;
 mod prepared;
 mod shaping;
 mod stats;
@@ -220,6 +221,8 @@ fn break_inline_lines(
 /// Livery document session.
 pub struct TextSystem {
     worker: shaping::ShapeWorker,
+    cache: cache::ShapeCache,
+    font_generation: u64,
     fonts: HashMap<FontInstanceKey, FontResource>,
     font_keys: HashMap<(u64, u32), FontInstanceKey>,
     ch_advances: HashMap<ChMetricKey, f32>,
@@ -287,6 +290,8 @@ impl TextSystem {
     pub fn new() -> Self {
         Self {
             worker: shaping::ShapeWorker::new(),
+            cache: cache::ShapeCache::default(),
+            font_generation: 0,
             fonts: HashMap::new(),
             font_keys: HashMap::new(),
             ch_advances: HashMap::new(),
@@ -307,7 +312,10 @@ impl TextSystem {
     }
 
     pub fn shaping_stats(&self) -> TextShapingStats {
-        self.shaping_stats
+        let mut stats = self.shaping_stats;
+        stats.retained_entries = self.cache.len();
+        stats.retained_text_bytes = self.cache.bytes();
+        stats
     }
 
     pub fn shaping_options(&self) -> TextShapingOptions {
@@ -316,6 +324,14 @@ impl TextSystem {
 
     pub fn set_shaping_options(&mut self, options: TextShapingOptions) {
         self.shaping_options = options;
+        self.cache
+            .trim(options.retained_entries, options.retained_text_bytes);
+    }
+
+    fn invalidate_shapes(&mut self) {
+        self.font_generation = self.font_generation.wrapping_add(1);
+        self.cache.clear();
+        self.worker.layout_context = LayoutContext::new();
     }
 
     pub fn retained_font_count(&self) -> usize {
@@ -333,6 +349,7 @@ impl TextSystem {
             .font_context
             .collection
             .register_fonts(parley::fontique::Blob::new(Arc::new(bytes)), None);
+        self.invalidate_shapes();
         self.ch_advances.clear();
         self.space_advances.clear();
         self.box_metrics.clear();
@@ -375,6 +392,7 @@ impl TextSystem {
             .font_context
             .collection
             .set_generic_families(generic, families.into_iter().map(|(id, _)| id));
+        self.invalidate_shapes();
         self.ch_advances.clear();
         self.space_advances.clear();
         self.box_metrics.clear();
@@ -403,6 +421,7 @@ impl TextSystem {
             family.to_ascii_lowercase(),
             feature_settings.settings().into(),
         );
+        self.invalidate_shapes();
         self.ch_advances.clear();
         self.space_advances.clear();
         self.box_metrics.clear();
@@ -1505,7 +1524,6 @@ impl TextSystem {
     where
         Id: Copy + Eq + Hash,
     {
-        self.shape_count = self.shape_count.saturating_add(1);
         self.shaping_stats.format_requests = self.shaping_stats.format_requests.saturating_add(1);
         let shape_start = self
             .shaping_options
@@ -1583,8 +1601,26 @@ impl TextSystem {
             scale: 1.0f32.to_bits(),
             quantize: true,
         };
-        self.shaping_stats.layout_builds = self.shaping_stats.layout_builds.saturating_add(1);
-        let unbroken = self.worker.shape(&input);
+        let key = cache::ShapeKey {
+            generation: self.font_generation,
+            input,
+        };
+        let unbroken = if let Some(value) = self.cache.get(&key) {
+            self.shaping_stats.cache_hits = self.shaping_stats.cache_hits.saturating_add(1);
+            value
+        } else {
+            self.shaping_stats.cache_misses = self.shaping_stats.cache_misses.saturating_add(1);
+            self.shaping_stats.layout_builds = self.shaping_stats.layout_builds.saturating_add(1);
+            self.shape_count = self.shape_count.saturating_add(1);
+            let value = Arc::new(self.worker.shape(&key.input));
+            self.cache.insert(
+                key,
+                Arc::clone(&value),
+                self.shaping_options.retained_entries,
+                self.shaping_options.retained_text_bytes,
+            );
+            value
+        };
         self.shaping_stats.shape_wall_ns = self
             .shaping_stats
             .shape_wall_ns

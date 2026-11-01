@@ -9316,7 +9316,7 @@ mod prepared_geometry_tests {
     #[test]
     fn split_shape_geometry_materialization_matches_fresh() {
         let dom = StaticDocument::parse(
-            "<div><span id=outer><span id=inner style='padding-left:10%'></span></span><span id=positioned style='position:relative'></span><img id=atom><span id=words>hello</span></div>",
+            "<div><span id=words>é</span><span id=outer><span id=inner style='padding-left:10%'></span></span><span id=middle>ok</span><span id=positioned style='position:relative'></span><img id=atom></div>",
         );
         let styles = resolve_styles(
             &dom,
@@ -9343,7 +9343,7 @@ mod prepared_geometry_tests {
         let inner = find("inner");
         let positioned = find("positioned");
         let atom = find("atom");
-        let roots = [outer, positioned, atom, find("words")];
+        let roots = [find("words"), outer, find("middle"), positioned, atom];
         let parent = ComputedValues::default();
         let counting = CountingDom {
             inner: &dom,
@@ -9484,7 +9484,19 @@ mod prepared_geometry_tests {
                             .collect::<Vec<_>>(),
                         expected
                     );
-                    assert!(result.iter().all(|a| a.index == 0));
+                    assert_eq!(prepared.text, "éok");
+                    assert!(
+                        result
+                            .iter()
+                            .filter(|a| a.source == inner)
+                            .all(|a| a.index == 2 && a.owners == [outer])
+                    );
+                    assert!(
+                        result
+                            .iter()
+                            .filter(|a| a.source == positioned || a.source == atom)
+                            .all(|a| a.index == 4 && a.owners.is_empty())
+                    );
                     if width != 0.0 {
                         assert_eq!(result[0].line_width, width * 0.1);
                         assert!(result[0].paint);

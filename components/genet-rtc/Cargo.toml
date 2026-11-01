@@ -1,0 +1,32 @@
+[package]
+name = "murm-rtc"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97.1"
+license = "MPL-2.0"
+repository = "https://github.com/merely-made/murm"
+description = "Caller-driven WebRTC protocol and optional native UDP host adapter"
+readme = "README.md"
+# Git supplier until an upstream registry release includes the pinned fix.
+publish = false
+
+[features]
+default = ["crypto-ring"]
+crypto-ring = ["rtc/crypto-ring"]
+crypto-aws-lc-rs = ["rtc/crypto-aws-lc-rs"]
+udp = ["dep:tokio", "dep:bytes", "dep:thiserror"]
+
+[dependencies]
+# Published 0.21.1 loses DCEP reliability on accepted channels. This exact
+# upstream fix configures the accepted SCTP stream and its public attributes.
+rtc = { git = "https://github.com/webrtc-rs/rtc", rev = "70901c3df6ad92dcb87d97af3d1e2fa8a2e2ae38", default-features = false }
+bytes = { version = "1", optional = true }
+thiserror = { version = "2", optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { version = "1", optional = true, features = ["rt", "net", "time", "macros"] }
+
+[dev-dependencies]
+bytes = "1"
+sha2 = "0.11"
+tokio = { version = "1", features = ["rt", "net", "time", "macros"] }

@@ -627,7 +627,7 @@ completed corpus census or bounded slice does not close its enclosing feature.
 
 ## layout and styling
 
-- [Retained and parallel inline shaping](2026-11-01_retained_parallel_shaping_plan.md) — implemented; bounded qualification shows reuse and pooled gains alongside cold and memory regressions; final branch review pending.
+- [Retained and parallel inline shaping](2026-11-01_retained_parallel_shaping_plan.md) — implemented and reviewed locally; bounded qualification shows reuse and pooled gains alongside cold and memory regressions; source-specific evidence and runtime limits remain explicit.
   (**qualification, 2026-11-01**): retained exact-input shaping and optional
   caller-supplied native pooling have separate measured gates; process
   orchestration remains outside this plan.

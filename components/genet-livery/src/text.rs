@@ -6,6 +6,9 @@
 
 //! Clean-room Parley adapter for Livery inline formatting.
 
+mod stats;
+pub use stats::{TextShapingOptions, TextShapingStats};
+
 use std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
@@ -223,6 +226,8 @@ pub struct TextSystem {
     box_metrics: HashMap<ChMetricKey, FontBoxMetrics>,
     font_face_features: HashMap<String, Box<[FontFeatureSetting]>>,
     shape_count: u64,
+    shaping_stats: TextShapingStats,
+    shaping_options: TextShapingOptions,
 }
 
 /// A font at a style's size: its ascent, descent, line gap and x-height, which
@@ -289,11 +294,28 @@ impl TextSystem {
             box_metrics: HashMap::new(),
             font_face_features: HashMap::new(),
             shape_count: 0,
+            shaping_stats: TextShapingStats::default(),
+            shaping_options: TextShapingOptions::default(),
         }
     }
 
+    /// Number of shape transactions, excluding separate metric builders.
+    /// Unlike `format_requests`, this legacy counter tracks actual shaping
+    /// when retained layouts are introduced.
     pub fn shape_count(&self) -> u64 {
         self.shape_count
+    }
+
+    pub fn shaping_stats(&self) -> TextShapingStats {
+        self.shaping_stats
+    }
+
+    pub fn shaping_options(&self) -> TextShapingOptions {
+        self.shaping_options
+    }
+
+    pub fn set_shaping_options(&mut self, options: TextShapingOptions) {
+        self.shaping_options = options;
     }
 
     pub fn retained_font_count(&self) -> usize {
@@ -401,6 +423,9 @@ impl TextSystem {
             style,
         ))));
         builder.push_default(StyleProperty::FontStyle(font_style(style)));
+        self.shaping_stats.layout_builds = self.shaping_stats.layout_builds.saturating_add(1);
+        self.shaping_stats.metric_layout_builds =
+            self.shaping_stats.metric_layout_builds.saturating_add(1);
         let mut layout = builder.build("0");
         layout.break_all_lines(None);
         let advance = layout
@@ -434,6 +459,9 @@ impl TextSystem {
             style,
         ))));
         builder.push_default(StyleProperty::FontStyle(font_style(style)));
+        self.shaping_stats.layout_builds = self.shaping_stats.layout_builds.saturating_add(1);
+        self.shaping_stats.metric_layout_builds =
+            self.shaping_stats.metric_layout_builds.saturating_add(1);
         let mut layout = builder.build("x");
         layout.break_all_lines(None);
         let metrics = layout
@@ -494,6 +522,9 @@ impl TextSystem {
             style,
         ))));
         builder.push_default(StyleProperty::FontStyle(font_style(style)));
+        self.shaping_stats.layout_builds = self.shaping_stats.layout_builds.saturating_add(1);
+        self.shaping_stats.metric_layout_builds =
+            self.shaping_stats.metric_layout_builds.saturating_add(1);
         let mut layout = builder.build("0 0");
         layout.break_all_lines(None);
         let advance = layout
@@ -534,6 +565,9 @@ impl TextSystem {
         if let Some(letter_spacing) = spacing_px(style.letter_spacing, font_size) {
             builder.push_default(StyleProperty::LetterSpacing(letter_spacing));
         }
+        self.shaping_stats.layout_builds = self.shaping_stats.layout_builds.saturating_add(1);
+        self.shaping_stats.metric_layout_builds =
+            self.shaping_stats.metric_layout_builds.saturating_add(1);
         let mut layout = builder.build(&text);
         layout.break_all_lines(None);
         layout
@@ -588,6 +622,10 @@ impl TextSystem {
         D::NodeId: Copy + Eq + Hash,
         F: FragmentLookup<D::NodeId>,
     {
+        let collect_start = self
+            .shaping_options
+            .record_timings
+            .then(std::time::Instant::now);
         let parent_style = request.parent_style;
         let mut text = String::new();
         let mut spans = Vec::new();
@@ -612,6 +650,10 @@ impl TextSystem {
                 collector.collect(*root, parent_style);
             }
         }
+        self.shaping_stats.collect_ns = self
+            .shaping_stats
+            .collect_ns
+            .saturating_add(stats::elapsed_ns(collect_start));
         // A forced break adds text without a span, so a block holding only
         // `<br>` still formats its line. Empty-inline markers alone leave the
         // line phantom (CSS 2.1 9.4.2).
@@ -1464,6 +1506,11 @@ impl TextSystem {
         Id: Copy + Eq + Hash,
     {
         self.shape_count = self.shape_count.saturating_add(1);
+        self.shaping_stats.format_requests = self.shaping_stats.format_requests.saturating_add(1);
+        let shape_start = self
+            .shaping_options
+            .record_timings
+            .then(std::time::Instant::now);
         let default_style = spans.first().map_or(root_style, |span| &span.style);
         let default_features = effective_font_features(&self.font_face_features, default_style);
         let span_features = spans
@@ -1535,7 +1582,16 @@ impl TextSystem {
                 },
             });
         }
+        self.shaping_stats.layout_builds = self.shaping_stats.layout_builds.saturating_add(1);
         let mut layout = builder.build(text);
+        self.shaping_stats.shape_wall_ns = self
+            .shaping_stats
+            .shape_wall_ns
+            .saturating_add(stats::elapsed_ns(shape_start));
+        let place_start = self
+            .shaping_options
+            .record_timings
+            .then(std::time::Instant::now);
         // Preserve the prospective break model for its unit tests only.
         #[cfg(test)]
         let mut break_stream = {
@@ -1563,6 +1619,7 @@ impl TextSystem {
                 hanging: root_style.text_indent.hanging,
             },
         );
+        self.shaping_stats.line_breaks = self.shaping_stats.line_breaks.saturating_add(1);
         break_inline_lines(
             &mut layout,
             width,
@@ -2110,6 +2167,10 @@ impl TextSystem {
             }
         }
         append_positioned_inline_start_markers(&mut result, inline_boxes);
+        self.shaping_stats.place_ns = self
+            .shaping_stats
+            .place_ns
+            .saturating_add(stats::elapsed_ns(place_start));
         Shaped {
             items: result,
             #[cfg(test)]
@@ -9163,3 +9224,6 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod reuse_tests;

@@ -89,7 +89,9 @@ where
     }
 
     pub(in crate::document) fn rebuild_font_resources(&mut self) {
+        let options = self.text.shaping_options();
         self.text = TextSystem::new();
+        self.text.set_shaping_options(options);
         // These immutable entries were all validated before ledger admission.
         for (generic, bytes) in &self.generic_font_sources {
             self.text

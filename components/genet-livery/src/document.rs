@@ -366,6 +366,10 @@ where
         Some([bounds.min.x, bounds.min.y, bounds.width(), bounds.height()])
     }
 
+    pub fn set_text_shaping_options(&mut self, options: crate::TextShapingOptions) {
+        self.text.set_shaping_options(options);
+    }
+
     pub fn text_system(&self) -> &TextSystem {
         &self.text
     }

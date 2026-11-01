@@ -8384,9 +8384,9 @@ fn prepared_batch_main_flushes_before_measurement_and_deduplicates() {
 }
 
 #[test]
-fn prepared_batch_defers_percentage_edges_and_missing_atoms() {
+fn prepared_batch_defers_percentage_edges() {
     let dom =
-        StaticDocument::parse("<div id=a><span style='padding-left:10%'>one two</span><img></div>");
+        StaticDocument::parse("<div id=a><span style='padding-left:10%'>one two</span></div>");
     let styles = resolve_styles(
         &dom,
         &StyleSet::cambium(&[]),
@@ -8538,15 +8538,49 @@ fn prepared_batch_geometry_matrix_matches_fresh_uncached() {
         options.retained_text_bytes = 0;
         cold_text.set_shaping_options(options);
         let cold = run(&mut cold_text);
-        let node = node_by_id(&dom, dom.document(), "a").unwrap();
         let snapshot = |layout: &LiveryLayout<_>| {
             layout
-                .fragments_for_node(node)
-                .map(|f| (f.x, f.y, f.width, f.height))
+                .boxes()
+                .iter()
+                .map(|(id, _)| {
+                    layout
+                        .fragments()
+                        .fragments_for_box(id)
+                        .map(|f| (f.x, f.y, f.width, f.height))
+                        .collect::<Vec<_>>()
+                })
                 .collect::<Vec<_>>()
         };
-        assert_eq!(snapshot(&warm), snapshot(&cold), "{name}");
-        assert!(!snapshot(&cold).is_empty(), "{name}");
+        assert_eq!(
+            snapshot(&warm),
+            snapshot(&cold),
+            "all box fragments: {name}"
+        );
+        assert!(
+            snapshot(&cold)
+                .iter()
+                .any(|fragments| !fragments.is_empty()),
+            "{name}"
+        );
+        let paint = |layout: &LiveryLayout<_>, text: &mut TextSystem| {
+            format!(
+                "{:?}",
+                emit_paint_list_with_text_system(
+                    &dom,
+                    &styles,
+                    layout,
+                    DeviceIntSize::new(320, 240),
+                    1,
+                    text
+                )
+                .commands()
+            )
+        };
+        assert_eq!(
+            paint(&warm, &mut warm_text),
+            paint(&cold, &mut cold_text),
+            "paint and text: {name}"
+        );
         let stats = cold_text.shaping_stats();
         println!(
             "{name}: ready={} late={} batches={}",
@@ -8595,4 +8629,216 @@ fn prepared_batch_missing_atom_is_not_ready() {
         },
     );
     assert!(prepared.ready::<<StaticDocument as LayoutDom>::NodeId, _>(&atomic));
+}
+
+#[test]
+fn prepared_batch_missing_atom_refuses_layout_until_geometry_arrives() {
+    let dom = StaticDocument::parse("<div id=a>before <img id=image> after</div>");
+    let styles = resolve_styles(
+        &dom,
+        &StyleSet::cambium(&[]),
+        &Device::screen(320.0, 240.0),
+        &InteractionStates::default(),
+    );
+    let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+    let image = boxes
+        .principal_box(node_by_id(&dom, dom.document(), "image").unwrap())
+        .unwrap();
+    let mut atomic = AtomicLayoutPlane::default();
+    let images = HashMap::new();
+    let mut text = TextSystem::new();
+    let error = layout_inline_groups(
+        &dom,
+        &styles,
+        boxes,
+        (320.0, 240.0),
+        &mut text,
+        &atomic,
+        &images,
+    )
+    .err()
+    .expect("missing geometry refuses the transaction");
+    assert!(error.to_string().contains("missing inline atom geometry"));
+    assert_eq!(text.shaping_stats().late_misses, 0);
+    assert_eq!(text.shaping_stats().format_requests, 0);
+    atomic.fragments.insert(
+        image,
+        Fragment {
+            x: 0.0,
+            y: 0.0,
+            width: 20.0,
+            height: 12.0,
+        },
+    );
+    let run = |text: &mut TextSystem| {
+        layout_inline_groups(
+            &dom,
+            &styles,
+            GeneratedBoxTree::from_dom(&dom, &styles),
+            (320.0, 240.0),
+            text,
+            &atomic,
+            &images,
+        )
+        .unwrap()
+    };
+    let actual = run(&mut text);
+    let mut fresh = TextSystem::new();
+    let mut options = fresh.shaping_options();
+    options.retained_entries = 0;
+    options.retained_text_bytes = 0;
+    fresh.set_shaping_options(options);
+    let expected = run(&mut fresh);
+    let snapshot = |layout: &LiveryLayout<_>| {
+        layout
+            .boxes()
+            .iter()
+            .map(|(id, _)| {
+                layout
+                    .fragments()
+                    .fragments_for_box(id)
+                    .map(|f| (f.x, f.y, f.width, f.height))
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(snapshot(&actual), snapshot(&expected));
+    let paint = |layout: &LiveryLayout<_>, text: &mut TextSystem| {
+        format!(
+            "{:?}",
+            emit_paint_list_with_text_system(
+                &dom,
+                &styles,
+                layout,
+                DeviceIntSize::new(320, 240),
+                1,
+                text
+            )
+            .commands()
+        )
+    };
+    assert_eq!(paint(&actual, &mut text), paint(&expected, &mut fresh));
+}
+
+#[test]
+fn prepared_batch_k7_changes_basis_and_atomic_geometry() {
+    let dom = StaticDocument::parse(
+        "<div id=a style='width:140px'>before <span id=atom style='display:inline-block;width:50%'>one two three</span> after</div>",
+    );
+    let styles = resolve_styles(
+        &dom,
+        &StyleSet::cambium(&[]),
+        &Device::screen(320.0, 240.0),
+        &InteractionStates::default(),
+    );
+    let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+    let atom = boxes
+        .principal_box(node_by_id(&dom, dom.document(), "atom").unwrap())
+        .unwrap();
+    let images = HashMap::new();
+    let mut text = TextSystem::new();
+    let contribution = layout_atomic_subtrees(
+        &dom,
+        &styles,
+        &boxes,
+        320.0,
+        240.0,
+        &AtomicPass::Contribution,
+        &mut text,
+        &images,
+    )
+    .unwrap();
+    let initial_width = contribution.get(atom).unwrap().width;
+    let initial_layout = layout_inline_groups(
+        &dom,
+        &styles,
+        GeneratedBoxTree::from_dom(&dom, &styles),
+        (320.0, 240.0),
+        &mut text,
+        &contribution,
+        &images,
+    )
+    .unwrap();
+    let bases = basis_sensitive_roots(&styles, &initial_layout, &contribution, (320.0, 240.0));
+    let basis = bases.get(&atom).expect("K7 basis must be selected");
+    assert!(
+        (basis.width - 320.0).abs() > 0.5,
+        "basis must change from viewport"
+    );
+    let contributions = bases
+        .keys()
+        .filter_map(|root| contribution.get(*root).map(|f| (*root, f.width)))
+        .collect();
+    let final_atomic = layout_atomic_subtrees(
+        &dom,
+        &styles,
+        &boxes,
+        320.0,
+        240.0,
+        &AtomicPass::Basis {
+            bases: &bases,
+            contributions: &contributions,
+        },
+        &mut text,
+        &images,
+    )
+    .unwrap();
+    let final_width = final_atomic.get(atom).unwrap().width;
+    assert!(
+        (initial_width - final_width).abs() > 0.5,
+        "contribution width {initial_width} must change to basis width {final_width}"
+    );
+    let before = atomic_basis::basis_passes();
+    layout_with_text_system(
+        &dom,
+        &styles,
+        320.0,
+        240.0,
+        ViewportSizes::uniform(320.0, 240.0),
+        &mut text,
+        &images,
+    )
+    .unwrap();
+    assert!(
+        atomic_basis::basis_passes() > before,
+        "orchestration must execute K7"
+    );
+    println!(
+        "K7 basis {} -> {}, atom {} -> {}",
+        320.0, basis.width, initial_width, final_width
+    );
+}
+
+#[test]
+fn prepared_batch_excludes_out_of_flow_atoms_from_missing_geometry() {
+    for html in [
+        "<div id=a>before<img style='position:absolute'>after</div>",
+        "<div id=a>before<table style='display:inline-table;position:absolute'><tr><td>cell</td></tr></table>after</div>",
+    ] {
+        let dom = StaticDocument::parse(html);
+        let styles = resolve_styles(
+            &dom,
+            &StyleSet::cambium(&[]),
+            &Device::screen(320.0, 240.0),
+            &InteractionStates::default(),
+        );
+        let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+        let node = node_by_id(&dom, dom.document(), "a").unwrap();
+        let root = boxes.principal_box(node).unwrap();
+        let group = crate::text::prepared::PreparedInlineGroup::collect(
+            &dom,
+            &styles,
+            &boxes,
+            boxes[root].children(),
+            styles.get(node).unwrap(),
+        );
+        assert!(
+            group
+                .missing_atom::<<StaticDocument as LayoutDom>::NodeId, _>(
+                    &AtomicLayoutPlane::default()
+                )
+                .is_none(),
+            "{html}"
+        );
+    }
 }

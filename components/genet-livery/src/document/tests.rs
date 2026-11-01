@@ -4695,3 +4695,72 @@ fn password_caret_projection_refreshes_same_mask_and_covers_partial_graphemes() 
         "changing type removes the password projection"
     );
 }
+
+#[test]
+fn retained_geometry_dependent_text_edits_match_fresh_uncached() {
+    for (name, inline) in [
+        (
+            "percentage",
+            "<span id=edit style='padding-left:10%;margin-right:5%'>old text</span>",
+        ),
+        (
+            "atomic",
+            "<span id=edit style='display:inline-block;width:50%'>old text</span>",
+        ),
+        (
+            "float",
+            "<span style='float:left;width:30px;height:30px'></span><span id=edit>old text</span>",
+        ),
+        (
+            "table",
+            "<table style='display:inline-table'><tr><td><span id=edit>old text</span></td></tr></table>",
+        ),
+    ] {
+        let root_style = if name == "percentage" {
+            "display:flex;width:140px;height:40px"
+        } else {
+            "width:140px"
+        };
+        let html = |body: &str| {
+            format!("<html><body><div style='{root_style}'>before {body} after</div></body></html>")
+        };
+        let initial = html(inline);
+        let final_html = html(&inline.replace("old text", "new longer text"));
+        let styles = || StyleSet::cambium(&["html, body { margin: 0; padding: 0; }"]);
+        let mut retained = LiveryDocument::new(
+            ScriptedDom::from_serialized_document(&initial),
+            styles(),
+            Device::screen(320.0, 240.0),
+        );
+        retained.frame(320, 240).unwrap();
+        let before = retained.text_system().shaping_stats();
+        let generation = retained.retained_root_relayout_generation;
+        retained.mutate_dom(|dom| {
+            let edit = by_id(dom, "edit");
+            let text = dom.dom_children(edit).next().unwrap();
+            dom.set_text(text, "new longer text");
+        });
+        let actual = format!("{:?}", retained.frame(320, 240).unwrap().commands());
+        let after = retained.text_system().shaping_stats();
+        if name == "percentage" {
+            assert_eq!(retained.retained_root_relayout_generation, generation + 1);
+        }
+        let mut fresh = LiveryDocument::new(
+            ScriptedDom::from_serialized_document(&final_html),
+            styles(),
+            Device::screen(320.0, 240.0),
+        );
+        let mut options = fresh.text_system().shaping_options();
+        options.retained_entries = 0;
+        options.retained_text_bytes = 0;
+        fresh.set_text_shaping_options(options);
+        let expected = format!("{:?}", fresh.frame(320, 240).unwrap().commands());
+        assert_eq!(actual, expected, "{name}");
+        println!(
+            "retained {name}: selected_root={} ready={} late={}",
+            retained.retained_root_relayout_generation - generation,
+            (after.unique_jobs - before.unique_jobs) - (after.late_misses - before.late_misses),
+            after.late_misses - before.late_misses
+        );
+    }
+}

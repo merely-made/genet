@@ -533,7 +533,7 @@ struct InlineMeasure {
     layouts: Vec<InlineLayoutEntry>,
     placement_constraints: Option<FloatLineConstraints>,
     prepared: Option<text_batch::PreparedMeasure>,
-    shape_error: Option<crate::text::ShapeBatchError>,
+    shape_error: Option<LayoutError>,
 }
 
 struct InlineLayoutEntry {
@@ -648,6 +648,12 @@ where
                 .prepared
                 .as_mut()
                 .expect("inline batch must flush before measurement");
+            if let Some(atom) = prepared.template.missing_atom::<D::NodeId, _>(atomic) {
+                context.shape_error.get_or_insert_with(|| {
+                    LayoutError::retained_state(format!("missing inline atom geometry: {atom:?}"))
+                });
+                return (context.width, context.height);
+            }
             let key = text.prepared_shape_key::<D::NodeId, _>(
                 &prepared.template,
                 atomic,
@@ -671,7 +677,11 @@ where
                             index
                         },
                         Err(error) => {
-                            context.shape_error.get_or_insert(error);
+                            context.shape_error.get_or_insert_with(|| {
+                                LayoutError::retained_state(format!(
+                                    "late inline batch rejected: {error:?}"
+                                ))
+                            });
                             return (context.width, context.height);
                         },
                     }

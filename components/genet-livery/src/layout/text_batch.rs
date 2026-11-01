@@ -119,10 +119,11 @@ pub(super) fn check_errors(
     tree: &AlgorithmTree<InlineMeasure, Vec<BoxId>>,
 ) -> Result<(), LayoutError> {
     for node in tree.node_ids() {
-        if let Some(error) = tree.context(node).and_then(|context| context.shape_error) {
-            return Err(LayoutError::retained_state(format!(
-                "late inline batch rejected: {error:?}"
-            )));
+        if let Some(error) = tree
+            .context(node)
+            .and_then(|context| context.shape_error.as_ref())
+        {
+            return Err(error.clone());
         }
     }
     Ok(())

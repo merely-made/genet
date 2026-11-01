@@ -426,6 +426,17 @@ impl PreparedInlineGroup {
         }
         result
     }
+    pub(crate) fn missing_atom<Id, F: FragmentLookup<Id>>(&self, fragments: &F) -> Option<BoxId> {
+        self.events.iter().find_map(|event| match event {
+            GeometryEvent::Atomic { source, .. }
+                if fragments.atomic_box_rect(*source).is_none() =>
+            {
+                Some(*source)
+            },
+            _ => None,
+        })
+    }
+
     /// Only admit a speculative key when every inserted atom exists and all
     /// geometry contributing to it is independent of the eventual query width.
     pub(crate) fn ready<Id, F: FragmentLookup<Id>>(&self, fragments: &F) -> bool {

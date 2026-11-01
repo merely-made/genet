@@ -13,6 +13,8 @@ use script_runtime_api::{ValidationMessageCatalog, WebGlFactory, WorkerPolicy};
 #[derive(Default)]
 pub struct ScriptedDocumentOptions {
     pub webgl: Option<WebGlFactory>,
+    /// Native peer factory installed before parser scripts; each realm owns its peers.
+    pub webrtc: Option<std::rc::Rc<dyn script_runtime_api::WebRtcFactory>>,
     /// Built-in constraint-validation wording installed before any authored
     /// scripts run. Custom validity text remains exact and bypasses this.
     pub validation_message_catalog: ValidationMessageCatalog,

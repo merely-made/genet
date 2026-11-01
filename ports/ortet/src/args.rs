@@ -28,6 +28,7 @@ usage: ortet --url <address> [options]
 
   --url <address>      A file path, a file:// URL, or an http(s) URL.
   --engine <name>      Session engine: livery (default), boa, or nova.
+  --rtc-bind <IP>     Concrete local RTC address (default 127.0.0.1; host candidates only).
   --size <WxH>         Window size in physical pixels (default 960x640).
   --frames <N>         Present N frames, then exit once any receipt condition matches.
   --artifact <path>    Write the captured frame as a PNG and print its digest.
@@ -101,6 +102,7 @@ pub struct Config {
     /// URL for anything that named the filesystem, otherwise as given.
     pub address: String,
     pub engine: EngineChoice,
+    pub rtc_bind: std::net::IpAddr,
     pub size: (u32, u32),
     pub frames: Option<u32>,
     pub artifact: Option<PathBuf>,
@@ -142,6 +144,7 @@ where
 {
     let mut url = None;
     let mut engine = EngineChoice::default();
+    let mut rtc_bind: std::net::IpAddr = "127.0.0.1".parse().unwrap();
     let mut size = DEFAULT_SIZE;
     let mut frames = None;
     let mut artifact = None;
@@ -165,6 +168,10 @@ where
             "--help" | "-h" => return Ok(Invocation::Help),
             "--url" => url = Some(value("--url")?),
             "--engine" => engine = parse_engine(&value("--engine")?)?,
+            "--rtc-bind" => {
+                rtc_bind = value("--rtc-bind")?.parse().map_err(|_| "--rtc-bind requires an IP address")?;
+                if rtc_bind.is_unspecified() { return Err("--rtc-bind requires a concrete IP address".into()); }
+            },
             "--size" => size = parse_size(&value("--size")?)?,
             "--frames" => {
                 let raw = value("--frames")?;
@@ -210,6 +217,7 @@ where
     Ok(Invocation::Run(Box::new(Config {
         address: address_from_argument(&url)?,
         engine,
+        rtc_bind,
         size,
         frames,
         artifact,

@@ -239,6 +239,8 @@ pub fn run(config: Config, fetcher: OrtetFetcher) -> Result<Outcome, String> {
         wake.clone(),
         #[cfg(feature = "scripted")]
         Some(webgl.clone()),
+        #[cfg(feature = "scripted")]
+        config.rtc_bind,
         #[cfg(not(feature = "scripted"))]
         (),
     )?;
@@ -294,6 +296,8 @@ fn make_engine(
         ScriptWake::new(),
         #[cfg(feature = "scripted")]
         None,
+        #[cfg(feature = "scripted")]
+        std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
         #[cfg(not(feature = "scripted"))]
         (),
     )
@@ -305,6 +309,7 @@ fn make_engine_with_wake(
     fetcher: OrtetFetcher,
     wake: ScriptWake,
     webgl: Option<WebGlHost>,
+    rtc_bind: std::net::IpAddr,
 ) -> Result<Box<dyn SessionEngine<Scene>>, String> {
     match choice {
         crate::args::EngineChoice::Livery => Ok(Box::new(LiverySessionEngine::new(fetcher))),
@@ -323,6 +328,12 @@ fn make_engine_with_wake(
                         genet_scripted::ScriptedDocumentOptions::default,
                         WebGlHost::scripted_document_options,
                     );
+                    options.webrtc = Some(std::rc::Rc::new(
+                        genet_webrtc::NativeWebRtcFactory::new(genet_webrtc::Settings {
+                            bind: rtc_bind,
+                            ..Default::default()
+                        }).map_err(|e| e.message)?,
+                    ));
                     options.worker_process_launcher = launcher.clone();
                     Ok(options)
                 })))
@@ -351,6 +362,12 @@ fn make_engine_with_wake(
                         genet_scripted::ScriptedDocumentOptions::default,
                         WebGlHost::scripted_document_options,
                     );
+                    options.webrtc = Some(std::rc::Rc::new(
+                        genet_webrtc::NativeWebRtcFactory::new(genet_webrtc::Settings {
+                            bind: rtc_bind,
+                            ..Default::default()
+                        }).map_err(|e| e.message)?,
+                    ));
                     options.worker_process_launcher = launcher.clone();
                     Ok(options)
                 })))

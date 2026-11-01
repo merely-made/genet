@@ -1686,13 +1686,27 @@ impl TextSystem {
         } else {
             misses
                 .iter()
-                .map(|key| (self.worker.shape(&key.input), 0))
+                .map(|key| {
+                    let start = self
+                        .shaping_options
+                        .record_timings
+                        .then(std::time::Instant::now);
+                    let output = self.worker.shape(&key.input);
+                    (output, stats::elapsed_ns(start))
+                })
                 .collect()
         };
         #[cfg(not(all(feature = "parallel-text", not(target_arch = "wasm32"))))]
         let outputs: Vec<_> = misses
             .iter()
-            .map(|key| (self.worker.shape(&key.input), 0u64))
+            .map(|key| {
+                let start = self
+                    .shaping_options
+                    .record_timings
+                    .then(std::time::Instant::now);
+                let output = self.worker.shape(&key.input);
+                (output, stats::elapsed_ns(start))
+            })
             .collect();
         // Publication happens only after every task has joined successfully.
         let count = misses.len() as u64;
@@ -1748,6 +1762,10 @@ impl TextSystem {
     where
         Id: Copy + Eq + Hash,
     {
+        let key_start = self
+            .shaping_options
+            .record_timings
+            .then(std::time::Instant::now);
         let default_style = spans.first().map_or(root_style, |span| &span.style);
         let default_features = effective_font_features(&self.font_face_features, default_style);
         let span_features = spans
@@ -1801,10 +1819,15 @@ impl TextSystem {
             scale: 1.0f32.to_bits(),
             quantize: true,
         };
-        cache::ShapeKey {
+        let key = cache::ShapeKey {
             generation: self.font_generation,
             input,
-        }
+        };
+        self.shaping_stats.key_materialize_ns = self
+            .shaping_stats
+            .key_materialize_ns
+            .saturating_add(stats::elapsed_ns(key_start));
+        key
     }
 
     #[expect(
@@ -1899,7 +1922,15 @@ impl TextSystem {
             self.shaping_stats.cache_misses = self.shaping_stats.cache_misses.saturating_add(1);
             self.shaping_stats.layout_builds = self.shaping_stats.layout_builds.saturating_add(1);
             self.shape_count = self.shape_count.saturating_add(1);
+            let task_start = self
+                .shaping_options
+                .record_timings
+                .then(std::time::Instant::now);
             let value = Arc::new(self.worker.shape(&key.input));
+            self.shaping_stats.worker_task_ns = self
+                .shaping_stats
+                .worker_task_ns
+                .saturating_add(stats::elapsed_ns(task_start));
             self.cache.insert(
                 key,
                 Arc::clone(&value),
@@ -1950,7 +1981,15 @@ impl TextSystem {
             .shaping_options
             .record_timings
             .then(std::time::Instant::now);
+        let clone_start = self
+            .shaping_options
+            .record_timings
+            .then(std::time::Instant::now);
         let mut layout = unbroken.layout.clone();
+        self.shaping_stats.unbroken_layout_clone_ns = self
+            .shaping_stats
+            .unbroken_layout_clone_ns
+            .saturating_add(stats::elapsed_ns(clone_start));
         // Preserve the prospective break model for its unit tests only.
         #[cfg(test)]
         let mut break_stream = {

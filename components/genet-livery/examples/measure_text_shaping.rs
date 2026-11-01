@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: MPL-2.0
 //! Deterministic document-frame shaping control. Run with `--help` for options.
 //! Pass the full source commit used to build the executable as `--source-revision`.
-//! This caller-supplied label is not verified; the output fingerprints the executable.
+//! This caller-supplied label is not verified; hash the executable externally.
 //! Example: `measure_text_shaping --source-revision <full-commit> --font <font-file>`.
 use genet_livery::{Device, LiveryDocument, StyleSet, TextShapingOptions};
 use genet_scripted_dom::{NodeId, ScriptedDom};
 use layout_dom_api::{LayoutDom, LocalName, Namespace};
-use paint_list_api::PaintEnvelope;
+use paint_list_api::{PaintEnvelope, PaintList};
 use std::{
     env, fs,
     io::{self, Write},
@@ -30,10 +30,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut mode = "uncached-serial".to_owned();
     let mut case = "article".to_owned();
     let mut paragraphs = 32usize;
-    let mut iterations = 1usize;
+    let mut iterations = 30usize;
+    let mut warmups = 5usize;
+    let mut protocol = "cold".to_owned();
+    let mut step = false;
     let mut workers = 1usize;
     let mut source_revision = String::new();
     let mut font = String::new();
+    let mut font_dump = String::new();
     let mut family = "Fixture".to_owned();
     let mut output = String::new();
     let mut options = TextShapingOptions {
@@ -43,7 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(key) = args.next() {
         if key == "--help" {
             println!(
-                "--source-revision FULL_GIT_COMMIT --mode uncached-serial|cached-serial|cached-parallel --case small|article|mixed|single-long|atomic|churn --paragraphs N --workers N --iterations N --font PATH --font-family NAME --cache-entries N --cache-text-bytes N --parallel-min-groups N --parallel-min-text-bytes N --output PATH"
+                "--source-revision FULL_GIT_COMMIT --mode uncached-serial|cached-serial|cached-parallel --case small|article|mixed|single-long|atomic|churn --paragraphs N --workers N --iterations N --warmups N --protocol cold|unchanged|width|edit|churn --step 0|1 --font PATH --font-dump DIRECTORY --font-family NAME --cache-entries N --cache-text-bytes N --parallel-min-groups N --parallel-min-text-bytes N --output PATH"
             );
             return Ok(());
         }
@@ -57,7 +61,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "--paragraphs" => paragraphs = value.parse()?,
             "--workers" => workers = value.parse()?,
             "--iterations" => iterations = value.parse()?,
+            "--warmups" => warmups = value.parse()?,
+            "--protocol" => protocol = value,
+            "--step" => {
+                step = match value.as_str() {
+                    "0" => false,
+                    "1" => true,
+                    _ => return Err("--step must be 0 or 1".into()),
+                }
+            },
             "--font" => font = value,
+            "--font-dump" => font_dump = value,
             "--font-family" => family = value,
             "--cache-entries" => options.retained_entries = value.parse()?,
             "--cache-text-bytes" => options.retained_text_bytes = value.parse()?,
@@ -86,6 +100,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         return Err(format!("unknown case {case}").into());
     }
+    if !["cold", "unchanged", "width", "edit", "churn"].contains(&protocol.as_str()) {
+        return Err(format!("unknown protocol {protocol}").into());
+    }
     if paragraphs == 0
         || iterations == 0
         || workers == 0
@@ -106,9 +123,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let font_bytes = fs::read(&font)?;
     let font_hash = hash(&font_bytes);
-    // The source label is supplied by the builder; the binary hash identifies
-    // the executable even when it is invoked from another checkout.
-    let executable_hash = hash(&fs::read(env::current_exe()?)?);
     let features = match (
         cfg!(feature = "image-decode"),
         cfg!(all(feature = "parallel-text", not(target_arch = "wasm32"))),
@@ -142,7 +156,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "mixed" => "English العربية e\u{301} ligature office, punctuation and tabs.",
         "single-long" => "A long paragraph tests wrapping and shaping across many words. ",
         "atomic" => {
-            "Text with <span style='display:inline-block;width:24px;height:12px'>box</span> inline."
+            "Text with <span style='float:left;width:12px;height:12px'></span><span style='display:inline-block;width:24px;height:12px'>box</span> inline."
         },
         "churn" => "Editing one paragraph among many retained paragraphs.",
         _ => {
@@ -166,9 +180,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let css = format!(
         "@font-face {{ font-family: '{family}'; src: url('fixture.ttf'); }} body {{ font-family: '{family}'; margin: 0; }} p {{ margin: 0 0 8px; }}"
     );
-    for iteration in 0..iterations {
+    genet_livery::phase::enable();
+    // Cold samples create a fresh document. Warm samples keep document and pool
+    // scratch alive for all warmups and measurements of a single protocol.
+    let create = || {
         let dom = ScriptedDom::from_serialized_document(&html);
-        let edit = find(&dom, dom.document()).ok_or("fixture edit node missing")?;
+        let edit = find(&dom, dom.document()).expect("fixture edit node");
         let mut doc = LiveryDocument::new(
             dom,
             StyleSet::cambium(&[&css]),
@@ -178,26 +195,89 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
         doc.set_text_shaping_pool(pool.clone());
         doc.set_font_resource("fixture.ttf", font_bytes.clone());
-        for (stage, width) in [
-            ("initial", 800),
-            ("unchanged", 800),
-            ("width", 640),
-            ("edit", 640),
-        ] {
-            if stage == "edit" {
-                doc.mutate_dom(|dom| dom.set_text_content(edit, "Edited paragraph unique-0"));
+        (doc, edit)
+    };
+    let mut retained = if protocol == "cold" || protocol == "churn" {
+        None
+    } else {
+        Some(create())
+    };
+    if step {
+        writeln!(out, "ready")?;
+        out.flush()?;
+    }
+    for iteration in 0..warmups + iterations {
+        if step {
+            let mut command = String::new();
+            if io::stdin().read_line(&mut command)? == 0 || command.trim() != "step" {
+                return Err("expected step on stdin".into());
             }
-            let start = Instant::now();
-            let list = doc.frame(width, 600)?;
-            let elapsed = start.elapsed().as_nanos();
-            let bytes = postcard::to_allocvec(&PaintEnvelope::from_list(&list))?;
-            writeln!(
-                out,
-                "source_revision={source_revision} features={features} executable_fnv64={executable_hash:016x} mode={mode} case={case} paragraphs={paragraphs} iteration={iteration} stage={stage} width={width} font_fnv64={font_hash:016x} family={family:?} workers={workers} options={options:?} stats={:?} frame_ns={elapsed} digest_fnv64={:016x}",
-                doc.text_system().shaping_stats(),
-                hash(&bytes)
-            )?;
         }
+        let cycle_start = Instant::now();
+        if protocol == "cold" || protocol == "churn" {
+            retained = Some(create());
+        }
+        let (doc, edit) = retained.as_mut().expect("document exists");
+        if protocol == "edit" || protocol == "churn" {
+            // A new key each time prevents two alternating edits becoming cache hits.
+            let text = format!("Edited paragraph revision-{iteration} unique-0");
+            if protocol == "churn" {
+                let _ = doc.frame(800, 600)?;
+            }
+            doc.mutate_dom(|dom| dom.set_text_content(*edit, &text));
+        }
+        let width = if protocol == "width" && iteration % 2 == 1 {
+            640
+        } else {
+            800
+        };
+        let before = doc.text_system().shaping_stats();
+        let _ = genet_livery::phase::take();
+        let start = Instant::now();
+        let list = doc.frame(width, 600)?;
+        let elapsed = start.elapsed().as_nanos();
+        let phase_us = genet_livery::phase::take();
+        let after = doc.text_system().shaping_stats();
+        if protocol == "cold" || protocol == "churn" {
+            retained = None;
+        }
+        // Churn covers creation, initial frame, edit frame, and document drop.
+        let cycle_ns = cycle_start.elapsed().as_nanos();
+        let selected_fonts: Vec<_> = list
+            .fonts()
+            .iter()
+            .map(|font| {
+                let bytes = font.data.as_slice();
+                (hash(bytes), bytes)
+            })
+            .collect();
+        if !font_dump.is_empty() {
+            fs::create_dir_all(&font_dump)?;
+            for (id, bytes) in &selected_fonts {
+                let path = std::path::Path::new(&font_dump)
+                    .join(format!("{id:016x}-{}.font", bytes.len()));
+                if path.exists() {
+                    if fs::read(&path)? != *bytes {
+                        return Err("font fingerprint collision".into());
+                    }
+                } else {
+                    fs::write(path, bytes)?;
+                }
+            }
+        }
+        let selected_font_ids: Vec<_> = selected_fonts
+            .iter()
+            .map(|(id, bytes)| format!("{id:016x}:{}", bytes.len()))
+            .collect();
+        let bytes = postcard::to_allocvec(&PaintEnvelope::from_list(&list))?;
+        writeln!(
+            out,
+            "source_revision={source_revision} features={features} mode={mode} case={case} paragraphs={paragraphs} protocol={protocol} sample={} measured={} width={width} font_fnv64={font_hash:016x} family={family:?} workers={workers} options={options:?} before={before:?} after={after:?} frame_ns={elapsed} cycle_ns={cycle_ns} phase_us={phase_us:?} selected_fonts={selected_font_ids:?} digest_fnv64={:016x}",
+            iteration,
+            iteration >= warmups,
+            hash(&bytes)
+        )?;
+        out.flush()?;
     }
     Ok(())
 }

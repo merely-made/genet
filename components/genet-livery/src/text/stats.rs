@@ -24,7 +24,13 @@ pub struct TextShapingStats {
     pub worker_scratch_slots: usize,
     pub retained_entries: usize,
     pub retained_text_bytes: usize,
+    /// DOM collection and prepared-template work; excludes key materialization.
     pub collect_ns: u64,
+    /// Builder-input normalization and materialization in `shape_key`.
+    /// Nested inside shape-wall timing where invoked by synchronous shaping.
+    pub key_materialize_ns: u64,
+    /// Clone of an unbroken Parley layout before line placement; nested in place.
+    pub unbroken_layout_clone_ns: u64,
     pub shape_wall_ns: u64,
     pub worker_task_ns: u64,
     pub place_ns: u64,

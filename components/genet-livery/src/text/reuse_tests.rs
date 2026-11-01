@@ -33,6 +33,27 @@ fn shaping_stats_count_builds_separately_from_formats() {
 }
 
 #[test]
+fn serial_worker_timing_is_opt_in_and_counts_builds() {
+    for record_timings in [false, true] {
+        let dom = ScriptedDom::from_serialized_document(
+            "<html><body><p>Timing the serial worker with several words.</p></body></html>",
+        );
+        let mut document =
+            LiveryDocument::new(dom, StyleSet::cambium(&[]), Device::screen(640.0, 480.0));
+        document.set_text_shaping_options(crate::TextShapingOptions {
+            record_timings,
+            ..Default::default()
+        });
+        document.frame(640, 480).expect("initial frame");
+        let stats = document.text_system().shaping_stats();
+        assert!(stats.unique_jobs > 0);
+        assert_eq!(stats.worker_task_ns > 0, record_timings);
+        assert_eq!(stats.key_materialize_ns > 0, record_timings);
+        assert_eq!(stats.unbroken_layout_clone_ns > 0, record_timings);
+    }
+}
+
+#[test]
 fn shaping_options_survive_font_resource_rebuild() {
     let dom = ScriptedDom::from_serialized_document("<html><body>test</body></html>");
     let mut document =

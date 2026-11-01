@@ -7,10 +7,13 @@ of `murm-wire`'s HTTP/QUIC dependencies.
 Use `murm_rtc::rtc` for the Sans-I/O connection. `crypto-ring` is the explicit
 default provider; `crypto-aws-lc-rs` is an alternative and neither is a claim of
 a C/assembly-free build. With both disabled, the caller supplies a provider.
-Select `udp` for `murm_rtc::udp::UdpPeer`: bind a concrete local address,
-choose I/O budgets, configure the peer through `core_mut()`, and poll `next`
-from the host's own event loop. Dropping the peer releases the socket; it
-spawns no tasks. `close` followed by polling flushes protocol close packets.
+Select `host` for `murm_rtc::udp::UdpPeer::bind_host`: bind a concrete local
+address, choose I/O budgets, configure the peer through `core_mut()`, and call
+nonblocking `poll` from the host's event loop. This dependency graph contains
+no Tokio. `next_deadline` exposes the protocol's next wakeup. Select `udp` for
+Tokio binding and async `next`/`next_with_interest`, using the same packet and
+timer driver. Dropping the peer releases the socket; it spawns no tasks.
+`close` followed by polling flushes protocol close packets.
 `next_with_interest` lets a full data consumer keep servicing protocol I/O,
 timers and media while leaving data-channel reads under SCTP backpressure.
 

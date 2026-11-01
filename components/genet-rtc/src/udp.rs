@@ -1,9 +1,9 @@
 //! A caller-owned UDP socket and peer connection, with no spawned tasks.
 //!
-//! [`UdpPeer::next`] returns protocol events and messages to the caller and
-//! processes one bounded I/O turn. Dropping its future is cancellation-safe:
-//! an unsent datagram stays pending. Dropping the peer releases its socket.
-//! The host may use `select!` to cancel or dispatch its own commands.
+//! [`UdpPeer::poll`] processes a bounded nonblocking host turn. The optional
+//! `udp` feature adds async `next`/`next_with_interest` on the same driver.
+//! Dropping an async wait is cancellation-safe: an unsent datagram stays
+//! pending. Dropping the peer releases its socket.
 
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
@@ -18,7 +18,53 @@ use rtc::peer_connection::transport::{
 };
 use rtc::sansio::Protocol;
 use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
+#[cfg(feature = "udp")]
 use tokio::net::UdpSocket;
+
+enum Socket {
+    Host(std::net::UdpSocket),
+    #[cfg(feature = "udp")]
+    Async(UdpSocket),
+}
+
+impl Socket {
+    fn local_addr(&self) -> std::io::Result<SocketAddr> {
+        match self {
+            Self::Host(socket) => socket.local_addr(),
+            #[cfg(feature = "udp")]
+            Self::Async(socket) => socket.local_addr(),
+        }
+    }
+    fn send(&self, bytes: &[u8], peer: SocketAddr) -> std::io::Result<usize> {
+        match self {
+            Self::Host(socket) => socket.send_to(bytes, peer),
+            #[cfg(feature = "udp")]
+            Self::Async(socket) => socket.try_send_to(bytes, peer),
+        }
+    }
+    fn receive(&self, bytes: &mut [u8]) -> std::io::Result<(usize, SocketAddr)> {
+        match self {
+            Self::Host(socket) => socket.recv_from(bytes),
+            #[cfg(feature = "udp")]
+            Self::Async(socket) => socket.try_recv_from(bytes),
+        }
+    }
+    #[cfg(feature = "udp")]
+    async fn wait(&self, wake: Instant, pending: bool, floor: Duration) -> std::io::Result<()> {
+        match self {
+            Self::Async(socket) => tokio::select! {
+                ready = socket.readable() => ready,
+                ready = socket.writable(), if pending => ready,
+                _ = tokio::time::sleep_until(wake.into()) => Ok(()),
+            },
+            Self::Host(_) => {
+                let wake = wake.min(Instant::now().checked_add(floor).unwrap_or(wake));
+                tokio::time::sleep_until(wake.into()).await;
+                Ok(())
+            }
+        }
+    }
+}
 
 /// Host-selected I/O budgets. These do not change data-channel message limits.
 #[derive(Clone, Copy, Debug)]
@@ -85,12 +131,13 @@ pub enum ReadInterest {
 /// A peer and one concrete local UDP route, owned entirely by the caller.
 pub struct UdpPeer {
     core: RTCPeerConnection,
-    socket: UdpSocket,
+    socket: Socket,
     local_addr: SocketAddr,
     limits: IoLimits,
     buffer: Vec<u8>,
     pending: Option<TaggedBytesMut>,
     closed: bool,
+    last_timeout: Instant,
 }
 
 impl UdpPeer {
@@ -100,11 +147,31 @@ impl UdpPeer {
     /// this adapter cannot invent the destination interface of received UDP.
     /// This creates no thread/task and performs no STUN, TURN or DNS discovery.
     /// Call [`Self::finish_host_candidates`] when host-only gathering is done.
+    #[cfg(feature = "udp")]
     pub async fn bind(
-        mut core: RTCPeerConnection,
+        core: RTCPeerConnection,
         bind: SocketAddr,
         limits: IoLimits,
     ) -> Result<Self, Error> {
+        Self::validate(bind, limits)?;
+        let socket = Socket::Async(UdpSocket::bind(bind).await?);
+        Self::from_socket(core, socket, limits)
+    }
+
+    /// Bind a nonblocking host socket without a Tokio runtime or background task.
+    /// Drive it through [`Self::poll`] and schedule its [`Self::next_deadline`].
+    pub fn bind_host(
+        core: RTCPeerConnection,
+        bind: SocketAddr,
+        limits: IoLimits,
+    ) -> Result<Self, Error> {
+        Self::validate(bind, limits)?;
+        let socket = std::net::UdpSocket::bind(bind)?;
+        socket.set_nonblocking(true)?;
+        Self::from_socket(core, Socket::Host(socket), limits)
+    }
+
+    fn validate(bind: SocketAddr, limits: IoLimits) -> Result<(), Error> {
         if bind.ip().is_unspecified() {
             return Err(Error::Configuration(
                 "a concrete local IP address is required",
@@ -118,7 +185,14 @@ impl UdpPeer {
                 "nonzero packet, datagram and timer budgets are required",
             ));
         }
-        let socket = UdpSocket::bind(bind).await?;
+        Ok(())
+    }
+
+    fn from_socket(
+        mut core: RTCPeerConnection,
+        socket: Socket,
+        limits: IoLimits,
+    ) -> Result<Self, Error> {
         let local_addr = socket.local_addr()?;
         let candidate = CandidateHostConfig {
             base_config: CandidateConfig {
@@ -144,6 +218,7 @@ impl UdpPeer {
             buffer: vec![0; 65_536],
             pending: None,
             closed: false,
+            last_timeout: Instant::now(),
         })
     }
 
@@ -176,13 +251,14 @@ impl UdpPeer {
         Ok(())
     }
 
-    async fn flush(&mut self) -> Result<bool, Error> {
+    fn flush(&mut self) -> Result<bool, Error> {
+        let mut sent = false;
         for _ in 0..self.limits.packets_per_turn {
             if self.pending.is_none() {
                 self.pending = self.core.poll_write();
             }
             let Some(packet) = self.pending.as_ref() else {
-                return Ok(false);
+                return Ok(sent);
             };
             if packet.transport.transport_protocol != TransportProtocol::UDP
                 || packet.transport.local_addr != self.local_addr
@@ -195,44 +271,55 @@ impl UdpPeer {
                     limit: self.limits.datagram_bytes,
                 });
             }
-            self.socket
-                .send_to(&packet.message, packet.transport.peer_addr)
-                .await?;
-            self.pending = None;
+            match self
+                .socket
+                .send(&packet.message, packet.transport.peer_addr)
+            {
+                Ok(size) if size == packet.message.len() => {
+                    self.pending = None;
+                    sent = true;
+                }
+                Ok(_) => {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::WriteZero,
+                        "short UDP send",
+                    )
+                    .into());
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => return Ok(sent),
+                Err(error) => return Err(error.into()),
+            }
         }
-        self.pending = self.core.poll_write();
-        Ok(self.pending.is_some())
+        Ok(sent)
     }
 
-    /// Deliver one queued observation or advance I/O until the host deadline.
-    ///
-    /// The deadline bounds each call, including a busy output queue. Events
-    /// and messages stay inside the protocol until the host asks for them,
-    /// preserving SCTP's receive-side backpressure. This method does not add
-    /// application framing, restrict channel modes or consume protocol events
-    /// on the host's behalf.
-    pub async fn next(&mut self, deadline: Instant) -> Result<Output, Error> {
-        self.next_with_interest(deadline, ReadInterest::All).await
+    /// Next protocol wakeup, including the host's repeated-timeout floor.
+    pub fn next_deadline(&mut self) -> Option<Instant> {
+        let floor = self.last_timeout.checked_add(self.limits.timer_floor);
+        self.core
+            .poll_timeout()
+            .map(|time| floor.map_or(time, |floor| time.max(floor)))
     }
 
-    /// Advance the peer while honoring the host's current receive capacity.
-    ///
-    /// A full data consumer can select [`ReadInterest::MediaOnly`] and keep
-    /// driving ICE, DTLS, SCTP timers and media. It need not stop servicing the
-    /// connection or copy reliable messages into another unbounded queue.
-    pub async fn next_with_interest(
+    /// Process one bounded, nonblocking host turn. `None` means wait for socket
+    /// readiness or [`Self::next_deadline`]. Both native socket adapters use
+    /// this same packet, timer, event, message and backpressure machinery.
+    pub fn poll(
         &mut self,
         deadline: Instant,
         interest: ReadInterest,
-    ) -> Result<Output, Error> {
-        if Instant::now() >= deadline {
-            return Ok(Output::Deadline);
+    ) -> Result<Option<Output>, Error> {
+        let now = Instant::now();
+        if now >= deadline {
+            return Ok(Some(Output::Deadline));
         }
-        let more = tokio::time::timeout_at(deadline.into(), self.flush()).await;
-        let more = match more {
-            Ok(result) => result?,
-            Err(_) => return Ok(Output::Deadline),
-        };
+        let mut progress = self.flush()?;
+        // Service timers even while application events/messages are queued.
+        if self.next_deadline().is_some_and(|time| time <= now) {
+            self.core.handle_timeout(now)?;
+            self.last_timeout = now;
+            progress = true;
+        }
         if let Some(event) = self.core.poll_event() {
             if matches!(
                 &event,
@@ -242,7 +329,7 @@ impl UdpPeer {
             ) {
                 self.closed = true;
             }
-            return Ok(Output::Event(event));
+            return Ok(Some(Output::Event(event)));
         }
         let message = match interest {
             ReadInterest::All => self.core.poll_read(),
@@ -250,31 +337,23 @@ impl UdpPeer {
             ReadInterest::EventsOnly => None,
         };
         if let Some(message) = message {
-            return Ok(Output::Message(message));
-        }
-        if more {
-            tokio::task::yield_now().await;
-            return Ok(Output::Progress);
+            return Ok(Some(Output::Message(message)));
         }
         let remote_closed = self
             .core
             .sctp()
             .is_some_and(|sctp| sctp.transport().state() == RTCDtlsTransportState::Closed);
-        if self.closed || remote_closed {
+        if (self.closed || remote_closed) && self.pending.is_none() {
             self.closed = true;
-            return Ok(Output::Closed);
+            return Ok(Some(Output::Closed));
         }
-        let now = Instant::now();
-        let protocol_deadline = self.core.poll_timeout();
-        let wake = protocol_deadline
-            .map(|time| time.max(now.checked_add(self.limits.timer_floor).unwrap_or(deadline)))
-            .unwrap_or(deadline)
-            .min(deadline);
-        tokio::select! {
-            received = self.socket.recv_from(&mut self.buffer) => {
-                let (size, peer_addr) = received?;
+        match self.socket.receive(&mut self.buffer) {
+            Ok((size, peer_addr)) => {
                 if size > self.limits.datagram_bytes {
-                    return Err(Error::DatagramLimit { actual: size, limit: self.limits.datagram_bytes });
+                    return Err(Error::DatagramLimit {
+                        actual: size,
+                        limit: self.limits.datagram_bytes,
+                    });
                 }
                 self.core.handle_read(TaggedBytesMut {
                     now: Instant::now(),
@@ -286,15 +365,39 @@ impl UdpPeer {
                     },
                     message: BytesMut::from(&self.buffer[..size]),
                 })?;
+                progress = true;
             }
-            _ = tokio::time::sleep_until(wake.into()) => {
-                let now = Instant::now();
-                if now >= deadline {
-                    return Ok(Output::Deadline);
-                }
-                self.core.handle_timeout(now)?;
-            }
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
+            Err(error) => return Err(error.into()),
         }
-        Ok(Output::Progress)
+        Ok(progress.then_some(Output::Progress))
+    }
+
+    /// Deliver an observation or await native I/O until the host's deadline.
+    #[cfg(feature = "udp")]
+    pub async fn next(&mut self, deadline: Instant) -> Result<Output, Error> {
+        self.next_with_interest(deadline, ReadInterest::All).await
+    }
+
+    /// Await I/O while honoring the host's current receive capacity. A full
+    /// data consumer can keep servicing protocol timers, I/O and media.
+    #[cfg(feature = "udp")]
+    pub async fn next_with_interest(
+        &mut self,
+        deadline: Instant,
+        interest: ReadInterest,
+    ) -> Result<Output, Error> {
+        loop {
+            if let Some(output) = self.poll(deadline, interest)? {
+                if matches!(&output, Output::Progress) {
+                    tokio::task::yield_now().await;
+                }
+                return Ok(output);
+            }
+            let wake = self.next_deadline().unwrap_or(deadline).min(deadline);
+            self.socket
+                .wait(wake, self.pending.is_some(), self.limits.timer_floor)
+                .await?;
+        }
     }
 }

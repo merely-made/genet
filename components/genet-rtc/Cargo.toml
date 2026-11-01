@@ -14,7 +14,8 @@ publish = false
 default = ["crypto-ring"]
 crypto-ring = ["rtc/crypto-ring"]
 crypto-aws-lc-rs = ["rtc/crypto-aws-lc-rs"]
-udp = ["dep:tokio", "dep:bytes", "dep:thiserror"]
+host = ["dep:bytes", "dep:thiserror"]
+udp = ["host", "dep:tokio"]
 
 [dependencies]
 # Published 0.21.1 loses DCEP reliability on accepted channels. This exact

@@ -185,7 +185,7 @@ Execution subdivision (2026-11-01): 2A isolates normalized builder inputs and Pa
 
 ### Task 4: prepare a flat queue during traversal
 
-Execution subdivision: 4A adds reusable prepared formatting and the serial batch API; 4B integrates traversal, pending atomic measures and all consumer flushes. Both are required.
+Execution subdivision: 4A adds reusable prepared formatting and the serial batch API; 4B integrates atomic pending measures and their consumers; 4C integrates main traversal, retained-root and K7 queues. All are required.
 
 **Files:** create `layout/text_batch.rs`; modify `layout.rs`, `layout/build_inline.rs`, `layout/build_block.rs`, `layout/transaction.rs`, `layout/retained.rs`, `text.rs`, `text/reuse_tests.rs`.
 
@@ -266,3 +266,5 @@ Make independently reviewable checkpoints after Tasks 1–5 and a qualification/
 - 2026-11-01: Task 3 complete at `f8e0e452e55`, reviewed after behavioral-test strengthening. Exact-key retention, font invalidation and current-source rebinding are covered by 6 public tests; full library at the production commit passed 381/2 ignored. Small debug controls show saved builds with matching paint; release performance and memory qualification remain Task 6.
 
 - 2026-11-01: Task 4A complete at `ce2001cbbd7`, reviewed after atomic batch rejection fix. Four focused batch tests pass, including active results after eviction; text suite 49 passed/1 ignored before scoped fix. Task 4B scheduling/readiness remains open.
+
+- 2026-11-01: Task 4B complete at `b37f103ffc5`, reviewed. Atomic text metrics are deferred and batched before consumers; TextWrap retains preparation/results. Supporting Buckram context-update API has one-pass cache invalidation and passed 275 library tests. Livery focused7, layout136/1ignored, retained26, text51/1ignored passed. Main inline scheduling remains Task 4C.

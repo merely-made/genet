@@ -185,6 +185,8 @@ Execution subdivision (2026-11-01): 2A isolates normalized builder inputs and Pa
 
 ### Task 4: prepare a flat queue during traversal
 
+Execution subdivision: 4A adds reusable prepared formatting and the serial batch API; 4B integrates traversal, pending atomic measures and all consumer flushes. Both are required.
+
 **Files:** create `layout/text_batch.rs`; modify `layout.rs`, `layout/build_inline.rs`, `layout/build_block.rs`, `layout/transaction.rs`, `layout/retained.rs`, `text.rs`, `text/reuse_tests.rs`.
 
 **Interfaces:** define the pass-local IDs/jobs/results and serial `TextSystem::shape_batch` above. `TextBatch` owns the ordered prepared groups and deduplicated ready misses. Late requests use the same cache/shape function and increment `late_misses`.
@@ -262,3 +264,5 @@ Make independently reviewable checkpoints after Tasks 1–5 and a qualification/
 - 2026-11-01: Task 2 complete at `080e634066a` after Terra implementation/review and Luna fix review. Geometry tape matches 27 original-collector cases; eight end-to-end formatter and paint controls match Task 1. Full library 378 passed/2 ignored before the test-only offset fix; focused fix test passed. Explicit fixture coverage and preserved oracle provenance are in the canonical receipt; broader conformance and parallel-script coverage remain qualification work.
 
 - 2026-11-01: Task 3 complete at `f8e0e452e55`, reviewed after behavioral-test strengthening. Exact-key retention, font invalidation and current-source rebinding are covered by 6 public tests; full library at the production commit passed 381/2 ignored. Small debug controls show saved builds with matching paint; release performance and memory qualification remain Task 6.
+
+- 2026-11-01: Task 4A complete at `ce2001cbbd7`, reviewed after atomic batch rejection fix. Four focused batch tests pass, including active results after eviction; text suite 49 passed/1 ignored before scoped fix. Task 4B scheduling/readiness remains open.

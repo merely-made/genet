@@ -71,6 +71,13 @@ pub(in crate::layout) fn lower_sequential_multicol_if_allowed(
     }
 }
 
+pub(in crate::layout) struct PendingTextMeasure {
+    node: AlgorithmNodeId,
+    source: BoxId,
+    style: ComputedValues,
+    prepared: std::sync::Arc<crate::text::prepared::PreparedInlineGroup>,
+}
+
 pub(in crate::layout) struct BuildState<'a, D: LayoutDom> {
     pub(in crate::layout) dom: &'a D,
     pub(in crate::layout) styles: &'a StylePlane<D::NodeId>,
@@ -89,6 +96,7 @@ pub(in crate::layout) struct BuildState<'a, D: LayoutDom> {
     /// The atomic inline root a scratch build formats to measure its
     /// shrink-to-fit width, which it does not measure again.
     pub(in crate::layout) measuring_root: Option<D::NodeId>,
+    pub(in crate::layout) pending_text: Vec<PendingTextMeasure>,
 }
 
 impl<D> BuildState<'_, D>
@@ -96,6 +104,111 @@ where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
+    pub(in crate::layout) fn prepare_text_measures(&mut self) -> Result<(), LayoutError> {
+        if self.pending_text.is_empty() {
+            return Ok(());
+        }
+        let Some(text) = self.text.as_deref_mut() else {
+            return Err(LayoutError::retained_state(
+                "pending text measures have no text system",
+            ));
+        };
+        static NEXT_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+        let generation = NEXT_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let fragments = AtomicLayoutPlane::default();
+        #[cfg(test)]
+        let requests_before_batch = text.shaping_stats().format_requests;
+        let mut jobs = Vec::new();
+        for (index, pending) in self.pending_text.iter().enumerate() {
+            for (width, intrinsic) in [
+                (0.01, IntrinsicSizeKind::MinContent),
+                (f32::INFINITY, IntrinsicSizeKind::MaxContent),
+            ] {
+                jobs.push(crate::text::ShapeJob {
+                    group: crate::text::InlineGroupId(index),
+                    generation,
+                    key: text.prepared_shape_key::<D::NodeId, _>(
+                        &pending.prepared,
+                        &fragments,
+                        width,
+                        Some(intrinsic),
+                        &pending.style,
+                    ),
+                });
+            }
+        }
+        let results = text.shape_batch(&jobs, generation).map_err(|error| {
+            LayoutError::retained_state(format!("text batch rejected: {error:?}"))
+        })?;
+        #[cfg(test)]
+        assert_eq!(
+            text.shaping_stats().format_requests,
+            requests_before_batch,
+            "the ready batch must flush before intrinsic placement"
+        );
+        let mut replacements = HashMap::new();
+        for (index, pending) in self.pending_text.iter().enumerate() {
+            let mut measure = self
+                .tree
+                .context(pending.node)
+                .expect("pending text context")
+                .clone();
+            let roots = [pending.source];
+            let request = |width, intrinsic| InlineRequest {
+                roots: &roots,
+                parent_style: &pending.style,
+                width,
+                intrinsic_kind: Some(intrinsic),
+                line_constraints: None,
+            };
+            if let Some(layout) = text.format_prepared_inline_group::<D::NodeId, _>(
+                &pending.prepared,
+                &fragments,
+                self.dom.quirks_mode(),
+                request(0.01, IntrinsicSizeKind::MinContent),
+                Some((
+                    &results[index * 2],
+                    generation,
+                    crate::text::InlineGroupId(index),
+                )),
+            ) {
+                measure.min_width = layout.size().0;
+            }
+            if let Some(layout) = text.format_prepared_inline_group::<D::NodeId, _>(
+                &pending.prepared,
+                &fragments,
+                self.dom.quirks_mode(),
+                request(f32::INFINITY, IntrinsicSizeKind::MaxContent),
+                Some((
+                    &results[index * 2 + 1],
+                    generation,
+                    crate::text::InlineGroupId(index),
+                )),
+            ) {
+                measure.max_width = layout.size().0.max(measure.min_width);
+                measure.height = layout.size().1;
+                measure.baselines = layout.baselines();
+                measure.wrap = Some(Box::new(TextWrap {
+                    source: pending.source,
+                    parent_style: pending.style.clone(),
+                    formatted: Vec::new(),
+                    prepared: pending.prepared.clone(),
+                    generation,
+                    group: crate::text::InlineGroupId(index),
+                    results: vec![results[index * 2].clone(), results[index * 2 + 1].clone()],
+                }));
+            }
+            replacements.insert(pending.node, measure);
+        }
+        self.tree.update_contexts(|node, context| {
+            if let Some(replacement) = replacements.remove(&node) {
+                *context = replacement;
+            }
+        });
+        self.pending_text.clear();
+        Ok(())
+    }
+
     fn has_multicol_ancestor(&self, box_id: BoxId) -> bool {
         let mut ancestor = self.boxes[box_id].parent();
         while let Some(box_id) = ancestor {
@@ -615,11 +728,13 @@ where
             contribution_root: None,
             width_override: None,
             measuring_root: Some(node),
+            pending_text: Vec::new(),
         };
         let Some(root) = scratch.build_box(box_id, inherited, parent_font_size, containing_size)?
         else {
             return Ok(None);
         };
+        scratch.prepare_text_measures()?;
         Ok(fallback_shrink_to_fit_width(
             &mut scratch,
             root,
@@ -917,7 +1032,7 @@ where
                 let line_height = inherited
                     .map(|style| line_height_px(&style.line_height, font_size))
                     .unwrap_or(font_size * 1.2);
-                let mut min_width = if preserves_whitespace {
+                let min_width = if preserves_whitespace {
                     text.lines()
                         .map(|line| line.chars().count())
                         .max()
@@ -927,7 +1042,7 @@ where
                 } as f32
                     * font_size
                     * 0.6;
-                let mut max_width = if preserves_whitespace {
+                let max_width = if preserves_whitespace {
                     min_width
                 } else {
                     collapsed_text_width(text) as f32 * font_size * 0.6
@@ -937,58 +1052,25 @@ where
                 } else {
                     1
                 };
-                let mut height = line_count as f32 * line_height;
-                let mut baselines = None;
-                let mut wrap = None;
-                if let Some(text_system) = self.text.as_deref_mut()
-                    && let Some(parent_style) = inherited
-                {
-                    let fragments = AtomicLayoutPlane::default();
-                    let roots = [box_id];
-                    let minimum = text_system
-                        .format_inline_group(
-                            self.dom,
-                            self.styles,
-                            self.boxes,
-                            &fragments,
-                            InlineRequest {
-                                roots: &roots,
-                                parent_style,
-                                width: 0.01,
-                                intrinsic_kind: Some(IntrinsicSizeKind::MinContent),
-                                line_constraints: None,
-                            },
+                let height = line_count as f32 * line_height;
+                let baselines = None;
+                let wrap = None;
+                let prepared = self
+                    .text
+                    .as_deref_mut()
+                    .zip(inherited)
+                    .map(|(text, style)| {
+                        (
+                            style.clone(),
+                            std::sync::Arc::new(text.prepare_inline_group(
+                                self.dom,
+                                self.styles,
+                                self.boxes,
+                                &[box_id],
+                                style,
+                            )),
                         )
-                        .map(|layout| layout.size());
-                    let maximum = text_system
-                        .format_inline_group(
-                            self.dom,
-                            self.styles,
-                            self.boxes,
-                            &fragments,
-                            InlineRequest {
-                                roots: &roots,
-                                parent_style,
-                                width: f32::INFINITY,
-                                intrinsic_kind: Some(IntrinsicSizeKind::MaxContent),
-                                line_constraints: None,
-                            },
-                        )
-                        .map(|layout| (layout.size(), layout.baselines()));
-                    if let Some((minimum, _)) = minimum {
-                        min_width = minimum;
-                    }
-                    if let Some(((maximum, maximum_height), maximum_baselines)) = maximum {
-                        max_width = maximum.max(min_width);
-                        height = maximum_height;
-                        baselines = maximum_baselines;
-                        wrap = Some(Box::new(TextWrap {
-                            source: box_id,
-                            parent_style: parent_style.clone(),
-                            formatted: Vec::new(),
-                        }));
-                    }
-                }
+                    });
                 let node = self.tree.new_leaf_with_context_and_block_style(
                     anonymous_block_style(self.boxes, box_id),
                     Style {
@@ -1004,6 +1086,14 @@ where
                     },
                     Some(box_id),
                 );
+                if let Some((style, prepared)) = prepared {
+                    self.pending_text.push(PendingTextMeasure {
+                        node,
+                        source: box_id,
+                        style,
+                        prepared,
+                    });
+                }
                 Ok(Some(node))
             },
             BoxOrigin::Pseudo {

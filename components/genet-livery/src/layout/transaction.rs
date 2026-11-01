@@ -248,6 +248,7 @@ where
         contribution_root: None,
         width_override: None,
         measuring_root: None,
+        pending_text: Vec::new(),
     };
     let children = boxes
         .roots()
@@ -288,6 +289,7 @@ where
         None,
     );
 
+    state.prepare_text_measures()?;
     state.apply_buckram_table_layout();
     state.tree.compute_layout_with_measure(
         root,
@@ -469,6 +471,7 @@ where
         contribution_root,
         width_override,
         measuring_root: None,
+        pending_text: Vec::new(),
     }
 }
 
@@ -542,6 +545,7 @@ where
             None,
         );
         let mut built = state.build_box(box_id, None, 16.0, (Some(basis_width), basis_height))?;
+        state.prepare_text_measures()?;
         // An auto-width root that Buckram does not shrink to fit would fill
         // its containing block, so it is built again at its shrink-to-fit
         // width.
@@ -559,6 +563,7 @@ where
                 Some((node, width)),
             );
             built = state.build_box(box_id, None, 16.0, (Some(basis_width), basis_height))?;
+            state.prepare_text_measures()?;
         }
         // Harvest before any continue below: the shadow already ran inside
         // build_box, and both skip paths would otherwise drop its ledger.
@@ -663,6 +668,7 @@ where
         // it again there for its height, through the text system the build
         // lent the tree.
         let mut text_system = state.text.take();
+        let mut text_error = None;
         state.tree.compute_layout_with_measure(
             root,
             available,
@@ -679,19 +685,21 @@ where
                     .width
                     .unwrap_or(context.max_width.min(available_width.max(0.0)));
                 let height = known.height.unwrap_or_else(|| {
-                    wrapped_text_height(
-                        context,
-                        width,
-                        text_system.as_deref_mut(),
-                        dom,
-                        styles,
-                        boxes,
-                    )
+                    match wrapped_text_height(context, width, text_system.as_deref_mut(), dom) {
+                        Ok(height) => height,
+                        Err(error) => {
+                            text_error = Some(error);
+                            context.height
+                        },
+                    }
                 });
                 AlgorithmSize::new(width, height)
             },
         );
         state.text = text_system;
+        if let Some(error) = text_error {
+            return Err(error);
+        }
 
         let table_paint = state.table_paint_plane();
         let tables = table_paint.fragments();

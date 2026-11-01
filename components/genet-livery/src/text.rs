@@ -239,6 +239,7 @@ pub(crate) struct ShapeBatchError {
     pub(crate) kind: ShapeBatchErrorKind,
 }
 
+#[derive(Clone)]
 pub(crate) struct ShapeResult {
     pub(crate) group: InlineGroupId,
     pub(crate) generation: u64,
@@ -686,17 +687,8 @@ impl TextSystem {
         D::NodeId: Copy + Eq + Hash,
         F: FragmentLookup<D::NodeId>,
     {
-        let collect_start = self
-            .shaping_options
-            .record_timings
-            .then(std::time::Instant::now);
-        let parent_style = request.parent_style;
         let prepared =
-            prepared::PreparedInlineGroup::collect(dom, styles, boxes, request.roots, parent_style);
-        self.shaping_stats.collect_ns = self
-            .shaping_stats
-            .collect_ns
-            .saturating_add(stats::elapsed_ns(collect_start));
+            self.prepare_inline_group(dom, styles, boxes, request.roots, request.parent_style);
         self.format_prepared_inline_group::<D::NodeId, F>(
             &prepared,
             fragments,
@@ -704,6 +696,30 @@ impl TextSystem {
             request,
             None,
         )
+    }
+
+    pub(crate) fn prepare_inline_group<D: LayoutDom>(
+        &mut self,
+        dom: &D,
+        styles: &StylePlane<D::NodeId>,
+        boxes: &CssBoxTree<D::NodeId>,
+        roots: &[BoxId],
+        parent_style: &ComputedValues,
+    ) -> prepared::PreparedInlineGroup
+    where
+        D::NodeId: Copy + Eq + Hash,
+    {
+        let start = self
+            .shaping_options
+            .record_timings
+            .then(std::time::Instant::now);
+        let prepared =
+            prepared::PreparedInlineGroup::collect(dom, styles, boxes, roots, parent_style);
+        self.shaping_stats.collect_ns = self
+            .shaping_stats
+            .collect_ns
+            .saturating_add(stats::elapsed_ns(start));
+        prepared
     }
 
     pub(crate) fn format_prepared_inline_group<Id, F>(
@@ -1572,6 +1588,20 @@ impl TextSystem {
             root_style,
             intrinsic_kind,
         )
+    }
+
+    pub(crate) fn shape_late_batch(
+        &mut self,
+        jobs: &[ShapeJob],
+        generation: u64,
+    ) -> Result<Vec<ShapeResult>, ShapeBatchError> {
+        let before = self.shaping_stats.cache_misses;
+        let results = self.shape_batch(jobs, generation)?;
+        self.shaping_stats.late_misses = self
+            .shaping_stats
+            .late_misses
+            .saturating_add(self.shaping_stats.cache_misses.saturating_sub(before));
+        Ok(results)
     }
 
     pub(crate) fn shape_batch(

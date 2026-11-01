@@ -153,6 +153,7 @@ fn nested_multicol_build_admits_only_the_outer_algorithm_node() {
         contribution_root: None,
         width_override: None,
         measuring_root: None,
+        pending_text: Vec::new(),
     };
     let outer_node = state
         .build_box(outer_box, None, 16.0, (Some(320.0), Some(240.0)))
@@ -8136,7 +8137,12 @@ fn inline_measure_policy_and_width_match_exact_requests() {
             );
         }
     }
-    assert!(inline_measure_matches(f32::INFINITY, max, f32::INFINITY, max));
+    assert!(inline_measure_matches(
+        f32::INFINITY,
+        max,
+        f32::INFINITY,
+        max
+    ));
     assert!(!inline_measure_matches(
         f32::INFINITY,
         max,
@@ -8144,4 +8150,135 @@ fn inline_measure_policy_and_width_match_exact_requests() {
         max
     ));
     assert!(!inline_measure_matches(42.0, None, 42.02, None));
+}
+
+#[test]
+fn prepared_batch_atomic_metrics_are_deferred_until_batch_flush() {
+    let dom = StaticDocument::parse(
+        "<span id=a style='display:inline-block'><span>one two three</span><span>one two three</span></span>",
+    );
+    let styles = resolve_styles(
+        &dom,
+        &StyleSet::cambium(&[]),
+        &Device::screen(320.0, 240.0),
+        &InteractionStates::default(),
+    );
+    let node = node_by_id(&dom, dom.document(), "a").unwrap();
+    let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+    let box_id = boxes.principal_box(node).unwrap();
+    let image_sources = HashMap::new();
+    let mut text = TextSystem::new();
+    let mut options = text.shaping_options();
+    options.retained_entries = 0;
+    options.retained_text_bytes = 0;
+    text.set_shaping_options(options);
+    let mut state = BuildState {
+        dom: &dom,
+        styles: &styles,
+        boxes: &boxes,
+        tree: AlgorithmTree::new(),
+        image_sources: &image_sources,
+        text: Some(&mut text),
+        table_shadow: TableShadowLedger::default(),
+        pending_tables: Vec::new(),
+        contribution_root: None,
+        width_override: None,
+        measuring_root: None,
+        pending_text: Vec::new(),
+    };
+    state
+        .build_box(box_id, None, 16.0, (Some(320.0), Some(240.0)))
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        state.text.as_ref().unwrap().shaping_stats().format_requests,
+        0
+    );
+    state.prepare_text_measures().unwrap();
+    let stats = state.text.as_ref().unwrap().shaping_stats();
+    assert_eq!(stats.batches, 1);
+    assert_eq!(stats.format_requests, 4);
+    assert_eq!(stats.unique_jobs, 1);
+    assert_eq!(stats.late_misses, 0);
+    let mut text = state.text.take();
+    state.tree.update_contexts(|_, context| {
+        if context.wrap.is_some() {
+            let before = text.as_ref().unwrap().shaping_stats().layout_builds;
+            let wrap = context.wrap.as_ref().unwrap();
+            let source = wrap.source;
+            let style = wrap.parent_style.clone();
+            let mut fresh = TextSystem::new();
+            for width in [10.0, 11.0] {
+                let expected = fresh
+                    .format_inline_group(
+                        &dom,
+                        &styles,
+                        &boxes,
+                        &AtomicLayoutPlane::default(),
+                        InlineRequest {
+                            roots: &[source],
+                            parent_style: &style,
+                            width,
+                            intrinsic_kind: None,
+                            line_constraints: None,
+                        },
+                    )
+                    .unwrap();
+                let height =
+                    wrapped_text_height(context, width, text.as_deref_mut(), &dom).unwrap();
+                assert_eq!(height, expected.size().1);
+                assert_eq!(text_baselines(context, width), expected.baselines());
+            }
+            assert_eq!(text.as_ref().unwrap().shaping_stats().layout_builds, before);
+        }
+    });
+}
+
+#[test]
+fn prepared_batch_atomic_geometry_matches_fresh_uncached() {
+    let dom = StaticDocument::parse(
+        "<div><span id=a style='display:inline-block;width:50%;padding:2px'><span>one two three four</span><span>five six</span></span></div>",
+    );
+    let styles = resolve_styles(
+        &dom,
+        &StyleSet::cambium(&[]),
+        &Device::screen(320.0, 240.0),
+        &InteractionStates::default(),
+    );
+    let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+    let images = HashMap::new();
+    let mut retained = TextSystem::new();
+    let run = |text: &mut TextSystem| {
+        layout_atomic_subtrees(
+            &dom,
+            &styles,
+            &boxes,
+            320.0,
+            240.0,
+            &AtomicPass::Contribution,
+            text,
+            &images,
+        )
+        .unwrap()
+    };
+    let _ = run(&mut retained);
+    let warm = run(&mut retained);
+    let mut fresh = TextSystem::new();
+    let mut options = fresh.shaping_options();
+    options.retained_entries = 0;
+    options.retained_text_bytes = 0;
+    fresh.set_shaping_options(options);
+    let cold = run(&mut fresh);
+    assert!(!cold.fragments.is_empty());
+    assert!(fresh.shaping_stats().unique_jobs > 0);
+    assert_eq!(fresh.shaping_stats().late_misses, 0);
+    assert_eq!(warm.fragments.len(), cold.fragments.len());
+    for (id, actual) in &warm.fragments {
+        let expected = cold.fragments.get(id).expect("fresh atomic fragment");
+        assert_eq!(
+            (actual.x, actual.y, actual.width, actual.height),
+            (expected.x, expected.y, expected.width, expected.height)
+        );
+        assert_eq!(warm.inline_baselines.get(id), cold.inline_baselines.get(id));
+    }
 }

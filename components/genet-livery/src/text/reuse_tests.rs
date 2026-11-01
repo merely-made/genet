@@ -263,3 +263,38 @@ fn prepared_batch_rejects_all_jobs_atomically() {
         }
     }
 }
+
+#[test]
+fn prepared_batch_late_counter_counts_only_cache_misses() {
+    use super::{InlineGroupId, ShapeJob};
+    let mut system = super::TextSystem::new();
+    let input = super::prepared::ShapeInput {
+        text: "late".into(),
+        defaults: vec![],
+        spans: vec![],
+        slots: vec![],
+        base_level: 0,
+        scale: 1.0f32.to_bits(),
+        quantize: true,
+    };
+    let key = super::cache::ShapeKey {
+        generation: system.font_generation,
+        input,
+    };
+    let job = ShapeJob {
+        group: InlineGroupId(0),
+        generation: 7,
+        key,
+    };
+    system
+        .shape_late_batch(std::slice::from_ref(&job), 7)
+        .unwrap();
+    assert_eq!(system.shaping_stats().late_misses, 1);
+    system
+        .shape_late_batch(std::slice::from_ref(&job), 7)
+        .unwrap();
+    assert_eq!(system.shaping_stats().late_misses, 1);
+    let before = system.shaping_stats();
+    assert!(system.shape_late_batch(&[job], 8).is_err());
+    assert_eq!(system.shaping_stats(), before);
+}

@@ -323,7 +323,7 @@ impl LayoutError {
 
 impl Error for LayoutError {}
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct TextMeasure {
     min_width: f32,
     max_width: f32,
@@ -335,10 +335,14 @@ struct TextMeasure {
     wrap: Option<Box<TextWrap>>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct TextWrap {
     source: BoxId,
     parent_style: ComputedValues,
+    prepared: std::sync::Arc<crate::text::prepared::PreparedInlineGroup>,
+    generation: u64,
+    group: crate::text::InlineGroupId,
+    results: Vec<crate::text::ShapeResult>,
     /// Widths already formatted, with the height and line baselines at each.
     formatted: Vec<(f32, f32, Option<(f32, f32)>)>,
 }
@@ -351,32 +355,59 @@ fn wrapped_text_height<D>(
     width: f32,
     text: Option<&mut TextSystem>,
     dom: &D,
-    styles: &StylePlane<D::NodeId>,
-    boxes: &GeneratedBoxTree<D::NodeId>,
-) -> f32
+) -> Result<f32, LayoutError>
 where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
     let (Some(wrap), Some(text)) = (context.wrap.as_deref_mut(), text) else {
-        return context.height;
+        return Ok(context.height);
     };
     if width >= context.max_width - 0.5 {
-        return context.height;
+        return Ok(context.height);
     }
     if let Some(&(_, height, _)) = wrap
         .formatted
         .iter()
         .find(|(formatted, ..)| (formatted - width).abs() <= 0.01)
     {
-        return height;
+        return Ok(height);
     }
+    let fragments = AtomicLayoutPlane::default();
+    let key = text.prepared_shape_key::<D::NodeId, _>(
+        &wrap.prepared,
+        &fragments,
+        width,
+        None,
+        &wrap.parent_style,
+    );
+    let result_index = if let Some(index) = wrap.results.iter().position(|result| result.key == key)
+    {
+        index
+    } else {
+        let job = crate::text::ShapeJob {
+            group: wrap.group,
+            generation: wrap.generation,
+            key,
+        };
+        let mut results = text
+            .shape_late_batch(&[job], wrap.generation)
+            .map_err(|error| {
+                LayoutError::retained_state(format!("late text batch rejected: {error:?}"))
+            })?;
+        let index = wrap.results.len();
+        wrap.results.append(&mut results);
+        index
+    };
+    let result = wrap
+        .results
+        .get(result_index)
+        .ok_or_else(|| LayoutError::retained_state("late text batch returned no result"))?;
     let (height, baselines) = text
-        .format_inline_group(
-            dom,
-            styles,
-            boxes,
-            &AtomicLayoutPlane::default(),
+        .format_prepared_inline_group::<D::NodeId, _>(
+            &wrap.prepared,
+            &fragments,
+            dom.quirks_mode(),
             InlineRequest {
                 roots: &[wrap.source],
                 parent_style: &wrap.parent_style,
@@ -384,12 +415,13 @@ where
                 intrinsic_kind: None,
                 line_constraints: None,
             },
+            Some((result, wrap.generation, wrap.group)),
         )
         .map_or((context.height, None), |layout| {
             (layout.size().1, layout.baselines())
         });
     wrap.formatted.push((width, height, baselines));
-    height
+    Ok(height)
 }
 
 /// `context`'s first and last line baselines at `width`: as it was formatted

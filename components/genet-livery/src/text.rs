@@ -643,29 +643,13 @@ impl TextSystem {
             .record_timings
             .then(std::time::Instant::now);
         let parent_style = request.parent_style;
-        let mut text = String::new();
-        let mut spans = Vec::new();
-        let mut inline_boxes = Vec::new();
-        let mut inline_styles = HashMap::new();
-        let mut owners = Vec::new();
-        {
-            let mut collector = BoxInlineCollector {
-                dom,
-                styles,
-                boxes,
-                fragments,
-                owners: &mut owners,
-                text: &mut text,
-                spans: &mut spans,
-                inline_boxes: &mut inline_boxes,
-                inline_styles: &mut inline_styles,
-                percentage_basis: request.width,
-                intrinsic_kind: request.intrinsic_kind,
-            };
-            for root in request.roots {
-                collector.collect(*root, parent_style);
-            }
-        }
+        let prepared =
+            prepared::PreparedInlineGroup::collect(dom, styles, boxes, request.roots, parent_style);
+        let inline_boxes =
+            prepared.materialize::<D::NodeId, _>(fragments, request.width, request.intrinsic_kind);
+        let text = prepared.text;
+        let mut spans = prepared.spans;
+        let inline_styles = prepared.inline_styles;
         self.shaping_stats.collect_ns = self
             .shaping_stats
             .collect_ns
@@ -3475,7 +3459,7 @@ struct TextSource<Id> {
     range: Range<usize>,
 }
 
-struct InlineAtom<Id> {
+pub(crate) struct InlineAtom<Id> {
     source: Id,
     owners: Vec<Id>,
     index: usize,
@@ -4780,29 +4764,20 @@ fn descendant_text<D: LayoutDom>(dom: &D, node: D::NodeId) -> String {
     text
 }
 
-struct BoxInlineCollector<'a, D, F>
-where
-    D: LayoutDom,
-    F: FragmentLookup<D::NodeId>,
-{
+struct TapeCollector<'a, D: LayoutDom> {
     dom: &'a D,
     styles: &'a StylePlane<D::NodeId>,
     boxes: &'a CssBoxTree<D::NodeId>,
-    fragments: &'a F,
     owners: &'a mut Vec<BoxId>,
     text: &'a mut String,
     spans: &'a mut Vec<SourceSpan<BoxId>>,
-    inline_boxes: &'a mut Vec<InlineAtom<BoxId>>,
     inline_styles: &'a mut HashMap<BoxId, ComputedValues>,
-    percentage_basis: f32,
-    intrinsic_kind: Option<IntrinsicSizeKind>,
+    events: &'a mut Vec<prepared::GeometryEvent>,
+    inline_owners: &'a mut Vec<prepared::InlineOwner>,
 }
-
-impl<D, F> BoxInlineCollector<'_, D, F>
+impl<D: LayoutDom> TapeCollector<'_, D>
 where
-    D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
-    F: FragmentLookup<D::NodeId>,
 {
     fn collect(&mut self, box_id: BoxId, inherited: &ComputedValues) {
         let css_box = &self.boxes[box_id];
@@ -4839,32 +4814,50 @@ where
                     return;
                 }
                 if is_forced_line_break(self.dom, node) {
-                    self.push_forced_line_break(box_id, &style);
+                    let start = append_forced_line_break(self.text);
+                    push_forced_break_span(self.spans, self.owners, &style, start..self.text.len());
                     return;
                 }
                 let atomic = css_box.replaced
                     || (css_box.display.outside == Some(DisplayOutside::Inline)
                         && css_box.display.inside == Some(DisplayInside::FlowRoot));
                 if atomic {
-                    self.push_atomic_box(box_id, &style);
+                    self.events.push(prepared::GeometryEvent::Atomic {
+                        source: box_id,
+                        style: style.clone(),
+                        owners: self.owners.clone(),
+                        index: self.text.len(),
+                    });
                     return;
                 }
 
                 let ancestor_owners = self.owners.clone();
                 let text_start = self.text.len();
-                self.push_edge(box_id, &style, &ancestor_owners, true);
-                self.push_positioned_start_marker(box_id, &style, &ancestor_owners);
-                let content_start = self.inline_boxes.len();
+                let positioned = matches!(
+                    css_box.positioning,
+                    buckram::PositioningScheme::Relative | buckram::PositioningScheme::Sticky
+                );
+                let slot = self.inline_owners.len();
+                self.inline_owners.push(prepared::InlineOwner {
+                    source: box_id,
+                    style: style.clone(),
+                    owners: ancestor_owners,
+                    positioned,
+                });
+                self.events.push(prepared::GeometryEvent::Begin {
+                    slot,
+                    index: text_start,
+                });
                 self.owners.push(box_id);
                 for child in css_box.children() {
                     self.collect(*child, &style);
                 }
                 self.owners.pop();
-                let has_inline_content = self.inline_boxes.len() > content_start;
-                self.push_edge(box_id, &style, &ancestor_owners, false);
-                if self.text.len() == text_start && !has_inline_content {
-                    self.push_empty_line_box(box_id, &style, &ancestor_owners);
-                }
+                self.events.push(prepared::GeometryEvent::End {
+                    slot,
+                    index: self.text.len(),
+                    text_empty: self.text.len() == text_start,
+                });
                 self.inline_styles.insert(box_id, style);
             },
             BoxOrigin::Anonymous { .. } => {
@@ -4886,7 +4879,12 @@ where
                     // vertical-align; it is not on the wrapper's migrated
                     // property list, and for_child reset it.
                     style.vertical_align = owner.vertical_align;
-                    self.push_atomic_box(box_id, &style);
+                    self.events.push(prepared::GeometryEvent::Atomic {
+                        source: box_id,
+                        style: style.clone(),
+                        owners: self.owners.clone(),
+                        index: self.text.len(),
+                    });
                     return;
                 }
                 for child in css_box.children() {
@@ -4927,7 +4925,18 @@ where
             },
         }
     }
+}
 
+struct GeometryMaterializer<'a, Id, F: FragmentLookup<Id>> {
+    fragments: &'a F,
+    owners: Vec<BoxId>,
+    inline_boxes: Vec<InlineAtom<BoxId>>,
+    percentage_basis: f32,
+    intrinsic_kind: Option<IntrinsicSizeKind>,
+    index: usize,
+    marker: std::marker::PhantomData<Id>,
+}
+impl<Id, F: FragmentLookup<Id>> GeometryMaterializer<'_, Id, F> {
     /// One atomic inline box: its whole subtree was laid out separately and
     /// its rectangle occupies line space as a unit.
     fn push_atomic_box(&mut self, box_id: BoxId, style: &ComputedValues) {
@@ -4950,7 +4959,7 @@ where
         self.inline_boxes.push(InlineAtom {
             source: box_id,
             owners: self.owners.clone(),
-            index: self.text.len(),
+            index: self.index,
             fragment,
             line_width,
             line_box_height,
@@ -4977,7 +4986,7 @@ where
                 self.inline_boxes.push(InlineAtom {
                     source,
                     owners: owners.to_vec(),
-                    index: self.text.len(),
+                    index: self.index,
                     fragment: Fragment {
                         width,
                         ..Fragment::default()
@@ -5016,11 +5025,9 @@ where
         source: BoxId,
         style: &ComputedValues,
         owners: &[BoxId],
+        positioned: bool,
     ) {
-        if !matches!(
-            self.boxes[source].positioning,
-            buckram::PositioningScheme::Relative | buckram::PositioningScheme::Sticky
-        ) {
+        if !positioned {
             return;
         }
         let font_size = super::paint::used_font_size(style);
@@ -5028,7 +5035,7 @@ where
         self.inline_boxes.push(InlineAtom {
             source,
             owners: owners.to_vec(),
-            index: self.text.len(),
+            index: self.index,
             fragment: Fragment::default(),
             line_width: 0.0,
             line_box_height: line_height,
@@ -5045,25 +5052,18 @@ where
         });
     }
 
-    fn push_empty_line_box(&mut self, source: BoxId, style: &ComputedValues, owners: &[BoxId]) {
+    fn push_empty_line_box(
+        &mut self,
+        source: BoxId,
+        style: &ComputedValues,
+        owners: &[BoxId],
+        positioned: bool,
+    ) {
         // An empty positioned inline still establishes the containing block
         // for an absolute descendant, so its atom keeps its line rectangle.
-        let positioned = matches!(
-            self.boxes[source].positioning,
-            buckram::PositioningScheme::Relative | buckram::PositioningScheme::Sticky
-        );
         self.inline_boxes.push(empty_inline_atom(
-            source,
-            owners,
-            self.text.len(),
-            style,
-            positioned,
+            source, owners, self.index, style, positioned,
         ));
-    }
-
-    fn push_forced_line_break(&mut self, _source: BoxId, style: &ComputedValues) {
-        let start = append_forced_line_break(self.text);
-        push_forced_break_span(self.spans, self.owners, style, start..self.text.len());
     }
 }
 
@@ -9202,3 +9202,306 @@ mod tests {
 
 #[cfg(test)]
 mod reuse_tests;
+
+#[cfg(test)]
+mod prepared_geometry_tests {
+    use super::*;
+    use crate::{Device, InteractionStates, StyleSet, box_tree::GeneratedBoxTree, resolve_styles};
+    use genet_static_dom::StaticDocument;
+
+    struct CountingDom<'a> {
+        inner: &'a StaticDocument,
+        reads: std::cell::Cell<usize>,
+    }
+    impl CountingDom<'_> {
+        fn hit(&self) {
+            self.reads.set(self.reads.get() + 1);
+        }
+    }
+    impl LayoutDom for CountingDom<'_> {
+        type NodeId = <StaticDocument as LayoutDom>::NodeId;
+        fn document(&self) -> Self::NodeId {
+            self.hit();
+            self.inner.document()
+        }
+        fn parent(&self, id: Self::NodeId) -> Option<Self::NodeId> {
+            self.hit();
+            self.inner.parent(id)
+        }
+        fn prev_sibling(&self, id: Self::NodeId) -> Option<Self::NodeId> {
+            self.hit();
+            self.inner.prev_sibling(id)
+        }
+        fn next_sibling(&self, id: Self::NodeId) -> Option<Self::NodeId> {
+            self.hit();
+            self.inner.next_sibling(id)
+        }
+        fn dom_children(&self, id: Self::NodeId) -> impl Iterator<Item = Self::NodeId> + '_ {
+            self.hit();
+            self.inner.dom_children(id)
+        }
+        fn kind(&self, id: Self::NodeId) -> NodeKind {
+            self.hit();
+            self.inner.kind(id)
+        }
+        fn element_name(&self, id: Self::NodeId) -> Option<&layout_dom_api::QualName> {
+            self.hit();
+            self.inner.element_name(id)
+        }
+        fn attribute(&self, id: Self::NodeId, ns: &Namespace, local: &LocalName) -> Option<&str> {
+            self.hit();
+            self.inner.attribute(id, ns, local)
+        }
+        fn attributes(
+            &self,
+            id: Self::NodeId,
+        ) -> impl Iterator<Item = layout_dom_api::AttributeView<'_>> + '_ {
+            self.hit();
+            self.inner.attributes(id)
+        }
+        fn text(&self, id: Self::NodeId) -> Option<&str> {
+            self.hit();
+            self.inner.text(id)
+        }
+    }
+    struct Plane {
+        atom: BoxId,
+        fragment: Option<Fragment>,
+        baseline: f32,
+    }
+    impl<Id> FragmentLookup<Id> for Plane {
+        fn rect(&self, _: Id) -> Option<&Fragment> {
+            None
+        }
+        fn atomic_box_rect(&self, id: BoxId) -> Option<&Fragment> {
+            if id == self.atom {
+                self.fragment.as_ref()
+            } else {
+                None
+            }
+        }
+        fn atomic_box_baseline(&self, id: BoxId) -> Option<f32> {
+            (id == self.atom).then_some(self.baseline)
+        }
+        fn atomic_box_intrinsic_inline(&self, id: BoxId) -> Option<IntrinsicSizes> {
+            (id == self.atom).then(|| IntrinsicSizes::new(7.0, 19.0).unwrap())
+        }
+    }
+    fn digest(atoms: &[InlineAtom<BoxId>]) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        for a in atoms {
+            a.source.hash(&mut h);
+            a.owners.hash(&mut h);
+            a.index.hash(&mut h);
+            for x in [
+                a.fragment.x,
+                a.fragment.y,
+                a.fragment.width,
+                a.fragment.height,
+                a.line_width,
+                a.line_box_height,
+                a.baseline,
+                a.margin_left,
+                a.margin_top,
+                a.font_size,
+                a.line_height,
+            ] {
+                x.to_bits().hash(&mut h);
+            }
+            (a.edge, a.paint, a.marker, a.empty_line).hash(&mut h);
+        }
+        h.finish()
+    }
+    #[test]
+    fn split_shape_geometry_materialization_matches_fresh() {
+        let dom = StaticDocument::parse(
+            "<div><span id=outer><span id=inner style='padding-left:10%'></span></span><span id=positioned style='position:relative'></span><img id=atom><span id=words>hello</span></div>",
+        );
+        let styles = resolve_styles(
+            &dom,
+            &StyleSet::cambium(&[]),
+            &Device::screen(320.0, 240.0),
+            &InteractionStates::default(),
+        );
+        let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+        let find = |name| {
+            boxes
+                .iter()
+                .find_map(|(id, b)| {
+                    b.origin
+                        .node()
+                        .filter(|n| {
+                            dom.attribute(*n, &Namespace::from(""), &LocalName::from("id"))
+                                == Some(name)
+                        })
+                        .map(|_| id)
+                })
+                .unwrap()
+        };
+        let outer = find("outer");
+        let inner = find("inner");
+        let positioned = find("positioned");
+        let atom = find("atom");
+        let roots = [outer, positioned, atom, find("words")];
+        let parent = ComputedValues::default();
+        let counting = CountingDom {
+            inner: &dom,
+            reads: std::cell::Cell::new(0),
+        };
+        let prepared =
+            prepared::PreparedInlineGroup::collect(&counting, &styles, &boxes, &roots, &parent);
+        let reads_after_collect = counting.reads.get();
+        assert!(reads_after_collect > 0);
+        for width in [0.0, 100.0, 250.0] {
+            for policy in [
+                None,
+                Some(IntrinsicSizeKind::MinContent),
+                Some(IntrinsicSizeKind::MaxContent),
+            ] {
+                for (fragment, baseline) in [
+                    (
+                        Some(Fragment {
+                            width: 13.0,
+                            height: 8.0,
+                            ..Fragment::default()
+                        }),
+                        3.0,
+                    ),
+                    (
+                        Some(Fragment {
+                            width: 29.0,
+                            height: 12.0,
+                            ..Fragment::default()
+                        }),
+                        6.0,
+                    ),
+                    (None, 0.0),
+                ] {
+                    let plane = Plane {
+                        atom,
+                        fragment,
+                        baseline,
+                    };
+                    let fresh = prepared::PreparedInlineGroup::collect(
+                        &dom, &styles, &boxes, &roots, &parent,
+                    );
+                    let inline_boxes = fresh
+                        .materialize::<<StaticDocument as LayoutDom>::NodeId, _>(
+                            &plane, width, policy,
+                        );
+                    let result = prepared.materialize::<<StaticDocument as LayoutDom>::NodeId, _>(
+                        &plane, width, policy,
+                    );
+                    assert_eq!(counting.reads.get(), reads_after_collect);
+                    assert_eq!(fresh.text, prepared.text);
+                    assert_eq!(fresh.spans.len(), prepared.spans.len());
+                    for (a, b) in fresh.spans.iter().zip(&prepared.spans) {
+                        assert_eq!(
+                            (a.selectable, a.source, &a.owners, &a.range),
+                            (b.selectable, b.source, &b.owners, &b.range)
+                        );
+                    }
+                    println!(
+                        "width={width} policy={policy:?} fragment={fragment:?} baseline={baseline} fresh={:016x} materialized={:016x}",
+                        digest(&inline_boxes),
+                        digest(&result)
+                    );
+                    assert_eq!(digest(&inline_boxes), digest(&result));
+                    assert_eq!(inline_boxes.len(), result.len());
+                    for (a, b) in inline_boxes.iter().zip(&result) {
+                        assert_eq!(
+                            (
+                                a.source,
+                                &a.owners,
+                                a.index,
+                                a.fragment,
+                                a.line_width,
+                                a.line_box_height,
+                                a.baseline,
+                                a.margin_left,
+                                a.margin_top
+                            ),
+                            (
+                                b.source,
+                                &b.owners,
+                                b.index,
+                                b.fragment,
+                                b.line_width,
+                                b.line_box_height,
+                                b.baseline,
+                                b.margin_left,
+                                b.margin_top
+                            )
+                        );
+                        assert_eq!(
+                            (
+                                a.edge,
+                                a.paint,
+                                a.marker,
+                                a.empty_line,
+                                a.vertical_align,
+                                a.font_size,
+                                a.line_height
+                            ),
+                            (
+                                b.edge,
+                                b.paint,
+                                b.marker,
+                                b.empty_line,
+                                b.vertical_align,
+                                b.font_size,
+                                b.line_height
+                            )
+                        );
+                    }
+                    assert_eq!(
+                        result.iter().any(|a| a.source == inner && a.edge),
+                        width != 0.0
+                    );
+                    assert!(!result.iter().any(|a| a.source == outer && a.empty_line));
+                    assert_eq!(
+                        result
+                            .iter()
+                            .any(|a| a.source == positioned && a.marker && !a.empty_line),
+                        true
+                    );
+                    assert_eq!(result.iter().any(|a| a.source == atom), fragment.is_some());
+                    let mut expected = Vec::new();
+                    if width != 0.0 {
+                        expected.push((inner, true, false));
+                    }
+                    expected.push((inner, false, true));
+                    expected.push((positioned, false, false));
+                    expected.push((positioned, false, true));
+                    if fragment.is_some() {
+                        expected.push((atom, false, false));
+                    }
+                    assert_eq!(
+                        result
+                            .iter()
+                            .map(|a| (a.source, a.edge, a.empty_line))
+                            .collect::<Vec<_>>(),
+                        expected
+                    );
+                    assert!(result.iter().all(|a| a.index == 0));
+                    if width != 0.0 {
+                        assert_eq!(result[0].line_width, width * 0.1);
+                        assert!(result[0].paint);
+                    }
+                    if let Some(rect) = fragment {
+                        let a = result.iter().find(|a| a.source == atom).unwrap();
+                        let expected_width = match policy {
+                            None => rect.width,
+                            Some(IntrinsicSizeKind::MinContent) => 7.0,
+                            Some(IntrinsicSizeKind::MaxContent) => 19.0,
+                        };
+                        assert_eq!(a.line_width, expected_width);
+                        assert_eq!(a.baseline, baseline);
+                        assert!(a.paint && !a.marker);
+                    }
+                }
+            }
+        }
+    }
+}

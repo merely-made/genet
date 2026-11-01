@@ -313,3 +313,136 @@ mod tests {
         assert_send::<super::super::shaping::UnbrokenText>();
     }
 }
+
+pub(crate) struct PreparedInlineGroup {
+    pub(super) text: String,
+    pub(super) spans: Vec<SourceSpan<BoxId>>,
+    pub(super) inline_styles: HashMap<BoxId, ComputedValues>,
+    events: Vec<GeometryEvent>,
+    inline_owners: Vec<InlineOwner>,
+}
+
+pub(super) struct InlineOwner {
+    pub source: BoxId,
+    pub style: ComputedValues,
+    pub owners: Vec<BoxId>,
+    pub positioned: bool,
+}
+pub(super) enum GeometryEvent {
+    Begin {
+        slot: usize,
+        index: usize,
+    },
+    End {
+        slot: usize,
+        index: usize,
+        text_empty: bool,
+    },
+    Atomic {
+        source: BoxId,
+        style: ComputedValues,
+        owners: Vec<BoxId>,
+        index: usize,
+    },
+}
+
+impl PreparedInlineGroup {
+    pub(crate) fn collect<D: LayoutDom>(
+        dom: &D,
+        styles: &StylePlane<D::NodeId>,
+        boxes: &CssBoxTree<D::NodeId>,
+        roots: &[BoxId],
+        parent_style: &ComputedValues,
+    ) -> Self
+    where
+        D::NodeId: Copy + Eq + Hash,
+    {
+        let mut result = Self {
+            text: String::new(),
+            spans: Vec::new(),
+            inline_styles: HashMap::new(),
+            events: Vec::new(),
+            inline_owners: Vec::new(),
+        };
+        let mut owners = Vec::new();
+        let mut collector = TapeCollector {
+            dom,
+            styles,
+            boxes,
+            owners: &mut owners,
+            text: &mut result.text,
+            spans: &mut result.spans,
+            inline_styles: &mut result.inline_styles,
+            events: &mut result.events,
+            inline_owners: &mut result.inline_owners,
+        };
+        for root in roots {
+            collector.collect(*root, parent_style);
+        }
+        result
+    }
+    pub(crate) fn materialize<Id, F: FragmentLookup<Id>>(
+        &self,
+        fragments: &F,
+        width: f32,
+        intrinsic_kind: Option<IntrinsicSizeKind>,
+    ) -> Vec<InlineAtom<BoxId>> {
+        let mut m = GeometryMaterializer {
+            fragments,
+            owners: Vec::new(),
+            inline_boxes: Vec::new(),
+            percentage_basis: width,
+            intrinsic_kind,
+            index: 0,
+            marker: std::marker::PhantomData,
+        };
+        let mut stack = Vec::new();
+        for event in &self.events {
+            match event {
+                GeometryEvent::Begin { slot, index } => {
+                    let owner = &self.inline_owners[*slot];
+                    m.index = *index;
+                    m.push_edge(owner.source, &owner.style, &owner.owners, true);
+                    m.push_positioned_start_marker(
+                        owner.source,
+                        &owner.style,
+                        &owner.owners,
+                        owner.positioned,
+                    );
+                    stack.push(m.inline_boxes.len());
+                },
+                GeometryEvent::End {
+                    slot,
+                    index,
+                    text_empty,
+                } => {
+                    let owner = &self.inline_owners[*slot];
+                    m.index = *index;
+                    let has_content =
+                        m.inline_boxes.len() > stack.pop().expect("balanced inline events");
+                    m.push_edge(owner.source, &owner.style, &owner.owners, false);
+                    if *text_empty && !has_content {
+                        m.push_empty_line_box(
+                            owner.source,
+                            &owner.style,
+                            &owner.owners,
+                            owner.positioned,
+                        );
+                    }
+                },
+                GeometryEvent::Atomic {
+                    source,
+                    style,
+                    owners,
+                    index,
+                } => {
+                    m.index = *index;
+                    m.owners.clone_from(owners);
+                    m.push_atomic_box(*source, style);
+                },
+            }
+        }
+        debug_assert!(stack.is_empty());
+        m.inline_boxes
+    }
+}

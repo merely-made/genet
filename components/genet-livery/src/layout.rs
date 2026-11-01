@@ -505,7 +505,7 @@ struct InlineLayoutEntry {
     width: f32,
     /// Formatted for an intrinsic query, where an atomic box takes its
     /// contribution width rather than its used one.
-    intrinsic: bool,
+    intrinsic: Option<IntrinsicSizeKind>,
     constraints: Option<FloatLineConstraints>,
     layout: InlineLayout<BoxId>,
 }
@@ -517,18 +517,34 @@ struct InlineMeasureGeometry<'a> {
     line_constraints: Option<&'a FloatLineConstraints>,
 }
 
+fn inline_width_distance(left: f32, right: f32) -> f32 {
+    if left == right {
+        0.0
+    } else {
+        (left - right).abs()
+    }
+}
+
+fn inline_measure_matches(
+    entry_width: f32,
+    entry_policy: Option<IntrinsicSizeKind>,
+    width: f32,
+    policy: Option<IntrinsicSizeKind>,
+) -> bool {
+    entry_policy == policy && inline_width_distance(entry_width, width) <= 0.01
+}
+
 impl InlineMeasure {
     fn cached_size(
         &self,
         width: f32,
-        intrinsic: bool,
+        intrinsic: Option<IntrinsicSizeKind>,
         constraints: Option<&FloatLineConstraints>,
     ) -> Option<(f32, f32)> {
         self.layouts
             .iter()
             .find(|entry| {
-                (entry.width - width).abs() <= 0.01
-                    && entry.intrinsic == intrinsic
+                inline_measure_matches(entry.width, entry.intrinsic, width, intrinsic)
                     && entry.constraints.as_ref() == constraints
             })
             .map(|entry| entry.layout.size())
@@ -537,7 +553,7 @@ impl InlineMeasure {
     fn remember(
         &mut self,
         width: f32,
-        intrinsic: bool,
+        intrinsic: Option<IntrinsicSizeKind>,
         constraints: Option<&FloatLineConstraints>,
         layout: InlineLayout<BoxId>,
     ) -> (f32, f32) {
@@ -558,10 +574,9 @@ impl InlineMeasure {
             .iter()
             .filter(|entry| entry.constraints.as_ref() == self.placement_constraints.as_ref())
             .min_by(|left, right| {
-                (left.width - width)
-                    .abs()
-                    .total_cmp(&(right.width - width).abs())
-                    .then(left.intrinsic.cmp(&right.intrinsic))
+                inline_width_distance(left.width, width)
+                    .total_cmp(&inline_width_distance(right.width, width))
+                    .then(left.intrinsic.is_some().cmp(&right.intrinsic.is_some()))
             })
             .map(|entry| &entry.layout)
     }
@@ -591,9 +606,8 @@ where
     if let Some(constraints) = constraints {
         context.placement_constraints = Some(constraints.clone());
     }
-    let intrinsic = intrinsic_kind.is_some();
     context
-        .cached_size(width, intrinsic, constraints)
+        .cached_size(width, intrinsic_kind, constraints)
         .unwrap_or_else(|| {
             let formatted = text.format_inline_group(
                 dom,
@@ -609,7 +623,7 @@ where
                 },
             );
             formatted.map_or((context.width, context.height), |layout| {
-                context.remember(width, intrinsic, constraints, layout)
+                context.remember(width, intrinsic_kind, constraints, layout)
             })
         })
 }

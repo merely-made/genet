@@ -8122,3 +8122,26 @@ fn container_alignment_normal_reaches_taffy_as_normal_and_every_other_keyword_pa
         (AlignItemsKeyword::Normal, AlignItemsKeyword::End)
     );
 }
+
+#[test]
+fn inline_measure_policy_and_width_match_exact_requests() {
+    let min = Some(IntrinsicSizeKind::MinContent);
+    let max = Some(IntrinsicSizeKind::MaxContent);
+    for policy in [None, min, max] {
+        assert!(inline_measure_matches(42.0, policy, 42.009, policy));
+        for other in [None, min, max] {
+            assert_eq!(
+                inline_measure_matches(42.0, policy, 42.0, other),
+                policy == other
+            );
+        }
+    }
+    assert!(inline_measure_matches(f32::INFINITY, max, f32::INFINITY, max));
+    assert!(!inline_measure_matches(
+        f32::INFINITY,
+        max,
+        f32::NEG_INFINITY,
+        max
+    ));
+    assert!(!inline_measure_matches(42.0, None, 42.02, None));
+}

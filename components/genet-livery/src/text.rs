@@ -6,6 +6,8 @@
 
 //! Clean-room Parley adapter for Livery inline formatting.
 
+mod prepared;
+mod shaping;
 mod stats;
 pub use stats::{TextShapingOptions, TextShapingStats};
 
@@ -217,8 +219,7 @@ fn break_inline_lines(
 /// Retained font discovery, shaping scratch space, and font resources for one
 /// Livery document session.
 pub struct TextSystem {
-    font_context: FontContext,
-    layout_context: LayoutContext<Brush>,
+    worker: shaping::ShapeWorker,
     fonts: HashMap<FontInstanceKey, FontResource>,
     font_keys: HashMap<(u64, u32), FontInstanceKey>,
     ch_advances: HashMap<ChMetricKey, f32>,
@@ -285,8 +286,7 @@ impl Default for TextSystem {
 impl TextSystem {
     pub fn new() -> Self {
         Self {
-            font_context: FontContext::new(),
-            layout_context: LayoutContext::new(),
+            worker: shaping::ShapeWorker::new(),
             fonts: HashMap::new(),
             font_keys: HashMap::new(),
             ch_advances: HashMap::new(),
@@ -329,7 +329,8 @@ impl TextSystem {
         let Some(bytes) = normalized_font_bytes(bytes) else {
             return;
         };
-        self.font_context
+        self.worker
+            .font_context
             .collection
             .register_fonts(parley::fontique::Blob::new(Arc::new(bytes)), None);
         self.ch_advances.clear();
@@ -354,6 +355,7 @@ impl TextSystem {
         };
         let bytes = normalized_font_bytes(bytes).ok_or(GenericFontError::InvalidFont)?;
         let mut families = self
+            .worker
             .font_context
             .collection
             .register_fonts(parley::fontique::Blob::new(Arc::new(bytes)), None);
@@ -361,14 +363,16 @@ impl TextSystem {
             return Err(GenericFontError::InvalidFont);
         }
         families.sort_by_key(|(id, _)| {
-            self.font_context
+            self.worker
+                .font_context
                 .collection
                 .family_name(*id)
                 .unwrap_or("")
                 .to_owned()
         });
         let count = families.len();
-        self.font_context
+        self.worker
+            .font_context
             .collection
             .set_generic_families(generic, families.into_iter().map(|(id, _)| id));
         self.ch_advances.clear();
@@ -388,7 +392,7 @@ impl TextSystem {
         let Some(bytes) = normalized_font_bytes(bytes) else {
             return;
         };
-        self.font_context.collection.register_fonts(
+        self.worker.font_context.collection.register_fonts(
             parley::fontique::Blob::new(Arc::new(bytes)),
             Some(parley::fontique::FontInfoOverride {
                 family_name: Some(family),
@@ -414,9 +418,12 @@ impl TextSystem {
             return *advance;
         }
 
-        let mut builder =
-            self.layout_context
-                .ranged_builder(&mut self.font_context, "0", 1.0, true);
+        let mut builder = self.worker.layout_context.ranged_builder(
+            &mut self.worker.font_context,
+            "0",
+            1.0,
+            true,
+        );
         builder.push_default(StyleProperty::FontSize(font_size));
         builder.push_default(font_family(style));
         builder.push_default(StyleProperty::FontWeight(FontWeight::new(font_weight(
@@ -450,9 +457,12 @@ impl TextSystem {
         if let Some(metrics) = self.box_metrics.get(&key) {
             return *metrics;
         }
-        let mut builder =
-            self.layout_context
-                .ranged_builder(&mut self.font_context, "x", 1.0, true);
+        let mut builder = self.worker.layout_context.ranged_builder(
+            &mut self.worker.font_context,
+            "x",
+            1.0,
+            true,
+        );
         builder.push_default(StyleProperty::FontSize(font_size));
         builder.push_default(font_family(style));
         builder.push_default(StyleProperty::FontWeight(FontWeight::new(font_weight(
@@ -513,9 +523,12 @@ impl TextSystem {
         }
         // Shape the space between two zeroes so font fallback cannot assign
         // an isolated whitespace run to a different face.
-        let mut builder =
-            self.layout_context
-                .ranged_builder(&mut self.font_context, "0 0", 1.0, true);
+        let mut builder = self.worker.layout_context.ranged_builder(
+            &mut self.worker.font_context,
+            "0 0",
+            1.0,
+            true,
+        );
         builder.push_default(StyleProperty::FontSize(font_size));
         builder.push_default(font_family(style));
         builder.push_default(StyleProperty::FontWeight(FontWeight::new(font_weight(
@@ -550,9 +563,12 @@ impl TextSystem {
         let text = character.to_string();
         let font_size = super::paint::used_font_size(style);
         let features = effective_font_features(&self.font_face_features, style);
-        let mut builder =
-            self.layout_context
-                .ranged_builder(&mut self.font_context, &text, 1.0, true);
+        let mut builder = self.worker.layout_context.ranged_builder(
+            &mut self.worker.font_context,
+            &text,
+            1.0,
+            true,
+        );
         builder.push_default(StyleProperty::FontSize(font_size));
         builder.push_default(font_family(style));
         builder.push_default(StyleProperty::FontWeight(FontWeight::new(font_weight(
@@ -1541,57 +1557,93 @@ impl TextSystem {
         } else {
             0.0
         };
-        let mut builder =
-            self.layout_context
-                .ranged_builder(&mut self.font_context, text, 1.0, true);
-        builder.set_base_level(Some(match root_style.direction {
-            Direction::Ltr => 0,
-            Direction::Rtl => 1,
-        }));
-        push_defaults(
-            &mut builder,
-            default_style,
-            default_features,
-            intrinsic_kind,
-            default_tab_stop,
-        );
-        for (source_index, span) in spans.iter().enumerate() {
-            push_span(
-                &mut builder,
-                &span.style,
-                span.range.clone(),
-                source_index,
-                span_features[source_index].clone(),
+        let input = prepared::ShapeInput {
+            text: text.to_owned(),
+            defaults: prepared::properties(
+                default_style,
+                0,
+                default_features,
                 intrinsic_kind,
-                span_tab_stops[source_index],
-            );
-        }
-        for (index, inline_box) in inline_boxes.iter().enumerate() {
-            if inline_box.marker {
-                continue;
-            }
-            builder.push_inline_box(InlineBox {
-                id: u64::try_from(index).unwrap_or(u64::MAX),
-                kind: InlineBoxKind::InFlow,
-                index: inline_box.index,
-                width: inline_box.line_width,
-                height: if inline_box.edge {
-                    0.0
-                } else {
-                    inline_box.line_box_height
-                },
-            });
-        }
+                default_tab_stop,
+            ),
+            spans: spans
+                .iter()
+                .enumerate()
+                .map(|(source_index, span)| prepared::Span {
+                    range: span.range.clone(),
+                    properties: prepared::properties(
+                        &span.style,
+                        source_index,
+                        span_features[source_index].clone(),
+                        intrinsic_kind,
+                        span_tab_stops[source_index],
+                    ),
+                })
+                .collect(),
+            slots: inline_boxes
+                .iter()
+                .enumerate()
+                .filter(|(_, atom)| !atom.marker)
+                .map(|(index, atom)| prepared::Slot {
+                    kind: prepared::SlotKind::InFlow,
+                    id: u64::try_from(index).unwrap_or(u64::MAX),
+                    index: atom.index,
+                    width: atom.line_width.to_bits(),
+                    height: (if atom.edge { 0.0 } else { atom.line_box_height }).to_bits(),
+                })
+                .collect(),
+            base_level: match root_style.direction {
+                Direction::Ltr => 0,
+                Direction::Rtl => 1,
+            },
+            scale: 1.0f32.to_bits(),
+            quantize: true,
+        };
         self.shaping_stats.layout_builds = self.shaping_stats.layout_builds.saturating_add(1);
-        let mut layout = builder.build(text);
+        let unbroken = self.worker.shape(&input);
         self.shaping_stats.shape_wall_ns = self
             .shaping_stats
             .shape_wall_ns
             .saturating_add(stats::elapsed_ns(shape_start));
+        self.place(
+            text,
+            spans,
+            inline_boxes,
+            inline_styles,
+            quirks,
+            width,
+            root_style,
+            line_constraints,
+            first_hanging_advance,
+            &unbroken,
+        )
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "placement needs current sources, geometry and policy"
+    )]
+    fn place<Id>(
+        &mut self,
+        text: &str,
+        spans: &mut [SourceSpan<Id>],
+        inline_boxes: &[InlineAtom<Id>],
+        inline_styles: &HashMap<Id, ComputedValues>,
+        quirks: bool,
+        width: f32,
+        root_style: &ComputedValues,
+        line_constraints: Option<&FloatLineConstraints>,
+        first_hanging_advance: f32,
+        unbroken: &shaping::UnbrokenText,
+    ) -> Shaped<Id>
+    where
+        Id: Copy + Eq + Hash,
+    {
         let place_start = self
             .shaping_options
             .record_timings
             .then(std::time::Instant::now);
+        let mut layout = unbroken.layout.clone();
         // Preserve the prospective break model for its unit tests only.
         #[cfg(test)]
         let mut break_stream = {
@@ -1671,9 +1723,13 @@ impl TextSystem {
                     .get(line_index + 1)
                     .map(positioned_atom_orders)
                     .unwrap_or_default();
-                if let Some(selected) =
-                    selected_break_position(range, kind, &line_atoms, &next_atoms, &break_stream.items)
-                {
+                if let Some(selected) = selected_break_position(
+                    range,
+                    kind,
+                    &line_atoms,
+                    &next_atoms,
+                    &break_stream.items,
+                ) {
                     break_stream.selected_breaks.push(selected);
                 }
             }
@@ -3001,7 +3057,9 @@ where
             (false, true) | (true, false) => cluster.range.start,
             (false, false) | (true, true) => cluster.range.end,
         };
-        let offset = self.password_offsets.get(&cluster.source)
+        let offset = self
+            .password_offsets
+            .get(&cluster.source)
             .map_or(offset, |offsets| offsets.source_offset(offset));
         Some((cluster.source, offset))
     }
@@ -3117,7 +3175,8 @@ where
     }
 
     fn source_offset(&self, source: Id, display: usize) -> usize {
-        self.password_offsets.get(&source)
+        self.password_offsets
+            .get(&source)
             .map_or(display, |offsets| offsets.source_offset(display))
     }
 
@@ -3130,7 +3189,9 @@ where
     where
         F: FnMut(Id, Fragment) -> TextRect,
     {
-        let offset = self.password_offsets.get(&source)
+        let offset = self
+            .password_offsets
+            .get(&source)
             .map_or(offset, |offsets| offsets.display_offset(offset, false));
         let cluster = self
             .text_clusters
@@ -3211,15 +3272,21 @@ where
             let source = self.text_order[index];
             let value = self.text_values.get(&source)?;
             let start = if index == start_index {
-                self.password_offsets.get(&source)
-                    .map_or(start_offset, |offsets| offsets.display_offset(start_offset, false))
+                self.password_offsets
+                    .get(&source)
+                    .map_or(start_offset, |offsets| {
+                        offsets.display_offset(start_offset, false)
+                    })
                     .min(value.len())
             } else {
                 0
             };
             let end = if index == end_index {
-                self.password_offsets.get(&source)
-                    .map_or(end_offset, |offsets| offsets.display_offset(end_offset, true))
+                self.password_offsets
+                    .get(&source)
+                    .map_or(end_offset, |offsets| {
+                        offsets.display_offset(end_offset, true)
+                    })
                     .min(value.len())
             } else {
                 value.len()
@@ -3451,10 +3518,7 @@ struct Shaped<Id> {
 /// selects lines. Byte ranges refer to the exact transformed/collapsed input
 /// passed to Parley; `span_range` is local to its transformed source span.
 #[derive(Clone, Debug)]
-#[allow(
-    dead_code,
-    reason = "test-only prospective break diagnostics"
-)]
+#[allow(dead_code, reason = "test-only prospective break diagnostics")]
 #[cfg(test)]
 struct LogicalBreakStream<Id> {
     paragraph_text: String,
@@ -3558,10 +3622,7 @@ enum SelectedBreakLocation {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[allow(
-    dead_code,
-    reason = "test-only prospective break diagnostics"
-)]
+#[allow(dead_code, reason = "test-only prospective break diagnostics")]
 #[cfg(test)]
 struct AtomicOpportunity {
     byte_index: usize,
@@ -3571,10 +3632,7 @@ struct AtomicOpportunity {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[allow(
-    dead_code,
-    reason = "test-only prospective break diagnostics"
-)]
+#[allow(dead_code, reason = "test-only prospective break diagnostics")]
 #[cfg(test)]
 enum AtomicOpportunitySide {
     Before,
@@ -3582,10 +3640,7 @@ enum AtomicOpportunitySide {
 }
 
 #[derive(Clone, Debug)]
-#[allow(
-    dead_code,
-    reason = "test-only prospective break diagnostics"
-)]
+#[allow(dead_code, reason = "test-only prospective break diagnostics")]
 #[cfg(test)]
 enum LogicalBreakItem<Id> {
     Cluster {
@@ -3616,10 +3671,7 @@ enum LogicalBreakItem<Id> {
 }
 
 #[derive(Clone, Debug)]
-#[allow(
-    dead_code,
-    reason = "test-only prospective break diagnostics"
-)]
+#[allow(dead_code, reason = "test-only prospective break diagnostics")]
 #[cfg(test)]
 struct SourceSlice<Id> {
     text_range: Range<usize>,
@@ -5787,84 +5839,6 @@ fn collapse_css_whitespace(source: &str) -> String {
     output
 }
 
-fn push_defaults(
-    builder: &mut parley::RangedBuilder<'_, Brush>,
-    style: &ComputedValues,
-    features: Vec<FontFeature>,
-    intrinsic_kind: Option<IntrinsicSizeKind>,
-    tab_stop: f32,
-) {
-    let font_size = super::paint::used_font_size(style);
-    builder.push_default(StyleProperty::FontSize(font_size));
-    builder.push_default(font_family(style));
-    builder.push_default(StyleProperty::FontWeight(FontWeight::new(font_weight(
-        style,
-    ))));
-    builder.push_default(StyleProperty::FontStyle(font_style(style)));
-    builder.push_default(StyleProperty::Brush(brush(style, 0)));
-    builder.push_default(line_height(style));
-    builder.push_default(StyleProperty::FontFeatures(FontFeatures::List(Cow::Owned(
-        features,
-    ))));
-    builder.push_default(StyleProperty::WordBreak(word_break(style)));
-    builder.push_default(StyleProperty::OverflowWrap(overflow_wrap(
-        style,
-        intrinsic_kind,
-    )));
-    builder.push_default(StyleProperty::TextWrapMode(text_wrap_mode(style)));
-    builder.push_default(StyleProperty::TabSize(tab_stop));
-    if let Some(letter_spacing) = spacing_px(style.letter_spacing, font_size) {
-        builder.push_default(StyleProperty::LetterSpacing(letter_spacing));
-    }
-    if let Some(word_spacing) = spacing_px(style.word_spacing, font_size) {
-        builder.push_default(StyleProperty::WordSpacing(word_spacing));
-    }
-}
-
-fn push_span(
-    builder: &mut parley::RangedBuilder<'_, Brush>,
-    style: &ComputedValues,
-    range: Range<usize>,
-    source_index: usize,
-    features: Vec<FontFeature>,
-    intrinsic_kind: Option<IntrinsicSizeKind>,
-    tab_stop: f32,
-) {
-    let font_size = super::paint::used_font_size(style);
-    builder.push(StyleProperty::FontSize(font_size), range.clone());
-    builder.push(font_family(style), range.clone());
-    builder.push(
-        StyleProperty::FontWeight(FontWeight::new(font_weight(style))),
-        range.clone(),
-    );
-    builder.push(StyleProperty::FontStyle(font_style(style)), range.clone());
-    builder.push(
-        StyleProperty::Brush(brush(style, source_index)),
-        range.clone(),
-    );
-    builder.push(line_height(style), range.clone());
-    builder.push(
-        StyleProperty::FontFeatures(FontFeatures::List(Cow::Owned(features))),
-        range.clone(),
-    );
-    builder.push(StyleProperty::WordBreak(word_break(style)), range.clone());
-    builder.push(
-        StyleProperty::OverflowWrap(overflow_wrap(style, intrinsic_kind)),
-        range.clone(),
-    );
-    builder.push(
-        StyleProperty::TextWrapMode(text_wrap_mode(style)),
-        range.clone(),
-    );
-    builder.push(StyleProperty::TabSize(tab_stop), range.clone());
-    if let Some(letter_spacing) = spacing_px(style.letter_spacing, font_size) {
-        builder.push(StyleProperty::LetterSpacing(letter_spacing), range.clone());
-    }
-    if let Some(word_spacing) = spacing_px(style.word_spacing, font_size) {
-        builder.push(StyleProperty::WordSpacing(word_spacing), range);
-    }
-}
-
 fn effective_font_features(
     face_features: &HashMap<String, Box<[FontFeatureSetting]>>,
     style: &ComputedValues,
@@ -6368,7 +6342,7 @@ mod tests {
     fn explicit_generic_font_shapes_without_system_and_invalid_replace_preserves_face() {
         let bytes = include_bytes!("../../../tests/wpt/tests/fonts/Ahem.ttf").to_vec();
         let mut system = TextSystem::new();
-        system.font_context.collection =
+        system.worker.font_context.collection =
             parley::fontique::Collection::new(parley::fontique::CollectionOptions {
                 shared: false,
                 system_fonts: false,
@@ -6568,18 +6542,19 @@ mod tests {
         );
         let features = effective_font_features(&text_system.font_face_features, style);
         let tab_stop = text_system.tab_stop(style);
-        let mut builder = text_system.layout_context.ranged_builder(
-            &mut text_system.font_context,
-            text,
-            1.0,
-            true,
-        );
-        builder.set_base_level(Some(match style.direction {
-            Direction::Ltr => 0,
-            Direction::Rtl => 1,
-        }));
-        push_defaults(&mut builder, style, features, None, tab_stop);
-        let mut layout = builder.build(text);
+        let input = prepared::ShapeInput {
+            text: text.to_owned(),
+            defaults: prepared::properties(style, 0, features, None, tab_stop),
+            spans: Vec::new(),
+            slots: Vec::new(),
+            base_level: match style.direction {
+                Direction::Ltr => 0,
+                Direction::Rtl => 1,
+            },
+            scale: 1.0f32.to_bits(),
+            quantize: true,
+        };
+        let mut layout = text_system.worker.shape(&input).layout;
         layout.break_all_lines(None);
         let mut metadata = Vec::new();
         for line in layout.lines() {

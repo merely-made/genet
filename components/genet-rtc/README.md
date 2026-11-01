@@ -41,12 +41,16 @@ Supplier integration: `murm/design_docs/2026-10-13_murm_family_move_plan.md`,
 WebRTC provider section. Native UDP tests are not headed-browser or WPT
 qualification.
 
-E1a passes four native tests on working Rust 1.99.1 and MSRV 1.97.1, plus
-strict Clippy and the core-only compile gate. The packet test pauses data
+The five native tests cover both host polling and async waits on working Rust
+1.99.1 and MSRV 1.97.1, alongside strict Clippy and the core-only compile gate. The packet test pauses data
 delivery while reverse traffic continues, then receives every held message.
 It does not measure a saturated receive window or induced packet loss.
 Receipts: `testing/webrtc-evaluation/receipts/provider-qualification.json`
-and `provider-boundaries.json`; failed attempts remain beside them. The
+and `provider-boundaries.json`; the host-driver addition is appended to
+`design_docs/archive_docs/receipts/2026-10-13_murm_family_move_plan_receipts.md`.
+Failed attempts remain in their cited locations. Genet consumes this provider
+through its native host adapter; its web/API qualification is recorded in the
+receiving plan. The
 wire workspace defaults still select only `murm-wire`, so ordinary wire
 builds do not acquire RTC. Run this package explicitly:
 

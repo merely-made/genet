@@ -8,7 +8,7 @@ use std::{
 };
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub(super) struct ShapeKey {
+pub(crate) struct ShapeKey {
     pub generation: u64,
     pub input: ShapeInput,
 }

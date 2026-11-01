@@ -43,14 +43,14 @@ pub(super) struct Slot {
     pub height: u32,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(super) struct ShapeInput {
-    pub text: String,
-    pub defaults: Vec<Property>,
-    pub spans: Vec<Span>,
-    pub slots: Vec<Slot>,
-    pub base_level: u8,
-    pub scale: u32,
-    pub quantize: bool,
+pub(crate) struct ShapeInput {
+    pub(super) text: String,
+    pub(super) defaults: Vec<Property>,
+    pub(super) spans: Vec<Span>,
+    pub(super) slots: Vec<Slot>,
+    pub(super) base_level: u8,
+    pub(super) scale: u32,
+    pub(super) quantize: bool,
 }
 
 pub(super) fn properties(

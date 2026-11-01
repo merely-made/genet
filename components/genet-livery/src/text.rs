@@ -7,7 +7,8 @@
 //! Clean-room Parley adapter for Livery inline formatting.
 
 mod cache;
-mod prepared;
+pub(crate) use cache::ShapeKey;
+pub(crate) mod prepared;
 mod shaping;
 mod stats;
 pub use stats::{TextShapingOptions, TextShapingStats};
@@ -215,6 +216,22 @@ fn break_inline_lines(
             }
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct InlineGroupId(pub(crate) usize);
+
+pub(crate) struct ShapeJob {
+    pub(crate) group: InlineGroupId,
+    pub(crate) generation: u64,
+    pub(crate) key: ShapeKey,
+}
+
+pub(crate) struct ShapeResult {
+    pub(crate) group: InlineGroupId,
+    pub(crate) generation: u64,
+    pub(crate) key: ShapeKey,
+    pub(crate) shaped: Arc<shaping::UnbrokenText>,
 }
 
 /// Retained font discovery, shaping scratch space, and font resources for one
@@ -664,15 +681,36 @@ impl TextSystem {
         let parent_style = request.parent_style;
         let prepared =
             prepared::PreparedInlineGroup::collect(dom, styles, boxes, request.roots, parent_style);
-        let inline_boxes =
-            prepared.materialize::<D::NodeId, _>(fragments, request.width, request.intrinsic_kind);
-        let text = prepared.text;
-        let mut spans = prepared.spans;
-        let inline_styles = prepared.inline_styles;
         self.shaping_stats.collect_ns = self
             .shaping_stats
             .collect_ns
             .saturating_add(stats::elapsed_ns(collect_start));
+        self.format_prepared_inline_group::<D::NodeId, F>(
+            &prepared,
+            fragments,
+            dom.quirks_mode(),
+            request,
+            None,
+        )
+    }
+
+    pub(crate) fn format_prepared_inline_group<Id, F>(
+        &mut self,
+        prepared: &prepared::PreparedInlineGroup,
+        fragments: &F,
+        quirks_mode: QuirksMode,
+        request: InlineRequest<'_>,
+        result: Option<(&ShapeResult, u64, InlineGroupId)>,
+    ) -> Option<InlineLayout<BoxId>>
+    where
+        F: FragmentLookup<Id>,
+    {
+        let parent_style = request.parent_style;
+        let inline_boxes =
+            prepared.materialize::<Id, _>(fragments, request.width, request.intrinsic_kind);
+        let text = prepared.text.clone();
+        let mut spans = prepared.spans.clone();
+        let inline_styles = &prepared.inline_styles;
         // A forced break adds text without a span, so a block holding only
         // `<br>` still formats its line. Empty-inline markers alone leave the
         // line phantom (CSS 2.1 9.4.2).
@@ -689,16 +727,17 @@ impl TextSystem {
             break_lines,
             baselines,
             ..
-        } = self.shape(
+        } = self.shape_with_result(
             &text,
             &mut spans,
             &inline_boxes,
             &inline_styles,
-            line_height_quirk(dom.quirks_mode(), parent_style),
+            line_height_quirk(quirks_mode, parent_style),
             request.width,
             parent_style,
             request.line_constraints,
             request.intrinsic_kind,
+            result,
         );
         let text_sources = spans
             .iter()
@@ -1505,30 +1544,87 @@ impl TextSystem {
         frame.record_prepared_group(prepared_sources, visual_commands);
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "one shaping transaction carries the text, source spans, inline atoms and styles, document mode, width, root policy, and optional line constraints"
-    )]
-    fn shape<Id>(
+    pub(crate) fn prepared_shape_key<Id, F: FragmentLookup<Id>>(
         &mut self,
-        text: &str,
-        spans: &mut [SourceSpan<Id>],
-        inline_boxes: &[InlineAtom<Id>],
-        inline_styles: &HashMap<Id, ComputedValues>,
-        quirks: bool,
+        prepared: &prepared::PreparedInlineGroup,
+        fragments: &F,
         width: f32,
-        root_style: &ComputedValues,
-        line_constraints: Option<&FloatLineConstraints>,
         intrinsic_kind: Option<IntrinsicSizeKind>,
-    ) -> Shaped<Id>
-    where
-        Id: Copy + Eq + Hash,
-    {
-        self.shaping_stats.format_requests = self.shaping_stats.format_requests.saturating_add(1);
-        let shape_start = self
+        root_style: &ComputedValues,
+    ) -> ShapeKey {
+        let atoms = prepared.materialize::<Id, _>(fragments, width, intrinsic_kind);
+        self.shape_key(
+            &prepared.text,
+            &prepared.spans,
+            &atoms,
+            root_style,
+            intrinsic_kind,
+        )
+    }
+
+    pub(crate) fn shape_batch(&mut self, jobs: &[ShapeJob], generation: u64) -> Vec<ShapeResult> {
+        let start = self
             .shaping_options
             .record_timings
             .then(std::time::Instant::now);
+        self.shaping_stats.batches = self.shaping_stats.batches.saturating_add(1);
+        let mut values = HashMap::new();
+        let mut results = Vec::new();
+        for job in jobs {
+            if job.generation != generation || job.key.generation != self.font_generation {
+                continue;
+            }
+            let shaped = if let Some(value) = values.get(&job.key) {
+                Arc::clone(value)
+            } else {
+                let value = if let Some(value) = self.cache.get(&job.key) {
+                    self.shaping_stats.cache_hits = self.shaping_stats.cache_hits.saturating_add(1);
+                    value
+                } else {
+                    self.shaping_stats.cache_misses =
+                        self.shaping_stats.cache_misses.saturating_add(1);
+                    self.shaping_stats.layout_builds =
+                        self.shaping_stats.layout_builds.saturating_add(1);
+                    self.shaping_stats.unique_jobs =
+                        self.shaping_stats.unique_jobs.saturating_add(1);
+                    self.shape_count = self.shape_count.saturating_add(1);
+                    let value = Arc::new(self.worker.shape(&job.key.input));
+                    self.cache.insert(
+                        job.key.clone(),
+                        Arc::clone(&value),
+                        self.shaping_options.retained_entries,
+                        self.shaping_options.retained_text_bytes,
+                    );
+                    value
+                };
+                values.insert(job.key.clone(), Arc::clone(&value));
+                value
+            };
+            results.push(ShapeResult {
+                group: job.group,
+                generation,
+                key: job.key.clone(),
+                shaped,
+            });
+        }
+        self.shaping_stats.shape_wall_ns = self
+            .shaping_stats
+            .shape_wall_ns
+            .saturating_add(stats::elapsed_ns(start));
+        results
+    }
+
+    fn shape_key<Id>(
+        &mut self,
+        text: &str,
+        spans: &[SourceSpan<Id>],
+        inline_boxes: &[InlineAtom<Id>],
+        root_style: &ComputedValues,
+        intrinsic_kind: Option<IntrinsicSizeKind>,
+    ) -> cache::ShapeKey
+    where
+        Id: Copy + Eq + Hash,
+    {
         let default_style = spans.first().map_or(root_style, |span| &span.style);
         let default_features = effective_font_features(&self.font_face_features, default_style);
         let span_features = spans
@@ -1540,25 +1636,6 @@ impl TextSystem {
             .iter()
             .map(|span| self.tab_stop(&span.style))
             .collect::<Vec<_>>();
-        let first_hanging_advance = if root_style.hanging_punctuation.first {
-            text.char_indices()
-                .find(|(_, character)| !character.is_whitespace())
-                .and_then(|(index, character)| {
-                    let blocked = inline_boxes.iter().any(|inline_box| {
-                        inline_box.index <= index && inline_box.line_width.abs() > f32::EPSILON
-                    });
-                    (!blocked && is_opening_hanging_punctuation(character)).then(|| {
-                        let style = spans
-                            .iter()
-                            .find(|span| span.range.contains(&index))
-                            .map_or(root_style, |span| &span.style);
-                        self.character_advance(character, style)
-                    })
-                })
-                .unwrap_or(0.0)
-        } else {
-            0.0
-        };
         let input = prepared::ShapeInput {
             text: text.to_owned(),
             defaults: prepared::properties(
@@ -1601,11 +1678,98 @@ impl TextSystem {
             scale: 1.0f32.to_bits(),
             quantize: true,
         };
-        let key = cache::ShapeKey {
+        cache::ShapeKey {
             generation: self.font_generation,
             input,
+        }
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one shaping transaction carries the text, source spans, inline atoms and styles, document mode, width, root policy, and optional line constraints"
+    )]
+    fn shape<Id>(
+        &mut self,
+        text: &str,
+        spans: &mut [SourceSpan<Id>],
+        inline_boxes: &[InlineAtom<Id>],
+        inline_styles: &HashMap<Id, ComputedValues>,
+        quirks: bool,
+        width: f32,
+        root_style: &ComputedValues,
+        line_constraints: Option<&FloatLineConstraints>,
+        intrinsic_kind: Option<IntrinsicSizeKind>,
+    ) -> Shaped<Id>
+    where
+        Id: Copy + Eq + Hash,
+    {
+        self.shape_with_result(
+            text,
+            spans,
+            inline_boxes,
+            inline_styles,
+            quirks,
+            width,
+            root_style,
+            line_constraints,
+            intrinsic_kind,
+            None,
+        )
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one shaping transaction carries the text, source spans, inline atoms and styles, document mode, width, root policy, and optional line constraints"
+    )]
+    fn shape_with_result<Id>(
+        &mut self,
+        text: &str,
+        spans: &mut [SourceSpan<Id>],
+        inline_boxes: &[InlineAtom<Id>],
+        inline_styles: &HashMap<Id, ComputedValues>,
+        quirks: bool,
+        width: f32,
+        root_style: &ComputedValues,
+        line_constraints: Option<&FloatLineConstraints>,
+        intrinsic_kind: Option<IntrinsicSizeKind>,
+        result: Option<(&ShapeResult, u64, InlineGroupId)>,
+    ) -> Shaped<Id>
+    where
+        Id: Copy + Eq + Hash,
+    {
+        self.shaping_stats.format_requests = self.shaping_stats.format_requests.saturating_add(1);
+        let shape_start = self
+            .shaping_options
+            .record_timings
+            .then(std::time::Instant::now);
+        let first_hanging_advance = if root_style.hanging_punctuation.first {
+            text.char_indices()
+                .find(|(_, character)| !character.is_whitespace())
+                .and_then(|(index, character)| {
+                    let blocked = inline_boxes.iter().any(|inline_box| {
+                        inline_box.index <= index && inline_box.line_width.abs() > f32::EPSILON
+                    });
+                    (!blocked && is_opening_hanging_punctuation(character)).then(|| {
+                        let style = spans
+                            .iter()
+                            .find(|span| span.range.contains(&index))
+                            .map_or(root_style, |span| &span.style);
+                        self.character_advance(character, style)
+                    })
+                })
+                .unwrap_or(0.0)
+        } else {
+            0.0
         };
-        let unbroken = if let Some(value) = self.cache.get(&key) {
+        let key = self.shape_key(text, spans, inline_boxes, root_style, intrinsic_kind);
+        let active = result
+            .filter(|(value, generation, group)| {
+                value.generation == *generation && value.group == *group && value.key == key
+            })
+            .map(|(value, _, _)| Arc::clone(&value.shaped));
+        let unbroken = if let Some(value) = active {
+            value
+        } else if let Some(value) = self.cache.get(&key) {
             self.shaping_stats.cache_hits = self.shaping_stats.cache_hits.saturating_add(1);
             value
         } else {
@@ -3426,6 +3590,7 @@ struct RetainedTextCluster<Id> {
     rtl: bool,
 }
 
+#[derive(Clone)]
 struct SourceSpan<Id> {
     selectable: bool,
     source: Option<Id>,
@@ -9349,6 +9514,169 @@ mod prepared_geometry_tests {
         }
         h.finish()
     }
+    #[test]
+    fn prepared_batch_formats_current_owners_without_dom_rereads() {
+        let dom = StaticDocument::parse(
+            "<div><span id=a>same text</span><span id=b>same text</span></div>",
+        );
+        let styles = resolve_styles(
+            &dom,
+            &StyleSet::cambium(&[]),
+            &Device::screen(320.0, 240.0),
+            &InteractionStates::default(),
+        );
+        let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+        let find = |name| {
+            boxes
+                .iter()
+                .find_map(|(id, b)| {
+                    b.origin
+                        .node()
+                        .filter(|n| {
+                            dom.attribute(*n, &Namespace::from(""), &LocalName::from("id"))
+                                == Some(name)
+                        })
+                        .map(|_| id)
+                })
+                .unwrap()
+        };
+        let roots_a = [find("a")];
+        let roots_b = [find("b")];
+        let parent = ComputedValues::default();
+        let counting = CountingDom {
+            inner: &dom,
+            reads: std::cell::Cell::new(0),
+        };
+        let a =
+            prepared::PreparedInlineGroup::collect(&counting, &styles, &boxes, &roots_a, &parent);
+        let b =
+            prepared::PreparedInlineGroup::collect(&counting, &styles, &boxes, &roots_b, &parent);
+        let reads = counting.reads.get();
+        let fragments = Plane {
+            atom: roots_a[0],
+            fragment: None,
+            baseline: 0.0,
+        };
+        let mut system = TextSystem::new();
+        let mut options = system.shaping_options();
+        options.retained_entries = 0;
+        system.set_shaping_options(options);
+        for (width, intrinsic) in [
+            (40.0, None),
+            (200.0, None),
+            (0.01, Some(IntrinsicSizeKind::MinContent)),
+            (f32::INFINITY, Some(IntrinsicSizeKind::MaxContent)),
+        ] {
+            let key_a = system.prepared_shape_key::<<StaticDocument as LayoutDom>::NodeId, _>(
+                &a, &fragments, width, intrinsic, &parent,
+            );
+            let key_b = system.prepared_shape_key::<<StaticDocument as LayoutDom>::NodeId, _>(
+                &b, &fragments, width, intrinsic, &parent,
+            );
+            assert_eq!(key_a, key_b);
+            let jobs = [
+                ShapeJob {
+                    group: InlineGroupId(4),
+                    generation: 99,
+                    key: key_a,
+                },
+                ShapeJob {
+                    group: InlineGroupId(8),
+                    generation: 99,
+                    key: key_b,
+                },
+            ];
+            let before = system.shape_count();
+            let results = system.shape_batch(&jobs, 99);
+            assert_eq!(system.shape_count() - before, 1);
+            let request = |roots| InlineRequest {
+                roots,
+                parent_style: &parent,
+                width,
+                intrinsic_kind: intrinsic,
+                line_constraints: None,
+            };
+            let first = system
+                .format_prepared_inline_group::<<StaticDocument as LayoutDom>::NodeId, _>(
+                    &a,
+                    &fragments,
+                    LayoutDom::quirks_mode(&dom),
+                    request(&roots_a),
+                    Some((&results[0], 99, InlineGroupId(4))),
+                )
+                .unwrap();
+            let second = system
+                .format_prepared_inline_group::<<StaticDocument as LayoutDom>::NodeId, _>(
+                    &b,
+                    &fragments,
+                    LayoutDom::quirks_mode(&dom),
+                    request(&roots_b),
+                    Some((&results[1], 99, InlineGroupId(8))),
+                )
+                .unwrap();
+            assert_eq!(
+                system.shape_count() - before,
+                1,
+                "active result must avoid a cache lookup"
+            );
+            assert_ne!(first.text_sources[0].source, second.text_sources[0].source);
+            let fresh = system
+                .format_inline_group(&dom, &styles, &boxes, &fragments, request(&roots_b))
+                .unwrap();
+            assert_eq!(second.size(), fresh.size());
+            assert_eq!(second.baselines(), fresh.baselines());
+            assert_eq!(second.text, fresh.text);
+            assert_eq!(second.text_sources[0].source, fresh.text_sources[0].source);
+            assert_eq!(counting.reads.get(), reads);
+            let before_stale = system.shape_count();
+            system
+                .format_prepared_inline_group::<<StaticDocument as LayoutDom>::NodeId, _>(
+                    &a,
+                    &fragments,
+                    LayoutDom::quirks_mode(&dom),
+                    request(&roots_a),
+                    Some((&results[0], 100, InlineGroupId(4))),
+                )
+                .unwrap();
+            assert_eq!(
+                system.shape_count() - before_stale,
+                1,
+                "stale result must be rejected"
+            );
+            let wrong_key = ShapeResult {
+                group: InlineGroupId(4),
+                generation: 99,
+                key: {
+                    let mut key = results[0].key.clone();
+                    key.input.text.push('x');
+                    key
+                },
+                shaped: Arc::clone(&results[0].shaped),
+            };
+            for (result, group) in [
+                (&results[0], InlineGroupId(8)),
+                (&wrong_key, InlineGroupId(4)),
+            ] {
+                let before = system.shape_count();
+                let rejected = system
+                    .format_prepared_inline_group::<<StaticDocument as LayoutDom>::NodeId, _>(
+                        &a,
+                        &fragments,
+                        LayoutDom::quirks_mode(&dom),
+                        request(&roots_a),
+                        Some((result, 99, group)),
+                    )
+                    .unwrap();
+                assert_eq!(
+                    system.shape_count() - before,
+                    1,
+                    "wrong group or key must be rejected"
+                );
+                assert_eq!(rejected.size(), first.size());
+            }
+        }
+    }
+
     #[test]
     fn split_shape_geometry_materialization_matches_fresh() {
         let dom = StaticDocument::parse(

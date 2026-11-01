@@ -8,8 +8,8 @@ pub(super) struct ShapeWorker {
     pub font_context: FontContext,
     pub layout_context: LayoutContext<Brush>,
 }
-pub(super) struct UnbrokenText {
-    pub layout: parley::Layout<Brush>,
+pub(crate) struct UnbrokenText {
+    pub(super) layout: parley::Layout<Brush>,
 }
 impl ShapeWorker {
     pub(super) fn new() -> Self {

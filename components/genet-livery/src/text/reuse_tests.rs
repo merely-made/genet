@@ -114,3 +114,111 @@ fn retained_lru_refreshes_on_hit() {
     drop(active);
     assert!(weak.upgrade().is_none());
 }
+
+#[test]
+fn prepared_batch_deduplicates_without_retention_and_rejects_stale_generation() {
+    use super::{InlineGroupId, ShapeJob};
+    let mut system = super::TextSystem::new();
+    let mut options = system.shaping_options();
+    options.retained_entries = 0;
+    system.set_shaping_options(options);
+    let input = super::prepared::ShapeInput {
+        text: "same".into(),
+        defaults: vec![],
+        spans: vec![],
+        slots: vec![],
+        base_level: 0,
+        scale: 1.0f32.to_bits(),
+        quantize: true,
+    };
+    let generation = system.font_generation;
+    let key = super::cache::ShapeKey { generation, input };
+    let jobs = vec![
+        ShapeJob {
+            group: InlineGroupId(0),
+            generation,
+            key: key.clone(),
+        },
+        ShapeJob {
+            group: InlineGroupId(1),
+            generation,
+            key: key.clone(),
+        },
+        ShapeJob {
+            group: InlineGroupId(2),
+            generation: generation.wrapping_add(1),
+            key: key.clone(),
+        },
+        ShapeJob {
+            group: InlineGroupId(3),
+            generation,
+            key: {
+                let mut stale = key;
+                stale.generation = generation.wrapping_add(1);
+                stale
+            },
+        },
+    ];
+    let results = system.shape_batch(&jobs, generation);
+    assert_eq!(results.len(), 2);
+    assert_eq!(results[0].group, InlineGroupId(0));
+    assert_eq!(results[1].group, InlineGroupId(1));
+    assert!(std::sync::Arc::ptr_eq(
+        &results[0].shaped,
+        &results[1].shaped
+    ));
+    assert_eq!(system.shaping_stats().unique_jobs, 1);
+    assert_eq!(system.shaping_stats().batches, 1);
+}
+
+#[test]
+fn prepared_batch_keeps_evicted_results_and_order() {
+    use super::{InlineGroupId, ShapeJob};
+    let mut system = super::TextSystem::new();
+    let mut options = system.shaping_options();
+    options.retained_entries = 1;
+    system.set_shaping_options(options);
+    let make = |text: &str| super::cache::ShapeKey {
+        generation: 0,
+        input: super::prepared::ShapeInput {
+            text: text.into(),
+            defaults: vec![],
+            spans: vec![],
+            slots: vec![],
+            base_level: 0,
+            scale: 1.0f32.to_bits(),
+            quantize: true,
+        },
+    };
+    let first = make("first");
+    let second = make("second");
+    let jobs = [
+        ShapeJob {
+            group: InlineGroupId(3),
+            generation: 42,
+            key: first.clone(),
+        },
+        ShapeJob {
+            group: InlineGroupId(1),
+            generation: 42,
+            key: second,
+        },
+        ShapeJob {
+            group: InlineGroupId(7),
+            generation: 42,
+            key: first.clone(),
+        },
+    ];
+    let results = system.shape_batch(&jobs, 42);
+    assert_eq!(
+        results.iter().map(|r| r.group).collect::<Vec<_>>(),
+        vec![InlineGroupId(3), InlineGroupId(1), InlineGroupId(7)]
+    );
+    assert_eq!(system.shaping_stats().unique_jobs, 2);
+    assert!(system.cache.get(&first).is_none());
+    assert!(std::sync::Arc::ptr_eq(
+        &results[0].shaped,
+        &results[2].shaped
+    ));
+    assert_eq!(std::sync::Arc::strong_count(&results[0].shaped), 2);
+}

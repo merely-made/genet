@@ -122,10 +122,10 @@ fn configuration(v: &Value) -> Result<RTCConfiguration, WebRtcError> {
 }
 
 enum Endpoint {
-    Host(UdpPeer),
+    Host(Box<UdpPeer>),
     // Host-only carriage cannot satisfy relay-only policy. Keep negotiation
     // available without registering or transmitting a direct host candidate.
-    NoRoute(RTCPeerConnection),
+    NoRoute(Box<RTCPeerConnection>),
 }
 impl Endpoint {
     fn core(&self) -> &RTCPeerConnection {
@@ -178,16 +178,16 @@ impl WebRtcFactory for NativeWebRtcFactory {
             .build(Instant::now())
             .map_err(protocol_error)?;
         let endpoint = if config["iceTransportPolicy"] == "relay" {
-            Endpoint::NoRoute(core)
+            Endpoint::NoRoute(Box::new(core))
         } else {
-            Endpoint::Host(
+            Endpoint::Host(Box::new(
                 UdpPeer::bind_host(
                     core,
                     SocketAddr::new(self.settings.bind, 0),
                     self.settings.io,
                 )
                 .map_err(protocol_error)?,
-            )
+            ))
         };
         self.live.set(self.live.get() + 1);
         Ok(Rc::new(NativePeer {
@@ -258,11 +258,11 @@ impl State {
     fn refresh_channel_ids(&mut self) {
         let ids: Vec<_> = self.channels.keys().copied().collect();
         for id in ids {
-            if let Some(channel) = self.endpoint.core_mut().data_channel(id) {
-                if let Some(meta) = self.channels.get_mut(&id) {
-                    meta["id"] = json!(channel.stream_id());
-                    meta["readyState"] = json!(channel.ready_state().to_string());
-                }
+            if let Some(channel) = self.endpoint.core_mut().data_channel(id)
+                && let Some(meta) = self.channels.get_mut(&id)
+            {
+                meta["id"] = json!(channel.stream_id());
+                meta["readyState"] = json!(channel.ready_state().to_string());
             }
         }
     }

@@ -58,7 +58,10 @@ pub enum WebRtcOperation {
 /// One native peer owned by one document realm.
 pub trait WebRtcPeer {
     /// Execute an operation. Payload and reply are JSON values; replies contain
-    /// `value` and `state`. The host must retain its own network policy/limits.
+    /// `value`, `state` with a monotonic `revision`, and optional `events`.
+    /// SDP signaling events in `events` run before the operation promise settles;
+    /// other observations arrive through `poll`. The host retains network policy
+    /// and resource limits.
     fn call(&self, operation: WebRtcOperation, payload: &str) -> Result<String, WebRtcError>;
     /// Poll at most `budget` host turns. Returned JSON observations are delivered
     /// as realm tasks with a microtask checkpoint after each task.

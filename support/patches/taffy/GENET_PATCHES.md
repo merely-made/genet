@@ -1,36 +1,64 @@
 # genet's taffy fork — patch log
 
-This is `genet-taffy 0.14.0`, a vendored copy of upstream `taffy 0.13.0` —
-re-vendored 2026-08-16 from the
-prior `0.12.1` (itself re-vendored 2026-07-12 from
-`0.11.0-experimental-cache-fix.3`, when `float_layout` graduated from
-experimental to stable in 0.12; see
-`docs/2026-07-12_ring3_fork_rename_publish_plan.md`, T0). The 0.13 bump
-retired patch 0001, which upstream fixed. Note that 0.12.2 was skipped.
+This is `genet-taffy 0.16.0`, based on upstream `taffy 0.15.1`,
+re-vendored on 2026-10-28 from the current Genet fork of `taffy 0.13.0`.
+The current fork changes were captured and reproduced against pristine 0.13.0
+before porting; the previously committed complete delta had missed later
+changes in five source files.
 
-It is wired in via `[patch.crates-io] genet-taffy = { path =
-"support/patches/taffy" }` in the workspace `Cargo.toml`. Buckram and
-genet-livery depend on the published package under the local dependency key
-`taffy`; the workspace's separate plain `taffy 0.10.1` is unaffected.
+Buckram and genet-livery use the published package under the dependency key
+`taffy`. Genet develops it through the root path patch. The separate, unused
+workspace `taffy` declaration also follows upstream 0.15.1.
 
-It exists because taffy's float / BFC / table layout is still incomplete in
-places, and genet pushes on exactly those paths as CSS conformance climbs.
-This fork is the home for the layout fixes we accumulate, each upstreamed at our
-own pace so the divergence from upstream stays small — see `UPSTREAM_PR.md`
-for the drafted PRs. Of those, 0002 and 0003 remain PR-able and unlanded;
-0001 has since been fixed upstream in 0.13.0 and is retired below. 0004 is the
-Livery size-containment seam, and 0000 is the formatter static position that
-Buckram's K5 work reads.
+Upstream now supplies intrinsic sizing keywords, including the representation
+of `flex-basis: content`; the old private compact-length tag and separate
+`FlexBasis` representation are retired. `FlexBasis` is a compatibility alias
+for upstream `Dimension`. The authored-cross-size content-basis rule and the
+wrapped-column automatic-minimum marker remain necessary and have regression
+tests. Upstream's definite stretched-cross-size behavior is preserved for
+`auto` flex bases.
+
+The new upstream out-of-flow pass and containing-block traits replace the old
+formatter-local absolute-layout algorithms. Buckram implements those traits
+while retaining its own CSS containing-block authority. Formatter static
+positions, resolved positioned-grid areas, physical size containment, float
+exclusion bands, CSS flex/grid order and the automatic-minimum cache partition
+remain Genet extensions. Grid order is applied before placement, with paired
+placement data kept in source order afterward.
+
+The feature patch files and upstream drafts below are historical explanations,
+not patches verified against 0.15.1. The complete delta is the reproduction
+record; its byte-exact apply must be checked whenever source changes.
 
 ## How to keep it in sync
 
 `0000-complete-fork-delta.patch` is the **authoritative record**: pristine
 upstream plus that one file reproduces the vendored `src/` byte for byte. It is
-generated mechanically, so it cannot drift from the tree. The per-feature
+generated mechanically and checked by applying it to pristine upstream and
+comparing every source file; regeneration alone does not prevent drift. The per-feature
 patches below exist for upstreaming individual fixes and are **not** a
 reproduction record — see the accuracy note at the end of this section.
 
-**0.13.1 release refresh (2026-08-26).** Regenerated `0000` against the
+**0.16.0 upstream refresh (2026-10-28).** The complete delta is now based on
+published upstream Taffy 0.15.1. It changes 19 source files and reproduces all
+52 vendored `src/` files byte for byte when applied to the pristine registry
+source. Its SHA-256 is
+`cfbdbf78b6109b4a7f0c0a2def47f2a88d6dddb98f44089b9e9c7a83ae86e1d0`
+and its size is 62,939 bytes. The standalone all-features run passes 196 unit
+tests and five doctests, including the retained automatic-minimum/cache
+regressions, borrowed-style grid order and an authored content-basis ratio
+regression. The consumer migration also preserves bare alignment keyword
+safety, uses the new minimum/maximum-size vocabulary, and corrects Livery's
+obsolete `align-content` initial value to `normal`. The extracted package
+passes the same 196 unit tests and five doctests. Buckram, Genet-Livery and
+Livery together pass 1220 tests, with 12 pre-existing ignored tests.
+See `testing/genet/receipts/taffy-upstream-0151-20261028.json` in the repository
+for evidence hashes and the retained pre-fix failures.
+
+Historical source and release receipts below describe their original
+snapshots; their hashes and counts do not describe the current package.
+
+**Historical 0.13.1 release refresh (2026-08-26).** Regenerated `0000` against the
 published upstream `taffy 0.13.0` source after the grid static-position
 callback gained its auto-edge, container-border, and border-box inputs. A
 packaged-source all-feature test also exposed a missing `size_containment`
@@ -157,7 +185,7 @@ the marker only while measuring a column item's max-content automatic minimum
 with an auto main-axis minimum and non-scroll main-axis overflow. Wrapped
 column min-content contributions sum only in that context; rows, explicit
 minimums, definite sizing, and cross-axis-only scroll retain their prior
-paths. `CacheKey` includes `SizingMode` so an inherent/content/automatic-min
+paths. The cache mode includes `SizingMode` so an inherent/content/automatic-min
 measurement cannot reuse the wrong cached result.
 
 ### 0001 — `find_content_slot` width-fit (patch file deleted 2026-08-16)
@@ -311,7 +339,7 @@ keeps CSS containing-block selection and used geometry outside Taffy.
 
 > **Its `.patch` file is historical and must not be applied**: 2 of 3 hunks in
 > `grid/alignment.rs` no longer apply even to pristine 0.12.1, and the callback
-> gained three more inputs after the 0.13 bump. The current 0.14.0 source is
+> gained three more inputs after the 0.13 bump. The current source is
 > recorded by `0000-complete-fork-delta.patch`.
 
 
@@ -331,8 +359,7 @@ engine with its own containing-block graph.
 This adds a backwards-compatible `LayoutGridContainer` callback. It receives
 the direct child, finalized grid area, grid content box, which grid-area edges
 came from `auto`, and the container's border inputs, then returns the alignment
-area used only to calculate `Layout::static_location`. Its default keeps prior
-Taffy behavior. Buckram selects the content box unless K5a selected the same
+area used only to calculate `Layout::static_location`. Its default follows upstream 0.15.1 containing-block selection. Buckram selects the content box unless K5a selected the same
 grid as the actual containing block; in that case, each `auto` grid line uses
 the corresponding padding edge. Detailed grid-area diagnostics and ordinary
 absolute layout remain unchanged.

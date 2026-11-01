@@ -10,6 +10,15 @@ use layout_dom_api::{LayoutDom, LocalName, Namespace, NodeKind};
 
 #[test]
 fn probe_positioned_grid_items() {
+    positioned_grid_items_with_body_alignment("", 0.0);
+}
+
+#[test]
+fn explicit_block_align_content_stretch_keeps_child_margins_inside() {
+    positioned_grid_items_with_body_alignment("body { align-content: stretch; }", 1.0);
+}
+
+fn positioned_grid_items_with_body_alignment(body_alignment: &str, extra_y: f32) {
     // css/css-grid/abspos/positioned-grid-items-001.html, reduced.
     let html = r#"<html><body>
       <div id="grid">
@@ -38,10 +47,11 @@ fn probe_positioned_grid_items() {
       #third  { grid-column: 1 / 2; grid-row: 2 / 3; }
       #fourth { grid-column: 2 / 3; grid-row: 2 / 3; }
     "#;
+    let css = format!("{css}\n{body_alignment}");
     let document = StaticDocument::parse(html);
     let styles = resolve_styles(
         &document,
-        &StyleSet::cambium(&[css]),
+        &StyleSet::cambium(&[&css]),
         &Device::screen(800.0, 600.0),
         &InteractionStates::default(),
     );
@@ -78,7 +88,7 @@ fn probe_positioned_grid_items() {
             .unwrap_or_default();
         assert_eq!(
             (fragment.x, fragment.y),
-            (x, y),
+            (x, y + extra_y),
             "{name}: abspos grid item must sit at its grid-area origin",
         );
     }

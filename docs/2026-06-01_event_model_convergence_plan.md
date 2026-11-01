@@ -1,5 +1,12 @@
 # Event-model convergence plan (2026-06-01)
 
+Status (2026-10-28): **superseded** by the
+[native event dispatch plan](./2026-10-17_native_event_dispatch_plan.md)
+(ruling 9), whose Phase 2 landed: both dispatchers are now one `genet-events`
+walk. The scenario table below is a permanent test, not a plan: `genet-events`'
+tests and `dom_node_events_work` here, `event_layer_tests.rs` in mere's Cambium.
+The rest is the 2026-06-01 reasoning, unchanged.
+
 The audit's [#1 priority](./2026-05-29_genet_holistic_audit.md): genet has
 **two** capture→target→bubble dispatchers, and they have already drifted. This
 plan pins the divergence with evidence, defines the one propagation/cancellation

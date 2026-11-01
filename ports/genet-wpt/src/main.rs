@@ -50,6 +50,7 @@ mod manifest;
 mod render;
 mod test262;
 mod testdriver;
+mod worker_helper;
 #[cfg(all(test, feature = "webgl-tests"))]
 mod webgl_conformance;
 

@@ -444,7 +444,7 @@ fn supervised_worker_tree_reclaims_spinning_scripts() {
                     .stderr(Stdio::piped())
                     .spawn()
                     .expect("spawn isolated fixture");
-                let deadline = Instant::now() + Duration::from_secs(15);
+                let deadline = Instant::now() + watchdog();
                 let status = loop {
                     if let Some(status) = child.try_wait().expect("poll fixture") {
                         break status;
@@ -483,7 +483,7 @@ fn parent_disappearance_reclaims_spinning_worker() {
             .stdout(Stdio::piped())
             .spawn()
             .expect("spawn parent disappearance fixture");
-        let deadline = Instant::now() + Duration::from_secs(15);
+        let deadline = Instant::now() + watchdog();
         loop {
             if child.try_wait().unwrap().is_some() {
                 break;
@@ -521,4 +521,16 @@ fn parent_disappearance_reclaims_spinning_worker() {
         }
         println!("PASS {engine}/parent_exit");
     }
+}
+
+/// How long an isolated fixture may run before it is killed as hung. A debug
+/// build under load needs 12 to 17 s per Boa case, so the default is 60 s;
+/// `GENET_WORKER_WATCHDOG_SECS` overrides it. A real hang still trips it.
+fn watchdog() -> Duration {
+    let secs = std::env::var("GENET_WORKER_WATCHDOG_SECS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|secs| *secs > 0)
+        .unwrap_or(60);
+    Duration::from_secs(secs)
 }

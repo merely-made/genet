@@ -970,9 +970,9 @@ source = "css_display_3"
 name = "align-content"
 value_type = "alignment"
 inherited = false
-initial = "stretch"
-grammar = "start | end | flex-start | flex-end | center | stretch | space-between | space-around | space-evenly"
-seed_values = ["stretch", "center", "space-between"]
+initial = "normal"
+grammar = "normal | start | end | flex-start | flex-end | center | stretch | space-between | space-around | space-evenly"
+seed_values = ["normal", "stretch", "center", "space-between"]
 animation = "discrete"
 source = "css_box_alignment_3"
 

@@ -22,6 +22,10 @@ use layout_dom_api::{LayoutDom, LocalName, Namespace, NodeKind};
 
 use crate::render::ScrollOffsets;
 
+#[cfg(test)]
+#[path = "a11y/traversal_tests.rs"]
+mod traversal_tests;
+
 #[cfg(all(test, feature = "accesskit"))]
 fn access_id<D: LayoutDom>(dom: &D, node: D::NodeId) -> AccessNodeId {
     AccessNodeId(dom.opaque_id(node))
@@ -328,70 +332,21 @@ fn has_tabindex<D: LayoutDom>(dom: &D, node: D::NodeId) -> bool {
         .is_some_and(|value| value.trim().parse::<i32>().is_ok())
 }
 
-/// `node`'s parent in the flat tree, the tree its boxes and scroll containers
-/// come from: a slotted node's slot, else its parent, and a shadow root's host
-/// in place of the root itself.
-fn flat_parent<D: LayoutDom>(dom: &D, node: D::NodeId) -> Option<D::NodeId> {
-    if !dom.has_shadow_trees() {
-        return dom.parent(node);
-    }
-    if let Some(slot) = dom.assigned_slot(node) {
-        return Some(slot);
-    }
-    let parent = dom.parent(node)?;
-    if dom.kind(parent) == NodeKind::ShadowRoot {
-        return dom.shadow_host(parent);
-    }
-    Some(parent)
+/// State carried down the flat-tree descent. Keep action blocking separate
+/// from the sum: opposite nonzero scroll offsets can cancel geometrically.
+#[derive(Clone, Copy, Default)]
+struct AncestorScroll {
+    offset: (f32, f32),
+    active: bool,
 }
 
-/// The accumulated scroll owned by element ancestors. A node's own scroll
-/// offset moves its descendants, not its own retained border box.
-fn ancestor_scroll<D>(
-    dom: &D,
-    node: D::NodeId,
-    scroll_offsets: &ScrollOffsets<D::NodeId>,
-) -> (f32, f32)
-where
-    D: LayoutDom,
-    D::NodeId: Copy + Eq + Hash,
-{
-    let mut total = (0.0, 0.0);
-    let mut current = flat_parent(dom, node);
-    while let Some(parent) = current {
-        if let Some((x, y)) = scroll_offsets.get(&parent) {
-            total.0 += x;
-            total.1 += y;
+impl AncestorScroll {
+    fn including(self, (x, y): (f32, f32)) -> Self {
+        Self {
+            offset: (self.offset.0 + x, self.offset.1 + y),
+            active: self.active || x != 0.0 || y != 0.0,
         }
-        current = flat_parent(dom, parent);
     }
-    total
-}
-
-/// An active nested scrollport moves its descendant bounds. Pelt can route a
-/// retained `ScrollIntoView` request back to Livery, but it does not yet own
-/// the corresponding nested-pointer route. Keep descendants semantic and
-/// focusable, advertise only the reveal action, and withhold Click.
-fn has_active_scrolled_ancestor<D>(
-    dom: &D,
-    node: D::NodeId,
-    scroll_offsets: &ScrollOffsets<D::NodeId>,
-) -> bool
-where
-    D: LayoutDom,
-    D::NodeId: Copy + Eq + Hash,
-{
-    let mut current = flat_parent(dom, node);
-    while let Some(parent) = current {
-        if scroll_offsets
-            .get(&parent)
-            .is_some_and(|&(x, y)| x != 0.0 || y != 0.0)
-        {
-            return true;
-        }
-        current = flat_parent(dom, parent);
-    }
-    false
 }
 
 fn is_native_control<D: LayoutDom>(dom: &D, node: D::NodeId) -> bool {
@@ -731,7 +686,7 @@ fn neutral_actions<D: LayoutDom>(
     node: D::NodeId,
     role: DocumentA11yRole,
     state: DocumentA11yState,
-    scroll_offsets: Option<&ScrollOffsets<D::NodeId>>,
+    blocked: bool,
 ) -> Vec<DocumentA11yAction> {
     let semantic_control = is_native_control(dom, node)
         || matches!(
@@ -751,8 +706,6 @@ fn neutral_actions<D: LayoutDom>(
                 | DocumentA11yRole::Link
         );
     let focusable = semantic_control || has_tabindex(dom, node) || is_content_editable(dom, node);
-    let blocked =
-        scroll_offsets.is_some_and(|offsets| has_active_scrolled_ancestor(dom, node, offsets));
     let mut actions = Vec::new();
     if !state.disabled && blocked {
         actions.push(DocumentA11yAction::ScrollIntoView);
@@ -774,6 +727,7 @@ fn projection_walk<D>(
     fragments: &LiveryLayout<D::NodeId>,
     scroll_offsets: Option<&ScrollOffsets<D::NodeId>>,
     node: D::NodeId,
+    inherited_scroll: AncestorScroll,
     parent: Option<DocumentA11yNodeId>,
     names: &name::Names<D>,
     focus: Option<D::NodeId>,
@@ -792,6 +746,12 @@ where
         || (fragments.get(node).is_some() && names.rendered(node));
     let id = projected.then(|| neutral_node_id(dom, node));
     let child_parent = id.or(parent);
+    let child_scroll = inherited_scroll.including(
+        scroll_offsets
+            .and_then(|offsets| offsets.get(&node))
+            .copied()
+            .unwrap_or_default(),
+    );
     let children = dom
         .flat_children(node)
         .filter(|child| dom.kind(*child) == NodeKind::Element)
@@ -801,6 +761,7 @@ where
                 fragments,
                 scroll_offsets,
                 child,
+                child_scroll,
                 child_parent,
                 names,
                 focus,
@@ -820,9 +781,7 @@ where
     };
     let state = neutral_state(dom, node, focus);
     let bounds = fragments.get(node).map(|fragment| {
-        let (scroll_x, scroll_y) = scroll_offsets
-            .map(|offsets| ancestor_scroll(dom, node, offsets))
-            .unwrap_or_default();
+        let (scroll_x, scroll_y) = inherited_scroll.offset;
         DocumentA11yBounds {
             x: fragment.x - scroll_x,
             y: fragment.y - scroll_y,
@@ -833,7 +792,7 @@ where
     let name = names.name(node);
     let description = names.description(node);
     let value = text_control_value(dom, node);
-    let actions = neutral_actions(dom, node, role, state, scroll_offsets);
+    let actions = neutral_actions(dom, node, role, state, inherited_scroll.active);
     let numeric_value = aria_number(dom, node, "aria-valuenow");
     let numeric_minimum = aria_number(dom, node, "aria-valuemin");
     let numeric_maximum = aria_number(dom, node, "aria-valuemax");
@@ -994,6 +953,7 @@ fn projection_with_names<D: LayoutDom>(
         fragments,
         scroll_offsets,
         root,
+        AncestorScroll::default(),
         None,
         names,
         focus,

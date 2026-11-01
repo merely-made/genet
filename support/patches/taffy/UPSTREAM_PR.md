@@ -1,15 +1,12 @@
 # Upstream PR drafts — taffy
 
-Target: `DioxusLabs/taffy`, branch `main`, against the **released 0.12.1**
-shape (`float_layout` graduated from experimental to stable in this release —
-genet's fork re-vendored onto it 2026-07-12, ending the need to ride the
-`-experimental-cache-fix` line; see
-`docs/2026-07-12_ring3_fork_rename_publish_plan.md`, T0). All three patches
-below are verified: applied against 0.12.1's actual source, compiled, and run
-through genet-layout's full suite (320 tests) + the html-to-pixels paint
-corpus + all nine WPT baselines with zero regressions. `main` may have moved
-further since 0.12.1's cut; line offsets in the `.patch` files will need
-rebasing, but each fix's substance is unchanged.
+These are historical drafts against upstream 0.12.1, retained for their
+rationale. The current fork is based on released Taffy 0.15.1; these patches
+have not been rebased or verified against that release. PR 1's width-fit fix
+was superseded upstream in 0.13.0. Float exclusion bands and CSS order remain
+fork extensions, but their current implementations belong to the complete
+source delta described in `GENET_PATCHES.md`. Historical validation claims
+below apply only to the source and tests identified in those drafts.
 
 ---
 

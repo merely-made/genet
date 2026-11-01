@@ -964,7 +964,42 @@ fn generate(db: &Database) -> String {
              \x20       }}\n"
         ));
     }
-    out.push_str("        changed\n    }\n}\n\n");
+    out.push_str("        changed\n    }\n\n");
+
+    // Used-color projection visits only the catalog's color-bearing families.
+    // Accessing every property through get/set would clone unrelated tagged
+    // values, including strings and lists, for every paint style.
+    out.push_str(
+        "    /// Resolve all color-bearing computed fields under the supplied\n\
+         \x20   /// foreground, palette and scheme, replacing them with absolute colors.\n\
+         \x20   /// The caller owns any retained contextual source and supplies its\n\
+         \x20   /// used-value context before this in-place paint projection.\n\
+         \x20   pub fn resolve_used_colors_in_place(\n\
+         \x20       &mut self,\n\
+         \x20       context: crate::values::UsedColorContext,\n\
+         \x20   ) {\n",
+    );
+    for property in &db.property {
+        let field = rust_field(&property.name);
+        match property.value_type.as_str() {
+            "color" => out.push_str(&format!(
+                "        self.{field} = crate::values::ComputedColor::Absolute(self.{field}.resolve_used(context));\n"
+            )),
+            "background-image" => out.push_str(&format!(
+                "        if let crate::values::BackgroundImage::LinearGradient {{ from, to }} = &mut self.{field} {{\n\
+                 \x20           *from = crate::values::ComputedColor::Absolute(from.resolve_used(context));\n\
+                 \x20           *to = crate::values::ComputedColor::Absolute(to.resolve_used(context));\n\
+                 \x20       }}\n"
+            )),
+            "box-shadow" => out.push_str(&format!(
+                "        if let crate::values::BoxShadow::Value(shadow) = &mut self.{field} {{\n\
+                 \x20           shadow.color = crate::values::ComputedColor::Absolute(shadow.color.resolve_used(context));\n\
+                 \x20       }}\n"
+            )),
+            _ => {},
+        }
+    }
+    out.push_str("    }\n}\n\n");
 
     out.push_str(
         "#[derive(Clone, Copy, Debug, Eq, PartialEq)]\n\

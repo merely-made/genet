@@ -88,6 +88,7 @@ pub(crate) fn resolve<D: LayoutDom>(dom: &D, plane: &mut StylePlane<D::NodeId>) 
     {
         return;
     }
+    plane.invalidate_used_colors();
     let mut resolver = Resolver {
         dom,
         plane,

@@ -46,7 +46,7 @@ not prerequisites for the first specimen bench. The native canvas acceptance
 was rerun at changed sources on 2026-09-16; the receipt is under T3.
 
 **Consumer and cross-repository owner:** the specimen bench prerequisites in
-`isometry/mesocosm/design_docs/2026-09-11_orthographic_voxel_presentation_plan.md#specimen-bench-prerequisites-2026-09-13`.
+`isometry/mesocosm/design_docs/archive_docs/2026-10-28/2026-09-11_orthographic_voxel_presentation_plan.md#specimen-bench-prerequisites-2026-09-13`.
 That section owns the application assembly and prerequisite order. This
 document owns the Genet engine changes it calls for.
 

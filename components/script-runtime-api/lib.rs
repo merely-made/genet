@@ -718,6 +718,9 @@ pub(crate) struct AgentState {
     pub(crate) dom_adoption: dom::adoption::AgentDomState,
     /// The one listener registry every realm of the agent dispatches through.
     pub(crate) events: Rc<RefCell<genet_events::Registry>>,
+    /// Runs the listeners other owners registered in `events`, in the same walk
+    /// as script's own.
+    pub(crate) foreign_invoker: Option<Rc<RefCell<Box<dyn genet_events::Invoker>>>>,
     /// Allocator for the ids of windows and plain `EventTarget` objects.
     pub(crate) next_event_target: u64,
     pub(crate) frames: crate::frames::FrameState,
@@ -967,6 +970,8 @@ impl<E: ScriptEngine> Runtime<E> {
         )
         .map_err(SurfaceError::main)?;
         if scope == GlobalScopeKind::Window {
+            // Only a worker scope installs the sink for its unhandled errors.
+            engine.eval("delete globalThis.__setWorkerErrorSink;")?;
             frames::bind_window_proxy_hooks_in_realm(&mut engine, &agent, MAIN_REALM, MAIN_REALM)
                 .expect("the bootstrap realm accepts its window-proxy host hook");
         }
@@ -2654,6 +2659,20 @@ impl<E: ScriptEngine> Runtime<E> {
         self.host.borrow_mut().dom.set_html_decode_options(options);
     }
 
+    /// The agent's listener registry, shared with every realm. A host registers
+    /// its own listeners here (under an owner other than `Owner::SCRIPT`) so
+    /// they interleave with script's on one node.
+    pub fn events(&self) -> Rc<RefCell<genet_events::Registry>> {
+        self.agent.borrow().events.clone()
+    }
+
+    /// Install the invoker that runs listeners of owners other than script when
+    /// a script-driven dispatch reaches them, at their place in registration
+    /// order. Without one such a listener is skipped.
+    pub fn set_foreign_invoker(&mut self, invoker: Option<Box<dyn genet_events::Invoker>>) {
+        self.agent.borrow_mut().foreign_invoker = invoker.map(|i| Rc::new(RefCell::new(i)));
+    }
+
     /// The shared host state (e.g. to read `console` output after a run).
     pub fn host(&self) -> &SharedHost {
         &self.host
@@ -3611,6 +3630,14 @@ const EVENT_TARGET_BOOTSTRAP: &str = r#"
   var reporting = false;
   var reportString = String, reportError = Error;
   var reportConsole = globalThis.console && globalThis.console.error;
+  var workerErrorSink = null;
+  Object.defineProperty(globalThis, '__setWorkerErrorSink', {
+    configurable: true, writable: true, enumerable: false,
+    value: function(sink) {
+      workerErrorSink = sink;
+      delete globalThis.__setWorkerErrorSink;
+    }
+  });
   function reportException(ex, filename, label) {
     var msg = (ex && ex.message !== undefined) ? reportString(ex.message) : reportString(ex);
     if (!reporting) {
@@ -3622,7 +3649,12 @@ const EVENT_TARGET_BOOTSTRAP: &str = r#"
         ev.filename = filename || '';
         ev.lineno = 0;
         ev.colno = 0;
-        trustApply(EventTarget.prototype.dispatchEvent, globalThis, [ev]);
+        var notCanceled = trustApply(EventTarget.prototype.dispatchEvent, globalThis, [ev]);
+        // A dedicated worker's unhandled error is also reported to its owner:
+        // the sink is installed only by the worker scope.
+        if (notCanceled && workerErrorSink) {
+          workerErrorSink(msg, ev.filename, ev.lineno, ev.colno);
+        }
       } catch (ignored) {
         // An error handler that itself threw: fall through to the console.
       }

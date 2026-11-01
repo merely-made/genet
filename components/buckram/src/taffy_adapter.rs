@@ -13,11 +13,12 @@
 use std::slice;
 
 use taffy::{
-    BlockContext, Cache, CacheTree, DetailedGridInfo, Layout, LayoutBlockContainer,
-    LayoutFlexboxContainer, LayoutGridContainer, LayoutInput, LayoutOutput, LayoutPartialTree,
-    NodeId, RoundTree, RunMode, SizingMode, Style, TraversePartialTree, TraverseTree,
-    compute_block_layout, compute_cached_layout, compute_flexbox_layout, compute_grid_layout,
-    compute_hidden_layout, compute_leaf_layout, compute_root_layout, round_layout,
+    BlockContext, Cache, CacheTree, DetailedGridInfo, DetailedLayoutInfo, Layout,
+    LayoutBlockContainer, LayoutContainingBlock, LayoutFlexboxContainer, LayoutGridContainer,
+    LayoutInput, LayoutOutput, LayoutPartialTree, NodeId, RoundTree, RunMode, SizingMode, Style,
+    TraversePartialTree, TraverseTree, compute_block_layout, compute_cached_layout,
+    compute_flexbox_layout, compute_grid_layout, compute_hidden_layout, compute_leaf_layout,
+    compute_oof_layout, compute_root_layout, round_layout,
 };
 
 use crate::block::FloatContextState;
@@ -155,7 +156,8 @@ struct AlgorithmNode {
     cache: Cache,
     unrounded_layout: Layout,
     final_layout: Layout,
-    grid_info: Option<DetailedGridInfo>,
+    detailed_info: DetailedLayoutInfo,
+    hoisted_children: Vec<NodeId>,
     /// CSS Grid §9.2: a direct absolute or fixed child's static position is
     /// aligned in the grid container's content box unless that grid also
     /// generates the child's containing block, in which case the §9.1 grid
@@ -299,7 +301,8 @@ impl<Context, Source> AlgorithmTree<Context, Source> {
             cache: Cache::new(),
             unrounded_layout: Layout::new(),
             final_layout: Layout::new(),
-            grid_info: None,
+            detailed_info: DetailedLayoutInfo::None,
+            hoisted_children: Vec::new(),
             grid_static_position_uses_grid_area: false,
             baselines: Baselines::default(),
             sequential_multicol: None,
@@ -814,9 +817,10 @@ impl AlgorithmCore {
         if self.nodes[parent.index()].kind != AlgorithmKind::Grid {
             return None;
         }
-        let area = self.nodes[parent.index()]
-            .grid_info
-            .as_ref()?
+        let DetailedLayoutInfo::Grid(info) = &self.nodes[parent.index()].detailed_info else {
+            return None;
+        };
+        let area = info
             .positioned_items
             .iter()
             .find(|item| item.node == id.into_taffy())?

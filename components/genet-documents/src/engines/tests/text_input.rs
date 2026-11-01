@@ -194,3 +194,81 @@ fn scripted_text_input_geometry_uses_live_utf16_selection_and_rejects_stale_layo
     session.input(SessionInput::Focus(false));
     assert!(session.text_input_state().is_none());
 }
+
+fn password_geometry_for_engine(engine: &dyn SessionEngine<Scene>) {
+    for (value, mask) in [("abcd", "••••"), ("é😀a", "•••"), ("e\u{0301}👩‍👩‍👧‍👦🇺🇸", "•••")]
+    {
+        let html = format!(
+            r#"<!doctype html><style>
+            body {{ margin:0 }} input {{ display:block; margin:24px 0 0 40px;
+                width:300px; height:40px; font:20px monospace; }}
+            </style><input type="password" value="{value}"><input value="{mask}">"#
+        );
+        let mut session = engine
+            .spawn(
+                &SessionSpawnRequest::new("https://fixture.test/password")
+                    .with_body(&html)
+                    .with_content_type("text/html")
+                    .with_viewport(640, 400),
+            )
+            .unwrap();
+        session.try_frame(640, 400).unwrap();
+        assert!(session.focus_move(SessionFocusDirection::Forward));
+        session.input(SessionInput::Key {
+            key: SessionKey::End,
+            state: SessionButtonState::Pressed,
+            modifiers: Default::default(),
+            repeat: false,
+        });
+        session.try_frame(640, 400).unwrap();
+        let password = session.text_input_state().unwrap();
+        assert!(password.password);
+        let units = value.encode_utf16().count() as u32;
+        assert_eq!(password.selection_utf16, (units, units));
+        assert!(!format!("{password:?}").contains(value));
+        assert!(session.focus_move(SessionFocusDirection::Forward));
+        session.input(SessionInput::Key {
+            key: SessionKey::End,
+            state: SessionButtonState::Pressed,
+            modifiers: Default::default(),
+            repeat: false,
+        });
+        session.try_frame(640, 400).unwrap();
+        let reference = session.text_input_state().unwrap();
+        assert!(!reference.password);
+        assert!(
+            (password.caret.x - reference.caret.x).abs() < 0.01,
+            "shared geometry must reach the end of the actual masked glyphs"
+        );
+        assert!(session.focus_move(SessionFocusDirection::Backward));
+        session.input(SessionInput::Key {
+            key: SessionKey::End,
+            state: SessionButtonState::Pressed,
+            modifiers: Default::default(),
+            repeat: false,
+        });
+        session.try_frame(640, 400).unwrap();
+        session.input(SessionInput::Ime(SessionIme::Commit("\u{0301}".into())));
+        assert!(session.text_input_state().is_none());
+        session.try_frame(640, 400).unwrap();
+        let edited = session.text_input_state().unwrap();
+        assert_eq!(edited.selection_utf16, (units + 1, units + 1));
+        assert!(
+            (edited.caret.x - password.caret.x).abs() < 0.01,
+            "an appended combining mark updates editing offsets without adding a mask glyph"
+        );
+    }
+}
+
+#[test]
+fn password_caret_projection_reaches_static_shared_geometry() {
+    password_geometry_for_engine(&LiverySessionEngine::new(NoFetch));
+}
+
+#[cfg(feature = "scripted")]
+#[test]
+fn password_caret_projection_reaches_scripted_shared_geometry() {
+    password_geometry_for_engine(
+        &ScriptedSessionEngine::<script_engine_boa::BoaEngine, _>::new("genet.scripted", NoFetch),
+    );
+}

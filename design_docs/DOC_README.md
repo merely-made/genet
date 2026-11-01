@@ -57,6 +57,10 @@ Netfetcher wire adoption (2026-10-14): [receiving plan](2026-10-14_netfetcher_wi
 
 - [Architecture reduction implementation plan, 2026-10-16](2026-10-16_architecture_reduction_plan.md): bounded task execution across the audited ownership lanes, with serialized memory-capped validation and preserved Forms acceptance boundaries.
 
+- [Nonblocking native frame qualification](2026-10-30_nonblocking_native_frames_plan.md): pending native batches preserve current-frame quality and device-loss admission while the host services input; Turnstone pane/tile measurements are receiving evidence.
+
+Used-color paint reuse (2026-10-30): the [contextual color plan](../docs/2026-07-28_livery_contextual_color_computation_plan.md#retained-paint-view-reuse-2026-10-30) preserves contextual source styles while sharing an invalidated-on-write numeric paint view and a generated color-only field walk.
+
 ## Current engine work (2026-09-07)
 
 Use the linked plan's current gate and dated receipts before implementing a
@@ -639,7 +643,7 @@ completed corpus census or bounded slice does not close its enclosing feature.
   independent of the first bench. The downstream native receipt is separate from the prior Ortet
   canvas acceptance and is not an Ortet or WPT rerun. Application prerequisite
   authority:
-  `isometry/mesocosm/design_docs/2026-09-11_orthographic_voxel_presentation_plan.md#specimen-bench-prerequisites-2026-09-13`.)
+  `isometry/mesocosm/design_docs/archive_docs/2026-10-28/2026-09-11_orthographic_voxel_presentation_plan.md#specimen-bench-prerequisites-2026-09-13`.)
 
 - [common_script_font_fallback_plan](2026-09-04_common_script_font_fallback_plan.md)
   (**Windows repair accepted 2026-09-05**: the paired Parley/Fontique patch

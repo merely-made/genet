@@ -1,0 +1,108 @@
+{
+  "date": "2026-10-28",
+  "base_genet_commit": "8a6a805039ec791a28d59dcda6add174abe772d1",
+  "upstream_release": "0.15.1",
+  "upstream_release_url": "https://github.com/DioxusLabs/taffy/releases/tag/v0.15.1",
+  "fork_version": "0.16.0",
+  "current_upstream_preserved": true,
+  "old_delta_was_stale_in_five_files": true,
+  "fresh_old_base_delta_roundtrip": true,
+  "final_source_delta": {
+    "upstream_version": "0.15.1",
+    "fork_version": "0.16.0",
+    "all_source_files": 52,
+    "changed_files": [
+      "compute/block.rs",
+      "compute/flexbox.rs",
+      "compute/float.rs",
+      "compute/grid/alignment.rs",
+      "compute/grid/mod.rs",
+      "compute/leaf.rs",
+      "compute/mod.rs",
+      "compute/oof.rs",
+      "prelude.rs",
+      "style/compact_length.rs",
+      "style/dimension.rs",
+      "style/flex.rs",
+      "style/grid.rs",
+      "style/mod.rs",
+      "tree/cache.rs",
+      "tree/layout.rs",
+      "tree/taffy_tree.rs",
+      "tree/traits.rs",
+      "util/print.rs"
+    ],
+    "delta_sha256": "cfbdbf78b6109b4a7f0c0a2def47f2a88d6dddb98f44089b9e9c7a83ae86e1d0",
+    "delta_size": 62939,
+    "byte_exact_source_roundtrip": true
+  },
+  "tests": {
+    "fork_all_features": {
+      "passed": 196,
+      "doctests_passed": 5
+    },
+    "extracted_package_all_features": {
+      "passed": 196,
+      "doctests_passed": 5
+    },
+    "buckram_genet_livery_livery": {
+      "command": [
+        "test",
+        "--locked",
+        "--offline",
+        "-p",
+        "buckram",
+        "-p",
+        "genet-livery",
+        "-p",
+        "livery",
+        "--no-fail-fast",
+        "-j",
+        "4"
+      ],
+      "targets": 70,
+      "passed": 1220,
+      "failed": 0,
+      "ignored": 12
+    }
+  },
+  "retained_regressions": {
+    "wrapped_column_automatic_minimum": {
+      "before": 500,
+      "expected_and_after": 100,
+      "red_log": "probe-0005.stdout"
+    },
+    "authored_content_basis_ratio": {
+      "before": 500,
+      "expected_and_after": 80,
+      "red_log": "probe-0009.stdout"
+    },
+    "positioned_grid_origin": {
+      "before_y": 9,
+      "expected_and_after_y": 8,
+      "red_log": "consumers-tests-0006.stdout",
+      "control": "explicit align-content:stretch retains child top margin; both forms pass"
+    }
+  },
+  "css_alignment_reference": "https://www.w3.org/TR/css-align-3/#propdef-align-content",
+  "scope_limits": [
+    "No new physical IME or accessibility qualification",
+    "No new Linux/Vulkan or GPU pixel qualification",
+    "No new browser reference-engine measurement"
+  ],
+  "generated_delta_whitespace_diagnostics": 17,
+  "non_patch_diff_check_passed": true,
+  "evidence_root": "<Code>/output/graphshell-taffy-source-20261028",
+  "evidence_sha256": {
+    "consumers-tests-0007.stdout": "a9903561e1dd6cb31c47512c70480f6d8d1c070f97f3852033446cbc9df9e961",
+    "consumers-tests-0007.stderr": "8f06b25d93cba906ace16658e411baf428e9e267345b05f375d858eeda62c1f6",
+    "probe-0010.stdout": "91617222fa91c908eaee237f39e01eee065ec54f401c7f8218a173751e839de3",
+    "probe-0010.stderr": "5ce9e185dd4c6ebbec577fdf1654770035bd8e432804edb889872fc4fbbf7ca0",
+    "package-tests.stdout": "05a69d4db385beb772702e2705b9b9837a00e8734b42af12b72aa1cb1de9a3f2",
+    "package-tests.stderr": "0bee2ed5a3299525624eb97b16efbec4fae9214d1192c42e8267654c61a02187",
+    "final-delta-roundtrip.json": "f016dbeca4ec9f46a88a0e7526e2e9bd6e956bdfab367fea2b39ee871200de30",
+    "probe-0005.stdout": "8f540d26d6581f3801d0980cbdeb272c871333cb4fa43e692fc221546a770385",
+    "probe-0009.stdout": "8bc51fab3a9cc508b645a1f090b058cf94031d012745a203c10ec6e6530b5041",
+    "consumers-tests-0006.stdout": "ee74a849e49e7a5b5dcd82a89a6fa10dd3a4b12b3ecff9012d6af2abb5238bb1"
+  }
+}

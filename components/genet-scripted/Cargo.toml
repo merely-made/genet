@@ -48,6 +48,7 @@ paint_list_render = { workspace = true, optional = true }
 genet-static-dom = { path = "../genet-static-dom" }
 fleece = { path = "../fleece" }
 genet-runtime = { path = "../script-runtime-api" }
+genet-events = { path = "../genet-events" }
 netrender = { workspace = true, optional = true }
 encoding_rs = { workspace = true }
 postcard = { workspace = true }

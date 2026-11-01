@@ -4,7 +4,7 @@
   "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
   "policy": "exact",
   "renderer": "livery",
-  "runner_sha256": "363d6abe361f0567bbd9439f954c62bf17ff926080122f296acfc9a57c68c4a2",
+  "runner_sha256": "5098ac0a57776b7a9e469c13c3cb323ef02b995422beb0b4b2f4c0a42364afde",
   "subset": "dom/events",
   "tests": {
     "dom/events/AddEventListenerOptions-once.any.html": {
@@ -31,8 +31,27 @@
       "subtests_total": 4
     },
     "dom/events/AddEventListenerOptions-once.any.worker.html": {
-      "reason": "harness-error",
-      "status": "error"
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Once listener should be invoked only once",
+          "status": "pass"
+        },
+        {
+          "name": "Once listener should be invoked only once even if the event is nested",
+          "status": "pass"
+        },
+        {
+          "name": "Once listener should be added / removed like normal listeners",
+          "status": "pass"
+        },
+        {
+          "name": "Multiple once listeners should be invoked even if the stopImmediatePropagation is set",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 4,
+      "subtests_total": 4
     },
     "dom/events/AddEventListenerOptions-passive.any.html": {
       "status": "fail",
@@ -62,8 +81,31 @@
       "subtests_total": 5
     },
     "dom/events/AddEventListenerOptions-passive.any.worker.html": {
-      "reason": "harness-error",
-      "status": "error"
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Supports passive option on addEventListener only",
+          "status": "fail"
+        },
+        {
+          "name": "preventDefault should be ignored if-and-only-if the passive option is true",
+          "status": "pass"
+        },
+        {
+          "name": "returnValue should be ignored if-and-only-if the passive option is true",
+          "status": "pass"
+        },
+        {
+          "name": "passive behavior of one listener should be unaffected by the presence of other listeners",
+          "status": "pass"
+        },
+        {
+          "name": "Equivalence of option values",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 4,
+      "subtests_total": 5
     },
     "dom/events/AddEventListenerOptions-signal.any.html": {
       "reason": "harness-error",
@@ -111,7 +153,47 @@
     },
     "dom/events/AddEventListenerOptions-signal.any.worker.html": {
       "reason": "harness-error",
-      "status": "error"
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Passing an AbortSignal to addEventListener options should allow removing a listener",
+          "status": "fail"
+        },
+        {
+          "name": "Passing an AbortSignal to addEventListener does not prevent removeEventListener",
+          "status": "pass"
+        },
+        {
+          "name": "Passing an AbortSignal to addEventListener works with the once flag",
+          "status": "fail"
+        },
+        {
+          "name": "Removing a once listener works with a passed signal",
+          "status": "pass"
+        },
+        {
+          "name": "Passing an AbortSignal to multiple listeners",
+          "status": "fail"
+        },
+        {
+          "name": "Passing an AbortSignal to addEventListener works with the capture flag",
+          "status": "fail"
+        },
+        {
+          "name": "Aborting from a listener does not call future listeners",
+          "status": "fail"
+        },
+        {
+          "name": "Adding then aborting a listener in another listener does not call it",
+          "status": "pass"
+        },
+        {
+          "name": "Aborting from a nested listener should remove it",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 3,
+      "subtests_total": 9
     },
     "dom/events/Body-FrameSet-Event-Handlers.html": {
       "status": "fail",
@@ -457,8 +539,67 @@
       "subtests_total": 14
     },
     "dom/events/Event-constructors.any.worker.html": {
-      "reason": "harness-error",
-      "status": "error"
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Event-constructors",
+          "status": "fail"
+        },
+        {
+          "name": "Event-constructors 1",
+          "status": "fail"
+        },
+        {
+          "name": "Event-constructors 2",
+          "status": "fail"
+        },
+        {
+          "name": "Event-constructors 3",
+          "status": "fail"
+        },
+        {
+          "name": "Event-constructors 4",
+          "status": "fail"
+        },
+        {
+          "name": "Event-constructors 5",
+          "status": "fail"
+        },
+        {
+          "name": "Event-constructors 6",
+          "status": "pass"
+        },
+        {
+          "name": "Event-constructors 7",
+          "status": "pass"
+        },
+        {
+          "name": "Event-constructors 8",
+          "status": "pass"
+        },
+        {
+          "name": "Event-constructors 9",
+          "status": "pass"
+        },
+        {
+          "name": "Event-constructors 10",
+          "status": "pass"
+        },
+        {
+          "name": "Event-constructors 11",
+          "status": "pass"
+        },
+        {
+          "name": "Event-constructors 12",
+          "status": "pass"
+        },
+        {
+          "name": "Event-constructors 13",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 7,
+      "subtests_total": 14
     },
     "dom/events/Event-defaultPrevented-after-dispatch.html": {
       "status": "pass",
@@ -978,10 +1119,14 @@
         {
           "name": "Redispatching event which is being dispatched",
           "status": "timeout"
+        },
+        {
+          "name": "Synthesizing click on button...",
+          "status": "pass"
         }
       ],
-      "subtests_passed": 0,
-      "subtests_total": 3
+      "subtests_passed": 1,
+      "subtests_total": 4
     },
     "dom/events/Event-dispatch-reenter.html": {
       "status": "pass",
@@ -1675,8 +1820,15 @@
       "subtests_total": 1
     },
     "dom/events/Event-isTrusted.any.worker.html": {
-      "reason": "harness-error",
-      "status": "error"
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Event-isTrusted",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
     },
     "dom/events/Event-propagation.html": {
       "status": "pass",
@@ -2213,14 +2365,14 @@
       "subtests_total": 4
     },
     "dom/events/EventTarget-add-listener-platform-object.html": {
-      "status": "fail",
+      "status": "pass",
       "subtests": [
         {
           "name": "addEventListener with a platform object",
-          "status": "fail"
+          "status": "pass"
         }
       ],
-      "subtests_passed": 0,
+      "subtests_passed": 1,
       "subtests_total": 1
     },
     "dom/events/EventTarget-add-remove-listener.any.html": {
@@ -2235,8 +2387,15 @@
       "subtests_total": 1
     },
     "dom/events/EventTarget-add-remove-listener.any.worker.html": {
-      "reason": "harness-error",
-      "status": "error"
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Removing an event listener without explicit capture arg should succeed",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
     },
     "dom/events/EventTarget-addEventListener.any.html": {
       "status": "pass",
@@ -2250,8 +2409,15 @@
       "subtests_total": 1
     },
     "dom/events/EventTarget-addEventListener.any.worker.html": {
-      "reason": "harness-error",
-      "status": "error"
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Adding a null event listener should succeed",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
     },
     "dom/events/EventTarget-constructible.any.html": {
       "status": "fail",
@@ -2273,8 +2439,23 @@
       "subtests_total": 3
     },
     "dom/events/EventTarget-constructible.any.worker.html": {
-      "reason": "harness-error",
-      "status": "error"
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "A constructed EventTarget can be used as expected",
+          "status": "pass"
+        },
+        {
+          "name": "A constructed EventTarget implements dispatch correctly",
+          "status": "pass"
+        },
+        {
+          "name": "EventTarget can be subclassed",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 3
     },
     "dom/events/EventTarget-dispatchEvent-returnvalue.html": {
       "status": "pass",
@@ -2410,8 +2591,15 @@
       "subtests_total": 1
     },
     "dom/events/EventTarget-removeEventListener.any.worker.html": {
-      "reason": "harness-error",
-      "status": "error"
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "removing a null event listener should succeed",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
     },
     "dom/events/EventTarget-this-of-listener.html": {
       "status": "fail",
@@ -2590,8 +2778,15 @@
       "subtests_total": 8
     },
     "dom/events/event-global.worker.html": {
-      "reason": "harness-error",
-      "status": "error"
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "There's no self.event (that's why we call it window.event) in workers",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1
     },
     "dom/events/event-handler-attribute-replace-preserves-passive.html": {
       "status": "pass",
@@ -3767,7 +3962,7 @@
         },
         {
           "name": "scrollTop and scrollLeft being set with the same value.",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "scrollTop and scrollLeft being set with invalid scroll offset.",
@@ -3778,7 +3973,7 @@
           "status": "fail"
         }
       ],
-      "subtests_passed": 1,
+      "subtests_passed": 2,
       "subtests_total": 4
     },
     "dom/events/scrolling/scroll-event-fired-to-iframe.html": {
@@ -3805,22 +4000,23 @@
       "subtests_total": 4
     },
     "dom/events/scrolling/scrollIntoView-in-onscroll-to-sticky.html": {
-      "status": "fail",
+      "status": "pass",
       "subtests": [
         {
           "name": "scrollIntoView-in-onscroll-to-sticky",
-          "status": "fail"
+          "status": "pass"
         }
       ],
-      "subtests_passed": 0,
+      "subtests_passed": 1,
       "subtests_total": 1
     },
     "dom/events/scrolling/scrollend-event-fired-after-instant-scroll-in-microtask.html": {
-      "status": "fail",
+      "reason": "harness-timeout",
+      "status": "error",
       "subtests": [
         {
           "name": "scrolling state is false at the end of the test",
-          "status": "fail"
+          "status": "timeout"
         }
       ],
       "subtests_passed": 0,
@@ -3903,23 +4099,23 @@
       "status": "error"
     },
     "dom/events/scrolling/scrollend-event-fired-for-scrollIntoView.html?include=nested-scrollIntoView": {
-      "reason": "harness-error",
+      "reason": "harness-timeout",
       "status": "error"
     },
     "dom/events/scrolling/scrollend-event-fired-for-scrollIntoView.html?include=root-inline-end-block-end-behavior-auto": {
-      "reason": "harness-error",
+      "reason": "harness-timeout",
       "status": "error"
     },
     "dom/events/scrolling/scrollend-event-fired-for-scrollIntoView.html?include=root-inline-start-block-start-behavior-smooth": {
-      "reason": "harness-error",
+      "reason": "harness-timeout",
       "status": "error"
     },
     "dom/events/scrolling/scrollend-event-fired-for-scrollIntoView.html?include=subframe-inline-end-block-end-behavior-auto": {
-      "reason": "harness-error",
+      "reason": "harness-timeout",
       "status": "error"
     },
     "dom/events/scrolling/scrollend-event-fired-for-scrollIntoView.html?include=subframe-inline-start-block-start-behavior-smooth": {
-      "reason": "harness-error",
+      "reason": "harness-timeout",
       "status": "error"
     },
     "dom/events/scrolling/scrollend-event-fired-to-document.html": {
@@ -3959,36 +4155,35 @@
       "status": "error"
     },
     "dom/events/scrolling/scrollend-event-not-fired-on-no-scroll.html": {
-      "reason": "harness-error",
-      "status": "error",
+      "status": "fail",
       "subtests": [
         {
           "name": "No scroll via wheel on div shouldn't fire scrollend.",
-          "status": "fail"
+          "status": "pass"
         },
         {
           "name": "No scroll via keys on div shouldn't fire scrollend.",
-          "status": "not-run"
+          "status": "fail"
         },
         {
           "name": "No scroll via wheel on document shouldn't fire scrollend.",
-          "status": "not-run"
+          "status": "pass"
         },
         {
           "name": "No scroll via keys on document shouldn't fire scrollend.",
-          "status": "not-run"
+          "status": "fail"
         }
       ],
-      "subtests_passed": 0,
+      "subtests_passed": 2,
       "subtests_total": 4
     },
     "dom/events/scrolling/scrollend-fires-to-text-input.html": {
-      "reason": "harness-error",
+      "reason": "harness-timeout",
       "status": "error",
       "subtests": [
         {
           "name": "scrolled input field should receive scrollend when setting scrollLeft.",
-          "status": "fail"
+          "status": "timeout"
         },
         {
           "name": "scrolled input field should receive scrollend with scrollBy({ behavior: 'smooth' }).",

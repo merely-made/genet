@@ -236,6 +236,8 @@ struct ScriptInvoker<'a, 'cx, E: ScriptEngine + 'cx> {
     /// code it was bound with.
     hook: E::Value,
     failure: Option<E::Error>,
+    /// Runs the listeners of owners other than script.
+    foreign: Option<Rc<RefCell<Box<dyn Invoker>>>>,
 }
 
 impl<'cx, E: ScriptEngine + 'cx> ScriptInvoker<'_, 'cx, E> {
@@ -256,6 +258,15 @@ impl<'cx, E: ScriptEngine + 'cx> ScriptInvoker<'_, 'cx, E> {
 
 impl<'cx, E: ScriptEngine + 'cx> Invoker for ScriptInvoker<'_, 'cx, E> {
     fn invoke(&mut self, call: Invocation<'_>) -> InvokeResult {
+        if call.listener.owner != Owner::SCRIPT {
+            // Another owner's listener on the same node: its invoker runs it in
+            // this walk. A re-entrant dispatch finds it busy and skips it.
+            return self
+                .foreign
+                .as_ref()
+                .and_then(|foreign| foreign.try_borrow_mut().ok())
+                .map_or_else(InvokeResult::default, |mut foreign| foreign.invoke(call));
+        }
         let flags = format!(
             "{}{}",
             call.phase as u8,
@@ -333,10 +344,14 @@ impl<E: ScriptEngine> NativeFn<E> for EvDispatch {
             return cx.make_string("00");
         };
         let hook = cx.arg(6);
+        let foreign = current_host(cx)
+            .and_then(|host| host.borrow().agent.upgrade())
+            .and_then(|agent| agent.borrow().foreign_invoker.clone());
         let mut invoker = ScriptInvoker::<E> {
             cx,
             hook,
             failure: None,
+            foreign,
         };
         let outcome = dispatch(&registry, path, &event, &mut invoker);
         if let Some(error) = invoker.failure {

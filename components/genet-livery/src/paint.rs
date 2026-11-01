@@ -520,6 +520,31 @@ impl LiveryPaintList {
             .map(|image| (image.width as f32, image.height as f32))
     }
 
+    /// Fill a canvas the document left transparent. The fill becomes the
+    /// canvas colour command, so it stays in the viewport during scroll.
+    pub(crate) fn fill_transparent_canvas(&mut self, color: livery::values::Color) {
+        let color = resolve_color(&ComputedColor::Absolute(color));
+        if self.has_canvas_color || color.a <= 0.0 {
+            return;
+        }
+        let canvas = LayoutRect::new(
+            LayoutPoint::new(0.0, 0.0),
+            LayoutPoint::new(
+                self.viewport.width.max(0) as f32,
+                self.viewport.height.max(0) as f32,
+            ),
+        );
+        self.commands.insert(
+            0,
+            PaintCmd::DrawRect(RectItem {
+                placement: CommonPlacement::new(canvas),
+                color,
+            }),
+        );
+        self.shift_slots_after(0, 1, None);
+        self.has_canvas_color = true;
+    }
+
     /// Scroll the canonical document paint without moving its canvas colour.
     /// The cached list remains unmodified; ordinary element backgrounds and
     /// the retained frame/text/host slots stay inside the scroll transform.

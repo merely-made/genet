@@ -157,8 +157,8 @@ where
         let style = self.tree.style_mut(cell_node);
         let saved = (style.size.width, style.min_size.width, style.max_size.width);
         style.size.width = Dimension::auto();
-        style.min_size.width = Dimension::auto();
-        style.max_size.width = Dimension::auto();
+        style.min_size.width = LengthPercentageAuto::auto();
+        style.max_size.width = LengthPercentageAuto::auto();
         let direct_child_width = |tree: &AlgorithmTree<TextMeasure, Option<BoxId>>| {
             tree.children(cell_node)
                 .iter()
@@ -763,13 +763,13 @@ where
                 taffy_style.size.height =
                     dimension_with_basis(computed.height, font_size, containing_size.1);
                 taffy_style.min_size.width =
-                    dimension_with_basis(computed.min_width, font_size, containing_size.0);
+                    size_limit_with_basis(computed.min_width, font_size, containing_size.0);
                 taffy_style.min_size.height =
-                    dimension_with_basis(computed.min_height, font_size, containing_size.1);
+                    size_limit_with_basis(computed.min_height, font_size, containing_size.1);
                 taffy_style.max_size.width =
-                    dimension_with_basis(computed.max_width, font_size, containing_size.0);
+                    size_limit_with_basis(computed.max_width, font_size, containing_size.0);
                 taffy_style.max_size.height =
-                    dimension_with_basis(computed.max_height, font_size, containing_size.1);
+                    size_limit_with_basis(computed.max_height, font_size, containing_size.1);
                 let replaced_size = apply_replaced_intrinsic_style(
                     &mut taffy_style,
                     self.dom,

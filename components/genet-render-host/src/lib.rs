@@ -52,6 +52,13 @@ pub use browser_surface_readback::{AcquiredSurfaceFrame, AcquiredSurfaceMetadata
 #[cfg(all(target_arch = "wasm32", feature = "browser-surface-readback-diagnostics"))]
 pub use surface_capture_layout::{SurfaceCaptureBudget, SurfaceCaptureLayout, SurfaceCaptureLimit, SurfaceCaptureReservation};
 
+#[cfg(not(target_arch = "wasm32"))]
+mod native_frame;
+#[cfg(not(target_arch = "wasm32"))]
+pub use native_frame::{
+    AcceptedNativeFrame, NativeFrameStartError, NativeFrameSubmission, PendingNativeFrame,
+};
+
 mod readback;
 mod recovery;
 pub use recovery::{
@@ -449,6 +456,8 @@ pub struct RenderCore {
     loss: Arc<DeviceLossMonitor>,
     recovery_owner: Mutex<Weak<SharedRenderCore>>,
     recipe: CoreBootRecipe,
+    #[cfg(not(target_arch = "wasm32"))]
+    native_frames: native_frame::NativeFrames,
     #[cfg(target_arch = "wasm32")]
     browser_frame_gate: Arc<browser_frame::FrameGate>,
 }
@@ -581,6 +590,8 @@ impl RenderCore {
             loss,
             recovery_owner: Mutex::new(Weak::new()),
             recipe,
+            #[cfg(not(target_arch = "wasm32"))]
+            native_frames: native_frame::NativeFrames::default(),
             #[cfg(target_arch = "wasm32")]
             browser_frame_gate: Arc::new(browser_frame::FrameGate::default()),
         })
@@ -956,6 +967,16 @@ impl RenderCore {
     ) -> Result<(wgpu::Texture, wgpu::TextureView), RasterizeFailure> {
         #[cfg(feature = "without-classic-vello")]
         self.unavailable();
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(loss) = self.device_failure() {
+            return Err(RasterizeFailure::DeviceLost(loss));
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        let _legacy_admission = self.native_frames.checked().map_err(|error| {
+            self.device_failure()
+                .map(RasterizeFailure::DeviceLost)
+                .unwrap_or(error)
+        })?;
         self.rasterize_scaled_for_admitted(surface, scene, w, h, clear, scale, || {})
     }
 

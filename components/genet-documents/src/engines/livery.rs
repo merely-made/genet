@@ -452,6 +452,8 @@ impl<Fetch> LiverySessionEngine<Fetch> {
             styles,
             genet_livery::Device::screen(width as f32, height as f32),
         );
+        // A top-level page owns its canvas; child frames stay transparent.
+        doc.set_opaque_canvas(true);
         for resource in &resources.resources {
             match resource.kind {
                 ResourceKind::Image => {

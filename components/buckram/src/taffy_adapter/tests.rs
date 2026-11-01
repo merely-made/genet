@@ -704,8 +704,8 @@ fn flex_static_layout_keeps_alignment_when_insets_place_the_item() {
                 width: Dimension::length(200.0),
                 height: Dimension::length(100.0),
             },
-            justify_content: Some(JustifyContent::CENTER),
-            align_items: Some(AlignItems::END),
+            justify_content: JustifyContent::CENTER,
+            align_items: AlignItems::END,
             ..Style::default()
         },
         &[positioned],
@@ -2866,7 +2866,7 @@ fn horizontal_buckram_block_admits_vertical_flex_auto_block_size() {
                 flex_direction: direction,
                 direction: taffy::Direction::Rtl,
                 flex_wrap: taffy::FlexWrap::WrapReverse,
-                align_items: Some(AlignItems::START),
+                align_items: AlignItems::START,
                 ..Style::default()
             },
             &children,
@@ -3524,11 +3524,7 @@ fn taffy_block_fallback_retains_the_css_facing_deferral() {
     );
 }
 
-fn leaf_with_height(
-    tree: &mut AlgorithmTree<(), u8>,
-    height: f32,
-    source: u8,
-) -> AlgorithmNodeId {
+fn leaf_with_height(tree: &mut AlgorithmTree<(), u8>, height: f32, source: u8) -> AlgorithmNodeId {
     tree.new_with_children_and_block_style(
         AlgorithmKind::Leaf,
         BlockStyle {

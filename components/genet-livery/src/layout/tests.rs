@@ -3232,7 +3232,9 @@ fn live_used_values_match_shaped_text_and_loaded_image_fragments() {
     .expect("retained layout");
     for id in ["parent", "text", "image"] {
         let node = node_by_id(&dom, dom.document(), id).expect("fixture node");
-        let painted = retained.principal_fragment(node).expect("retained fragment");
+        let painted = retained
+            .principal_fragment(node)
+            .expect("retained fragment");
         let mut query_text = ahem_text_system();
         let used = used_value_context_with_text_system(
             &dom,
@@ -6794,13 +6796,11 @@ fn flex_cross_axis_projects_logical_start_and_wrap_reversal() {
                     assert_eq!(style.direction, expected_direction);
                     assert_eq!(style.flex_wrap, expected_wrap);
                     assert_eq!(
-                        style.align_items.expect("flex alignment").keyword,
-                        expected_items,
+                        style.align_items.keyword, expected_items,
                         "{writing_mode:?} {direction:?} {wrap:?} {alignment:?}"
                     );
                     assert_eq!(
-                        style.align_content.expect("line alignment").keyword,
-                        expected_content,
+                        style.align_content.keyword, expected_content,
                         "{writing_mode:?} {direction:?} {wrap:?} {alignment:?}"
                     );
                 }
@@ -6834,14 +6834,8 @@ fn flex_cross_axis_projects_logical_start_and_wrap_reversal() {
             computed.align_content = CssAlignment::End;
             let style = to_taffy_style(&computed, 16.0);
             assert_eq!(style.flex_wrap, expected_wrap);
-            assert_eq!(
-                style.align_items.expect("items").keyword,
-                AlignItemsKeyword::End
-            );
-            assert_eq!(
-                style.align_content.expect("content").keyword,
-                AlignContentKeyword::Start
-            );
+            assert_eq!(style.align_items.keyword, AlignItemsKeyword::End);
+            assert_eq!(style.align_content.keyword, AlignContentKeyword::Start);
         }
     }
     computed.flex_wrap = CssFlexWrap::NoWrap;
@@ -6849,24 +6843,15 @@ fn flex_cross_axis_projects_logical_start_and_wrap_reversal() {
     computed.align_content = CssAlignment::FlexEnd;
     let nowrap = to_taffy_style(&computed, 16.0);
     assert_eq!(nowrap.flex_wrap, FlexWrap::NoWrap);
-    assert_eq!(
-        nowrap.align_items.expect("nowrap items").keyword,
-        AlignItemsKeyword::FlexEnd
-    );
-    assert_eq!(
-        nowrap.align_content.expect("nowrap content").keyword,
-        AlignContentKeyword::FlexStart
-    );
+    assert_eq!(nowrap.align_items.keyword, AlignItemsKeyword::FlexEnd);
+    assert_eq!(nowrap.align_content.keyword, AlignContentKeyword::FlexStart);
 
     computed.display = CssDisplay::Block;
     computed.writing_mode = CssWritingMode::VerticalRl;
     computed.direction = CssDirection::Ltr;
     let block = to_taffy_style(&computed, 16.0);
     assert_eq!(block.direction, TaffyDirection::Ltr);
-    assert_eq!(
-        block.align_items.expect("block items").keyword,
-        AlignItemsKeyword::FlexStart
-    );
+    assert_eq!(block.align_items.keyword, AlignItemsKeyword::FlexStart);
 }
 
 #[test]
@@ -7154,14 +7139,30 @@ fn replaced_auto_width_is_intrinsic_in_flow_and_stretchable_in_flex_and_grid() {
         (100.0, 100.0),
         "block flow keeps the natural size"
     );
-    // Flexbox 9.4: an auto cross size with align-items: stretch fills the
-    // line. The intrinsic width must not pin it.
+    // Flexbox 9.8 makes a single-line stretched cross size definite. With
+    // no authored main size, the natural ratio therefore supplies that size.
+    // The equivalent row-axis case is pinned by WPT's
+    // flexbox-definite-cross-size-constrained-percentage.html/.ref.
     assert_eq!(
         used_size(
             "#parent { display: flex; flex-direction: column; width: 200px; height: 200px; }"
         ),
+        (200.0, 200.0),
+        "a definite stretched cross size transfers through the natural ratio (Flexbox 9.8)"
+    );
+    assert_eq!(
+        used_size(
+            "#parent { display: flex; flex-direction: column; width: 200px; height: 200px; } #item { height: 100px; }"
+        ),
         (200.0, 100.0),
-        "a column flex item still stretches across the line"
+        "an authored main size stays fixed when the cross size stretches"
+    );
+    assert_eq!(
+        used_size(
+            "#parent { display: flex; flex-direction: column; align-items: flex-start; width: 200px; height: 200px; }"
+        ),
+        (100.0, 100.0),
+        "a non-stretched item keeps its natural size"
     );
     assert_eq!(
         used_size("#parent { display: flex; width: 200px; } #item { flex-grow: 1; }"),
@@ -7958,7 +7959,7 @@ fn dimension_converters_tag_percentage_bearing_calc_for_the_basis_and_pass_the_r
     // resolution waits for the real basis.
     let width = dimension(computed.width, 16.0).into_raw();
     assert!(
-        width.is_calc(),
+        width.is_plain_calc(),
         "calc(50% - 10px) must not flatten at a zero basis"
     );
     assert_eq!(resolve_taffy_calc(width.calc_value(), 200.0), 90.0);
@@ -7990,7 +7991,7 @@ fn dimension_converters_tag_percentage_bearing_calc_for_the_basis_and_pass_the_r
 
     // Margins and gaps take the same three paths.
     let margin_left = margin(computed.margin_left, 16.0).into_raw();
-    assert!(margin_left.is_calc());
+    assert!(margin_left.is_plain_calc());
     assert_eq!(resolve_taffy_calc(margin_left.calc_value(), 200.0), 54.0);
     assert_eq!(
         margin(computed.margin_top, 16.0),
@@ -8071,7 +8072,7 @@ fn border_line_height_alignment_and_overflow_converters_follow_their_css_tables(
     );
     assert_eq!(
         align_content(CssAlignment::Normal).keyword,
-        AlignContentKeyword::Stretch
+        AlignContentKeyword::Normal
     );
 
     assert_eq!(overflow(CssOverflow::Visible), Overflow::Visible);
@@ -8092,7 +8093,7 @@ fn border_line_height_alignment_and_overflow_converters_follow_their_css_tables(
 }
 
 #[test]
-fn container_alignment_normal_reaches_taffy_as_unset_and_every_other_keyword_passes_through() {
+fn container_alignment_normal_reaches_taffy_as_normal_and_every_other_keyword_passes_through() {
     let dom = StaticDocument::parse("<div id=box></div>");
     let node = node_by_id(&dom, dom.document(), "box").expect("box");
     let projected = |css: &str| {
@@ -8103,27 +8104,21 @@ fn container_alignment_normal_reaches_taffy_as_unset_and_every_other_keyword_pas
             &InteractionStates::default(),
         );
         let style = to_taffy_style(styles.get(node).expect("box style"), 16.0);
-        (
-            style.align_items.map(|a| a.keyword),
-            style.justify_items.map(|a| a.keyword),
-        )
+        (style.align_items.keyword, style.justify_items.keyword)
     };
 
     assert_eq!(
         projected(""),
-        (None, None),
-        "the initial `normal` is unset for Taffy"
+        (AlignItemsKeyword::Normal, AlignItemsKeyword::Normal),
+        "the initial `normal` stays explicit for Taffy"
     );
     assert_eq!(
         projected("align-items: stretch; justify-items: center;"),
-        (
-            Some(AlignItemsKeyword::Stretch),
-            Some(AlignItemsKeyword::Center)
-        ),
+        (AlignItemsKeyword::Stretch, AlignItemsKeyword::Center),
         "an explicit stretch is a real keyword, not `normal`"
     );
     assert_eq!(
         projected("align-items: normal; justify-items: end;"),
-        (None, Some(AlignItemsKeyword::End))
+        (AlignItemsKeyword::Normal, AlignItemsKeyword::End)
     );
 }

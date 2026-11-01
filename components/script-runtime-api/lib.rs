@@ -626,7 +626,7 @@ const REALM_TASK_HOOKS: &[&str] = &[
     "__moPump", "__ioUpdate", "__websocketOpen", "__websocketMessageText",
     "__websocketMessageBinary", "__websocketFlushed", "__websocketError",
     "__websocketClose", "__websocketPending", "__websocketFailAll",
-    "__subtleExposure", "__rtcDeliver",
+    "__subtleExposure", "__rtcDeliver", "__rtcDiscard",
 ];
 const AGENT_TASK_HOOKS: &[&str] = &[
     "__runTimers", "__nextTimerDelay", "__runOneAnimationFrameCallback",

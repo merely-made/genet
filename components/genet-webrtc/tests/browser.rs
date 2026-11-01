@@ -48,6 +48,8 @@ fn until<E: ScriptEngine>(rt: &mut Runtime<E>, expression: &str) {
             rt.host().borrow().console
         );
         rt.pump_webrtc(128);
+        let now = rt.clock_elapsed_ms();
+        rt.run_timers(64, now).unwrap();
         rt.run_microtasks();
         std::thread::sleep(Duration::from_millis(1));
     }
@@ -59,6 +61,7 @@ fn constructors_and_close<E: ScriptEngine>() {
         &mut rt,
         r#"
       function check(v) { if(!v)throw new Error('RTC assertion'); }
+      check(typeof __rtc_new==='undefined' && typeof __rtc_command==='undefined' && typeof __rtcDiscard==='undefined');
       var p = new RTCPeerConnection();
       check(p.signalingState==='stable' && p.connectionState==='new');
       check(p.localDescription===null && p.remoteDescription===null);
@@ -135,13 +138,16 @@ fn descriptions_and_rollback<E: ScriptEngine>() {
     run(
         &mut rt,
         r#"
-      var problem='',done=false,p=new RTCPeerConnection();p.createDataChannel('rollback');
+      var problem='',done=false,signals=[],p=new RTCPeerConnection();p.createDataChannel('rollback');
+      p.onsignalingstatechange=()=>signals.push(p.signalingState);
       (async()=>{
         var offer=await p.createOffer();
         await p.setLocalDescription(offer);
+        if(signals.join(',')!=='have-local-offer')throw new Error('signaling event after promise');
         if(p.signalingState!=='have-local-offer'||!p.pendingLocalDescription||p.currentLocalDescription!==null)throw new Error('pending SDP');
         var first=p.localDescription;if(first!==p.localDescription||first!==p.pendingLocalDescription)throw new Error('unstable wrapper');
         await p.setLocalDescription({type:'rollback'});
+        if(signals.join(',')!=='have-local-offer,stable')throw new Error('rollback event after promise');
         if(p.signalingState!=='stable'||p.pendingLocalDescription!==null)throw new Error('rollback');
         p.close();done=true;
       })().catch(e=>problem=String(e));

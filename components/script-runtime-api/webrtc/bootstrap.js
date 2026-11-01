@@ -7,7 +7,11 @@
   const PCs = new WeakMap(), DCs = new WeakMap(), live = new Map();
   const descs = new WeakMap(), candidates = new WeakMap();
   const transports = new WeakMap(), transportToken={};
+  let active=true;
+  const eachMap=Function.call.bind(Map.prototype.forEach), clearLive=live.clear.bind(live);
+  const privatePc=PCs.get.bind(PCs), privateDc=DCs.get.bind(DCs), privateTransport=transports.get.bind(transports);
   const PromiseCtor = g.Promise, ArrayBufferCtor = g.ArrayBuffer, U8 = g.Uint8Array;
+  const queueTask=g.setTimeout.bind(g);
   const utf8 = new TextEncoder(), decoder = new TextDecoder();
   const encode = utf8.encode.bind(utf8), decode = decoder.decode.bind(decoder);
   function error(name, text) { return name === 'TypeError' ? new TypeError(text) : name === 'SyntaxError' ? new DOMException(text, name) : new DOMException(text, name); }
@@ -83,6 +87,8 @@
   }
   function apply(s,state) {
     if(!state)return;
+    if(state.revision<s.revision)return;
+    s.revision=state.revision;
     s.state=state;
     const names=['currentLocalDescription','pendingLocalDescription','currentRemoteDescription','pendingRemoteDescription'];
     const pool=names.map(name=>s[name]).filter(Boolean);
@@ -99,9 +105,10 @@
       Object.assign(transports.get(s.sctp),state.sctp);Object.assign(transports.get(s.dtls),state.sctp.dtls);Object.assign(transports.get(s.ice),state.sctp.dtls.ice);
     }
   }
-  function call(s,op,data) { const r=unwrap(commandHost(s.id,op,stringify(data===undefined?null:data)));apply(s,r.state);return r.value; }
+  function call(s,op,data) { const r=unwrap(commandHost(s.id,op,stringify(data===undefined?null:data)));apply(s,r.state);for(const n of r.events||[])deliver(s.id,stringify(n));return r.value; }
   function queued(s,op,data) {
-    const result=s.chain.then(function(){if(s.closed)throw error('InvalidStateError','Peer connection is closed');return call(s,op,data);});
+    if(s.closed)return PromiseCtor.reject(error('InvalidStateError','Peer connection is closed'));
+    const result=s.chain.then(function(){return new PromiseCtor(function(resolve,reject){queueTask(function(){try{if(s.closed)throw error('InvalidStateError','Peer connection is closed');resolve(call(s,op,data));}catch(e){reject(e);}},0);});});
     s.chain=result.then(function(){},function(){});return result;
   }
   function handler(proto,type) { const slots=new WeakMap();Object.defineProperty(proto,'on'+type,{enumerable:true,configurable:true,get(){return slots.get(this)||null;},set(fn){const old=slots.get(this);if(old)this.removeEventListener(type,old);if(typeof fn==='function'){slots.set(this,fn);this.addEventListener(type,fn);}else slots.delete(this);}}); }
@@ -144,7 +151,7 @@
   for(const name of ['open','message','closing','close','error','bufferedamountlow'])handler(RTCDataChannel.prototype,name);
   class RTCPeerConnection extends EventTarget {
     constructor(input={}) {
-      super();const config=configuration(input),created=unwrap(createHost(stringify(config)));
+      super();if(!active)throw error('InvalidStateError','RTC document was discarded');const config=configuration(input),created=unwrap(createHost(stringify(config)));
       const s={id:created.id,closed:false,chain:PromiseCtor.resolve(),channels:new Map(),state:{},config};
       PCs.set(this,s);live.set(s.id,this);apply(s,callState(s));
     }
@@ -173,13 +180,25 @@
   for(const name of ['signalingState','iceGatheringState','iceConnectionState','connectionState','canTrickleIceCandidates'])Object.defineProperty(RTCPeerConnection.prototype,name,{enumerable:true,configurable:true,get(){return pc(this).state[name];}});
   Object.defineProperty(RTCPeerConnection.prototype,'sctp',{enumerable:true,configurable:true,get(){return pc(this).sctp||null;}});
   for(const name of ['negotiationneeded','icecandidate','icecandidateerror','signalingstatechange','iceconnectionstatechange','icegatheringstatechange','connectionstatechange','datachannel','track'])handler(RTCPeerConnection.prototype,name);
-  Object.defineProperty(g,'__rtcDeliver',{configurable:true,value:function(id,text){
+  function deliver(id,text){
     const owner=live.get(id);if(!owner)return;const s=pc(owner),n=parse(text);apply(s,n.state);
     if(n.event==='transportstatechange'){const t=s[n.transport];if(t)t.dispatchEvent(new Event('statechange'));return;}
-    if(n.channel){const key=String(n.channel.handle);let channel=s.channels.get(key);if(!channel){channel=new RTCDataChannel(channelToken,s,n.channel);s.channels.set(key,channel);owner.dispatchEvent(new RTCDataChannelEvent('datachannel',{channel}));}Object.assign(dc(channel).meta,n.channel);if(n.event==='open'||n.event==='close'||n.event==='closing'||n.event==='bufferedamountlow')channel.dispatchEvent(new Event(n.event));return;}
+    if(n.channel){const meta=(s.state.channels||[]).find(c=>c.handle===n.channel.handle)||n.channel,key=String(meta.handle);let channel=s.channels.get(key);if(!channel){channel=new RTCDataChannel(channelToken,s,meta);s.channels.set(key,channel);owner.dispatchEvent(new RTCDataChannelEvent('datachannel',{channel}));}Object.assign(dc(channel).meta,meta);if(n.event==='open'||n.event==='close'||n.event==='closing'||n.event==='bufferedamountlow')channel.dispatchEvent(new Event(n.event));return;}
     if(n.event==='message'){const channel=s.channels.get(String(n.handle));if(!channel)return;const bytes=new U8(n.data);const value=n.isString?decode(bytes):dc(channel).binaryType==='blob'?FormOps.makeBlob(bytes,''):bytes.buffer;channel.dispatchEvent(new MessageEvent('message',{data:value}));return;}
     if(n.event==='icecandidate'){const value=n.candidate===null?null:new RTCIceCandidate(n.candidate);owner.dispatchEvent(new RTCPeerConnectionIceEvent('icecandidate',{candidate:value}));return;}
     if(n.event)owner.dispatchEvent(new Event(n.event));
+  }
+  Object.defineProperty(g,'__rtcDeliver',{configurable:true,value:deliver});
+  Object.defineProperty(g,'__rtcDiscard',{configurable:true,value:function(){
+    active=false;
+    eachMap(live,function(owner){
+      const s=privatePc(owner);s.closed=true;s.state.signalingState='closed';s.state.connectionState='closed';s.state.iceConnectionState='closed';
+      eachMap(s.channels,function(channel){privateDc(channel).meta.readyState='closed';});
+      if(s.sctp)privateTransport(s.sctp).state='closed';
+      if(s.dtls)privateTransport(s.dtls).state='closed';
+      if(s.ice)privateTransport(s.ice).state='closed';
+    });
+    clearLive();
   }});
   for(const [name,value] of Object.entries({RTCSessionDescription,RTCIceCandidate,RTCPeerConnectionIceEvent,RTCDataChannelEvent,RTCDataChannel,RTCPeerConnection,RTCSctpTransport,RTCDtlsTransport,RTCIceTransport})) {
     Object.defineProperty(value.prototype,Symbol.toStringTag,{value:name,configurable:true});Object.defineProperty(g,name,{value,writable:true,configurable:true});

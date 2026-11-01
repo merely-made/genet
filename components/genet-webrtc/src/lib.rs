@@ -156,6 +156,7 @@ struct State {
     gathering: bool,
     held_candidates: Vec<Value>,
     transports: Value,
+    revision: u64,
 }
 
 impl WebRtcFactory for NativeWebRtcFactory {
@@ -200,6 +201,7 @@ impl WebRtcFactory for NativeWebRtcFactory {
                 gathering: false,
                 held_candidates: Vec::new(),
                 transports: Value::Null,
+                revision: 0,
                 observable: json!({"signalingState":"stable","iceGatheringState":"new","iceConnectionState":"new","connectionState":"new"}),
             }),
         }))
@@ -229,6 +231,9 @@ impl State {
             return;
         }
         let value = self.transports();
+        if self.transports != value {
+            self.revision = self.revision.saturating_add(1);
+        }
         if !self.transports.is_null() && !value.is_null() {
             for (kind, path) in [
                 ("sctp", "/state"),
@@ -260,6 +265,7 @@ impl State {
         let core = self.endpoint.core();
         let remote = core.remote_description();
         let mut value = self.observable.clone();
+        value["revision"] = json!(self.revision);
         value["localDescription"] = json!(core.local_description());
         value["currentLocalDescription"] = json!(core.current_local_description());
         value["pendingLocalDescription"] = json!(core.pending_local_description());
@@ -282,6 +288,7 @@ impl State {
         self.notifications.push_back(value);
     }
     fn observe(&mut self, event: RTCPeerConnectionEvent) {
+        self.revision = self.revision.saturating_add(1);
         let name = match event {
             RTCPeerConnectionEvent::OnSignalingStateChangeEvent(state) => {
                 self.observable["signalingState"] = json!(state.to_string());
@@ -382,6 +389,7 @@ impl WebRtcPeer for NativePeer {
         {
             return Err(failure("OperationError", "RTC host event queue is full"));
         }
+        state.revision = state.revision.saturating_add(1);
         let now = Instant::now();
         let value = match operation {
             WebRtcOperation::Snapshot => Value::Null,
@@ -588,7 +596,24 @@ impl WebRtcPeer for NativePeer {
         };
         state.harvest();
         state.harvest_transports();
-        Ok(json!({"value":value,"state":state.snapshot()}).to_string())
+        // Applying SDP changes signaling state and fires its event in the same
+        // task, before the operation promise resolves. Other observations stay
+        // queued for separate host tasks.
+        let mut immediate = Vec::new();
+        if matches!(
+            operation,
+            WebRtcOperation::SetLocalDescription | WebRtcOperation::SetRemoteDescription
+        ) {
+            state.notifications.retain(|event| {
+                if event["event"] == "signalingstatechange" {
+                    immediate.push(event.clone());
+                    false
+                } else {
+                    true
+                }
+            });
+        }
+        Ok(json!({"value":value,"state":state.snapshot(),"events":immediate}).to_string())
     }
     fn poll(&self, budget: usize) -> Vec<String> {
         let mut state = self.state.borrow_mut();

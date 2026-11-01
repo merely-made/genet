@@ -193,6 +193,23 @@ pub(crate) fn revoke(host: &crate::SharedHost) {
     host.webrtc_factory = None;
 }
 
+/// Close retained wrappers before the outgoing host cell and its Encoding
+/// handles are replaced. The private hook runs no authored event listeners.
+pub(crate) fn discard_from_call<E: ScriptEngine>(
+    cx: &mut E::CallCx<'_>,
+    agent: &Rc<RefCell<crate::AgentState>>,
+    realm: script_engine_api::RealmId,
+) {
+    let hook = agent
+        .borrow()
+        .task_hooks
+        .get(&(realm, "__rtcDiscard"))
+        .cloned();
+    if let Some(function) = hook.as_ref().and_then(|v| v.downcast_ref::<E::Value>()) {
+        let _ = E::call_from_call(cx, function, function, &[]);
+    }
+}
+
 impl<E: ScriptEngine> Runtime<E> {
     /// Install the document's peer factory. Children inherit the factory, while
     /// connection handles and native peers remain owned by each realm's host.

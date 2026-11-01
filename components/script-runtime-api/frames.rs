@@ -863,6 +863,7 @@ fn run_pending_teardown<E: ScriptEngine>(
                 let id = cx.make_string(&realm.to_string())?;
                 let _ = invoke::<E>(cx, cancel, &[id]);
             }
+            crate::webrtc::discard_from_call::<E>(cx, agent, *realm);
             {
                 let mut a = agent.borrow_mut();
                 a.frames.release_context(*realm);
@@ -1510,6 +1511,7 @@ fn open_document_realm<E: ScriptEngine>(
                     let _ = invoke::<E>(cx, cancel, &[id]);
                 }
             }
+            crate::webrtc::discard_from_call::<E>(cx, agent, realm);
             let mut agent = agent.borrow_mut();
             agent.dom_adoption.remove_realm(realm);
             if let Some(host) = agent.hosts.remove(&realm) { crate::webrtc::revoke(&host); }
@@ -2462,6 +2464,7 @@ fn release_navigation_realms<E: ScriptEngine>(
                 let _ = invoke::<E>(cx, cancel, &[id]);
             }
         }
+        crate::webrtc::discard_from_call::<E>(cx, agent, *realm);
         let context = {
             let mut a = agent.borrow_mut();
             let context = a.frames.contexts.remove(realm);

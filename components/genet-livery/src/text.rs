@@ -698,6 +698,10 @@ impl TextSystem {
         )
     }
 
+    pub(crate) fn account_collection_ns(&mut self, ns: u64) {
+        self.shaping_stats.collect_ns = self.shaping_stats.collect_ns.saturating_add(ns);
+    }
+
     pub(crate) fn prepare_inline_group<D: LayoutDom>(
         &mut self,
         dom: &D,
@@ -9460,14 +9464,14 @@ mod tests {
 mod reuse_tests;
 
 #[cfg(test)]
-mod prepared_geometry_tests {
+pub(crate) mod prepared_geometry_tests {
     use super::*;
     use crate::{Device, InteractionStates, StyleSet, box_tree::GeneratedBoxTree, resolve_styles};
     use genet_static_dom::StaticDocument;
 
-    struct CountingDom<'a> {
-        inner: &'a StaticDocument,
-        reads: std::cell::Cell<usize>,
+    pub(crate) struct CountingDom<'a> {
+        pub(crate) inner: &'a StaticDocument,
+        pub(crate) reads: std::cell::Cell<usize>,
     }
     impl CountingDom<'_> {
         fn hit(&self) {

@@ -89,6 +89,7 @@ mod tables;
 mod taffy_style;
 #[cfg(test)]
 mod tests;
+mod text_batch;
 mod transaction;
 
 #[cfg(test)]
@@ -531,6 +532,8 @@ struct InlineMeasure {
     replaced_size: Option<(f32, f32)>,
     layouts: Vec<InlineLayoutEntry>,
     placement_constraints: Option<FloatLineConstraints>,
+    prepared: Option<text_batch::PreparedMeasure>,
+    shape_error: Option<crate::text::ShapeBatchError>,
 }
 
 struct InlineLayoutEntry {
@@ -617,8 +620,8 @@ impl InlineMeasure {
 fn measure_inline_context<D>(
     text: &mut TextSystem,
     dom: &D,
-    styles: &StylePlane<D::NodeId>,
-    boxes: &GeneratedBoxTree<D::NodeId>,
+    _styles: &StylePlane<D::NodeId>,
+    _boxes: &GeneratedBoxTree<D::NodeId>,
     atomic: &AtomicLayoutPlane,
     context: &mut InlineMeasure,
     geometry: InlineMeasureGeometry<'_>,
@@ -641,11 +644,42 @@ where
     context
         .cached_size(width, intrinsic_kind, constraints)
         .unwrap_or_else(|| {
-            let formatted = text.format_inline_group(
-                dom,
-                styles,
-                boxes,
+            let prepared = context
+                .prepared
+                .as_mut()
+                .expect("inline batch must flush before measurement");
+            let key = text.prepared_shape_key::<D::NodeId, _>(
+                &prepared.template,
                 atomic,
+                width,
+                intrinsic_kind,
+                &context.style,
+            );
+            let index =
+                if let Some(index) = prepared.results.iter().position(|result| result.key == key) {
+                    index
+                } else {
+                    let job = crate::text::ShapeJob {
+                        group: prepared.group,
+                        generation: prepared.generation,
+                        key,
+                    };
+                    match text.shape_late_batch(&[job], prepared.generation) {
+                        Ok(mut results) => {
+                            let index = prepared.results.len();
+                            prepared.results.append(&mut results);
+                            index
+                        },
+                        Err(error) => {
+                            context.shape_error.get_or_insert(error);
+                            return (context.width, context.height);
+                        },
+                    }
+                };
+            let formatted = text.format_prepared_inline_group::<D::NodeId, _>(
+                &prepared.template,
+                atomic,
+                dom.quirks_mode(),
                 InlineRequest {
                     roots: &context.roots,
                     parent_style: &context.style,
@@ -653,6 +687,11 @@ where
                     intrinsic_kind,
                     line_constraints: constraints,
                 },
+                Some((
+                    &prepared.results[index],
+                    prepared.generation,
+                    prepared.group,
+                )),
             );
             formatted.map_or((context.width, context.height), |layout| {
                 context.remember(width, intrinsic_kind, constraints, layout)

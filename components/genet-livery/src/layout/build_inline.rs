@@ -15,6 +15,7 @@ pub(in crate::layout) struct InlineBuildState<'a, D: LayoutDom> {
     pub(in crate::layout) boxes: &'a GeneratedBoxTree<D::NodeId>,
     pub(in crate::layout) atomic: &'a AtomicLayoutPlane,
     pub(in crate::layout) tree: AlgorithmTree<InlineMeasure, Vec<BoxId>>,
+    pub(in crate::layout) text_batch: text_batch::TextBatch,
     pub(in crate::layout) image_sources: &'a dyn crate::ImageSourceLookup,
     pub(in crate::layout) table_shadow: TableShadowLedger,
     pub(in crate::layout) pending_tables: Vec<PendingTable<D::NodeId>>,
@@ -165,6 +166,8 @@ where
                                 replaced_size: Some((width, height)),
                                 layouts: Vec::new(),
                                 placement_constraints: None,
+                                prepared: None,
+                                shape_error: None,
                             },
                             vec![box_id],
                         )
@@ -524,7 +527,10 @@ where
     /// the pipeline Buckram owns. Runs before the main layout pass; the
     /// formatting queries only scribble on scratch layout state the main pass
     /// recomputes.
-    pub(in crate::layout) fn apply_buckram_table_layout(&mut self, text: &mut TextSystem) {
+    pub(in crate::layout) fn apply_buckram_table_layout(
+        &mut self,
+        text: &mut TextSystem,
+    ) -> Result<(), LayoutError> {
         let mut pendings = std::mem::take(&mut self.pending_tables);
         let mut aggregate = std::mem::take(&mut self.table_shadow);
         let mut intrinsic_wrappers = HashMap::new();
@@ -569,7 +575,9 @@ where
                         })
                     })
                     .collect::<Vec<_>>();
+                text_batch::check_errors(&self.tree)?;
                 let caption_min = self.measure_caption_min(text, &pending.captions.clone());
+                text_batch::check_errors(&self.tree)?;
                 let columns = buckram_table_columns(
                     self.boxes,
                     self.styles,
@@ -601,10 +609,12 @@ where
                 }
             }
             self.apply_buckram_table_rows(text, std::slice::from_mut(pending));
+            text_batch::check_errors(&self.tree)?;
             aggregate.record_table(pending.table, std::mem::take(&mut self.table_shadow));
         }
         self.table_shadow = aggregate;
         self.pending_tables = pendings;
+        Ok(())
     }
 
     /// Give the wrapper the grid's border-edge width, which is CSS Tables 3
@@ -812,6 +822,7 @@ where
                     )
                 },
             );
+            text_batch::check_errors(tree)?;
             let mut output = FragmentOutput { fragments };
             collect_inline_fragments(
                 tree,
@@ -1074,6 +1085,9 @@ where
             .first()
             .and_then(|root| self.boxes[*root].parent())
             .map_or(flow, |parent| self.boxes[parent].flow);
+        let prepared =
+            self.text_batch
+                .collect(self.dom, self.styles, self.boxes, roots, parent_style);
         let node = self.tree.new_leaf_with_context_and_block_style(
             BlockStyle::anonymous(flow, containing_flow),
             Style {
@@ -1090,9 +1104,12 @@ where
                 replaced_size: None,
                 layouts: Vec::new(),
                 placement_constraints: None,
+                prepared: None,
+                shape_error: None,
             },
             roots.to_vec(),
         );
+        self.text_batch.push(node, prepared, parent_style.clone());
         // The inline formatter owns the distinction between wrapped and
         // no-wrap lines. Both still need the current float band to choose a
         // line origin and, when possible, the next wider band.

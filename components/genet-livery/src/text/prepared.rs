@@ -426,6 +426,44 @@ impl PreparedInlineGroup {
         }
         result
     }
+    /// Only admit a speculative key when every inserted atom exists and all
+    /// geometry contributing to it is independent of the eventual query width.
+    pub(crate) fn ready<Id, F: FragmentLookup<Id>>(&self, fragments: &F) -> bool {
+        fn independent(value: livery::values::LengthPercentage) -> bool {
+            use livery::values::LengthPercentage as L;
+            matches!(value, L::Zero | L::Length(_))
+        }
+        fn style_ready(style: &ComputedValues) -> bool {
+            use livery::values::Margin;
+            [
+                style.padding_left.0,
+                style.padding_right.0,
+                style.padding_top.0,
+                style.padding_bottom.0,
+            ]
+            .into_iter()
+            .all(independent)
+                && [
+                    style.margin_left,
+                    style.margin_right,
+                    style.margin_top,
+                    style.margin_bottom,
+                ]
+                .into_iter()
+                .all(|m| match m {
+                    Margin::Auto => true,
+                    Margin::Value(v) => independent(v),
+                })
+        }
+        self.events.iter().all(|event| match event {
+            GeometryEvent::Begin { slot, .. } | GeometryEvent::End { slot, .. } => {
+                style_ready(&self.inline_owners[*slot].style)
+            },
+            GeometryEvent::Atomic { source, style, .. } => {
+                fragments.atomic_box_rect(*source).is_some() && style_ready(style)
+            },
+        })
+    }
     pub(crate) fn materialize<Id, F: FragmentLookup<Id>>(
         &self,
         fragments: &F,

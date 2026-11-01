@@ -4448,12 +4448,22 @@ fn assert_retained_text_edit_paints_like_fresh(rows: usize, row: usize) {
     retained.frame(300, 400).expect("initial retained frame");
     let local_generation = retained.retained_root_relayout_generation;
 
+    let before = retained.text_system().shaping_stats();
     retained.mutate_dom(|dom| {
         let row = by_id(dom, &format!("row{row}"));
         let text = dom.dom_children(row).next().expect("row text");
         dom.set_text(text, "changed");
     });
-    let retained_paint = retained.frame(300, 400).expect("retained frame");
+    let retained_commands = format!(
+        "{:?}",
+        retained.frame(300, 400).expect("retained frame").commands()
+    );
+    let after = retained.text_system().shaping_stats();
+    println!(
+        "retained edit rows={rows}: ready={} late={}",
+        (after.unique_jobs - before.unique_jobs) - (after.late_misses - before.late_misses),
+        after.late_misses - before.late_misses
+    );
     assert_eq!(
         retained.retained_root_relayout_generation,
         local_generation + 1,
@@ -4463,9 +4473,13 @@ fn assert_retained_text_edit_paints_like_fresh(rows: usize, row: usize) {
     let mut fresh_dom = ScriptedDom::from_serialized_document(&flex_row_list(rows, Some(row)));
     fresh_dom.drain_mutations(&mut Vec::new());
     let mut fresh = LiveryDocument::new(fresh_dom, styles(), Device::screen(300.0, 400.0));
+    let mut options = fresh.text_system().shaping_options();
+    options.retained_entries = 0;
+    options.retained_text_bytes = 0;
+    fresh.set_text_shaping_options(options);
     let fresh_paint = fresh.frame(300, 400).expect("fresh final frame");
     assert_eq!(
-        format!("{:?}", retained_paint.commands()),
+        retained_commands,
         format!("{:?}", fresh_paint.commands()),
         "retained text must paint where a fresh layout paints it",
     );

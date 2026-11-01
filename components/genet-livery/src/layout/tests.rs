@@ -8282,3 +8282,317 @@ fn prepared_batch_atomic_geometry_matches_fresh_uncached() {
         assert_eq!(warm.inline_baselines.get(id), cold.inline_baselines.get(id));
     }
 }
+
+#[test]
+fn prepared_batch_main_flushes_before_measurement_and_deduplicates() {
+    let dom = StaticDocument::parse("<div><p>one two three</p><p>one two three</p></div>");
+    let styles = resolve_styles(
+        &dom,
+        &StyleSet::cambium(&[]),
+        &Device::screen(320.0, 240.0),
+        &InteractionStates::default(),
+    );
+    let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+    let counting = crate::text::prepared_geometry_tests::CountingDom {
+        inner: &dom,
+        reads: std::cell::Cell::new(0),
+    };
+    let atomic = AtomicLayoutPlane::default();
+    let images = HashMap::new();
+    let mut text = TextSystem::new();
+    let mut options = text.shaping_options();
+    options.retained_entries = 0;
+    options.retained_text_bytes = 0;
+    text.set_shaping_options(options);
+    let mut state = InlineBuildState {
+        dom: &counting,
+        styles: &styles,
+        boxes: &boxes,
+        atomic: &atomic,
+        tree: AlgorithmTree::new(),
+        text_batch: text_batch::TextBatch::new(false),
+        image_sources: &images,
+        table_shadow: TableShadowLedger::default(),
+        pending_tables: Vec::new(),
+        pending_table_handoff: None,
+    };
+    for root in boxes.roots() {
+        state
+            .build_box(*root, None, 16.0, (Some(320.0), Some(240.0)))
+            .unwrap();
+    }
+    assert_eq!(text.shaping_stats().format_requests, 0);
+    assert_eq!(text.shaping_stats().unique_jobs, 0);
+    state
+        .text_batch
+        .flush::<crate::text::prepared_geometry_tests::CountingDom<'_>>(
+            &mut text,
+            &atomic,
+            &mut state.tree,
+        )
+        .unwrap();
+    let stats = text.shaping_stats();
+    assert_eq!(stats.format_requests, 0);
+    assert_eq!(stats.unique_jobs, 1);
+    assert_eq!(stats.late_misses, 0);
+    let nodes: Vec<_> = state
+        .tree
+        .node_ids()
+        .filter(|node| state.tree.context(*node).is_some())
+        .collect();
+    assert_eq!(nodes.len(), 2);
+    let reads_before_queries = counting.reads.get();
+    state.tree.update_contexts(|_, context| {
+        for width in [30.0, 70.0] {
+            let expected = TextSystem::new()
+                .format_inline_group(
+                    &dom,
+                    &styles,
+                    &boxes,
+                    &atomic,
+                    InlineRequest {
+                        roots: &context.roots,
+                        parent_style: &context.style,
+                        width,
+                        intrinsic_kind: None,
+                        line_constraints: None,
+                    },
+                )
+                .unwrap()
+                .size();
+            assert_eq!(
+                measure_inline_context(
+                    &mut text,
+                    &counting,
+                    &styles,
+                    &boxes,
+                    &atomic,
+                    context,
+                    InlineMeasureGeometry {
+                        width,
+                        intrinsic_kind: None,
+                        line_constraints: None
+                    }
+                ),
+                expected
+            );
+        }
+    });
+    assert_eq!(counting.reads.get(), reads_before_queries);
+    assert_eq!(text.shaping_stats().unique_jobs, 1);
+    assert_eq!(text.shaping_stats().late_misses, 0);
+}
+
+#[test]
+fn prepared_batch_defers_percentage_edges_and_missing_atoms() {
+    let dom =
+        StaticDocument::parse("<div id=a><span style='padding-left:10%'>one two</span><img></div>");
+    let styles = resolve_styles(
+        &dom,
+        &StyleSet::cambium(&[]),
+        &Device::screen(320.0, 240.0),
+        &InteractionStates::default(),
+    );
+    let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+    let root = boxes
+        .principal_box(node_by_id(&dom, dom.document(), "a").unwrap())
+        .unwrap();
+    let roots = boxes[root].children().to_vec();
+    let style = styles
+        .get(node_by_id(&dom, dom.document(), "a").unwrap())
+        .unwrap();
+    let prepared =
+        crate::text::prepared::PreparedInlineGroup::collect(&dom, &styles, &boxes, &roots, style);
+    let atomic = AtomicLayoutPlane::default();
+    assert!(!prepared.ready::<<StaticDocument as LayoutDom>::NodeId, _>(&atomic));
+    let mut text = TextSystem::new();
+    let mut options = text.shaping_options();
+    options.retained_entries = 0;
+    options.retained_text_bytes = 0;
+    text.set_shaping_options(options);
+    let images = HashMap::new();
+    let mut state = InlineBuildState {
+        dom: &dom,
+        styles: &styles,
+        boxes: &boxes,
+        atomic: &atomic,
+        tree: AlgorithmTree::new(),
+        text_batch: text_batch::TextBatch::new(false),
+        image_sources: &images,
+        table_shadow: TableShadowLedger::default(),
+        pending_tables: Vec::new(),
+        pending_table_handoff: None,
+    };
+    state
+        .build_inline_group(Some(root), root, &roots, style, 16.0)
+        .unwrap();
+    state
+        .text_batch
+        .flush::<StaticDocument>(&mut text, &atomic, &mut state.tree)
+        .unwrap();
+    assert_eq!(text.shaping_stats().unique_jobs, 0);
+    state.tree.update_contexts(|_, context| {
+        for width in [100.0, 200.0] {
+            let expected = TextSystem::new()
+                .format_inline_group(
+                    &dom,
+                    &styles,
+                    &boxes,
+                    &atomic,
+                    InlineRequest {
+                        roots: &context.roots,
+                        parent_style: &context.style,
+                        width,
+                        intrinsic_kind: None,
+                        line_constraints: None,
+                    },
+                )
+                .unwrap()
+                .size();
+            assert_eq!(
+                measure_inline_context(
+                    &mut text,
+                    &dom,
+                    &styles,
+                    &boxes,
+                    &atomic,
+                    context,
+                    InlineMeasureGeometry {
+                        width,
+                        intrinsic_kind: None,
+                        line_constraints: None
+                    }
+                ),
+                expected
+            );
+        }
+    });
+    assert_eq!(text.shaping_stats().late_misses, 2);
+    text_batch::check_errors(&state.tree).unwrap();
+}
+
+#[test]
+fn prepared_batch_geometry_matrix_matches_fresh_uncached() {
+    struct LoadedImage;
+    impl crate::ImageSourceLookup for LoadedImage {
+        fn get(&self, _: &str) -> Option<&Vec<u8>> {
+            None
+        }
+        fn decoded_document(&self, _: &str) -> Option<crate::ImagePixels> {
+            Some(crate::ImagePixels {
+                width: 20,
+                height: 12,
+                data: std::sync::Arc::new(vec![0; 20 * 12 * 4]),
+            })
+        }
+    }
+    for (name, html) in [
+        (
+            "float",
+            "<div id=a style='width:160px'><span style='float:left;width:30px;height:30px'></span>one two three four five</div>",
+        ),
+        (
+            "percentage",
+            "<div id=a style='width:160px'>before <span style='padding:0 10%;margin-left:5%'>one two</span> after</div>",
+        ),
+        (
+            "table",
+            "<div id=a>before <table style='display:inline-table'><tr><td>one two</td></tr></table> after</div>",
+        ),
+        ("image", "<div id=a>before <img src='loaded'> after</div>"),
+        (
+            "positioned",
+            "<div id=a style='position:relative'>before <span style='position:absolute'>one two</span> after</div>",
+        ),
+        (
+            "k7",
+            "<div id=a style='width:140px'>before <span style='display:inline-block;width:50%'>one two three</span> after</div>",
+        ),
+    ] {
+        let dom = StaticDocument::parse(html);
+        let styles = resolve_styles(
+            &dom,
+            &StyleSet::cambium(&[]),
+            &Device::screen(320.0, 240.0),
+            &InteractionStates::default(),
+        );
+        let run = |text: &mut TextSystem| {
+            layout_with_text_system(
+                &dom,
+                &styles,
+                320.0,
+                240.0,
+                ViewportSizes::uniform(320.0, 240.0),
+                text,
+                &LoadedImage,
+            )
+            .unwrap()
+            .1
+        };
+        let mut warm_text = TextSystem::new();
+        let _ = run(&mut warm_text);
+        let warm = run(&mut warm_text);
+        let mut cold_text = TextSystem::new();
+        let mut options = cold_text.shaping_options();
+        options.retained_entries = 0;
+        options.retained_text_bytes = 0;
+        cold_text.set_shaping_options(options);
+        let cold = run(&mut cold_text);
+        let node = node_by_id(&dom, dom.document(), "a").unwrap();
+        let snapshot = |layout: &LiveryLayout<_>| {
+            layout
+                .fragments_for_node(node)
+                .map(|f| (f.x, f.y, f.width, f.height))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(snapshot(&warm), snapshot(&cold), "{name}");
+        assert!(!snapshot(&cold).is_empty(), "{name}");
+        let stats = cold_text.shaping_stats();
+        println!(
+            "{name}: ready={} late={} batches={}",
+            stats.unique_jobs - stats.late_misses,
+            stats.late_misses,
+            stats.batches
+        );
+        assert!(stats.unique_jobs > 0, "{name}");
+    }
+}
+
+#[test]
+fn prepared_batch_missing_atom_is_not_ready() {
+    let dom = StaticDocument::parse("<div id=a>before<img>after</div>");
+    let styles = resolve_styles(
+        &dom,
+        &StyleSet::cambium(&[]),
+        &Device::screen(320.0, 240.0),
+        &InteractionStates::default(),
+    );
+    let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+    let node = node_by_id(&dom, dom.document(), "a").unwrap();
+    let root = boxes.principal_box(node).unwrap();
+    let roots = boxes[root].children();
+    let prepared = crate::text::prepared::PreparedInlineGroup::collect(
+        &dom,
+        &styles,
+        &boxes,
+        roots,
+        styles.get(node).unwrap(),
+    );
+    let mut atomic = AtomicLayoutPlane::default();
+    assert!(!prepared.ready::<<StaticDocument as LayoutDom>::NodeId, _>(&atomic));
+    let image = roots
+        .iter()
+        .find(|id| boxes[**id].replaced)
+        .copied()
+        .unwrap();
+    atomic.fragments.insert(
+        image,
+        Fragment {
+            x: 0.0,
+            y: 0.0,
+            width: 20.0,
+            height: 12.0,
+        },
+    );
+    assert!(prepared.ready::<<StaticDocument as LayoutDom>::NodeId, _>(&atomic));
+}

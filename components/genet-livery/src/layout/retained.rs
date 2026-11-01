@@ -88,6 +88,7 @@ where
         styles,
         boxes: &boxes,
         atomic: &atomic,
+        text_batch: text_batch::TextBatch::new(text.shaping_options().record_timings),
         tree: {
             let mut tree = AlgorithmTree::new();
             tree.set_calc_resolver(resolve_taffy_calc);
@@ -128,7 +129,11 @@ where
         &[formatted_root],
         Vec::new(),
     );
-    state.apply_buckram_table_layout(text);
+    state
+        .text_batch
+        .flush::<D>(text, state.atomic, &mut state.tree)?;
+    state.apply_buckram_table_layout(text)?;
+    text_batch::check_errors(&state.tree)?;
     state.tree.compute_layout_with_measure(
         formatter_root,
         AlgorithmSize::new(
@@ -150,6 +155,7 @@ where
             )
         },
     );
+    text_batch::check_errors(&state.tree)?;
     populate_inline_baselines(&mut state.tree);
     let (buckram_blocks, taffy_blocks) = state.tree.block_algorithm_counts();
     let backend_sizing_blocks = state

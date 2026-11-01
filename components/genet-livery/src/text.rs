@@ -227,6 +227,18 @@ pub(crate) struct ShapeJob {
     pub(crate) key: ShapeKey,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ShapeBatchErrorKind {
+    PassGeneration,
+    FontGeneration,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ShapeBatchError {
+    pub(crate) index: usize,
+    pub(crate) kind: ShapeBatchErrorKind,
+}
+
 pub(crate) struct ShapeResult {
     pub(crate) group: InlineGroupId,
     pub(crate) generation: u64,
@@ -1562,7 +1574,23 @@ impl TextSystem {
         )
     }
 
-    pub(crate) fn shape_batch(&mut self, jobs: &[ShapeJob], generation: u64) -> Vec<ShapeResult> {
+    pub(crate) fn shape_batch(
+        &mut self,
+        jobs: &[ShapeJob],
+        generation: u64,
+    ) -> Result<Vec<ShapeResult>, ShapeBatchError> {
+        for (index, job) in jobs.iter().enumerate() {
+            let kind = if job.generation != generation {
+                Some(ShapeBatchErrorKind::PassGeneration)
+            } else if job.key.generation != self.font_generation {
+                Some(ShapeBatchErrorKind::FontGeneration)
+            } else {
+                None
+            };
+            if let Some(kind) = kind {
+                return Err(ShapeBatchError { index, kind });
+            }
+        }
         let start = self
             .shaping_options
             .record_timings
@@ -1571,9 +1599,6 @@ impl TextSystem {
         let mut values = HashMap::new();
         let mut results = Vec::new();
         for job in jobs {
-            if job.generation != generation || job.key.generation != self.font_generation {
-                continue;
-            }
             let shaped = if let Some(value) = values.get(&job.key) {
                 Arc::clone(value)
             } else {
@@ -1611,7 +1636,7 @@ impl TextSystem {
             .shaping_stats
             .shape_wall_ns
             .saturating_add(stats::elapsed_ns(start));
-        results
+        Ok(results)
     }
 
     fn shape_key<Id>(
@@ -9587,7 +9612,7 @@ mod prepared_geometry_tests {
                 },
             ];
             let before = system.shape_count();
-            let results = system.shape_batch(&jobs, 99);
+            let results = system.shape_batch(&jobs, 99).expect("valid batch");
             assert_eq!(system.shape_count() - before, 1);
             let request = |roots| InlineRequest {
                 roots,
@@ -9675,6 +9700,80 @@ mod prepared_geometry_tests {
                 assert_eq!(rejected.size(), first.size());
             }
         }
+        // Retention is enabled, but a second unique key evicts the first.
+        let mut options = system.shaping_options();
+        options.retained_entries = 1;
+        system.set_shaping_options(options);
+        let key = system.prepared_shape_key::<<StaticDocument as LayoutDom>::NodeId, _>(
+            &a, &fragments, 80.0, None, &parent,
+        );
+        let mut other = key.clone();
+        other.input.text.push('x');
+        let jobs = [
+            ShapeJob {
+                group: InlineGroupId(4),
+                generation: 101,
+                key: key.clone(),
+            },
+            ShapeJob {
+                group: InlineGroupId(5),
+                generation: 101,
+                key: other,
+            },
+        ];
+        let results = system
+            .shape_batch(&jobs, 101)
+            .expect("valid eviction batch");
+        assert!(
+            system.cache.get(&key).is_none(),
+            "first entry must be evicted"
+        );
+        let request = || InlineRequest {
+            roots: &roots_a,
+            parent_style: &parent,
+            width: 80.0,
+            intrinsic_kind: None,
+            line_constraints: None,
+        };
+        let before = system.shape_count();
+        let actual = system
+            .format_prepared_inline_group::<<StaticDocument as LayoutDom>::NodeId, _>(
+                &a,
+                &fragments,
+                LayoutDom::quirks_mode(&dom),
+                request(),
+                Some((&results[0], 101, InlineGroupId(4))),
+            )
+            .unwrap();
+        assert_eq!(
+            system.shape_count(),
+            before,
+            "evicted active result must not rebuild"
+        );
+        let mut fresh_system = TextSystem::new();
+        let fresh = fresh_system
+            .format_inline_group(&dom, &styles, &boxes, &fragments, request())
+            .unwrap();
+        assert_eq!(actual.size(), fresh.size());
+        assert_eq!(actual.baselines(), fresh.baselines());
+        assert_eq!(actual.text, fresh.text);
+        assert_eq!(actual.text_sources[0].source, fresh.text_sources[0].source);
+        let glyphs = |layout: &InlineLayout<BoxId>| {
+            layout
+                .items
+                .iter()
+                .filter_map(|item| match item {
+                    ShapedItem::Text(run) => Some(
+                        run.glyphs
+                            .iter()
+                            .map(|g| (g.index, g.point.x.to_bits(), g.point.y.to_bits()))
+                            .collect::<Vec<_>>(),
+                    ),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(glyphs(&actual), glyphs(&fresh));
     }
 
     #[test]

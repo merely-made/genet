@@ -144,22 +144,8 @@ fn prepared_batch_deduplicates_without_retention_and_rejects_stale_generation() 
             generation,
             key: key.clone(),
         },
-        ShapeJob {
-            group: InlineGroupId(2),
-            generation: generation.wrapping_add(1),
-            key: key.clone(),
-        },
-        ShapeJob {
-            group: InlineGroupId(3),
-            generation,
-            key: {
-                let mut stale = key;
-                stale.generation = generation.wrapping_add(1);
-                stale
-            },
-        },
     ];
-    let results = system.shape_batch(&jobs, generation);
+    let results = system.shape_batch(&jobs, generation).expect("valid batch");
     assert_eq!(results.len(), 2);
     assert_eq!(results[0].group, InlineGroupId(0));
     assert_eq!(results[1].group, InlineGroupId(1));
@@ -209,7 +195,7 @@ fn prepared_batch_keeps_evicted_results_and_order() {
             key: first.clone(),
         },
     ];
-    let results = system.shape_batch(&jobs, 42);
+    let results = system.shape_batch(&jobs, 42).expect("valid batch");
     assert_eq!(
         results.iter().map(|r| r.group).collect::<Vec<_>>(),
         vec![InlineGroupId(3), InlineGroupId(1), InlineGroupId(7)]
@@ -221,4 +207,59 @@ fn prepared_batch_keeps_evicted_results_and_order() {
         &results[2].shaped
     ));
     assert_eq!(std::sync::Arc::strong_count(&results[0].shaped), 2);
+}
+
+#[test]
+fn prepared_batch_rejects_all_jobs_atomically() {
+    use super::{InlineGroupId, ShapeBatchError, ShapeBatchErrorKind, ShapeJob};
+    let input = super::prepared::ShapeInput {
+        text: "ready".into(),
+        defaults: vec![],
+        spans: vec![],
+        slots: vec![],
+        base_level: 0,
+        scale: 1.0f32.to_bits(),
+        quantize: true,
+    };
+    for stale_index in [0, 1] {
+        for stale_font in [false, true] {
+            let mut system = super::TextSystem::new();
+            let key = super::cache::ShapeKey {
+                generation: system.font_generation,
+                input: input.clone(),
+            };
+            let mut jobs = (0..3)
+                .map(|i| ShapeJob {
+                    group: InlineGroupId(i),
+                    generation: 17,
+                    key: key.clone(),
+                })
+                .collect::<Vec<_>>();
+            if stale_font {
+                jobs[stale_index].key.generation = key.generation.wrapping_add(1);
+            } else {
+                jobs[stale_index].generation = 18;
+            }
+            cached_fixture(&mut system, "ready");
+            cached_fixture(&mut system, "other");
+            let before_stats = system.shaping_stats();
+            let before_count = system.shape_count();
+            let kind = if stale_font {
+                ShapeBatchErrorKind::FontGeneration
+            } else {
+                ShapeBatchErrorKind::PassGeneration
+            };
+            assert!(
+                matches!(system.shape_batch(&jobs, 17), Err(ShapeBatchError { index, kind: actual }) if index == stale_index && actual == kind)
+            );
+            assert_eq!(system.shaping_stats(), before_stats);
+            assert_eq!(system.shape_count(), before_count);
+            assert_eq!(system.cache.len(), 2);
+            cached_fixture(&mut system, "third");
+            assert!(
+                system.cache.get(&key).is_none(),
+                "rejected work must not refresh LRU order"
+            );
+        }
+    }
 }

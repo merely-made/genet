@@ -1,6 +1,9 @@
 // Copyright 2026 Mark Alan Boykin
 // SPDX-License-Identifier: MPL-2.0
 //! Deterministic document-frame shaping control. Run with `--help` for options.
+//! Pass the full source commit used to build the executable as `--source-revision`.
+//! This caller-supplied label is not verified; the output fingerprints the executable.
+//! Example: `measure_text_shaping --source-revision <full-commit> --font <font-file>`.
 use genet_livery::{Device, LiveryDocument, StyleSet, TextShapingOptions};
 use genet_scripted_dom::{NodeId, ScriptedDom};
 use layout_dom_api::{LayoutDom, LocalName, Namespace};
@@ -8,7 +11,6 @@ use paint_list_api::PaintEnvelope;
 use std::{
     env, fs,
     io::{self, Write},
-    process::Command,
     time::Instant,
 };
 
@@ -30,6 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut paragraphs = 32usize;
     let mut iterations = 1usize;
     let mut workers = 1usize;
+    let mut source_revision = String::new();
     let mut font = String::new();
     let mut family = "Fixture".to_owned();
     let mut output = String::new();
@@ -40,7 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(key) = args.next() {
         if key == "--help" {
             println!(
-                "--mode uncached-serial|cached-serial|cached-parallel --case small|article|mixed|single-long|atomic|churn --paragraphs N --workers N --iterations N --font PATH --font-family NAME --cache-entries N --cache-text-bytes N --parallel-min-groups N --parallel-min-text-bytes N --output PATH"
+                "--source-revision FULL_GIT_COMMIT --mode uncached-serial|cached-serial|cached-parallel --case small|article|mixed|single-long|atomic|churn --paragraphs N --workers N --iterations N --font PATH --font-family NAME --cache-entries N --cache-text-bytes N --parallel-min-groups N --parallel-min-text-bytes N --output PATH"
             );
             return Ok(());
         }
@@ -48,6 +51,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .next()
             .ok_or_else(|| format!("missing value for {key}"))?;
         match key.as_str() {
+            "--source-revision" => source_revision = value,
             "--mode" => mode = value,
             "--case" => case = value,
             "--paragraphs" => paragraphs = value.parse()?,
@@ -84,6 +88,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .into(),
         );
     }
+    if source_revision.len() != 40 || !source_revision.bytes().all(|c| c.is_ascii_hexdigit()) {
+        return Err("--source-revision requires the full 40-digit build source commit".into());
+    }
     if font.is_empty() {
         return Err("--font is required for reproducible font identity".into());
     }
@@ -92,14 +99,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let font_bytes = fs::read(&font)?;
     let font_hash = hash(&font_bytes);
-    let rev = String::from_utf8(
-        Command::new("git")
-            .args(["rev-parse", "HEAD"])
-            .output()?
-            .stdout,
-    )?
-    .trim()
-    .to_owned();
+    // The source label is supplied by the builder; the binary hash identifies
+    // the executable even when it is invoked from another checkout.
+    let executable_hash = hash(&fs::read(env::current_exe()?)?);
+    let features = if cfg!(feature = "image-decode") {
+        "image-decode"
+    } else {
+        "none"
+    };
     let mut out: Box<dyn Write> = if output.is_empty() {
         Box::new(io::stdout())
     } else {
@@ -159,7 +166,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let bytes = postcard::to_allocvec(&PaintEnvelope::from_list(&list))?;
             writeln!(
                 out,
-                "revision={rev} features=default mode={mode} case={case} paragraphs={paragraphs} iteration={iteration} stage={stage} width={width} font_fnv64={font_hash:016x} family={family:?} workers={workers} options={options:?} stats={:?} frame_ns={elapsed} digest_fnv64={:016x}",
+                "source_revision={source_revision} features={features} executable_fnv64={executable_hash:016x} mode={mode} case={case} paragraphs={paragraphs} iteration={iteration} stage={stage} width={width} font_fnv64={font_hash:016x} family={family:?} workers={workers} options={options:?} stats={:?} frame_ns={elapsed} digest_fnv64={:016x}",
                 doc.text_system().shaping_stats(),
                 hash(&bytes)
             )?;

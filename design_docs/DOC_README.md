@@ -627,11 +627,10 @@ completed corpus census or bounded slice does not close its enclosing feature.
 
 ## layout and styling
 
-- [Retained and parallel inline shaping](2026-11-01_retained_parallel_shaping_plan.md)
-  (**plan, 2026-11-01**): separate shaping from line placement, retain exact-input
-  results, collect ready misses during traversal, and optionally shape them on a
-  caller-supplied native pool. Reuse and parallel gains have separate gates;
-  process orchestration remains outside this plan.
+- [Retained and parallel inline shaping](2026-11-01_retained_parallel_shaping_plan.md) — implemented; bounded qualification shows reuse and pooled gains alongside cold and memory regressions; final branch review pending.
+  (**qualification, 2026-11-01**): retained exact-input shaping and optional
+  caller-supplied native pooling have separate measured gates; process
+  orchestration remains outside this plan.
 
 - [css_3d_transforms_and_first_frame_plan](2026-09-12_css_3d_transforms_and_first_frame_plan.md)
   (**bounded Genet seam implemented; downstream native Bench B accepted 2026-09-13**:

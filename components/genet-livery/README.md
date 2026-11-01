@@ -38,6 +38,37 @@ session rung. Flex and grid containers lower their bounded direction, track,
 gap, alignment, order, and placement values into Taffy. Box shadows lower into
 the neutral shadow primitive before backgrounds.
 
+## Retained and parallel text shaping
+
+`LiveryDocument::set_text_shaping_options` configures `TextShapingOptions`.
+The initial defaults retain up to 512 entries and 4 MiB of key text; setting
+either limit to zero disables retention. These limits bound entry count and
+key text, not the Parley layouts or total heap. Oversized groups are shaped
+but not retained. These are configurable starting settings, not a demonstrated
+optimum for every host. `text_system().shaping_stats()` reports cumulative
+builds, hits, late misses and pool work, plus current retention gauges. Optional
+timings are disabled by default (`record_timings: false`).
+
+Shaping is serial by default. On native targets, enable `parallel-text` and
+supply an `Arc<rayon::ThreadPool>` with `set_text_shaping_pool`; the global
+pool is never selected implicitly. Initial admission requires at least eight
+unique misses and 16 KiB of text, both configurable. Ready inputs are batched
+before their measurement consumers; inputs whose geometry is not ready can
+shape synchronously later and are counted as late misses. One long paragraph
+is one group and is not split across workers. Calls join before results publish.
+
+Bounded measurements show mixed results. With a 4,096-entry cache, resize of
+2,048 groups reused all keys and retained serial layout improved over the
+original in two 30-sample cohorts. A one-key edit rebuilt one key. The default
+512-entry cache did not hold that working set. In three cold cohorts, pooled
+layout improved over the new retained serial implementation, but both were
+slower than the original layout pipeline. A 129 KB long-edit process peaked at
+194.5 MiB retained serial versus 86.4 MiB original; these peaks include font
+and serialization work. Small and edit cases met the specified empirical noise
+band, but 30 samples and different process counts in the independent control
+leave p95 uncertainty. The long edit used no pool jobs. These CPU measurements
+are not GPU or headed runtime evidence. See the [qualification receipt](../../design_docs/archive_docs/receipts/2026-11-01_retained_parallel_shaping_plan_receipts.md).
+
 ## Explicit host generic resources
 
 A browser does not lend Parley its installed system fonts. Registering a face

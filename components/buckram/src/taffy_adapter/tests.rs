@@ -3899,3 +3899,42 @@ fn a_relatively_positioned_scroll_container_is_an_opaque_block_child() {
     );
     assert_eq!(tree.layout(root).height, 20.0);
 }
+
+#[test]
+fn updating_contexts_invalidates_ancestor_layout_cache() {
+    let mut tree = AlgorithmTree::<f32, ()>::new();
+    let leaf = tree.new_leaf_with_context_and_block_style(
+        BlockStyle::anonymous(FlowAxes::HORIZONTAL_LTR, FlowAxes::HORIZONTAL_LTR),
+        Style::default(),
+        10.0,
+        (),
+    );
+    let root = tree.new_with_children(
+        AlgorithmKind::Block,
+        Style {
+            display: Display::Block,
+            ..Style::default()
+        },
+        &[leaf],
+        (),
+    );
+    let measure = |known: AlgorithmSize<Option<f32>>,
+                   _: AlgorithmSize<AlgorithmAvailableSpace>,
+                   _: AlgorithmNodeId,
+                   context: Option<&mut f32>,
+                   _: Option<&FloatLineConstraints>| {
+        AlgorithmSize::new(
+            known.width.unwrap_or(20.0),
+            known.height.unwrap_or(*context.unwrap()),
+        )
+    };
+    tree.compute_layout_with_measure(root, available(100.0, 200.0), measure);
+    assert_eq!(tree.layout(root).height, 10.0);
+    tree.update_contexts(|id, value| {
+        assert_eq!(id, leaf);
+        *value = 30.0;
+    });
+    tree.compute_layout_with_measure(root, available(100.0, 200.0), measure);
+    assert_eq!(tree.layout(leaf).height, 30.0);
+    assert_eq!(tree.layout(root).height, 30.0);
+}

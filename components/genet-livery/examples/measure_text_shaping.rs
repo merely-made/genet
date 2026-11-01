@@ -47,7 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(key) = args.next() {
         if key == "--help" {
             println!(
-                "--source-revision FULL_GIT_COMMIT --mode uncached-serial|cached-serial|cached-parallel --case small|article|mixed|single-long|atomic|churn --paragraphs N --workers N --iterations N --warmups N --protocol cold|unchanged|width|edit|churn --step 0|1 --font PATH --font-dump DIRECTORY --font-family NAME --cache-entries N --cache-text-bytes N --parallel-min-groups N --parallel-min-text-bytes N --output PATH"
+                "--source-revision FULL_GIT_COMMIT --mode uncached-serial|cached-serial|cached-parallel --case small|article|mixed|single-long|atomic|churn --paragraphs N --workers N --iterations N --warmups N --protocol cold|unchanged|width|edit|churn --step 0|1 --record-timings 0|1 --font PATH --font-dump DIRECTORY --font-family NAME --cache-entries N --cache-text-bytes N --parallel-min-groups N --parallel-min-text-bytes N --output PATH"
             );
             return Ok(());
         }
@@ -63,13 +63,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "--iterations" => iterations = value.parse()?,
             "--warmups" => warmups = value.parse()?,
             "--protocol" => protocol = value,
+            "--record-timings" => {
+                options.record_timings = match value.as_str() {
+                    "0" => false,
+                    "1" => true,
+                    _ => return Err("--record-timings must be 0 or 1".into()),
+                }
+            }
             "--step" => {
                 step = match value.as_str() {
                     "0" => false,
                     "1" => true,
                     _ => return Err("--step must be 0 or 1".into()),
                 }
-            },
+            }
             "--font" => font = value,
             "--font-dump" => font_dump = value,
             "--font-family" => family = value,
@@ -157,11 +164,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "single-long" => "A long paragraph tests wrapping and shaping across many words. ",
         "atomic" => {
             "Text with <span style='float:left;width:12px;height:12px'></span><span style='display:inline-block;width:24px;height:12px'>box</span> inline."
-        },
+        }
         "churn" => "Editing one paragraph among many retained paragraphs.",
         _ => {
             "A paragraph contains several words, punctuation, and enough text to wrap across lines."
-        },
+        }
     };
     let count = if case == "single-long" { 1 } else { paragraphs };
     let mut html = String::from("<!doctype html><html><body>");
@@ -220,7 +227,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let (doc, edit) = retained.as_mut().expect("document exists");
         if protocol == "edit" || protocol == "churn" {
             // A new key each time prevents two alternating edits becoming cache hits.
-            let text = format!("Edited paragraph revision-{iteration} unique-0");
+            let text = if case == "single-long" {
+                // Preserve the entire long paragraph and insert a short unique
+                // change near its middle instead of replacing it with a label.
+                format!(
+                    "{} revision-{iteration} {} unique-0",
+                    para.repeat(paragraphs / 2),
+                    para.repeat(paragraphs - paragraphs / 2)
+                )
+            } else {
+                format!("Edited paragraph revision-{iteration} unique-0")
+            };
             if protocol == "churn" {
                 let _ = doc.frame(800, 600)?;
             }

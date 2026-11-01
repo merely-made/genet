@@ -65,6 +65,63 @@ fn plain_resize_reuses_unbroken_text() {
 }
 
 #[test]
+fn font_ledger_rebuild_preserves_cumulative_shaping_observations() {
+    let html = "<html><body><p>first distinct paragraph</p><p>second distinct paragraph</p><p>third distinct paragraph</p></body></html>";
+    let mut doc = LiveryDocument::new(
+        ScriptedDom::from_serialized_document(html),
+        StyleSet::cambium(&["p { font: 20px sans-serif; }"]),
+        Device::screen(320.0, 200.0),
+    );
+    let options = genet_livery::TextShapingOptions {
+        parallel_min_groups: 2,
+        parallel_min_text_bytes: 0,
+        record_timings: true,
+        ..Default::default()
+    };
+    doc.set_text_shaping_options(options);
+    #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+    let pool = std::sync::Arc::new(
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .build()
+            .unwrap(),
+    );
+    #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+    doc.set_text_shaping_pool(Some(pool.clone()));
+    doc.frame(320, 200).unwrap();
+    doc.frame(280, 200).unwrap();
+    let mut before = doc.text_system().shaping_stats();
+    let shapes = doc.text_system().shape_count();
+    assert!(shapes > 0 && before.cache_hits > 0 && before.shape_wall_ns > 0);
+    assert!(before.retained_entries > 0 && before.retained_text_bytes > 0);
+    #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+    assert_eq!(before.worker_scratch_slots, 2);
+    doc.set_font_resource(
+        "fixture.ttf",
+        include_bytes!("../../../tests/wpt/tests/fonts/Ahem.ttf").to_vec(),
+    );
+    let after = doc.text_system().shaping_stats();
+    assert_eq!(after.retained_entries, 0);
+    assert_eq!(after.retained_text_bytes, 0);
+    assert_eq!(after.worker_scratch_slots, 0);
+    before.retained_entries = 0;
+    before.retained_text_bytes = 0;
+    before.worker_scratch_slots = 0;
+    assert_eq!(after, before);
+    assert_eq!(doc.text_system().shape_count(), shapes);
+    assert_eq!(doc.text_system().shaping_options(), options);
+    #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+    assert!(std::sync::Arc::strong_count(&pool) > 1);
+    doc.frame(280, 200).unwrap();
+    let later = doc.text_system().shaping_stats();
+    assert!(later.layout_builds > after.layout_builds);
+    assert!(later.cache_misses > after.cache_misses);
+    assert!(doc.text_system().shape_count() > shapes);
+    #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+    assert!(later.parallel_batches > after.parallel_batches && later.worker_scratch_slots == 2);
+}
+
+#[test]
 fn retention_limits_bound_churn() {
     use genet_livery::TextShapingOptions;
     let html = "<html><body><p>first paragraph</p><p>second paragraph</p><p>third paragraph</p></body></html>";

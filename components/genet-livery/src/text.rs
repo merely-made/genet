@@ -340,6 +340,16 @@ impl TextSystem {
         }
     }
 
+    pub(crate) fn fresh_font_context(&self) -> Self {
+        let mut fresh = Self::new();
+        fresh.shape_count = self.shape_count;
+        fresh.shaping_stats = self.shaping_stats;
+        fresh.set_shaping_options(self.shaping_options);
+        #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+        fresh.set_shaping_pool(self.shaping_pool());
+        fresh
+    }
+
     /// Number of shape transactions, excluding separate metric builders.
     /// Unlike `format_requests`, this legacy counter tracks actual shaping
     /// when retained layouts are introduced.

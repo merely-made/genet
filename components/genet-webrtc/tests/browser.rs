@@ -241,6 +241,24 @@ fn top_navigation<E: ScriptEngine>() {
     assert_eq!(rt.pending_webrtc(), 0);
 }
 
+fn channel_string_limits<E: ScriptEngine>() {
+    let mut rt = wired::<E>();
+    run(
+        &mut rt,
+        r#"
+      var p=new RTCPeerConnection();
+      function tooLong(label,options){try{p.createDataChannel(label,options);throw new Error('oversize accepted');}catch(e){if(!(e instanceof TypeError))throw e;}}
+      tooLong('l'.repeat(65536),{});tooLong('µ'.repeat(32768),{});
+      tooLong('',{protocol:'p'.repeat(65536)});tooLong('',{protocol:'¶'.repeat(32768)});
+      var label='l'.repeat(65535),protocol='p'.repeat(65535),ch=p.createDataChannel(label,{protocol});
+      if(ch.label!==label||ch.protocol!==protocol)throw new Error('maximum label altered');
+      var repaired=p.createDataChannel('\ud800A\udc00🙂');
+      if(repaired.label!=='�A�🙂')throw new Error('USV string conversion');p.close();
+    "#,
+    );
+    assert_eq!(rt.pending_webrtc(), 0);
+}
+
 macro_rules! both {
     ($module:ident,$engine:ty) => {
         mod $module {
@@ -268,6 +286,10 @@ macro_rules! both {
             #[test]
             fn navigation_revokes_old_handles() {
                 top_navigation::<$engine>();
+            }
+            #[test]
+            fn strings_and_utf8_limits() {
+                channel_string_limits::<$engine>();
             }
         }
     };

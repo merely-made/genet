@@ -495,6 +495,11 @@ impl WebRtcPeer for NativePeer {
                 Value::Null
             },
             WebRtcOperation::CreateDataChannel => {
+                if data["label"].as_str().unwrap_or("").len() > u16::MAX as usize
+                    || data["protocol"].as_str().unwrap_or("").len() > u16::MAX as usize
+                {
+                    return Err(failure("TypeError", "RTC channel string is too long"));
+                }
                 if state.channels.len() >= state.settings.max_channels {
                     return Err(failure("OperationError", "RTC channel limit reached"));
                 }

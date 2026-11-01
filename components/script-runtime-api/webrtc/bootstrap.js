@@ -21,7 +21,7 @@
   function integer(value, max) { const n = Math.trunc(Number(value)); if (!Number.isFinite(n) || n < 0 || n > max) throw new TypeError('Integer is out of range'); return n; }
   function ushort(value) { const n=Number(value); return !Number.isFinite(n)||n===0?0:((Math.trunc(n)%65536)+65536)%65536; }
   function string(value) { if (typeof value === 'symbol') throw new TypeError('Symbol cannot be converted to DOMString'); return String(value); }
-  function usv(value) { return decode(encode(string(value))); }
+  function usv(value) { return string(value).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g,function(pair){return pair.length===2?pair:'\uFFFD';}); }
   function description(value,local=false) {
     if(local&&value==null)return null;
     if (value === null || typeof value !== 'object') throw new TypeError('A session description is required');
@@ -43,7 +43,9 @@
       sdpMLineIndex:init.sdpMLineIndex == null ? null : ushort(init.sdpMLineIndex),
       usernameFragment:init.usernameFragment == null ? null : string(init.usernameFragment)};
     if (s.sdpMid === null && s.sdpMLineIndex === null) throw new TypeError('A media identifier is required');
-    const fields={foundation:null,component:null,priority:null,address:null,protocol:null,port:null,type:null,tcpType:null,relatedAddress:null,relatedPort:null,relayProtocol:null,url:null};
+    const relayProtocol=init.relayProtocol==null?null:string(init.relayProtocol);
+    if(relayProtocol!==null&&!['udp','tcp','tls'].includes(relayProtocol))throw new TypeError('Invalid relay protocol');
+    const fields={foundation:null,component:null,priority:null,address:null,protocol:null,port:null,type:null,tcpType:null,relatedAddress:null,relatedPort:null,relayProtocol,url:init.url==null?null:usv(init.url)};
     const words=s.candidate.trim().replace(/^a=/,'').split(/\s+/);
     if (/^candidate:/.test(words[0]) && words.length >= 8 && words[6] === 'typ') {
       fields.foundation=words[0].slice(10); fields.component=words[1] === '1' ? 'rtp' : words[1] === '2' ? 'rtcp' : null;
@@ -167,7 +169,6 @@
       const s=pc(this);if(arguments.length===0)throw new TypeError('Label is required');if(s.closed)throw error('InvalidStateError','Peer connection is closed');
       options=options==null?{}:Object(options);
       label=usv(label);const init={label,ordered:options.ordered===undefined?true:!!options.ordered,protocol:options.protocol===undefined?'':usv(options.protocol),negotiated:!!options.negotiated,maxPacketLifeTime:options.maxPacketLifeTime===undefined?null:ushort(options.maxPacketLifeTime),maxRetransmits:options.maxRetransmits===undefined?null:ushort(options.maxRetransmits),id:options.id===undefined?null:integer(options.id,65535)};
-      if(encode(init.label).length>65535||encode(init.protocol).length>65535)throw new TypeError('Channel string is too long');
       if(init.maxPacketLifeTime!==null&&init.maxRetransmits!==null)throw new TypeError('Conflicting reliability options');
       if(init.id===65535)throw new TypeError('Reserved channel ID');if(init.negotiated&&init.id===null)throw new TypeError('Negotiated channel ID is required');
       const meta=call(s,'createDataChannel',init),channel=new RTCDataChannel(channelToken,s,meta);s.channels.set(String(meta.handle),channel);return channel;

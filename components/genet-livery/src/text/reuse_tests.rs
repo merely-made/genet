@@ -13,6 +13,14 @@ fn shaping_stats_count_builds_separately_from_formats() {
     );
     document.frame(640, 480).expect("initial frame");
     let stats = document.text_system().shaping_stats();
+    assert_eq!(
+        (
+            stats.parallel_batches,
+            stats.parallel_jobs,
+            stats.worker_scratch_slots
+        ),
+        (0, 0, 0)
+    );
     assert!(stats.format_requests > 0);
     assert!(stats.metric_layout_builds > 0);
     assert_eq!(
@@ -399,7 +407,9 @@ fn parallel_shape_threshold_and_lifetime() {
         system.shape_batch(&jobs, 17)
     }));
     assert!(panic.is_err());
-    assert_eq!(system.shaping_stats(), before);
+    let mut expected = before;
+    expected.worker_scratch_slots = 0;
+    assert_eq!(system.shaping_stats(), expected);
     assert_eq!(system.cache.len(), 0);
     assert_eq!(system.parallel.scratch_len(), 0);
     system.parallel.hook = None;

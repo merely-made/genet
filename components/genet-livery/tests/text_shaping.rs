@@ -350,7 +350,15 @@ fn parallel_shape_matches_serial() {
         ] {
             serial.set_font_resource("fixture.ttf", font.to_vec());
             parallel.set_font_resource("fixture.ttf", font.to_vec());
+            let before = parallel.text_system().shaping_stats();
             assert_eq!(font_output(&mut serial), font_output(&mut parallel));
+            let after = parallel.text_system().shaping_stats();
+            assert!(
+                after.parallel_batches > before.parallel_batches,
+                "threads={threads}, font generation did not enter pool"
+            );
+            assert!(after.parallel_jobs >= before.parallel_jobs + 2);
+            assert_eq!(after.worker_scratch_slots, threads);
             let (serial_node, serial_offset) = serial.text_position_at_point(12.0, 12.0).unwrap();
             let (parallel_node, parallel_offset) =
                 parallel.text_position_at_point(12.0, 12.0).unwrap();
@@ -457,8 +465,13 @@ fn parallel_shape_font_snapshots_match() {
         parallel.set_font_resource("fixture.ttf", font.clone());
         assert!(weak.upgrade().is_some());
         assert_eq!(parallel.text_system().shaping_options(), options);
+        let before = parallel.text_system().shaping_stats();
         let a = font_output(&mut serial);
         let b = font_output(&mut parallel);
+        let after = parallel.text_system().shaping_stats();
+        assert!(after.parallel_batches > before.parallel_batches);
+        assert!(after.parallel_jobs >= before.parallel_jobs + 2);
+        assert_eq!(after.worker_scratch_slots, 2);
         assert_eq!(a, b);
         assert!(b.1.contains(font), "owner must retain admitted font bytes");
         for bytes in &b.1 {
@@ -479,11 +492,62 @@ fn parallel_shape_font_snapshots_match() {
     assert!(weak.upgrade().is_none());
     serial.set_font_resource("fixture.ttf", lato.clone());
     parallel.set_font_resource("fixture.ttf", lato);
+    let before = parallel.text_system().shaping_stats();
     assert_eq!(font_output(&mut serial), font_output(&mut parallel));
+    let after = parallel.text_system().shaping_stats();
+    assert!(after.parallel_batches > before.parallel_batches);
+    assert!(after.parallel_jobs >= before.parallel_jobs + 2);
+    assert_eq!(after.worker_scratch_slots, 1);
     parallel.set_text_shaping_pool(None);
+    assert_eq!(
+        parallel.text_system().shaping_stats().worker_scratch_slots,
+        0
+    );
     assert!(replacement_weak.upgrade().is_none());
     serial.set_font_resource("fixture.ttf", ahem.clone());
     parallel.set_font_resource("fixture.ttf", ahem);
     assert_eq!(font_output(&mut serial), font_output(&mut parallel));
     drop(parallel);
+}
+
+#[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+#[test]
+fn parallel_shape_repeated_document_lifecycle() {
+    use std::sync::Arc;
+    for iteration in 0..8 {
+        let pool = Arc::new(
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(2)
+                .build()
+                .unwrap(),
+        );
+        let weak = Arc::downgrade(&pool);
+        let mut doc = LiveryDocument::new(
+            ScriptedDom::from_serialized_document(
+                "<html><body><p>first unique text</p><p>second unique text</p><p>third unique text</p></body></html>",
+            ),
+            StyleSet::cambium(&[]),
+            Device::screen(320.0, 200.0),
+        );
+        doc.set_text_shaping_options(genet_livery::TextShapingOptions {
+            parallel_min_groups: 2,
+            parallel_min_text_bytes: 0,
+            ..Default::default()
+        });
+        doc.set_text_shaping_pool(Some(pool));
+        doc.frame(320, 200).unwrap();
+        let stats = doc.text_system().shaping_stats();
+        assert!(
+            stats.parallel_batches > 0 && stats.parallel_jobs >= 2,
+            "iteration {iteration}"
+        );
+        assert_eq!(stats.worker_scratch_slots, 2);
+        if iteration % 2 == 0 {
+            doc.set_text_shaping_pool(None);
+            assert_eq!(doc.text_system().shaping_stats().worker_scratch_slots, 0);
+            assert!(weak.upgrade().is_none());
+        }
+        drop(doc);
+        assert!(weak.upgrade().is_none());
+    }
 }

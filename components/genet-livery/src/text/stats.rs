@@ -17,6 +17,11 @@ pub struct TextShapingStats {
     pub unique_jobs: u64,
     pub late_misses: u64,
     pub batches: u64,
+    /// Successfully joined pool batches and unique jobs in those batches.
+    pub parallel_batches: u64,
+    pub parallel_jobs: u64,
+    /// Current retained worker scratch slots; zero without an attached pool.
+    pub worker_scratch_slots: usize,
     pub retained_entries: usize,
     pub retained_text_bytes: usize,
     pub collect_ns: u64,

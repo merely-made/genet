@@ -349,6 +349,10 @@ impl TextSystem {
 
     pub fn shaping_stats(&self) -> TextShapingStats {
         let mut stats = self.shaping_stats;
+        #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+        {
+            stats.worker_scratch_slots = self.parallel.scratch_len();
+        }
         stats.retained_entries = self.cache.len();
         stats.retained_text_bytes = self.cache.bytes();
         stats
@@ -1663,7 +1667,9 @@ impl TextSystem {
             }
         }
         #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
-        let outputs = if self.parallel.admits(&misses, self.shaping_options) {
+        let used_parallel = self.parallel.admits(&misses, self.shaping_options);
+        #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+        let outputs = if used_parallel {
             match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 self.parallel.shape(
                     &misses,
@@ -1691,6 +1697,13 @@ impl TextSystem {
         // Publication happens only after every task has joined successfully.
         let count = misses.len() as u64;
         self.shaping_stats.batches = self.shaping_stats.batches.saturating_add(1);
+        #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+        if used_parallel {
+            self.shaping_stats.parallel_batches =
+                self.shaping_stats.parallel_batches.saturating_add(1);
+            self.shaping_stats.parallel_jobs =
+                self.shaping_stats.parallel_jobs.saturating_add(count);
+        }
         self.shaping_stats.cache_hits = self.shaping_stats.cache_hits.saturating_add(hits);
         self.shaping_stats.cache_misses = self.shaping_stats.cache_misses.saturating_add(count);
         self.shaping_stats.layout_builds = self.shaping_stats.layout_builds.saturating_add(count);

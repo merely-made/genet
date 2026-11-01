@@ -24,7 +24,6 @@ impl ParallelShaping {
         self.workers.clear();
         self.pool = pool;
     }
-    #[cfg(test)]
     pub(super) fn scratch_len(&self) -> usize {
         self.workers.len()
     }

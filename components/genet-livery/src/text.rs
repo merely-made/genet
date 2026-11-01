@@ -8,6 +8,8 @@
 
 mod cache;
 pub(crate) use cache::ShapeKey;
+#[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+mod parallel;
 pub(crate) mod prepared;
 mod shaping;
 mod stats;
@@ -251,6 +253,8 @@ pub(crate) struct ShapeResult {
 /// Livery document session.
 pub struct TextSystem {
     worker: shaping::ShapeWorker,
+    #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+    parallel: parallel::ParallelShaping,
     cache: cache::ShapeCache,
     font_generation: u64,
     fonts: HashMap<FontInstanceKey, FontResource>,
@@ -320,6 +324,8 @@ impl TextSystem {
     pub fn new() -> Self {
         Self {
             worker: shaping::ShapeWorker::new(),
+            #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+            parallel: parallel::ParallelShaping::default(),
             cache: cache::ShapeCache::default(),
             font_generation: 0,
             fonts: HashMap::new(),
@@ -358,9 +364,21 @@ impl TextSystem {
             .trim(options.retained_entries, options.retained_text_bytes);
     }
 
+    #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+    pub fn set_shaping_pool(&mut self, pool: Option<Arc<rayon::ThreadPool>>) {
+        self.parallel.set_pool(pool);
+    }
+
+    #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+    pub(crate) fn shaping_pool(&self) -> Option<Arc<rayon::ThreadPool>> {
+        self.parallel.pool.clone()
+    }
+
     fn invalidate_shapes(&mut self) {
         self.font_generation = self.font_generation.wrapping_add(1);
         self.cache.clear();
+        #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+        self.parallel.clear();
         self.worker.layout_context = LayoutContext::new();
     }
 
@@ -1629,43 +1647,76 @@ impl TextSystem {
             .shaping_options
             .record_timings
             .then(std::time::Instant::now);
-        self.shaping_stats.batches = self.shaping_stats.batches.saturating_add(1);
         let mut values = HashMap::new();
-        let mut results = Vec::new();
+        let mut misses = Vec::new();
+        let mut seen = HashSet::new();
+        let mut hits = 0u64;
         for job in jobs {
-            let shaped = if let Some(value) = values.get(&job.key) {
-                Arc::clone(value)
+            if !seen.insert(job.key.clone()) {
+                continue;
+            }
+            if let Some(value) = self.cache.get(&job.key) {
+                hits = hits.saturating_add(1);
+                values.insert(job.key.clone(), value);
             } else {
-                let value = if let Some(value) = self.cache.get(&job.key) {
-                    self.shaping_stats.cache_hits = self.shaping_stats.cache_hits.saturating_add(1);
-                    value
-                } else {
-                    self.shaping_stats.cache_misses =
-                        self.shaping_stats.cache_misses.saturating_add(1);
-                    self.shaping_stats.layout_builds =
-                        self.shaping_stats.layout_builds.saturating_add(1);
-                    self.shaping_stats.unique_jobs =
-                        self.shaping_stats.unique_jobs.saturating_add(1);
-                    self.shape_count = self.shape_count.saturating_add(1);
-                    let value = Arc::new(self.worker.shape(&job.key.input));
-                    self.cache.insert(
-                        job.key.clone(),
-                        Arc::clone(&value),
-                        self.shaping_options.retained_entries,
-                        self.shaping_options.retained_text_bytes,
-                    );
-                    value
-                };
-                values.insert(job.key.clone(), Arc::clone(&value));
-                value
-            };
-            results.push(ShapeResult {
+                misses.push(job.key.clone());
+            }
+        }
+        #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+        let outputs = if self.parallel.admits(&misses, self.shaping_options) {
+            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                self.parallel.shape(
+                    &misses,
+                    &self.worker.font_context,
+                    self.shaping_options.record_timings,
+                )
+            })) {
+                Ok(results) => results,
+                Err(panic) => {
+                    self.parallel.clear();
+                    std::panic::resume_unwind(panic)
+                },
+            }
+        } else {
+            misses
+                .iter()
+                .map(|key| (self.worker.shape(&key.input), 0))
+                .collect()
+        };
+        #[cfg(not(all(feature = "parallel-text", not(target_arch = "wasm32"))))]
+        let outputs: Vec<_> = misses
+            .iter()
+            .map(|key| (self.worker.shape(&key.input), 0u64))
+            .collect();
+        // Publication happens only after every task has joined successfully.
+        let count = misses.len() as u64;
+        self.shaping_stats.batches = self.shaping_stats.batches.saturating_add(1);
+        self.shaping_stats.cache_hits = self.shaping_stats.cache_hits.saturating_add(hits);
+        self.shaping_stats.cache_misses = self.shaping_stats.cache_misses.saturating_add(count);
+        self.shaping_stats.layout_builds = self.shaping_stats.layout_builds.saturating_add(count);
+        self.shaping_stats.unique_jobs = self.shaping_stats.unique_jobs.saturating_add(count);
+        self.shape_count = self.shape_count.saturating_add(count);
+        for (key, (output, task_ns)) in misses.into_iter().zip(outputs) {
+            self.shaping_stats.worker_task_ns =
+                self.shaping_stats.worker_task_ns.saturating_add(task_ns);
+            let value = Arc::new(output);
+            self.cache.insert(
+                key.clone(),
+                Arc::clone(&value),
+                self.shaping_options.retained_entries,
+                self.shaping_options.retained_text_bytes,
+            );
+            values.insert(key, value);
+        }
+        let results = jobs
+            .iter()
+            .map(|job| ShapeResult {
                 group: job.group,
                 generation,
                 key: job.key.clone(),
-                shaped,
-            });
-        }
+                shaped: Arc::clone(&values[&job.key]),
+            })
+            .collect();
         self.shaping_stats.shape_wall_ns = self
             .shaping_stats
             .shape_wall_ns

@@ -298,3 +298,114 @@ fn prepared_batch_late_counter_counts_only_cache_misses() {
     assert!(system.shape_late_batch(&[job], 8).is_err());
     assert_eq!(system.shaping_stats(), before);
 }
+
+#[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+#[test]
+fn parallel_shape_pool_detach() {
+    let mut system = super::TextSystem::new();
+    let pool = std::sync::Arc::new(
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .build()
+            .unwrap(),
+    );
+    system.set_shaping_pool(Some(pool));
+    system.set_shaping_pool(None);
+}
+
+#[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+#[test]
+fn parallel_shape_threshold_and_lifetime() {
+    use super::{InlineGroupId, ShapeJob};
+    use std::sync::{
+        Arc, Barrier,
+        atomic::{AtomicUsize, Ordering},
+    };
+    fn assert_send<T: Send>() {}
+    assert_send::<ShapeJob>();
+    assert_send::<super::shaping::UnbrokenText>();
+    assert_send::<super::ShapeResult>();
+    let mut system = super::TextSystem::new();
+    let mut options = system.shaping_options();
+    options.retained_entries = 0;
+    options.parallel_min_groups = 2;
+    options.parallel_min_text_bytes = 0;
+    system.set_shaping_options(options);
+    let make = |i| ShapeJob {
+        group: InlineGroupId(i),
+        generation: 17,
+        key: super::cache::ShapeKey {
+            generation: 0,
+            input: super::prepared::ShapeInput {
+                text: format!("fixture {i}"),
+                defaults: vec![],
+                spans: vec![],
+                slots: vec![],
+                base_level: 0,
+                scale: 1f32.to_bits(),
+                quantize: true,
+            },
+        },
+    };
+    let jobs = [make(0), make(1)];
+    assert!(!system.parallel.admits(
+        &jobs.iter().map(|j| j.key.clone()).collect::<Vec<_>>(),
+        options
+    ));
+    let pool = Arc::new(
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .build()
+            .unwrap(),
+    );
+    system.set_shaping_pool(Some(pool));
+    let calls = Arc::new(AtomicUsize::new(0));
+    let barrier = Arc::new(Barrier::new(2));
+    system.parallel.hook = Some({
+        let calls = calls.clone();
+        let barrier = barrier.clone();
+        Arc::new(move |_| {
+            calls.fetch_add(1, Ordering::SeqCst);
+            barrier.wait();
+        })
+    });
+    let mut huge = jobs[0].key.clone();
+    huge.input.text = "x".repeat(1024 * 1024);
+    assert!(!system.parallel.admits(&[huge], options));
+    let keys: Vec<_> = jobs.iter().map(|job| job.key.clone()).collect();
+    let mut above_bytes = options;
+    above_bytes.parallel_min_text_bytes = usize::MAX;
+    assert!(!system.parallel.admits(&keys, above_bytes));
+    let mut above_groups = options;
+    above_groups.parallel_min_groups = 3;
+    assert!(!system.parallel.admits(&keys, above_groups));
+    let results = system.shape_batch(&jobs, 17).unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    assert_eq!(system.parallel.scratch_len(), 2);
+    assert_eq!(
+        results.iter().map(|r| r.group.0).collect::<Vec<_>>(),
+        vec![0, 1]
+    );
+    options.retained_entries = 10;
+    system.set_shaping_options(options);
+    assert_eq!(system.cache.len(), 0);
+    system.parallel.hook = Some(Arc::new(|index| {
+        if index == 0 {
+            panic!("test panic");
+        }
+    }));
+    let before = system.shaping_stats();
+    let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        system.shape_batch(&jobs, 17)
+    }));
+    assert!(panic.is_err());
+    assert_eq!(system.shaping_stats(), before);
+    assert_eq!(system.cache.len(), 0);
+    assert_eq!(system.parallel.scratch_len(), 0);
+    system.parallel.hook = None;
+    system.set_shaping_pool(None);
+    assert_eq!(system.parallel.scratch_len(), 0);
+    assert_eq!(Arc::strong_count(&results[0].shaped), 1);
+    drop(system);
+    assert_eq!(Arc::strong_count(&results[0].shaped), 1);
+}

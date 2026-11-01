@@ -67,7 +67,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ => return Err(format!("unknown option {key}").into()),
         }
     }
-    if mode != "uncached-serial" && mode != "cached-serial" {
+    if mode != "uncached-serial" && mode != "cached-serial" && mode != "cached-parallel" {
         return Err(format!("mode {mode} is not implemented").into());
     }
     if mode == "uncached-serial" {
@@ -86,7 +86,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         return Err(format!("unknown case {case}").into());
     }
-    if paragraphs == 0 || iterations == 0 || workers != 1 {
+    if paragraphs == 0
+        || iterations == 0
+        || workers == 0
+        || (mode != "cached-parallel" && workers != 1)
+    {
         return Err(
             "paragraphs and iterations must be positive; serial modes require one worker".into(),
         );
@@ -105,11 +109,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The source label is supplied by the builder; the binary hash identifies
     // the executable even when it is invoked from another checkout.
     let executable_hash = hash(&fs::read(env::current_exe()?)?);
-    let features = if cfg!(feature = "image-decode") {
-        "image-decode"
-    } else {
-        "none"
+    let features = match (
+        cfg!(feature = "image-decode"),
+        cfg!(all(feature = "parallel-text", not(target_arch = "wasm32"))),
+    ) {
+        (true, true) => "image-decode,parallel-text",
+        (true, false) => "image-decode",
+        (false, true) => "parallel-text",
+        (false, false) => "none",
     };
+    #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+    let pool = if mode == "cached-parallel" {
+        Some(std::sync::Arc::new(
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(workers)
+                .build()?,
+        ))
+    } else {
+        None
+    };
+    #[cfg(not(all(feature = "parallel-text", not(target_arch = "wasm32"))))]
+    if mode == "cached-parallel" {
+        return Err("cached-parallel requires native parallel-text".into());
+    }
     let mut out: Box<dyn Write> = if output.is_empty() {
         Box::new(io::stdout())
     } else {
@@ -153,6 +175,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Device::screen(800.0, 600.0),
         );
         doc.set_text_shaping_options(options);
+        #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+        doc.set_text_shaping_pool(pool.clone());
         doc.set_font_resource("fixture.ttf", font_bytes.clone());
         for (stage, width) in [
             ("initial", 800),

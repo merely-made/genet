@@ -90,7 +90,11 @@ where
 
     pub(in crate::document) fn rebuild_font_resources(&mut self) {
         let options = self.text.shaping_options();
+        #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+        let pool = self.text.shaping_pool();
         self.text = TextSystem::new();
+        #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+        self.text.set_shaping_pool(pool);
         self.text.set_shaping_options(options);
         // These immutable entries were all validated before ledger admission.
         for (generic, bytes) in &self.generic_font_sources {

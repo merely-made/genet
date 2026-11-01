@@ -41,3 +41,11 @@ measure_text_shaping --source-revision <full-build-source-commit> --font <font-p
 ```
 
 The source revision is a caller-supplied claim; retain the source checkout and lock used for the build. Each row also records the executable's FNV-1a fingerprint and its compiled `image-decode` or `none` feature label. An executable hash identifies the build for comparison but is not cryptographic verification of the source claim.
+
+## 2026-11-01: Task 2A construction/placement split
+
+Source `0bb48169e0a`, unchanged resolved lock SHA256 `3bd1d748fc464919f5007ffc8c1958f471a391ee25b1a04467abbbc18077b145`. All commands used the same shared-lock systemd wrapper, 3 GiB/zero swap/150% CPU, one Cargo job and one test thread. `cargo test -p genet-livery --lib --locked --offline -- --test-threads=1`: 377 passed, 0 failed, 2 ignored. Focused `inline_measure_policy_and_width_match_exact_requests`: 1 passed; `split_shape_`: 3 passed. Existing deprecation warnings remain. Logs `/home/markik/Code/testing/genet/shaping-task2a-full-final.log` and `shaping-task2a-final-*.log`.
+
+Temporary simultaneous original/split layout fingerprints matched for real Arabic (`0979d502b446285a`), Lato ligature (`84323ece945f5f92`), Ahem inline atom (`f745350b94d196ff`), mixed spans (`7a025ec7bbb052dc`), forced break (`95aad734e2c49ee2`), tabs (`60aa7fabd6d62eb2`) and UTF-8 source range (`d94cf3626ce94a8d`). Fingerprints included glyph/font/cluster/line/slot values. Old production builder and temporary oracle were removed after parity. Independent existing fixture assertions remain. The removed oracle code is not preserved as a second engine; this is bounded recorded evidence, not exhaustive equivalence proof. New input tests were added after production code, so there was no clean test-first cycle for that boundary.
+
+Terra task review approved spec and quality, with no critical/important finding. Geometry-template preparation remains Task 2B; caching and parallelism are still unimplemented.

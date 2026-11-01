@@ -154,6 +154,8 @@ impl<D: LayoutDom> LiveryDocument<D> {
 
 ### Task 2: split collection, shaping and placement without caching
 
+Execution subdivision (2026-11-01): 2A isolates normalized builder inputs and Parley construction while retaining the existing collector; 2B adds the owner-side geometry-resolvable collection template. Review each subtask; both remain required for this task to close.
+
 **Files:** create `text/prepared.rs`, `text/shaping.rs`; modify `text.rs`, `text/reuse_tests.rs`, `layout.rs`.
 
 **Interfaces:** define `PreparedInlineGroup`, normalized `ShapeInput`, `ShapeWorker`, `UnbrokenText`, `InlineGeometry` and `place_inline_group` above. The collector produces a geometry-resolvable template; materialization yields exact builder inputs and a current source sidecar. Keep direct overlay/control entry points working through the common split where applicable.
@@ -254,3 +256,5 @@ Make independently reviewable checkpoints after Tasks 1–5 and a qualification/
 - 2026-11-01: user selected Terra/Luna orchestration; implementation starts on `codex/retained-parallel-shaping-20261101`.
 
 - 2026-11-01: Task 1 complete at `5285e5e5859` after Terra implementation/review and Luna scoped fix review. Focused 2 passed; library 373 passed/2 ignored; original/instrumented four-stage paint digests match. Measurements are single debug controls, not speed claims. [Baseline receipt](archive_docs/receipts/2026-11-01_retained_parallel_shaping_plan_receipts.md).
+
+- 2026-11-01: Task 2A implemented/reviewed at `0bb48169e0a`: owned exact builder inputs, one serial worker, owner-side placement, precise intrinsic policy cache. Library 377 passed/2 ignored; selected old/split controls match. Task 2B collection template remains open.

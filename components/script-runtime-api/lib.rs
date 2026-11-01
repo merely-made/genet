@@ -181,7 +181,7 @@ impl<'cx, E: ScriptEngine + 'cx> Surface<'_, 'cx, E> {
         // These setup-only aliases are captured by trusted bootstrap and then
         // deleted. Predeclare their flags before a value-only native installer
         // can create a nonconfigurable property. A refusal aborts registration.
-        if name.starts_with("__webgl_") || matches!(
+        if name.starts_with("__webgl_") || name.starts_with("__rtc_") || matches!(
             name,
             "__formFileAllocate"
                 | "__hostFormEdit"

@@ -3,9 +3,7 @@
   const parse = JSON.parse, stringify = JSON.stringify;
   const createHost = __rtc_new, commandHost = __rtc_command;
   const FormOps = g.__formsPrivate;
-  for(const name of ['__rtc_new','__rtc_command']) {
-    if(!Reflect.deleteProperty(g,name))g[name]=undefined;
-  }
+  delete g.__rtc_new; delete g.__rtc_command;
   const PCs = new WeakMap(), DCs = new WeakMap(), live = new Map();
   const descs = new WeakMap(), candidates = new WeakMap();
   const transports = new WeakMap(), transportToken={};
@@ -86,11 +84,15 @@
   function apply(s,state) {
     if(!state)return;
     s.state=state;
-    for(const name of ['localDescription','currentLocalDescription','pendingLocalDescription','remoteDescription','currentRemoteDescription','pendingRemoteDescription']) {
-      const value=state[name],old=s[name];
+    const names=['currentLocalDescription','pendingLocalDescription','currentRemoteDescription','pendingRemoteDescription'];
+    const pool=names.map(name=>s[name]).filter(Boolean);
+    for(const name of names) {
+      const value=state[name];
       if(value==null)s[name]=null;
-      else if(!old||old.type!==value.type||old.sdp!==value.sdp)s[name]=new RTCSessionDescription(value);
+      else {s[name]=pool.find(item=>{const d=descs.get(item);return d.type===value.type&&d.sdp===value.sdp;})||new RTCSessionDescription(value);pool.push(s[name]);}
     }
+    s.localDescription=s.pendingLocalDescription||s.currentLocalDescription;
+    s.remoteDescription=s.pendingRemoteDescription||s.currentRemoteDescription;
     for(const meta of state.channels||[]) { const item=s.channels.get(String(meta.handle));if(item)Object.assign(dc(item).meta,meta); }
     if(state.sctp) {
       if(!s.sctp) {s.ice=new RTCIceTransport(transportToken);s.dtls=new RTCDtlsTransport(transportToken);s.sctp=new RTCSctpTransport(transportToken);transports.get(s.dtls).iceTransport=s.ice;transports.get(s.sctp).transport=s.dtls;}

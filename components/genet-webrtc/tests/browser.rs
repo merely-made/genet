@@ -140,7 +140,7 @@ fn descriptions_and_rollback<E: ScriptEngine>() {
         var offer=await p.createOffer();
         await p.setLocalDescription(offer);
         if(p.signalingState!=='have-local-offer'||!p.pendingLocalDescription||p.currentLocalDescription!==null)throw new Error('pending SDP');
-        var first=p.localDescription;if(first!==p.localDescription)throw new Error('unstable wrapper');
+        var first=p.localDescription;if(first!==p.localDescription||first!==p.pendingLocalDescription)throw new Error('unstable wrapper');
         await p.setLocalDescription({type:'rollback'});
         if(p.signalingState!=='stable'||p.pendingLocalDescription!==null)throw new Error('rollback');
         p.close();done=true;
@@ -219,7 +219,7 @@ fn top_navigation<E: ScriptEngine>() {
         &script_runtime_api::NoScriptLoader,
     );
     run(&mut rt, "var p=new RTCPeerConnection();");
-    let stale=rt.eval(r#"(function(){var result=[];for(const f of [()=>new RTCPeerConnection(),()=>p.createDataChannel('stale')]){try{f();result.push('accepted');}catch(e){result.push(e.name);}}return result.join(',');})"#).unwrap();
+    let stale=rt.eval(r#"(function(Ctor,peer){return function(){var result=[];for(const f of [()=>new Ctor(),()=>peer.createDataChannel('stale')]){try{f();result.push('accepted');}catch(e){result.push(e.name);}}return result.join(',');};})(RTCPeerConnection,p)"#).unwrap();
     run(&mut rt, "location.href='https://rtc.test/two.html';");
     rt.run_event_loop(32).unwrap();
     assert_eq!(read(&mut rt, "location.href"), "https://rtc.test/two.html");

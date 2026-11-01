@@ -219,9 +219,24 @@ fn an_opaque_canvas_fills_a_transparent_page_with_its_root_scheme_canvas() {
     use livery::values::ColorScheme;
     let cases = [
         ("", ColorScheme::Light, true, [255, 255, 255, 255]),
-        ("html { color-scheme: dark; }", ColorScheme::Dark, true, [18, 18, 18, 255]),
-        ("html { color-scheme: light dark; }", ColorScheme::Light, true, [255, 255, 255, 255]),
-        ("body { background:#f4efe3; }", ColorScheme::Light, true, [244, 239, 227, 255]),
+        (
+            "html { color-scheme: dark; }",
+            ColorScheme::Dark,
+            true,
+            [18, 18, 18, 255],
+        ),
+        (
+            "html { color-scheme: light dark; }",
+            ColorScheme::Light,
+            true,
+            [255, 255, 255, 255],
+        ),
+        (
+            "body { background:#f4efe3; }",
+            ColorScheme::Light,
+            true,
+            [244, 239, 227, 255],
+        ),
         ("", ColorScheme::Light, false, [0, 0, 0, 0]),
     ];
     for (canvas_style, preference, opaque, expected) in cases {
@@ -234,7 +249,11 @@ fn an_opaque_canvas_fills_a_transparent_page_with_its_root_scheme_canvas() {
         let mut cpu = CpuSession::new(SparseResourceLimits::default());
         let pixels = cpu.render(&scene).unwrap();
         let bytes = pixels.data_as_u8_slice();
-        assert_eq!(pixel_at(bytes, 64, 60, 60), expected, "{canvas_style:?} opaque={opaque}");
+        assert_eq!(
+            pixel_at(bytes, 64, 60, 60),
+            expected,
+            "{canvas_style:?} opaque={opaque}"
+        );
         assert_eq!(
             pixel_at(bytes, 64, 12, 12),
             [255, 0, 0, 255],

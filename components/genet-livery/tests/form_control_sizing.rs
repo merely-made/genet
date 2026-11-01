@@ -14,10 +14,10 @@
 //! themselves; the hit-test angle stays in `form_control_hit.rs`.
 
 use genet_livery::{InteractionStates, LiveryLayout, StyleSet, layout, resolve_styles};
-use livery::values::Size as CssSize;
 use genet_scripted_dom::ScriptedDom;
 use layout_dom_api::LayoutDom;
 use livery::media::Device;
+use livery::values::Size as CssSize;
 
 type Node = <ScriptedDom as LayoutDom>::NodeId;
 
@@ -43,7 +43,8 @@ fn rect(dom: &ScriptedDom, fragments: &LiveryLayout<Node>, id: &str) -> (f32, f3
         {
             return Some(node);
         }
-        dom.dom_children(node).find_map(|child| find(dom, child, id))
+        dom.dom_children(node)
+            .find_map(|child| find(dom, child, id))
     }
     let node = find(dom, dom.document(), id).unwrap();
     let fragment = fragments.get(node).unwrap();
@@ -77,7 +78,8 @@ fn size_cols_rows_never_reach_computed_style() {
         {
             return Some(node);
         }
-        dom.dom_children(node).find_map(|child| find(dom, child, id))
+        dom.dom_children(node)
+            .find_map(|child| find(dom, child, id))
     }
     for element in [
         r#"<input id="target" size="17">"#,
@@ -120,14 +122,12 @@ fn text_entry_types_are_non_zero_and_default_to_twenty_characters() {
         assert!(width > 0.0 && height > 0.0, "{input}: {width}x{height}");
 
         let (default_width, _) = size(input);
-        let (wide_width, _) =
-            size(&input.replace("id=\"target\"", "id=\"target\" size=\"40\""));
+        let (wide_width, _) = size(&input.replace("id=\"target\"", "id=\"target\" size=\"40\""));
         assert!(
             wide_width > default_width,
             "{input}: size=40 ({wide_width}) should widen the default ({default_width})"
         );
-        let (narrow_width, _) =
-            size(&input.replace("id=\"target\"", "id=\"target\" size=\"5\""));
+        let (narrow_width, _) = size(&input.replace("id=\"target\"", "id=\"target\" size=\"5\""));
         assert!(
             narrow_width < default_width,
             "{input}: size=5 ({narrow_width}) should narrow the default ({default_width})"
@@ -242,15 +242,22 @@ fn textarea_defaults_to_twenty_columns_and_two_rows() {
     let (default_width, default_height) = size(r#"<textarea id="target"></textarea>"#);
     assert!(default_width > 0.0 && default_height > 0.0);
 
-    let (wide_width, default_height_2) =
-        size(r#"<textarea id="target" cols="40"></textarea>"#);
-    assert_eq!(default_height_2, default_height, "cols does not change height");
-    assert!(wide_width > default_width, "cols=40 should widen the default");
+    let (wide_width, default_height_2) = size(r#"<textarea id="target" cols="40"></textarea>"#);
+    assert_eq!(
+        default_height_2, default_height,
+        "cols does not change height"
+    );
+    assert!(
+        wide_width > default_width,
+        "cols=40 should widen the default"
+    );
 
-    let (default_width_2, tall_height) =
-        size(r#"<textarea id="target" rows="8"></textarea>"#);
+    let (default_width_2, tall_height) = size(r#"<textarea id="target" rows="8"></textarea>"#);
     assert_eq!(default_width_2, default_width, "rows does not change width");
-    assert!(tall_height > default_height, "rows=8 should heighten the default");
+    assert!(
+        tall_height > default_height,
+        "rows=8 should heighten the default"
+    );
 }
 
 #[test]
@@ -287,7 +294,8 @@ fn hidden_inputs_stay_boxless() {
         {
             return Some(node);
         }
-        dom.dom_children(node).find_map(|child| find(dom, child, id))
+        dom.dom_children(node)
+            .find_map(|child| find(dom, child, id))
     }
     let node = find(&dom, dom.document(), "target").unwrap();
     assert!(
@@ -312,7 +320,8 @@ fn image_input_keeps_its_natural_size_path_untouched() {
         {
             return Some(node);
         }
-        dom.dom_children(node).find_map(|child| find(dom, child, id))
+        dom.dom_children(node)
+            .find_map(|child| find(dom, child, id))
     }
     let dom = ScriptedDom::from_serialized_document(
         "<!DOCTYPE html><html><body><input id=\"target\" type=\"image\"></body></html>",

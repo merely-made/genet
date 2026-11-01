@@ -169,7 +169,11 @@ fn default_controls_are_no_longer_zero_extent() {
 #[test]
 fn author_zero_size_keeps_the_half_open_containment_fix() {
     let page = Page::new(r#"<input id="target" style="margin: 20px; width: 0; height: 0">"#);
-    assert_eq!(page.rect("target").2, 0.0, "author-forced input has no width");
+    assert_eq!(
+        page.rect("target").2,
+        0.0,
+        "author-forced input has no width"
+    );
     assert_eq!(
         page.rect("target").3,
         0.0,
@@ -187,9 +191,7 @@ fn author_zero_size_keeps_the_half_open_containment_fix() {
 
     // A `display: block` input authored to zero height is still a line, one
     // axis at a time.
-    let page = Page::new(
-        r#"<input id="target" style="margin: 20px; display: block; height: 0">"#,
-    );
+    let page = Page::new(r#"<input id="target" style="margin: 20px; display: block; height: 0">"#);
     let (left, top, width, height) = page.rect("target");
     assert!(width > 2.0 && height == 0.0, "authored zero-height line");
     for point in [
@@ -229,15 +231,18 @@ fn author_zero_size_keeps_the_half_open_containment_fix() {
 /// `0 0` transform origin, matching the CSS transform matrix convention
 /// (`matrix(cos, sin, -sin, cos, 0, 0)`) so the expected painted point is
 /// computed independently of the placement code under test.
-fn rotated(origin: (f32, f32), point: (f32, f32), tx: f32, ty: f32, angle_degrees: f32) -> (f32, f32) {
+fn rotated(
+    origin: (f32, f32),
+    point: (f32, f32),
+    tx: f32,
+    ty: f32,
+    angle_degrees: f32,
+) -> (f32, f32) {
     let (ox, oy) = origin;
     let (x, y) = (point.0 - ox, point.1 - oy);
     let radians = angle_degrees.to_radians();
     let (sin, cos) = (radians.sin(), radians.cos());
-    (
-        ox + tx + x * cos - y * sin,
-        oy + ty + x * sin + y * cos,
-    )
+    (ox + tx + x * cos - y * sin, oy + ty + x * sin + y * cos)
 }
 
 #[test]

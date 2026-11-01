@@ -217,8 +217,15 @@ impl State {
     fn transports(&self) -> Value {
         self.endpoint.core().sctp().map_or(Value::Null, |sctp| {
             let dtls=sctp.transport(); let ice=dtls.ice_transport();
+            let mut state=sctp.state().to_string();
+            // The web "connected procedure" assigns stream IDs before exposing
+            // Connected. The raw association can become established before its
+            // completion event has crossed the protocol pipeline.
+            if state=="connected" && self.transports["state"]!="connected" && self.channels.values().any(|c|c["id"].is_null() && c["readyState"]!="closed") {
+                state="connecting".into();
+            }
             let candidates=|values:Vec<murm_rtc::rtc::peer_connection::transport::RTCIceCandidate>| values.into_iter().filter_map(|c|c.to_json().ok()).collect::<Vec<_>>();
-            json!({"state":sctp.state().to_string(),"maxMessageSize":sctp.max_message_size(),"maxChannels":sctp.max_channels(),
+            json!({"state":state,"maxMessageSize":sctp.max_message_size(),"maxChannels":sctp.max_channels(),
                 "dtls":{"state":dtls.state().to_string(),"certificates":dtls.get_remote_certificates(),
                     "ice":{"state":ice.state().to_string(),"gatheringState":ice.gathering_state().to_string(),
                         "role":ice.role().to_string(),"component":ice.component().to_string(),
@@ -230,6 +237,7 @@ impl State {
         if self.notifications.len() + 3 >= self.settings.max_notifications {
             return;
         }
+        self.refresh_channel_ids();
         let value = self.transports();
         if self.transports != value {
             self.revision = self.revision.saturating_add(1);
@@ -246,6 +254,17 @@ impl State {
             }
         }
         self.transports = value;
+    }
+    fn refresh_channel_ids(&mut self) {
+        let ids: Vec<_> = self.channels.keys().copied().collect();
+        for id in ids {
+            if let Some(channel) = self.endpoint.core_mut().data_channel(id) {
+                if let Some(meta) = self.channels.get_mut(&id) {
+                    meta["id"] = json!(channel.stream_id());
+                    meta["readyState"] = json!(channel.ready_state().to_string());
+                }
+            }
+        }
     }
     fn channel(&mut self, id: usize) -> Option<Value> {
         if let Some(dc) = self.endpoint.core_mut().data_channel(id) {
@@ -502,6 +521,17 @@ impl WebRtcPeer for NativePeer {
                 }
                 if state.channels.len() >= state.settings.max_channels {
                     return Err(failure("OperationError", "RTC channel limit reached"));
+                }
+                state.refresh_channel_ids();
+                if data["negotiated"] == true
+                    && state.channels.values().any(|channel| {
+                        channel["id"] == data["id"] && channel["readyState"] != "closed"
+                    })
+                {
+                    return Err(failure(
+                        "OperationError",
+                        "RTC channel ID is already in use",
+                    ));
                 }
                 let init = RTCDataChannelInit {
                     ordered: data["ordered"].as_bool().unwrap_or(true),

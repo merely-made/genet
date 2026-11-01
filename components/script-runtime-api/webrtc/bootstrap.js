@@ -170,7 +170,7 @@
       options=options==null?{}:Object(options);
       label=usv(label);const init={label,ordered:options.ordered===undefined?true:!!options.ordered,protocol:options.protocol===undefined?'':usv(options.protocol),negotiated:!!options.negotiated,maxPacketLifeTime:options.maxPacketLifeTime===undefined?null:ushort(options.maxPacketLifeTime),maxRetransmits:options.maxRetransmits===undefined?null:ushort(options.maxRetransmits),id:options.id===undefined?null:integer(options.id,65535)};
       if(init.maxPacketLifeTime!==null&&init.maxRetransmits!==null)throw new TypeError('Conflicting reliability options');
-      if(init.id===65535)throw new TypeError('Reserved channel ID');if(init.negotiated&&init.id===null)throw new TypeError('Negotiated channel ID is required');
+      if(init.negotiated&&init.id===65535)throw new TypeError('Reserved channel ID');if(init.negotiated&&init.id===null)throw new TypeError('Negotiated channel ID is required');
       const meta=call(s,'createDataChannel',init),channel=new RTCDataChannel(channelToken,s,meta);s.channels.set(String(meta.handle),channel);return channel;
     }
     getStats(selector=null){const s=pc(this);if(selector!==null)return PromiseCtor.reject(error('InvalidAccessError','Unknown media track'));if(s.closed)return PromiseCtor.resolve(new Map());return queued(s,'getStats',null).then(function(entries){return new Map(entries.map(function(e){return [e.id,e];}));});}

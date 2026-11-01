@@ -68,6 +68,9 @@ fn constructors_and_close<E: ScriptEngine>() {
       var ch=p.createDataChannel('zero',{ordered:false,maxRetransmits:0});
       check(ch.ordered===false && ch.maxRetransmits===0 && ch.maxPacketLifeTime===null);
       check(ch.readyState==='connecting');
+      check(p.createDataChannel('ignored',{id:65535}).id===null);
+      p.createDataChannel('negotiated',{negotiated:true,id:42});
+      try {p.createDataChannel('duplicate',{negotiated:true,id:42});throw new Error('duplicate accepted');}catch(e){check(e.name==='OperationError');}
       try { ch.send('early');throw new Error('send accepted'); } catch(e) { check(e.name==='InvalidStateError'); }
       try { p.createDataChannel('bad',{maxRetransmits:0,maxPacketLifeTime:0});throw new Error('conflict accepted'); } catch(e) {check(e instanceof TypeError);}
       p.close(); p.close();
@@ -107,6 +110,8 @@ fn encrypted_browser_exchange<E: ScriptEngine>() {
         };
       };
       ch.onopen=()=>{
+        if(ch.id===null)problem='missing assigned stream ID';
+        try{a.createDataChannel('duplicate',{negotiated:true,id:ch.id});problem='duplicate stream ID';}catch(e){if(e.name!=='OperationError')problem=String(e);}
         if(!a.sctp||a.sctp.state!=='connected'||a.sctp.transport.state!=='connected'||a.sctp.transport.getRemoteCertificates().length===0)problem='native transports';
         if(a.sctp!==a.sctp||a.sctp.transport.iceTransport!==a.sctp.transport.iceTransport)problem='transport identity';
         ch.send('hello λ');
@@ -116,7 +121,9 @@ fn encrypted_browser_exchange<E: ScriptEngine>() {
         Object.defineProperty(blob,'size',{value:999});ch.send(blob);
       };
       ch.onmessage=e=>{if(e.data==='ack'){a.close();b.close();done=true;}};
-      (async()=>{await a.setLocalDescription();await b.setRemoteDescription(a.localDescription);await b.setLocalDescription();await a.setRemoteDescription(b.localDescription);})().catch(e=>problem=String(e));
+      (async()=>{await a.setLocalDescription();await b.setRemoteDescription(a.localDescription);await b.setLocalDescription();await a.setRemoteDescription(b.localDescription);
+        var checkId=()=>{if(a.sctp.state==='connected'&&ch.id===null)problem='SCTP connected before stream ID assignment';};a.sctp.onstatechange=checkId;checkId();
+      })().catch(e=>problem=String(e));
       globalThis.__rtcDeliver=()=>{problem='authored task hook called';};
     "#,
     );

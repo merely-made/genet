@@ -8842,3 +8842,123 @@ fn prepared_batch_excludes_out_of_flow_atoms_from_missing_geometry() {
         );
     }
 }
+
+#[test]
+fn late_errors_at_both_measurement_entrypoints_preserve_context() {
+    for markup in ["<span id=a>(hello</span>", "<span id=a></span>"] {
+        let dom = StaticDocument::parse(markup);
+        let styles = resolve_styles(
+            &dom,
+            &StyleSet::cambium(&[]),
+            &Device::screen(320.0, 240.0),
+            &InteractionStates::default(),
+        );
+        let node = node_by_id(&dom, dom.document(), "a").unwrap();
+        let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+        let root = boxes.principal_box(node).unwrap();
+        let mut style = ComputedValues::default();
+        style.color = livery::values::ComputedColor::Absolute(livery::values::Color::srgb(
+            0.0, 0.0, 0.0, 1.0,
+        ));
+        for fault in 1..=7 {
+            let mut text = TextSystem::new();
+            let prepared = std::sync::Arc::new(text.prepare_inline_group(
+                &dom,
+                &styles,
+                &boxes,
+                &[root],
+                &style,
+            ));
+            let mut context = InlineMeasure {
+                owner: None,
+                formatting_owner: root,
+                roots: vec![root],
+                style: style.clone(),
+                width: 123.0,
+                height: 45.0,
+                replaced_size: None,
+                layouts: Vec::new(),
+                placement_constraints: None,
+                prepared: Some(text_batch::PreparedMeasure {
+                    template: prepared.clone(),
+                    generation: 11,
+                    group: crate::text::InlineGroupId(9),
+                    results: Vec::new(),
+                }),
+                shape_error: None,
+            };
+            crate::text::LATE_FAULT.with(|f| f.set(fault));
+            let before = text.shaping_stats();
+            let size = measure_inline_context(
+                &mut text,
+                &dom,
+                &styles,
+                &boxes,
+                &AtomicLayoutPlane::default(),
+                &mut context,
+                InlineMeasureGeometry {
+                    width: 30.0,
+                    intrinsic_kind: None,
+                    line_constraints: None,
+                },
+            );
+            assert_eq!(size, (123.0, 45.0));
+            assert!(context.layouts.is_empty());
+            assert!(context.prepared.as_ref().unwrap().results.is_empty());
+            let error = context.shape_error.as_ref().unwrap().to_string();
+            let expected = match fault {
+                1 => "late inline batch rejected:",
+                2 => "late inline batch returned no result",
+                _ => "late inline batch returned invalid result",
+            };
+            assert!(error.starts_with(expected), "{error}");
+            assert_eq!(text.shaping_stats().format_requests, before.format_requests);
+            crate::text::LATE_FAULT.with(|f| f.set(if fault == 1 { 2 } else { 1 }));
+            let again = measure_inline_context(
+                &mut text,
+                &dom,
+                &styles,
+                &boxes,
+                &AtomicLayoutPlane::default(),
+                &mut context,
+                InlineMeasureGeometry {
+                    width: 31.0,
+                    intrinsic_kind: None,
+                    line_constraints: None,
+                },
+            );
+            assert_eq!(again, (123.0, 45.0));
+            assert_eq!(context.shape_error.as_ref().unwrap().to_string(), error);
+
+            let mut wrap = TextMeasure {
+                min_width: 0.0,
+                max_width: 100.0,
+                height: 45.0,
+                baselines: None,
+                wrap: Some(Box::new(TextWrap {
+                    source: root,
+                    parent_style: style.clone(),
+                    prepared: prepared.clone(),
+                    generation: 11,
+                    group: crate::text::InlineGroupId(9),
+                    results: Vec::new(),
+                    formatted: Vec::new(),
+                })),
+            };
+            crate::text::LATE_FAULT.with(|f| f.set(fault));
+            let before = text.shaping_stats();
+            let error = wrapped_text_height(&mut wrap, 30.0, Some(&mut text), &dom)
+                .unwrap_err()
+                .to_string();
+            let expected = match fault {
+                1 => "late text batch rejected:",
+                2 => "late text batch returned no result",
+                _ => "late text batch returned invalid result",
+            };
+            assert!(error.starts_with(expected), "{error}");
+            let inner = wrap.wrap.as_ref().unwrap();
+            assert!(inner.results.is_empty() && inner.formatted.is_empty());
+            assert_eq!(text.shaping_stats().format_requests, before.format_requests);
+        }
+    }
+}

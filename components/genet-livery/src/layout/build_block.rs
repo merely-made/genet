@@ -161,30 +161,36 @@ where
                 intrinsic_kind: Some(intrinsic),
                 line_constraints: None,
             };
-            if let Some(layout) = text.format_prepared_inline_group::<D::NodeId, _>(
-                &pending.prepared,
-                &fragments,
-                self.dom.quirks_mode(),
-                request(0.01, IntrinsicSizeKind::MinContent),
-                Some((
-                    &results[index * 2],
-                    generation,
-                    crate::text::InlineGroupId(index),
-                )),
-            ) {
+            if let Some(layout) = text
+                .format_prepared_inline_group::<D::NodeId, _>(
+                    &pending.prepared,
+                    &fragments,
+                    self.dom.quirks_mode(),
+                    request(0.01, IntrinsicSizeKind::MinContent),
+                    crate::text::Candidates::AtomicNoLate {
+                        results: &results[index * 2..index * 2 + 2],
+                        generation,
+                        group: crate::text::InlineGroupId(index),
+                    },
+                )
+                .expect("atomic formatting cannot fail")
+            {
                 measure.min_width = layout.size().0;
             }
-            if let Some(layout) = text.format_prepared_inline_group::<D::NodeId, _>(
-                &pending.prepared,
-                &fragments,
-                self.dom.quirks_mode(),
-                request(f32::INFINITY, IntrinsicSizeKind::MaxContent),
-                Some((
-                    &results[index * 2 + 1],
-                    generation,
-                    crate::text::InlineGroupId(index),
-                )),
-            ) {
+            if let Some(layout) = text
+                .format_prepared_inline_group::<D::NodeId, _>(
+                    &pending.prepared,
+                    &fragments,
+                    self.dom.quirks_mode(),
+                    request(f32::INFINITY, IntrinsicSizeKind::MaxContent),
+                    crate::text::Candidates::AtomicNoLate {
+                        results: &results[index * 2..index * 2 + 2],
+                        generation,
+                        group: crate::text::InlineGroupId(index),
+                    },
+                )
+                .expect("atomic formatting cannot fail")
+            {
                 measure.max_width = layout.size().0.max(measure.min_width);
                 measure.height = layout.size().1;
                 measure.baselines = layout.baselines();

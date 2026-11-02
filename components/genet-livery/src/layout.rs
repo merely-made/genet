@@ -377,35 +377,6 @@ where
         return Ok(height);
     }
     let fragments = AtomicLayoutPlane::default();
-    let key = text.prepared_shape_key::<D::NodeId, _>(
-        &wrap.prepared,
-        &fragments,
-        width,
-        None,
-        &wrap.parent_style,
-    );
-    let result_index = if let Some(index) = wrap.results.iter().position(|result| result.key == key)
-    {
-        index
-    } else {
-        let job = crate::text::ShapeJob {
-            group: wrap.group,
-            generation: wrap.generation,
-            key,
-        };
-        let mut results = text
-            .shape_late_batch(&[job], wrap.generation)
-            .map_err(|error| {
-                LayoutError::retained_state(format!("late text batch rejected: {error:?}"))
-            })?;
-        let index = wrap.results.len();
-        wrap.results.append(&mut results);
-        index
-    };
-    let result = wrap
-        .results
-        .get(result_index)
-        .ok_or_else(|| LayoutError::retained_state("late text batch returned no result"))?;
     let (height, baselines) = text
         .format_prepared_inline_group::<D::NodeId, _>(
             &wrap.prepared,
@@ -418,8 +389,25 @@ where
                 intrinsic_kind: None,
                 line_constraints: None,
             },
-            Some((result, wrap.generation, wrap.group)),
+            crate::text::Candidates::Transactional {
+                results: &mut wrap.results,
+                generation: wrap.generation,
+                group: wrap.group,
+            },
         )
+        .map_err(|error| {
+            LayoutError::retained_state(match error {
+                crate::text::PreparedFormatError::Batch(error) => {
+                    format!("late text batch rejected: {error:?}")
+                },
+                crate::text::PreparedFormatError::EmptyLateResult => {
+                    "late text batch returned no result".to_string()
+                },
+                crate::text::PreparedFormatError::InvalidLateResult => {
+                    "late text batch returned invalid result".to_string()
+                },
+            })
+        })?
         .map_or((context.height, None), |layout| {
             (layout.size().1, layout.baselines())
         });
@@ -656,38 +644,6 @@ where
                 });
                 return (context.width, context.height);
             }
-            let key = text.prepared_shape_key::<D::NodeId, _>(
-                &prepared.template,
-                atomic,
-                width,
-                intrinsic_kind,
-                &context.style,
-            );
-            let index =
-                if let Some(index) = prepared.results.iter().position(|result| result.key == key) {
-                    index
-                } else {
-                    let job = crate::text::ShapeJob {
-                        group: prepared.group,
-                        generation: prepared.generation,
-                        key,
-                    };
-                    match text.shape_late_batch(&[job], prepared.generation) {
-                        Ok(mut results) => {
-                            let index = prepared.results.len();
-                            prepared.results.append(&mut results);
-                            index
-                        },
-                        Err(error) => {
-                            context.shape_error.get_or_insert_with(|| {
-                                LayoutError::retained_state(format!(
-                                    "late inline batch rejected: {error:?}"
-                                ))
-                            });
-                            return (context.width, context.height);
-                        },
-                    }
-                };
             let formatted = text.format_prepared_inline_group::<D::NodeId, _>(
                 &prepared.template,
                 atomic,
@@ -699,12 +655,31 @@ where
                     intrinsic_kind,
                     line_constraints: constraints,
                 },
-                Some((
-                    &prepared.results[index],
-                    prepared.generation,
-                    prepared.group,
-                )),
+                crate::text::Candidates::Transactional {
+                    results: &mut prepared.results,
+                    generation: prepared.generation,
+                    group: prepared.group,
+                },
             );
+            let formatted = match formatted {
+                Ok(formatted) => formatted,
+                Err(error) => {
+                    context.shape_error.get_or_insert_with(|| {
+                        LayoutError::retained_state(match error {
+                            crate::text::PreparedFormatError::Batch(error) => {
+                                format!("late inline batch rejected: {error:?}")
+                            },
+                            crate::text::PreparedFormatError::EmptyLateResult => {
+                                "late inline batch returned no result".to_string()
+                            },
+                            crate::text::PreparedFormatError::InvalidLateResult => {
+                                "late inline batch returned invalid result".to_string()
+                            },
+                        })
+                    });
+                    return (context.width, context.height);
+                },
+            };
             formatted.map_or((context.width, context.height), |layout| {
                 context.remember(width, intrinsic_kind, constraints, layout)
             })

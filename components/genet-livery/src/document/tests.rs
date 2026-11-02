@@ -4800,8 +4800,8 @@ fn shaping_benchmark_real_fixtures_are_ready_and_equivalent() {
         );
         assert_eq!(
             crate::text::READY_KEY_WORK.with(|c| c.get().3),
-            6144,
-            "{case}: one eager plus two current keys per group"
+            4096,
+            "{case}: one eager plus one current key per group"
         );
     }
 }

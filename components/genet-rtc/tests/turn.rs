@@ -179,7 +179,8 @@ fn forced_relay_encrypted_fragmentation_refresh_and_release() {
     assert!(
         a.iter()
             .chain(&b)
-            .all(|c| c.candidate.contains(" typ relay "))
+            .all(|c| c.candidate.contains(" typ relay ")
+                && c.candidate.contains(" raddr 0.0.0.0 rport 0"))
     );
     for candidate in a {
         right.core_mut().add_remote_candidate(candidate).unwrap();

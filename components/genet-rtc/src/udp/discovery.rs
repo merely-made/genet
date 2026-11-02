@@ -218,8 +218,14 @@ impl Discovery {
                     Event::AllocateResponse(_, addr) if !managed.done => {
                         let candidate = CandidateRelayConfig {
                             base_config: base(addr),
-                            rel_addr: local.ip().to_string(),
-                            rel_port: local.port(),
+                            // JSEP relay policy conceals the physical address
+                            // in candidate strings, SDP and transport getters.
+                            rel_addr: if self.relay_only {
+                                if local.is_ipv4() { "0.0.0.0" } else { "::" }.into()
+                            } else {
+                                local.ip().to_string()
+                            },
+                            rel_port: if self.relay_only { 0 } else { local.port() },
                             url: Some(managed.url.clone()),
                         }
                         .new_candidate_relay()?;

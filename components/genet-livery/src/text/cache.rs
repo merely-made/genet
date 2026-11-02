@@ -185,16 +185,71 @@ mod tests {
         Arc::new(super::super::shaping::ShapeWorker::new().shape(key.input()))
     }
 
+    // Recompute from retained values, independently of the maintained gauges.
+    fn assert_cache_invariants(cache: &ShapeCache) {
+        let layout_bytes: usize = cache
+            .entries
+            .values()
+            .map(|(value, _)| value.layout.vector_storage_bytes())
+            .sum();
+        let text_bytes: usize = cache.entries.keys().map(|key| key.input.text.len()).sum();
+        assert_eq!(cache.layout_bytes(), layout_bytes);
+        assert_eq!(cache.bytes(), text_bytes);
+        assert_eq!(cache.len(), cache.entries.len());
+        assert_eq!(cache.order.len(), cache.entries.len());
+        for (key, (_, stamp)) in &cache.entries {
+            let ordered = cache.order.get(stamp).expect("entry has an order slot");
+            assert!(Arc::ptr_eq(key, ordered));
+        }
+    }
+
+    #[test]
+    fn layout_budget_evicts_least_recently_used_entry_after_touch() {
+        let seed = RandomState::new();
+        let a = key("aaaaa", &seed);
+        let b = key("bbbbb", &seed);
+        let c = key("ccccc", &seed);
+        let va = value(&a);
+        let vb = value(&b);
+        let vc = value(&c);
+        let ca = va.layout.vector_storage_bytes();
+        let cb = vb.layout.vector_storage_bytes();
+        let cc = vc.layout.vector_storage_bytes();
+        assert!(ca > 0 && cb > 0 && cc > 0);
+        // All three do not fit, but either survivor pair does.
+        let limit = (ca + cc).max(cb + cc).max(ca + cb);
+        assert!(ca + cb + cc > limit);
+        let mut cache = ShapeCache::default();
+        cache.insert(a.clone(), va.clone(), 3, 100, limit);
+        assert_cache_invariants(&cache);
+        cache.insert(b.clone(), vb.clone(), 3, 100, limit);
+        assert_cache_invariants(&cache);
+        let evicted_active = cache.get(&b).unwrap();
+        assert!(Arc::ptr_eq(&cache.get(&a).unwrap(), &va));
+        assert_cache_invariants(&cache);
+        cache.insert(c.clone(), vc.clone(), 3, 100, limit);
+        assert_cache_invariants(&cache);
+        assert!(cache.get(&b).is_none());
+        assert!(Arc::ptr_eq(&cache.get(&a).unwrap(), &va));
+        assert!(Arc::ptr_eq(&cache.get(&c).unwrap(), &vc));
+        assert_eq!(cache.len(), 2);
+        assert!(Arc::ptr_eq(&evicted_active, &vb));
+        assert_eq!(evicted_active.layout.vector_storage_bytes(), cb);
+        assert_cache_invariants(&cache);
+    }
+
     #[test]
     fn retained_key_text_is_shared_and_touch_keeps_its_allocation() {
         let seed = RandomState::new();
         let lookup = key(&"long key ".repeat(1000), &seed);
         let mut cache = ShapeCache::default();
         cache.insert(lookup.clone(), value(&lookup), 2, usize::MAX, usize::MAX);
+        assert_cache_invariants(&cache);
         let entry_text = cache.entries.keys().next().unwrap().input.text.as_ptr();
         let order_text = cache.order.values().next().unwrap().input.text.as_ptr();
         assert_eq!(entry_text, order_text, "indexes must share retained text");
         cache.get(&lookup).unwrap();
+        assert_cache_invariants(&cache);
         assert_eq!(
             cache.order.values().next().unwrap().input.text.as_ptr(),
             entry_text,
@@ -214,23 +269,32 @@ mod tests {
         let vc = value(&c);
         let mut cache = ShapeCache::default();
         cache.insert(a.clone(), va.clone(), 2, 7, usize::MAX);
+        assert_cache_invariants(&cache);
         cache.insert(b.clone(), vb.clone(), 2, 7, usize::MAX);
+        assert_cache_invariants(&cache);
         assert_eq!((cache.len(), cache.bytes()), (2, 7));
         assert!(Arc::ptr_eq(&cache.get(&a).unwrap(), &va));
         cache.insert(c.clone(), vc.clone(), 2, 7, usize::MAX);
+        assert_cache_invariants(&cache);
         assert!(cache.get(&b).is_none());
         assert_eq!((cache.len(), cache.bytes()), (2, 5));
         cache.insert(a.clone(), vb.clone(), 2, 7, usize::MAX);
+        assert_cache_invariants(&cache);
         assert_eq!((cache.len(), cache.bytes()), (2, 5));
         assert!(Arc::ptr_eq(&cache.get(&a).unwrap(), &vb));
         cache.insert(b.clone(), vb.clone(), 2, 7, usize::MAX);
+        assert_cache_invariants(&cache);
         assert!(cache.get(&c).is_none());
         assert_eq!((cache.len(), cache.bytes()), (2, 7));
         cache.insert(c.clone(), vc.clone(), 0, 7, usize::MAX);
+        assert_cache_invariants(&cache);
         cache.insert(c.clone(), vc.clone(), 2, 0, usize::MAX);
+        assert_cache_invariants(&cache);
         cache.insert(key("oversized", &seed), vc, 2, 7, usize::MAX);
+        assert_cache_invariants(&cache);
         assert_eq!((cache.len(), cache.bytes()), (2, 7));
         cache.trim(0, 7, usize::MAX);
+        assert_cache_invariants(&cache);
         assert_eq!((cache.len(), cache.bytes()), (0, 0));
     }
 
@@ -246,29 +310,38 @@ mod tests {
         assert!(ca > 0 && cb > 0);
         let mut cache = ShapeCache::default();
         cache.insert(a.clone(), va.clone(), 2, 100, ca);
+        assert_cache_invariants(&cache);
         assert_eq!(cache.layout_bytes(), ca);
         assert!(Arc::ptr_eq(&cache.get(&a).unwrap(), &va));
         cache.insert(b.clone(), vb.clone(), 2, 100, ca.max(cb));
+        assert_cache_invariants(&cache);
         assert_eq!(cache.layout_bytes(), cb);
         assert!(cache.get(&a).is_none());
         assert!(Arc::ptr_eq(&cache.get(&b).unwrap(), &vb));
         cache.insert(b.clone(), va.clone(), 2, 100, ca);
+        assert_cache_invariants(&cache);
         assert_eq!(cache.layout_bytes(), ca);
         assert!(Arc::ptr_eq(&cache.get(&b).unwrap(), &va));
         cache.insert(b.clone(), vb.clone(), 2, 100, ca.max(cb));
+        assert_cache_invariants(&cache);
         assert_eq!(cache.layout_bytes(), cb);
         assert!(Arc::ptr_eq(&cache.get(&b).unwrap(), &vb));
         cache.insert(b.clone(), vb.clone(), 2, 100, cb - 1);
+        assert_cache_invariants(&cache);
         assert_eq!((cache.len(), cache.layout_bytes()), (0, 0));
         // Active references remain usable after eviction and rejection.
         assert_eq!(vb.layout.vector_storage_bytes(), cb);
         for _ in 0..3 {
             cache.insert(a.clone(), va.clone(), 2, 100, usize::MAX);
+            assert_cache_invariants(&cache);
             cache.insert(b.clone(), vb.clone(), 2, 100, usize::MAX);
+            assert_cache_invariants(&cache);
             assert_eq!(cache.layout_bytes(), ca + cb);
             cache.trim(2, 100, ca.max(cb));
+            assert_cache_invariants(&cache);
             assert!(cache.layout_bytes() <= ca.max(cb));
             cache.clear();
+            assert_cache_invariants(&cache);
             assert_eq!(
                 (cache.len(), cache.bytes(), cache.layout_bytes()),
                 (0, 0, 0)
@@ -292,6 +365,7 @@ mod tests {
             (1, 100, charge - 1),
         ] {
             cache.insert(k.clone(), v.clone(), entries, text, layout);
+            assert_cache_invariants(&cache);
             assert_eq!((cache.len(), cache.layout_bytes()), (0, 0));
         }
         for (entries, text, layout) in [
@@ -302,8 +376,10 @@ mod tests {
             (1, 100, charge - 1),
         ] {
             cache.insert(k.clone(), v.clone(), 1, 100, charge);
+            assert_cache_invariants(&cache);
             assert_eq!(cache.layout_bytes(), charge);
             cache.trim(entries, text, layout);
+            assert_cache_invariants(&cache);
             assert_eq!(
                 (cache.len(), cache.bytes(), cache.layout_bytes()),
                 (0, 0, 0)

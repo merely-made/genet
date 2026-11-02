@@ -4831,3 +4831,34 @@ fn later_invalid_actual_group_rejects_before_context_updates() {
         (0, 0, 0)
     );
 }
+
+#[test]
+fn late_batch_failure_does_not_publish_document_frame() {
+    let html = "<html><body><p>ready text first</p><p><span style='padding-left:10%'>deferred text second</span></p></body></html>";
+    let mut document = LiveryDocument::new(
+        ScriptedDom::from_serialized_document(html),
+        StyleSet::cambium(&["p { margin: 0; }"]),
+        Device::screen(800.0, 600.0),
+    );
+    let generation = document.generation();
+    let layout_generation = document.layout_generation();
+    crate::text::LATE_FAULT.with(|f| f.set(1));
+    let error = document
+        .frame(800, 600)
+        .err()
+        .expect("late failure rejects the frame");
+    assert!(
+        format!("{error:?}").contains("late inline batch rejected"),
+        "{error:?}"
+    );
+    assert!(!document.has_current_frame());
+    assert!(document.cached.is_none());
+    assert!(document.layout.is_none());
+    assert_eq!(document.generation(), generation);
+    assert_eq!(document.layout_generation(), layout_generation);
+    let stats = document.text_system().shaping_stats();
+    assert!(
+        stats.batches > 0 && stats.cache_misses > 0 && stats.retained_entries > 0,
+        "the earlier successful batch remains published in the shaping cache"
+    );
+}

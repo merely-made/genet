@@ -10391,6 +10391,76 @@ pub(crate) mod prepared_geometry_tests {
         let prepared =
             prepared::PreparedInlineGroup::collect(&dom, &styles, &boxes, &[root], &parent);
         let mut system = TextSystem::new();
+        let mut reference = TextSystem::new();
+        reference.key_seed = system.key_seed.clone();
+        let old_format = |system: &mut TextSystem,
+                          results: &mut Vec<ShapeResult>,
+                          generation: u64| {
+            let key = system.prepared_shape_key::<Node, _>(&prepared, &plane, 100.0, None, &parent);
+            let index = if let Some(index) = results.iter().position(|result| result.key == key) {
+                index
+            } else {
+                let mut late = system
+                    .shape_late_batch(
+                        &[ShapeJob {
+                            group: InlineGroupId(9),
+                            generation,
+                            key,
+                        }],
+                        generation,
+                    )
+                    .unwrap();
+                let index = results.len();
+                results.append(&mut late);
+                index
+            };
+            system
+                .format_prepared_inline_group::<Node, _>(
+                    &prepared,
+                    &plane,
+                    LayoutDom::quirks_mode(&dom),
+                    InlineRequest {
+                        roots: &[root],
+                        parent_style: &parent,
+                        width: 100.0,
+                        intrinsic_kind: None,
+                        line_constraints: None,
+                    },
+                    Candidates::AtomicNoLate {
+                        results: std::slice::from_ref(&results[index]),
+                        generation,
+                        group: InlineGroupId(9),
+                    },
+                )
+                .unwrap()
+                .unwrap()
+        };
+        READY_KEY_WORK.with(|w| w.set((0, 0, 0, 0)));
+        let old_keys =
+            reference.prepared_shape_keys_for_ready::<Node, _>(&prepared, &plane, &parent);
+        let old_jobs = old_keys
+            .into_iter()
+            .map(|key| ShapeJob {
+                group: InlineGroupId(9),
+                generation: 11,
+                key,
+            })
+            .collect::<Vec<_>>();
+        let mut old_results = reference.shape_batch(&old_jobs, 11).unwrap();
+        let old_first = old_format(&mut reference, &mut old_results, 11);
+        let old_work = READY_KEY_WORK.with(|w| w.get());
+        assert_eq!(
+            (old_work.2, old_work.3),
+            (5, 5),
+            "old three eager plus two current boundaries"
+        );
+        let old_eager_work = old_work;
+        READY_KEY_WORK.with(|w| w.set((0, 0, 0, 0)));
+        let old_repeat = old_format(&mut reference, &mut old_results, 11);
+        let old_work = READY_KEY_WORK.with(|w| w.get());
+        assert_eq!((old_work.2, old_work.3), (2, 2), "old repeated format");
+        assert_eq!(old_first.size(), old_repeat.size());
+        let old_repeat_work = old_work;
         READY_KEY_WORK.with(|w| w.set((0, 0, 0, 0)));
         let keys = system.prepared_shape_keys_for_ready::<Node, _>(&prepared, &plane, &parent);
         let jobs = keys
@@ -10410,7 +10480,7 @@ pub(crate) mod prepared_geometry_tests {
             intrinsic_kind: None,
             line_constraints: None,
         };
-        system
+        let first = system
             .format_prepared_inline_group::<Node, _>(
                 &prepared,
                 &plane,
@@ -10424,12 +10494,15 @@ pub(crate) mod prepared_geometry_tests {
             )
             .unwrap()
             .unwrap();
+        assert_eq!(old_first.size(), first.size());
         let work = READY_KEY_WORK.with(|w| w.get());
         assert_eq!(
             (work.2, work.3),
             (4, 4),
             "three eager keys plus one current key"
         );
+        let new_eager_work = work;
+        READY_KEY_WORK.with(|w| w.set((0, 0, 0, 0)));
         system
             .format_prepared_inline_group::<Node, _>(
                 &prepared,
@@ -10447,12 +10520,33 @@ pub(crate) mod prepared_geometry_tests {
         let work = READY_KEY_WORK.with(|w| w.get());
         assert_eq!(
             (work.2, work.3),
-            (5, 5),
+            (1, 1),
             "repeated formatting makes one current key"
         );
+        let new_repeat_work = work;
+        let mut old_cold = TextSystem::new();
+        let mut new_cold = TextSystem::new();
+        new_cold.key_seed = old_cold.key_seed.clone();
+        for cold in [&mut old_cold, &mut new_cold] {
+            let mut options = cold.shaping_options();
+            options.retained_entries = 0;
+            cold.set_shaping_options(options);
+        }
+        READY_KEY_WORK.with(|w| w.set((0, 0, 0, 0)));
+        let mut old_late = Vec::new();
+        let old_before = old_cold.shaping_stats();
+        let old_output = old_format(&mut old_cold, &mut old_late, 12);
+        let old_work = READY_KEY_WORK.with(|w| w.get());
+        assert_eq!((old_work.2, old_work.3), (2, 2), "old cold late format");
+        let old_after = old_cold.shaping_stats();
+        assert_eq!(old_after.batches - old_before.batches, 1);
+        assert_eq!(old_after.cache_misses - old_before.cache_misses, 1);
+        assert_eq!(old_after.late_misses - old_before.late_misses, 1);
+        assert_eq!(old_after.cache_hits - old_before.cache_hits, 0);
         READY_KEY_WORK.with(|w| w.set((0, 0, 0, 0)));
         let mut late = Vec::new();
-        system
+        let before = new_cold.shaping_stats();
+        let output = new_cold
             .format_prepared_inline_group::<Node, _>(
                 &prepared,
                 &plane,
@@ -10473,6 +10567,167 @@ pub(crate) mod prepared_geometry_tests {
             "late formatting makes one current key"
         );
         assert_eq!(late.len(), 1);
+        assert_eq!(old_output.size(), output.size());
+        let after = new_cold.shaping_stats();
+        assert_eq!(after.batches - before.batches, 1);
+        assert_eq!(after.cache_misses - before.cache_misses, 1);
+        assert_eq!(after.late_misses - before.late_misses, 1);
+        assert_eq!(after.cache_hits - before.cache_hits, 0);
+        println!(
+            "old/new boundaries eager+current {}/{}, repeat {}/{}, cold late {}/{}; cold batches/misses/late-misses old {}/{}/{}, new {}/{}/{}",
+            old_eager_work.3,
+            new_eager_work.3,
+            old_repeat_work.3,
+            new_repeat_work.3,
+            old_work.3,
+            work.3,
+            old_after.batches - old_before.batches,
+            old_after.cache_misses - old_before.cache_misses,
+            old_after.late_misses - old_before.late_misses,
+            after.batches - before.batches,
+            after.cache_misses - before.cache_misses,
+            after.late_misses - before.late_misses
+        );
+    }
+
+    #[test]
+    fn old_and_current_late_batch_failure_have_same_early_effects() {
+        type Node = <StaticDocument as LayoutDom>::NodeId;
+        let dom = StaticDocument::parse("<span id=a>(hello</span>");
+        let styles = resolve_styles(
+            &dom,
+            &StyleSet::cambium(&[]),
+            &Device::screen(320.0, 240.0),
+            &InteractionStates::default(),
+        );
+        let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+        let root = boxes
+            .iter()
+            .find_map(|(id, b)| {
+                b.origin
+                    .node()
+                    .filter(|n| {
+                        dom.attribute(*n, &Namespace::from(""), &LocalName::from("id")) == Some("a")
+                    })
+                    .map(|_| id)
+            })
+            .unwrap();
+        let plane = Plane {
+            atom: root,
+            fragment: None,
+            baseline: 0.0,
+        };
+        let mut parent = ComputedValues::default();
+        parent.hanging_punctuation.first = true;
+        parent.color = ComputedColor::Absolute(CssColor::srgb(0.0, 0.0, 0.0, 1.0));
+        let prepared =
+            prepared::PreparedInlineGroup::collect(&dom, &styles, &boxes, &[root], &parent);
+        let mut old = TextSystem::new();
+        let mut current = TextSystem::new();
+        current.key_seed = old.key_seed.clone();
+        for system in [&mut old, &mut current] {
+            let mut options = system.shaping_options();
+            options.record_timings = true;
+            system.set_shaping_options(options);
+        }
+        // Seed a distinct successful batch first. Failure must not undo this publication.
+        let seed_key = old.prepared_shape_key::<Node, _>(&prepared, &plane, 100.0, None, &parent);
+        let current_seed =
+            current.prepared_shape_key::<Node, _>(&prepared, &plane, 100.0, None, &parent);
+        assert_eq!(seed_key, current_seed);
+        let mut input = seed_key.input().clone();
+        input.text.push('x');
+        let earlier = ShapeKey::new(seed_key.generation(), input, &old.key_seed);
+        for system in [&mut old, &mut current] {
+            system
+                .shape_batch(
+                    &[ShapeJob {
+                        group: InlineGroupId(8),
+                        generation: 10,
+                        key: earlier.clone(),
+                    }],
+                    10,
+                )
+                .unwrap();
+        }
+        let old_before = old.shaping_stats();
+        let current_before = current.shaping_stats();
+        READY_KEY_TIMED.with(|c| c.set((0, 0)));
+        FORMAT_TIMED.with(|c| c.set(0));
+        let key = old.prepared_shape_key::<Node, _>(&prepared, &plane, 100.0, None, &parent);
+        LATE_FAULT.with(|f| f.set(1));
+        let old_error = old
+            .shape_late_batch(
+                &[ShapeJob {
+                    group: InlineGroupId(9),
+                    generation: 11,
+                    key,
+                }],
+                11,
+            )
+            .err()
+            .unwrap();
+        assert_eq!(READY_KEY_TIMED.with(|c| c.get()), (1, 1));
+        assert_eq!(FORMAT_TIMED.with(|c| c.get()), 0);
+        READY_KEY_TIMED.with(|c| c.set((0, 0)));
+        FORMAT_TIMED.with(|c| c.set(0));
+        LATE_FAULT.with(|f| f.set(1));
+        let mut results = Vec::new();
+        let current_error = current
+            .format_prepared_inline_group::<Node, _>(
+                &prepared,
+                &plane,
+                LayoutDom::quirks_mode(&dom),
+                InlineRequest {
+                    roots: &[root],
+                    parent_style: &parent,
+                    width: 100.0,
+                    intrinsic_kind: None,
+                    line_constraints: None,
+                },
+                Candidates::Transactional {
+                    results: &mut results,
+                    generation: 11,
+                    group: InlineGroupId(9),
+                },
+            )
+            .err()
+            .unwrap();
+        assert!(matches!(current_error, PreparedFormatError::Batch(error) if error == old_error));
+        assert!(results.is_empty());
+        assert_eq!(READY_KEY_TIMED.with(|c| c.get()), (1, 1));
+        assert_eq!(FORMAT_TIMED.with(|c| c.get()), 0);
+        let old_after = old.shaping_stats();
+        let current_after = current.shaping_stats();
+        for (before, after) in [(old_before, old_after), (current_before, current_after)] {
+            assert_eq!(after.format_requests, before.format_requests);
+            assert_eq!(after.batches, before.batches);
+            assert_eq!(after.cache_misses, before.cache_misses);
+            assert_eq!(after.late_misses, before.late_misses);
+            assert_eq!(after.shape_wall_ns, before.shape_wall_ns);
+            assert!(after.key_materialize_ns > before.key_materialize_ns);
+            assert_eq!(after.retained_entries, before.retained_entries);
+        }
+        assert_eq!(
+            old_after.layout_builds - old_before.layout_builds,
+            current_after.layout_builds - current_before.layout_builds
+        );
+        assert_eq!(
+            old_after.metric_layout_builds - old_before.metric_layout_builds,
+            current_after.metric_layout_builds - current_before.metric_layout_builds
+        );
+        assert_eq!(old.ch_advances, current.ch_advances);
+        assert_eq!(old.space_advances, current.space_advances);
+        assert_eq!(
+            old_after.cache_hits - old_before.cache_hits,
+            current_after.cache_hits - current_before.cache_hits
+        );
+        assert_eq!(
+            old_after.unique_jobs - old_before.unique_jobs,
+            current_after.unique_jobs - current_before.unique_jobs
+        );
+        assert!(old.cache.get(&earlier).is_some());
+        assert!(current.cache.get(&earlier).is_some());
     }
 
     #[test]

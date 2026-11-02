@@ -97,7 +97,10 @@ pub enum Error {
     },
     /// A packet requested an unsupported transport or local address.
     #[error("RTC packet does not belong to this UDP socket")]
-    Route,
+    Route {
+        /// The requested route, without packet contents or credentials.
+        transport: TransportContext,
+    },
     /// A TURN permission or established relay transaction failed.
     #[error("RTC relay transaction failed")]
     RelayUnavailable,
@@ -328,7 +331,9 @@ impl UdpPeer {
                     return Ok(sent);
                 };
                 if packet.transport.transport_protocol != TransportProtocol::UDP {
-                    return Err(Error::Route);
+                    return Err(Error::Route {
+                        transport: packet.transport,
+                    });
                 }
                 if packet.message.len() > self.limits.datagram_bytes {
                     return Err(Error::DatagramLimit {
@@ -348,7 +353,9 @@ impl UdpPeer {
                         continue;
                     }
                 } else if packet.transport.local_addr != self.local_addr {
-                    return Err(Error::Route);
+                    return Err(Error::Route {
+                        transport: packet.transport,
+                    });
                 }
                 self.pending_socket = self.pending.take();
             }

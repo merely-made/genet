@@ -351,7 +351,9 @@ impl Discovery {
             // Direct writes are sent by the socket owner.
             Ok(false)
         } else {
-            Err(Error::Route)
+            Err(Error::Route {
+                transport: packet.transport,
+            })
         }
     }
 

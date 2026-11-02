@@ -76,21 +76,15 @@ impl TextBatch {
         let mut jobs = Vec::new();
         for (_, measure, style) in &self.pending {
             if measure.template.ready::<D::NodeId, _>(atomic) {
-                for (width, intrinsic) in [
-                    (0.01, Some(IntrinsicSizeKind::MinContent)),
-                    (f32::INFINITY, Some(IntrinsicSizeKind::MaxContent)),
-                    (0.0, None),
-                ] {
+                for key in text.prepared_shape_keys_for_ready::<D::NodeId, _>(
+                    &measure.template,
+                    atomic,
+                    style,
+                ) {
                     jobs.push(crate::text::ShapeJob {
                         group: measure.group,
                         generation: self.generation,
-                        key: text.prepared_shape_key::<D::NodeId, _>(
-                            &measure.template,
-                            atomic,
-                            width,
-                            intrinsic,
-                            style,
-                        ),
+                        key,
                     });
                 }
             }

@@ -249,6 +249,29 @@ pub(crate) struct ShapeResult {
     pub(crate) shaped: Arc<shaping::UnbrokenText>,
 }
 
+#[cfg(test)]
+thread_local! {
+    // Counts actual key-resolution call sites and key/materialization boundaries.
+    static READY_KEY_TIMED: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+    static READY_KEY_WORK: std::cell::Cell<(usize, usize, usize, usize)> = const { std::cell::Cell::new((0, 0, 0, 0)) };
+}
+
+#[cfg(test)]
+fn ready_key_work(f: impl FnOnce(&mut (usize, usize, usize, usize))) {
+    READY_KEY_WORK.with(|cell| {
+        let mut work = cell.get();
+        f(&mut work);
+        cell.set(work);
+    });
+}
+
+struct ResolvedShapeStyles {
+    default_features: Vec<FontFeature>,
+    span_features: Vec<Vec<FontFeature>>,
+    default_tab_stop: f32,
+    span_tab_stops: Vec<f32>,
+}
+
 /// Retained font discovery, shaping scratch space, and font resources for one
 /// Livery document session.
 pub struct TextSystem {
@@ -1622,6 +1645,8 @@ impl TextSystem {
         intrinsic_kind: Option<IntrinsicSizeKind>,
         root_style: &ComputedValues,
     ) -> ShapeKey {
+        #[cfg(test)]
+        ready_key_work(|w| w.2 += 1);
         let atoms = prepared.materialize::<Id, _>(fragments, width, intrinsic_kind);
         self.shape_key(
             &prepared.text,
@@ -1630,6 +1655,56 @@ impl TextSystem {
             root_style,
             intrinsic_kind,
         )
+    }
+
+    pub(crate) fn prepared_shape_keys_for_ready<Id, F: FragmentLookup<Id>>(
+        &mut self,
+        prepared: &prepared::PreparedInlineGroup,
+        fragments: &F,
+        root_style: &ComputedValues,
+    ) -> [ShapeKey; 3] {
+        #[cfg(test)]
+        ready_key_work(|w| w.2 += 1);
+        let min_atoms =
+            prepared.materialize::<Id, _>(fragments, 0.01, Some(IntrinsicSizeKind::MinContent));
+        let resolved = self.resolve_shape_styles(&prepared.spans, root_style);
+        let min = self.shape_key_with_resolved(
+            &prepared.text,
+            &prepared.spans,
+            &min_atoms,
+            root_style,
+            Some(IntrinsicSizeKind::MinContent),
+            &resolved,
+        );
+        #[cfg(test)]
+        ready_key_work(|w| w.2 += 1);
+        drop(min_atoms);
+        let max_atoms = prepared.materialize::<Id, _>(
+            fragments,
+            f32::INFINITY,
+            Some(IntrinsicSizeKind::MaxContent),
+        );
+        let max = self.shape_key_with_resolved(
+            &prepared.text,
+            &prepared.spans,
+            &max_atoms,
+            root_style,
+            Some(IntrinsicSizeKind::MaxContent),
+            &resolved,
+        );
+        #[cfg(test)]
+        ready_key_work(|w| w.2 += 1);
+        drop(max_atoms);
+        let used_atoms = prepared.materialize::<Id, _>(fragments, 0.0, None);
+        let used = self.shape_key_with_resolved(
+            &prepared.text,
+            &prepared.spans,
+            &used_atoms,
+            root_style,
+            None,
+            &resolved,
+        );
+        [min, max, used]
     }
 
     pub(crate) fn shape_late_batch(
@@ -1779,29 +1854,95 @@ impl TextSystem {
     where
         Id: Copy + Eq + Hash,
     {
+        let resolved = self.resolve_shape_styles(spans, root_style);
+        self.shape_key_with_resolved(
+            text,
+            spans,
+            inline_boxes,
+            root_style,
+            intrinsic_kind,
+            &resolved,
+        )
+    }
+
+    fn resolve_shape_styles<Id>(
+        &mut self,
+        spans: &[SourceSpan<Id>],
+        root_style: &ComputedValues,
+    ) -> ResolvedShapeStyles {
         let key_start = self
             .shaping_options
             .record_timings
             .then(std::time::Instant::now);
         let default_style = spans.first().map_or(root_style, |span| &span.style);
+        #[cfg(test)]
+        ready_key_work(|w| w.0 += 1);
         let default_features = effective_font_features(&self.font_face_features, default_style);
         let span_features = spans
             .iter()
-            .map(|span| effective_font_features(&self.font_face_features, &span.style))
+            .map(|span| {
+                #[cfg(test)]
+                ready_key_work(|w| w.0 += 1);
+                effective_font_features(&self.font_face_features, &span.style)
+            })
             .collect::<Vec<_>>();
+        #[cfg(test)]
+        ready_key_work(|w| w.1 += 1);
         let default_tab_stop = self.tab_stop(default_style);
         let span_tab_stops = spans
             .iter()
-            .map(|span| self.tab_stop(&span.style))
+            .map(|span| {
+                #[cfg(test)]
+                ready_key_work(|w| w.1 += 1);
+                self.tab_stop(&span.style)
+            })
             .collect::<Vec<_>>();
+        self.shaping_stats.key_materialize_ns = self
+            .shaping_stats
+            .key_materialize_ns
+            .saturating_add(stats::elapsed_ns(key_start));
+        #[cfg(test)]
+        if key_start.is_some() {
+            READY_KEY_TIMED.with(|c| {
+                let (a, b) = c.get();
+                c.set((a + 1, b));
+            });
+        }
+        ResolvedShapeStyles {
+            default_features,
+            span_features,
+            default_tab_stop,
+            span_tab_stops,
+        }
+    }
+
+    fn shape_key_with_resolved<Id>(
+        &mut self,
+        text: &str,
+        spans: &[SourceSpan<Id>],
+        inline_boxes: &[InlineAtom<Id>],
+        root_style: &ComputedValues,
+        intrinsic_kind: Option<IntrinsicSizeKind>,
+        resolved: &ResolvedShapeStyles,
+    ) -> cache::ShapeKey
+    where
+        Id: Copy + Eq + Hash,
+    {
+        let key_start = self
+            .shaping_options
+            .record_timings
+            .then(std::time::Instant::now);
+        let default_style = spans.first().map_or(root_style, |span| &span.style);
+        #[cfg(test)]
+        ready_key_work(|w| w.3 += 1);
         let input = prepared::ShapeInput {
             text: text.to_owned(),
             defaults: prepared::properties(
                 default_style,
                 0,
-                default_features,
+                resolved.default_features.clone(),
                 intrinsic_kind,
-                default_tab_stop,
+                resolved.default_tab_stop,
             ),
             spans: spans
                 .iter()
@@ -1811,9 +1952,9 @@ impl TextSystem {
                     properties: prepared::properties(
                         &span.style,
                         source_index,
-                        span_features[source_index].clone(),
+                        resolved.span_features[source_index].clone(),
                         intrinsic_kind,
-                        span_tab_stops[source_index],
+                        resolved.span_tab_stops[source_index],
                     ),
                 })
                 .collect(),
@@ -1841,6 +1982,13 @@ impl TextSystem {
             .shaping_stats
             .key_materialize_ns
             .saturating_add(stats::elapsed_ns(key_start));
+        #[cfg(test)]
+        if key_start.is_some() {
+            READY_KEY_TIMED.with(|c| {
+                let (a, b) = c.get();
+                c.set((a, b + 1));
+            });
+        }
         key
     }
 
@@ -9691,6 +9839,286 @@ pub(crate) mod prepared_geometry_tests {
         }
         h.finish()
     }
+    #[test]
+    fn ready_batch_resolves_each_style_position_once_but_keeps_three_keys() {
+        let dom = StaticDocument::parse("<div><span id=a>one span</span></div>");
+        let styles = resolve_styles(
+            &dom,
+            &StyleSet::cambium(&[]),
+            &Device::screen(320.0, 240.0),
+            &InteractionStates::default(),
+        );
+        let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+        let root = boxes
+            .iter()
+            .find_map(|(id, b)| {
+                b.origin
+                    .node()
+                    .filter(|n| {
+                        dom.attribute(*n, &Namespace::from(""), &LocalName::from("id")) == Some("a")
+                    })
+                    .map(|_| id)
+            })
+            .unwrap();
+        let parent = ComputedValues::default();
+        let prepared =
+            prepared::PreparedInlineGroup::collect(&dom, &styles, &boxes, &[root], &parent);
+        assert_eq!(prepared.spans.len(), 1);
+        let fragments = Plane {
+            atom: root,
+            fragment: None,
+            baseline: 0.0,
+        };
+        assert!(prepared.ready::<<StaticDocument as LayoutDom>::NodeId, _>(&fragments));
+        let mut system = TextSystem::new();
+        READY_KEY_WORK.with(|w| w.set((0, 0, 0, 0)));
+        let keys = system
+            .prepared_shape_keys_for_ready::<<StaticDocument as LayoutDom>::NodeId, _>(
+                &prepared, &fragments, &parent,
+            );
+        assert_eq!(keys.len(), 3);
+        assert_eq!(READY_KEY_WORK.with(|w| w.get()), (2, 2, 3, 3));
+        for enabled in [false, true] {
+            let mut system = TextSystem::new();
+            system.set_shaping_options(TextShapingOptions {
+                record_timings: enabled,
+                ..Default::default()
+            });
+            READY_KEY_TIMED.with(|c| c.set((0, 0)));
+            system.prepared_shape_keys_for_ready::<<StaticDocument as LayoutDom>::NodeId, _>(
+                &prepared, &fragments, &parent,
+            );
+            assert_eq!(
+                READY_KEY_TIMED.with(|c| c.get()),
+                if enabled { (1, 3) } else { (0, 0) }
+            );
+            assert_eq!(system.shaping_stats.key_materialize_ns > 0, enabled);
+        }
+    }
+
+    #[test]
+    fn ready_keys_match_independent_original_requests_after_font_registration() {
+        use std::hash::{Hash, Hasher};
+        type Node = <StaticDocument as LayoutDom>::NodeId;
+        let font = include_bytes!("../../../tests/wpt/tests/fonts/Ahem.ttf").to_vec();
+        for (markup, css) in [
+            ("<div><span id=a></span></div>", ""),
+            (
+                "<div><span id=a>hello\tworld</span></div>",
+                "#a { font-family: monospace; tab-size: 3; overflow-wrap: break-word; }",
+            ),
+            (
+                "<div><span id=a>abc <b>مرحبا</b> z</span></div>",
+                "#a { direction: rtl; overflow-wrap: anywhere; font-feature-settings: 'liga' 0; } b { tab-size: 4; letter-spacing: 2px; }",
+            ),
+            (
+                "<div><span id=a>abc <b></b><img id=atom> z</span></div>",
+                "#a { word-break: break-word; padding: 2px; } b { margin-left: 3px; }",
+            ),
+        ] {
+            let dom = StaticDocument::parse(markup);
+            let styles = resolve_styles(
+                &dom,
+                &StyleSet::cambium(&[css]),
+                &Device::screen(320.0, 240.0),
+                &InteractionStates::default(),
+            );
+            let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+            let find = |name| {
+                boxes.iter().find_map(|(id, b)| {
+                    b.origin
+                        .node()
+                        .filter(|n| {
+                            dom.attribute(*n, &Namespace::from(""), &LocalName::from("id"))
+                                == Some(name)
+                        })
+                        .map(|_| id)
+                })
+            };
+            let root = find("a").unwrap();
+            let atom = find("atom").unwrap_or(root);
+            let plane = Plane {
+                atom,
+                fragment: Some(Fragment {
+                    width: 29.0,
+                    height: 12.0,
+                    ..Fragment::default()
+                }),
+                baseline: 6.0,
+            };
+            let mut parent = ComputedValues::default();
+            parent.direction = Direction::Rtl;
+            parent.font_family = CssFontFamily::Named("different-root-face".into());
+            parent.tab_size = TabSize::Number(9.0);
+            parent.color = ComputedColor::Absolute(CssColor::srgb(0.0, 0.0, 0.0, 1.0));
+            let prepared =
+                prepared::PreparedInlineGroup::collect(&dom, &styles, &boxes, &[root], &parent);
+            assert!(prepared.ready::<Node, _>(&plane));
+            for prewarm in [false, true] {
+                let mut reference = TextSystem::new();
+                let mut actual = TextSystem::new();
+                actual.key_seed = reference.key_seed.clone();
+                for system in [&mut reference, &mut actual] {
+                    system
+                        .register_generic_font_bytes(font.clone(), "sans-serif")
+                        .unwrap();
+                    system
+                        .register_generic_font_bytes(font.clone(), "monospace")
+                        .unwrap();
+                    if prewarm {
+                        for span in &prepared.spans {
+                            system.tab_stop(&span.style);
+                        }
+                        system.tab_stop(&parent);
+                    }
+                }
+                for generation in 0..2 {
+                    if generation == 1 {
+                        let replacement = include_bytes!(
+                            "../../../tests/wpt/tests/fonts/CanvasTest-ascent256.ttf"
+                        )
+                        .to_vec();
+                        for system in [&mut reference, &mut actual] {
+                            system
+                                .register_generic_font_bytes(replacement.clone(), "sans-serif")
+                                .unwrap();
+                            if prewarm {
+                                for span in &prepared.spans {
+                                    system.tab_stop(&span.style);
+                                }
+                                system.tab_stop(&parent);
+                            }
+                        }
+                    }
+                    READY_KEY_WORK.with(|w| w.set((0, 0, 0, 0)));
+                    let expected = [
+                        reference.prepared_shape_key::<Node, _>(
+                            &prepared,
+                            &plane,
+                            0.01,
+                            Some(IntrinsicSizeKind::MinContent),
+                            &parent,
+                        ),
+                        reference.prepared_shape_key::<Node, _>(
+                            &prepared,
+                            &plane,
+                            f32::INFINITY,
+                            Some(IntrinsicSizeKind::MaxContent),
+                            &parent,
+                        ),
+                        reference
+                            .prepared_shape_key::<Node, _>(&prepared, &plane, 0.0, None, &parent),
+                    ];
+                    let n = 1 + prepared.spans.len();
+                    assert_eq!(READY_KEY_WORK.with(|w| w.get()), (3 * n, 3 * n, 3, 3));
+                    READY_KEY_WORK.with(|w| w.set((0, 0, 0, 0)));
+                    let got =
+                        actual.prepared_shape_keys_for_ready::<Node, _>(&prepared, &plane, &parent);
+                    assert_eq!(READY_KEY_WORK.with(|w| w.get()), (n, n, 3, 3));
+                    assert_eq!(
+                        expected, got,
+                        "{markup} {css} prewarm={prewarm} generation={generation}"
+                    );
+                    if !prepared.spans.is_empty() {
+                        assert_eq!(got[0].input().defaults, got[0].input().spans[0].properties);
+                    }
+                    for (a, b) in expected.iter().zip(&got) {
+                        let mut ah = std::collections::hash_map::DefaultHasher::new();
+                        let mut bh = std::collections::hash_map::DefaultHasher::new();
+                        a.hash(&mut ah);
+                        b.hash(&mut bh);
+                        assert_eq!(ah.finish(), bh.finish());
+                    }
+                    assert_eq!(reference.ch_advances, actual.ch_advances);
+                    assert_eq!(reference.space_advances, actual.space_advances);
+                    assert_eq!(
+                        reference.shaping_stats.metric_layout_builds,
+                        actual.shaping_stats.metric_layout_builds
+                    );
+                    if find("atom").is_some() {
+                        let widths = got
+                            .each_ref()
+                            .map(|k| k.input().slots.iter().map(|s| s.width).collect::<Vec<_>>());
+                        assert!(widths[0].contains(&7.0f32.to_bits()));
+                        assert!(widths[1].contains(&19.0f32.to_bits()));
+                        assert!(widths[2].contains(&29.0f32.to_bits()));
+                    }
+                    let jobs = |keys: &[ShapeKey; 3]| {
+                        keys.iter()
+                            .cloned()
+                            .map(|key| ShapeJob {
+                                group: InlineGroupId(1),
+                                generation: 42,
+                                key,
+                            })
+                            .collect::<Vec<_>>()
+                    };
+                    let ref_results = reference.shape_batch(&jobs(&expected), 42).unwrap();
+                    let results = actual.shape_batch(&jobs(&got), 42).unwrap();
+                    let request = || InlineRequest {
+                        roots: std::slice::from_ref(&root),
+                        parent_style: &parent,
+                        width: 0.0,
+                        intrinsic_kind: None,
+                        line_constraints: None,
+                    };
+                    let left = reference.format_prepared_inline_group::<Node, _>(
+                        &prepared,
+                        &plane,
+                        LayoutDom::quirks_mode(&dom),
+                        request(),
+                        Some((&ref_results[2], 42, InlineGroupId(1))),
+                    );
+                    let right = actual.format_prepared_inline_group::<Node, _>(
+                        &prepared,
+                        &plane,
+                        LayoutDom::quirks_mode(&dom),
+                        request(),
+                        Some((&results[2], 42, InlineGroupId(1))),
+                    );
+                    assert_eq!(left.is_some(), right.is_some());
+                    if let (Some(left), Some(right)) = (left, right) {
+                        assert_eq!(left.size(), right.size());
+                        assert_eq!(left.baselines(), right.baselines());
+                        assert_eq!(left.text, right.text);
+                        let glyphs = |layout: &InlineLayout<BoxId>| {
+                            layout
+                                .items
+                                .iter()
+                                .filter_map(|item| match item {
+                                    ShapedItem::Text(run) => Some(
+                                        run.glyphs
+                                            .iter()
+                                            .map(|g| {
+                                                (g.index, g.point.x.to_bits(), g.point.y.to_bits())
+                                            })
+                                            .collect::<Vec<_>>(),
+                                    ),
+                                    _ => None,
+                                })
+                                .collect::<Vec<_>>()
+                        };
+                        assert_eq!(glyphs(&left), glyphs(&right));
+                        let fonts = |system: &TextSystem, layout: &InlineLayout<BoxId>| {
+                            layout
+                                .items
+                                .iter()
+                                .filter_map(|item| match item {
+                                    ShapedItem::Text(run) => {
+                                        let font = &system.fonts[&run.font_instance];
+                                        Some((font.index, font.data.as_ref().clone()))
+                                    },
+                                    _ => None,
+                                })
+                                .collect::<Vec<_>>()
+                        };
+                        assert_eq!(fonts(&reference, &left), fonts(&actual, &right));
+                    }
+                }
+            }
+        }
+    }
+
     #[test]
     fn prepared_batch_formats_current_owners_without_dom_rereads() {
         let dom = StaticDocument::parse(

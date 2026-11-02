@@ -89,7 +89,11 @@ impl TextBatch {
                 let (ready, empty, eligible) = c.get();
                 let r = measure.template.ready::<D::NodeId, _>(atomic);
                 let e = r && measure.template.test_empty_events();
-                let q = e && crate::text::test_equivalent_overflow(&measure.template, style);
+                let q = r && measure.template.can_share_eager_key(style);
+                assert_eq!(
+                    q,
+                    e && crate::text::test_equivalent_overflow(&measure.template, style)
+                );
                 c.set((
                     ready + usize::from(r),
                     empty + usize::from(e),

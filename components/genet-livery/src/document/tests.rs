@@ -4775,10 +4775,17 @@ fn shaping_benchmark_real_fixtures_are_ready_and_equivalent() {
     }
     for case in ["small", "article"] {
         let html = fixture::html(case, 2048, fixture::paragraph(case));
-        let css = "@font-face { font-family: 'Fixture'; src: url('fixture.ttf'); } body { font-family: 'Fixture'; margin: 0; } p { margin: 0 0 8px; }";
+        let css = fixture::css("Fixture");
+        assert_eq!(
+            css,
+            "@font-face { font-family: 'Fixture'; src: url('fixture.ttf'); } body { font-family: 'Fixture'; margin: 0; } p { margin: 0 0 8px; }"
+        );
         let dom = ScriptedDom::from_serialized_document(&html);
-        let mut document =
-            LiveryDocument::new(dom, StyleSet::cambium(&[css]), Device::screen(800.0, 600.0));
+        let mut document = LiveryDocument::new(
+            dom,
+            StyleSet::cambium(&[&css]),
+            Device::screen(800.0, 600.0),
+        );
         document.set_font_resource(
             "fixture.ttf",
             include_bytes!("../../../../tests/wpt/tests/fonts/Ahem.ttf").to_vec(),

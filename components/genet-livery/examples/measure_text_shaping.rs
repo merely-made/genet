@@ -165,9 +165,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let para = shaping_fixture::paragraph(&case);
     let html = shaping_fixture::html(&case, paragraphs, para);
-    let css = format!(
-        "@font-face {{ font-family: '{family}'; src: url('fixture.ttf'); }} body {{ font-family: '{family}'; margin: 0; }} p {{ margin: 0 0 8px; }}"
-    );
+    let css = shaping_fixture::css(&family);
     genet_livery::phase::enable();
     // Cold samples create a fresh document. Warm samples keep document and pool
     // scratch alive for all warmups and measurements of a single protocol.

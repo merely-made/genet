@@ -39,3 +39,10 @@ pub fn paragraph(case: &str) -> &'static str {
         },
     }
 }
+
+/// Shared benchmark stylesheet, with the face name supplied by the caller.
+pub fn css(family: &str) -> String {
+    format!(
+        "@font-face {{ font-family: '{family}'; src: url('fixture.ttf'); }} body {{ font-family: '{family}'; margin: 0; }} p {{ margin: 0 0 8px; }}"
+    )
+}

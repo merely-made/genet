@@ -13,8 +13,9 @@ use std::time::{Duration, Instant};
 
 use murm_rtc::rtc::crypto::{RTCCryptoProvider, default_provider};
 use murm_rtc::rtc::data_channel::RTCDataChannelInit;
+use murm_rtc::rtc::ice::mdns::MulticastDnsMode;
 use murm_rtc::rtc::ice::url::{ProtoType, SchemeType, Url};
-use murm_rtc::rtc::peer_connection::configuration::setting_engine::SettingEngine;
+use murm_rtc::rtc::peer_connection::configuration::setting_engine::SettingEngineBuilder;
 use murm_rtc::rtc::peer_connection::configuration::{
     RTCBundlePolicy, RTCConfiguration, RTCConfigurationBuilder, RTCIceTransportPolicy,
 };
@@ -257,8 +258,12 @@ impl WebRtcFactory for NativeWebRtcFactory {
         let config: Value = serde_json::from_str(configuration_json).map_err(protocol_error)?;
         let crypto = default_provider().map_err(protocol_error)?;
         let (discovery, refused_servers) = discovery(&config, self.settings, crypto.clone())?;
-        let mut settings_engine = SettingEngine::default();
-        settings_engine.set_crypto_provider(crypto);
+        // mDNS requires its own multicast socket. Enabling the core's default
+        // QueryOnly mode without that route wedges the single UDP output queue.
+        let settings_engine = SettingEngineBuilder::new()
+            .with_crypto_provider(crypto)
+            .with_multicast_dns_mode(MulticastDnsMode::Disabled)
+            .build();
         let mut engine_config = config.clone();
         // The core rejects relay-only configurations with no TURN server,
         // whereas WebRTC permits creating them. The I/O driver enforces relay
@@ -601,6 +606,17 @@ impl WebRtcPeer for NativePeer {
                 } else {
                     serde_json::from_value(data).map_err(protocol_error)?
                 };
+                if candidate
+                    .candidate
+                    .split_whitespace()
+                    .nth(4)
+                    .is_some_and(|address| address.to_ascii_lowercase().ends_with(".local"))
+                {
+                    return Err(failure(
+                        "OperationError",
+                        "mDNS ICE candidate resolution is not yet supported",
+                    ));
+                }
                 state
                     .endpoint
                     .core_mut()
@@ -727,7 +743,7 @@ impl WebRtcPeer for NativePeer {
                     .endpoint
                     .core_mut()
                     .get_stats(now, StatsSelector::None);
-                let entries: Vec<Value> = report
+                let mut entries: Vec<Value> = report
                     .iter()
                     .filter_map(|entry| match entry {
                         RTCStatsReportEntry::PeerConnection(v) => serde_json::to_value(v).ok(),
@@ -740,6 +756,79 @@ impl WebRtcPeer for NativePeer {
                         _ => None,
                     })
                     .collect();
+                // Peer-reflexive candidates can be discovered inside ICE,
+                // without passing through the core's stats registration hook.
+                // Describe those real candidates before repairing references.
+                if let Some(sctp) = state.endpoint.core().sctp() {
+                    let ice = sctp.transport().ice_transport();
+                    let pairs: Vec<Value> = entries
+                        .iter()
+                        .filter(|v| v["type"] == "candidate-pair")
+                        .cloned()
+                        .collect();
+                    for (local, candidates, field, prefix) in [
+                        (
+                            true,
+                            ice.get_local_candidates(),
+                            "localCandidateId",
+                            "RTCLocalIceCandidate_",
+                        ),
+                        (
+                            false,
+                            ice.get_remote_candidates(),
+                            "remoteCandidateId",
+                            "RTCRemoteIceCandidate_",
+                        ),
+                    ] {
+                        for pair in &pairs {
+                            let Some(id) = pair[field].as_str() else {
+                                continue;
+                            };
+                            let raw = id.strip_prefix(prefix).unwrap_or(id);
+                            let registered = format!("{prefix}{raw}");
+                            if entries
+                                .iter()
+                                .any(|v| v["id"] == id || v["id"] == registered)
+                            {
+                                continue;
+                            }
+                            if let Some(candidate) = candidates.iter().find(|c| c.id == raw) {
+                                entries.push(json!({
+                                    "id":registered,"type":if local {"local-candidate"} else {"remote-candidate"},
+                                    "timestamp":pair["timestamp"],"transportId":pair["transportId"],
+                                    "address":candidate.address,"port":candidate.port,
+                                    "protocol":candidate.protocol.to_string(),"candidateType":candidate.typ.to_string(),
+                                    "priority":candidate.priority,"foundation":candidate.foundation,
+                                }));
+                            }
+                        }
+                    }
+                }
+                // The current core registers namespaced candidate statistics
+                // but its pair accumulator still refers to raw candidate IDs.
+                // Every web-visible reference must identify an actual map row.
+                let ids: std::collections::BTreeSet<String> = entries
+                    .iter()
+                    .filter_map(|v| v["id"].as_str().map(str::to_owned))
+                    .collect();
+                for entry in &mut entries {
+                    if entry["type"] != "candidate-pair" {
+                        continue;
+                    }
+                    for (field, prefix) in [
+                        ("localCandidateId", "RTCLocalIceCandidate_"),
+                        ("remoteCandidateId", "RTCRemoteIceCandidate_"),
+                    ] {
+                        if let Some(raw) = entry[field].as_str()
+                            && !ids.contains(raw)
+                        {
+                            let registered = format!("{prefix}{raw}");
+                            if ids.contains(&registered) {
+                                entry[field] = json!(registered);
+                            }
+                        }
+                    }
+                }
                 json!(entries)
             },
             WebRtcOperation::Close => {

@@ -113,8 +113,13 @@ fn encrypted_browser_exchange<E: ScriptEngine>() {
         var blob=new Blob([new Uint8Array([5,0,255])]);blob._b=new Uint8Array([99]);
         Object.defineProperty(blob,'size',{value:999});ch.send(blob);
       };
-      ch.onmessage=e=>{if(e.data==='ack'){a.close();b.close();done=true;}};
-      (async()=>{await a.setLocalDescription();await b.setRemoteDescription(a.localDescription);await b.setLocalDescription();await a.setRemoteDescription(b.localDescription);
+      ch.onmessage=e=>{if(e.data==='ack'){Promise.all([a.getStats(),b.getStats()]).then(reports=>{
+        for(const report of reports)for(const row of report.values())if(row.type==='candidate-pair'&&(!report.has(row.localCandidateId)||!report.has(row.remoteCandidateId)))problem='dangling candidate stats reference';
+        a.close();b.close();done=true;
+      }).catch(e=>problem=String(e));}};
+      (async()=>{await a.setLocalDescription();await b.setRemoteDescription(a.localDescription);
+        try{await b.addIceCandidate({candidate:'candidate:mdns 1 udp 123456 unresolved.local 50000 typ host',sdpMLineIndex:0});problem='mDNS accepted without a resolver';}catch(e){if(e.name!=='OperationError')problem=String(e);}
+        await b.setLocalDescription();await a.setRemoteDescription(b.localDescription);
         var checkId=()=>{if(a.sctp.state==='connected'&&ch.id===null)problem='SCTP connected before stream ID assignment';};a.sctp.onstatechange=checkId;checkId();
       })().catch(e=>problem=String(e));
       globalThis.__rtcDeliver=()=>{problem='authored task hook called';};

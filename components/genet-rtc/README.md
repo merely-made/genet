@@ -36,6 +36,13 @@ peer-close events. DNS, interface discovery, mDNS, TCP/TLS, ICE restart/server
 replacement and multiple-interface routing remain open host work. A remote
 candidate is not authorization to ignore the consumer's network policy.
 
+The core defaults to querying mDNS, which needs a separate multicast route.
+For this single-socket adapter, build its SettingEngine with
+`with_multicast_dns_mode(MulticastDnsMode::Disabled)` until the host supplies that
+route, and explicitly handle unresolved `.local` remote candidates. Route
+refusals retain their `TransportContext` for host diagnostics, without packet
+contents or credentials. Genet applies this policy in its native factory.
+
 Genet owns JS objects, promises, events, origin/permission policy, navigation
 lifetime and WPT. Application consumers own message framing, invitations and
 admission. This crate imposes no one-channel, ordered-only or Graphshell

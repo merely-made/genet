@@ -92,6 +92,13 @@ small resize with raised capacity reused all 2,048 keys with zero builds. One
 remaining-case scope had a single 677-microsecond throttle; the three headline
 scopes had none. See the receipt for full ranges and source-specific results.
 
+The single-cohort default cold controls also showed final cached-serial layout
+medians 0.754 ms slower for mixed-256 and 0.793 ms slower for single-long
+against original; these are bounded process comparisons. For small-2048,
+pooled layout medians improved in three cohorts, while pooled frame and cycle
+medians varied in direction. A consistent small end-to-end pool gain is not
+established.
+
 ## Explicit host generic resources
 
 A browser does not lend Parley its installed system fonts. Registering a face

@@ -970,7 +970,7 @@ assembly on a development-path build: Genet
 `3961aca919f707ab09a786379eb4ce8bb121258e`, and Cambium's producer source,
 which was uncommitted at that run. Compact receipts and executable/source
 identities live at
-`isometry/mesocosm/testing/bench/receipts/2026-09-13/`; full captures live at
+`Code/testing/isocosm/mesocosm-bench-receipts/2026-09-13/`; full captures live at
 `Code/testing/specimen-bench/native-final/`.
 
 A separate Mesocosm release workspace check with all features and targets

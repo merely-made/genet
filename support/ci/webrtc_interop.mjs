@@ -58,7 +58,8 @@ async function freePort() {
 async function bindIP() {
   const socket = createSocket('udp4');
   // A route lookup only: no datagram is sent to this documentation address.
-  // Firefox excludes WSL virtual interfaces, so use the default-route interface.
+  // The direct WSL endpoint timed out in this receiving environment. Use the
+  // Windows-facing default-route interface for both peers and the UDP front end.
   try { await new Promise((resolve,reject) => { socket.once('error',reject); socket.connect(9,'192.0.2.1',resolve); }); return args.get('--bind') || socket.address().address; }
   finally { socket.close(); }
 }
@@ -287,6 +288,7 @@ function verifySnapshot(snapshot,other) {
   assert(snapshot.modes.some(c=>c.label==='unreliable' && !c.ordered && c.maxRetransmits===0),'partial reliability mismatch');
 }
 function verifyStats(a,b,route) {
+  assert(a.remoteAddressesRedacted===true && a.peerReflexiveInRemoteList===false,'native ICE observation exposed an unsignaled address');
   for(const stats of [a,b]) {
     assert(stats.pair && stats.pair.state==='succeeded','selected candidate pair unavailable');
     assert(stats.pair.localProtocol==='udp' && stats.pair.remoteProtocol==='udp','unexpected selected transport');
@@ -322,7 +324,7 @@ try {
           await native.evaluate(source);await browser.evaluate(source);
           await native.evaluate(`globalThis.__interop=makeInteropPeer(${JSON.stringify(config)},'native',${offerer==='native'});__interop.start()`);
           await browser.evaluate(`globalThis.__interop=makeInteropPeer(${JSON.stringify(config)},'browser',${offerer==='browser'});__interop.start()`);
-          phase='negotiation and transfer';
+          phase='negotiation and transfer';const exchangeStart=Date.now();
           for(let i=0;i<600;i++) {
             for(const signal of await native.value('__interop.takeSignals()'))await browser.evaluate(`__interop.receive(${JSON.stringify(signal)})`);
             for(const signal of await browser.value('__interop.takeSignals()'))await native.evaluate(`__interop.receive(${JSON.stringify(signal)})`);
@@ -330,7 +332,7 @@ try {
             assert(!udpFixture.error,udpFixture.error);
             assert(!a.errors.length && !b.errors.length,'peer error '+[...a.errors,...b.errors].join(','));
             if(a.connected && b.connected && a.received.length===3 && b.received.length===3)break;
-            assert(Date.now()-start<25000,'application exchange deadline');await delay(15);
+            assert(Date.now()-exchangeStart<25000,'application exchange deadline');await delay(15);
           }
           verifySnapshot(a,'browser');verifySnapshot(b,'native');
           phase='route and certificate verification';await native.evaluate('__interop.inspect()');await browser.evaluate('__interop.inspect()');
@@ -349,7 +351,8 @@ try {
           assert(ownedUdp(native.process.pid).length===0,'native cleanup retained UDP ownership');await released(sockets);
           await browser.evaluate('__interop.close()');
           const summary=(snapshot,stats)=>({connected:snapshot.connected,textMessagesVerified:2,binaryBytesVerified:48000,modes:snapshot.modes,refused:snapshot.refused,gatheringErrors:snapshot.gatheringErrors,
-            pair:stats.pair,localFingerprint:stats.localFingerprint,remoteFingerprint:stats.remoteFingerprint,remoteDER_SHA256:stats.remoteDER_SHA256,statsRemoteFingerprint:stats.statsRemoteFingerprint});
+            pair:stats.pair,localFingerprint:stats.localFingerprint,remoteFingerprint:stats.remoteFingerprint,remoteDER_SHA256:stats.remoteDER_SHA256,statsRemoteFingerprint:stats.statsRemoteFingerprint,
+            remoteAddressesRedacted:stats.remoteAddressesRedacted,peerReflexiveInRemoteList:stats.peerReflexiveInRemoteList});
           cases.push({...current,status:'pass',seconds:Math.round((Date.now()-start)/10)/100,native:summary(a,aStats),browserPeer:summary(b,bStats),cleanupVerified:true,socketRebound:true});
           console.log(JSON.stringify({...current,status:'pass',seconds:cases.at(-1).seconds}));
         } catch(error) {

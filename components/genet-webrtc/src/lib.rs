@@ -326,7 +326,10 @@ impl State {
             if state=="connected" && self.transports["state"]!="connected" && self.channels.values().any(|c|c["id"].is_null() && c["readyState"]!="closed") {
                 state="connecting".into();
             }
-            let candidates=|values:Vec<RTCIceCandidate>,local| values.into_iter().filter_map(|mut c|{
+            let candidates=|values:Vec<RTCIceCandidate>,local:bool| values.into_iter().filter_map(|mut c|{
+                // getRemoteCandidates exposes signaled candidates, not the
+                // peer-reflexive addresses ICE learns from incoming traffic.
+                if !local && c.typ==murm_rtc::rtc::peer_connection::transport::RTCIceCandidateType::Prflx { return None; }
                 if local { c.url=self.candidate_urls.get(&c.id).cloned(); }
                 candidate_value(c,local)
             }).collect::<Vec<_>>();
@@ -812,6 +815,16 @@ impl WebRtcPeer for NativePeer {
                     .filter_map(|v| v["id"].as_str().map(str::to_owned))
                     .collect();
                 for entry in &mut entries {
+                    // W3C RTCIceCandidateStats defaults remote addresses to
+                    // null. Keep this conservative even for signaled addresses;
+                    // remote server URLs and relay protocols are never exposed.
+                    if entry["type"] == "remote-candidate"
+                        && let Some(object) = entry.as_object_mut()
+                    {
+                        object.insert("address".into(), Value::Null);
+                        object.remove("url");
+                        object.remove("relayProtocol");
+                    }
                     if entry["type"] != "candidate-pair" {
                         continue;
                     }

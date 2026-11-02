@@ -82,6 +82,8 @@
           remoteCertificates:typeof pc.sctp.transport.getRemoteCertificates==='function' ?
             pc.sctp.transport.getRemoteCertificates().map(c=>Array.from(new Uint8Array(c))) : [],
           statsRemoteFingerprint:certificate?.fingerprint?.replace(/:/g,'').toLowerCase() || null,
+          remoteAddressesRedacted:values.filter(s=>s.type==='remote-candidate').every(s=>s.address===null&&!('url' in s)&&!('relayProtocol' in s)),
+          peerReflexiveInRemoteList:typeof pc.sctp.transport.iceTransport.getRemoteCandidates==='function' ? pc.sctp.transport.iceTransport.getRemoteCandidates().some(c=>c.type==='prflx') : null,
           pairKeys:pair?{local:pair.localCandidateId,remote:pair.remoteCandidateId}:null,
           candidateKeys:values.filter(s=>s.type==='local-candidate'||s.type==='remote-candidate').map(s=>({id:s.id,type:s.type,candidateType:s.candidateType,protocol:s.protocol}))};
       }).catch(e => fail('stats', e));

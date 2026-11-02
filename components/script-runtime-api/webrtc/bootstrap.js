@@ -68,6 +68,13 @@
   class RTCPeerConnectionIceEvent extends Event {
     constructor(type,init={}) { super(type,init); const c=init.candidate==null?null:init.candidate; if(c!==null&&!candidates.has(c))throw new TypeError('Invalid candidate'); Object.defineProperty(this,'candidate',{value:c,enumerable:true}); Object.defineProperty(this,'url',{value:init.url===undefined?null:string(init.url),enumerable:true}); }
   }
+  class RTCPeerConnectionIceErrorEvent extends Event {
+    constructor(type,init) {
+      if(!init||init.errorCode===undefined)throw new TypeError('An ICE error code is required');
+      super(type,init);
+      for(const [name,value] of Object.entries({address:init.address==null?null:string(init.address),port:init.port==null?null:ushort(init.port),url:init.url===undefined?'':usv(init.url),errorCode:ushort(init.errorCode),errorText:init.errorText===undefined?'':usv(init.errorText)}))Object.defineProperty(this,name,{value,enumerable:true});
+    }
+  }
   class RTCDataChannelEvent extends Event {
     constructor(type,init) { if(!init||!DCs.has(init.channel))throw new TypeError('A data channel is required');super(type,init);Object.defineProperty(this,'channel',{value:init.channel,enumerable:true}); }
   }
@@ -187,6 +194,7 @@
     if(n.channel){const meta=(s.state.channels||[]).find(c=>c.handle===n.channel.handle)||n.channel,key=String(meta.handle);let channel=s.channels.get(key);if(!channel){channel=new RTCDataChannel(channelToken,s,meta);s.channels.set(key,channel);owner.dispatchEvent(new RTCDataChannelEvent('datachannel',{channel}));}Object.assign(dc(channel).meta,meta);if(n.event==='open'||n.event==='close'||n.event==='closing'||n.event==='bufferedamountlow')channel.dispatchEvent(new Event(n.event));return;}
     if(n.event==='message'){const channel=s.channels.get(String(n.handle));if(!channel)return;const bytes=new U8(n.data);const value=n.isString?decode(bytes):dc(channel).binaryType==='blob'?FormOps.makeBlob(bytes,''):bytes.buffer;channel.dispatchEvent(new MessageEvent('message',{data:value}));return;}
     if(n.event==='icecandidate'){const value=n.candidate===null?null:new RTCIceCandidate(n.candidate);owner.dispatchEvent(new RTCPeerConnectionIceEvent('icecandidate',{candidate:value}));return;}
+    if(n.event==='icecandidateerror'){owner.dispatchEvent(new RTCPeerConnectionIceErrorEvent('icecandidateerror',n));return;}
     if(n.event)owner.dispatchEvent(new Event(n.event));
   }
   Object.defineProperty(g,'__rtcDeliver',{configurable:true,value:deliver});
@@ -201,7 +209,7 @@
     });
     clearLive();
   }});
-  for(const [name,value] of Object.entries({RTCSessionDescription,RTCIceCandidate,RTCPeerConnectionIceEvent,RTCDataChannelEvent,RTCDataChannel,RTCPeerConnection,RTCSctpTransport,RTCDtlsTransport,RTCIceTransport})) {
+  for(const [name,value] of Object.entries({RTCSessionDescription,RTCIceCandidate,RTCPeerConnectionIceEvent,RTCPeerConnectionIceErrorEvent,RTCDataChannelEvent,RTCDataChannel,RTCPeerConnection,RTCSctpTransport,RTCDtlsTransport,RTCIceTransport})) {
     Object.defineProperty(value.prototype,Symbol.toStringTag,{value:name,configurable:true});Object.defineProperty(g,name,{value,writable:true,configurable:true});
   }
 })(globalThis);

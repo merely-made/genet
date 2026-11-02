@@ -2,27 +2,20 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use genet_webrtc::{NativeWebRtcFactory, Settings};
-use murm_rtc::udp::IoLimits;
 use script_engine_api::ScriptEngine;
 use script_runtime_api::Runtime;
 
 fn wired<E: ScriptEngine>() -> Runtime<E> {
+    wired_with(Settings {
+        max_peers: 8,
+        max_channels: 16,
+        ..Settings::default()
+    })
+}
+
+fn wired_with<E: ScriptEngine>(settings: Settings) -> Runtime<E> {
     let mut rt = Runtime::new().expect("runtime");
-    rt.set_webrtc_factory(Rc::new(
-        NativeWebRtcFactory::new(Settings {
-            bind: "127.0.0.1".parse().unwrap(),
-            io: IoLimits {
-                datagram_bytes: 65_535,
-                packets_per_turn: 8,
-                timer_floor: Duration::from_millis(1),
-            },
-            max_peers: 8,
-            max_channels: 16,
-            max_notifications: 256,
-            poll_interval: Duration::from_millis(1),
-        })
-        .unwrap(),
-    ));
+    rt.set_webrtc_factory(Rc::new(NativeWebRtcFactory::new(settings).unwrap()));
     rt
 }
 
@@ -266,6 +259,105 @@ fn channel_string_limits<E: ScriptEngine>() {
     assert_eq!(rt.pending_webrtc(), 0);
 }
 
+fn gathering_errors<E: ScriptEngine>() {
+    let blackhole = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+    let config = serde_json::json!({"iceTransportPolicy":"relay", "iceServers":[
+        {"urls":[format!("turn:{}",blackhole.local_addr().unwrap()),"turn:unresolved.invalid:3478","turn:127.0.0.1:3478?transport=tcp"],
+         "username":"unused", "credential":"private-test-password"}]});
+    let mut rt = wired_with::<E>(Settings {
+        gathering_timeout: Duration::from_millis(40),
+        ..Settings::default()
+    });
+    run(&mut rt, &format!("var config={config};"));
+    run(
+        &mut rt,
+        r#"
+      var p=new RTCPeerConnection(config),problem='',done=false,errors=[],order=[];
+      p.createDataChannel('refused');
+      p.onicecandidate=e=>{if(e.candidate)problem='direct candidate leaked';else{order.push('null');done=true;}};
+      p.onicegatheringstatechange=()=>{if(p.iceGatheringState==='complete')order.push('complete');};
+      p.onicecandidateerror=e=>{
+        if(!(e instanceof RTCPeerConnectionIceErrorEvent)||e.errorCode!==701||e.address!==null||e.port!==null||e.url.indexOf('password')>=0||e.errorText==='')problem='ICE error metadata';
+        errors.push(e.url);
+      };
+      try{p.setConfiguration({iceTransportPolicy:'relay'});problem='server replacement accepted';}catch(e){if(e.name!=='NotSupportedError')problem=String(e);}
+      try{p.restartIce();problem='server restart accepted';}catch(e){if(e.name!=='NotSupportedError')problem=String(e);}
+      p.setLocalDescription().catch(e=>problem=String(e));
+    "#,
+    );
+    until(&mut rt, "done || problem!==''");
+    assert_eq!(read(&mut rt, "problem"), "");
+    assert_eq!(read(&mut rt, "errors.length"), "3");
+    assert_eq!(read(&mut rt, "order.join(',')"), "complete,null");
+    run(&mut rt, "p.close();");
+    assert_eq!(rt.pending_webrtc(), 0);
+}
+
+fn coturn_relay<E: ScriptEngine>() {
+    let server: std::net::SocketAddr = std::env::var("MURM_RTC_TEST_SERVER")
+        .expect("controlled coturn endpoint")
+        .parse()
+        .unwrap();
+    let probe = std::net::UdpSocket::bind("0.0.0.0:0").unwrap();
+    probe.connect(server).unwrap();
+    let mut rt = wired_with::<E>(Settings {
+        bind: probe.local_addr().unwrap().ip(),
+        gathering_timeout: Duration::from_secs(3),
+        allocation_refresh_interval_cap: Some(Duration::from_secs(1)),
+        ..Settings::default()
+    });
+    let config = serde_json::json!({"iceTransportPolicy":"relay","iceServers":[
+        {"urls":[format!("turn:{server}?transport=udp")],"username":"rtc-test","credential":"rtc-test-password"}]});
+    run(&mut rt, &format!("var config={config};"));
+    run(
+        &mut rt,
+        r#"
+      var a=new RTCPeerConnection(config),b=new RTCPeerConnection(config),problem='',done=false,localCandidates=0,nullCandidates=0;
+      function ice(other,e){
+        if(e.candidate){
+          localCandidates++;
+          if(e.candidate.type!=='relay'||e.candidate.relayProtocol!=='udp'||e.candidate.url!==config.iceServers[0].urls[0]||e.candidate.relatedAddress!=='0.0.0.0'||e.candidate.relatedPort!==0)problem='relay metadata:'+JSON.stringify([e.candidate.type,e.candidate.relayProtocol,e.candidate.url,e.candidate.relatedAddress,e.candidate.relatedPort]);
+          if('url' in e.candidate.toJSON()||'relayProtocol' in e.candidate.toJSON())problem='local metadata in signaling';
+          other.addIceCandidate(e.candidate).catch(e=>problem=String(e));
+        }else nullCandidates++;
+      }
+      a.onicecandidate=e=>ice(b,e);b.onicecandidate=e=>ice(a,e);
+      a.onicecandidateerror=b.onicecandidateerror=e=>problem='unexpected gathering error';
+      var ch=a.createDataChannel('relay'),bytes=new Uint8Array(48000);bytes.fill(90);
+      b.ondatachannel=e=>{e.channel.onmessage=m=>{
+        var received=new Uint8Array(m.data);
+        if(received.length!==48000||received[0]!==90||received[47999]!==90)problem='relay payload';
+        e.channel.send('relay acknowledged');
+      };};
+      ch.onopen=()=>setTimeout(()=>ch.send(bytes),2200);
+      ch.onmessage=e=>{if(e.data==='relay acknowledged')done=true;else problem='reply';};
+      (async()=>{await a.setLocalDescription();await b.setRemoteDescription(a.localDescription);await b.setLocalDescription();await a.setRemoteDescription(b.localDescription);})().catch(e=>problem=String(e));
+    "#,
+    );
+    until(&mut rt, "done || problem!==''");
+    assert_eq!(read(&mut rt, "problem"), "");
+    assert_eq!(
+        read(&mut rt, "localCandidates===2&&nullCandidates===2"),
+        "true"
+    );
+    assert_eq!(
+        read(
+            &mut rt,
+            "a.sctp.transport.getRemoteCertificates().length>0&&b.sctp.transport.getRemoteCertificates().length>0"
+        ),
+        "true"
+    );
+    assert_eq!(
+        read(
+            &mut rt,
+            "a.sctp.transport.iceTransport.getLocalCandidates().every(c=>c.url===config.iceServers[0].urls[0]&&c.relayProtocol==='udp')"
+        ),
+        "true"
+    );
+    run(&mut rt, "a.close();b.close();");
+    assert_eq!(rt.pending_webrtc(), 0);
+}
+
 macro_rules! both {
     ($module:ident,$engine:ty) => {
         mod $module {
@@ -297,6 +389,15 @@ macro_rules! both {
             #[test]
             fn strings_and_utf8_limits() {
                 channel_string_limits::<$engine>();
+            }
+            #[test]
+            fn gathering_errors() {
+                super::gathering_errors::<$engine>();
+            }
+            #[test]
+            #[ignore = "requires controlled coturn; MURM_RTC_TEST_SERVER numeric endpoint"]
+            fn coturn_relay() {
+                super::coturn_relay::<$engine>();
             }
         }
     };

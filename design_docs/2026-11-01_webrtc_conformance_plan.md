@@ -3,9 +3,9 @@
 **Status (2026-11-01): E0/E1a qualified; native Genet data-channel intake
 qualified; application-carrier cutover, broader E2 acceptance and E3 remain open.**
 The native receiving path is checked on both engines against selected unmodified
-WPT and direct encrypted data transfer. Ortet's scripted host compiles with the
-capability. Headed Chrome/Firefox, browser-guest, discovery/relay and media
-acceptance remain separate gates.
+WPT and encrypted direct/UDP-relay transfer. Ortet's scripted host compiles with
+the capability. IP-literal UDP STUN/TURN is implemented; DNS, TCP/TLS, restart,
+headed Chrome/Firefox, browser-guest and media acceptance remain separate gates.
 
 **Brief:** Mark asked to evaluate webrtc-rs against the existing stack, inspect
 Murm for duplication and dependency direction, and place the implementation
@@ -44,8 +44,9 @@ and a universal transport trait are not prerequisites for this evaluation.
 The provider implementation lives in `murm/wire/crates/rtc` (`murm-rtc`): a
 shared protocol API plus an optional caller-owned UDP adapter. Genet's host
 binding now consumes this exact Git supplier through `components/genet-webrtc`;
-the application carrier has not changed. Host-only candidate
-gathering is implemented; broader discovery and relaying remain explicit work.
+the application carrier has not changed. Host candidates and IP-literal UDP
+STUN/TURN use one caller-driven socket driver. Broader discovery and network
+fallbacks remain explicit work.
 
 Genet owns WebIDL conversion, exceptions, promises and the operations chain,
 stable JS wrapper identities, task/event ordering, per-realm connection
@@ -199,10 +200,15 @@ interfaces/tests such as `webrtc-stats`, encoded transforms and media capture.
   and checkpoints microtasks after each observation. SDP operations run as tasks,
   with signaling events before promise completion. Revisioned observations cannot
   overwrite a newer command result; description getters preserve slot aliases.
-- The first native route gathers host candidates. Relay-only construction owns
-  no socket and registers no direct candidate; changing route policy after
-  construction refuses with `NotSupportedError`. ICE server configuration is
-  retained, but discovery/allocation is not yet driven. Custom certificates,
+- The native route gathers host and configured IP-literal UDP STUN/TURN
+  candidates. Relay-only construction owns no route when no usable relay is
+  configured; otherwise it owns a control socket and relay candidates, suppresses
+  direct traffic, and conceals the physical related address in candidates/SDP.
+  Gathering waits for server results or a caller-selected deadline, with typed,
+  sanitized `icecandidateerror` events and a final null candidate. Local server
+  URL/relay protocol metadata stays out of candidate signaling JSON. Route-policy
+  changes, ICE-server replacement and configured-server restarts refuse with
+  `NotSupportedError`. DNS, TCP/TLS and mDNS are still open. Custom certificates,
   complete media/IDL, and full stats and transport event qualification remain
   open. `bufferedAmount` currently reflects the core's outstanding send bytes;
   exact web-visible timing and send-buffer saturation need their own coverage.
@@ -274,6 +280,27 @@ interfaces/tests such as `webrtc-stats`, encoded transforms and media capture.
   retained. Strict native-adapter Clippy and Ortet all-target receiving checks
   pass. Concurrent upstream runtime/runner work was merged before final
   qualification.
+- 2026-11-01: Murm E1c now feeds IP-literal UDP STUN/TURN into Genet's native
+  host. Both engines qualify encrypted forced-relay transfer, private related
+  addresses, local-only server metadata, gathering errors/completion and
+  allocation lifecycle against controlled coturn. The original selected WPT
+  cases retain their identities/results; the additional ICE-error constructor
+  case and Ortet receiving check pass. Native discovery remains distinct from
+  headed/browser-guest, public TURN, DNS/TCP/TLS, restart and carrier acceptance.
+
+## UDP STUN and TURN receiving gate
+
+Receive Murm E1c with IP-literal UDP servers, bounded gathering and allocation
+refresh. Start discovery on local-description gathering, preserve candidate
+server metadata, and surface sanitized gathering errors. Relay-only construction
+must retain its no-direct-route guarantee, including refusal and timeout paths.
+Changed server configuration must refuse until replacement/restart is supported.
+Host name resolution, TCP/TLS, mDNS, restart, headed interop and carrier cutover
+remain open. Done: both engines exchange encrypted messages using forced relay
+against coturn; failure/close paths release their sockets; existing native and
+selected WPT gates retain their case identities and results. Append compact
+evidence to the existing receipt file within its 1 MB total cap; record supplier
+and root-lock deltas rather than duplicating the full lock.
 
 ## Decisions
 

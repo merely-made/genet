@@ -16398,3 +16398,1420 @@ dependencies = [
  "winnow",
 ]
 ```
+
+
+## 2026-11-01: E1c receiving native ordinary
+
+```json
+{
+  "source_revision": "0f38cba4fbe9d5a8158170f18469743b8b7c4433",
+  "utc": "2026-11-02T01:07:43.109387+00:00",
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "genet-webrtc",
+    "--test",
+    "browser",
+    "--locked",
+    "--offline",
+    "-j",
+    "1"
+  ],
+  "exit": 0,
+  "seconds": 16.17,
+  "lock_sha256": "e3efb15480e914bec5fb39bf2b3294aa43d1bee4f5ee40eef4f0b01ca71c9884",
+  "stdout_tail": [
+    "",
+    "running 18 tests",
+    "test boa::coturn_relay ... ignored, requires controlled coturn; MURM_RTC_TEST_SERVER numeric endpoint",
+    "test vano::coturn_relay ... ignored, requires controlled coturn; MURM_RTC_TEST_SERVER numeric endpoint",
+    "test vano::rollback ... ok",
+    "test vano::gathering_errors ... ok",
+    "test vano::policy_and_budgets ... ok",
+    "test vano::strings_and_utf8_limits ... ok",
+    "test vano::transfer ... ok",
+    "test vano::document_teardown ... ok",
+    "test vano::navigation_revokes_old_handles ... ok",
+    "test vano::constructors ... ok",
+    "test boa::rollback ... ok",
+    "test boa::gathering_errors ... ok",
+    "test boa::policy_and_budgets ... ok",
+    "test boa::strings_and_utf8_limits ... ok",
+    "test boa::transfer ... ok",
+    "test boa::document_teardown ... ok",
+    "test boa::navigation_revokes_old_handles ... ok",
+    "test boa::constructors ... ok",
+    "",
+    "test result: ok. 16 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 13.55s",
+    ""
+  ],
+  "stderr_tail": [
+    "9 | use crate::OwnerResolvedCx as _;",
+    "  |     ^^^^^^^^^^^^^^^^^^^^^^",
+    "  |",
+    "  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default",
+    "",
+    "warning: unused import: `crate::OwnerResolvedCx`",
+    "  --> components\\script-runtime-api\\dom\\shadow.rs:14:5",
+    "   |",
+    "14 | use crate::OwnerResolvedCx as _;",
+    "   |     ^^^^^^^^^^^^^^^^^^^^^^",
+    "",
+    "warning: unused import: `crate::OwnerResolvedCx`",
+    "  --> components\\script-runtime-api\\dom\\markup_insertion.rs:37:5",
+    "   |",
+    "37 | use crate::OwnerResolvedCx as _;",
+    "   |     ^^^^^^^^^^^^^^^^^^^^^^",
+    "",
+    "warning: `genet-runtime` (lib) generated 4 warnings (run `cargo fix --lib -p genet-runtime` to apply 1 suggestion)",
+    "    Finished `test` profile [unoptimized] target(s) in 2.44s",
+    "     Running tests\\browser.rs (C:\\t\\cargo-targets\\genet\\build\\debug\\deps\\browser-44f1dcb4b50f684f.exe)"
+  ]
+}
+```
+
+
+## 2026-11-01: E1c receiving WPT build
+
+```json
+{
+  "source_revision": "0f38cba4fbe9d5a8158170f18469743b8b7c4433",
+  "utc": "2026-11-02T01:08:46.102642+00:00",
+  "command": [
+    "cargo",
+    "build",
+    "-p",
+    "genet-wpt",
+    "--no-default-features",
+    "--features",
+    "webrtc",
+    "--locked",
+    "--offline",
+    "-j",
+    "1"
+  ],
+  "exit": 0,
+  "seconds": 62.99,
+  "lock_sha256": "e3efb15480e914bec5fb39bf2b3294aa43d1bee4f5ee40eef4f0b01ca71c9884",
+  "stdout_tail": [],
+  "stderr_tail": [
+    "    |",
+    "162 | impl Harness {",
+    "    | ------------ method in this implementation",
+    "...",
+    "178 |     pub fn assemble(&self, test_src: &str, meta: &Test262Meta, strict: bool) -> io::Result<String> {",
+    "    |            ^^^^^^^^",
+    "",
+    "warning: variant `Unsupported` is never constructed",
+    "   --> ports\\genet-wpt\\src\\test262.rs:270:5",
+    "    |",
+    "263 | pub enum Observation {",
+    "    |          ----------- variant in this enum",
+    "...",
+    "270 |     Unsupported,",
+    "    |     ^^^^^^^^^^^",
+    "    |",
+    "    = note: `Observation` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis",
+    "",
+    "warning: `genet-wpt` (bin \"genet-wpt\") generated 3 warnings",
+    "    Finished `dev` profile [unoptimized] target(s) in 1m 02s"
+  ]
+}
+```
+
+
+## 2026-11-01: E1c matched selected WPT and ICE error constructor
+
+```json
+{
+  "schema": 2,
+  "phase": "after-udp-discovery",
+  "source_revision": "0f38cba4fbe9d5a8158170f18469743b8b7c4433",
+  "utc": "2026-11-02T01:11:31.004614+00:00",
+  "binary_sha256": "fe0956ed14ac1aaae8496450da87bcc647e68da2c3f294733b73ae554ad15f05",
+  "baseline_source": "835dca0f37cf7efbd6d791f94752a2e40733c2fa",
+  "outcomes": [
+    {
+      "detail": null,
+      "failures": [],
+      "reason": null,
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "RTCPeerConnection.length",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCPeerConnection()",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCPeerConnection(null)",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCPeerConnection(undefined)",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCPeerConnection({})",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCPeerConnection({ certificates: null })",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCPeerConnection({ certificates: undefined })",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCPeerConnection({ certificates: [] })",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCPeerConnection({ certificates: [null] })",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCPeerConnection({ certificates: [undefined] })",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCPeerConnection({ iceCandidatePoolSize: toNumberThrows })",
+          "status": "pass"
+        },
+        {
+          "name": "localDescription initial value",
+          "status": "pass"
+        },
+        {
+          "name": "currentLocalDescription initial value",
+          "status": "pass"
+        },
+        {
+          "name": "pendingLocalDescription initial value",
+          "status": "pass"
+        },
+        {
+          "name": "remoteDescription initial value",
+          "status": "pass"
+        },
+        {
+          "name": "currentRemoteDescription initial value",
+          "status": "pass"
+        },
+        {
+          "name": "pendingRemoteDescription initial value",
+          "status": "pass"
+        },
+        {
+          "name": "signalingState initial value",
+          "status": "pass"
+        },
+        {
+          "name": "iceGatheringState initial value",
+          "status": "pass"
+        },
+        {
+          "name": "iceConnectionState initial value",
+          "status": "pass"
+        },
+        {
+          "name": "connectionState initial value",
+          "status": "pass"
+        },
+        {
+          "name": "canTrickleIceCandidates initial value",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 22,
+      "subtests_total": 22,
+      "engine": "boa",
+      "test": "webrtc/RTCPeerConnection-constructor.html",
+      "exit_code": 0,
+      "command": [
+        "C:\\t\\cargo-targets\\genet\\debug\\genet-wpt.exe",
+        "testharness-one",
+        "webrtc/RTCPeerConnection-constructor.html",
+        "--test-path",
+        "C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests\\webrtc\\RTCPeerConnection-constructor.html",
+        "--tests-root",
+        "C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests",
+        "--engine",
+        "boa",
+        "--drive-deadline",
+        "5"
+      ]
+    },
+    {
+      "detail": null,
+      "failures": [],
+      "reason": null,
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "new RTCIceCandidate()",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({})",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ ... }) with manually filled default values",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ sdpMid: null, sdpMLineIndex: null })",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ candidate: '' })",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ candidate: null })",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ ... }) with valid candidate string only",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ sdpMid: 'audio' })",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ sdpMLineIndex: 0 })",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ sdpMid: 'audio', sdpMLineIndex: 0 })",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ candidate: '', sdpMid: 'audio' }",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ candidate: null, sdpMLineIndex: 0 }",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ ... }) with valid candidate string and sdpMid",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ ... }) with invalid candidate string and sdpMid",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ ... }) with nondefault values for most fields",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ ... }) with nondefault values for most fields, tcp candidate",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ ... }) with nondefault values for all fields",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ ... }) with nondefault values for all fields, tcp candidate",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ relayProtocol, url }) cloned vs signaled",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ ... }) with invalid sdpMid",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ ... }) with invalid sdpMLineIndex",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 21,
+      "subtests_total": 21,
+      "engine": "boa",
+      "test": "webrtc/RTCIceCandidate-constructor.html",
+      "exit_code": 0,
+      "command": [
+        "C:\\t\\cargo-targets\\genet\\debug\\genet-wpt.exe",
+        "testharness-one",
+        "webrtc/RTCIceCandidate-constructor.html",
+        "--test-path",
+        "C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests\\webrtc\\RTCIceCandidate-constructor.html",
+        "--tests-root",
+        "C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests",
+        "--engine",
+        "boa",
+        "--drive-deadline",
+        "5"
+      ]
+    },
+    {
+      "detail": null,
+      "failures": [
+        "        [1] addTrack, then creating datachannel, should negotiate properly promise_test: Unhandled rejection with value: object \"TypeError: cannot convert 'null' or 'undefined' to object\"",
+        "        [1] addTrack, then creating datachannel, should negotiate properly when max-bundle is used promise_test: Unhandled rejection with value: object \"TypeError: cannot convert 'null' or 'undefined' to object\"",
+        "        [1] Renegotiation with audio/video and datachannel should work properly promise_test: Unhandled rejection with value: object \"TypeError: cannot convert 'null' or 'undefined' to object\"",
+        "        [1] addTrack, then creating negotiated datachannel, should negotiate properly promise_test: Unhandled rejection with value: object \"TypeError: cannot convert 'null' or 'undefined' to object\"",
+        "        [1] addTrack, then creating negotiated datachannel, should negotiate properly when max-bundle is used promise_test: Unhandled rejection with value: object \"TypeError: cannot convert 'null' or 'undefined' to object\"",
+        "        [1] Renegotiation with audio/video and negotiated datachannel should work properly promise_test: Unhandled rejection with value: object \"TypeError: cannot convert 'null' or 'undefined' to object\""
+      ],
+      "reason": null,
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "createDataChannel with no argument should throw TypeError",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with closed connection should throw InvalidStateError",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel attribute default values",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with provided parameters should initialize attributes to provided values",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with label \"foo\" should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with label null should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with label undefined should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with label lone surrogate should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with ordered false should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with ordered null/undefined should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with maxPacketLifeTime 0 should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with maxRetransmits 0 should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with both maxPacketLifeTime and maxRetransmits undefined should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with both maxPacketLifeTime and maxRetransmits should throw TypeError",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with protocol \"foo\" should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with protocol null should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with protocol undefined should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with protocol lone surrogate should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with id 0 and negotiated not set should succeed, but not set the channel's id",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with id 1 and negotiated not set should succeed, but not set the channel's id",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with id 65534 and negotiated not set should succeed, but not set the channel's id",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with id 65535 and negotiated not set should succeed, but not set the channel's id",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with id 0 and negotiated true should succeed, and set the channel's id",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with id 1 and negotiated true should succeed, and set the channel's id",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with id 65534 and negotiated true should succeed, and set the channel's id",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with id -1 and negotiated not set should throw TypeError",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with id 65536 and negotiated not set should throw TypeError",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with id -1 should throw TypeError",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with id 65535 should throw TypeError",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with id 65536 should throw TypeError",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with too long label should throw TypeError",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with too long label (2 byte unicode) should throw TypeError",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with same label used twice should not throw",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with negotiated true and id should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with too long protocol should throw TypeError",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with too long protocol (2 byte unicode) should throw TypeError",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with maximum length label and protocol should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with negotiated false should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with negotiated false and id 42 should ignore the id",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with negotiated true and id not defined should throw TypeError",
+          "status": "pass"
+        },
+        {
+          "name": "Channels created (after SCTP connected) should have id assigned",
+          "status": "pass"
+        },
+        {
+          "name": "Reusing a data channel id that is in use should throw OperationError",
+          "status": "pass"
+        },
+        {
+          "name": "Reusing a data channel id that is in use (after setRemoteDescription) should throw OperationError",
+          "status": "pass"
+        },
+        {
+          "name": "Reusing a data channel id that is in use (after setRemoteDescription, negotiated via DCEP) should throw OperationError",
+          "status": "pass"
+        },
+        {
+          "name": "New datachannel should be in the connecting state after creation (after connection establishment)",
+          "status": "pass"
+        },
+        {
+          "name": "addTrack, then creating datachannel, should negotiate properly",
+          "status": "fail"
+        },
+        {
+          "name": "addTrack, then creating datachannel, should negotiate properly when max-bundle is used",
+          "status": "fail"
+        },
+        {
+          "name": "Renegotiation with audio/video and datachannel should work properly",
+          "status": "fail"
+        },
+        {
+          "name": "New negotiated datachannel should be in the connecting state after creation (after connection establishment)",
+          "status": "pass"
+        },
+        {
+          "name": "addTrack, then creating negotiated datachannel, should negotiate properly",
+          "status": "fail"
+        },
+        {
+          "name": "addTrack, then creating negotiated datachannel, should negotiate properly when max-bundle is used",
+          "status": "fail"
+        },
+        {
+          "name": "Renegotiation with audio/video and negotiated datachannel should work properly",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 46,
+      "subtests_total": 52,
+      "engine": "boa",
+      "test": "webrtc/RTCPeerConnection-createDataChannel.html",
+      "exit_code": 0,
+      "command": [
+        "C:\\t\\cargo-targets\\genet\\debug\\genet-wpt.exe",
+        "testharness-one",
+        "webrtc/RTCPeerConnection-createDataChannel.html",
+        "--test-path",
+        "C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests\\webrtc\\RTCPeerConnection-createDataChannel.html",
+        "--tests-root",
+        "C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests",
+        "--engine",
+        "boa",
+        "--drive-deadline",
+        "5"
+      ]
+    },
+    {
+      "detail": null,
+      "failures": [],
+      "reason": null,
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "RTCPeerConnection.length",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCPeerConnection()",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCPeerConnection(null)",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCPeerConnection(undefined)",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCPeerConnection({})",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCPeerConnection({ certificates: null })",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCPeerConnection({ certificates: undefined })",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCPeerConnection({ certificates: [] })",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCPeerConnection({ certificates: [null] })",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCPeerConnection({ certificates: [undefined] })",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCPeerConnection({ iceCandidatePoolSize: toNumberThrows })",
+          "status": "pass"
+        },
+        {
+          "name": "localDescription initial value",
+          "status": "pass"
+        },
+        {
+          "name": "currentLocalDescription initial value",
+          "status": "pass"
+        },
+        {
+          "name": "pendingLocalDescription initial value",
+          "status": "pass"
+        },
+        {
+          "name": "remoteDescription initial value",
+          "status": "pass"
+        },
+        {
+          "name": "currentRemoteDescription initial value",
+          "status": "pass"
+        },
+        {
+          "name": "pendingRemoteDescription initial value",
+          "status": "pass"
+        },
+        {
+          "name": "signalingState initial value",
+          "status": "pass"
+        },
+        {
+          "name": "iceGatheringState initial value",
+          "status": "pass"
+        },
+        {
+          "name": "iceConnectionState initial value",
+          "status": "pass"
+        },
+        {
+          "name": "connectionState initial value",
+          "status": "pass"
+        },
+        {
+          "name": "canTrickleIceCandidates initial value",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 22,
+      "subtests_total": 22,
+      "engine": "nova",
+      "test": "webrtc/RTCPeerConnection-constructor.html",
+      "exit_code": 0,
+      "command": [
+        "C:\\t\\cargo-targets\\genet\\debug\\genet-wpt.exe",
+        "testharness-one",
+        "webrtc/RTCPeerConnection-constructor.html",
+        "--test-path",
+        "C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests\\webrtc\\RTCPeerConnection-constructor.html",
+        "--tests-root",
+        "C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests",
+        "--engine",
+        "nova",
+        "--drive-deadline",
+        "5"
+      ]
+    },
+    {
+      "detail": null,
+      "failures": [],
+      "reason": null,
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "new RTCIceCandidate()",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({})",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ ... }) with manually filled default values",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ sdpMid: null, sdpMLineIndex: null })",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ candidate: '' })",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ candidate: null })",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ ... }) with valid candidate string only",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ sdpMid: 'audio' })",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ sdpMLineIndex: 0 })",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ sdpMid: 'audio', sdpMLineIndex: 0 })",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ candidate: '', sdpMid: 'audio' }",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ candidate: null, sdpMLineIndex: 0 }",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ ... }) with valid candidate string and sdpMid",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ ... }) with invalid candidate string and sdpMid",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ ... }) with nondefault values for most fields",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ ... }) with nondefault values for most fields, tcp candidate",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ ... }) with nondefault values for all fields",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ ... }) with nondefault values for all fields, tcp candidate",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ relayProtocol, url }) cloned vs signaled",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ ... }) with invalid sdpMid",
+          "status": "pass"
+        },
+        {
+          "name": "new RTCIceCandidate({ ... }) with invalid sdpMLineIndex",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 21,
+      "subtests_total": 21,
+      "engine": "nova",
+      "test": "webrtc/RTCIceCandidate-constructor.html",
+      "exit_code": 0,
+      "command": [
+        "C:\\t\\cargo-targets\\genet\\debug\\genet-wpt.exe",
+        "testharness-one",
+        "webrtc/RTCIceCandidate-constructor.html",
+        "--test-path",
+        "C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests\\webrtc\\RTCIceCandidate-constructor.html",
+        "--tests-root",
+        "C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests",
+        "--engine",
+        "nova",
+        "--drive-deadline",
+        "5"
+      ]
+    },
+    {
+      "detail": null,
+      "failures": [
+        "        [1] addTrack, then creating datachannel, should negotiate properly promise_test: Unhandled rejection with value: object \"TypeError: Cannot read property 'getUserMedia' of undefined.\"",
+        "        [1] addTrack, then creating datachannel, should negotiate properly when max-bundle is used promise_test: Unhandled rejection with value: object \"TypeError: Cannot read property 'getUserMedia' of undefined.\"",
+        "        [1] Renegotiation with audio/video and datachannel should work properly promise_test: Unhandled rejection with value: object \"TypeError: Cannot read property 'getUserMedia' of undefined.\"",
+        "        [1] addTrack, then creating negotiated datachannel, should negotiate properly promise_test: Unhandled rejection with value: object \"TypeError: Cannot read property 'getUserMedia' of undefined.\"",
+        "        [1] addTrack, then creating negotiated datachannel, should negotiate properly when max-bundle is used promise_test: Unhandled rejection with value: object \"TypeError: Cannot read property 'getUserMedia' of undefined.\"",
+        "        [1] Renegotiation with audio/video and negotiated datachannel should work properly promise_test: Unhandled rejection with value: object \"TypeError: Cannot read property 'getUserMedia' of undefined.\""
+      ],
+      "reason": null,
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "createDataChannel with no argument should throw TypeError",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with closed connection should throw InvalidStateError",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel attribute default values",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with provided parameters should initialize attributes to provided values",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with label \"foo\" should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with label null should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with label undefined should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with label lone surrogate should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with ordered false should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with ordered null/undefined should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with maxPacketLifeTime 0 should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with maxRetransmits 0 should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with both maxPacketLifeTime and maxRetransmits undefined should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with both maxPacketLifeTime and maxRetransmits should throw TypeError",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with protocol \"foo\" should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with protocol null should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with protocol undefined should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with protocol lone surrogate should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with id 0 and negotiated not set should succeed, but not set the channel's id",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with id 1 and negotiated not set should succeed, but not set the channel's id",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with id 65534 and negotiated not set should succeed, but not set the channel's id",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with id 65535 and negotiated not set should succeed, but not set the channel's id",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with id 0 and negotiated true should succeed, and set the channel's id",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with id 1 and negotiated true should succeed, and set the channel's id",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with id 65534 and negotiated true should succeed, and set the channel's id",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with id -1 and negotiated not set should throw TypeError",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with id 65536 and negotiated not set should throw TypeError",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with id -1 should throw TypeError",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with id 65535 should throw TypeError",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with id 65536 should throw TypeError",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with too long label should throw TypeError",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with too long label (2 byte unicode) should throw TypeError",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with same label used twice should not throw",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with negotiated true and id should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with too long protocol should throw TypeError",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with too long protocol (2 byte unicode) should throw TypeError",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with maximum length label and protocol should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with negotiated false should succeed",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with negotiated false and id 42 should ignore the id",
+          "status": "pass"
+        },
+        {
+          "name": "createDataChannel with negotiated true and id not defined should throw TypeError",
+          "status": "pass"
+        },
+        {
+          "name": "Channels created (after SCTP connected) should have id assigned",
+          "status": "pass"
+        },
+        {
+          "name": "Reusing a data channel id that is in use should throw OperationError",
+          "status": "pass"
+        },
+        {
+          "name": "Reusing a data channel id that is in use (after setRemoteDescription) should throw OperationError",
+          "status": "pass"
+        },
+        {
+          "name": "Reusing a data channel id that is in use (after setRemoteDescription, negotiated via DCEP) should throw OperationError",
+          "status": "pass"
+        },
+        {
+          "name": "New datachannel should be in the connecting state after creation (after connection establishment)",
+          "status": "pass"
+        },
+        {
+          "name": "addTrack, then creating datachannel, should negotiate properly",
+          "status": "fail"
+        },
+        {
+          "name": "addTrack, then creating datachannel, should negotiate properly when max-bundle is used",
+          "status": "fail"
+        },
+        {
+          "name": "Renegotiation with audio/video and datachannel should work properly",
+          "status": "fail"
+        },
+        {
+          "name": "New negotiated datachannel should be in the connecting state after creation (after connection establishment)",
+          "status": "pass"
+        },
+        {
+          "name": "addTrack, then creating negotiated datachannel, should negotiate properly",
+          "status": "fail"
+        },
+        {
+          "name": "addTrack, then creating negotiated datachannel, should negotiate properly when max-bundle is used",
+          "status": "fail"
+        },
+        {
+          "name": "Renegotiation with audio/video and negotiated datachannel should work properly",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 46,
+      "subtests_total": 52,
+      "engine": "nova",
+      "test": "webrtc/RTCPeerConnection-createDataChannel.html",
+      "exit_code": 0,
+      "command": [
+        "C:\\t\\cargo-targets\\genet\\debug\\genet-wpt.exe",
+        "testharness-one",
+        "webrtc/RTCPeerConnection-createDataChannel.html",
+        "--test-path",
+        "C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests\\webrtc\\RTCPeerConnection-createDataChannel.html",
+        "--tests-root",
+        "C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests",
+        "--engine",
+        "nova",
+        "--drive-deadline",
+        "5"
+      ]
+    },
+    {
+      "detail": null,
+      "failures": [],
+      "reason": null,
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "RTCPeerConnectionIceErrorEvent constructed from init parameters",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1,
+      "engine": "boa",
+      "test": "webrtc/RTCPeerConnectionIceErrorEvent.html",
+      "exit_code": 0,
+      "command": [
+        "C:\\t\\cargo-targets\\genet\\debug\\genet-wpt.exe",
+        "testharness-one",
+        "webrtc/RTCPeerConnectionIceErrorEvent.html",
+        "--test-path",
+        "C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests\\webrtc\\RTCPeerConnectionIceErrorEvent.html",
+        "--tests-root",
+        "C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests",
+        "--engine",
+        "boa",
+        "--drive-deadline",
+        "5"
+      ]
+    },
+    {
+      "detail": null,
+      "failures": [],
+      "reason": null,
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "RTCPeerConnectionIceErrorEvent constructed from init parameters",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 1,
+      "subtests_total": 1,
+      "engine": "nova",
+      "test": "webrtc/RTCPeerConnectionIceErrorEvent.html",
+      "exit_code": 0,
+      "command": [
+        "C:\\t\\cargo-targets\\genet\\debug\\genet-wpt.exe",
+        "testharness-one",
+        "webrtc/RTCPeerConnectionIceErrorEvent.html",
+        "--test-path",
+        "C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests\\webrtc\\RTCPeerConnectionIceErrorEvent.html",
+        "--tests-root",
+        "C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests",
+        "--engine",
+        "nova",
+        "--drive-deadline",
+        "5"
+      ]
+    }
+  ],
+  "frozen_case_comparison": [
+    {
+      "engine": "boa",
+      "test": "webrtc/RTCPeerConnection-constructor.html",
+      "missing": [],
+      "added": [],
+      "regressions": []
+    },
+    {
+      "engine": "boa",
+      "test": "webrtc/RTCIceCandidate-constructor.html",
+      "missing": [],
+      "added": [],
+      "regressions": []
+    },
+    {
+      "engine": "boa",
+      "test": "webrtc/RTCPeerConnection-createDataChannel.html",
+      "missing": [],
+      "added": [],
+      "regressions": []
+    },
+    {
+      "engine": "nova",
+      "test": "webrtc/RTCPeerConnection-constructor.html",
+      "missing": [],
+      "added": [],
+      "regressions": []
+    },
+    {
+      "engine": "nova",
+      "test": "webrtc/RTCIceCandidate-constructor.html",
+      "missing": [],
+      "added": [],
+      "regressions": []
+    },
+    {
+      "engine": "nova",
+      "test": "webrtc/RTCPeerConnection-createDataChannel.html",
+      "missing": [],
+      "added": [],
+      "regressions": []
+    }
+  ]
+}
+```
+
+
+## 2026-11-01: E1c receiving controlled coturn
+
+```json
+{
+  "source_revision": "0f38cba4fbe9d5a8158170f18469743b8b7c4433",
+  "utc": "2026-11-02T01:12:33.047545+00:00",
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "genet-webrtc",
+    "--test",
+    "browser",
+    "--locked",
+    "--offline",
+    "-j",
+    "1",
+    "--",
+    "--ignored",
+    "--test-threads=1"
+  ],
+  "exit": 0,
+  "seconds": 31.05,
+  "stdout": [
+    "",
+    "running 2 tests",
+    "test boa::coturn_relay ... ok",
+    "test vano::coturn_relay ... ok",
+    "",
+    "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 16 filtered out; finished in 20.91s",
+    ""
+  ],
+  "stderr_tail": [
+    "",
+    "warning: `genet-runtime` (lib) generated 4 warnings (run `cargo fix --lib -p genet-runtime` to apply 1 suggestion)",
+    "    Finished `test` profile [unoptimized] target(s) in 9.93s",
+    "     Running tests\\browser.rs (C:\\t\\cargo-targets\\genet\\build\\debug\\deps\\browser-44f1dcb4b50f684f.exe)"
+  ],
+  "binary_sha256": "4253487a709d23de1d53b3c51da76d564d946ce7f2218164dd8bd22ca8fa0026"
+}
+```
+
+
+## 2026-11-01: E1c Ortet receiving check
+
+```json
+{
+  "source_revision": "0f38cba4fbe9d5a8158170f18469743b8b7c4433",
+  "utc": "2026-11-02T01:13:05.550381+00:00",
+  "command": [
+    "cargo",
+    "check",
+    "-p",
+    "ortet",
+    "--features",
+    "scripted-nova",
+    "--all-targets",
+    "--locked",
+    "--offline",
+    "-j",
+    "1"
+  ],
+  "exit": 0,
+  "seconds": 20.83,
+  "stderr_tail": [
+    "warning: `genet-documents` (lib) generated 3 warnings (run `cargo fix --lib -p genet-documents` to apply 2 suggestions)",
+    "    Checking genet-webrtc v0.2.0 (C:\\Users\\mark_\\Code\\repos\\genet\\components\\genet-webrtc)",
+    "    Checking ortet v0.2.0 (C:\\Users\\mark_\\Code\\repos\\genet\\ports\\ortet)",
+    "warning: unused import: `SessionClick`",
+    "  --> ports\\ortet\\src\\shell.rs:19:42",
+    "   |",
+    "19 |     DocumentSession, SessionButtonState, SessionClick, SessionCursor, SessionEffect, SessionEngine,",
+    "   |                                          ^^^^^^^^^^^^",
+    "   |",
+    "   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default",
+    "",
+    "warning: method `navigate` is never used",
+    "   --> ports\\ortet\\src\\shell.rs:754:8",
+    "    |",
+    "462 | impl Ortet {",
+    "    | ---------- method in this implementation",
+    "...",
+    "754 |     fn navigate(&mut self, target: &str) {",
+    "    |        ^^^^^^^^",
+    "    |",
+    "    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default",
+    "",
+    "warning: `ortet` (lib) generated 2 warnings (run `cargo fix --lib -p ortet` to apply 1 suggestion)",
+    "warning: `ortet` (lib test) generated 1 warning (1 duplicate)",
+    "    Finished `dev` profile [unoptimized] target(s) in 20.58s"
+  ]
+}
+```
+
+
+## 2026-11-01: coturn confirms allocation refresh and release
+
+{
+  "source_revision": "0f38cba4fbe9d5a8158170f18469743b8b7c4433",
+  "fixture": "murm/wire/crates/rtc/tests/coturn.sh (verbose)",
+  "server": "coturn 4.6.1, WSL local virtual network",
+  "allocations": 4,
+  "renewals": 22,
+  "releases": 4,
+  "observed_lines": [
+    "96: : session 000000000000000001: realm <murm-rtc.test> user <rtc-test>: incoming packet ALLOCATE processed, success",
+    "96: : session 000000000000000002: realm <murm-rtc.test> user <rtc-test>: incoming packet ALLOCATE processed, success",
+    "96: : session 000000000000000001: realm <murm-rtc.test> user <rtc-test>: incoming packet CREATE_PERMISSION processed, success",
+    "96: : session 000000000000000002: realm <murm-rtc.test> user <rtc-test>: incoming packet CREATE_PERMISSION processed, success",
+    "96: : session 000000000000000001: realm <murm-rtc.test> user <rtc-test>: incoming packet CREATE_PERMISSION processed, success",
+    "96: : session 000000000000000002: realm <murm-rtc.test> user <rtc-test>: incoming packet CREATE_PERMISSION processed, success",
+    "96: : session 000000000000000001: realm <murm-rtc.test> user <rtc-test>: incoming packet CREATE_PERMISSION processed, success",
+    "96: : session 000000000000000002: realm <murm-rtc.test> user <rtc-test>: incoming packet CREATE_PERMISSION processed, success",
+    "96: : session 000000000000000001: realm <murm-rtc.test> user <rtc-test>: incoming packet CREATE_PERMISSION processed, success",
+    "97: : session 000000000000000001: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=600",
+    "97: : session 000000000000000001: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success",
+    "97: : session 000000000000000002: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=600",
+    "97: : session 000000000000000002: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success",
+    "98: : session 000000000000000002: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=600",
+    "98: : session 000000000000000002: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success",
+    "98: : session 000000000000000001: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=600",
+    "98: : session 000000000000000001: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success",
+    "99: : session 000000000000000002: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=600",
+    "99: : session 000000000000000002: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success",
+    "99: : session 000000000000000001: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=600",
+    "99: : session 000000000000000001: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success",
+    "100: : session 000000000000000001: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=600",
+    "100: : session 000000000000000001: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success",
+    "100: : session 000000000000000002: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=600",
+    "100: : session 000000000000000002: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success",
+    "101: : session 000000000000000001: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=600",
+    "101: : session 000000000000000001: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success",
+    "101: : session 000000000000000002: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=600",
+    "101: : session 000000000000000002: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success",
+    "102: : session 000000000000000001: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=600",
+    "102: : session 000000000000000001: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success",
+    "102: : session 000000000000000002: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=600",
+    "102: : session 000000000000000002: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success",
+    "102: : session 000000000000000001: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=0",
+    "102: : session 000000000000000001: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success",
+    "102: : session 000000000000000002: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=0",
+    "102: : session 000000000000000002: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success",
+    "104: : session 000000000000000003: realm <murm-rtc.test> user <rtc-test>: incoming packet ALLOCATE processed, success",
+    "104: : session 000000000000000004: realm <murm-rtc.test> user <rtc-test>: incoming packet ALLOCATE processed, success",
+    "104: : session 000000000000000003: realm <murm-rtc.test> user <rtc-test>: incoming packet CREATE_PERMISSION processed, success",
+    "104: : session 000000000000000004: realm <murm-rtc.test> user <rtc-test>: incoming packet CREATE_PERMISSION processed, success",
+    "104: : session 000000000000000003: realm <murm-rtc.test> user <rtc-test>: incoming packet CREATE_PERMISSION processed, success",
+    "104: : session 000000000000000004: realm <murm-rtc.test> user <rtc-test>: incoming packet CREATE_PERMISSION processed, success",
+    "104: : session 000000000000000003: realm <murm-rtc.test> user <rtc-test>: incoming packet CREATE_PERMISSION processed, success",
+    "104: : session 000000000000000004: realm <murm-rtc.test> user <rtc-test>: incoming packet CREATE_PERMISSION processed, success",
+    "105: : session 000000000000000003: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=600",
+    "105: : session 000000000000000003: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success",
+    "105: : session 000000000000000004: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=600",
+    "105: : session 000000000000000004: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success",
+    "106: : session 000000000000000003: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=600",
+    "106: : session 000000000000000003: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success",
+    "106: : session 000000000000000004: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=600",
+    "106: : session 000000000000000004: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success",
+    "107: : session 000000000000000003: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=600",
+    "107: : session 000000000000000003: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success",
+    "107: : session 000000000000000004: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=600",
+    "107: : session 000000000000000004: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success",
+    "108: : session 000000000000000003: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=600",
+    "108: : session 000000000000000003: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success",
+    "108: : session 000000000000000004: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=600",
+    "108: : session 000000000000000004: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success",
+    "110: : session 000000000000000003: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=600",
+    "110: : session 000000000000000003: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success",
+    "110: : session 000000000000000004: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=600",
+    "110: : session 000000000000000004: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success",
+    "111: : session 000000000000000003: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=0",
+    "111: : session 000000000000000003: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success",
+    "111: : session 000000000000000004: refreshed, realm=<murm-rtc.test>, username=<rtc-test>, lifetime=0",
+    "111: : session 000000000000000004: realm <murm-rtc.test> user <rtc-test>: incoming packet REFRESH processed, success"
+  ]
+}
+
+
+## 2026-11-01: E1c final source and receiving audit
+
+Source committed before the final ordinary/WPT/controlled/Ortet gates. The
+strict native library Clippy gate (`cargo clippy -p genet-webrtc --lib --no-deps
+--locked --offline -j 1 -- -D warnings`) passed on these source bytes before the
+source commit; inherited runtime/Ortet warnings remain outside this slice.
+Final native ordinary gate: 16 passed; the two explicitly selected coturn cases
+also passed, for 18 native receiving checks across Boa/Vano. Coturn confirms
+four allocations, 22 renewals and four lifetime-zero releases in the separate
+server observations above. Original selected WPT remains 89/95 per engine,
+with zero missing, added or regressed identities. The separate unmodified
+ICE-error constructor WPT passes 1/1 per engine. Six media assertions remain
+failed; the selection is not a whole manifest denominator.
+
+The first native relay attempts caught missing local server URLs. The supplier
+now registers that metadata explicitly, and Genet retains it from the core's
+separate event field for candidate events and transport getters while omitting
+it from JS signaling JSON. Earlier supplier/test conversion, completion and
+close-flush corrections are recorded in Murm's receipt. One exploratory WPT
+capture parser expected bare JSON; the final gate parses the actual __thresult
+marker and preserves all original case rows.
+
+The root lock is ignored by repository policy. Its only change from the full
+prior receiving lock is the exact Murm source revision below. No new package
+versions were selected. Reused C:\t\cargo-targets\genet and its build directory,
+debug=0, jobs=1. No isolated target, Cargo home or worktree was created. The
+foreground coturn fixture has been stopped; its installed system service is
+inactive and disabled. No fixture process is retained.
+
+Qualified scope: native Windows/WSL virtual network, IP-literal UDP STUN/TURN,
+caller-driven I/O, typed gathering events and the selected tests. DNS, TCP/TLS,
+mDNS, restart/reconfiguration, allocation/permission expiry and recovery,
+induced loss/saturation, public deployment, media, headed interoperability,
+browser guest and application-carrier migration remain open.
+
+```json
+{
+  "source_revision": "0f38cba4fbe9d5a8158170f18469743b8b7c4433",
+  "supplier_revision": "ebafed19bf68edcfa0c276f0693a2bf45c858174",
+  "toolchain": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "lock_sha256": "e3efb15480e914bec5fb39bf2b3294aa43d1bee4f5ee40eef4f0b01ca71c9884",
+  "source_blobs": {
+    "components/genet-webrtc/Cargo.toml": "82f9fdb1f3266a722da3433bd1ce28472bb2add4",
+    "components/genet-webrtc/src/lib.rs": "c7092bde7f5b66126927f14b54506672878828a2",
+    "components/genet-webrtc/tests/browser.rs": "1c417f60778e793061e1f6c62013251224bb53f1",
+    "components/script-runtime-api/webrtc/bootstrap.js": "cfe4526a1736651c8c3357eef3725de3fa74974c"
+  }
+}
+```
+
+```diff
+--- prior-receiving-lock
+
++++ E1c-receiving-lock
+
+@@ -4567,7 +4567,7 @@
+
+ [[package]]
+ name = "murm-rtc"
+ version = "0.1.0"
+-source = "git+https://github.com/merely-made/murm.git?rev=c58b70421d31ed9f2288dc44152dcb6d719552a9#c58b70421d31ed9f2288dc44152dcb6d719552a9"
++source = "git+https://github.com/merely-made/murm.git?rev=ebafed19bf68edcfa0c276f0693a2bf45c858174#ebafed19bf68edcfa0c276f0693a2bf45c858174"
+ dependencies = [
+  "bytes",
+  "rtc",
+```

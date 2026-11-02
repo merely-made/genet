@@ -258,12 +258,15 @@ fn prepared_batch_rejects_all_jobs_atomically() {
         scale: 1.0f32.to_bits(),
         quantize: true,
     };
-    for stale_index in [0, 1] {
+    // One eligible group (one job), one fallback group (three jobs),
+    // then the invalid later group at physical index four.
+    for stale_index in [0, 1, 4] {
         for stale_font in [false, true] {
             let mut system = super::TextSystem::new();
             let seed = system.key_seed.clone();
             let key = super::cache::ShapeKey::new(system.font_generation, input.clone(), &seed);
-            let mut jobs = (0..3)
+            let mut jobs = [0, 1, 1, 1, 2]
+                .into_iter()
                 .map(|i| ShapeJob {
                     group: InlineGroupId(i),
                     generation: 17,

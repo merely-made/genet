@@ -7,6 +7,15 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
 };
 
+#[cfg(test)]
+thread_local! {
+    pub(crate) static FIXTURE_FAULT: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
+    pub(crate) static FIXTURE_UPDATES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+thread_local! { pub(crate) static FIXTURE_GATE: std::cell::Cell<(usize, usize, usize)> = const { std::cell::Cell::new((0, 0, 0)) }; }
+
 pub(super) struct PreparedMeasure {
     pub template: Arc<crate::text::prepared::PreparedInlineGroup>,
     pub generation: u64,
@@ -75,20 +84,54 @@ impl TextBatch {
         text.account_collection_ns(std::mem::take(&mut self.collect_ns));
         let mut jobs = Vec::new();
         for (_, measure, style) in &self.pending {
+            #[cfg(test)]
+            FIXTURE_GATE.with(|c| {
+                let (ready, empty, eligible) = c.get();
+                let r = measure.template.ready::<D::NodeId, _>(atomic);
+                let e = r && measure.template.test_empty_events();
+                let q = e && crate::text::test_equivalent_overflow(&measure.template, style);
+                c.set((
+                    ready + usize::from(r),
+                    empty + usize::from(e),
+                    eligible + usize::from(q),
+                ));
+            });
             if measure.template.ready::<D::NodeId, _>(atomic) {
-                for key in text.prepared_shape_keys_for_ready::<D::NodeId, _>(
-                    &measure.template,
-                    atomic,
-                    style,
-                ) {
+                if measure.template.can_share_eager_key(style) {
                     jobs.push(crate::text::ShapeJob {
                         group: measure.group,
                         generation: self.generation,
-                        key,
+                        key: text.prepared_min_shape_key_for_ready::<D::NodeId, _>(
+                            &measure.template,
+                            atomic,
+                            style,
+                        ),
                     });
+                } else {
+                    for key in text.prepared_shape_keys_for_ready::<D::NodeId, _>(
+                        &measure.template,
+                        atomic,
+                        style,
+                    ) {
+                        jobs.push(crate::text::ShapeJob {
+                            group: measure.group,
+                            generation: self.generation,
+                            key,
+                        });
+                    }
                 }
             }
         }
+        #[cfg(test)]
+        FIXTURE_FAULT.with(|fault| {
+            if let Some(index) = fault.replace(None) {
+                assert_eq!(
+                    jobs.iter().map(|job| job.group.0).collect::<Vec<_>>(),
+                    [0, 1, 1, 1, 2]
+                );
+                jobs[index].generation = self.generation.wrapping_add(1);
+            }
+        });
         let results = text
             .shape_batch(&jobs, self.generation)
             .map_err(|e| LayoutError::retained_state(format!("inline batch rejected: {e:?}")))?;
@@ -101,6 +144,8 @@ impl TextBatch {
             measure.results = by_group.remove(&measure.group).unwrap_or_default();
             updates.insert(node, measure);
         }
+        #[cfg(test)]
+        FIXTURE_UPDATES.with(|count| count.set(count.get() + 1));
         tree.update_contexts(|node, context| {
             if let Some(measure) = updates.remove(&node) {
                 context.prepared = Some(measure);

@@ -4764,3 +4764,63 @@ fn retained_geometry_dependent_text_edits_match_fresh_uncached() {
         );
     }
 }
+
+#[test]
+fn shaping_benchmark_real_fixtures_are_ready_and_equivalent() {
+    mod fixture {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/examples/support/shaping_fixture.rs"
+        ));
+    }
+    for case in ["small", "article"] {
+        let html = fixture::html(case, 2048, fixture::paragraph(case));
+        let css = "@font-face { font-family: 'Fixture'; src: url('fixture.ttf'); } body { font-family: 'Fixture'; margin: 0; } p { margin: 0 0 8px; }";
+        let dom = ScriptedDom::from_serialized_document(&html);
+        let mut document =
+            LiveryDocument::new(dom, StyleSet::cambium(&[css]), Device::screen(800.0, 600.0));
+        document.set_font_resource(
+            "fixture.ttf",
+            include_bytes!("../../../../tests/wpt/tests/fonts/Ahem.ttf").to_vec(),
+        );
+        crate::layout::FIXTURE_GATE.with(|c| c.set((0, 0, 0)));
+        crate::text::READY_KEY_WORK.with(|c| c.set((0, 0, 0, 0)));
+        document.frame(800, 600).expect("fixture frame");
+        assert_eq!(
+            crate::layout::FIXTURE_GATE.with(|c| c.get()),
+            (2048, 2048, 2048),
+            "{case}"
+        );
+        assert_eq!(
+            crate::text::READY_KEY_WORK.with(|c| c.get().3),
+            6144,
+            "{case}: one eager plus two current keys per group"
+        );
+    }
+}
+
+#[test]
+fn later_invalid_actual_group_rejects_before_context_updates() {
+    let html = "<html><body><p>eligible one</p><p>fallback <span>inline</span></p><p>eligible three</p></body></html>";
+    let mut document = LiveryDocument::new(
+        ScriptedDom::from_serialized_document(html),
+        StyleSet::cambium(&["p { margin: 0; }"]),
+        Device::screen(800.0, 600.0),
+    );
+    crate::layout::FIXTURE_UPDATES.with(|c| c.set(0));
+    crate::layout::FIXTURE_FAULT.with(|c| c.set(Some(4)));
+    let error = document
+        .frame(800, 600)
+        .err()
+        .expect("invalid physical job must reject frame");
+    assert!(
+        format!("{error:?}").contains("index: 4, kind: PassGeneration"),
+        "{error:?}"
+    );
+    assert_eq!(crate::layout::FIXTURE_UPDATES.with(|c| c.get()), 0);
+    let stats = document.text_system().shaping_stats();
+    assert_eq!(
+        (stats.batches, stats.unique_jobs, stats.cache_misses),
+        (0, 0, 0)
+    );
+}

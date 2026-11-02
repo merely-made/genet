@@ -53,6 +53,7 @@ pub(crate) struct ShapeInput {
     pub(super) quantize: bool,
 }
 
+// Intrinsic-dependent properties must also be checked by can_share_eager_key.
 pub(super) fn properties(
     style: &ComputedValues,
     source_index: usize,
@@ -390,6 +391,48 @@ pub(super) enum GeometryEvent {
 }
 
 impl PreparedInlineGroup {
+    // Keep in sync with every intrinsic-dependent input in properties. Empty
+    // events make materialized geometry identical for the three requests.
+    pub(crate) fn can_share_eager_key(&self, root: &ComputedValues) -> bool {
+        if !self.events.is_empty() {
+            return false;
+        }
+        let equivalent = |style: &ComputedValues| {
+            let min = overflow_wrap(style, Some(IntrinsicSizeKind::MinContent));
+            min == overflow_wrap(style, Some(IntrinsicSizeKind::MaxContent))
+                && min == overflow_wrap(style, None)
+        };
+        equivalent(self.spans.first().map_or(root, |span| &span.style))
+            && self.spans.iter().all(|span| equivalent(&span.style))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_empty_events(&self) -> bool {
+        self.events.is_empty()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_individual_event_rejections(
+        &mut self,
+        root: &ComputedValues,
+    ) -> (usize, usize, usize) {
+        let events = std::mem::take(&mut self.events);
+        let mut restored = Vec::new();
+        let mut counts = (0, 0, 0);
+        for event in events {
+            match &event {
+                GeometryEvent::Begin { .. } => counts.0 += 1,
+                GeometryEvent::End { .. } => counts.1 += 1,
+                GeometryEvent::Atomic { .. } => counts.2 += 1,
+            }
+            self.events.push(event);
+            assert!(!self.can_share_eager_key(root));
+            restored.push(self.events.pop().unwrap());
+        }
+        self.events = restored;
+        counts
+    }
+
     pub(crate) fn collect<D: LayoutDom>(
         dom: &D,
         styles: &StylePlane<D::NodeId>,

@@ -253,7 +253,7 @@ pub(crate) struct ShapeResult {
 thread_local! {
     // Counts actual key-resolution call sites and key/materialization boundaries.
     static READY_KEY_TIMED: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
-    static READY_KEY_WORK: std::cell::Cell<(usize, usize, usize, usize)> = const { std::cell::Cell::new((0, 0, 0, 0)) };
+    pub(crate) static READY_KEY_WORK: std::cell::Cell<(usize, usize, usize, usize)> = const { std::cell::Cell::new((0, 0, 0, 0)) };
 }
 
 #[cfg(test)]
@@ -1654,6 +1654,27 @@ impl TextSystem {
             &atoms,
             root_style,
             intrinsic_kind,
+        )
+    }
+
+    pub(crate) fn prepared_min_shape_key_for_ready<Id, F: FragmentLookup<Id>>(
+        &mut self,
+        prepared: &prepared::PreparedInlineGroup,
+        fragments: &F,
+        root_style: &ComputedValues,
+    ) -> ShapeKey {
+        #[cfg(test)]
+        ready_key_work(|w| w.2 += 1);
+        let atoms =
+            prepared.materialize::<Id, _>(fragments, 0.01, Some(IntrinsicSizeKind::MinContent));
+        let resolved = self.resolve_shape_styles(&prepared.spans, root_style);
+        self.shape_key_with_resolved(
+            &prepared.text,
+            &prepared.spans,
+            &atoms,
+            root_style,
+            Some(IntrinsicSizeKind::MinContent),
+            &resolved,
         )
     }
 
@@ -6497,6 +6518,20 @@ fn word_break(style: &ComputedValues) -> ParleyWordBreak {
     }
 }
 
+#[cfg(test)]
+pub(crate) fn test_equivalent_overflow(
+    prepared: &prepared::PreparedInlineGroup,
+    root: &ComputedValues,
+) -> bool {
+    let equivalent = |style: &ComputedValues| {
+        let min = overflow_wrap(style, Some(IntrinsicSizeKind::MinContent));
+        min == overflow_wrap(style, Some(IntrinsicSizeKind::MaxContent))
+            && min == overflow_wrap(style, None)
+    };
+    equivalent(prepared.spans.first().map_or(root, |span| &span.style))
+        && prepared.spans.iter().all(|span| equivalent(&span.style))
+}
+
 fn overflow_wrap(
     style: &ComputedValues,
     intrinsic_kind: Option<IntrinsicSizeKind>,
@@ -9897,11 +9932,129 @@ pub(crate) mod prepared_geometry_tests {
     }
 
     #[test]
+    fn eager_equivalence_rejects_events_and_differing_span_policy() {
+        type Node = <StaticDocument as LayoutDom>::NodeId;
+        let dom =
+            StaticDocument::parse("<div><span id=a>first</span><span id=b>second</span></div>");
+        let styles = resolve_styles(
+            &dom,
+            &StyleSet::cambium(&[]),
+            &Device::screen(320.0, 240.0),
+            &InteractionStates::default(),
+        );
+        let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+        let span = boxes
+            .iter()
+            .find_map(|(id, b)| {
+                b.origin
+                    .node()
+                    .filter(|n| {
+                        dom.attribute(*n, &Namespace::from(""), &LocalName::from("id")) == Some("a")
+                    })
+                    .map(|_| id)
+            })
+            .unwrap();
+        let text = *boxes[span]
+            .children()
+            .iter()
+            .find(|id| matches!(boxes[**id].origin, BoxOrigin::Text(_)))
+            .unwrap();
+        let parent = ComputedValues::default();
+        let mut nested =
+            prepared::PreparedInlineGroup::collect(&dom, &styles, &boxes, &[span], &parent);
+        assert_eq!(nested.test_individual_event_rejections(&parent), (1, 1, 0));
+        assert!(!nested.test_empty_events());
+        assert!(!nested.can_share_eager_key(&parent));
+        let mut plain =
+            prepared::PreparedInlineGroup::collect(&dom, &styles, &boxes, &[text], &parent);
+        let plane = Plane {
+            atom: span,
+            fragment: None,
+            baseline: 0.0,
+        };
+        assert!(plain.ready::<Node, _>(&plane));
+        assert!(plain.can_share_eager_key(&parent));
+        plain.spans[0].style.overflow_wrap = CssOverflowWrap::BreakWord;
+        assert!(!plain.can_share_eager_key(&parent));
+        plain.spans[0].style.word_break = CssWordBreak::BreakWord;
+        assert!(plain.can_share_eager_key(&parent));
+        let mut second = plain.spans[0].clone();
+        second.style.word_break = CssWordBreak::Normal;
+        plain.spans.push(second);
+        assert!(!plain.can_share_eager_key(&parent));
+        plain.spans.clear();
+        let mut different_root = parent.clone();
+        different_root.overflow_wrap = CssOverflowWrap::BreakWord;
+        assert!(!plain.can_share_eager_key(&different_root));
+        assert!(plain.can_share_eager_key(&parent));
+    }
+
+    #[test]
+    fn eager_equivalence_rejects_atomic_event_with_and_without_geometry() {
+        type Node = <StaticDocument as LayoutDom>::NodeId;
+        let dom = StaticDocument::parse("<div><img id=atom></div>");
+        let styles = resolve_styles(
+            &dom,
+            &StyleSet::cambium(&[]),
+            &Device::screen(320.0, 240.0),
+            &InteractionStates::default(),
+        );
+        let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+        let atom = boxes
+            .iter()
+            .find_map(|(id, b)| {
+                b.origin
+                    .node()
+                    .filter(|n| {
+                        dom.attribute(*n, &Namespace::from(""), &LocalName::from("id"))
+                            == Some("atom")
+                    })
+                    .map(|_| id)
+            })
+            .unwrap();
+        let parent = ComputedValues::default();
+        let mut prepared =
+            prepared::PreparedInlineGroup::collect(&dom, &styles, &boxes, &[atom], &parent);
+        assert_eq!(
+            prepared.test_individual_event_rejections(&parent),
+            (0, 0, 1)
+        );
+        let missing = Plane {
+            atom,
+            fragment: None,
+            baseline: 0.0,
+        };
+        let fixed = Plane {
+            atom,
+            fragment: Some(Fragment {
+                width: 29.0,
+                height: 12.0,
+                ..Fragment::default()
+            }),
+            baseline: 6.0,
+        };
+        assert!(!prepared.ready::<Node, _>(&missing));
+        assert!(prepared.ready::<Node, _>(&fixed));
+        assert!(!prepared.can_share_eager_key(&parent));
+        let widths = [
+            Some(IntrinsicSizeKind::MinContent),
+            Some(IntrinsicSizeKind::MaxContent),
+            None,
+        ]
+        .map(|kind| prepared.materialize::<Node, _>(&fixed, 320.0, kind)[0].line_width);
+        assert_eq!(widths, [7.0, 19.0, 29.0]);
+    }
+
+    #[test]
     fn ready_keys_match_independent_original_requests_after_font_registration() {
         use std::hash::{Hash, Hasher};
         type Node = <StaticDocument as LayoutDom>::NodeId;
         let font = include_bytes!("../../../tests/wpt/tests/fonts/Ahem.ttf").to_vec();
         for (markup, css) in [
+            (
+                "<div><span id=a>eligible hello world</span></div>",
+                "#a { overflow-wrap: anywhere; }",
+            ),
             ("<div><span id=a></span></div>", ""),
             (
                 "<div><span id=a>hello\tworld</span></div>",
@@ -9935,7 +10088,14 @@ pub(crate) mod prepared_geometry_tests {
                         .map(|_| id)
                 })
             };
-            let root = find("a").unwrap();
+            let mut root = find("a").unwrap();
+            if markup.contains("eligible hello world") {
+                root = *boxes[root]
+                    .children()
+                    .iter()
+                    .find(|id| matches!(boxes[**id].origin, BoxOrigin::Text(_)))
+                    .expect("text box");
+            }
             let atom = find("atom").unwrap_or(root);
             let plane = Plane {
                 atom,
@@ -10031,9 +10191,19 @@ pub(crate) mod prepared_geometry_tests {
                     let n = 1 + prepared.spans.len();
                     assert_eq!(READY_KEY_WORK.with(|w| w.get()), (3 * n, 3 * n, 3, 3));
                     READY_KEY_WORK.with(|w| w.set((0, 0, 0, 0)));
-                    let got =
-                        actual.prepared_shape_keys_for_ready::<Node, _>(&prepared, &plane, &parent);
-                    assert_eq!(READY_KEY_WORK.with(|w| w.get()), (n, n, 3, 3));
+                    let eligible = markup.contains("eligible hello world");
+                    let got = if eligible {
+                        let key = actual.prepared_min_shape_key_for_ready::<Node, _>(
+                            &prepared, &plane, &parent,
+                        );
+                        [key.clone(), key.clone(), key]
+                    } else {
+                        actual.prepared_shape_keys_for_ready::<Node, _>(&prepared, &plane, &parent)
+                    };
+                    assert_eq!(
+                        READY_KEY_WORK.with(|w| w.get()),
+                        if eligible { (n, n, 1, 1) } else { (n, n, 3, 3) }
+                    );
                     assert_eq!(
                         expected, got,
                         "{markup} {css} prewarm={prewarm} generation={generation}"
@@ -10082,7 +10252,22 @@ pub(crate) mod prepared_geometry_tests {
                             .collect::<Vec<_>>()
                     };
                     let ref_results = reference.shape_batch(&jobs(&expected), 42).unwrap();
-                    let results = actual.shape_batch(&jobs(&got), 42).unwrap();
+                    let actual_jobs = jobs(&got);
+                    let results = actual
+                        .shape_batch(
+                            if eligible {
+                                &actual_jobs[..1]
+                            } else {
+                                &actual_jobs
+                            },
+                            42,
+                        )
+                        .unwrap();
+                    if markup.contains("eligible hello world") {
+                        assert!(prepared.test_empty_events());
+                        assert_eq!(expected[0], expected[1]);
+                        assert_eq!(expected[0], expected[2]);
+                    }
                     for (index, (width, intrinsic_kind)) in [
                         (0.01, Some(IntrinsicSizeKind::MinContent)),
                         (f32::INFINITY, Some(IntrinsicSizeKind::MaxContent)),
@@ -10110,7 +10295,15 @@ pub(crate) mod prepared_geometry_tests {
                             &plane,
                             LayoutDom::quirks_mode(&dom),
                             request(),
-                            Some((&results[index], 42, InlineGroupId(1))),
+                            Some((
+                                &results[if markup.contains("eligible hello world") {
+                                    0
+                                } else {
+                                    index
+                                }],
+                                42,
+                                InlineGroupId(1),
+                            )),
                         );
                         if markup.contains("<span id=a></span>") {
                             assert!(left.is_none() && right.is_none(), "empty inline is phantom");
@@ -10119,6 +10312,12 @@ pub(crate) mod prepared_geometry_tests {
                         let left = left.expect("reference nonempty output");
                         let right = right.expect("optimized nonempty output");
                         assert!(!left.items.is_empty() && !right.items.is_empty());
+                        assert!(left.items.iter().any(
+                            |item| matches!(item, ShapedItem::Text(run) if !run.glyphs.is_empty())
+                        ));
+                        assert!(right.items.iter().any(
+                            |item| matches!(item, ShapedItem::Text(run) if !run.glyphs.is_empty())
+                        ));
                         assert_eq!(left.size(), right.size());
                         assert_eq!(left.baselines(), right.baselines());
                         assert_eq!(left.text, right.text);

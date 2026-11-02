@@ -90,6 +90,8 @@ mod taffy_style;
 #[cfg(test)]
 mod tests;
 mod text_batch;
+#[cfg(test)]
+pub(crate) use text_batch::{FIXTURE_FAULT, FIXTURE_GATE, FIXTURE_UPDATES};
 mod transaction;
 
 #[cfg(test)]

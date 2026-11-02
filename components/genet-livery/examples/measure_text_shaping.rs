@@ -4,6 +4,9 @@
 //! Pass the full source commit used to build the executable as `--source-revision`.
 //! This caller-supplied label is not verified; hash the executable externally.
 //! Example: `measure_text_shaping --source-revision <full-commit> --font <font-file>`.
+#[path = "support/shaping_fixture.rs"]
+mod shaping_fixture;
+
 use genet_livery::{Device, LiveryDocument, StyleSet, TextShapingOptions};
 use genet_scripted_dom::{NodeId, ScriptedDom};
 use layout_dom_api::{LayoutDom, LocalName, Namespace};
@@ -160,40 +163,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         Box::new(fs::File::create(output)?)
     };
-    let para = match case.as_str() {
-        "small" => "A small line.",
-        "mixed" => "English العربية e\u{301} ligature office, punctuation and tabs.",
-        "single-long" | "long-short" => {
-            "A long paragraph tests wrapping and shaping across many words. "
-        },
-        "atomic" => {
-            "Text with <span style='float:left;width:12px;height:12px'></span><span style='display:inline-block;width:24px;height:12px'>box</span> inline."
-        },
-        "churn" => "Editing one paragraph among many retained paragraphs.",
-        _ => {
-            "A paragraph contains several words, punctuation, and enough text to wrap across lines."
-        },
-    };
-    let count = if case == "single-long" {
-        1
-    } else if case == "long-short" {
-        9
-    } else {
-        paragraphs
-    };
-    let mut html = String::from("<!doctype html><html><body>");
-    for i in 0..count {
-        let content = if case == "single-long" || (case == "long-short" && i == 0) {
-            para.repeat(paragraphs)
-        } else {
-            para.to_owned()
-        };
-        html.push_str(&format!(
-            "<p {}>{content} unique-{i}</p>",
-            if i == 0 { "id='edit'" } else { "" }
-        ));
-    }
-    html.push_str("</body></html>");
+    let para = shaping_fixture::paragraph(&case);
+    let html = shaping_fixture::html(&case, paragraphs, para);
     let css = format!(
         "@font-face {{ font-family: '{family}'; src: url('fixture.ttf'); }} body {{ font-family: '{family}'; margin: 0; }} p {{ margin: 0 0 8px; }}"
     );

@@ -146,4 +146,93 @@ mod tests {
         }
         assert!(counter.0 <= 160, "hashed {} bytes", counter.0);
     }
+
+    #[test]
+    fn repeated_map_operations_do_not_scan_complete_text() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        #[derive(Clone)]
+        struct CountingBuild(Arc<AtomicUsize>);
+        struct CountingHash {
+            inner: std::collections::hash_map::DefaultHasher,
+            bytes: Arc<AtomicUsize>,
+        }
+        impl Hasher for CountingHash {
+            fn finish(&self) -> u64 {
+                self.inner.finish()
+            }
+            fn write(&mut self, bytes: &[u8]) {
+                self.bytes.fetch_add(bytes.len(), Ordering::Relaxed);
+                self.inner.write(bytes);
+            }
+        }
+        impl BuildHasher for CountingBuild {
+            type Hasher = CountingHash;
+            fn build_hasher(&self) -> Self::Hasher {
+                CountingHash {
+                    inner: Default::default(),
+                    bytes: self.0.clone(),
+                }
+            }
+        }
+        let seed = RandomState::new();
+        let key = ShapeKey::new(
+            0,
+            ShapeInput {
+                text: "text payload ".repeat(1000),
+                defaults: vec![],
+                spans: vec![],
+                slots: vec![],
+                base_level: 0,
+                scale: 1f32.to_bits(),
+                quantize: true,
+            },
+            &seed,
+        );
+        let bytes = Arc::new(AtomicUsize::new(0));
+        let mut map = HashMap::with_hasher(CountingBuild(bytes.clone()));
+        for value in 0..4 {
+            assert_eq!(map.insert(key.clone(), value), None);
+            assert_eq!(map.get(&key), Some(&value));
+            assert_eq!(map.remove(&key), Some(value));
+            assert_eq!(map.insert(key.clone(), value + 10), None);
+            assert_eq!(map.get(&key), Some(&(value + 10)));
+            assert_eq!(map.remove(&key), Some(value + 10));
+        }
+        let work = bytes.load(Ordering::Relaxed);
+        assert!(work > 0 && work <= 512, "map hashed {work} bytes");
+    }
+
+    #[test]
+    fn independently_seeded_keys_obey_eq_hash_contract() {
+        let input = ShapeInput {
+            text: "same input".into(),
+            defaults: vec![],
+            spans: vec![],
+            slots: vec![],
+            base_level: 0,
+            scale: 1f32.to_bits(),
+            quantize: true,
+        };
+        let seeds: Vec<_> = (0..8).map(|_| RandomState::new()).collect();
+        let keys: Vec<_> = seeds
+            .iter()
+            .flat_map(|seed| {
+                [
+                    ShapeKey::new(2, input.clone(), seed),
+                    ShapeKey::new(2, input.clone(), seed),
+                ]
+            })
+            .collect();
+        let map_seed = RandomState::new();
+        for pair in keys.chunks_exact(2) {
+            assert_eq!(pair[0], pair[1]);
+        }
+        for a in &keys {
+            for b in &keys {
+                if a == b {
+                    assert_eq!(map_seed.hash_one(a), map_seed.hash_one(b));
+                }
+            }
+        }
+    }
 }

@@ -14,7 +14,7 @@ use std::{
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ShapeKey {
     generation: u64,
-    input: ShapeInput,
+    input: Arc<ShapeInput>,
     fingerprint: u64,
 }
 
@@ -23,7 +23,7 @@ impl ShapeKey {
         self.generation
     }
     pub(super) fn input(&self) -> &ShapeInput {
-        &self.input
+        self.input.as_ref()
     }
     #[cfg(test)]
     pub(super) fn force_fingerprint(&mut self, fingerprint: u64) {
@@ -33,7 +33,7 @@ impl ShapeKey {
         let fingerprint = seed.hash_one((&generation, &input));
         Self {
             generation,
-            input,
+            input: Arc::new(input),
             fingerprint,
         }
     }
@@ -179,6 +179,96 @@ mod tests {
             },
             seed,
         )
+    }
+
+    #[test]
+    fn cloned_key_shares_populated_input_storage() {
+        use super::super::prepared::{Family, Property, Slot, SlotKind, Span};
+
+        let seed = RandomState::new();
+        let input = ShapeInput {
+            text: "substantial text ".repeat(64),
+            defaults: vec![Property::Family(Family::Source("Example".into()))],
+            spans: vec![Span {
+                range: 0..8,
+                properties: vec![Property::Features(vec![(*b"kern", 1)])],
+            }],
+            slots: vec![Slot {
+                kind: SlotKind::InFlow,
+                id: 1,
+                index: 0,
+                width: 1,
+                height: 2,
+            }],
+            base_level: 0,
+            scale: 1f32.to_bits(),
+            quantize: true,
+        };
+        let key = ShapeKey::new(1, input, &seed);
+        let clone = key.clone();
+        assert!(
+            std::ptr::eq(key.input(), clone.input()),
+            "key clone copied its input"
+        );
+        assert_eq!(key.input().text.as_ptr(), clone.input().text.as_ptr());
+        assert_eq!(
+            key.input().defaults.as_ptr(),
+            clone.input().defaults.as_ptr()
+        );
+        assert_eq!(key.input().spans.as_ptr(), clone.input().spans.as_ptr());
+        assert_eq!(key.input().slots.as_ptr(), clone.input().slots.as_ptr());
+        let independent = ShapeKey::new(1, key.input().clone(), &seed);
+        assert_eq!(key, independent);
+        assert!(!Arc::ptr_eq(&key.input, &independent.input));
+        assert_eq!(seed.hash_one(&key), seed.hash_one(&independent));
+        let weak = Arc::downgrade(&key.input);
+        drop(key);
+        assert!(weak.upgrade().is_some());
+        drop(clone);
+        assert!(weak.upgrade().is_none());
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<ShapeInput>();
+        assert_send_sync::<ShapeKey>();
+    }
+
+    #[test]
+    fn active_result_keeps_evicted_input_until_dropped() {
+        use super::super::{InlineGroupId, ShapeJob, TextSystem};
+
+        for (entries, bytes) in [(1, usize::MAX), (0, usize::MAX), (1, 1)] {
+            let mut system = TextSystem::new();
+            let mut options = system.shaping_options();
+            options.retained_entries = entries;
+            options.retained_text_bytes = bytes;
+            system.set_shaping_options(options);
+            let first = key("first input", &system.key_seed);
+            let weak = Arc::downgrade(&first.input);
+            let jobs = [ShapeJob {
+                group: InlineGroupId(0),
+                generation: 1,
+                key: first,
+            }];
+            let results = system.shape_batch(&jobs, 1).unwrap();
+            drop(jobs);
+            let second = ShapeJob {
+                group: InlineGroupId(1),
+                generation: 1,
+                key: key("second input", &system.key_seed),
+            };
+            drop(system.shape_batch(&[second], 1).unwrap());
+            assert_eq!(
+                system.cache.bytes(),
+                if entries == 1 && bytes > 1 {
+                    "second input".len()
+                } else {
+                    0
+                }
+            );
+            assert_eq!(results[0].key.input().text, "first input");
+            assert!(weak.upgrade().is_some());
+            drop(results);
+            assert!(weak.upgrade().is_none());
+        }
     }
 
     fn value(key: &ShapeKey) -> Arc<UnbrokenText> {

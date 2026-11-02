@@ -8,6 +8,7 @@ use crate::layout::data::LayoutData;
 use crate::style::Brush;
 use core::cmp::Ordering;
 use core::fmt;
+use core::mem::size_of;
 
 use crate::IndentOptions;
 use crate::layout::{
@@ -43,10 +44,43 @@ impl<B: Brush> fmt::Debug for Layout<B> {
     }
 }
 
+fn vector_bytes(capacity: usize, element_size: usize) -> usize {
+    capacity.saturating_mul(element_size)
+}
+
+fn sum_vector_bytes(sizes: [usize; 10]) -> usize {
+    sizes.into_iter().fold(0usize, usize::saturating_add)
+}
+
 impl<B: Brush> Layout<B> {
     /// Creates an empty layout.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Requested backing storage of the ten directly owned vectors, in bytes.
+    ///
+    /// Includes spare capacity and inline element storage. Excludes the layout
+    /// object, nested or shared allocations (including fonts and brushes),
+    /// allocator overhead, input, scratch, clones, and process RSS. Arithmetic
+    /// saturates at `usize::MAX`.
+    pub fn vector_storage_bytes(&self) -> usize {
+        fn bytes<T>(v: &alloc::vec::Vec<T>) -> usize {
+            vector_bytes(v.capacity(), size_of::<T>())
+        }
+        let d = &self.data;
+        sum_vector_bytes([
+            bytes(&d.styles),
+            bytes(&d.inline_boxes),
+            bytes(&d.fonts),
+            bytes(&d.coords),
+            bytes(&d.runs),
+            bytes(&d.items),
+            bytes(&d.clusters),
+            bytes(&d.glyphs),
+            bytes(&d.lines),
+            bytes(&d.line_items),
+        ])
     }
 
     /// Returns the scale factor provided when creating the layout.
@@ -230,5 +264,61 @@ impl<B: Brush> Default for Layout<B> {
         Self {
             data: LayoutData::default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod vector_storage_tests {
+    use super::*;
+
+    fn size<T>(v: &alloc::vec::Vec<T>) -> usize {
+        v.capacity() * size_of::<T>()
+    }
+
+    fn expected(layout: &Layout<[u8; 4]>) -> usize {
+        let d = &layout.data;
+        size(&d.styles)
+            + size(&d.inline_boxes)
+            + size(&d.fonts)
+            + size(&d.coords)
+            + size(&d.runs)
+            + size(&d.items)
+            + size(&d.clusters)
+            + size(&d.glyphs)
+            + size(&d.lines)
+            + size(&d.line_items)
+    }
+
+    #[test]
+    fn direct_vectors_count_capacity_including_spare_storage() {
+        let mut layout = Layout::<[u8; 4]>::new();
+        assert_eq!(layout.vector_storage_bytes(), 0);
+        macro_rules! reserve {
+            ($field:ident) => {{
+                let before = expected(&layout);
+                layout.data.$field.reserve(3);
+                assert!(expected(&layout) > before);
+                assert_eq!(layout.vector_storage_bytes(), expected(&layout));
+            }};
+        }
+        reserve!(styles);
+        reserve!(inline_boxes);
+        reserve!(fonts);
+        reserve!(coords);
+        reserve!(runs);
+        reserve!(items);
+        reserve!(clusters);
+        reserve!(glyphs);
+        reserve!(lines);
+        reserve!(line_items);
+        layout.data.coords.push(42);
+        let copy = layout.clone();
+        assert_eq!(copy.vector_storage_bytes(), expected(&copy));
+        assert_eq!(layout.vector_storage_bytes(), expected(&layout));
+        assert_eq!(vector_bytes(usize::MAX, 2), usize::MAX);
+        assert_eq!(
+            sum_vector_bytes([usize::MAX - 1, 2, 0, 0, 0, 0, 0, 0, 0, 0]),
+            usize::MAX
+        );
     }
 }

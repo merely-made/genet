@@ -24,6 +24,10 @@ pub struct TextShapingStats {
     pub worker_scratch_slots: usize,
     pub retained_entries: usize,
     pub retained_text_bytes: usize,
+    /// Requested direct layout-vector backing storage, including spare capacity.
+    /// Excludes nested and shared resources, allocator overhead, input keys,
+    /// scratch, placed clones, and RSS; this is not a total-memory bound.
+    pub retained_layout_bytes: usize,
     /// DOM collection and prepared-template work; excludes key materialization.
     pub collect_ns: u64,
     /// Builder-input normalization and materialization in `shape_key`.
@@ -41,6 +45,10 @@ pub struct TextShapingStats {
 pub struct TextShapingOptions {
     pub retained_entries: usize,
     pub retained_text_bytes: usize,
+    /// Requested direct layout-vector backing storage, including spare capacity.
+    /// Excludes nested and shared resources, allocator overhead, input keys,
+    /// scratch, placed clones, and RSS; this is not a total-memory bound.
+    pub retained_layout_bytes: usize,
     pub parallel_min_groups: usize,
     pub parallel_min_text_bytes: usize,
     pub record_timings: bool,
@@ -51,6 +59,7 @@ impl Default for TextShapingOptions {
         Self {
             retained_entries: 512,
             retained_text_bytes: 4 * 1024 * 1024,
+            retained_layout_bytes: 32 * 1024 * 1024,
             parallel_min_groups: 8,
             parallel_min_text_bytes: 16 * 1024,
             record_timings: false,

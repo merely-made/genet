@@ -41,11 +41,16 @@ the neutral shadow primitive before backgrounds.
 ## Retained and parallel text shaping
 
 `LiveryDocument::set_text_shaping_options` configures `TextShapingOptions`.
-The initial defaults retain up to 512 entries and 4 MiB of key text; setting
-either limit to zero disables retention. These limits bound entry count and
-key text, not the Parley layouts or total heap. Oversized groups are shaped
-but not retained. These are configurable starting settings, not a demonstrated
-optimum for every host. `text_system().shaping_stats()` reports cumulative
+The initial defaults retain up to 512 entries, 4 MiB of key text, and 32 MiB
+of requested backing storage for the ten direct Parley layout vectors. Any
+zero limit disables retention. The vector gauge includes spare capacity and
+inline elements and charges each retained entry independently, but excludes
+nested and shared resources, allocator overhead,
+input keys, scratch, placed clones, and RSS. It is not a total-memory bound.
+Oversized groups are shaped but not retained. The 32 MiB starting point reflects
+the observed roughly 3.41 MB per historical long result, not an optimum.
+Adding the option requires callers with exhaustive struct literals to supply it
+or use `..Default::default()`. `text_system().shaping_stats()` reports cumulative
 builds, hits, late misses and pool work, plus current retention gauges. Optional
 timings are disabled by default (`record_timings: false`).
 

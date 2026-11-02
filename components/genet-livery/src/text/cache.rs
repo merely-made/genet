@@ -51,6 +51,11 @@ pub(super) struct ShapeCache {
     order: BTreeMap<u128, Arc<ShapeKey>>,
     clock: u128,
     bytes: usize,
+    layout_bytes: usize,
+}
+
+fn fits(current: usize, incoming: usize, limit: usize) -> bool {
+    current <= limit && incoming <= limit - current
 }
 
 impl ShapeCache {
@@ -72,40 +77,72 @@ impl ShapeCache {
         value: Arc<UnbrokenText>,
         max_entries: usize,
         max_bytes: usize,
+        max_layout_bytes: usize,
     ) {
+        // Remove an old value even when the replacement cannot be retained.
+        if let Some((old, stamp)) = self.entries.remove(&key) {
+            self.order.remove(&stamp);
+            self.bytes -= key.input.text.len();
+            self.layout_bytes -= old.layout.vector_storage_bytes();
+        }
         let bytes = key.input.text.len();
-        if max_entries == 0 || max_bytes == 0 || bytes > max_bytes {
+        let layout_bytes = value.layout.vector_storage_bytes();
+        if max_entries == 0
+            || max_bytes == 0
+            || max_layout_bytes == 0
+            || bytes > max_bytes
+            || layout_bytes == usize::MAX
+            || layout_bytes > max_layout_bytes
+        {
             return;
         }
-        if let Some((_, stamp)) = self.entries.remove(&key) {
-            self.order.remove(&stamp);
-            self.bytes -= bytes;
+        while self.entries.len() >= max_entries
+            || !fits(self.bytes, bytes, max_bytes)
+            || !fits(self.layout_bytes, layout_bytes, max_layout_bytes)
+        {
+            self.evict_oldest();
         }
         self.clock += 1;
         let key = Arc::new(key);
         self.order.insert(self.clock, Arc::clone(&key));
         self.entries.insert(key, (value, self.clock));
         self.bytes += bytes;
-        self.trim(max_entries, max_bytes);
+        self.layout_bytes += layout_bytes;
     }
 
-    pub fn trim(&mut self, max_entries: usize, max_bytes: usize) {
-        while self.entries.len() > max_entries
-            || self.bytes > max_bytes
-            || (max_bytes == 0 && !self.entries.is_empty())
+    fn evict_oldest(&mut self) {
+        let (_, key) = self.order.pop_first().expect("cache order matches entries");
+        self.bytes -= key.input.text.len();
+        let (value, _) = self
+            .entries
+            .remove(key.as_ref())
+            .expect("cache order matches entries");
+        self.layout_bytes -= value.layout.vector_storage_bytes();
+    }
+
+    pub fn trim(&mut self, max_entries: usize, max_bytes: usize, max_layout_bytes: usize) {
+        while !self.entries.is_empty()
+            && (self.entries.len() > max_entries
+                || self.bytes > max_bytes
+                || self.layout_bytes > max_layout_bytes
+                || max_entries == 0
+                || max_bytes == 0
+                || max_layout_bytes == 0)
         {
-            let (_, key) = self.order.pop_first().expect("cache order matches entries");
-            self.bytes -= key.input.text.len();
-            self.entries.remove(key.as_ref());
+            self.evict_oldest();
         }
     }
     pub fn clear(&mut self) {
         self.entries.clear();
         self.order.clear();
         self.bytes = 0;
+        self.layout_bytes = 0;
     }
     pub fn len(&self) -> usize {
         self.entries.len()
+    }
+    pub fn layout_bytes(&self) -> usize {
+        self.layout_bytes
     }
     pub fn bytes(&self) -> usize {
         self.bytes
@@ -153,7 +190,7 @@ mod tests {
         let seed = RandomState::new();
         let lookup = key(&"long key ".repeat(1000), &seed);
         let mut cache = ShapeCache::default();
-        cache.insert(lookup.clone(), value(&lookup), 2, usize::MAX);
+        cache.insert(lookup.clone(), value(&lookup), 2, usize::MAX, usize::MAX);
         let entry_text = cache.entries.keys().next().unwrap().input.text.as_ptr();
         let order_text = cache.order.values().next().unwrap().input.text.as_ptr();
         assert_eq!(entry_text, order_text, "indexes must share retained text");
@@ -176,25 +213,109 @@ mod tests {
         let vb = value(&b);
         let vc = value(&c);
         let mut cache = ShapeCache::default();
-        cache.insert(a.clone(), va.clone(), 2, 7);
-        cache.insert(b.clone(), vb.clone(), 2, 7);
+        cache.insert(a.clone(), va.clone(), 2, 7, usize::MAX);
+        cache.insert(b.clone(), vb.clone(), 2, 7, usize::MAX);
         assert_eq!((cache.len(), cache.bytes()), (2, 7));
         assert!(Arc::ptr_eq(&cache.get(&a).unwrap(), &va));
-        cache.insert(c.clone(), vc.clone(), 2, 7);
+        cache.insert(c.clone(), vc.clone(), 2, 7, usize::MAX);
         assert!(cache.get(&b).is_none());
         assert_eq!((cache.len(), cache.bytes()), (2, 5));
-        cache.insert(a.clone(), vb.clone(), 2, 7);
+        cache.insert(a.clone(), vb.clone(), 2, 7, usize::MAX);
         assert_eq!((cache.len(), cache.bytes()), (2, 5));
         assert!(Arc::ptr_eq(&cache.get(&a).unwrap(), &vb));
-        cache.insert(b.clone(), vb.clone(), 2, 7);
+        cache.insert(b.clone(), vb.clone(), 2, 7, usize::MAX);
         assert!(cache.get(&c).is_none());
         assert_eq!((cache.len(), cache.bytes()), (2, 7));
-        cache.insert(c.clone(), vc.clone(), 0, 7);
-        cache.insert(c.clone(), vc.clone(), 2, 0);
-        cache.insert(key("oversized", &seed), vc, 2, 7);
+        cache.insert(c.clone(), vc.clone(), 0, 7, usize::MAX);
+        cache.insert(c.clone(), vc.clone(), 2, 0, usize::MAX);
+        cache.insert(key("oversized", &seed), vc, 2, 7, usize::MAX);
         assert_eq!((cache.len(), cache.bytes()), (2, 7));
-        cache.trim(0, 7);
+        cache.trim(0, 7, usize::MAX);
         assert_eq!((cache.len(), cache.bytes()), (0, 0));
+    }
+
+    #[test]
+    fn layout_budget_admits_evicts_and_rejects_replacements() {
+        let seed = RandomState::new();
+        let a = key("alpha", &seed);
+        let b = key("beta beta", &seed);
+        let va = value(&a);
+        let vb = value(&b);
+        let ca = va.layout.vector_storage_bytes();
+        let cb = vb.layout.vector_storage_bytes();
+        assert!(ca > 0 && cb > 0);
+        let mut cache = ShapeCache::default();
+        cache.insert(a.clone(), va.clone(), 2, 100, ca);
+        assert_eq!(cache.layout_bytes(), ca);
+        assert!(Arc::ptr_eq(&cache.get(&a).unwrap(), &va));
+        cache.insert(b.clone(), vb.clone(), 2, 100, ca.max(cb));
+        assert_eq!(cache.layout_bytes(), cb);
+        assert!(cache.get(&a).is_none());
+        assert!(Arc::ptr_eq(&cache.get(&b).unwrap(), &vb));
+        cache.insert(b.clone(), va.clone(), 2, 100, ca);
+        assert_eq!(cache.layout_bytes(), ca);
+        assert!(Arc::ptr_eq(&cache.get(&b).unwrap(), &va));
+        cache.insert(b.clone(), vb.clone(), 2, 100, ca.max(cb));
+        assert_eq!(cache.layout_bytes(), cb);
+        assert!(Arc::ptr_eq(&cache.get(&b).unwrap(), &vb));
+        cache.insert(b.clone(), vb.clone(), 2, 100, cb - 1);
+        assert_eq!((cache.len(), cache.layout_bytes()), (0, 0));
+        // Active references remain usable after eviction and rejection.
+        assert_eq!(vb.layout.vector_storage_bytes(), cb);
+        for _ in 0..3 {
+            cache.insert(a.clone(), va.clone(), 2, 100, usize::MAX);
+            cache.insert(b.clone(), vb.clone(), 2, 100, usize::MAX);
+            assert_eq!(cache.layout_bytes(), ca + cb);
+            cache.trim(2, 100, ca.max(cb));
+            assert!(cache.layout_bytes() <= ca.max(cb));
+            cache.clear();
+            assert_eq!(
+                (cache.len(), cache.bytes(), cache.layout_bytes()),
+                (0, 0, 0)
+            );
+        }
+    }
+
+    #[test]
+    fn limits_disable_and_trim_retention_independently() {
+        let seed = RandomState::new();
+        let k = key("distinct text", &seed);
+        let v = value(&k);
+        let charge = v.layout.vector_storage_bytes();
+        assert!(charge > 0);
+        let mut cache = ShapeCache::default();
+        for (entries, text, layout) in [
+            (0, 100, charge),
+            (1, 0, charge),
+            (1, 100, 0),
+            (1, 2, charge),
+            (1, 100, charge - 1),
+        ] {
+            cache.insert(k.clone(), v.clone(), entries, text, layout);
+            assert_eq!((cache.len(), cache.layout_bytes()), (0, 0));
+        }
+        for (entries, text, layout) in [
+            (0, 100, charge),
+            (1, 0, charge),
+            (1, 100, 0),
+            (1, 2, charge),
+            (1, 100, charge - 1),
+        ] {
+            cache.insert(k.clone(), v.clone(), 1, 100, charge);
+            assert_eq!(cache.layout_bytes(), charge);
+            cache.trim(entries, text, layout);
+            assert_eq!(
+                (cache.len(), cache.bytes(), cache.layout_bytes()),
+                (0, 0, 0)
+            );
+        }
+    }
+
+    #[test]
+    fn admission_handles_arithmetic_boundary_without_overflow() {
+        assert!(fits(usize::MAX - 5, 5, usize::MAX));
+        assert!(!fits(usize::MAX - 5, 6, usize::MAX));
+        assert!(!fits(usize::MAX, 0, usize::MAX - 1));
     }
 
     #[test]

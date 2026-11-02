@@ -61,6 +61,7 @@ fn shaping_options_survive_font_resource_rebuild() {
     let options = crate::TextShapingOptions {
         retained_entries: 7,
         retained_text_bytes: 256,
+        retained_layout_bytes: 4096,
         parallel_min_groups: 3,
         parallel_min_text_bytes: 100,
         record_timings: true,
@@ -83,7 +84,7 @@ fn cached_fixture(system: &mut super::TextSystem, text: &str) {
     let seed = system.key_seed.clone();
     let key = super::cache::ShapeKey::new(system.font_generation, input, &seed);
     let value = std::sync::Arc::new(system.worker.shape(key.input()));
-    system.cache.insert(key, value, 2, 100);
+    system.cache.insert(key, value, 2, 100, usize::MAX);
 }
 
 #[test]

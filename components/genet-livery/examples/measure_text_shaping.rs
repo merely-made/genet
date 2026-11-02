@@ -47,7 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(key) = args.next() {
         if key == "--help" {
             println!(
-                "--source-revision FULL_GIT_COMMIT --mode uncached-serial|cached-serial|cached-parallel --case small|article|mixed|single-long|atomic|churn --paragraphs N --workers N --iterations N --warmups N --protocol cold|unchanged|width|edit|churn --step 0|1 --record-timings 0|1 --font PATH --font-dump DIRECTORY --font-family NAME --cache-entries N --cache-text-bytes N --parallel-min-groups N --parallel-min-text-bytes N --output PATH"
+                "--source-revision FULL_GIT_COMMIT --mode uncached-serial|cached-serial|cached-parallel --case small|article|mixed|single-long|long-short|atomic|churn --paragraphs N --workers N --iterations N --warmups N --protocol cold|unchanged|width|edit|churn --step 0|1 --record-timings 0|1 --font PATH --font-dump DIRECTORY --font-family NAME --cache-entries N --cache-text-bytes N --cache-layout-bytes N --parallel-min-groups N --parallel-min-text-bytes N --output PATH"
             );
             return Ok(());
         }
@@ -82,6 +82,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "--font-family" => family = value,
             "--cache-entries" => options.retained_entries = value.parse()?,
             "--cache-text-bytes" => options.retained_text_bytes = value.parse()?,
+            "--cache-layout-bytes" => options.retained_layout_bytes = value.parse()?,
             "--parallel-min-groups" => options.parallel_min_groups = value.parse()?,
             "--parallel-min-text-bytes" => options.parallel_min_text_bytes = value.parse()?,
             "--output" => output = value,
@@ -100,6 +101,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "article",
         "mixed",
         "single-long",
+        "long-short",
         "atomic",
         "churn",
     ]
@@ -161,7 +163,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let para = match case.as_str() {
         "small" => "A small line.",
         "mixed" => "English العربية e\u{301} ligature office, punctuation and tabs.",
-        "single-long" => "A long paragraph tests wrapping and shaping across many words. ",
+        "single-long" | "long-short" => {
+            "A long paragraph tests wrapping and shaping across many words. "
+        },
         "atomic" => {
             "Text with <span style='float:left;width:12px;height:12px'></span><span style='display:inline-block;width:24px;height:12px'>box</span> inline."
         },
@@ -170,10 +174,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "A paragraph contains several words, punctuation, and enough text to wrap across lines."
         },
     };
-    let count = if case == "single-long" { 1 } else { paragraphs };
+    let count = if case == "single-long" {
+        1
+    } else if case == "long-short" {
+        9
+    } else {
+        paragraphs
+    };
     let mut html = String::from("<!doctype html><html><body>");
     for i in 0..count {
-        let content = if case == "single-long" {
+        let content = if case == "single-long" || (case == "long-short" && i == 0) {
             para.repeat(paragraphs)
         } else {
             para.to_owned()
@@ -227,7 +237,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let (doc, edit) = retained.as_mut().expect("document exists");
         if protocol == "edit" || protocol == "churn" {
             // A new key each time prevents two alternating edits becoming cache hits.
-            let text = if case == "single-long" {
+            let text = if case == "single-long" || case == "long-short" {
                 // Preserve the entire long paragraph and insert a short unique
                 // change near its middle instead of replacing it with a label.
                 format!(

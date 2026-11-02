@@ -321,7 +321,7 @@ mod tests {
         let mut cache = super::super::cache::ShapeCache::default();
         let used = make(&style, None);
         let value = std::sync::Arc::new(worker.shape(used.input()));
-        cache.insert(used.clone(), value, 8, 1000);
+        cache.insert(used.clone(), value, 8, 1000, usize::MAX);
         assert!(
             cache
                 .get(&make(&style, Some(IntrinsicSizeKind::MinContent)))
@@ -341,7 +341,7 @@ mod tests {
                 .is_some()
         );
         let value = std::sync::Arc::new(worker.shape(changed.input()));
-        cache.insert(changed, value, 8, 1000);
+        cache.insert(changed, value, 8, 1000, usize::MAX);
         assert!(
             cache
                 .get(&make(&style, Some(IntrinsicSizeKind::MaxContent)))

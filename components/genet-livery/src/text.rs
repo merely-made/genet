@@ -367,6 +367,7 @@ impl TextSystem {
         }
         stats.retained_entries = self.cache.len();
         stats.retained_text_bytes = self.cache.bytes();
+        stats.retained_layout_bytes = self.cache.layout_bytes();
         stats
     }
 
@@ -376,8 +377,11 @@ impl TextSystem {
 
     pub fn set_shaping_options(&mut self, options: TextShapingOptions) {
         self.shaping_options = options;
-        self.cache
-            .trim(options.retained_entries, options.retained_text_bytes);
+        self.cache.trim(
+            options.retained_entries,
+            options.retained_text_bytes,
+            options.retained_layout_bytes,
+        );
     }
 
     #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
@@ -1744,6 +1748,7 @@ impl TextSystem {
                 Arc::clone(&value),
                 self.shaping_options.retained_entries,
                 self.shaping_options.retained_text_bytes,
+                self.shaping_options.retained_layout_bytes,
             );
             values.insert(key, value);
         }
@@ -1945,6 +1950,7 @@ impl TextSystem {
                 Arc::clone(&value),
                 self.shaping_options.retained_entries,
                 self.shaping_options.retained_text_bytes,
+                self.shaping_options.retained_layout_bytes,
             );
             value
         };
@@ -9920,6 +9926,28 @@ pub(crate) mod prepared_geometry_tests {
                 })
                 .collect::<Vec<_>>()
         };
+        assert_eq!(glyphs(&actual), glyphs(&fresh));
+
+        options.retained_layout_bytes = 0;
+        system.set_shaping_options(options);
+        assert_eq!(system.shaping_stats().retained_layout_bytes, 0);
+        let disabled = system
+            .shape_batch(&jobs, 101)
+            .expect("disabled cache batch");
+        assert_eq!(system.shaping_stats().retained_entries, 0);
+        let before = system.shape_count();
+        let actual = system
+            .format_prepared_inline_group::<<StaticDocument as LayoutDom>::NodeId, _>(
+                &a,
+                &fragments,
+                LayoutDom::quirks_mode(&dom),
+                request(),
+                Some((&disabled[0], 101, InlineGroupId(4))),
+            )
+            .unwrap();
+        assert_eq!(system.shape_count(), before);
+        assert_eq!(actual.text, fresh.text);
+        assert_eq!(actual.text_sources[0].source, fresh.text_sources[0].source);
         assert_eq!(glyphs(&actual), glyphs(&fresh));
     }
 

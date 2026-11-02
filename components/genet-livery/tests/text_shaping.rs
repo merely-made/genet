@@ -103,9 +103,11 @@ fn font_ledger_rebuild_preserves_cumulative_shaping_observations() {
     let after = doc.text_system().shaping_stats();
     assert_eq!(after.retained_entries, 0);
     assert_eq!(after.retained_text_bytes, 0);
+    assert_eq!(after.retained_layout_bytes, 0);
     assert_eq!(after.worker_scratch_slots, 0);
     before.retained_entries = 0;
     before.retained_text_bytes = 0;
+    before.retained_layout_bytes = 0;
     before.worker_scratch_slots = 0;
     assert_eq!(after, before);
     assert_eq!(doc.text_system().shape_count(), shapes);

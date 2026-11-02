@@ -515,7 +515,7 @@ struct InlineMeasure {
     /// `owner` above is only the optional intrinsic-cache identity.
     formatting_owner: BoxId,
     roots: Vec<BoxId>,
-    style: ComputedValues,
+    style: Box<ComputedValues>,
     width: f32,
     height: f32,
     /// Natural content-box dimensions for a directly measured replaced leaf.

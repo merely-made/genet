@@ -82,7 +82,7 @@ impl TextBatch {
         text.account_collection_ns(std::mem::take(&mut self.collect_ns));
         let mut jobs = Vec::new();
         for (node, measure) in &self.pending {
-            let style = &tree
+            let style: &ComputedValues = &tree
                 .context(*node)
                 .ok_or_else(|| {
                     LayoutError::retained_state(format!(
@@ -92,7 +92,8 @@ impl TextBatch {
                 .style;
             #[cfg(test)]
             if measure.template.ready::<D::NodeId, _>(atomic) {
-                let context_style = &tree.context(*node).expect("measured context").style;
+                let context_style: &ComputedValues =
+                    &tree.context(*node).expect("measured context").style;
                 INPUT_OWNERSHIP.with(|c| {
                     let (total, shared) = c.get();
                     c.set((

@@ -11,6 +11,18 @@ use crate::{
 use genet_static_dom::StaticDocument;
 use paint_list_api::{DeviceIntSize, PaintList};
 
+#[test]
+fn inline_measure_context_slot_is_compact() {
+    let slot = std::mem::size_of::<Option<InlineMeasure>>();
+    let style = std::mem::size_of::<ComputedValues>();
+    eprintln!(
+        "target={}-{} slot={slot} style={style}",
+        std::env::consts::ARCH,
+        std::env::consts::OS
+    );
+    assert!(slot < style / 4, "context slot must remain compact");
+}
+
 fn node_by_id(
     dom: &StaticDocument,
     node: <StaticDocument as LayoutDom>::NodeId,
@@ -8321,6 +8333,12 @@ fn prepared_batch_main_flushes_before_measurement_and_deduplicates() {
             .build_box(*root, None, 16.0, (Some(320.0), Some(240.0)))
             .unwrap();
     }
+    assert!(
+        state
+            .tree
+            .node_ids()
+            .any(|node| state.tree.context(node).is_none())
+    );
     assert_eq!(text.shaping_stats().format_requests, 0);
     assert_eq!(text.shaping_stats().unique_jobs, 0);
     state
@@ -8877,7 +8895,7 @@ fn late_errors_at_both_measurement_entrypoints_preserve_context() {
                 owner: None,
                 formatting_owner: root,
                 roots: vec![root],
-                style: style.clone(),
+                style: Box::new(style.clone()),
                 width: 123.0,
                 height: 45.0,
                 replaced_size: None,

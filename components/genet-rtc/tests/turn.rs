@@ -119,6 +119,15 @@ fn gather(
             }
             Some(Output::Event(RTCPeerConnectionEvent::OnIceCandidateEvent(event))) => {
                 let candidate = event.candidate.to_json().unwrap();
+                if candidate.candidate.contains(" typ relay ")
+                    || candidate.candidate.contains(" typ srflx ")
+                {
+                    assert!(!event.url.is_empty(), "local server metadata lost");
+                    assert!(
+                        candidate.url.is_none(),
+                        "local metadata must stay out of signaling"
+                    );
+                }
                 if candidate.candidate.is_empty() {
                     return candidates;
                 }

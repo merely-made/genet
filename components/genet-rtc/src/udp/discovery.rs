@@ -211,7 +211,11 @@ impl Discovery {
                             url: Some(managed.url.clone()),
                         }
                         .new_candidate_server_reflexive()?;
-                        core.add_local_candidate(RTCIceCandidate::from(&candidate).to_json()?)?;
+                        let mut init = RTCIceCandidate::from(&candidate).to_json()?;
+                        // to_json is deliberately signaling-only. Supplying a
+                        // local candidate additionally needs its gatherer URL.
+                        init.url = Some(managed.url.clone());
+                        core.add_local_candidate(init)?;
                         managed.reflexive = Some(addr);
                         managed.done = true;
                     }
@@ -229,7 +233,9 @@ impl Discovery {
                             url: Some(managed.url.clone()),
                         }
                         .new_candidate_relay()?;
-                        core.add_local_candidate(RTCIceCandidate::from(&candidate).to_json()?)?;
+                        let mut init = RTCIceCandidate::from(&candidate).to_json()?;
+                        init.url = Some(managed.url.clone());
+                        core.add_local_candidate(init)?;
                         managed.relay = Some(addr);
                         managed.done = true;
                     }

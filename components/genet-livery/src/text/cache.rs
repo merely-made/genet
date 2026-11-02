@@ -47,8 +47,8 @@ impl Hash for ShapeKey {
 
 #[derive(Default)]
 pub(super) struct ShapeCache {
-    entries: HashMap<ShapeKey, (Arc<UnbrokenText>, u128)>,
-    order: BTreeMap<u128, ShapeKey>,
+    entries: HashMap<Arc<ShapeKey>, (Arc<UnbrokenText>, u128)>,
+    order: BTreeMap<u128, Arc<ShapeKey>>,
     clock: u128,
     bytes: usize,
 }
@@ -56,10 +56,13 @@ pub(super) struct ShapeCache {
 impl ShapeCache {
     pub fn get(&mut self, key: &ShapeKey) -> Option<Arc<UnbrokenText>> {
         let (value, stamp) = self.entries.get_mut(key)?;
-        self.order.remove(stamp);
+        let retained_key = self
+            .order
+            .remove(stamp)
+            .expect("cache order matches entries");
         self.clock += 1;
         *stamp = self.clock;
-        self.order.insert(*stamp, key.clone());
+        self.order.insert(*stamp, retained_key);
         Some(Arc::clone(value))
     }
 
@@ -79,7 +82,8 @@ impl ShapeCache {
             self.bytes -= bytes;
         }
         self.clock += 1;
-        self.order.insert(self.clock, key.clone());
+        let key = Arc::new(key);
+        self.order.insert(self.clock, Arc::clone(&key));
         self.entries.insert(key, (value, self.clock));
         self.bytes += bytes;
         self.trim(max_entries, max_bytes);
@@ -92,7 +96,7 @@ impl ShapeCache {
         {
             let (_, key) = self.order.pop_first().expect("cache order matches entries");
             self.bytes -= key.input.text.len();
-            self.entries.remove(&key);
+            self.entries.remove(key.as_ref());
         }
     }
     pub fn clear(&mut self) {
@@ -122,6 +126,75 @@ mod tests {
         fn write(&mut self, bytes: &[u8]) {
             self.0 += bytes.len();
         }
+    }
+
+    fn key(text: &str, seed: &RandomState) -> ShapeKey {
+        ShapeKey::new(
+            0,
+            ShapeInput {
+                text: text.into(),
+                defaults: vec![],
+                spans: vec![],
+                slots: vec![],
+                base_level: 0,
+                scale: 1f32.to_bits(),
+                quantize: true,
+            },
+            seed,
+        )
+    }
+
+    fn value(key: &ShapeKey) -> Arc<UnbrokenText> {
+        Arc::new(super::super::shaping::ShapeWorker::new().shape(key.input()))
+    }
+
+    #[test]
+    fn retained_key_text_is_shared_and_touch_keeps_its_allocation() {
+        let seed = RandomState::new();
+        let lookup = key(&"long key ".repeat(1000), &seed);
+        let mut cache = ShapeCache::default();
+        cache.insert(lookup.clone(), value(&lookup), 2, usize::MAX);
+        let entry_text = cache.entries.keys().next().unwrap().input.text.as_ptr();
+        let order_text = cache.order.values().next().unwrap().input.text.as_ptr();
+        assert_eq!(entry_text, order_text, "indexes must share retained text");
+        cache.get(&lookup).unwrap();
+        assert_eq!(
+            cache.order.values().next().unwrap().input.text.as_ptr(),
+            entry_text,
+            "touch must reuse retained text"
+        );
+    }
+
+    #[test]
+    fn retention_replacement_collision_and_limits_keep_correct_results() {
+        let seed = RandomState::new();
+        let a = key("aaa", &seed);
+        let mut b = key("bbbb", &seed);
+        b.force_fingerprint(a.fingerprint);
+        let c = key("cc", &seed);
+        let va = value(&a);
+        let vb = value(&b);
+        let vc = value(&c);
+        let mut cache = ShapeCache::default();
+        cache.insert(a.clone(), va.clone(), 2, 7);
+        cache.insert(b.clone(), vb.clone(), 2, 7);
+        assert_eq!((cache.len(), cache.bytes()), (2, 7));
+        assert!(Arc::ptr_eq(&cache.get(&a).unwrap(), &va));
+        cache.insert(c.clone(), vc.clone(), 2, 7);
+        assert!(cache.get(&b).is_none());
+        assert_eq!((cache.len(), cache.bytes()), (2, 5));
+        cache.insert(a.clone(), vb.clone(), 2, 7);
+        assert_eq!((cache.len(), cache.bytes()), (2, 5));
+        assert!(Arc::ptr_eq(&cache.get(&a).unwrap(), &vb));
+        cache.insert(b.clone(), vb.clone(), 2, 7);
+        assert!(cache.get(&c).is_none());
+        assert_eq!((cache.len(), cache.bytes()), (2, 7));
+        cache.insert(c.clone(), vc.clone(), 0, 7);
+        cache.insert(c.clone(), vc.clone(), 2, 0);
+        cache.insert(key("oversized", &seed), vc, 2, 7);
+        assert_eq!((cache.len(), cache.bytes()), (2, 7));
+        cache.trim(0, 7);
+        assert_eq!((cache.len(), cache.bytes()), (0, 0));
     }
 
     #[test]

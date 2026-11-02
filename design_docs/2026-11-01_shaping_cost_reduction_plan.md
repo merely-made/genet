@@ -18,7 +18,7 @@
 - Preserve old binaries, scripts, raw rows, locks and failures. Source-text budget is not a heap budget. Do not infer causes from peak RSS alone or sum nested timers.
 - Shared `/home/markik/Code/testing/machine-heavy.lock`; build/test scope MemoryMax=3G, MemorySwapMax=0, CPUQuota=150%, nice10, one Cargo job and test thread. Matched two-worker performance controls CPUQuota=200%, same memory/swap limits for every mode. Host swap is not disabled.
 - Freeze and record reconciled dependency closure before measurement. Narrow workspace-member lock reconciliation only; preserve original lock and explain graph changes, no broad source/version churn.
-- Use Terra for diagnosis/implementation and substantive review; Luna for bounded mechanical checks. No concurrent implementation agents.
+- Use Terra for diagnosis/implementation and substantive review; Luna for bounded mechanical checks. The final whole-phase review uses the most capable available model under the SDD review requirement. No concurrent implementation agents.
 
 ## Review focus
 
@@ -50,9 +50,16 @@ Exact files/interfaces and tests are finalized from Task 1's measured diagnosis 
 
 ### Task 3: qualification and documentation
 
-- [ ] Reuse the preserved balanced controls, five warmups/30 measured samples for final headline cases, real font-byte identities, matched paint and actual pool-job observations. Compare original, reconciled pre-optimization and final where needed to attribute changes.
+- [x] Reuse the preserved balanced controls, five warmups/30 measured samples for final headline cases, real font-byte identities, matched paint and actual pool-job observations. Compare original, reconciled pre-optimization and final where needed to attribute changes.
 - [ ] Establish cold layout against original, repeated resize reuse, one-key edits and long-edit memory; include small edit and lifecycle controls relevant to changed paths. Extend measurements only for new failures or unresolved questions.
-- [ ] Run appropriate default/parallel package and consumer/wasm gates for changed source; reuse unchanged WPT evidence with explicit source limits or rerun affected cases. Update README, original receipt and this plan with exact evidence and remaining limitations.
+- [x] Run appropriate default/parallel package and consumer/wasm gates for changed source; reuse unchanged WPT evidence with explicit source limits or rerun affected cases. Update README, original receipt and this plan with exact evidence and remaining limitations.
 - [ ] Final whole-phase review, one cohesive fix wave if required, scoped re-review, clean local checkpoint and preserved worktree.
 
 **Done:** the accepted control matrix shows cold performance matches original and retains resize/pool gains; additional retained memory is measured and controlled. If a result remains unmet, keep it explicit and continue diagnosis rather than claim a universal improvement.
+
+
+### Qualification disposition at selected source
+
+Source `24f743517497bec0d44316ab0794572441f70177` passed full Livery default/parallel packages (802/808, eight ignored each), 101 `genet-documents` tests and Livery wasm no-default compile. Current-source WPT, browser/GPU and platform runtime remain UNTESTED; the earlier WPT results are bound to `30901973a284c265044d649c5d3ec95095e3d7c4`. Rust 1.97.1 and sanitizer are not freshly qualified. The original receipt records the build cap, the failed mixed-face validator and byte-for-byte revalidation, the continuation's one 677-microsecond throttle, and the separate source-specific measurements.
+
+Three CPU 0,2 cold cohorts included two independent original processes. Final cached-serial article layout versus original A/B had paired medians `-4.346/-6.719`, `-8.495/+0.089`, and `-2.621/+0.355` ms; the original A/B article medians were `-2.987/+7.815/+2.696` ms. This empirical process control leaves the cold-original goal unresolved, not proven by a universal performance claim. Small comparisons and pooled work improved in these samples, and raised-cap final cached-serial resize reused all 2,048 small keys. Default direct-vector history plateaued below 32 MiB; that is not a heap or RSS bound. Task 2J also remains materially slower than 2I for atomic layout in its CPU 0 samples. Full ranges, signs, order strata, current gates, precise mode/cap distinctions and artifact hashes are in the [receipt](archive_docs/receipts/2026-11-01_retained_parallel_shaping_plan_receipts.md) and preserved Task 3 report. Final whole-phase review and any resulting disposition remain open.

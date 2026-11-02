@@ -74,6 +74,24 @@ band, but 30 samples and different process counts in the independent control
 leave p95 uncertainty. The long edit used no pool jobs. These CPU measurements
 are not GPU or headed runtime evidence. See the [qualification receipt](../../design_docs/archive_docs/receipts/2026-11-01_retained_parallel_shaping_plan_receipts.md).
 
+The subsequent cost-reduction work shares retained inputs and precomputes a
+per-context key fingerprint while still checking the complete key and current
+source slots. The ready queue borrows context styles and prepared spans, and a
+private boxed style reduces context-slot size. These changes preserve owned
+layout output and exact validation; the fingerprint is not identity. At source
+`24f743517497`, bounded CPU 0 controls showed a material tradeoff: atomic
+layout was 4.9–9.5 ms slower in paired medians than the preceding source, even
+though it remained 4.1–5.2 ms faster than the original in those cohorts. Small
+and article results varied by fixture and control. Cumulative allocation traffic
+is not live memory, copied bytes, or RSS. Current-source WPT, browser/GPU and
+platform runtime remain untested. Three later CPU 0,2 cold cohorts included two
+independent original processes. Final cached-serial article layout compared
+with the second original had paired medians of -6.719, +0.089 and +0.355 ms;
+process variation leaves the original cold goal unresolved. Final cached-serial
+small resize with raised capacity reused all 2,048 keys with zero builds. One
+remaining-case scope had a single 677-microsecond throttle; the three headline
+scopes had none. See the receipt for full ranges and source-specific results.
+
 ## Explicit host generic resources
 
 A browser does not lend Parley its installed system fonts. Registering a face

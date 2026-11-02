@@ -8,8 +8,8 @@
 //! their own event loop.
 //!
 //! Web APIs, application framing, invitations, identities and admission belong
-//! to consumers. Candidate discovery and relay allocation beyond a concrete
-//! local host address remain explicit host integration work.
+//! to consumers. The optional UDP driver supports host-resolved STUN/TURN
+//! endpoints; DNS, interface discovery and network policy remain host work.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]

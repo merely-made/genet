@@ -21,6 +21,10 @@ use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
 #[cfg(feature = "udp")]
 use tokio::net::UdpSocket;
 
+mod discovery;
+use discovery::Discovery;
+pub use discovery::{DiscoveryConfig, Server};
+
 enum Socket {
     Host(std::net::UdpSocket),
     #[cfg(feature = "udp")]
@@ -94,6 +98,9 @@ pub enum Error {
     /// A packet requested an unsupported transport or local address.
     #[error("RTC packet does not belong to this UDP socket")]
     Route,
+    /// A TURN permission or established relay transaction failed.
+    #[error("RTC relay transaction failed")]
+    RelayUnavailable,
     /// The underlying socket operation failed.
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -104,6 +111,13 @@ pub enum Error {
 
 /// One observation from a caller-driven host turn.
 pub enum Output {
+    /// A configured server failed gathering. The URL excludes TURN credentials.
+    GatheringError {
+        /// Server whose attempt failed.
+        url: String,
+        /// WebRTC host gathering error (701: server could not be reached/used).
+        code: u16,
+    },
     /// A peer-connection state or channel event, preserving upstream order.
     Event(RTCPeerConnectionEvent),
     /// An inbound media or data-channel message, preserving message boundaries.
@@ -136,7 +150,10 @@ pub struct UdpPeer {
     limits: IoLimits,
     buffer: Vec<u8>,
     pending: Option<TaggedBytesMut>,
+    pending_socket: Option<TaggedBytesMut>,
+    discovery: Option<Discovery>,
     closed: bool,
+    released: bool,
     last_timeout: Instant,
 }
 
@@ -155,7 +172,7 @@ impl UdpPeer {
     ) -> Result<Self, Error> {
         Self::validate(bind, limits)?;
         let socket = Socket::Async(UdpSocket::bind(bind).await?);
-        Self::from_socket(core, socket, limits)
+        Self::from_socket(core, socket, limits, None)
     }
 
     /// Bind a nonblocking host socket without a Tokio runtime or background task.
@@ -168,7 +185,34 @@ impl UdpPeer {
         Self::validate(bind, limits)?;
         let socket = std::net::UdpSocket::bind(bind)?;
         socket.set_nonblocking(true)?;
-        Self::from_socket(core, Socket::Host(socket), limits)
+        Self::from_socket(core, Socket::Host(socket), limits, None)
+    }
+
+    /// Bind with host-resolved UDP discovery. Gathering starts only when
+    /// [`Self::finish_host_candidates`] is called. This performs no DNS lookup.
+    pub fn bind_host_with_discovery(
+        core: RTCPeerConnection,
+        bind: SocketAddr,
+        limits: IoLimits,
+        discovery: DiscoveryConfig,
+    ) -> Result<Self, Error> {
+        Self::validate(bind, limits)?;
+        let socket = std::net::UdpSocket::bind(bind)?;
+        socket.set_nonblocking(true)?;
+        Self::from_socket(core, Socket::Host(socket), limits, Some(discovery))
+    }
+
+    /// Async socket counterpart of [`Self::bind_host_with_discovery`].
+    #[cfg(feature = "udp")]
+    pub async fn bind_with_discovery(
+        core: RTCPeerConnection,
+        bind: SocketAddr,
+        limits: IoLimits,
+        discovery: DiscoveryConfig,
+    ) -> Result<Self, Error> {
+        Self::validate(bind, limits)?;
+        let socket = Socket::Async(UdpSocket::bind(bind).await?);
+        Self::from_socket(core, socket, limits, Some(discovery))
     }
 
     fn validate(bind: SocketAddr, limits: IoLimits) -> Result<(), Error> {
@@ -192,20 +236,26 @@ impl UdpPeer {
         mut core: RTCPeerConnection,
         socket: Socket,
         limits: IoLimits,
+        discovery: Option<DiscoveryConfig>,
     ) -> Result<Self, Error> {
         let local_addr = socket.local_addr()?;
-        let candidate = CandidateHostConfig {
-            base_config: CandidateConfig {
-                network: "udp".into(),
-                address: local_addr.ip().to_string(),
-                port: local_addr.port(),
-                component: 1,
+        let discovery = discovery
+            .map(|c| Discovery::new(local_addr, c))
+            .transpose()?;
+        if !discovery.as_ref().is_some_and(Discovery::relay_only) {
+            let candidate = CandidateHostConfig {
+                base_config: CandidateConfig {
+                    network: "udp".into(),
+                    address: local_addr.ip().to_string(),
+                    port: local_addr.port(),
+                    component: 1,
+                    ..Default::default()
+                },
                 ..Default::default()
-            },
-            ..Default::default()
+            }
+            .new_candidate_host()?;
+            core.add_local_candidate(RTCIceCandidate::from(&candidate).to_json()?)?;
         }
-        .new_candidate_host()?;
-        core.add_local_candidate(RTCIceCandidate::from(&candidate).to_json()?)?;
         Ok(Self {
             core,
             socket,
@@ -217,7 +267,10 @@ impl UdpPeer {
             // portably distinguish an oversize packet from other I/O errors.
             buffer: vec![0; 65_536],
             pending: None,
+            pending_socket: None,
+            discovery,
             closed: false,
+            released: false,
             last_timeout: Instant::now(),
         })
     }
@@ -237,9 +290,16 @@ impl UdpPeer {
         &mut self.core
     }
 
-    /// Mark host-only candidate gathering complete, emitting its real event.
+    /// Finish supplying host candidates and start configured server discovery.
+    /// With no servers, gathering completes immediately. Otherwise completion
+    /// waits for every server's result or the configured gathering deadline.
     pub fn finish_host_candidates(&mut self) -> Result<(), Error> {
-        self.core.add_local_candidate(Default::default())?;
+        if let Some(discovery) = &mut self.discovery {
+            discovery.start(Instant::now())?;
+            discovery.advance(&mut self.core, self.local_addr)?;
+        } else {
+            self.core.add_local_candidate(Default::default())?;
+        }
         Ok(())
     }
 
@@ -254,17 +314,45 @@ impl UdpPeer {
     fn flush(&mut self) -> Result<bool, Error> {
         let mut sent = false;
         for _ in 0..self.limits.packets_per_turn {
-            if self.pending.is_none() {
-                self.pending = self.core.poll_write();
+            if self.pending_socket.is_none() {
+                self.pending_socket = self.discovery.as_mut().and_then(Discovery::poll_write);
             }
-            let Some(packet) = self.pending.as_ref() else {
-                return Ok(sent);
-            };
-            if packet.transport.transport_protocol != TransportProtocol::UDP
-                || packet.transport.local_addr != self.local_addr
-            {
-                return Err(Error::Route);
+            if self.pending_socket.is_none() {
+                if self.pending.is_none() {
+                    self.pending = self.core.poll_write();
+                }
+                let Some(packet) = self.pending.as_ref() else {
+                    if self.closed {
+                        self.release_allocations();
+                    }
+                    return Ok(sent);
+                };
+                if packet.transport.transport_protocol != TransportProtocol::UDP {
+                    return Err(Error::Route);
+                }
+                if packet.message.len() > self.limits.datagram_bytes {
+                    return Err(Error::DatagramLimit {
+                        actual: packet.message.len(),
+                        limit: self.limits.datagram_bytes,
+                    });
+                }
+                if let Some(discovery) = &mut self.discovery {
+                    let relay = discovery.is_relay(packet.transport.local_addr);
+                    let routed = discovery.route(packet, self.local_addr)?;
+                    if relay {
+                        if !routed {
+                            return Ok(sent);
+                        }
+                        self.pending = None;
+                        sent = true;
+                        continue;
+                    }
+                } else if packet.transport.local_addr != self.local_addr {
+                    return Err(Error::Route);
+                }
+                self.pending_socket = self.pending.take();
             }
+            let packet = self.pending_socket.as_ref().expect("pending socket packet");
             if packet.message.len() > self.limits.datagram_bytes {
                 return Err(Error::DatagramLimit {
                     actual: packet.message.len(),
@@ -276,7 +364,7 @@ impl UdpPeer {
                 .send(&packet.message, packet.transport.peer_addr)
             {
                 Ok(size) if size == packet.message.len() => {
-                    self.pending = None;
+                    self.pending_socket = None;
                     sent = true;
                 }
                 Ok(_) => {
@@ -295,9 +383,15 @@ impl UdpPeer {
 
     /// Next protocol wakeup, including the host's repeated-timeout floor.
     pub fn next_deadline(&mut self) -> Option<Instant> {
+        if self.closed {
+            return None;
+        }
         let floor = self.last_timeout.checked_add(self.limits.timer_floor);
         self.core
             .poll_timeout()
+            .into_iter()
+            .chain(self.discovery.as_mut().and_then(Discovery::next_deadline))
+            .min()
             .map(|time| floor.map_or(time, |floor| time.max(floor)))
     }
 
@@ -317,8 +411,17 @@ impl UdpPeer {
         // Service timers even while application events/messages are queued.
         if self.next_deadline().is_some_and(|time| time <= now) {
             self.core.handle_timeout(now)?;
+            if let Some(discovery) = &mut self.discovery {
+                discovery.timeout(now)?;
+            }
             self.last_timeout = now;
             progress = true;
+        }
+        if let Some(discovery) = &mut self.discovery {
+            discovery.advance(&mut self.core, self.local_addr)?;
+            if let Some(url) = discovery.poll_error() {
+                return Ok(Some(Output::GatheringError { url, code: 701 }));
+            }
         }
         if let Some(event) = self.core.poll_event() {
             if matches!(
@@ -344,6 +447,7 @@ impl UdpPeer {
             .sctp()
             .is_some_and(|sctp| sctp.transport().state() == RTCDtlsTransportState::Closed);
         if (self.closed || remote_closed) && self.pending.is_none() {
+            self.release_allocations();
             self.closed = true;
             return Ok(Some(Output::Closed));
         }
@@ -355,7 +459,7 @@ impl UdpPeer {
                         limit: self.limits.datagram_bytes,
                     });
                 }
-                self.core.handle_read(TaggedBytesMut {
+                let packet = TaggedBytesMut {
                     now: Instant::now(),
                     transport: TransportContext {
                         local_addr: self.local_addr,
@@ -364,7 +468,15 @@ impl UdpPeer {
                         ecn: None,
                     },
                     message: BytesMut::from(&self.buffer[..size]),
-                })?;
+                };
+                let packet = if let Some(discovery) = &mut self.discovery {
+                    discovery.read(packet)?
+                } else {
+                    Some(packet)
+                };
+                if let Some(packet) = packet {
+                    self.core.handle_read(packet)?;
+                }
                 progress = true;
             }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
@@ -396,8 +508,31 @@ impl UdpPeer {
             }
             let wake = self.next_deadline().unwrap_or(deadline).min(deadline);
             self.socket
-                .wait(wake, self.pending.is_some(), self.limits.timer_floor)
+                .wait(wake, self.pending_socket.is_some(), self.limits.timer_floor)
                 .await?;
         }
+    }
+
+    fn release_allocations(&mut self) {
+        if self.released {
+            return;
+        }
+        self.released = true;
+        if let Some(discovery) = &mut self.discovery {
+            discovery.close();
+            // One release per bounded server list, best effort on a nonblocking
+            // socket. Dropping never waits for a server or spawns cleanup work.
+            while let Some(packet) = discovery.poll_write() {
+                let _ = self
+                    .socket
+                    .send(&packet.message, packet.transport.peer_addr);
+            }
+        }
+    }
+}
+
+impl Drop for UdpPeer {
+    fn drop(&mut self) {
+        self.release_allocations();
     }
 }

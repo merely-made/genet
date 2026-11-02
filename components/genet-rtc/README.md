@@ -24,10 +24,17 @@ real-packet partial-reliability check; the frozen E0 comparison still describes
 that release. This is an immutable upstream source dependency, not a local
 registry edit or a root-only Cargo patch that consumers would lose.
 
-The UDP adapter registers host candidates only. Interface discovery, STUN/TURN
-allocation, mDNS, TCP/TLS and multiple-interface routing remain additional
-host integration work. No remote candidate is an authorization to ignore the
-consumer's network policy.
+`bind_host_with_discovery` / `bind_with_discovery` additionally take resolved
+UDP STUN/TURN servers and the same crypto provider as the peer's SettingEngine.
+`finish_host_candidates` starts server gathering; completion waits for results
+or the caller's gathering timeout. Relay-only suppresses direct candidates and
+direct peer packets. TURN authentication, permissions and refresh use the pinned
+protocol client. One retained protocol datagram and one socket datagram bound
+pending sends, including permission waits. Close/drop attempts authenticated
+allocation release without waiting. Server errors are observations, not invented
+peer-close events. DNS, interface discovery, mDNS, TCP/TLS, ICE restart/server
+replacement and multiple-interface routing remain open host work. A remote
+candidate is not authorization to ignore the consumer's network policy.
 
 Genet owns JS objects, promises, events, origin/permission policy, navigation
 lifetime and WPT. Application consumers own message framing, invitations and
@@ -61,3 +68,11 @@ $env:CARGO_PROFILE_DEV_DEBUG = '0'
 cargo test --manifest-path wire/Cargo.toml -p murm-rtc --features udp --locked -j 1
 cargo +1.97.1 test --manifest-path wire/Cargo.toml -p murm-rtc --features udp --locked -j 1
 ```
+
+Controlled coturn qualification: run `tests/coturn.sh` in WSL, then set its
+printed numeric endpoint as `MURM_RTC_TEST_SERVER`. The fixture contains only
+local test credentials and must be stopped after the run. Execute
+`cargo test -p murm-rtc --features udp --test turn -- --ignored --test-threads=1`
+from `wire/`. These checks cover STUN, relay-only encrypted fragmentation after
+allocation refresh, authentication failure and socket release. They do not
+qualify public deployment, headed interop, cross-machine routing or packet loss.

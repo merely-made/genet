@@ -9954,6 +9954,25 @@ pub(crate) mod prepared_geometry_tests {
             let prepared =
                 prepared::PreparedInlineGroup::collect(&dom, &styles, &boxes, &[root], &parent);
             assert!(prepared.ready::<Node, _>(&plane));
+            if markup.contains("<span id=a></span>") {
+                assert!(prepared.spans.is_empty());
+                assert!(prepared.text.is_empty());
+            }
+            if markup.contains("مرحبا") {
+                assert!(prepared.spans.len() > 1);
+                let first = &prepared.spans[0].style;
+                assert!(
+                    prepared.spans.iter().skip(1).any(|span| {
+                        metric_key(first, super::super::paint::used_font_size(first))
+                            == metric_key(
+                                &span.style,
+                                super::super::paint::used_font_size(&span.style),
+                            )
+                            && first.letter_spacing != span.style.letter_spacing
+                    }),
+                    "fixture must include distinct styles sharing a metric key"
+                );
+            }
             for prewarm in [false, true] {
                 let mut reference = TextSystem::new();
                 let mut actual = TextSystem::new();
@@ -10031,6 +10050,15 @@ pub(crate) mod prepared_geometry_tests {
                     }
                     assert_eq!(reference.ch_advances, actual.ch_advances);
                     assert_eq!(reference.space_advances, actual.space_advances);
+                    for (left, right) in [
+                        (&reference.ch_advances, &actual.ch_advances),
+                        (&reference.space_advances, &actual.space_advances),
+                    ] {
+                        assert_eq!(left.len(), right.len());
+                        for (key, value) in left {
+                            assert_eq!(value.to_bits(), right[key].to_bits());
+                        }
+                    }
                     assert_eq!(
                         reference.shaping_stats.metric_layout_builds,
                         actual.shaping_stats.metric_layout_builds
@@ -10055,50 +10083,111 @@ pub(crate) mod prepared_geometry_tests {
                     };
                     let ref_results = reference.shape_batch(&jobs(&expected), 42).unwrap();
                     let results = actual.shape_batch(&jobs(&got), 42).unwrap();
-                    let request = || InlineRequest {
-                        roots: std::slice::from_ref(&root),
-                        parent_style: &parent,
-                        width: 0.0,
-                        intrinsic_kind: None,
-                        line_constraints: None,
-                    };
-                    let left = reference.format_prepared_inline_group::<Node, _>(
-                        &prepared,
-                        &plane,
-                        LayoutDom::quirks_mode(&dom),
-                        request(),
-                        Some((&ref_results[2], 42, InlineGroupId(1))),
-                    );
-                    let right = actual.format_prepared_inline_group::<Node, _>(
-                        &prepared,
-                        &plane,
-                        LayoutDom::quirks_mode(&dom),
-                        request(),
-                        Some((&results[2], 42, InlineGroupId(1))),
-                    );
-                    assert_eq!(left.is_some(), right.is_some());
-                    if let (Some(left), Some(right)) = (left, right) {
+                    for (index, (width, intrinsic_kind)) in [
+                        (0.01, Some(IntrinsicSizeKind::MinContent)),
+                        (f32::INFINITY, Some(IntrinsicSizeKind::MaxContent)),
+                        (0.0, None),
+                    ]
+                    .into_iter()
+                    .enumerate()
+                    {
+                        let request = || InlineRequest {
+                            roots: std::slice::from_ref(&root),
+                            parent_style: &parent,
+                            width,
+                            intrinsic_kind,
+                            line_constraints: None,
+                        };
+                        let left = reference.format_prepared_inline_group::<Node, _>(
+                            &prepared,
+                            &plane,
+                            LayoutDom::quirks_mode(&dom),
+                            request(),
+                            Some((&ref_results[index], 42, InlineGroupId(1))),
+                        );
+                        let right = actual.format_prepared_inline_group::<Node, _>(
+                            &prepared,
+                            &plane,
+                            LayoutDom::quirks_mode(&dom),
+                            request(),
+                            Some((&results[index], 42, InlineGroupId(1))),
+                        );
+                        if markup.contains("<span id=a></span>") {
+                            assert!(left.is_none() && right.is_none(), "empty inline is phantom");
+                            continue;
+                        }
+                        let left = left.expect("reference nonempty output");
+                        let right = right.expect("optimized nonempty output");
+                        assert!(!left.items.is_empty() && !right.items.is_empty());
                         assert_eq!(left.size(), right.size());
                         assert_eq!(left.baselines(), right.baselines());
                         assert_eq!(left.text, right.text);
-                        let glyphs = |layout: &InlineLayout<BoxId>| {
+                        assert_eq!(
+                            format!("{:?}", left.line_bounds),
+                            format!("{:?}", right.line_bounds)
+                        );
+                        let sources = |layout: &InlineLayout<BoxId>| {
+                            layout
+                                .text_sources
+                                .iter()
+                                .map(|source| (source.source, source.range.clone()))
+                                .collect::<Vec<_>>()
+                        };
+                        assert_eq!(sources(&left), sources(&right));
+                        // Include ordered lines, source/owner binding, atom geometry and glyphs.
+                        let items = |layout: &InlineLayout<BoxId>| {
                             layout
                                 .items
                                 .iter()
-                                .filter_map(|item| match item {
-                                    ShapedItem::Text(run) => Some(
-                                        run.glyphs
+                                .map(|item| match item {
+                                    ShapedItem::Text(run) => format!(
+                                        "text {:?} {:?} {:?} {:?} {:?} {:?} {:?} {:?} {:?} {:?}",
+                                        run.source,
+                                        run.owners,
+                                        run.line_y.to_bits(),
+                                        run.fragment,
+                                        run.line_fragment,
+                                        run.font_instance,
+                                        run.font_size.to_bits(),
+                                        run.color,
+                                        run.glyphs,
+                                        run.clusters
                                             .iter()
-                                            .map(|g| {
-                                                (g.index, g.point.x.to_bits(), g.point.y.to_bits())
-                                            })
-                                            .collect::<Vec<_>>(),
+                                            .map(|c| (c.source, c.range.clone(), c.fragment, c.rtl))
+                                            .collect::<Vec<_>>()
                                     ),
-                                    _ => None,
+                                    ShapedItem::InlineBox {
+                                        source,
+                                        owners,
+                                        fragment,
+                                        line_fragment,
+                                        edge,
+                                        paint,
+                                        line_y,
+                                    } => format!(
+                                        "atom {:?} {:?} {:?} {:?} {:?} {:?} {:?}",
+                                        source,
+                                        owners,
+                                        fragment,
+                                        line_fragment,
+                                        edge,
+                                        paint,
+                                        line_y.to_bits()
+                                    ),
+                                    ShapedItem::Empty {
+                                        source,
+                                        fragment,
+                                        line_y,
+                                    } => format!(
+                                        "empty {:?} {:?} {:?}",
+                                        source,
+                                        fragment,
+                                        line_y.to_bits()
+                                    ),
                                 })
                                 .collect::<Vec<_>>()
                         };
-                        assert_eq!(glyphs(&left), glyphs(&right));
+                        assert_eq!(items(&left), items(&right));
                         let fonts = |system: &TextSystem, layout: &InlineLayout<BoxId>| {
                             layout
                                 .items
@@ -10113,6 +10202,43 @@ pub(crate) mod prepared_geometry_tests {
                                 .collect::<Vec<_>>()
                         };
                         assert_eq!(fonts(&reference, &left), fonts(&actual, &right));
+                        let mut left_frame = TextFrame::default();
+                        let mut right_frame = TextFrame::default();
+                        let owner = boxes[root].origin.node();
+                        left.place(
+                            &mut left_frame,
+                            &styles,
+                            owner,
+                            |id| boxes[id].origin.node(),
+                            (0.0, 0.0),
+                            320.0,
+                        );
+                        right.place(
+                            &mut right_frame,
+                            &styles,
+                            owner,
+                            |id| boxes[id].origin.node(),
+                            (0.0, 0.0),
+                            320.0,
+                        );
+                        assert!(
+                            left_frame
+                                .prepared_groups
+                                .iter()
+                                .any(|group| !group.is_empty()),
+                            "nonempty output must project paint commands"
+                        );
+                        assert!(
+                            right_frame
+                                .prepared_groups
+                                .iter()
+                                .any(|group| !group.is_empty()),
+                            "nonempty output must project paint commands"
+                        );
+                        assert_eq!(
+                            format!("{:?}", left_frame.prepared_groups),
+                            format!("{:?}", right_frame.prepared_groups)
+                        );
                     }
                 }
             }

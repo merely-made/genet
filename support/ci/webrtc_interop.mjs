@@ -372,7 +372,7 @@ finally {
   const hashes={};for(const file of files)hashes[file]=hash(await readFile(path.join(repo,file)));
   const record={schema:1,gate:'E2h',utc:new Date().toISOString(),source:execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),node:process.version,command:['node','support/ci/webrtc_interop.mjs',...process.argv.slice(2)],expectedCases,completeMatrix:expectedCases===32&&cases.length===32&&!failure,nativeBinarySHA256:hash(await readFile(nativeExe)),sourceSHA256:hashes,versions,cases,failure,relayFixture:'bounded Windows UDP front end forwarding unchanged datagrams to WSL coturn; distinct backend socket per client; max 8 clients/256 pending datagrams/1 MiB',profileCache:scratch,profileCleanup:'automatic approval review blocked recursive deletion; marked profiles retained for reuse',scope:'native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance'};
   const old=await readFile(receipt,'utf8'),marker='\n\n## E2h automated browser interoperability';const index=old.indexOf(marker);const base=index<0?Buffer.byteLength(old):Buffer.byteLength(old.slice(0,index));
-  const entry=marker+' - '+record.utc+'\n\n```json\n'+JSON.stringify(record,null,2)+'\n```\n';
+  const entry=marker+' - '+record.utc+'\n\n```json\n'+JSON.stringify(record)+'\n```\n';
   assert(Buffer.byteLength(old+entry)<=1000000 && Buffer.byteLength(old+entry)-base<=256000,'E2h receipt byte cap exceeded');
   await appendFile(receipt,entry);console.log(`E2h ${cases.filter(c=>c.status==='pass').length}/${cases.length} passed; compact receipt appended`);
 }

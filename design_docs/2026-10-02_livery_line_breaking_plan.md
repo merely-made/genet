@@ -218,7 +218,7 @@ loses no shaping quality.
     `components/livery/src` or `components/genet-livery/src`, 2026-10-02).
   - **Consumer.** Knot's Navigator status message, where Mark ruled the gap
     be reported to Genet's roadmap
-    (`knot-editor/design_docs/2026-09-23_knot_workspace_slice1_plan.md`,
+    (`knot-editor/design_docs/archive_docs/2026-11-02/2026-09-23_knot_workspace_slice1_plan.md`,
     the 2026-09-26 chip-squeeze entry). Cambium's doc says the ellipsis
     waits on Genet (mere `518ca1dc`).
   - **Why it waits for S1.3.** The ellipsis is placed at the line end, which

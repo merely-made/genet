@@ -256,6 +256,7 @@ pub struct TextSystem {
     #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
     parallel: parallel::ParallelShaping,
     cache: cache::ShapeCache,
+    key_seed: std::collections::hash_map::RandomState,
     font_generation: u64,
     fonts: HashMap<FontInstanceKey, FontResource>,
     font_keys: HashMap<(u64, u32), FontInstanceKey>,
@@ -327,6 +328,7 @@ impl TextSystem {
             #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
             parallel: parallel::ParallelShaping::default(),
             cache: cache::ShapeCache::default(),
+            key_seed: std::collections::hash_map::RandomState::new(),
             font_generation: 0,
             fonts: HashMap::new(),
             font_keys: HashMap::new(),
@@ -1648,7 +1650,7 @@ impl TextSystem {
         for (index, job) in jobs.iter().enumerate() {
             let kind = if job.generation != generation {
                 Some(ShapeBatchErrorKind::PassGeneration)
-            } else if job.key.generation != self.font_generation {
+            } else if job.key.generation() != self.font_generation {
                 Some(ShapeBatchErrorKind::FontGeneration)
             } else {
                 None
@@ -1701,7 +1703,7 @@ impl TextSystem {
                         .shaping_options
                         .record_timings
                         .then(std::time::Instant::now);
-                    let output = self.worker.shape(&key.input);
+                    let output = self.worker.shape(key.input());
                     (output, stats::elapsed_ns(start))
                 })
                 .collect()
@@ -1714,7 +1716,7 @@ impl TextSystem {
                     .shaping_options
                     .record_timings
                     .then(std::time::Instant::now);
-                let output = self.worker.shape(&key.input);
+                let output = self.worker.shape(key.input());
                 (output, stats::elapsed_ns(start))
             })
             .collect();
@@ -1829,10 +1831,7 @@ impl TextSystem {
             scale: 1.0f32.to_bits(),
             quantize: true,
         };
-        let key = cache::ShapeKey {
-            generation: self.font_generation,
-            input,
-        };
+        let key = cache::ShapeKey::new(self.font_generation, input, &self.key_seed);
         self.shaping_stats.key_materialize_ns = self
             .shaping_stats
             .key_materialize_ns
@@ -1936,7 +1935,7 @@ impl TextSystem {
                 .shaping_options
                 .record_timings
                 .then(std::time::Instant::now);
-            let value = Arc::new(self.worker.shape(&key.input));
+            let value = Arc::new(self.worker.shape(key.input()));
             self.shaping_stats.worker_task_ns = self
                 .shaping_stats
                 .worker_task_ns
@@ -9819,9 +9818,9 @@ pub(crate) mod prepared_geometry_tests {
                 group: InlineGroupId(4),
                 generation: 99,
                 key: {
-                    let mut key = results[0].key.clone();
-                    key.input.text.push('x');
-                    key
+                    let mut input = results[0].key.input().clone();
+                    input.text.push('x');
+                    cache::ShapeKey::new(results[0].key.generation(), input, &system.key_seed)
                 },
                 shaped: Arc::clone(&results[0].shaped),
             };
@@ -9854,8 +9853,9 @@ pub(crate) mod prepared_geometry_tests {
         let key = system.prepared_shape_key::<<StaticDocument as LayoutDom>::NodeId, _>(
             &a, &fragments, 80.0, None, &parent,
         );
-        let mut other = key.clone();
-        other.input.text.push('x');
+        let mut other_input = key.input().clone();
+        other_input.text.push('x');
+        let other = cache::ShapeKey::new(key.generation(), other_input, &system.key_seed);
         let jobs = [
             ShapeJob {
                 group: InlineGroupId(4),

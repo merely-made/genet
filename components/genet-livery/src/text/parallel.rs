@@ -34,7 +34,7 @@ impl ParallelShaping {
         self.pool.is_some()
             && keys.len() >= 2
             && keys.len() >= options.parallel_min_groups
-            && keys.iter().map(|k| k.input.text.len()).sum::<usize>()
+            && keys.iter().map(|k| k.input().text.len()).sum::<usize>()
                 >= options.parallel_min_text_bytes
     }
     pub(super) fn shape(
@@ -67,7 +67,7 @@ impl ParallelShaping {
                             hook(index);
                         }
                         let start = timing.then(std::time::Instant::now);
-                        let shaped = worker.shape(&keys[index].input);
+                        let shaped = worker.shape(keys[index].input());
                         results.push((index, shaped, stats::elapsed_ns(start)));
                     }
                     results

@@ -3,14 +3,46 @@
 
 use super::{prepared::ShapeInput, shaping::UnbrokenText};
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, hash_map::RandomState},
+    hash::{BuildHasher, Hash, Hasher},
     sync::Arc,
 };
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+// The fingerprint is scoped to one TextSystem's random seed and participates
+// in equality. Keys from different systems may therefore compare unequal even
+// for identical inputs; matching fingerprints still require exact input equality.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ShapeKey {
-    pub generation: u64,
-    pub input: ShapeInput,
+    generation: u64,
+    input: ShapeInput,
+    fingerprint: u64,
+}
+
+impl ShapeKey {
+    pub(super) fn generation(&self) -> u64 {
+        self.generation
+    }
+    pub(super) fn input(&self) -> &ShapeInput {
+        &self.input
+    }
+    #[cfg(test)]
+    pub(super) fn force_fingerprint(&mut self, fingerprint: u64) {
+        self.fingerprint = fingerprint;
+    }
+    pub(super) fn new(generation: u64, input: ShapeInput, seed: &RandomState) -> Self {
+        let fingerprint = seed.hash_one((&generation, &input));
+        Self {
+            generation,
+            input,
+            fingerprint,
+        }
+    }
+}
+
+impl Hash for ShapeKey {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.fingerprint.hash(state);
+    }
 }
 
 #[derive(Default)]
@@ -73,5 +105,45 @@ impl ShapeCache {
     }
     pub fn bytes(&self) -> usize {
         self.bytes
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::hash::{Hash, Hasher};
+
+    #[derive(Default)]
+    struct WorkCounter(usize);
+    impl Hasher for WorkCounter {
+        fn finish(&self) -> u64 {
+            0
+        }
+        fn write(&mut self, bytes: &[u8]) {
+            self.0 += bytes.len();
+        }
+    }
+
+    #[test]
+    fn repeated_key_hashes_do_not_scan_complete_text() {
+        let seed = RandomState::new();
+        let key = ShapeKey::new(
+            0,
+            ShapeInput {
+                text: "text payload ".repeat(1000),
+                defaults: vec![],
+                spans: vec![],
+                slots: vec![],
+                base_level: 0,
+                scale: 1.0f32.to_bits(),
+                quantize: true,
+            },
+            &seed,
+        );
+        let mut counter = WorkCounter::default();
+        for _ in 0..10 {
+            key.hash(&mut counter);
+        }
+        assert!(counter.0 <= 160, "hashed {} bytes", counter.0);
     }
 }

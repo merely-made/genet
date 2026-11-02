@@ -310,19 +310,17 @@ mod tests {
     fn intrinsic_policy_reuses_only_equal_builder_inputs() {
         let mut style = ComputedValues::default();
         style.color = "black".parse().unwrap();
+        let seed = std::collections::hash_map::RandomState::new();
         let make = |style: &ComputedValues, kind| {
             let mut input = fixture();
             input.defaults = properties(style, 0, Vec::new(), kind, 8.0);
             input.spans[0].properties = input.defaults.clone();
-            super::super::cache::ShapeKey {
-                generation: 0,
-                input,
-            }
+            super::super::cache::ShapeKey::new(0, input, &seed)
         };
         let mut worker = super::super::shaping::ShapeWorker::new();
         let mut cache = super::super::cache::ShapeCache::default();
         let used = make(&style, None);
-        let value = std::sync::Arc::new(worker.shape(&used.input));
+        let value = std::sync::Arc::new(worker.shape(used.input()));
         cache.insert(used.clone(), value, 8, 1000);
         assert!(
             cache
@@ -342,7 +340,7 @@ mod tests {
                 .get(&make(&style, Some(IntrinsicSizeKind::MinContent)))
                 .is_some()
         );
-        let value = std::sync::Arc::new(worker.shape(&changed.input));
+        let value = std::sync::Arc::new(worker.shape(changed.input()));
         cache.insert(changed, value, 8, 1000);
         assert!(
             cache

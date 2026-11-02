@@ -80,11 +80,9 @@ fn cached_fixture(system: &mut super::TextSystem, text: &str) {
         scale: 1.0f32.to_bits(),
         quantize: true,
     };
-    let key = super::cache::ShapeKey {
-        generation: system.font_generation,
-        input,
-    };
-    let value = std::sync::Arc::new(system.worker.shape(&key.input));
+    let seed = system.key_seed.clone();
+    let key = super::cache::ShapeKey::new(system.font_generation, input, &seed);
+    let value = std::sync::Arc::new(system.worker.shape(key.input()));
     system.cache.insert(key, value, 2, 100);
 }
 
@@ -120,17 +118,21 @@ fn retained_lru_refreshes_on_hit() {
     let mut system = super::TextSystem::new();
     cached_fixture(&mut system, "one");
     cached_fixture(&mut system, "two");
-    let key = |text: &str| super::cache::ShapeKey {
-        generation: 0,
-        input: super::prepared::ShapeInput {
-            text: text.into(),
-            defaults: vec![],
-            spans: vec![],
-            slots: vec![],
-            base_level: 0,
-            scale: 1.0f32.to_bits(),
-            quantize: true,
-        },
+    let seed = system.key_seed.clone();
+    let key = |text: &str| {
+        super::cache::ShapeKey::new(
+            0,
+            super::prepared::ShapeInput {
+                text: text.into(),
+                defaults: vec![],
+                spans: vec![],
+                slots: vec![],
+                base_level: 0,
+                scale: 1.0f32.to_bits(),
+                quantize: true,
+            },
+            &seed,
+        )
     };
     let active = system.cache.get(&key("one")).unwrap();
     let weak = std::sync::Arc::downgrade(&active);
@@ -161,7 +163,8 @@ fn prepared_batch_deduplicates_without_retention_and_rejects_stale_generation() 
         quantize: true,
     };
     let generation = system.font_generation;
-    let key = super::cache::ShapeKey { generation, input };
+    let seed = system.key_seed.clone();
+    let key = super::cache::ShapeKey::new(generation, input, &seed);
     let jobs = vec![
         ShapeJob {
             group: InlineGroupId(0),
@@ -193,17 +196,21 @@ fn prepared_batch_keeps_evicted_results_and_order() {
     let mut options = system.shaping_options();
     options.retained_entries = 1;
     system.set_shaping_options(options);
-    let make = |text: &str| super::cache::ShapeKey {
-        generation: 0,
-        input: super::prepared::ShapeInput {
-            text: text.into(),
-            defaults: vec![],
-            spans: vec![],
-            slots: vec![],
-            base_level: 0,
-            scale: 1.0f32.to_bits(),
-            quantize: true,
-        },
+    let seed = system.key_seed.clone();
+    let make = |text: &str| {
+        super::cache::ShapeKey::new(
+            0,
+            super::prepared::ShapeInput {
+                text: text.into(),
+                defaults: vec![],
+                spans: vec![],
+                slots: vec![],
+                base_level: 0,
+                scale: 1.0f32.to_bits(),
+                quantize: true,
+            },
+            &seed,
+        )
     };
     let first = make("first");
     let second = make("second");
@@ -253,10 +260,8 @@ fn prepared_batch_rejects_all_jobs_atomically() {
     for stale_index in [0, 1] {
         for stale_font in [false, true] {
             let mut system = super::TextSystem::new();
-            let key = super::cache::ShapeKey {
-                generation: system.font_generation,
-                input: input.clone(),
-            };
+            let seed = system.key_seed.clone();
+            let key = super::cache::ShapeKey::new(system.font_generation, input.clone(), &seed);
             let mut jobs = (0..3)
                 .map(|i| ShapeJob {
                     group: InlineGroupId(i),
@@ -265,7 +270,11 @@ fn prepared_batch_rejects_all_jobs_atomically() {
                 })
                 .collect::<Vec<_>>();
             if stale_font {
-                jobs[stale_index].key.generation = key.generation.wrapping_add(1);
+                jobs[stale_index].key = super::cache::ShapeKey::new(
+                    key.generation().wrapping_add(1),
+                    key.input().clone(),
+                    &seed,
+                );
             } else {
                 jobs[stale_index].generation = 18;
             }
@@ -306,10 +315,8 @@ fn prepared_batch_late_counter_counts_only_cache_misses() {
         scale: 1.0f32.to_bits(),
         quantize: true,
     };
-    let key = super::cache::ShapeKey {
-        generation: system.font_generation,
-        input,
-    };
+    let seed = system.key_seed.clone();
+    let key = super::cache::ShapeKey::new(system.font_generation, input, &seed);
     let job = ShapeJob {
         group: InlineGroupId(0),
         generation: 7,
@@ -360,12 +367,13 @@ fn parallel_shape_threshold_and_lifetime() {
     options.parallel_min_groups = 2;
     options.parallel_min_text_bytes = 0;
     system.set_shaping_options(options);
+    let seed = system.key_seed.clone();
     let make = |i| ShapeJob {
         group: InlineGroupId(i),
         generation: 17,
-        key: super::cache::ShapeKey {
-            generation: 0,
-            input: super::prepared::ShapeInput {
+        key: super::cache::ShapeKey::new(
+            0,
+            super::prepared::ShapeInput {
                 text: format!("fixture {i}"),
                 defaults: vec![],
                 spans: vec![],
@@ -374,7 +382,8 @@ fn parallel_shape_threshold_and_lifetime() {
                 scale: 1f32.to_bits(),
                 quantize: true,
             },
-        },
+            &seed,
+        ),
     };
     let jobs = [make(0), make(1)];
     assert!(!system.parallel.admits(
@@ -398,8 +407,9 @@ fn parallel_shape_threshold_and_lifetime() {
             barrier.wait();
         })
     });
-    let mut huge = jobs[0].key.clone();
-    huge.input.text = "x".repeat(1024 * 1024);
+    let mut huge_input = jobs[0].key.input().clone();
+    huge_input.text = "x".repeat(1024 * 1024);
+    let huge = super::cache::ShapeKey::new(0, huge_input, &seed);
     assert!(!system.parallel.admits(&[huge], options));
     let keys: Vec<_> = jobs.iter().map(|job| job.key.clone()).collect();
     let mut above_bytes = options;
@@ -439,4 +449,81 @@ fn parallel_shape_threshold_and_lifetime() {
     assert_eq!(Arc::strong_count(&results[0].shaped), 1);
     drop(system);
     assert_eq!(Arc::strong_count(&results[0].shaped), 1);
+}
+
+#[test]
+fn fingerprint_collisions_keep_batch_and_cache_inputs_separate() {
+    use super::{
+        InlineGroupId, ShapeJob,
+        prepared::{Property, ShapeInput, Slot, SlotKind},
+    };
+    use std::sync::Arc;
+    let mut system = super::TextSystem::new();
+    let base = ShapeInput {
+        text: "first".into(),
+        defaults: vec![],
+        spans: vec![],
+        slots: vec![],
+        base_level: 0,
+        scale: 1f32.to_bits(),
+        quantize: true,
+    };
+    let mut variants = vec![base.clone()];
+    let mut text = base.clone();
+    text.text = "second".into();
+    variants.push(text);
+    let mut property = base.clone();
+    property.defaults.push(Property::Size(18f32.to_bits()));
+    variants.push(property);
+    let mut atom = base.clone();
+    atom.slots.push(Slot {
+        kind: SlotKind::InFlow,
+        id: 0,
+        index: 0,
+        width: 8f32.to_bits(),
+        height: 9f32.to_bits(),
+    });
+    variants.push(atom);
+    let keys: Vec<_> = variants
+        .into_iter()
+        .map(|input| {
+            let mut key = super::cache::ShapeKey::new(0, input, &system.key_seed);
+            key.force_fingerprint(123);
+            key
+        })
+        .collect();
+    let mut generation_key = super::cache::ShapeKey::new(1, base.clone(), &system.key_seed);
+    generation_key.force_fingerprint(123);
+    assert_ne!(keys[0], generation_key);
+    let mut other_context =
+        super::cache::ShapeKey::new(0, base, &std::collections::hash_map::RandomState::new());
+    other_context.force_fingerprint(123);
+    assert_eq!(keys[0], other_context);
+    let jobs: Vec<_> = keys
+        .iter()
+        .chain(std::iter::once(&keys[0]))
+        .enumerate()
+        .map(|(i, key)| ShapeJob {
+            group: InlineGroupId(i),
+            generation: 42,
+            key: key.clone(),
+        })
+        .collect();
+    let first = system.shape_batch(&jobs, 42).unwrap();
+    assert_eq!(system.shaping_stats().unique_jobs, 4);
+    assert_eq!(system.cache.len(), 4);
+    assert!(Arc::ptr_eq(&first[0].shaped, &first[4].shaped));
+    for i in 1..4 {
+        assert!(!Arc::ptr_eq(&first[0].shaped, &first[i].shaped));
+    }
+    for i in 0..4 {
+        let direct = system.worker.shape(keys[i].input());
+        let actual = first[i].shaped.layout.calculate_content_widths();
+        let expected = direct.layout.calculate_content_widths();
+        assert_eq!((actual.min, actual.max), (expected.min, expected.max));
+    }
+    let second = system.shape_batch(&jobs, 42).unwrap();
+    for i in 0..4 {
+        assert!(Arc::ptr_eq(&first[i].shaped, &second[i].shaped));
+    }
 }

@@ -10438,6 +10438,26 @@ pub(crate) mod prepared_geometry_tests {
                             format!("{:?}", left_frame.prepared_groups),
                             format!("{:?}", right_frame.prepared_groups)
                         );
+                        if eligible {
+                            let first = left_frame
+                                .text_clusters
+                                .first()
+                                .expect("eligible output binds caret clusters");
+                            let rect = |_, f: Fragment| TextRect {
+                                x: f.x,
+                                y: f.y,
+                                width: f.width,
+                                height: f.height,
+                            };
+                            for offset in [first.range.start, first.range.end] {
+                                let expected_caret =
+                                    left_frame.caret_rect(first.source, offset, rect);
+                                let actual_caret =
+                                    right_frame.caret_rect(first.source, offset, rect);
+                                assert!(expected_caret.is_some() && actual_caret.is_some());
+                                assert_eq!(expected_caret, actual_caret);
+                            }
+                        }
                     }
                 }
             }

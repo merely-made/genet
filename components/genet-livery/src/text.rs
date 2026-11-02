@@ -273,9 +273,10 @@ pub(crate) struct ShapeResult {
 #[cfg(test)]
 thread_local! {
     // Counts actual key-resolution call sites and key/materialization boundaries.
-    static READY_KEY_TIMED: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+    pub(crate) static READY_KEY_TIMED: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
     pub(crate) static READY_KEY_WORK: std::cell::Cell<(usize, usize, usize, usize)> = const { std::cell::Cell::new((0, 0, 0, 0)) };
     pub(crate) static LATE_FAULT: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
+    pub(crate) static FORMAT_TIMED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static OBSERVE_FORMAT_KEY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static OBSERVED_FORMAT_KEY: std::cell::RefCell<Option<ShapeKey>> = const { std::cell::RefCell::new(None) };
 }
@@ -2186,6 +2187,10 @@ impl TextSystem {
             .shaping_options
             .record_timings
             .then(std::time::Instant::now);
+        #[cfg(test)]
+        if shape_start.is_some() {
+            FORMAT_TIMED.with(|count| count.set(count.get() + 1));
+        }
         let first_hanging_advance = if root_style.hanging_punctuation.first {
             text.char_indices()
                 .find(|(_, character)| !character.is_whitespace())
@@ -10274,6 +10279,10 @@ pub(crate) mod prepared_geometry_tests {
         let prepared =
             prepared::PreparedInlineGroup::collect(&dom, &styles, &boxes, &[root], &parent);
         let mut system = TextSystem::new();
+        let mut options = system.shaping_options();
+        options.retained_entries = 0;
+        options.record_timings = true;
+        system.set_shaping_options(options);
         let key = system.prepared_shape_key::<Node, _>(&prepared, &plane, 100.0, None, &parent);
         let valid = system
             .shape_batch(
@@ -10300,7 +10309,10 @@ pub(crate) mod prepared_geometry_tests {
             line_constraints: None,
         };
         let mut choices = vec![wrong_group.clone(), stale.clone(), valid.clone()];
+        READY_KEY_TIMED.with(|c| c.set((0, 0)));
+        FORMAT_TIMED.with(|c| c.set(0));
         let before = system.shaping_stats();
+        let builds_before = system.shape_count();
         system
             .format_prepared_inline_group::<Node, _>(
                 &prepared,
@@ -10317,6 +10329,14 @@ pub(crate) mod prepared_geometry_tests {
             .unwrap();
         assert_eq!(choices.len(), 3);
         assert_eq!(system.shaping_stats().batches, before.batches);
+        assert_eq!(READY_KEY_TIMED.with(|c| c.get()), (1, 1));
+        assert_eq!(FORMAT_TIMED.with(|c| c.get()), 1);
+        assert!(system.shaping_stats().shape_wall_ns > before.shape_wall_ns);
+        assert_eq!(
+            system.shape_count(),
+            builds_before,
+            "active result survives zero retention"
+        );
         let mut invalid_only = vec![wrong_group, stale];
         let before = system.shaping_stats();
         system
@@ -10337,6 +10357,122 @@ pub(crate) mod prepared_geometry_tests {
         assert_eq!(invalid_only[2].group, InlineGroupId(9));
         assert_eq!(invalid_only[2].generation, 11);
         assert_eq!(system.shaping_stats().batches, before.batches + 1);
+    }
+
+    #[test]
+    fn fallback_and_late_format_construct_one_current_key_each() {
+        type Node = <StaticDocument as LayoutDom>::NodeId;
+        let dom = StaticDocument::parse("<span id=a>hello</span>");
+        let styles = resolve_styles(
+            &dom,
+            &StyleSet::cambium(&[]),
+            &Device::screen(320.0, 240.0),
+            &InteractionStates::default(),
+        );
+        let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+        let root = boxes
+            .iter()
+            .find_map(|(id, b)| {
+                b.origin
+                    .node()
+                    .filter(|n| {
+                        dom.attribute(*n, &Namespace::from(""), &LocalName::from("id")) == Some("a")
+                    })
+                    .map(|_| id)
+            })
+            .unwrap();
+        let plane = Plane {
+            atom: root,
+            fragment: None,
+            baseline: 0.0,
+        };
+        let mut parent = ComputedValues::default();
+        parent.color = ComputedColor::Absolute(CssColor::srgb(0.0, 0.0, 0.0, 1.0));
+        let prepared =
+            prepared::PreparedInlineGroup::collect(&dom, &styles, &boxes, &[root], &parent);
+        let mut system = TextSystem::new();
+        READY_KEY_WORK.with(|w| w.set((0, 0, 0, 0)));
+        let keys = system.prepared_shape_keys_for_ready::<Node, _>(&prepared, &plane, &parent);
+        let jobs = keys
+            .into_iter()
+            .map(|key| ShapeJob {
+                group: InlineGroupId(9),
+                generation: 11,
+                key,
+            })
+            .collect::<Vec<_>>();
+        let mut results = system.shape_batch(&jobs, 11).unwrap();
+        let roots = [root];
+        let request = || InlineRequest {
+            roots: &roots,
+            parent_style: &parent,
+            width: 100.0,
+            intrinsic_kind: None,
+            line_constraints: None,
+        };
+        system
+            .format_prepared_inline_group::<Node, _>(
+                &prepared,
+                &plane,
+                LayoutDom::quirks_mode(&dom),
+                request(),
+                Candidates::Transactional {
+                    results: &mut results,
+                    generation: 11,
+                    group: InlineGroupId(9),
+                },
+            )
+            .unwrap()
+            .unwrap();
+        let work = READY_KEY_WORK.with(|w| w.get());
+        assert_eq!(
+            (work.2, work.3),
+            (4, 4),
+            "three eager keys plus one current key"
+        );
+        system
+            .format_prepared_inline_group::<Node, _>(
+                &prepared,
+                &plane,
+                LayoutDom::quirks_mode(&dom),
+                request(),
+                Candidates::Transactional {
+                    results: &mut results,
+                    generation: 11,
+                    group: InlineGroupId(9),
+                },
+            )
+            .unwrap()
+            .unwrap();
+        let work = READY_KEY_WORK.with(|w| w.get());
+        assert_eq!(
+            (work.2, work.3),
+            (5, 5),
+            "repeated formatting makes one current key"
+        );
+        READY_KEY_WORK.with(|w| w.set((0, 0, 0, 0)));
+        let mut late = Vec::new();
+        system
+            .format_prepared_inline_group::<Node, _>(
+                &prepared,
+                &plane,
+                LayoutDom::quirks_mode(&dom),
+                request(),
+                Candidates::Transactional {
+                    results: &mut late,
+                    generation: 12,
+                    group: InlineGroupId(9),
+                },
+            )
+            .unwrap()
+            .unwrap();
+        let work = READY_KEY_WORK.with(|w| w.get());
+        assert_eq!(
+            (work.2, work.3),
+            (1, 1),
+            "late formatting makes one current key"
+        );
+        assert_eq!(late.len(), 1);
     }
 
     #[test]
@@ -10387,148 +10523,221 @@ pub(crate) mod prepared_geometry_tests {
                 ));
             }
             for prewarm in [false, true] {
-                let mut system = TextSystem::new();
-                system
-                    .register_generic_font_bytes(
-                        include_bytes!("../../../tests/wpt/tests/fonts/Ahem.ttf").to_vec(),
-                        "monospace",
-                    )
-                    .unwrap();
-                let fallback = include_bytes!(
-                    "../../../tests/wpt/tests/fonts/noto/NotoSansDevanagari-Regular.ttf"
-                );
-                system.register_font_bytes(fallback.to_vec());
-                let mut actual = TextSystem::new();
-                actual.key_seed = system.key_seed.clone();
-                actual
-                    .register_generic_font_bytes(
-                        include_bytes!("../../../tests/wpt/tests/fonts/Ahem.ttf").to_vec(),
-                        "monospace",
-                    )
-                    .unwrap();
-                actual.register_font_bytes(fallback.to_vec());
-                if prewarm {
-                    for span in &prepared.spans {
-                        system.tab_stop(&span.style);
-                        actual.tab_stop(&span.style);
+                for (width, intrinsic_kind) in [
+                    (0.01, Some(IntrinsicSizeKind::MinContent)),
+                    (f32::INFINITY, Some(IntrinsicSizeKind::MaxContent)),
+                    (100.0, None),
+                ] {
+                    let mut system = TextSystem::new();
+                    system
+                        .register_generic_font_bytes(
+                            include_bytes!("../../../tests/wpt/tests/fonts/Ahem.ttf").to_vec(),
+                            "monospace",
+                        )
+                        .unwrap();
+                    let fallback = include_bytes!(
+                        "../../../tests/wpt/tests/fonts/noto/NotoSansDevanagari-Regular.ttf"
+                    );
+                    system.register_font_bytes(fallback.to_vec());
+                    let mut actual = TextSystem::new();
+                    actual.key_seed = system.key_seed.clone();
+                    actual
+                        .register_generic_font_bytes(
+                            include_bytes!("../../../tests/wpt/tests/fonts/Ahem.ttf").to_vec(),
+                            "monospace",
+                        )
+                        .unwrap();
+                    actual.register_font_bytes(fallback.to_vec());
+                    if prewarm {
+                        for span in &prepared.spans {
+                            system.tab_stop(&span.style);
+                            actual.tab_stop(&span.style);
+                        }
+                        system.tab_stop(&parent);
+                        actual.tab_stop(&parent);
                     }
-                    system.tab_stop(&parent);
-                    actual.tab_stop(&parent);
-                }
-                let first =
-                    system.prepared_shape_key::<Node, _>(&prepared, &plane, 100.0, None, &parent);
-                let generation = system.font_generation;
-                let results = system
-                    .shape_late_batch(
-                        &[ShapeJob {
-                            group: InlineGroupId(9),
-                            generation: 11,
-                            key: first.clone(),
-                        }],
-                        11,
-                    )
-                    .unwrap();
-                OBSERVED_FORMAT_KEY.with(|key| *key.borrow_mut() = None);
-                OBSERVE_FORMAT_KEY.with(|enabled| enabled.set(true));
-                let output = system
-                    .format_prepared_inline_group::<Node, _>(
+                    let first = system.prepared_shape_key::<Node, _>(
                         &prepared,
                         &plane,
-                        LayoutDom::quirks_mode(&dom),
-                        InlineRequest {
-                            roots: &[root],
-                            parent_style: &parent,
-                            width: 100.0,
-                            intrinsic_kind: None,
-                            line_constraints: None,
+                        width,
+                        intrinsic_kind,
+                        &parent,
+                    );
+                    let generation = system.font_generation;
+                    let results = system
+                        .shape_late_batch(
+                            &[ShapeJob {
+                                group: InlineGroupId(9),
+                                generation: 11,
+                                key: first.clone(),
+                            }],
+                            11,
+                        )
+                        .unwrap();
+                    OBSERVED_FORMAT_KEY.with(|key| *key.borrow_mut() = None);
+                    OBSERVE_FORMAT_KEY.with(|enabled| enabled.set(true));
+                    let output = system
+                        .format_prepared_inline_group::<Node, _>(
+                            &prepared,
+                            &plane,
+                            LayoutDom::quirks_mode(&dom),
+                            InlineRequest {
+                                roots: &[root],
+                                parent_style: &parent,
+                                width,
+                                intrinsic_kind,
+                                line_constraints: None,
+                            },
+                            Candidates::AtomicNoLate {
+                                results: &results,
+                                generation: 11,
+                                group: InlineGroupId(9),
+                            },
+                        )
+                        .unwrap();
+                    OBSERVE_FORMAT_KEY.with(|enabled| enabled.set(false));
+                    let second = OBSERVED_FORMAT_KEY.with(|key| key.borrow_mut().take());
+                    if prepared.text.is_empty() {
+                        assert!(output.is_none());
+                        assert!(second.is_none(), "old empty path returns before second key");
+                    } else {
+                        assert_eq!(Some(first), second, "{markup}, prewarm={prewarm}");
+                    }
+                    assert_eq!(system.font_generation, generation);
+                    let mut current_results = Vec::new();
+                    let current = actual
+                        .format_prepared_inline_group::<Node, _>(
+                            &prepared,
+                            &plane,
+                            LayoutDom::quirks_mode(&dom),
+                            InlineRequest {
+                                roots: &[root],
+                                parent_style: &parent,
+                                width,
+                                intrinsic_kind,
+                                line_constraints: None,
+                            },
+                            Candidates::Transactional {
+                                results: &mut current_results,
+                                generation: 11,
+                                group: InlineGroupId(9),
+                            },
+                        )
+                        .unwrap();
+                    assert_eq!(system.font_generation, actual.font_generation);
+                    assert_eq!(system.ch_advances, actual.ch_advances);
+                    assert_eq!(system.space_advances, actual.space_advances);
+                    for (left, right) in [
+                        (&system.ch_advances, &actual.ch_advances),
+                        (&system.space_advances, &actual.space_advances),
+                    ] {
+                        for (key, value) in left {
+                            assert_eq!(value.to_bits(), right[key].to_bits());
+                        }
+                    }
+                    assert_eq!(
+                        system.shaping_stats.layout_builds,
+                        actual.shaping_stats.layout_builds
+                    );
+                    assert_eq!(
+                        system.shaping_stats.metric_layout_builds,
+                        actual.shaping_stats.metric_layout_builds
+                    );
+                    assert_eq!(
+                        system.shaping_stats.format_requests,
+                        actual.shaping_stats.format_requests
+                    );
+                    match (&output, &current) {
+                        (None, None) => {},
+                        (Some(left), Some(right)) => {
+                            assert_eq!(left.size(), right.size());
+                            assert_eq!(left.baselines(), right.baselines());
+                            assert_eq!(left.text, right.text);
+                            assert_eq!(
+                                format!("{:?}", left.line_bounds),
+                                format!("{:?}", right.line_bounds)
+                            );
+                            let mut left_frame = TextFrame::default();
+                            let mut right_frame = TextFrame::default();
+                            let owner = boxes[root].origin.node();
+                            left.place(
+                                &mut left_frame,
+                                &styles,
+                                owner,
+                                |id| boxes[id].origin.node(),
+                                (0.0, 0.0),
+                                320.0,
+                            );
+                            right.place(
+                                &mut right_frame,
+                                &styles,
+                                owner,
+                                |id| boxes[id].origin.node(),
+                                (0.0, 0.0),
+                                320.0,
+                            );
+                            assert!(
+                                left_frame
+                                    .prepared_groups
+                                    .iter()
+                                    .any(|group| !group.is_empty())
+                            );
+                            assert_eq!(
+                                format!("{:?}", left_frame.prepared_groups),
+                                format!("{:?}", right_frame.prepared_groups)
+                            );
+                            let first = left_frame
+                                .text_clusters
+                                .first()
+                                .expect("nonempty output binds a caret cluster");
+                            let rect = |_, f: Fragment| TextRect {
+                                x: f.x,
+                                y: f.y,
+                                width: f.width,
+                                height: f.height,
+                            };
+                            for offset in [first.range.start, first.range.end] {
+                                let l = left_frame.caret_rect(first.source, offset, rect);
+                                let r = right_frame.caret_rect(first.source, offset, rect);
+                                assert!(l.is_some() && r.is_some());
+                                assert_eq!(l, r);
+                            }
+                            let runs = |layout: &InlineLayout<BoxId>, system: &TextSystem| {
+                                layout
+                                    .items
+                                    .iter()
+                                    .filter_map(|item| match item {
+                                        ShapedItem::Text(run) => Some(format!(
+                                            "{:?} {:?} {:?} {:?} {:?} {:?} {:?} {:?}",
+                                            run.source,
+                                            run.owners,
+                                            run.fragment,
+                                            run.line_fragment,
+                                            run.glyphs,
+                                            run.clusters
+                                                .iter()
+                                                .map(|c| (
+                                                    c.source,
+                                                    c.range.clone(),
+                                                    c.fragment,
+                                                    c.rtl
+                                                ))
+                                                .collect::<Vec<_>>(),
+                                            run.color,
+                                            system.fonts[&run.font_instance].data
+                                        )),
+                                        _ => None,
+                                    })
+                                    .collect::<Vec<_>>()
+                            };
+                            assert_eq!(runs(left, &system), runs(right, &actual));
                         },
-                        Candidates::AtomicNoLate {
-                            results: &results,
-                            generation: 11,
-                            group: InlineGroupId(9),
-                        },
-                    )
-                    .unwrap();
-                OBSERVE_FORMAT_KEY.with(|enabled| enabled.set(false));
-                let second = OBSERVED_FORMAT_KEY.with(|key| key.borrow_mut().take());
-                if prepared.text.is_empty() {
-                    assert!(output.is_none());
-                    assert!(second.is_none(), "old empty path returns before second key");
-                } else {
-                    assert_eq!(Some(first), second, "{markup}, prewarm={prewarm}");
-                }
-                assert_eq!(system.font_generation, generation);
-                let mut current_results = Vec::new();
-                let current = actual
-                    .format_prepared_inline_group::<Node, _>(
-                        &prepared,
-                        &plane,
-                        LayoutDom::quirks_mode(&dom),
-                        InlineRequest {
-                            roots: &[root],
-                            parent_style: &parent,
-                            width: 100.0,
-                            intrinsic_kind: None,
-                            line_constraints: None,
-                        },
-                        Candidates::Transactional {
-                            results: &mut current_results,
-                            generation: 11,
-                            group: InlineGroupId(9),
-                        },
-                    )
-                    .unwrap();
-                assert_eq!(system.font_generation, actual.font_generation);
-                assert_eq!(system.ch_advances, actual.ch_advances);
-                assert_eq!(system.space_advances, actual.space_advances);
-                assert_eq!(
-                    system.shaping_stats.layout_builds,
-                    actual.shaping_stats.layout_builds
-                );
-                assert_eq!(
-                    system.shaping_stats.metric_layout_builds,
-                    actual.shaping_stats.metric_layout_builds
-                );
-                assert_eq!(
-                    system.shaping_stats.format_requests,
-                    actual.shaping_stats.format_requests
-                );
-                match (&output, &current) {
-                    (None, None) => {},
-                    (Some(left), Some(right)) => {
-                        assert_eq!(left.size(), right.size());
-                        assert_eq!(left.baselines(), right.baselines());
-                        assert_eq!(left.text, right.text);
-                        let runs = |layout: &InlineLayout<BoxId>, system: &TextSystem| {
-                            layout
-                                .items
-                                .iter()
-                                .filter_map(|item| match item {
-                                    ShapedItem::Text(run) => Some(format!(
-                                        "{:?} {:?} {:?} {:?} {:?} {:?} {:?} {:?}",
-                                        run.source,
-                                        run.owners,
-                                        run.fragment,
-                                        run.line_fragment,
-                                        run.glyphs,
-                                        run.clusters
-                                            .iter()
-                                            .map(|c| (c.source, c.range.clone(), c.fragment, c.rtl))
-                                            .collect::<Vec<_>>(),
-                                        run.color,
-                                        system.fonts[&run.font_instance].data
-                                    )),
-                                    _ => None,
-                                })
-                                .collect::<Vec<_>>()
-                        };
-                        assert_eq!(runs(left, &system), runs(right, &actual));
-                    },
-                    _ => panic!("old/current empty mismatch"),
-                }
-                if markup.contains("नमस्ते") {
-                    let output = output.unwrap();
-                    assert!(output.items.iter().any(|item| matches!(item, ShapedItem::Text(run) if system.fonts.get(&run.font_instance).is_some_and(|font| font.data.as_slice() == fallback))));
+                        _ => panic!("old/current empty mismatch"),
+                    }
+                    if markup.contains("नमस्ते") {
+                        let output = output.unwrap();
+                        assert!(output.items.iter().any(|item| matches!(item, ShapedItem::Text(run) if system.fonts.get(&run.font_instance).is_some_and(|font| font.data.as_slice() == fallback))));
+                    }
                 }
             }
         }

@@ -8845,6 +8845,7 @@ fn prepared_batch_excludes_out_of_flow_atoms_from_missing_geometry() {
 
 #[test]
 fn late_errors_at_both_measurement_entrypoints_preserve_context() {
+    let mut empty_success_checked = false;
     for markup in ["<span id=a>(hello</span>", "<span id=a></span>"] {
         let dom = StaticDocument::parse(markup);
         let styles = resolve_styles(
@@ -8862,6 +8863,9 @@ fn late_errors_at_both_measurement_entrypoints_preserve_context() {
         ));
         for fault in 1..=7 {
             let mut text = TextSystem::new();
+            let mut options = text.shaping_options();
+            options.record_timings = true;
+            text.set_shaping_options(options);
             let prepared = std::sync::Arc::new(text.prepare_inline_group(
                 &dom,
                 &styles,
@@ -8888,6 +8892,8 @@ fn late_errors_at_both_measurement_entrypoints_preserve_context() {
                 shape_error: None,
             };
             crate::text::LATE_FAULT.with(|f| f.set(fault));
+            crate::text::READY_KEY_TIMED.with(|c| c.set((0, 0)));
+            crate::text::FORMAT_TIMED.with(|c| c.set(0));
             let before = text.shaping_stats();
             let size = measure_inline_context(
                 &mut text,
@@ -8913,6 +8919,14 @@ fn late_errors_at_both_measurement_entrypoints_preserve_context() {
             };
             assert!(error.starts_with(expected), "{error}");
             assert_eq!(text.shaping_stats().format_requests, before.format_requests);
+            assert_eq!(crate::text::READY_KEY_TIMED.with(|c| c.get()), (1, 1));
+            assert_eq!(crate::text::FORMAT_TIMED.with(|c| c.get()), 0);
+            assert!(text.shaping_stats().key_materialize_ns > before.key_materialize_ns);
+            if fault == 1 {
+                assert_eq!(text.shaping_stats().shape_wall_ns, before.shape_wall_ns);
+            } else {
+                assert!(text.shaping_stats().shape_wall_ns > before.shape_wall_ns);
+            }
             crate::text::LATE_FAULT.with(|f| f.set(if fault == 1 { 2 } else { 1 }));
             let again = measure_inline_context(
                 &mut text,
@@ -8946,6 +8960,8 @@ fn late_errors_at_both_measurement_entrypoints_preserve_context() {
                 })),
             };
             crate::text::LATE_FAULT.with(|f| f.set(fault));
+            crate::text::READY_KEY_TIMED.with(|c| c.set((0, 0)));
+            crate::text::FORMAT_TIMED.with(|c| c.set(0));
             let before = text.shaping_stats();
             let error = wrapped_text_height(&mut wrap, 30.0, Some(&mut text), &dom)
                 .unwrap_err()
@@ -8959,6 +8975,57 @@ fn late_errors_at_both_measurement_entrypoints_preserve_context() {
             let inner = wrap.wrap.as_ref().unwrap();
             assert!(inner.results.is_empty() && inner.formatted.is_empty());
             assert_eq!(text.shaping_stats().format_requests, before.format_requests);
+            assert_eq!(crate::text::READY_KEY_TIMED.with(|c| c.get()), (1, 1));
+            assert_eq!(crate::text::FORMAT_TIMED.with(|c| c.get()), 0);
+            assert!(text.shaping_stats().key_materialize_ns > before.key_materialize_ns);
+            if fault == 1 {
+                assert_eq!(text.shaping_stats().shape_wall_ns, before.shape_wall_ns);
+            } else {
+                assert!(text.shaping_stats().shape_wall_ns > before.shape_wall_ns);
+            }
+            if markup.contains("></span>") && fault == 1 {
+                empty_success_checked = true;
+                crate::text::READY_KEY_TIMED.with(|c| c.set((0, 0)));
+                crate::text::FORMAT_TIMED.with(|c| c.set(0));
+                let before = text.shaping_stats();
+                let size = measure_inline_context(
+                    &mut text,
+                    &dom,
+                    &styles,
+                    &boxes,
+                    &AtomicLayoutPlane::default(),
+                    &mut context,
+                    InlineMeasureGeometry {
+                        width: 32.0,
+                        intrinsic_kind: None,
+                        line_constraints: None,
+                    },
+                );
+                assert_eq!(size, (123.0, 45.0));
+                assert_eq!(context.prepared.as_ref().unwrap().results.len(), 1);
+                assert!(context.layouts.is_empty());
+                assert_eq!(text.shaping_stats().format_requests, before.format_requests);
+                assert_eq!(text.shaping_stats().batches, before.batches + 1);
+                assert_eq!(crate::text::READY_KEY_TIMED.with(|c| c.get()), (1, 1));
+                assert_eq!(crate::text::FORMAT_TIMED.with(|c| c.get()), 0);
+                assert!(text.shaping_stats().shape_wall_ns > before.shape_wall_ns);
+                crate::text::READY_KEY_TIMED.with(|c| c.set((0, 0)));
+                crate::text::FORMAT_TIMED.with(|c| c.set(0));
+                let before = text.shaping_stats();
+                assert_eq!(
+                    wrapped_text_height(&mut wrap, 31.0, Some(&mut text), &dom).unwrap(),
+                    45.0
+                );
+                let inner = wrap.wrap.as_ref().unwrap();
+                assert_eq!(inner.results.len(), 1);
+                assert_eq!(inner.formatted.len(), 1);
+                assert_eq!(text.shaping_stats().format_requests, before.format_requests);
+                assert_eq!(text.shaping_stats().batches, before.batches + 1);
+                assert_eq!(crate::text::READY_KEY_TIMED.with(|c| c.get()), (1, 1));
+                assert_eq!(crate::text::FORMAT_TIMED.with(|c| c.get()), 0);
+                assert!(text.shaping_stats().shape_wall_ns > before.shape_wall_ns);
+            }
         }
     }
+    assert!(empty_success_checked);
 }

@@ -361,7 +361,7 @@ netfetcher stays a policy-taking engine. P1 builds exactly this.
 Asked about the exact Murm diff (a `LenientEof` wrapper, `tower-service` as a direct
 dependency of `murm-wire`, a regression that fails on the unpatched source), Mark:
 **"OK, apply to Murm and repin (Recommended)"**. Applied as one commit on branch
-`fetch-close-notify` in a worktree of the Murm repository (`repos/retinue`'s remote
+`fetch-close-notify` in a worktree of the Murm repository (`repos/murm`'s remote
 `merely-made/murm`), based on the pinned `f9fe8507cf1` that Genet resolves today. Not
 pushed or merged; Mark merges as usual. Genet follows Murm by `branch = "main"` with
 its lock ignored, so the repin is the supplier resolving the merged commit; no Genet

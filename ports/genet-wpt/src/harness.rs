@@ -847,6 +847,11 @@ fn prepare_runtime<E: ScriptEngine>(
     webgl: Option<WebGlFactory>,
     route: Option<Box<dyn ScriptResourceLoader>>,
 ) {
+    #[cfg(feature = "webrtc")]
+    rt.set_webrtc_factory(std::rc::Rc::new(
+        genet_webrtc::NativeWebRtcFactory::new(genet_webrtc::Settings::default())
+            .expect("valid WPT RTC host budgets"),
+    ));
     // Dedicated workers run in the killable helper process, so the default
     // `RequireCancellation` policy admits them; without a helper they error.
     rt.set_worker_policy(WorkerPolicy::RequireCancellation);
@@ -1318,6 +1323,8 @@ fn drive_virtual<E: ScriptEngine>(rt: &mut Runtime<E>, render: &RenderSession) -
         // messages. A worker that has not reported idle can still speak, so it
         // holds the loop open the way a pending timer does.
         let worked = rt.pump_workers();
+        let rtc_work = rt.pump_webrtc(64);
+        let rtc_live = rt.pending_webrtc() != 0;
         let workers_live = rt.has_worker_work();
         let has_raf = match rt.has_animation_frame_callbacks() {
             Ok(value) => value,
@@ -1335,6 +1342,8 @@ fn drive_virtual<E: ScriptEngine>(rt: &mut Runtime<E>, render: &RenderSession) -
             && rendered == 0
             && acted == 0
             && worked == 0
+            && rtc_work == 0
+            && !rtc_live
             && !workers_live
             && !has_raf
             && !animating
@@ -1342,9 +1351,9 @@ fn drive_virtual<E: ScriptEngine>(rt: &mut Runtime<E>, render: &RenderSession) -
         {
             break; // quiescent: no timer, no frame consumer, nothing happened
         }
-        if workers_live {
+        if workers_live || rtc_live {
             now_ms = now_ms.max(start.elapsed().as_millis() as f64 + skipped_ms);
-            if fired == 0 && rendered == 0 && acted == 0 && worked == 0 {
+            if fired == 0 && rendered == 0 && acted == 0 && worked == 0 && rtc_work == 0 {
                 std::thread::sleep(Duration::from_millis(1)); // do not spin on the worker
             }
             continue;
@@ -1466,6 +1475,8 @@ fn drive_wall<E: ScriptEngine>(
             Err(error) => return HarnessOutcome::Threw(error),
         };
         let worked = rt.pump_workers();
+        let rtc_work = rt.pump_webrtc(64);
+        let rtc_live = rt.pending_webrtc() != 0;
         let workers_live = rt.has_worker_work();
         let has_raf = match rt.has_animation_frame_callbacks() {
             Ok(value) => value,
@@ -1475,7 +1486,7 @@ fn drive_wall<E: ScriptEngine>(
         // A live WebSocket is outstanding network work exactly as an in-flight
         // fetch is: the peer can still speak, and the page cannot see it until
         // the loop applies the completion.
-        let pending = rt.pending_fetches() + rt.pending_websockets();
+        let pending = rt.pending_fetches() + rt.pending_websockets() + rt.pending_webrtc();
         let next_timer = match rt.next_timer_delay() {
             Ok(value) => value,
             Err(error) => return HarnessOutcome::Threw(format!("runtime turn: {error:?}")),
@@ -1490,13 +1501,14 @@ fn drive_wall<E: ScriptEngine>(
             && rendered == 0
             && acted == 0
             && worked == 0
+            && rtc_work == 0
             && !workers_live
             && !has_raf
             && !animating
         {
             break; // quiescent: no fetch, no timer, no frame consumer, no worker
         }
-        if fired == 0 && applied == 0 && rendered == 0 && acted == 0 && worked == 0 && workers_live
+        if fired == 0 && applied == 0 && rendered == 0 && acted == 0 && worked == 0 && rtc_work == 0 && (workers_live || rtc_live)
         {
             std::thread::sleep(Duration::from_millis(1));
             continue;
@@ -1517,6 +1529,9 @@ fn drive_wall<E: ScriptEngine>(
             // wanted — at most one frame.
             let remaining = (deadline.as_millis() as f64 - elapsed_ms(start)).max(0.0);
             let mut wait_ms = remaining;
+            if let Some(delay) = rt.next_webrtc_delay() {
+                wait_ms = wait_ms.min(delay);
+            }
             if let Some(d) = next_timer {
                 wait_ms = wait_ms.min(d);
             }

@@ -863,11 +863,12 @@ fn run_pending_teardown<E: ScriptEngine>(
                 let id = cx.make_string(&realm.to_string())?;
                 let _ = invoke::<E>(cx, cancel, &[id]);
             }
+            crate::webrtc::discard_from_call::<E>(cx, agent, *realm);
             {
                 let mut a = agent.borrow_mut();
                 a.frames.release_context(*realm);
                 a.dom_adoption.remove_realm(*realm);
-                a.hosts.remove(realm);
+                if let Some(host) = a.hosts.remove(realm) { crate::webrtc::revoke(&host); }
                 a.task_hooks.retain(|(owner, _), _| owner != realm);
                 a.opaque_roots.remove(realm);
                 a.fetch_realms.retain(|_, owner| owner != realm);
@@ -1050,6 +1051,7 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
             fetch,
             loader,
             websocket,
+            webrtc_factory,
             wake,
             resource_wake,
             decode_options,
@@ -1093,6 +1095,7 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
                 h.fetch.clone(),
                 h.script_loader.clone(),
                 h.websocket.clone(),
+                h.webrtc_factory.clone(),
                 h.worker_wake.clone(),
                 h.worker_resource_wake.clone(),
                 h.dom.html_decode_options(),
@@ -1249,6 +1252,7 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
                 fetch,
                 script_loader: loader,
                 websocket,
+                webrtc_factory,
                 worker_wake: wake,
                 worker_resource_wake: resource_wake,
                 secure_context: parent_host.borrow().secure_context,
@@ -1292,6 +1296,7 @@ struct HostSeams {
     fetch: Option<Rc<dyn crate::fetch::FetchHandler>>,
     script_loader: Option<Rc<dyn crate::ScriptResourceLoader>>,
     websocket: Option<Rc<dyn crate::WebSocketHandler>>,
+    webrtc_factory: Option<Rc<dyn crate::WebRtcFactory>>,
     worker_wake: Option<std::sync::Arc<dyn Fn() + Send + Sync>>,
     worker_resource_wake: Option<std::sync::Arc<dyn Fn(String) + Send + Sync>>,
     /// The creating document's secure context, which an `about:` or `data:`
@@ -1385,6 +1390,7 @@ fn open_document_realm<E: ScriptEngine>(
         fetch: seams.fetch,
         script_loader: seams.script_loader,
         websocket: seams.websocket,
+        webrtc_factory: seams.webrtc_factory,
         worker_wake: seams.worker_wake,
         worker_resource_wake: seams.worker_resource_wake,
         agent: Rc::downgrade(agent),
@@ -1505,9 +1511,10 @@ fn open_document_realm<E: ScriptEngine>(
                     let _ = invoke::<E>(cx, cancel, &[id]);
                 }
             }
+            crate::webrtc::discard_from_call::<E>(cx, agent, realm);
             let mut agent = agent.borrow_mut();
             agent.dom_adoption.remove_realm(realm);
-            agent.hosts.remove(&realm);
+            if let Some(host) = agent.hosts.remove(&realm) { crate::webrtc::revoke(&host); }
             agent.task_hooks.retain(|(owner, _), _| *owner != realm);
             agent.opaque_roots.remove(&realm);
             agent.frames.contexts.remove(&realm);
@@ -2457,6 +2464,7 @@ fn release_navigation_realms<E: ScriptEngine>(
                 let _ = invoke::<E>(cx, cancel, &[id]);
             }
         }
+        crate::webrtc::discard_from_call::<E>(cx, agent, *realm);
         let context = {
             let mut a = agent.borrow_mut();
             let context = a.frames.contexts.remove(realm);
@@ -2465,7 +2473,7 @@ fn release_navigation_realms<E: ScriptEngine>(
             a.frames.ancestor_origins.remove(realm);
             a.frames.release_context(*realm);
             a.dom_adoption.remove_realm(*realm);
-            a.hosts.remove(realm);
+            if let Some(host) = a.hosts.remove(realm) { crate::webrtc::revoke(&host); }
             a.task_hooks.retain(|(owner, _), _| owner != realm);
             a.opaque_roots.remove(realm);
             a.fetch_realms.retain(|_, owner| owner != realm);
@@ -2562,6 +2570,7 @@ fn perform_navigation<E: ScriptEngine>(
                 fetch: host.fetch.clone(),
                 script_loader: host.script_loader.clone(),
                 websocket: host.websocket.clone(),
+                webrtc_factory: host.webrtc_factory.clone(),
                 worker_wake: host.worker_wake.clone(),
                 worker_resource_wake: host.worker_resource_wake.clone(),
                 secure_context: host.secure_context,

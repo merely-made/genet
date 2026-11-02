@@ -22,6 +22,7 @@ members = [
     "components/genet-scripted-dom",
     "components/genet-events",
     "components/genet-scripted",
+    "components/genet-webrtc",
     "components/genet-scripted-worker",
     # Render-free live-document extraction and structured reader shapes.
     "components/fleece",

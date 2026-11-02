@@ -158,6 +158,10 @@ fn next_document_wake_delay<E: ScriptEngine>(
             Some(0.0)
         },
     };
+    let timer = match rt.next_webrtc_delay() {
+        Some(rtc) => Some(timer.map_or(rtc, |d| d.min(rtc))),
+        None => timer,
+    };
     if lifecycle.hidden {
         // Timer and external work independently request an admitted turn.
         // A distant timer must not postpone an already queued completion.
@@ -493,6 +497,9 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         if let Some(webgl) = options.webgl {
             rt.set_webgl_factory(webgl);
         }
+        if let Some(factory) = options.webrtc {
+            rt.set_webrtc_factory(factory);
+        }
         let mut capture = {
             let host = rt.host().borrow();
             DomCaptureRecorder::from_env(&host.dom, &sheets)
@@ -558,6 +565,7 @@ impl<E: ScriptEngine> ScriptedDocument<E> {
         }
         self.rt.run_microtasks();
         let _ = self.rt.pump_workers();
+        let _ = self.rt.pump_webrtc(64);
         self.rt.run_microtasks();
         if !self.lifecycle.hidden {
             if let Err(error) = self.rt.run_animation_frame_callbacks(now_ms) {
@@ -1104,6 +1112,9 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         let _ = rt.set_base_url(base_url);
         if let Some(webgl) = options.webgl {
             rt.set_webgl_factory(webgl);
+        }
+        if let Some(factory) = options.webrtc {
+            rt.set_webrtc_factory(factory);
         }
         // The CSSOM is installed over the *empty* arena, before the parse, and
         // re-resolves its author sheets from the live DOM at every read. That
@@ -1802,6 +1813,7 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         }
         self.rt.run_microtasks();
         workers += self.rt.pump_workers();
+        workers += self.rt.pump_webrtc(64);
         self.rt.run_microtasks();
         if !self.lifecycle.hidden {
             if let Err(error) = self.rt.run_animation_frame_callbacks(now_ms) {
@@ -1829,12 +1841,17 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
     /// Milliseconds until the next timer or visible animation frame. The
     /// document adapter hands this deadline to the host's pending-work report.
     pub fn next_wake_delay(&mut self) -> Option<f64> {
-        let external_pending = self.bridge.has_pending() || self.rt.has_worker_work();
+        let external_pending = self.bridge.has_pending()
+            || self.rt.has_worker_work()
+            || self.rt.pending_webrtc() != 0;
         next_document_wake_delay(&mut self.rt, &self.lifecycle, external_pending)
     }
 
     pub fn has_external_work(&self) -> bool {
-        !self.lifecycle.frozen && (self.bridge.has_pending() || self.rt.has_worker_work())
+        !self.lifecycle.frozen
+            && (self.bridge.has_pending()
+                || self.rt.has_worker_work()
+                || self.rt.pending_webrtc() != 0)
     }
 
     /// Select the worker lifetime contract for workers created after this call.

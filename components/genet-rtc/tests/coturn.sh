@@ -4,7 +4,7 @@
 set -eu
 addr=$(hostname -I | cut -d ' ' -f 1)
 printf 'MURM_RTC_TEST_SERVER=%s:34790\n' "$addr"
-exec turnserver -n --listening-ip="$addr" --relay-ip="$addr" \
+exec turnserver -n --verbose --listening-ip="$addr" --relay-ip="$addr" \
   --listening-port=34790 --min-port=50000 --max-port=50100 \
   --realm=murm-rtc.test --user=rtc-test:rtc-test-password --lt-cred-mech \
   --fingerprint --no-cli --no-tls --no-dtls --no-tcp --no-multicast-peers \

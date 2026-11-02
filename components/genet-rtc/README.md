@@ -48,10 +48,12 @@ Supplier integration: `murm/design_docs/2026-10-13_murm_family_move_plan.md`,
 WebRTC provider section. Native UDP tests are not headed-browser or WPT
 qualification.
 
-The five native tests cover both host polling and async waits on working Rust
+The original five native tests cover both host polling and async waits on working Rust
 1.99.1 and MSRV 1.97.1, alongside strict Clippy and the core-only compile gate. The packet test pauses data
 delivery while reverse traffic continues, then receives every held message.
 It does not measure a saturated receive window or induced packet loss.
+E1c adds ordinary discovery demux/deadline checks and the three controlled
+coturn checks below. Relay-only candidates conceal the physical related address.
 Receipts: `testing/webrtc-evaluation/receipts/provider-qualification.json`
 and `provider-boundaries.json`; the host-driver addition is appended to
 `design_docs/archive_docs/receipts/2026-10-13_murm_family_move_plan_receipts.md`.

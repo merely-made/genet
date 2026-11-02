@@ -14,6 +14,9 @@ thread_local! {
 }
 
 #[cfg(test)]
+thread_local! { pub(crate) static INPUT_OWNERSHIP: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) }; }
+
+#[cfg(test)]
 thread_local! { pub(crate) static FIXTURE_GATE: std::cell::Cell<(usize, usize, usize)> = const { std::cell::Cell::new((0, 0, 0)) }; }
 
 pub(super) struct PreparedMeasure {
@@ -27,7 +30,7 @@ pub(super) struct TextBatch {
     generation: u64,
     record_timings: bool,
     collect_ns: u64,
-    pending: Vec<(AlgorithmNodeId, PreparedMeasure, ComputedValues)>,
+    pending: Vec<(AlgorithmNodeId, PreparedMeasure)>,
 }
 impl TextBatch {
     pub fn new(record_timings: bool) -> Self {
@@ -64,13 +67,8 @@ impl TextBatch {
             results: Vec::new(),
         }
     }
-    pub fn push(
-        &mut self,
-        node: AlgorithmNodeId,
-        prepared: PreparedMeasure,
-        style: ComputedValues,
-    ) {
-        self.pending.push((node, prepared, style));
+    pub fn push(&mut self, node: AlgorithmNodeId, prepared: PreparedMeasure) {
+        self.pending.push((node, prepared));
     }
     pub fn flush<D: LayoutDom>(
         &mut self,
@@ -83,7 +81,26 @@ impl TextBatch {
     {
         text.account_collection_ns(std::mem::take(&mut self.collect_ns));
         let mut jobs = Vec::new();
-        for (_, measure, style) in &self.pending {
+        for (node, measure) in &self.pending {
+            let style = &tree
+                .context(*node)
+                .ok_or_else(|| {
+                    LayoutError::retained_state(format!(
+                        "inline batch missing measured context for {node:?}"
+                    ))
+                })?
+                .style;
+            #[cfg(test)]
+            if measure.template.ready::<D::NodeId, _>(atomic) {
+                let context_style = &tree.context(*node).expect("measured context").style;
+                INPUT_OWNERSHIP.with(|c| {
+                    let (total, shared) = c.get();
+                    c.set((
+                        total + 1,
+                        shared + usize::from(std::ptr::eq(style, context_style)),
+                    ));
+                });
+            }
             #[cfg(test)]
             FIXTURE_GATE.with(|c| {
                 let (ready, empty, eligible) = c.get();
@@ -144,7 +161,7 @@ impl TextBatch {
             by_group.entry(result.group).or_default().push(result);
         }
         let mut updates = HashMap::new();
-        for (node, mut measure, _) in self.pending.drain(..) {
+        for (node, mut measure) in self.pending.drain(..) {
             measure.results = by_group.remove(&measure.group).unwrap_or_default();
             updates.insert(node, measure);
         }

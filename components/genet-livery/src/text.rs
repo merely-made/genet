@@ -282,6 +282,9 @@ thread_local! {
 }
 
 #[cfg(test)]
+thread_local! { pub(crate) static SPAN_OWNERSHIP: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) }; }
+
+#[cfg(test)]
 fn ready_key_work(f: impl FnOnce(&mut (usize, usize, usize, usize))) {
     READY_KEY_WORK.with(|cell| {
         let mut work = cell.get();
@@ -830,7 +833,7 @@ impl TextSystem {
         let inline_boxes =
             prepared.materialize::<Id, _>(fragments, request.width, request.intrinsic_kind);
         let text = prepared.text.clone();
-        let mut spans = prepared.spans.clone();
+        let spans = &prepared.spans;
         let inline_styles = &prepared.inline_styles;
         let (preselected, no_late) = match candidates {
             Candidates::Transactional {
@@ -900,6 +903,14 @@ impl TextSystem {
             return Ok(None);
         }
 
+        #[cfg(test)]
+        SPAN_OWNERSHIP.with(|c| {
+            let (total, shared) = c.get();
+            c.set((
+                total + 1,
+                shared + usize::from(std::ptr::eq(spans.as_ptr(), prepared.spans.as_ptr())),
+            ));
+        });
         let Shaped {
             items,
             break_lines,
@@ -907,7 +918,7 @@ impl TextSystem {
             ..
         } = self.shape_with_result(
             &text,
-            &mut spans,
+            spans,
             &inline_boxes,
             &inline_styles,
             line_height_quirk(quirks_mode, parent_style),
@@ -2134,7 +2145,7 @@ impl TextSystem {
     fn shape<Id>(
         &mut self,
         text: &str,
-        spans: &mut [SourceSpan<Id>],
+        spans: &[SourceSpan<Id>],
         inline_boxes: &[InlineAtom<Id>],
         inline_styles: &HashMap<Id, ComputedValues>,
         quirks: bool,
@@ -2168,7 +2179,7 @@ impl TextSystem {
     fn shape_with_result<Id>(
         &mut self,
         text: &str,
-        spans: &mut [SourceSpan<Id>],
+        spans: &[SourceSpan<Id>],
         inline_boxes: &[InlineAtom<Id>],
         inline_styles: &HashMap<Id, ComputedValues>,
         quirks: bool,
@@ -2280,7 +2291,7 @@ impl TextSystem {
     fn place<Id>(
         &mut self,
         text: &str,
-        spans: &mut [SourceSpan<Id>],
+        spans: &[SourceSpan<Id>],
         inline_boxes: &[InlineAtom<Id>],
         inline_styles: &HashMap<Id, ComputedValues>,
         quirks: bool,
@@ -10245,6 +10256,60 @@ pub(crate) mod prepared_geometry_tests {
                 assert!(after.cache_misses > before.cache_misses);
             }
         }
+    }
+
+    #[test]
+    fn formatted_output_outlives_prepared_group() {
+        type Node = <StaticDocument as LayoutDom>::NodeId;
+        let dom = StaticDocument::parse("<span id=a>owned hello</span>");
+        let styles = resolve_styles(
+            &dom,
+            &StyleSet::cambium(&[]),
+            &Device::screen(320.0, 240.0),
+            &InteractionStates::default(),
+        );
+        let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+        let root = boxes
+            .iter()
+            .find_map(|(id, b)| {
+                b.origin
+                    .node()
+                    .filter(|n| {
+                        dom.attribute(*n, &Namespace::from(""), &LocalName::from("id")) == Some("a")
+                    })
+                    .map(|_| id)
+            })
+            .unwrap();
+        let parent = ComputedValues::default();
+        let plane = Plane {
+            atom: root,
+            fragment: None,
+            baseline: 0.0,
+        };
+        let mut system = TextSystem::new();
+        let output = {
+            let prepared =
+                prepared::PreparedInlineGroup::collect(&dom, &styles, &boxes, &[root], &parent);
+            system
+                .format_prepared_inline_group::<Node, _>(
+                    &prepared,
+                    &plane,
+                    LayoutDom::quirks_mode(&dom),
+                    InlineRequest {
+                        roots: &[root],
+                        parent_style: &parent,
+                        width: 100.0,
+                        intrinsic_kind: None,
+                        line_constraints: None,
+                    },
+                    Candidates::DirectNoTransaction,
+                )
+                .unwrap()
+                .unwrap()
+        };
+        assert_eq!(output.text, "owned hello");
+        assert!(!output.items.is_empty());
+        assert!(!output.text_sources.is_empty());
     }
 
     #[test]

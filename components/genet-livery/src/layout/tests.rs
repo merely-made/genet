@@ -9029,3 +9029,28 @@ fn late_errors_at_both_measurement_entrypoints_preserve_context() {
     }
     assert!(empty_success_checked);
 }
+
+#[test]
+fn text_batch_refuses_missing_measured_context_before_publication() {
+    let dom = StaticDocument::parse("<p>hello</p>");
+    let styles = resolve_styles(
+        &dom,
+        &StyleSet::cambium(&[]),
+        &Device::screen(320.0, 240.0),
+        &InteractionStates::default(),
+    );
+    let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+    let mut batch = text_batch::TextBatch::new(false);
+    let prepared = batch.collect(&dom, &styles, &boxes, &[], &ComputedValues::default());
+    let mut tree = AlgorithmTree::<InlineMeasure, Vec<BoxId>>::new();
+    let node = tree.new_with_children(AlgorithmKind::Block, Style::default(), &[], Vec::new());
+    batch.push(node, prepared);
+    let mut text = TextSystem::new();
+    text_batch::FIXTURE_UPDATES.with(|c| c.set(0));
+    let error = batch
+        .flush::<StaticDocument>(&mut text, &AtomicLayoutPlane::default(), &mut tree)
+        .unwrap_err();
+    assert!(format!("{error:?}").contains("missing measured context"));
+    assert_eq!(text_batch::FIXTURE_UPDATES.with(|c| c.get()), 0);
+    assert_eq!(text.shaping_stats().batches, 0);
+}

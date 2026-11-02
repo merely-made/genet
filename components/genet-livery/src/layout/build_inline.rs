@@ -1109,7 +1109,7 @@ where
             },
             roots.to_vec(),
         );
-        self.text_batch.push(node, prepared, parent_style.clone());
+        self.text_batch.push(node, prepared);
         // The inline formatter owns the distinction between wrapped and
         // no-wrap lines. Both still need the current float band to choose a
         // line origin and, when possible, the next wider band.

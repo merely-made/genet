@@ -4791,8 +4791,21 @@ fn shaping_benchmark_real_fixtures_are_ready_and_equivalent() {
             include_bytes!("../../../../tests/wpt/tests/fonts/Ahem.ttf").to_vec(),
         );
         crate::layout::FIXTURE_GATE.with(|c| c.set((0, 0, 0)));
+        crate::layout::INPUT_OWNERSHIP.with(|c| c.set((0, 0)));
+        crate::text::SPAN_OWNERSHIP.with(|c| c.set((0, 0)));
         crate::text::READY_KEY_WORK.with(|c| c.set((0, 0, 0, 0)));
         document.frame(800, 600).expect("fixture frame");
+        let (style_total, style_shared) = crate::layout::INPUT_OWNERSHIP.with(|c| c.get());
+        let (span_total, span_shared) = crate::text::SPAN_OWNERSHIP.with(|c| c.get());
+        assert!(style_total > 0 && span_total > 0);
+        assert_eq!(
+            span_shared, span_total,
+            "formatting borrows prepared span storage"
+        );
+        assert_eq!(
+            style_shared, style_total,
+            "eager keys borrow measured context style"
+        );
         assert_eq!(
             crate::layout::FIXTURE_GATE.with(|c| c.get()),
             (2048, 2048, 2048),
